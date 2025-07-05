@@ -1,0 +1,458 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Nivel {
+  Base
+  Avancado
+  Performance
+}
+
+enum Categoria {
+  Sub9
+  Sub11
+  Sub13
+  Sub15
+  Sub17
+  Sub20
+  Livre
+}
+
+enum TipoUsuario {
+  Atleta
+  Professor
+  Clube
+  Escolinha
+  Admin
+}
+
+enum TipoMidia {
+  Imagem
+  Video
+  Documento
+}
+
+enum StatusConexao {
+  Pendente
+  Aprovado
+  Recusado
+}
+
+model Usuario {
+  id            String      @id @default(uuid())
+  nomeDeUsuario String      @unique
+  senhaHash     String
+  nome          String
+  email         String      @unique
+  foto          String?
+  tipo          TipoUsuario
+  cidade        String?
+  estado        String?
+  pais          String?
+  bairro        String?
+  cpf           String?
+  dataCriacao   DateTime    @default(now())
+  codigo        String?
+
+  seguidores         Seguidor[]   @relation("Seguido")
+  seguindo           Seguidor[]   @relation("Seguidor")
+  amigos             Amigo[]      @relation("UsuarioAmigo")
+  amigosDe           Amigo[]      @relation("AmigoUsuario")
+  mensagensEnviadas  Mensagem[]   @relation("MensagensEnviadas")
+  mensagensRecebidas Mensagem[]   @relation("MensagensRecebidas")
+  postagens          Postagem[]
+  comentarios        Comentario[]
+  curtidas           Curtida[]
+
+  atleta        Atleta?
+  professor     Professor?
+  clube         Clube?
+  escolinha     Escolinha?
+  administrador Administrador?
+}
+
+model Professor {
+  id            String  @id @default(uuid())
+  codigo        String  @unique
+  cref          String?
+  areaFormacao  String
+  escola        String?
+  qualificacoes String?
+  certificacoes String?
+  fotoUrl       String?
+  nome          String
+
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  treinosProgramados TreinoProgramado[]
+}
+
+model Amigo {
+  id        String   @id @default(uuid())
+  usuarioId String
+  amigoId   String
+  local     String?
+  seguindo  Boolean? @default(false)
+
+  usuario Usuario @relation("UsuarioAmigo", fields: [usuarioId], references: [id])
+  amigo   Usuario @relation("AmigoUsuario", fields: [amigoId], references: [id])
+}
+
+model Mensagem {
+  id       String   @id @default(uuid())
+  deId     String
+  paraId   String
+  conteudo String
+  criadaEm DateTime @default(now())
+  lida     Boolean  @default(false)
+
+  de   Usuario @relation("MensagensEnviadas", fields: [deId], references: [id])
+  para Usuario @relation("MensagensRecebidas", fields: [paraId], references: [id])
+}
+
+model Atleta {
+  id                    String           @id @default(uuid())
+  usuarioId             String           @unique
+  usuario               Usuario          @relation(fields: [usuarioId], references: [id])
+  nome                  String?
+  sobrenome             String?
+  email                 String?
+  senhaHash             String?
+  idade                 Int
+  cpf                   String?
+  telefone1             String?
+  telefone2             String?
+  nacionalidade         String?
+  naturalidade          String?
+  posicao               String?
+  altura                Decimal?
+  peso                  Decimal?
+  seloQualidade         String?
+  foto                  String?
+  categoria             Categoria[]
+  consentimento         Boolean          @default(false)
+  clubeId               String?
+  clube                 Clube?           @relation(fields: [clubeId], references: [id])
+  escolinhaId           String?
+  escolinha             Escolinha?       @relation(fields: [escolinhaId], references: [id])
+  statusConexao         StatusConexao    @default(Pendente)
+  dataCriacao           DateTime         @default(now())
+  dataUltimaModificacao DateTime?
+  pontuacao             PontuacaoAtleta?
+
+  postagens           Postagem[]
+  midias              Midia[]
+  solicitacoesVinculo SolicitacaoVinculo[]
+  submissoesDesafio   SubmissaoDesafio[]
+  membrosGrupo        MembroGrupo[]
+  treinosAgendados    TreinoAgendado[]
+  treinosLivres       TreinoLivre[]
+  Video               Video[]
+  Ranking             Ranking?
+}
+
+model TreinoProgramado {
+  id             String                      @id @default(uuid())
+  codigo         String                      @unique
+  nome           String
+  descricao      String?
+  nivel          Nivel
+  dataAgendada   DateTime?
+  professorId    String?
+  professor      Professor?                  @relation(fields: [professorId], references: [id])
+  exercicios     TreinoProgramadoExercicio[]
+  createdAt      DateTime                    @default(now())
+  treinoAgendado TreinoAgendado[]
+}
+
+model TreinoProgramadoExercicio {
+  id                 String @id @default(uuid())
+  treinoProgramadoId String
+  exercicioId        String
+  ordem              Int
+  repeticoes         String
+
+  treinoProgramado TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id])
+  exercicio        Exercicio        @relation(fields: [exercicioId], references: [id])
+}
+
+model Exercicio {
+  id                    String      @id @default(uuid())
+  codigo                String      @unique
+  nome                  String
+  descricao             String?
+  nivel                 Nivel
+  categorias            Categoria[]
+  videoDemonstrativoUrl String?
+
+  treinoProgramadoExercicios TreinoProgramadoExercicio[]
+}
+
+model DesafioOficial {
+  id        String      @id @default(uuid())
+  titulo    String
+  descricao String
+  imagemUrl String?
+  nivel     Nivel
+  pontos    Int
+  categoria Categoria[]
+  createdAt DateTime    @default(now())
+
+  submissoes SubmissaoDesafio[]
+}
+
+model Seguidor {
+  id                String @id @default(uuid())
+  seguidoUsuarioId  String
+  seguidorUsuarioId String
+
+  seguidoUsuario  Usuario @relation("Seguido", fields: [seguidoUsuarioId], references: [id])
+  seguidorUsuario Usuario @relation("Seguidor", fields: [seguidorUsuarioId], references: [id])
+}
+
+model Postagem {
+  id          String     @id @default(uuid())
+  conteudo    String
+  imagemUrl   String?
+  videoUrl    String?
+  tipoMidia   TipoMidia?
+  dataCriacao DateTime   @default(now())
+
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  atletaId String?
+  atleta   Atleta? @relation(fields: [atletaId], references: [id])
+
+  clubeId String?
+  clube   Clube?  @relation(fields: [clubeId], references: [id])
+
+  escolinhaId String?
+  escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id])
+
+  comentarios Comentario[]
+  curtidas    Curtida[]
+}
+
+model Midia {
+  id          String    @id @default(uuid())
+  url         String
+  tipo        TipoMidia
+  dataCriacao DateTime  @default(now())
+  dataEnvio   DateTime
+  descricao   String
+  titulo      String
+
+  atletaId String?
+  atleta   Atleta? @relation(fields: [atletaId], references: [id])
+
+  escolinhaId String?
+  escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id])
+
+  clubeId String?
+  clube   Clube?  @relation(fields: [clubeId], references: [id])
+}
+
+model Escolinha {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  nome        String
+  cnpj        String?
+  telefone1   String?
+  telefone2   String?
+  email       String?
+  siteOficial String?
+  sede        String?
+  logradouro  String?
+  numero      String?
+  complemento String?
+  bairro      String?
+  cidade      String?
+  estado      String?
+  pais        String?
+  cep         String?
+  logo        String?
+  dataCriacao DateTime @default(now())
+
+  atletas   Atleta[]
+  midias    Midia[]
+  postagens Postagem[]
+}
+
+model Comentario {
+  id          String   @id @default(uuid())
+  conteudo    String
+  dataCriacao DateTime @default(now())
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+  postagemId  String
+  postagem    Postagem @relation(fields: [postagemId], references: [id])
+}
+
+model Clube {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  nome        String
+  cnpj        String?
+  telefone1   String?
+  telefone2   String?
+  email       String?
+  siteOficial String?
+  sede        String?
+  estadio     String?
+  logradouro  String?
+  numero      String?
+  complemento String?
+  bairro      String?
+  cidade      String?
+  estado      String?
+  pais        String?
+  cep         String?
+  logo        String?
+  dataCriacao DateTime @default(now())
+
+  atletas   Atleta[]
+  midias    Midia[]
+  postagens Postagem[]
+}
+
+model SolicitacaoVinculo {
+  id           String   @id @default(uuid())
+  atletaId     String
+  entidadeId   String // pode ser clube ou escolinha
+  tipoEntidade String // "clube" ou "escolinha"
+  status       String // "pendente", "aceito", "recusado"
+  criadoEm     DateTime @default(now())
+
+  atleta Atleta @relation(fields: [atletaId], references: [id])
+}
+
+model SubmissaoDesafio {
+  id        String   @id @default(uuid())
+  atletaId  String
+  desafioId String
+  videoUrl  String
+  aprovado  Boolean?
+  createdAt DateTime @default(now())
+
+  atleta  Atleta         @relation(fields: [atletaId], references: [id])
+  desafio DesafioOficial @relation(fields: [desafioId], references: [id])
+}
+
+model Grupo {
+  id        String        @id @default(uuid())
+  nome      String
+  descricao String?
+  membros   MembroGrupo[]
+}
+
+model MembroGrupo {
+  id       String @id @default(uuid())
+  grupoId  String
+  atletaId String
+
+  grupo  Grupo  @relation(fields: [grupoId], references: [id])
+  atleta Atleta @relation(fields: [atletaId], references: [id])
+}
+
+model Administrador {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+  cargo     String // Ex: "SuperAdmin", "Moderador", etc.
+  nivel     Nivel
+}
+
+model LogErro {
+  id           String   @id @default(uuid())
+  errorMessage String
+  requestId    String
+  timestamp    DateTime
+  path         String
+  clientIp     String
+  userAgent    String
+  referer      String?
+}
+
+model Curtida {
+  id         String   @id @default(uuid())
+  usuarioId  String
+  postagemId String
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+  postagem   Postagem @relation(fields: [postagemId], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model TreinoAgendado {
+  id       String   @id @default(uuid())
+  titulo   String
+  dataHora DateTime
+  local    String?
+
+  atletaId String
+  atleta   Atleta @relation(fields: [atletaId], references: [id])
+
+  treinoProgramadoId String?
+  treinoProgramado   TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id])
+}
+
+model TreinoLivre {
+  id         String   @id @default(uuid())
+  atletaId   String
+  atleta     Atleta   @relation(fields: [atletaId], references: [id])
+  data       DateTime
+  descricao  String?
+  duracaoMin Int?
+
+  registros RegistroTreino[]
+}
+
+model RegistroTreino {
+  id         String      @id @default(uuid())
+  treinoId   String
+  treino     TreinoLivre @relation(fields: [treinoId], references: [id])
+  notas      String?
+  completado Boolean     @default(false)
+}
+
+model PontuacaoAtleta {
+  atletaId String @id // também é FK
+  atleta   Atleta @relation(fields: [atletaId], references: [id])
+
+  pontuacaoTotal            Int      @default(0)
+  pontuacaoPerformance      Int      @default(0)
+  pontuacaoDisciplina       Int      @default(0)
+  pontuacaoResponsabilidade Int      @default(0)
+  ultimaAtualizacao         DateTime @default(now())
+}
+
+model Video {
+  id        String      @id @default(uuid())
+  titulo    String
+  url       String
+  thumbnail String?
+  atletaId  String
+  atleta    Atleta      @relation(fields: [atletaId], references: [id])
+  createdAt DateTime    @default(now())
+  categoria Categoria[]
+  nivel     Nivel
+}
+
+model Ranking {
+  id        String   @id @default(uuid())
+  atletaId  String   @unique
+  atleta    Atleta   @relation(fields: [atletaId], references: [id])
+  total     Int      @default(0)
+  posicao   Int
+  createdAt DateTime @default(now())
+}
