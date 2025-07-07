@@ -1,6 +1,6 @@
-import { S3 } from "aws-sdk";
+import AWS from "aws-sdk"; 
 
-const s3 = new S3();
+const s3 = new AWS.S3();
 
 export const s3Service = {
   async uploadFileAsync(file: Express.Multer.File, folder: string): Promise<string> {

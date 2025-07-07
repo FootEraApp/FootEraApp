@@ -1,3 +1,9 @@
+import { AppRoutes } from "./routes";
+
 export default function App() {
-  return <h1>Bem-vindo ao Footera</h1>;
+  return (
+    <div>
+      <AppRoutes />
+    </div>
+  );
 }

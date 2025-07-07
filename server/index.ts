@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
 
 import adminRoutes from "./routes/admin";
 import atletaRoutes from "./routes/atleta";
@@ -32,6 +34,9 @@ import uploadRoutes from "./routes/upload";
 import vinculoRoutes from "./routes/vinculo";
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 app.use(cors());
 app.use(express.json());
 
@@ -67,7 +72,6 @@ app.use("/api/treinosprogramados", treinoProgramadoRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
 
-// Rota base
 app.get("/", (req, res) => {
   res.send("FootEra API está ativa!");
 });
