@@ -24,7 +24,7 @@ export default function Cadastro() {
   return (
     <div className="flex h-screen">
       <div className="w-1/2 bg-green-900 text-white flex flex-col justify-center items-center p-10">
-        <img src="/logo.png" className="w-20 mb-4" />
+        <img src="/footera-logo.png" className="w-20 mb-4" />
         <h1 className="text-3xl font-bold mb-4">Bem-vindo à FootEra</h1>
         <p className="text-center max-w-md text-lg">
           Se você sonha em conquistar uma oportunidade, joga por amor ou quer se superar... aqui é o seu lugar.
@@ -42,7 +42,7 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
 
       <div className="w-1/2 bg-cream flex justify-center items-center p-10">
         <div className="bg-white rounded shadow-md w-full max-w-md p-6">
-          <h2 className="text-xl font-semibold mb-1">Criar conta</h2>
+          <h2 className="text-xl font-semibold mb-1 mt-11">Criar conta</h2>
           <p className="text-sm text-green-600 mb-4">Preencha os campos abaixo para criar sua conta</p>
 
           <label className="block mb-2 font-medium">Tipo de Perfil</label>
@@ -98,7 +98,7 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
           <div className="mt-4 mb-3">
             <label className="flex items-center text-sm">
               <input type="checkbox" className="mr-2" checked={aceitaTermos} onChange={(e) => setAceitaTermos(e.target.checked)} />
-              Li e aceito os <a href="#" className="underline text-blue-700">Termos de Uso</a> e <a href="#" className="underline text-blue-700">Política de Privacidade</a>
+              Li e aceito os <a href="#" className="underline text-blue-700">Termos de Uso </a> e <a href="#" className="underline text-blue-700"> Política de Privacidade</a>
             </label>
           </div>
 
