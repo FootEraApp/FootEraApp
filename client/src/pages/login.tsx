@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../hooks/use-auth";
 import { useLocation } from "wouter";
+import logo from "@/assets/footera-logo.png"; 
 
 export default function PaginaLogin() {
   const [username, setUsername] = useState("");
@@ -9,10 +10,10 @@ export default function PaginaLogin() {
   const [_, navigate] = useLocation();
   const [erro, setErro] = useState("");
 
-//  if (username) {
-//  navigate("/"); 
-//  return null;
-//  }
+ if (username) {
+ navigate("/"); 
+ return null;
+ }
 
   const handleLogin = async () => {
     try {
@@ -27,14 +28,14 @@ export default function PaginaLogin() {
     <div className="flex h-screen">
 
       <div className="w-1/2 bg-green-800 text-white flex flex-col justify-center items-center p-10">
-        <img src="../assets/footera-logo.png" alt="Logo" className="mb-6 w-16" />
+        <img src={logo} alt="Logo FootEra" className="w-20 mb-4" />
         <h1 className="text-3xl font-bold mb-4">Bem-vindo à FootEra</h1>
         <p className="text-center text-lg max-w-md">
           Se você sonha em conquistar uma oportunidade, joga por amor ou quer se superar... aqui é o seu lugar.
 FootEra. A metodologia dos profissionais, para quem vive futebol.
         </p>
 
-        <div className="mt-10 bg-green-700 p-6 rounded-lg text-sm text-left max-w-md w-full">
+        <div className="mt-10 p-6 rounded-lg text-base text-left max-w-md w-full">
           <h2 className="font-semibold mb-2">O que a FootEra oferece:</h2>
           <ul className="list-disc list-inside space-y-1">
             <li>Treinamentos personalizados</li>
