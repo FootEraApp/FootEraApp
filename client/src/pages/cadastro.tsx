@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import logo from "@/assets/footera-logo.png"; 
 
 export default function Cadastro() {
   const [tipoPerfil, setTipoPerfil] = useState("Atleta");
@@ -16,22 +17,22 @@ export default function Cadastro() {
   const handleSubmit = () => {
     if (!aceitaTermos) return setErro("Você deve aceitar os termos.");
     if (senha !== confirmarSenha) return setErro("As senhas não coincidem.");
-    // Fazer requisição aqui...
+
     console.log({ tipoPerfil, nome, email, nomeDeUsuario, senha, treinaEscolinha });
     navigate("/login");
   };
 
   return (
-    <div className="flex h-screen">
-      <div className="w-1/2 bg-green-900 text-white flex flex-col justify-center items-center p-10">
-        <img src="/footera-logo.png" className="w-20 mb-4" />
+    <div className="flex flex-col lg:flex-row min-h-screen">
+      <div className="w-full lg:w-1/2 bg-green-800 text-white flex flex-col justify-center items-center p-10">
+        <img src={logo} alt="Logo FootEra" className="w-20 mb-4" />
         <h1 className="text-3xl font-bold mb-4">Bem-vindo à FootEra</h1>
         <p className="text-center max-w-md text-lg">
           Se você sonha em conquistar uma oportunidade, joga por amor ou quer se superar... aqui é o seu lugar.
 FootEra. A metodologia dos profissionais, para quem vive futebol.
 
         </p>
-        <ul className="text-left mt-6 text-sm list-disc list-inside">
+        <ul className="text-left mt-6 text-base list-disc list-inside">
           <li>Treinamentos personalizados</li>
           <li>Desafios para testar suas habilidades</li>
           <li>Compartilhe seu progresso com a comunidade</li>
@@ -98,7 +99,7 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
           <div className="mt-4 mb-3">
             <label className="flex items-center text-sm">
               <input type="checkbox" className="mr-2" checked={aceitaTermos} onChange={(e) => setAceitaTermos(e.target.checked)} />
-              Li e aceito os <a href="#" className="underline text-blue-700">Termos de Uso </a> e <a href="#" className="underline text-blue-700"> Política de Privacidade</a>
+              Li e aceito os   <a href="#" className="underline text-blue-700"> Termos de Uso </a> e <a href="#" className="underline text-blue-700">  Política de Privacidade </a>
             </label>
           </div>
 
