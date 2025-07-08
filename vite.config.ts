@@ -7,8 +7,8 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src"),
-      "@pages": path.resolve(__dirname, "src/pages"),
+      "@": path.resolve(__dirname, "client", "src"),
+      "hooks": path.resolve(__dirname, "client", "src", "hooks"),
     },
   },
   build: {
@@ -16,6 +16,6 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 3000,
+    port: 5173,
   },
 });

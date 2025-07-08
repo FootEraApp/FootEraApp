@@ -5,7 +5,6 @@ import jwt from "jsonwebtoken";
 
 const prisma = new PrismaClient();
 
-// Login do admin
 export const loginAdmin = async (req: Request, res: Response) => {
   const { nomeDeUsuario, senha } = req.body;
 

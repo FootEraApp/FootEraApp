@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "../hooks/use-auth";
 import { useLocation } from "wouter";
 
 export default function PaginaLogin() {
@@ -9,11 +9,10 @@ export default function PaginaLogin() {
   const [_, navigate] = useLocation();
   const [erro, setErro] = useState("");
 
-    if (username) {
-  navigate("/"); 
-  return null;
-}
-
+//  if (username) {
+//  navigate("/"); 
+//  return null;
+//  }
 
   const handleLogin = async () => {
     try {
@@ -28,7 +27,7 @@ export default function PaginaLogin() {
     <div className="flex h-screen">
 
       <div className="w-1/2 bg-green-800 text-white flex flex-col justify-center items-center p-10">
-        <img src="/assets/footera-logo.png" alt="Logo" className="mb-6 w-16" />
+        <img src="../assets/footera-logo.png" alt="Logo" className="mb-6 w-16" />
         <h1 className="text-3xl font-bold mb-4">Bem-vindo à FootEra</h1>
         <p className="text-center text-lg max-w-md">
           Se você sonha em conquistar uma oportunidade, joga por amor ou quer se superar... aqui é o seu lugar.
