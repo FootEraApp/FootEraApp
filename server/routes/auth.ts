@@ -1,9 +1,13 @@
-import { Router } from "express";
+import express, { Router } from "express";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma"; 
 import { TipoUsuario } from "@prisma/client"; 
+import { cadastrarUsuario, login } from "../controllers/authController"; 
 
 const router = Router();
+
+router.post("/cadastro", cadastrarUsuario);
 
 router.post("/auth/register", async (req, res) => {
   const {
@@ -100,5 +104,26 @@ router.post("/auth/register", async (req, res) => {
     res.status(500).json({ message: "Erro interno ao criar conta." });
   }
 });
+
+router.post("/login", login);
+
+// router.post("/login", (req, res) => {
+//   const { nomeDeUsuario, senha } = req.body;
+
+//   if (nomeDeUsuario === "teste" && senha === "1234") {
+//     const token = "fake-jwt-token";
+//     return res.json({
+//       usuario: {
+//         id: 1,
+//         nome: "João da Silva",
+//         username: nomeDeUsuario,
+//         avatar: "/avatar.png"
+//       },
+//       token,
+//     });
+//   }
+
+//   return res.status(401).json({ message: "Credenciais inválidas" });
+// });
 
 export default router;

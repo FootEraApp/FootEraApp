@@ -12,14 +12,41 @@ export default function Cadastro() {
   const [aceitaTermos, setAceitaTermos] = useState(false);
   const [treinaEscolinha, setTreinaEscolinha] = useState("");
   const [erro, setErro] = useState("");
+  const [sucesso, setSucesso] = useState("");
   const [_, navigate] = useLocation();
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    setErro("");
+    setSucesso("");
+
     if (!aceitaTermos) return setErro("Você deve aceitar os termos.");
     if (senha !== confirmarSenha) return setErro("As senhas não coincidem.");
+    if (!nome || !email || !nomeDeUsuario || !senha) return setErro("Preencha todos os campos obrigatórios.");
 
-    console.log({ tipoPerfil, nome, email, nomeDeUsuario, senha, treinaEscolinha });
-    navigate("/login");
+    try {
+      const res = await fetch("http://localhost:3001/api/cadastro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: tipoPerfil,
+          nome,
+          email,
+          nomeDeUsuario,
+          senha,
+          treinaEscolinha,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Erro ao cadastrar");
+      }
+
+      setSucesso("Cadastro realizado com sucesso!");
+      setTimeout(() => navigate("/login"), 1500);
+    } catch (err: any) {
+      setErro(err.message);
+    }
   };
 
   return (

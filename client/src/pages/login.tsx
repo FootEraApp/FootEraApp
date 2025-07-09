@@ -10,24 +10,25 @@ export default function PaginaLogin() {
   const [_, navigate] = useLocation();
   const [erro, setErro] = useState("");
 
- if (username) {
- navigate("/"); 
- return null;
- }
-
   const handleLogin = async () => {
+    setErro(""); 
+
+    if (!username || !senha) {
+      return setErro("Por favor, preencha todos os campos.");
+    }
+
     try {
       await login(username, senha);
-      navigate("/"); 
+      navigate("/feed"); 
     } catch (err) {
       setErro("Nome de usuário ou senha inválidos.");
     }
   };
 
   return (
-    <div className="flex h-screen">
+    <div className="flex flex-col md:flex-row h-screen">
 
-      <div className="w-1/2 bg-green-800 text-white flex flex-col justify-center items-center p-10">
+      <div className="md:w-1/2 bg-green-800 text-white flex flex-col justify-center items-center p-10">
         <img src={logo} alt="Logo FootEra" className="w-20 mb-4" />
         <h1 className="text-3xl font-bold mb-4">Bem-vindo à FootEra</h1>
         <p className="text-center text-lg max-w-md">
@@ -47,7 +48,7 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
         </div>
       </div>
 
-      <div className="w-1/2 bg-cream flex flex-col justify-center items-center p-10">
+      <div className="md:w-1/2 bg-cream flex flex-col justify-center items-center p-10">
         <div className="w-full max-w-md bg-white shadow-md rounded-lg p-8">
           <h2 className="text-xl font-semibold mb-2 text-center">Entrar</h2>
           <p className="text-sm text-center text-gray-600 mb-6">
