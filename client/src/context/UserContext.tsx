@@ -17,13 +17,15 @@ export interface Score {
   responsibility: number;
 }
 
-interface UserContextType {
+export interface UserContextType {
   user: User | null;
   score: Score | null;
   isLoading: boolean;
   isLoggedIn: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  setUser?: React.Dispatch<React.SetStateAction<User | null>>;
+  setIsLoading?: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -72,7 +74,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         isLoggedIn: !!user,
         login,
-        logout
+        logout,
+        setUser,
+        setIsLoading
       }}
     >
       {children}
