@@ -155,3 +155,72 @@ export const deletarPostagem = async (req: AuthenticatedRequest, res: Response) 
     res.status(500).json({ message: "Erro interno." });
   }
 };
+
+export const getPerfil = async (req: AuthenticatedRequest, res: Response) => {
+  const usuarioId = req.userId;
+
+  if (!usuarioId) {
+    return res.status(401).json({ message: "Usuário não autenticado." });
+  }
+
+  try {
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: {
+        id: true,
+        nome: true,
+        nomeDeUsuario: true,
+        email: true,
+        foto: true,
+        tipo: true,
+        cidade: true,
+        estado: true,
+        pais: true,
+        postagens: true,
+        seguidores: true,
+        seguindo: true,
+      },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ message: "Usuário não encontrado." });
+    }
+
+    res.json(usuario);
+  } catch (error) {
+    console.error("Erro ao obter perfil:", error);
+    res.status(500).json({ message: "Erro interno ao buscar perfil." });
+  }
+};
+
+export const deletarUsuario = async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const usuario = await prisma.usuario.findUnique({ where: { id } });
+
+    if (!usuario) {
+      return res.status(404).json({ message: "Usuário não encontrado." });
+    }
+
+    // Deleta relacionamentos antes, se necessário (amigos, seguidores, etc.)
+    await prisma.seguidor.deleteMany({
+      where: {
+        OR: [
+          { seguidorUsuarioId: id },
+          { seguidoUsuarioId: id },
+        ],
+      },
+    });
+
+    await prisma.postagem.deleteMany({ where: { usuarioId: id } });
+
+    await prisma.usuario.delete({ where: { id } });
+
+    res.json({ message: "Usuário deletado com sucesso." });
+  } catch (error) {
+    console.error("Erro ao deletar usuário:", error);
+    res.status(500).json({ message: "Erro interno ao deletar usuário." });
+  }
+};
+

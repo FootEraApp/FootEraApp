@@ -45,13 +45,13 @@ export function useAuth() {
   throw new Error("Contexto inválido: setUser ou setIsLoading não definido");
 }
 
-  async function login(username: string, senha: string) {
+  async function login(nomeDeUsuario: string, senha: string) {
     setIsLoading(true);
     try {
       const response = await fetch("http://localhost:3001/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nomeDeUsuario: username, senha }),
+        body: JSON.stringify({ nomeDeUsuario, senha }),
       });
 
       if (!response.ok) {

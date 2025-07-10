@@ -1,27 +1,47 @@
-import express from "express";
+import express, { Router} from "express";
+import { authenticateToken } from "../middlewares/auth";
+import { adminAuth } from "../middlewares/admin-auth";
+import { PrismaClient } from "@prisma/client";
+
 import {
   getFeed,
   curtirPostagem,
   comentarPostagem,
   seguirUsuario,
   postar,
-  deletarPostagem
+  deletarPostagem,
+  getPerfil,
+  deletarUsuario
 } from "../controllers/feedController";
-import { authenticateToken } from "../middlewares/auth"; // middleware JWT
 
 import multer from "multer";
 const upload = multer({ dest: "public/uploads/posts" });
 
-const router = express.Router();
+const router = Router();
+const prisma = new PrismaClient();
 
-// Requer autenticação em todas as rotas
 router.use(authenticateToken);
 
-router.get("/", getFeed);
+router.get("/feed", authenticateToken, getFeed);
+router.get("/perfil/:id", authenticateToken, getPerfil);
+router.delete("/usuario/:id", adminAuth, deletarUsuario);
 router.post("/curtir", curtirPostagem);
 router.post("/comentar", comentarPostagem);
 router.post("/seguir", seguirUsuario);
 router.post("/postar", upload.single("arquivo"), postar);
-router.delete("/:id", deletarPostagem);
+router.delete("/:id", adminAuth, deletarPostagem);
+router.get("/", authenticateToken, async (req, res) => {
+  try {
+    const posts = await prisma.postagem.findMany({
+      orderBy: { dataCriacao: "desc" },
+      include: { usuario: true }, 
+    });
+
+    res.json(posts);
+  } catch (err) {
+    console.error("Erro ao carregar feed:", err);
+    res.status(500).json({ message: "Erro ao carregar o feed" });
+  }
+});
 
 export default router;

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { FaHeart, FaRegHeart, FaRegCommentDots, FaShare } from "react-icons/fa";
-import { getFeedPosts, likePost, PostagemComUsuario } from "../services/feedService"; // Crie este arquivo!
+import { getFeedPosts, likePost, PostagemComUsuario } from "../services/feedService"; 
 import { formatDistanceToNow } from "date-fns";
+import { Link } from "wouter";
 
 interface Usuario {
   id: string;
@@ -28,21 +29,16 @@ function PaginaFeed(): JSX.Element {
 
   useEffect(() => {
   async function carregarFeed() {
-    try {
-      const dados = await getFeedPosts();
-      if (Array.isArray(dados)) {
-        setPosts(dados);
-      } else {
-        console.error("Resposta inesperada do getFeedPosts:", dados);
-        setPosts([]);
-      }
-    } catch (error) {
-      console.error("Erro ao carregar feed:", error);
-      setPosts([]); // evita quebra da tela
+    const dados = await getFeedPosts();
+    if (!dados) {
+      console.warn("Resposta inesperada do getFeedPosts:", dados);
+      return;
     }
+    setPosts(dados);
   }
-    carregarFeed();
-  }, []);
+
+  carregarFeed();
+}, []);
 
   const handleLike = async (postId: string) => {
     await likePost(postId);
@@ -62,9 +58,9 @@ function PaginaFeed(): JSX.Element {
 
   return (
     <div className="px-4 py-6 space-y-6">
-        <h1 className="text-2xl font-bold mb-4">Feed de Postagens</h1>
+        <h1 className="text-2xl font-bold mb-4 text-center">Feed de Postagens</h1>
       {Array.isArray(posts) && posts.map((post) => {
-        const jaCurtiu = post.curtidas.some((c) => c.usuarioId === userId);
+        const jaCurtiu = Array.isArray(post.curtidas) && post.curtidas.some((c) => c.usuarioId === userId);
         return (
           <div
             key={post.id}
@@ -110,12 +106,12 @@ function PaginaFeed(): JSX.Element {
                 onClick={() => handleLike(post.id)}
               >
                 {jaCurtiu ? <FaHeart className="text-red-500" /> : <FaRegHeart />}
-                <span>{post.curtidas.length}</span>
+                <span>{post.curtidas?.length || 0}</span>
               </button>
 
               <button className="flex items-center gap-1">
                 <FaRegCommentDots />
-                <span>{post.comentarios.length}</span>
+                <span>{post.comentarios?.length || 0}</span>
               </button>
 
               <button className="flex items-center gap-1">
@@ -125,6 +121,17 @@ function PaginaFeed(): JSX.Element {
           </div>
         );
       })}
+
+      {/* Barra de navegação inferior */}
+            <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
+
+              <Link href="/feed" className="hover:underline">Feed</Link>
+              <Link href="/search" className="hover:underline">Explorar</Link>
+              <Link href="/post" className="hover:underline">Publicar</Link>
+              <Link href="/treinos" className="hover:underline">Treinos</Link>
+              <Link href="/perfil" className="hover:underline">Perfil</Link>
+      
+            </nav>
     </div>
   );
 };

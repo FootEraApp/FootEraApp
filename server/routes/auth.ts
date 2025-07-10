@@ -107,23 +107,23 @@ router.post("/auth/register", async (req, res) => {
 
 router.post("/login", login);
 
-// router.post("/login", (req, res) => {
-//   const { nomeDeUsuario, senha } = req.body;
+router.post("/login", (req, res) => {
+  const { nomeDeUsuario, senha } = req.body;
 
-//   if (nomeDeUsuario === "teste" && senha === "1234") {
-//     const token = "fake-jwt-token";
-//     return res.json({
-//       usuario: {
-//         id: 1,
-//         nome: "João da Silva",
-//         username: nomeDeUsuario,
-//         avatar: "/avatar.png"
-//       },
-//       token,
-//     });
-//   }
+  if (nomeDeUsuario === "teste" && senha === "1234") {
+    const token = "fake-jwt-token";
+    return res.json({
+      usuario: {
+        id: 1,
+        nome: "João da Silva",
+        username: nomeDeUsuario,
+        avatar: "/avatar.png"
+      },
+      token,
+    });
+  }
 
-//   return res.status(401).json({ message: "Credenciais inválidas" });
-// });
+  return res.status(401).json({ message: "Credenciais inválidas" });
+});
 
 export default router;
