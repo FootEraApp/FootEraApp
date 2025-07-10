@@ -2,38 +2,46 @@ import { useState } from "react";
 import { useAuth } from "../hooks/use-auth";
 import { useLocation } from "wouter";
 import logo from "@/assets/footera-logo.png"; 
+import axios from "axios";
 
 export default function PaginaLogin() {
-  const [username, setUsername] = useState("");
+  const [nomeDeUsuario, setNomeDeUsuario] = useState("");
   const [senha, setSenha] = useState("");
-  const { login } = useAuth();
   const [_, navigate] = useLocation();
   const [erro, setErro] = useState("");
 
-  const handleLogin = async () => {
+  const handleLogin = async (e: React.FormEvent) => {
     setErro(""); 
+    e.preventDefault();
 
-    if (!username || !senha) {
+    if (!nomeDeUsuario || !senha) {
       return setErro("Por favor, preencha todos os campos.");
     }
 
     try {
-      await login(username, senha);
-      navigate("/feed"); 
-    } catch (err) {
+       const resposta = await axios.post("http://localhost:3001/api/auth/login", {
+        nomeDeUsuario,
+        senha,
+      });
+
+     localStorage.setItem("token", resposta.data.token);
+
+
+      navigate("/feed");
+    } catch (err: any) {
+      console.error(err);
       setErro("Nome de usuário ou senha inválidos.");
     }
   };
-
+      
   return (
     <div className="flex flex-col md:flex-row h-screen">
-
       <div className="md:w-1/2 bg-green-800 text-white flex flex-col justify-center items-center p-10">
         <img src={logo} alt="Logo FootEra" className="w-20 mb-4" />
         <h1 className="text-3xl font-bold mb-4">Bem-vindo à FootEra</h1>
         <p className="text-center text-lg max-w-md">
           Se você sonha em conquistar uma oportunidade, joga por amor ou quer se superar... aqui é o seu lugar.
-FootEra. A metodologia dos profissionais, para quem vive futebol.
+          FootEra. A metodologia dos profissionais, para quem vive futebol.
         </p>
 
         <div className="mt-10 p-6 rounded-lg text-base text-left max-w-md w-full">
@@ -60,8 +68,8 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
             <input
               className="w-full border border-gray-300 rounded px-3 py-2"
               placeholder="Seu nome de usuário"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={nomeDeUsuario}
+              onChange={(e) => setNomeDeUsuario(e.target.value)}
             />
           </div>
 
@@ -96,3 +104,4 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
     </div>
   );
 }
+

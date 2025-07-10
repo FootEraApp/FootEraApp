@@ -31,7 +31,6 @@ export const deletarUsuario = async (req: Request, res: Response) => {
   }
 };
 
-// POST /api/cadastro
 export const criarUsuario = async (req: Request, res: Response) => {
   const {
     nomeDeUsuario,

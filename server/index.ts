@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import bodyParser from "body-parser";
+import dotenv from "dotenv";
 
 import adminRoutes from "./routes/admin";
 import atletaRoutes from "./routes/atleta";
@@ -28,7 +29,7 @@ import professorRoutes from "./routes/professor";
 import rankingRoutes from "./routes/ranking"
 import searchRoutes from "./routes/search";
 import termoRoutes from "./routes/termo";
-import treinoRoutes from "./routes/treino";
+import treinoRoutes from "./routes/treinos";
 import treinoLivreRoutes from "./routes/treinoLivre";
 import treinoProgramadoRoutes from "./routes/treinoProgramado";
 import uploadRoutes from "./routes/upload";
@@ -37,6 +38,7 @@ import vinculoRoutes from "./routes/vinculo";
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+dotenv.config();
 
 app.use(cors());
 app.use(express.json());
@@ -63,7 +65,7 @@ app.use("/api/mensagens", mensagemRoutes);
 app.use("/api/midias", midiaRoutes);
 app.use("/api/perfil", perfilRoutes);
 app.use("/api/pontuacao", pontuacaoRoutes);
-app.use("/api/posts", postRoutes);
+app.use("/api/post", postRoutes);
 app.use("/api/professores", professorRoutes);
 app.use("/api/ranking", rankingRoutes);
 app.use("/api/search", searchRoutes);
@@ -80,6 +82,6 @@ app.get("/", (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
+app.listen(3001, () => {
+  console.log(`Servidor rodando em http://localhost:3001`);
 });

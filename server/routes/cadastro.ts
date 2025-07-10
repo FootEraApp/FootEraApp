@@ -13,6 +13,6 @@ router.get("/", getCadastroIndex);
 router.get("/escolha", getEscolhaTipo);
 router.get("/criar", getCriar);
 router.delete("/deletar/:id", deletarUsuario);
-router.post("/", criarUsuario);
+router.post("/cadastro", criarUsuario);
 
 export default router;
