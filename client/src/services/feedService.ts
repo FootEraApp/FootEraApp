@@ -26,8 +26,7 @@ try {
    const response = await fetch("http://localhost:3001/api/feed", {
     headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-    },
+   },
     });
 
     if (!response.ok) {
@@ -56,5 +55,56 @@ try {
 }  
 
 export async function likePost(postId: string) {
-  await axios.post(`/api/posts/${postId}/like`);
+  const token = localStorage.getItem("token");
+
+  const response = await fetch(`http://localhost:3001/api/post/posts/${postId}/like`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Erro ao curtir post: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+export async function comentarPost(postId: string, conteudo: string) {
+  const token = localStorage.getItem("token");
+  const usuarioId = localStorage.getItem("usuarioId"); 
+
+  await fetch(`http://localhost:3001/api/posts/${postId}/comentario`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ conteudo, usuarioId }),
+  });
+}
+
+export async function compartilharPost(postId: string) {
+  const link = `${window.location.origin}/post/${postId}`;
+  try {
+    await navigator.clipboard.writeText(link);
+    alert("Link copiado para a área de transferência!");
+  } catch (error) {
+    console.error("Erro ao copiar link:", error);
+    alert("Não foi possível copiar o link.");
+  }
+}
+
+export async function getPostById(id: string): Promise<PostagemComUsuario> {
+  const token = localStorage.getItem("token");
+  const response = await fetch(`http://localhost:3001/api/posts/${id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) throw new Error("Erro ao buscar post");
+
+  return response.json();
 }
