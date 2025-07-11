@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import logo from "@/assets/footera-logo.png"; 
+import logo from "/assets/footera-logo.png"; 
 
 export default function Cadastro() {
   const [tipoPerfil, setTipoPerfil] = useState("Atleta");

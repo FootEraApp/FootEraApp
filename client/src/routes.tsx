@@ -3,8 +3,10 @@ import PaginaLogin from "./pages/login";
 import PaginaCadastro from "./pages/cadastro";
 import HomeRedirect from "./pages/index";
 import PaginaFeed from "./pages/feed";
-import PaginaTreinos from "./pages/treinos"
-import PaginaCreate from "./pages/post/create"
+import PaginaTreinos from "./pages/treinos";
+import PaginaCreate from "./pages/post/create";
+import ShowPostPage from "./pages/post/ShowPost";
+import PostagemIndividual from "./pages/post/postagemIndividual";
 export function AppRoutes() {
   return (
     <>
@@ -26,6 +28,13 @@ export function AppRoutes() {
       <Route path="/post">
         <PaginaCreate />
       </Route>
+      <Route path="/postagens/:id">
+        <PostagemIndividual />
+      </Route>
+      <Route path="/posts">
+        <ShowPostPage />
+      </Route>
+
     </>
   );
 }

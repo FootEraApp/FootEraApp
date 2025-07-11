@@ -21,18 +21,6 @@ async function main() {
         bairro: 'Centro',
       },
     });
-
-    await prisma.professor.create({
-      data: {
-        usuarioId: usuarioProfessor.id,
-        codigo: 'PROF001',
-        cref: '12345-G/ES',
-        areaFormacao: 'Educação Física - UFES',
-        nome: usuarioProfessor.nome,
-        qualificacoes: 'Mestrado em Educação Física; Pós-graduação NAR-SP',
-        certificacoes: 'Curso de Preparação CBF; Licença Técnica CBF'
-      }
-    });
   }
 
   let atleta1 = await prisma.usuario.findUnique({
@@ -188,6 +176,29 @@ async function main() {
       });
     }
   }
+
+  const usuario = await prisma.usuario.upsert({
+    where: { nome: "Usuário Teste", nomeDeUsuario: "usuario_teste" },
+    update: {},
+    create: {
+      nome: "Usuário Teste",
+      tipo: "Admin",
+      foto: "footera-logo.png", 
+      nomeDeUsuario: "usuario_teste",
+      senhaHash: "hashTeste123",
+      email: " usuarioteste@gmail.com"
+
+    },
+  });
+
+  await prisma.postagem.create({
+    data: {
+      conteudo: "Nosso ranking semanal de treinos está no ar! 🏆",
+      tipoMidia: "Imagem",
+      imagemUrl: "Ranking-treinos.png", 
+      usuarioId: usuario.id,
+    },
+  });
 
   console.log('Seed finalizado com sucesso!');
 }

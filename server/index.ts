@@ -65,7 +65,7 @@ app.use("/api/mensagens", mensagemRoutes);
 app.use("/api/midias", midiaRoutes);
 app.use("/api/perfil", perfilRoutes);
 app.use("/api/pontuacao", pontuacaoRoutes);
-app.use("/api/post", postRoutes);
+app.use("/api/posts", postRoutes);
 app.use("/api/professores", professorRoutes);
 app.use("/api/ranking", rankingRoutes);
 app.use("/api/search", searchRoutes);
