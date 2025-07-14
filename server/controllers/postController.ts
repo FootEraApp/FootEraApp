@@ -108,7 +108,8 @@ export const curtirPost = async (req: Request, res: Response) => {
 
 export const comentarPost = async (req: Request, res: Response) => {
   const { postId } = req.params;
-  const { conteudo, usuarioId } = req.body;
+  const usuarioId = req.userId;
+  const { conteudo } = req.body;
 
   if (!conteudo || !usuarioId) {
     return res.status(400).json({ message: "Comentário inválido" });
@@ -151,3 +152,16 @@ export const criarPostagem = async (req: AuthenticatedRequest, res: Response) =>
   }
 };
 
+export const compartilharPostagem = async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  try {
+   await prisma.postagem.update ({
+    where: { id },
+    data: { compartilhamentos: { increment: 1 } },
+   })
+    res.status(200).json({ message: "Compartilhamento registrado." });
+  } catch (error) {
+    console.error("Erro ao compartilhar:", error);
+    res.status(500).json({ message: "Erro interno ao compartilhar." });
+  }
+};

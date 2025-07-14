@@ -105,7 +105,7 @@ router.post("/auth/register", async (req, res) => {
   }
 });
 
-router.post("/login", login);
+// router.post("/login", login);
 
 router.post("/login", (req, res) => {
   const { nomeDeUsuario, senha } = req.body;

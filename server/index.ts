@@ -44,9 +44,6 @@ app.use(cors());
 app.use(express.json());
 app.use(bodyParser.json());
 
-app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
-
-// Rotas agrupadas
 app.use("/api/admin", adminRoutes);
 app.use("/api/atletas", atletaRoutes);
 app.use("/api/auth", authRoutes);
@@ -65,7 +62,7 @@ app.use("/api/mensagens", mensagemRoutes);
 app.use("/api/midias", midiaRoutes);
 app.use("/api/perfil", perfilRoutes);
 app.use("/api/pontuacao", pontuacaoRoutes);
-app.use("/api/posts", postRoutes);
+app.use("/api/post", postRoutes);
 app.use("/api/professores", professorRoutes);
 app.use("/api/ranking", rankingRoutes);
 app.use("/api/search", searchRoutes);
@@ -75,6 +72,8 @@ app.use("/api/treinoslivres", treinoLivreRoutes);
 app.use("/api/treinosprogramados", treinoProgramadoRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
+app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
+
 
 app.get("/", (req, res) => {
   res.send("FootEra API está ativa!");

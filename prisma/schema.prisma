@@ -182,6 +182,7 @@ model Postagem {
   escolinhaId String?
   comentarios Comentario[]
   curtidas    Curtida[]
+  compartilhamentos Int @default(0)
   atleta      Atleta?      @relation(fields: [atletaId], references: [id])
   clube       Clube?       @relation(fields: [clubeId], references: [id])
   escolinha   Escolinha?   @relation(fields: [escolinhaId], references: [id])

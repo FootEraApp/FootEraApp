@@ -4,22 +4,18 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-// GET /api/cadastro
 export const getCadastroIndex = async (_req: Request, res: Response) => {
   res.json({ message: "Tela de cadastro inicial" });
 };
 
-// GET /api/cadastro/escolha
 export const getEscolhaTipo = async (_req: Request, res: Response) => {
   res.json({ message: "Escolha o tipo de usuário: Atleta, Clube, Escolinha, Professor ou Admin" });
 };
 
-// GET /api/cadastro/criar
 export const getCriar = async (_req: Request, res: Response) => {
   res.json({ message: "Formulário de criação de usuário" });
 };
 
-// DELETE /api/cadastro/deletar/:id
 export const deletarUsuario = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

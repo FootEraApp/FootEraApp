@@ -8,9 +8,18 @@ export default function PaginaPostagem() {
   const [mensagem, setMensagem] = useState("");
 
   const handleEnviar = async () => {
-    if (!descricao || !mídia) {
-      setMensagem("Preencha todos os campos.");
+    if (!descricao.trim() && !mídia) {
+      setMensagem("É necessário pelo menos uma descrição ou uma mídia.");
       return;
+    }
+
+    const body = {
+      conteudo: descricao,
+      ...(mídia && {
+        tipoMidia: mídia.type.startsWith("video") ? "Video" : "Imagem",
+        imagemUrl: mídia.name || "", 
+        videoUrl: mídia.name || "",  
+      }),
     }
 
     setCarregando(true);
@@ -20,18 +29,13 @@ export default function PaginaPostagem() {
 
 
     try {
-      const res = await fetch("http://localhost:3001/api/post", {
+      const res = await fetch("http://localhost:3001/api/post/postar", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: JSON.stringify({
-          conteudo: descricao,
-          tipoMidia: mídia?.type.startsWith("video") ? "Video" : "Imagem",
-          imagemUrl: mídia?.name || "", 
-          videoUrl: mídia?.name || "",  
-        }),
+        body: JSON.stringify(body)
       });
 
       if (!res.ok) throw new Error("Erro ao enviar");
