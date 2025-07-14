@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import logo from "/assets/footera-logo.png"; 
+import logo from "/assets/usuarios/footera-logo.png"; 
 
 export default function Cadastro() {
   const [tipoPerfil, setTipoPerfil] = useState("Atleta");
@@ -24,7 +24,7 @@ export default function Cadastro() {
     if (!nome || !email || !nomeDeUsuario || !senha) return setErro("Preencha todos os campos obrigatórios.");
 
     try {
-      const res = await fetch("http://localhost:3001/api/cadastro", {
+      const res = await fetch("http://localhost:3001/api/cadastro/cadastro", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

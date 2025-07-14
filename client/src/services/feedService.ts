@@ -7,6 +7,16 @@ export interface Usuario {
   tipo: string;
 }
 
+export interface Comentarios {
+  id: string;
+  conteudo: string;
+  dataCriacao: string;
+  usuario: {
+    nome: string;
+    foto?: string;
+  };
+}
+
 export interface PostagemComUsuario {
   id: string;
   conteudo: string;
@@ -16,14 +26,13 @@ export interface PostagemComUsuario {
   dataCriacao: string;
   usuario: Usuario;
   curtidas: { usuarioId: string }[];
-  comentarios: { id: string }[];
+  comentarios: Comentarios[];
 }
-
 
 export async function getFeedPosts(): Promise<PostagemComUsuario[]> {
 try {
   const token = localStorage.getItem("token");
-   const response = await fetch("http://localhost:3001/api/feed", {
+   const response = await fetch("http://localhost:3001/api/feed/", {
     headers: {
         Authorization: `Bearer ${token}`,
    },
@@ -57,7 +66,7 @@ try {
 export async function likePost(postId: string) {
   const token = localStorage.getItem("token");
 
-  const response = await fetch(`http://localhost:3001/api/post/posts/${postId}/like`, {
+  const response = await fetch(`http://localhost:3001/api/post/${postId}/like`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -73,15 +82,14 @@ export async function likePost(postId: string) {
 
 export async function comentarPost(postId: string, conteudo: string) {
   const token = localStorage.getItem("token");
-  const usuarioId = localStorage.getItem("usuarioId"); 
-
-  await fetch(`http://localhost:3001/api/posts/${postId}/comentario`, {
+ 
+  await fetch(`http://localhost:3001/api/post/${postId}/comentario`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ conteudo, usuarioId }),
+    body: JSON.stringify({ conteudo, postagemId: postId }),
   });
 }
 
@@ -89,6 +97,10 @@ export async function compartilharPost(postId: string) {
   const link = `${window.location.origin}/post/${postId}`;
   try {
     await navigator.clipboard.writeText(link);
+    
+    await fetch(`http://localhost:3001/api/post/${postId}/compartilhar`, {
+      method: "POST",
+    });
     alert("Link copiado para a área de transferência!");
   } catch (error) {
     console.error("Erro ao copiar link:", error);

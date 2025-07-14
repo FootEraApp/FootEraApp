@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { useAuth } from "../hooks/use-auth";
 import { useLocation } from "wouter";
-import logo from "/assets/footera-logo.png"; 
+import logo from "/assets/usuarios/footera-logo.png"; 
 import axios from "axios";
 
 export default function PaginaLogin() {
