@@ -33,7 +33,9 @@ export async function login(req: Request, res: Response) {
     }
 
     const token = jwt.sign(
-      { id: usuario.id },
+      { id: usuario.id,
+        tipo: usuario.tipo,
+       },
       process.env.JWT_SECRET || "defaultsecret",
       { expiresIn: "7d" }
     );
@@ -45,6 +47,9 @@ export async function login(req: Request, res: Response) {
       message: "Login bem-sucedido",
       token,
       usuario,
+      tipo: usuario.tipo, 
+      nome: usuario.nomeDeUsuario,
+      id: usuario.id,
     });
   } catch (error) {
     console.error("Erro no login:", error);

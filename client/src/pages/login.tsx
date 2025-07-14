@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import logo from "/assets/usuarios/footera-logo.png"; 
+import logo from "../assets/footera-logo.png"; 
 import axios from "axios";
 
 export default function PaginaLogin() {
@@ -18,13 +18,34 @@ export default function PaginaLogin() {
     }
 
     try {
-       const resposta = await axios.post("http://localhost:3001/api/auth/login", {
+      const resposta = await axios.post("http://localhost:3001/api/auth/login", {
         nomeDeUsuario,
         senha,
       });
 
-     localStorage.setItem("token", resposta.data.token);
+      // 🟢 Salva o token
+      localStorage.setItem("token", resposta.data.token);
 
+      // 🟢 Salva nome e id
+      localStorage.setItem("nomeUsuario", resposta.data.nome);
+      localStorage.setItem("usuarioId", resposta.data.id);
+
+      // 🟢 Padroniza e salva o tipo do usuário
+      const tipoOriginal = resposta.data.tipo;
+      const tipoFormatado = tipoOriginal.toLowerCase();
+
+      let tipoPadrao: 'atleta' | 'escola' | 'clube' | 'professor' | null = null;
+
+      if (tipoFormatado === 'atleta') tipoPadrao = 'atleta';
+      if (tipoFormatado === 'escolinha') tipoPadrao = 'escola';
+      if (tipoFormatado === 'clube') tipoPadrao = 'clube';
+      if (tipoFormatado === 'professor') tipoPadrao = 'professor';
+
+      if (tipoPadrao) {
+        localStorage.setItem("tipoUsuario", tipoPadrao);
+      } else {
+        console.warn("Tipo de usuário não reconhecido:", tipoOriginal);
+      }
 
       navigate("/feed");
     } catch (err: any) {
@@ -32,7 +53,7 @@ export default function PaginaLogin() {
       setErro("Nome de usuário ou senha inválidos.");
     }
   };
-      
+
   return (
     <div className="flex flex-col md:flex-row h-screen">
       <div className="md:w-1/2 bg-green-800 text-white flex flex-col justify-center items-center p-10">
@@ -103,4 +124,3 @@ export default function PaginaLogin() {
     </div>
   );
 }
-
