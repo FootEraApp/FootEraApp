@@ -17,16 +17,17 @@ export default function PaginaPostagem() {
       conteudo: descricao,
       ...(mídia && {
         tipoMidia: mídia.type.startsWith("video") ? "Video" : "Imagem",
-        imagemUrl: mídia.name || "", 
-        videoUrl: mídia.name || "",  
+        imagemUrl: mídia.name || "",
+        videoUrl: mídia.name || "",
       }),
-    }
+    };
 
     setCarregando(true);
     const formData = new FormData();
     formData.append("descricao", descricao);
-    formData.append("arquivo", mídia);
-
+    if (mídia) {
+      formData.append("arquivo", mídia);
+    }
 
     try {
       const res = await fetch("http://localhost:3001/api/post/postar", {
@@ -35,7 +36,7 @@ export default function PaginaPostagem() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) throw new Error("Erro ao enviar");

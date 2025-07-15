@@ -10,7 +10,7 @@ router.put("/:id", authenticateToken, editarPostagemPost);
 router.delete("/:postagemId", authenticateToken, deletarPostagem);
 router.post("/:id/like", authenticateToken, curtirPost);
 router.post("/:id/comentario", authenticateToken, comentarPost);    
-router.post("/:id/compartilhar", compartilharPostagem);  
+router.post("/:id/compartilhar", authenticateToken, compartilharPostagem);  
 router.get("/feed", authenticateToken, getFeed);
 
 

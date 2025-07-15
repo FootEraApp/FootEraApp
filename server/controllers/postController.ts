@@ -1,4 +1,3 @@
-// server/controllers/postController.ts
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth";
@@ -81,33 +80,28 @@ export const getFeed = async (_req: Request, res: Response) => {
   res.json(posts);
 };
 
-export const curtirPost = async (req: Request, res: Response) => {
-  const { postId } = req.params;
-  const usuarioId = req.headers["usuario-id"] as string; // ou extraído do JWT
+export const curtirPost = async (req: AuthenticatedRequest, res: Response) => {
+  const { id: postId } = req.params;
+  const usuarioId = req.userId;
+
+  if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
   const curtidaExistente = await prisma.curtida.findFirst({
     where: { postagemId: postId, usuarioId },
   });
 
   if (curtidaExistente) {
-    await prisma.curtida.delete({
-      where: { id: curtidaExistente.id },
-    });
-    return res.json({ message: "Curtida removida" });
+    await prisma.curtida.delete({ where: { id: curtidaExistente.id } });
+    return res.status(200).json({ message: "Descurtido" });
   }
 
-  await prisma.curtida.create({
-    data: {
-      postagemId: postId,
-      usuarioId,
-    },
-  });
+  await prisma.curtida.create({ data: { usuarioId, postagemId: postId } });
+  res.status(201).json({ message: "Curtido" });
 
-  res.json({ message: "Curtida adicionada" });
-};
+  };
 
-export const comentarPost = async (req: Request, res: Response) => {
-  const { postId } = req.params;
+export const comentarPost = async (req: AuthenticatedRequest, res: Response) => {
+  const { id: postId } = req.params;
   const usuarioId = req.userId;
   const { conteudo } = req.body;
 
@@ -123,7 +117,7 @@ export const comentarPost = async (req: Request, res: Response) => {
     },
   });
 
-  res.status(201).json(comentario);
+  res.status(201).json({ message: "comentado com sucesso", comentario });
 };
 
 export const criarPostagem = async (req: AuthenticatedRequest, res: Response) => {
@@ -153,12 +147,13 @@ export const criarPostagem = async (req: AuthenticatedRequest, res: Response) =>
 };
 
 export const compartilharPostagem = async (req: AuthenticatedRequest, res: Response) => {
-  const { id } = req.params;
+  const { id: postId } = req.params;
   try {
    await prisma.postagem.update ({
-    where: { id },
+    where: { id: postId },
     data: { compartilhamentos: { increment: 1 } },
    })
+   
     res.status(200).json({ message: "Compartilhamento registrado." });
   } catch (error) {
     console.error("Erro ao compartilhar:", error);

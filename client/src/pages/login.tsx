@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import logo from "../assets/footera-logo.png"; 
+import logo from "/assets/usuarios/footera-logo.png"; 
 import axios from "axios";
 
 export default function PaginaLogin() {
@@ -23,15 +23,12 @@ export default function PaginaLogin() {
         senha,
       });
 
-      // 🟢 Salva o token
       localStorage.setItem("token", resposta.data.token);
 
-      // 🟢 Salva nome e id
-      localStorage.setItem("nomeUsuario", resposta.data.nome);
-      localStorage.setItem("usuarioId", resposta.data.id);
+      localStorage.setItem("nomeUsuario", resposta.data.usuario.nome);
+      localStorage.setItem("usuarioId", resposta.data.usuario.id);
 
-      // 🟢 Padroniza e salva o tipo do usuário
-      const tipoOriginal = resposta.data.tipo;
+      const tipoOriginal = resposta.data.usuario.tipo;
       const tipoFormatado = tipoOriginal.toLowerCase();
 
       let tipoPadrao: 'atleta' | 'escola' | 'clube' | 'professor' | null = null;
