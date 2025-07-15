@@ -5,7 +5,7 @@ import HomeRedirect from "./pages/index";
 import PaginaFeed from "./pages/feed";
 import PaginaTreinos from "./pages/treinos";
 import PaginaCreate from "./pages/post/create";
-import ShowPostPage from "./pages/post/ShowPost";
+import ShowPostPage from "./pages/post/showPost";
 import PostagemIndividual from "./pages/post/postagemIndividual";
 export function AppRoutes() {
   return (

@@ -87,7 +87,6 @@ export async function comentarPost(postId: string, conteudo: string) {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
     },
     body: JSON.stringify({ conteudo, postagemId: postId }),
   });

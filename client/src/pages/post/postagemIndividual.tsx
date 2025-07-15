@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { getPostById } from "@/services/feedService";
+
 export default function PostagemIndividual() {
-  const [post, setPost] = useState(null);
+  const [post, setPost] = useState<any>(null);
   const [location] = useLocation();
 
   const postId = location.split("/").pop();
 
   useEffect(() => {
     async function fetchPost() {
-      const data = await getPostById(postId);
+      const data = await getPostById(postId as string);
       setPost(data);
     }
 

@@ -39,14 +39,11 @@ export function useAuth() {
     throw new Error("useAuth deve ser usado dentro de um UserProvider");
   }
 
-  const { setUser, setIsLoading } = context ?? {};
-
-  if (!setUser || !setIsLoading) {
-  throw new Error("Contexto inválido: setUser ou setIsLoading não definido");
-}
+  const safeSetUser = context?.setUser ?? (() => {});
+  const safeSetIsLoading = context?.setIsLoading ?? (() => {});
 
   async function login(nomeDeUsuario: string, senha: string) {
-    setIsLoading(true);
+    safeSetIsLoading(true);
     try {
       const response = await fetch("http://localhost:3001/api/auth/login", {
         method: "POST",
@@ -59,9 +56,9 @@ export function useAuth() {
       }
 
       const data = await response.json();
-      setUser(data.usuario); // ou conforme sua API retornar
+      safeSetUser(data.usuario);
     } finally {
-      setIsLoading(false);
+      safeSetIsLoading(false);
     }
   }
 

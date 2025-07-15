@@ -29,7 +29,7 @@ export const deletarUsuario = async (req: Request, res: Response) => {
 
 export const criarUsuario = async (req: Request, res: Response) => {
   const {
-    nomeDeUsuario,
+    nomeDeUsuario: usuarioLower,
     nome,
     email,
     senha,
@@ -41,6 +41,7 @@ export const criarUsuario = async (req: Request, res: Response) => {
     cpf
   } = req.body;
 
+  const nomeDeUsuario = usuarioLower.toLowerCase();
   if (!nomeDeUsuario || !nome || !email || !senha || !tipo) {
     return res.status(400).json({ message: "Campos obrigatórios ausentes." });
   }
