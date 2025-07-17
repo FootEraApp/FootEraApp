@@ -202,7 +202,7 @@ function PaginaFeed(): JSX.Element {
         <Link href="/feed" className="hover:underline">
           Feed
         </Link>
-        <Link href="/search" className="hover:underline">
+        <Link href="/explorar" className="hover:underline">
           Explorar
         </Link>
         <Link href="/post" className="hover:underline">

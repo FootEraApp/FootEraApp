@@ -23,6 +23,7 @@ model Usuario {
   dataCriacao        DateTime       @default(now())
   codigo             String?
   administrador      Administrador?
+  verified           Boolean        @default(false)
   amigosDe           Amigo[]        @relation("AmigoUsuario")
   amigos             Amigo[]        @relation("UsuarioAmigo")
   atleta             Atleta?

@@ -84,7 +84,7 @@ export default function PaginaPostagem() {
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">Feed</Link>
-        <Link href="/search" className="hover:underline">Explorar</Link>
+        <Link href="/explorar" className="hover:underline">Explorar</Link>
         <Link href="/post" className="hover:underline">Publicar</Link>
         <Link href="/treinos" className="hover:underline">Treinos</Link>
         <Link href="/perfil" className="hover:underline">Perfil</Link>
