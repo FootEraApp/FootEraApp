@@ -27,7 +27,7 @@ import pontuacaoRoutes from "./routes/pontuacao";
 import postRoutes from "./routes/post";
 import professorRoutes from "./routes/professor";
 import rankingRoutes from "./routes/ranking"
-import searchRoutes from "./routes/search";
+import explorarRoutes from "./routes/explorar";
 import termoRoutes from "./routes/termo";
 import treinoRoutes from "./routes/treinos";
 import treinoLivreRoutes from "./routes/treinoLivre";
@@ -42,7 +42,6 @@ dotenv.config();
 
 app.use(cors());
 app.use(express.json());
-app.use(bodyParser.json());
 
 app.use("/api/admin", adminRoutes);
 app.use("/api/atletas", atletaRoutes);
@@ -52,6 +51,7 @@ app.use("/api/cadastro", cadastroRoutes);
 app.use("/api/clubes", clubeRoutes);
 app.use("/api/desafios", desafiosRoutes);
 app.use("/api/escolinhas", escolinhaRoutes);
+app.use("/api/explorar", explorarRoutes);
 app.use("/api/exercicios", exerciciosRoutes);
 app.use("/api/feed", feedRoutes);
 app.use("/api/grupos", gruposRoutes);
@@ -65,7 +65,6 @@ app.use("/api/pontuacao", pontuacaoRoutes);
 app.use("/api/post", postRoutes);
 app.use("/api/professores", professorRoutes);
 app.use("/api/ranking", rankingRoutes);
-app.use("/api/search", searchRoutes);
 app.use("/api/termos", termoRoutes);
 app.use("/api/treinos", treinoRoutes);
 app.use("/api/treinoslivres", treinoLivreRoutes);

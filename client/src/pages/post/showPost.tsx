@@ -3,7 +3,7 @@ import { useParams } from "wouter";
 import { getFeedPosts } from "../../services/feedService";
 import { formatDistanceToNow } from "date-fns";
 
-export default function ShowPostPage() {
+export default function PaginaMostrarPost() {
   const params = useParams();
   const id = ( params as { id?: string }).id;
   const [post, setPost] = useState<any>(null);

@@ -5,8 +5,10 @@ import HomeRedirect from "./pages/index";
 import PaginaFeed from "./pages/feed";
 import PaginaTreinos from "./pages/treinos";
 import PaginaCreate from "./pages/post/create";
-import ShowPostPage from "./pages/post/showPost";
+import PaginaMostrarPost from "./pages/post/showPost";
 import PostagemIndividual from "./pages/post/postagemIndividual";
+import PaginaExplorar from "./pages/explorar";
+import PaginaAdmin from "./pages/admin-page";
 export function AppRoutes() {
   return (
     <>
@@ -32,7 +34,13 @@ export function AppRoutes() {
         <PostagemIndividual />
       </Route>
       <Route path="/posts">
-        <ShowPostPage />
+        <PaginaMostrarPost />
+      </Route>
+      <Route path="/explorar">
+        <PaginaExplorar />
+      </Route>
+      <Route path="/admin">
+        <PaginaAdmin />
       </Route>
 
     </>
