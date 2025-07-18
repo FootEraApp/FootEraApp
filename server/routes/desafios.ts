@@ -1,18 +1,10 @@
 import express from "express";
-import {
-  getDesafios,
-  getDesafioById,
-  criarSubmissaoDesafio,
-  getSubmissoesPorDesafio,
-  getSubmissoesPorAtleta
-} from "../controllers/desafiosOficiaisController";
+import { createDesafio, updateDesafio, deleteDesafio, getDesafios } from "../controllers/desafiosController";
 
 const router = express.Router();
-
+router.post("/", createDesafio);
+router.put("/:id", updateDesafio);
+router.delete("/:id", deleteDesafio);
 router.get("/", getDesafios);
-router.get("/:id", getDesafioById);
-router.post("/:id/submissoes", criarSubmissaoDesafio);
-router.get("/:id/submissoes", getSubmissoesPorDesafio);
-router.get("/atleta/:atletaId/submissoes", getSubmissoesPorAtleta);
 
 export default router;

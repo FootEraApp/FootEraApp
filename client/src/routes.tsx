@@ -4,11 +4,16 @@ import PaginaCadastro from "./pages/cadastro";
 import HomeRedirect from "./pages/index";
 import PaginaFeed from "./pages/feed";
 import PaginaTreinos from "./pages/treinos";
-import PaginaCreate from "./pages/post/create";
+import PaginaCreatePost from "./pages/post/create";
 import PaginaMostrarPost from "./pages/post/showPost";
 import PostagemIndividual from "./pages/post/postagemIndividual";
 import PaginaExplorar from "./pages/explorar";
 import PaginaAdmin from "./pages/admin-page";
+import PaginaCreateDesafios from "./pages/admin/desafios/create";
+import PaginaCreateExercicios from "./pages/admin/exercicios/create";
+import PaginaCreateTreinos from "./pages/admin/treinos/create";
+import PaginaCreateProfessores from "./pages/admin/professores/create";
+
 export function AppRoutes() {
   return (
     <>
@@ -28,7 +33,7 @@ export function AppRoutes() {
         <PaginaTreinos />
       </Route>
       <Route path="/post">
-        <PaginaCreate />
+        <PaginaCreatePost />
       </Route>
       <Route path="/postagens/:id">
         <PostagemIndividual />
@@ -42,7 +47,18 @@ export function AppRoutes() {
       <Route path="/admin">
         <PaginaAdmin />
       </Route>
-
+      <Route path="/admin/desafios/create">
+        <PaginaCreateDesafios />
+      </Route>
+      <Route path="/admin/exercicios/create">
+        <PaginaCreateExercicios />
+      </Route>
+      <Route path="/admin/treinos/create">
+        <PaginaCreateTreinos />
+      </Route>
+      <Route path="/admin/professores/create">
+        <PaginaCreateProfessores />
+      </Route>
     </>
   );
 }
