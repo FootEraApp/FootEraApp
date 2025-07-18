@@ -1,124 +1,87 @@
 import { Request, Response } from "express";
-import { PrismaClient, Categoria, Nivel } from "@prisma/client";
+import { prisma } from "../lib/prisma";
+import { Nivel } from "@prisma/client";
+import multer from "multer";
 import path from "path";
 import fs from "fs";
 
-const prisma = new PrismaClient();
+const uploadPath = path.join(__dirname, "..", "uploads", "videos");
+fs.mkdirSync(uploadPath, { recursive: true });
 
-// GET /api/exercicios
-export const getExercicios = async (_req: Request, res: Response) => {
-  try {
-    const exercicios = await prisma.exercicio.findMany();
-    res.json(exercicios);
-  } catch (error) {
-    console.error("Erro ao listar exercícios:", error);
-    res.status(500).json({ message: "Erro interno." });
-  }
-};
-
-// GET /api/exercicios/:id
-export const getExercicioById = async (req: Request, res: Response) => {
-  try {
-    const exercicio = await prisma.exercicio.findUnique({
-      where: { id: req.params.id }
-    });
-
-    if (!exercicio) {
-      return res.status(404).json({ message: "Exercício não encontrado." });
-    }
-
-    res.json(exercicio);
-  } catch (error) {
-    console.error("Erro ao buscar exercício:", error);
-    res.status(500).json({ message: "Erro interno." });
-  }
-};
-
-// POST /api/exercicios
 export const createExercicio = async (req: Request, res: Response) => {
+  const { codigo, nome, descricao, nivel, categorias } = req.body;
+
+  let videoDemonstrativoUrl = null;
+  if (req.file) {
+    videoDemonstrativoUrl = `/uploads/videos/${req.file.filename}`;
+  }
+
   try {
-    const { codigo, nome, descricao, nivel, categorias } = req.body;
-    const file = (req as any).file;
-
-    const videoUrl = file ? `/uploads/videos/${file.filename}` : undefined;
-
-    const novoExercicio = await prisma.exercicio.create({
+    const exercicio = await prisma.exercicio.create({
       data: {
         codigo,
         nome,
         descricao,
         nivel: nivel as Nivel,
-        categorias: categorias as Categoria[],
-        videoDemonstrativoUrl: videoUrl
-      }
+        categorias: categorias ? JSON.parse(categorias) : [],
+        videoDemonstrativoUrl,
+      },
     });
-
-    res.status(201).json(novoExercicio);
+    res.status(201).json(exercicio);
   } catch (error) {
-    console.error("Erro ao criar exercício:", error);
-    res.status(500).json({ message: "Erro interno ao criar exercício" });
+    console.error(error);
+    res.status(500).json({ error: "Erro ao criar exercício." });
   }
 };
 
-// PUT /api/exercicios/:id
 export const updateExercicio = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { nome, descricao, nivel, categorias } = req.body;
-  const file = (req as any).file;
+  const { codigo, nome, descricao, nivel, categorias, videoDemonstrativoUrl } = req.body;
 
   try {
-    const exercicioExistente = await prisma.exercicio.findUnique({ where: { id } });
-
-    if (!exercicioExistente) {
-      return res.status(404).json({ message: "Exercício não encontrado." });
-    }
-
-    const videoDemonstrativoUrl = file
-      ? `/uploads/videos/${file.filename}`
-      : exercicioExistente.videoDemonstrativoUrl;
-
-    const atualizado = await prisma.exercicio.update({
+    const updated = await prisma.exercicio.update({
       where: { id },
       data: {
+        codigo,
         nome,
         descricao,
-        nivel: nivel as Nivel,
-        categorias: categorias as Categoria[],
-        videoDemonstrativoUrl
-      }
+        nivel,
+        categorias,
+        videoDemonstrativoUrl,
+      },
     });
 
-    res.json(atualizado);
+    res.json(updated);
   } catch (error) {
-    console.error("Erro ao atualizar exercício:", error);
-    res.status(500).json({ message: "Erro interno." });
+    res.status(500).json({ error: "Erro ao atualizar exercício." });
   }
 };
 
-// DELETE /api/exercicios/:id
 export const deleteExercicio = async (req: Request, res: Response) => {
   const { id } = req.params;
 
   try {
-    const exercicio = await prisma.exercicio.findUnique({ where: { id } });
-
-    if (!exercicio) {
-      return res.status(404).json({ message: "Exercício não encontrado." });
-    }
-
-    // Remover vídeo do disco (se existir)
-    if (exercicio.videoDemonstrativoUrl) {
-      const fullPath = path.join(__dirname, "../../public", exercicio.videoDemonstrativoUrl);
-      if (fs.existsSync(fullPath)) {
-        fs.unlinkSync(fullPath);
-      }
-    }
-
     await prisma.exercicio.delete({ where: { id } });
-
-    res.json({ message: "Exercício deletado com sucesso." });
+    res.status(204).end();
   } catch (error) {
-    console.error("Erro ao deletar exercício:", error);
-    res.status(500).json({ message: "Erro interno." });
+    res.status(500).json({ error: "Erro ao excluir exercício." });
   }
 };
+
+export const getExercicioById = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const exercicio = await prisma.exercicio.findUnique({
+      where: { id },
+    });
+
+    if (!exercicio) {
+      return res.status(404).json({ error: "Exercício não encontrado." });
+    }
+
+    res.json(exercicio);
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao buscar exercício." });
+  }
+}

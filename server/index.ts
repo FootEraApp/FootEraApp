@@ -25,7 +25,7 @@ import midiaRoutes from "./routes/midia";
 import perfilRoutes from "./routes/perfil";
 import pontuacaoRoutes from "./routes/pontuacao";
 import postRoutes from "./routes/post";
-import professorRoutes from "./routes/professor";
+import professorRoutes from "./routes/professores";
 import rankingRoutes from "./routes/ranking"
 import explorarRoutes from "./routes/explorar";
 import termoRoutes from "./routes/termo";

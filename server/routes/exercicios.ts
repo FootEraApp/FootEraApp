@@ -1,27 +1,22 @@
-import { Router } from "express";
+import express from "express";
 import multer from "multer";
 import path from "path";
-import {
-  getExercicios,
-  getExercicioById,
-  createExercicio,
-  updateExercicio,
-  deleteExercicio
-} from "../controllers/exerciciosController";
+import { createExercicio, updateExercicio, deleteExercicio, getExercicioById } from "../controllers/exerciciosController";
 
-const router = Router();
+const router = express.Router();
 
-// configuração do multer
 const storage = multer.diskStorage({
-  destination: (_, __, cb) => cb(null, "public/uploads/videos"),
-  filename: (_, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+  destination: path.join(__dirname, "..", "uploads", "videos"),
+  filename: (req, file, cb) => {
+    const filename = Date.now() + "-" + file.originalname;
+    cb(null, filename);
+  },
 });
 const upload = multer({ storage });
 
-router.get("/", getExercicios);
-router.get("/:id", getExercicioById);
 router.post("/", upload.single("video"), createExercicio);
 router.put("/:id", upload.single("video"), updateExercicio);
 router.delete("/:id", deleteExercicio);
+router.get("/:id", getExercicioById);
 
 export default router;

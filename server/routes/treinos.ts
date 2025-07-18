@@ -1,8 +1,10 @@
-import { Router } from "express";
-import { treinosController } from "../controllers/treinosController";
+import express from "express";
+import { createTreino, updateTreino, deleteTreino, getTreinos } from "../controllers/treinosController";
 
-const router = Router();
-
-router.get("/treinos/dashboard", treinosController.dashboard);
+const router = express.Router();
+router.post("/", createTreino);
+router.put("/:id", updateTreino);
+router.delete("/:id", deleteTreino);
+router.get("/", getTreinos);
 
 export default router;
