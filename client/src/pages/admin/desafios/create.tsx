@@ -49,6 +49,8 @@ export default function CriarDesafio() {
           className="border p-2 rounded"
         />
 
+<label className="text-base mb-0">Pontuação</label>
+          
         <input
           type="number"
           placeholder="Pontuação"
@@ -57,6 +59,8 @@ export default function CriarDesafio() {
           className="border p-2 rounded"
         />
 
+<label className="text-base mb-0">Prazo submissao</label>
+          
         <input
           type="date"
           value={prazoSubmissao}

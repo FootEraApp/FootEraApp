@@ -1,10 +1,8 @@
-// server/controllers/gruposController.ts
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// GET /api/grupos
 export const getGrupos = async (_req: Request, res: Response) => {
   try {
     const grupos = await prisma.grupo.findMany({
@@ -16,7 +14,6 @@ export const getGrupos = async (_req: Request, res: Response) => {
   }
 };
 
-// GET /api/grupos/:id
 export const getGrupoById = async (req: Request, res: Response) => {
   try {
     const grupo = await prisma.grupo.findUnique({
@@ -40,7 +37,6 @@ export const getGrupoById = async (req: Request, res: Response) => {
   }
 };
 
-// POST /api/grupos
 export const createGrupo = async (req: Request, res: Response) => {
   const { nome, descricao, criadorId } = req.body;
 
@@ -73,7 +69,6 @@ export const createGrupo = async (req: Request, res: Response) => {
   }
 };
 
-// POST /api/grupos/:id/membros
 export const adicionarMembro = async (req: Request, res: Response) => {
   const grupoId = req.params.id;
   const { atletaId } = req.body;
@@ -103,7 +98,6 @@ export const adicionarMembro = async (req: Request, res: Response) => {
   }
 };
 
-// DELETE /api/grupos/:id/membros/:atletaId
 export const removerMembro = async (req: Request, res: Response) => {
   const { id: grupoId, atletaId } = req.params;
 

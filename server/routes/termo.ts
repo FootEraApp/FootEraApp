@@ -1,4 +1,3 @@
-// server/routes/termRoutes.ts
 import { Router } from "express";
 import {
   index,

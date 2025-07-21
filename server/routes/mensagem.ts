@@ -1,15 +1,14 @@
-// server/routes/mensagem.routes.ts
 import { Router } from "express";
 import {
   getMensagens,
   enviarMensagem,
   getCaixasDeMensagens
 } from "../controllers/mensagensController";
-import { authenticateToken as authenticate} from "../middlewares/auth"; // middleware que define req.userId
+import { authenticateToken as authenticate} from "../middlewares/auth"; 
 
 const router = Router();
 
-router.use(authenticate); // Protege todas as rotas
+router.use(authenticate); 
 
 router.get("/caixa", getCaixasDeMensagens);
 router.get("/:destinatarioId", getMensagens);

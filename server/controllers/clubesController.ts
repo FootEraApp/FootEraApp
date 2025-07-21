@@ -3,7 +3,6 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// GET /api/clubes
 export const getClubes = async (_req: Request, res: Response) => {
   try {
     const clubes = await prisma.clube.findMany();
@@ -14,7 +13,6 @@ export const getClubes = async (_req: Request, res: Response) => {
   }
 };
 
-// GET /api/clubes/:id
 export const getClube = async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -39,7 +37,6 @@ export const getClube = async (req: Request, res: Response) => {
   }
 };
 
-// POST /api/clubes
 export const createClube = async (req: Request, res: Response) => {
   try {
     const { usuarioId, nome, cnpj, telefone1, telefone2, email, siteOficial, sede, estadio, logradouro, numero, complemento, bairro, cidade, estado, pais, cep, logo } = req.body;
@@ -74,7 +71,6 @@ export const createClube = async (req: Request, res: Response) => {
   }
 };
 
-// PUT /api/clubes/:id
 export const updateClube = async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -97,7 +93,6 @@ export const updateClube = async (req: Request, res: Response) => {
   }
 };
 
-// DELETE /api/clubes/:id
 export const deleteClube = async (req: Request, res: Response) => {
   const { id } = req.params;
 

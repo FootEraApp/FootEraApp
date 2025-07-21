@@ -1,10 +1,8 @@
-// server/controllers/logErroController.ts
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// GET /api/logs
 export const getLogs = async (req: Request, res: Response) => {
   try {
     const { search } = req.query;
@@ -28,7 +26,6 @@ export const getLogs = async (req: Request, res: Response) => {
   }
 };
 
-// POST /api/logs
 export const createLog = async (req: Request, res: Response) => {
   try {
     const { errorMessage, requestId, timestamp, path, clientIp, userAgent, referer } = req.body;

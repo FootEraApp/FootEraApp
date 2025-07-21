@@ -1,11 +1,9 @@
-// server/controllers/mensagemController.ts
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import { AuthenticatedRequest } from "../types/auth"; // Assume um middleware que injeta req.userId
+import { AuthenticatedRequest } from "../types/auth"; 
 
 const prisma = new PrismaClient();
 
-// GET /api/mensagens/:destinatarioId
 export const getMensagens = async (req: AuthenticatedRequest, res: Response) => {
   const { destinatarioId } = req.params;
   const usuarioId = req.userId;
@@ -29,7 +27,6 @@ export const getMensagens = async (req: AuthenticatedRequest, res: Response) => 
       }
     });
 
-    // Marcar como lidas
     await prisma.mensagem.updateMany({
       where: {
         deId: destinatarioId,
@@ -46,7 +43,6 @@ export const getMensagens = async (req: AuthenticatedRequest, res: Response) => 
   }
 };
 
-// POST /api/mensagens/:destinatarioId
 export const enviarMensagem = async (req: AuthenticatedRequest, res: Response) => {
   const { destinatarioId } = req.params;
   const { conteudo } = req.body;
@@ -72,7 +68,6 @@ export const enviarMensagem = async (req: AuthenticatedRequest, res: Response) =
   }
 };
 
-// GET /api/mensagens/caixa
 export const getCaixasDeMensagens = async (req: AuthenticatedRequest, res: Response) => {
   const usuarioId = req.userId;
 

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import MobileLayout from "@/components/layout/MobileLayout";
+import MobileLayout from "../components/layout/MobileLayout";
 
 export default function RankingPage() {
   const { data: rankings = [], isLoading } = useQuery({
@@ -24,7 +24,7 @@ export default function RankingPage() {
                   <div>
                     <span className="font-semibold">{i + 1}º</span> - {r.atleta.usuario.nome}
                   </div>
-                  <span className="font-bold">{r.total} pts</span>
+                  <span className="font-bold">{String(r.total)} pts</span>
                 </div>
               </li>
             ))}

@@ -1,4 +1,3 @@
-// treinos.tsx com formulário em etapas, filtros por subcategoria, cards visuais e perfil vindo do login
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 
@@ -38,7 +37,6 @@ export default function PaginaTreinos() {
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<Exercicio[]>([]);
   const [filtroSub, setFiltroSub] = useState<string>('Todos');
 
-  // Etapas de criação do treino
   const [etapa, setEtapa] = useState<number>(1);
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -87,7 +85,6 @@ export default function PaginaTreinos() {
 
   const atualizarExercicio = (index: number, campo: string, valor: string) => {
     const copia = [...exerciciosSelecionados];
-    // @ts-ignore
     copia[index][campo] = valor;
     setExerciciosSelecionados(copia);
   };

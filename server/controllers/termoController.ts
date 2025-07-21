@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 
-// Essas respostas podem ser adaptadas para renderizar HTML ou servir arquivos estáticos
 export const index = (req: Request, res: Response) => {
   res.send("Página principal dos Termos.");
 };

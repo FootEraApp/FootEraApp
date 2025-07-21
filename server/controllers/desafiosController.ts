@@ -59,7 +59,7 @@ export const deleteDesafio = async (req: Request, res: Response) => {
 
 export const getDesafios = async (req: Request, res: Response) => {
   try {
-    const desafios = await prisma.desafioOficial.findMany(); // apenas isso
+    const desafios = await prisma.desafioOficial.findMany(); 
 
     res.json(desafios);
   } catch (error) {

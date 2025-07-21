@@ -3,7 +3,6 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// GET /api/atletas/:atletaId/pontuacao
 export const getPontuacaoAtleta = async (req: Request, res: Response) => {
   const atletaId = req.params.atletaId;
 
@@ -21,7 +20,6 @@ export const getPontuacaoAtleta = async (req: Request, res: Response) => {
   return res.json(pontuacao);
 };
 
-// PUT /api/atletas/:atletaId/pontuacao
 export const atualizarPontuacaoAtleta = async (req: Request, res: Response) => {
   const atletaId = req.params.atletaId;
   const {
@@ -51,7 +49,6 @@ export const atualizarPontuacaoAtleta = async (req: Request, res: Response) => {
   return res.status(204).end();
 };
 
-// GET /api/ranking?categoria=Sub15&regiao=ES
 export const getRanking = async (req: Request, res: Response) => {
   try {
     const { categoria, regiao } = req.query;
@@ -60,10 +57,6 @@ export const getRanking = async (req: Request, res: Response) => {
       include: { atleta: true },
       orderBy: { pontuacaoTotal: "desc" }
     });
-
-    // Filtros a implementar futuramente:
-    // - categoria: atleta.categoria.includes()
-    // - regiao: atleta.estado, cidade, etc.
 
     const ranking = await query;
     res.json(ranking);

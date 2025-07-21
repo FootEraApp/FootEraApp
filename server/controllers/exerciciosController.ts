@@ -4,6 +4,10 @@ import { Nivel } from "@prisma/client";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import {fileURLToPath} from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const uploadPath = path.join(__dirname, "..", "uploads", "videos");
 fs.mkdirSync(uploadPath, { recursive: true });
@@ -85,3 +89,20 @@ export const getExercicioById = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Erro ao buscar exercício." });
   }
 }
+
+export const getAllExercicios = async (req: Request, res: Response) => {
+  try {
+    const exercicios = await prisma.exercicio.findMany({
+      select: {
+        id: true,
+        nome: true,
+        codigo: true, 
+      },
+    });
+
+    res.json(exercicios);
+  } catch (error) {
+    console.error("Erro ao buscar exercícios:", error);
+    res.status(500).json({ error: "Erro ao buscar exercícios" });
+  }
+};
