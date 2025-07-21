@@ -12,7 +12,7 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const baseUrl = '/api';  // Prepend /api to all requests
+  const baseUrl = '/api'; 
   const res = await fetch(`${baseUrl}${url}`, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},

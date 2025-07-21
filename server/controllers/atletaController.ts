@@ -3,7 +3,6 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// GET /api/atletas
 export const getAllAtletas = async (_req: Request, res: Response) => {
   const atletas = await prisma.atleta.findMany({
     include: { usuario: true, midias: true, postagens: true }
@@ -11,7 +10,6 @@ export const getAllAtletas = async (_req: Request, res: Response) => {
   res.json(atletas);
 };
 
-// GET /api/atletas/:id
 export const getAtletaById = async (req: Request, res: Response) => {
   const { id } = req.params;
   const atleta = await prisma.atleta.findUnique({
@@ -34,7 +32,6 @@ export const getAtletaById = async (req: Request, res: Response) => {
   res.json(atleta);
 };
 
-// POST /api/atletas
 export const createAtleta = async (req: Request, res: Response) => {
   try {
     const {
@@ -45,11 +42,9 @@ export const createAtleta = async (req: Request, res: Response) => {
       ...atletaDados
     } = req.body;
 
-    // Criptografar senha
     const bcrypt = await import("bcryptjs");
     const senhaHash = await bcrypt.hash(senha, 10);
 
-    // Criar usuário
     const usuario = await prisma.usuario.create({
       data: {
         nomeDeUsuario,
@@ -60,7 +55,6 @@ export const createAtleta = async (req: Request, res: Response) => {
       }
     });
 
-    // Criar atleta vinculado ao usuário
     const atleta = await prisma.atleta.create({
       data: {
         usuarioId: usuario.id,
@@ -75,7 +69,6 @@ export const createAtleta = async (req: Request, res: Response) => {
   }
 };
 
-// PATCH /api/atletas/:id
 export const updateAtleta = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -96,7 +89,6 @@ export const updateAtleta = async (req: Request, res: Response) => {
   }
 };
 
-// DELETE /api/atletas/:id
 export const deleteAtleta = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -108,7 +100,6 @@ export const deleteAtleta = async (req: Request, res: Response) => {
   }
 };
 
-// GET /api/atletas/:id/midias
 export const getMidiasAtleta = async (req: Request, res: Response) => {
   const { id } = req.params;
   const midias = await prisma.midia.findMany({
@@ -117,7 +108,6 @@ export const getMidiasAtleta = async (req: Request, res: Response) => {
   res.json(midias);
 };
 
-// POST /api/atletas/:id/midias
 export const uploadMidiaAtleta = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { url, tipo, titulo, descricao } = req.body;

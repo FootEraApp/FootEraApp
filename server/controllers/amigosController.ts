@@ -3,7 +3,6 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// Listar amigos (usuários seguidos)
 export const listarAmigos = async (req: Request, res: Response) => {
   const usuarioId = req.headers["usuarioid"] as string;
 
@@ -36,7 +35,6 @@ export const listarAmigos = async (req: Request, res: Response) => {
   res.json({ amigos: amigosDetalhados });
 };
 
-// Seguir um usuário
 export const seguirUsuario = async (req: Request, res: Response) => {
   const seguidorId = req.headers["usuarioid"] as string;
   const { seguidoId } = req.body;
@@ -66,7 +64,6 @@ export const seguirUsuario = async (req: Request, res: Response) => {
   res.status(201).json({ message: "Agora você está seguindo este usuário" });
 };
 
-// Deixar de seguir
 export const deixarDeSeguir = async (req: Request, res: Response) => {
   const seguidorId = req.headers["usuarioid"] as string;
   const { seguidoId } = req.body;
@@ -89,7 +86,6 @@ export const deixarDeSeguir = async (req: Request, res: Response) => {
   res.json({ message: "Você deixou de seguir este usuário" });
 };
 
-// Listar seguidores
 export const listarSeguidores = async (req: Request, res: Response) => {
   const usuarioId = req.headers["usuarioid"] as string;
 
@@ -105,7 +101,6 @@ export const listarSeguidores = async (req: Request, res: Response) => {
   res.json({ seguidores });
 };
 
-// Listar seguidos
 export const listarSeguindo = async (req: Request, res: Response) => {
   const usuarioId = req.headers["usuarioid"] as string;
 

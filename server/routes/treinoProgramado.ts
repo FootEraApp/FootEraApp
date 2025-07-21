@@ -1,17 +1,26 @@
-import { Router } from "express";
-import { treinosProgramadosController } from "../controllers/treinosProgramadosController";
+import express from "express";
+import { prisma }  from "../lib/prisma";
 
-const router = Router();
+import { getAllTreinos, createTreinoProgramado, getTreinoById, updateTreino } from "../controllers/treinosProgramadosController";
 
-router.get("/", treinosProgramadosController.index);
-router.post("/", treinosProgramadosController.create);
-router.get("/:id", treinosProgramadosController.show);
-router.put("/:id", treinosProgramadosController.update);
-router.delete("/:id", treinosProgramadosController.delete);
+const router = express.Router();
 
-router.post("/agendar", treinosProgramadosController.agendarTreino);
-router.delete("/agendado/:id", treinosProgramadosController.excluirAgendamento);
+router.post("/", createTreinoProgramado);
+router.get("/", getAllTreinos);
+router.get("/:id", getTreinoById);
+router.put("/:id", updateTreino);
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
 
-router.get("/dashboard/lista", treinosProgramadosController.dashboard);
+  try {
+    await prisma.treinoProgramado.delete({
+      where: { id },
+    });
+    res.status(204).send();
+  } catch (error) {
+    console.error("Erro ao excluir treino:", error);
+    res.status(500).json({ message: 'Erro ao excluir treino.' });
+  }
+});
 
 export default router;

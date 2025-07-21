@@ -1,11 +1,9 @@
-// server/controllers/midiaController.ts
 import { Request, Response } from "express";
 import { PrismaClient, TipoMidia } from "@prisma/client";
 import { uploadFile } from "../utils/s3";
 
 const prisma = new PrismaClient();
 
-// GET /api/midias/:atletaId
 export const getMidias = async (req: Request, res: Response) => {
   const { atletaId } = req.params;
 
@@ -21,7 +19,6 @@ export const getMidias = async (req: Request, res: Response) => {
   }
 };
 
-// POST /api/midias/:atletaId
 export const uploadMidia = async (req: Request, res: Response) => {
   const { atletaId } = req.params;
   const { titulo, tipo } = req.body;
@@ -57,7 +54,6 @@ export const uploadMidia = async (req: Request, res: Response) => {
   }
 };
 
-// DELETE /api/midias/:id
 export const deleteMidia = async (req: Request, res: Response) => {
   const { id } = req.params;
 

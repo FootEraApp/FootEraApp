@@ -17,7 +17,6 @@ router.post("/", createAtleta);
 router.patch("/:id", updateAtleta);
 router.delete("/:id", deleteAtleta);
 
-// Mídias
 router.get("/:id/midias", getMidiasAtleta);
 router.post("/:id/midias", uploadMidiaAtleta);
 

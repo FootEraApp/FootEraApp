@@ -1,11 +1,14 @@
-// server/controllers/feedController.ts
 import { Response } from "express";
 import { PrismaClient, TipoMidia } from "@prisma/client";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 import { AuthenticatedRequest } from "../types/auth"; 
 
 const prisma = new PrismaClient();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const getFeed = async (req: AuthenticatedRequest, res: Response) => {
   try {

@@ -26,7 +26,7 @@ export async function login(req: Request, res: Response) {
       return res.status(404).json({ message: "Usuário não encontrado" });
     }
 
-    const senhaCorreta = await bcrypt.compare(senha, usuario.senhaHash); // ou "senha" se não estiver criptografando
+    const senhaCorreta = await bcrypt.compare(senha, usuario.senhaHash);
 
     if (!senhaCorreta) {
       return res.status(401).json({ message: "Senha incorreta" });
@@ -58,7 +58,6 @@ export async function login(req: Request, res: Response) {
 }
 
 export const logout = async (_req: Request, res: Response) => {
-  // Em JWT, o logout é gerenciado no cliente, mas você pode invalidar tokens com blacklist se quiser.
   res.json({ message: "Logout efetuado (JWT inválido do lado cliente)" });
 };
 

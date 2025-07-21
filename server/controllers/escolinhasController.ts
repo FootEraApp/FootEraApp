@@ -3,7 +3,6 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// GET /api/escolinhas
 export const getEscolinhas = async (_req: Request, res: Response) => {
   try {
     const escolinhas = await prisma.escolinha.findMany({
@@ -19,7 +18,6 @@ export const getEscolinhas = async (_req: Request, res: Response) => {
   }
 };
 
-// GET /api/escolinhas/:id
 export const getEscolinhaById = async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -43,7 +41,6 @@ export const getEscolinhaById = async (req: Request, res: Response) => {
   }
 };
 
-// POST /api/escolinhas
 export const createEscolinha = async (req: Request, res: Response) => {
   try {
     const novaEscolinha = await prisma.escolinha.create({
@@ -57,7 +54,6 @@ export const createEscolinha = async (req: Request, res: Response) => {
   }
 };
 
-// PUT /api/escolinhas/:id
 export const updateEscolinha = async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -80,7 +76,6 @@ export const updateEscolinha = async (req: Request, res: Response) => {
   }
 };
 
-// DELETE /api/escolinhas/:id
 export const deleteEscolinha = async (req: Request, res: Response) => {
   const { id } = req.params;
 

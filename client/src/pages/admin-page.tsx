@@ -2,12 +2,20 @@ import { useEffect, useState } from "react";
 
 type Tab = "dashboard" | "exercicios" | "treinos" | "professores" | "desafios" | "configuracoes";
 
+interface Treinos {
+  id: string;
+  nome: string;
+  codigo: string;
+  nivel: string;
+  descricao: string;
+}
+
 export default function AdminDashboard() {
   const [aba, setAba] = useState("dashboard");
   const [dados, setDados] = useState<any>(null);
   const [dashboardData, setDashboardData] = useState<Tab>('dashboard');
   const [exercicios, setExercicios] = useState<any[]>([]);
-  const [treinos, setTreinos] = useState<any[]>([]);
+  const [treinos, setTreinos] = useState<Treinos[]>([]);
   const [professores, setProfessores] = useState<any[]>([]);
   const [desafios, setDesafios] = useState<any[]>([]);
   
@@ -80,8 +88,10 @@ export default function AdminDashboard() {
               <Card title="Posts Criados" icon="✍️" value={dados.totalPostsCriados} />
             </div>
 
-            <h4 className="font-semibold mb-2">Distribuição de Usuários</h4>
-            {[
+            
+            <h4 className="font-semibold mb-2" >Distribuição de Usuários</h4>
+            <div className="bg-white p-3 ">
+               {[
               { label: "Atletas", value: dados.totalAtletas },
               { label: "Escolas de Futebol", value: dados.totalEscolinhas },
               { label: "Clubes Profissionais", value: dados.totalClubes },
@@ -90,10 +100,13 @@ export default function AdminDashboard() {
             ].map((d, i) => (
               <Bar key={i} label={d.label} percent={percent(d.value)} />
             ))}
+            </div>
 
             <h4 className="font-semibold mt-6 mb-2">Status dos Usuários</h4>
-            <Bar label="Verificados" percent={percent(dados.totalVerificados)} />
-            <Bar label="Não Verificados" percent={percent(dados.totalNaoVerificados)} />
+            <div className="bg-white p-3 grid grid-cols-2 gap-4">
+              <Bar label="Verificados" percent={percent(dados.totalVerificados)} />
+              <Bar label="Não Verificados" percent={percent(dados.totalNaoVerificados)} />
+            </div>
          </div>
 
         )}
@@ -125,18 +138,45 @@ export default function AdminDashboard() {
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg">Gerenciar Treinos</h3>
-              <button className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800">+ Novo Treino</button>
+              <button className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800" onClick={() => window.location.href = "/admin/treinos/create"}>
+                + Novo Treino
+              </button>
+
             </div>
             <ul className="space-y-2">
               {dados.treinos.map((t: any) => (
                 <li key={t.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
                   <div>
-                    <strong>{t.titulo}</strong> — {t.codigo} [{t.nivel}]
+                    <strong>{t.nome}</strong> — {t.codigo} [{t.nivel}]
                     <p className="text-sm text-gray-500">{t.descricao}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button className="text-blue-600">✏️</button>
-                    <button className="text-red-600">🗑️</button>
+                    <button
+                      onClick={() => window.location.href = `/admin/treinos/edit/${t.id}`}
+                      className="text-blue-600"
+                    >
+                      ✏️
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        const confirmar = confirm("Deseja mesmo excluir este treino?");
+                        if (!confirmar) return;
+
+                        const response = await fetch(`http://localhost:3001/api/treinosprogramados/${t.id}`, {
+                          method: "DELETE",
+                        });
+
+                        if (response.ok) {
+                          alert("Treino excluído com sucesso!");
+                           } else {
+                          alert("Erro ao excluir treino.");
+                        }
+                      }}
+                    >
+                      🗑
+                    </button>
+
                   </div>
                 </li>
               ))}
@@ -178,9 +218,10 @@ export default function AdminDashboard() {
               {dados.desafios.map((d: any) => (
                 <li key={d.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
                   <div>
-                    <strong>{d.titulo}</strong> — {d.categoriaIdade} — {d.objetivo}
+                    <strong>{d.titulo}</strong> 
+                    <p>• {d.categoria} - {d.descricao} </p>
                     <p className="text-sm text-gray-500">
-                      Pontos: {d.pontuacao} • Prazo: {new Date(d.prazoSubmissao).toLocaleDateString()}
+                      Pontos: {d.pontos }
                     </p>
                   </div>
                   <div className="flex gap-2">

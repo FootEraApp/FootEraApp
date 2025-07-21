@@ -2,7 +2,6 @@ import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 
 export const treinosLivresController = {
-  // Lista todos os treinos livres ou filtra por atletaId
   async index(req: Request, res: Response) {
     try {
       const atletaId = req.query.atletaId as string | undefined;
@@ -19,7 +18,6 @@ export const treinosLivresController = {
     }
   },
 
-  // Busca treino livre por ID
   async show(req: Request, res: Response) {
     try {
       const id = String(req.params.id);
@@ -37,12 +35,10 @@ export const treinosLivresController = {
     }
   },
 
-  // Cria novo treino livre
   async create(req: Request, res: Response) {
     try {
       const { atletaId, data, descricao, duracaoMin, tipoAtividade, urlEvidencia } = req.body;
 
-      // Simulação (o correto seria obter atletaId do JWT, por exemplo)
       const atletaExiste = await prisma.atleta.findUnique({ where: { id: atletaId } });
       if (!atletaExiste) return res.status(400).json({ message: "Atleta inválido" });
 
@@ -61,7 +57,6 @@ export const treinosLivresController = {
     }
   },
 
-  // Deleta treino livre
   async delete(req: Request, res: Response) {
     try {
       const id = String(req.params.id);
