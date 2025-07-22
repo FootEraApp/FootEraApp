@@ -51,7 +51,7 @@ export default function EditarTreino() {
 
             if (response.ok) {
               alert("Treino atualizado com sucesso!");
-              router.push("/admin");
+              window.location.href = "/admin"
             } else {
               alert("Erro ao atualizar treino.");
             }

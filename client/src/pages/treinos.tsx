@@ -83,11 +83,16 @@ export default function PaginaTreinos() {
     setExerciciosSelecionados([...exerciciosSelecionados, { nome: '', series: '', repeticoes: '', descricao: '' }]);
   };
 
-  const atualizarExercicio = (index: number, campo: string, valor: string) => {
+ const atualizarExercicio = (
+  index: number,
+  campo: keyof typeof exerciciosSelecionados[number],
+  valor: string
+  ) => {
     const copia = [...exerciciosSelecionados];
     copia[index][campo] = valor;
     setExerciciosSelecionados(copia);
   };
+
 
   const adicionarDica = () => {
     if (dicaAtual.trim()) {

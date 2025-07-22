@@ -115,7 +115,12 @@ export default function AdminDashboard() {
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg">Gerenciar Exercícios</h3>
-              <button className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800">+ Novo Exercício</button>
+              <button
+                className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800"
+                onClick={() => window.location.href = "/admin/exercicios/create"}
+              >
+                + Novo Exercicio
+              </button>
             </div>
             <ul className="space-y-2">
               {dados.exercicios.map((ex: any) => (
@@ -125,9 +130,29 @@ export default function AdminDashboard() {
                     <p className="text-sm text-gray-500">{ex.descricao}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button className="text-blue-600">✏️</button>
-                    <button className="text-red-600">🗑️</button>
-                  </div>
+                    <button
+                      onClick={() => window.location.href = `/admin/exercicios/edit/${ex.id}`}
+                      className="text-blue-600"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const confirmar = confirm("Deseja excluir este exercício?");
+                        if (!confirmar) return;
+
+                        const response = await fetch(`http://localhost:3001/api/exercicios/${ex.id}`, {
+                          method: "DELETE",
+                        });
+
+                        if (response.ok) {
+                          alert("Exercício excluído com sucesso!");
+                        } else {
+                          alert("Erro ao excluir exercício.");
+                        }
+                      }}
+                    >🗑️</button>
+                    </div>
                 </li>
               ))}
             </ul>
@@ -188,7 +213,12 @@ export default function AdminDashboard() {
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg">Gerenciar Professores</h3>
-              <button className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800">+ Novo Professor</button>
+              <button
+                className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800"
+                onClick={() => window.location.href = "/admin/professores/create"}
+              >
+                + Novo Professor
+              </button>
             </div>
             <ul className="space-y-2">
               {dados.professores.map((p: any) => (
@@ -199,9 +229,18 @@ export default function AdminDashboard() {
                     <p className="text-sm text-gray-500">{p.certificacoes}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button className="text-blue-600">✏️</button>
-                    <button className="text-red-600">🗑️</button>
-                  </div>
+                    <button onClick={() => window.location.href = `/admin/professores/edit/${p.id}`}>✏️</button>
+                    <button
+                      onClick={async () => {
+                        const confirmar = confirm("Deseja excluir este professor?");
+                        if (!confirmar) return;
+                        const response = await fetch(`http://localhost:3001/api/professores/${p.id}`, {
+                          method: "DELETE",
+                        });
+                        response.ok ? alert("Professor excluído!") : alert("Erro ao excluir professor.");
+                      }}
+                    >🗑️</button>
+                    </div>
                 </li>
               ))}
             </ul>
@@ -212,27 +251,51 @@ export default function AdminDashboard() {
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg">Gerenciar Desafios</h3>
-              <button className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800">+ Novo Desafio</button>
+              <button
+                className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800"
+                onClick={() => window.location.href = "/admin/desafios/create"}
+              >
+                + Novo Desafio
+              </button>
             </div>
             <ul className="space-y-2">
               {dados.desafios.map((d: any) => (
                 <li key={d.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
                   <div>
                     <strong>{d.titulo}</strong> 
-                    <p>• {d.categoria} - {d.descricao} </p>
-                    <p className="text-sm text-gray-500">
-                      Pontos: {d.pontos }
-                    </p>
+                    <p>• {d.categoria.join(", ")} - {d.descricao} </p>
+                    <p className="text-sm text-gray-500">Pontos: {d.pontos}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button className="text-blue-600">✏️</button>
-                    <button className="text-red-600">🗑️</button>
+                    <button
+                      onClick={() => window.location.href = `/admin/desafios/edit/${d.id}`}
+                      className="text-blue-600"
+                    >✏️</button>
+                    <button
+                      onClick={async () => {
+                        const confirmar = confirm("Deseja mesmo excluir este desafio?");
+                        if (!confirmar) return;
+
+                        const response = await fetch(`http://localhost:3001/api/desafios/${d.id}`, {
+                          method: "DELETE",
+                        });
+
+                        if (response.ok) {
+                          alert("Desafio excluído com sucesso!");
+                          window.location.reload();
+                        } else {
+                          alert("Erro ao excluir desafio.");
+                        }
+                      }}
+                      className="text-red-600"
+                    >🗑️</button>
                   </div>
                 </li>
               ))}
             </ul>
           </div>
         )}
+
 
         {aba === "configuracoes" && (
           <div className="bg-transparent p-6 rounded shadow">

@@ -15,7 +15,8 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "lib": ["dom", "dom.iterable", "esnext"]
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "types": ["next", "next/types/global", "vite/client", "react"]
   },
   "include": ["src/**/*", "../api"],
   "exclude": ["node_modules", "dist"]

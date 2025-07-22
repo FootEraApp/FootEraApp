@@ -120,17 +120,17 @@ export default function CriarTreino() {
       <h1 className="text-2xl font-bold text-green-800 mb-4">Novo Treino</h1>
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow grid gap-4">
         <div className="grid grid-cols-2 gap-4">
-          <label className="text-base mb-0">Codigo</label>
+          <label className="text-base -mb-2  text-green-800">Codigo</label>
           <input
             type="text"
-            placeholder="EX001"
+            placeholder="TR001"
             value={codigo}
             onChange={(e) => setCodigo(e.target.value)}
             className="border p-2 rounded"
             required
           />
 
-          <label className="text-base mb-0">Nível</label>
+          <label className="text-base -mb-2 text-green-800">Nível</label>
           <select
             value={nivel}
             onChange={(e) => setNivel(e.target.value)}
@@ -142,6 +142,8 @@ export default function CriarTreino() {
           </select>
         </div>
 
+        <label className="text-base -mb-2  text-green-800">Professor </label>
+          
         <select
           value={profSelecionado}
           onChange={(e) => setProfSelecionado(e.target.value)}
@@ -155,6 +157,8 @@ export default function CriarTreino() {
           ))}
         </select>
 
+          <label className="text-base -mb-2  text-green-800">Nome</label>
+          
        <input
           type="text"
           placeholder="Nome do treino"
@@ -163,6 +167,8 @@ export default function CriarTreino() {
           className="border p-2 rounded"
         />
 
+<label className="text-base -mb-2  text-green-800">Descrição </label>
+          
        <textarea
           placeholder="Descrição do treino"
           value={descricao}
@@ -171,7 +177,7 @@ export default function CriarTreino() {
         />
 
         <div>
-          <h2 className="font-semibold mb-2">Exercícios do Treino</h2>
+          <h2 className="font-semibold text-green-800 mb-2">Exercícios do Treino</h2>
           {treinoExercicios.map((item, index) => (
             <div key={index} className="flex gap-2 mb-2 items-center">
               <select
