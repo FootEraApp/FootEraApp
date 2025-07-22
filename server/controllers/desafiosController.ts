@@ -1,68 +1,64 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
-import { Nivel, Categoria } from "@prisma/client";
+import { undefined } from "zod";
 
-export const createDesafio = async (req: Request, res: Response) => {
-  const { titulo, descricao, imagemUrl, nivel, categoria, pontos } = req.body;
+export async function listarDesafios(req: Request, res: Response) {
+  const desafios = await prisma.desafioOficial.findMany();
+  res.json(desafios);
+}
 
+export async function buscarDesafioPorId(req: Request, res: Response) {
+  const { id } = req.params;
+  const desafio = await prisma.desafioOficial.findUnique({ where: { id } });
+  if (!desafio) return res.status(404).json({ message: "Desafio não encontrado." });
+  res.json(desafio);
+}
+
+export async function criarDesafio(req: Request, res: Response) {
   try {
+    const {
+      titulo,
+      descricao,
+      imagemUrl,
+      nivel,
+      pontuacao,
+      categorias,
+    } = req.body;
+
+    if (!titulo || !descricao || !nivel || !pontuacao || !categorias ) {
+      return res.status(400).json({ error: "Campos obrigatórios ausentes." });
+    }
+
     const desafio = await prisma.desafioOficial.create({
       data: {
         titulo,
         descricao,
         imagemUrl,
-        nivel: nivel as Nivel,
-        categoria: Array.isArray(categoria) ? categoria : [categoria],
-        pontos: Number(pontos),
-        },
+        nivel,
+        pontos: Number(pontuacao),
+        categoria: categorias, 
+         },
     });
+
     res.status(201).json(desafio);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Erro ao criar desafio." });
   }
-};
+}
 
-export const updateDesafio = async (req: Request, res: Response) => {
+export async function editarDesafio(req: Request, res: Response) {
   const { id } = req.params;
-  const { titulo, descricao, imagemUrl, nivel, categoria, pontuacao, prazoSubmissao } = req.body;
+  const { titulo, descricao, pontos, categoria } = req.body;
+  const desafio = await prisma.desafioOficial.update({
+    where: { id },
+    data: { titulo, descricao, pontos, categoria }
+  });
+  res.json(desafio);
+}
 
-  try {
-    const updated = await prisma.desafioOficial.update({
-      where: { id },
-      data: {
-        titulo,
-        descricao,
-        imagemUrl,
-        nivel: nivel as Nivel,
-        categoria: categoria as Categoria[],
-        pontos: Number(pontuacao),
-        },
-    });
-
-    res.json(updated);
-  } catch (error) {
-    res.status(500).json({ error: "Erro ao atualizar desafio." });
-  }
-};
-
-export const deleteDesafio = async (req: Request, res: Response) => {
+export async function excluirDesafio(req: Request, res: Response) {
   const { id } = req.params;
-
-  try {
-    await prisma.desafioOficial.delete({ where: { id } });
-    res.status(204).end();
-  } catch (error) {
-    res.status(500).json({ error: "Erro ao excluir desafio." });
-  }
-};
-
-export const getDesafios = async (req: Request, res: Response) => {
-  try {
-    const desafios = await prisma.desafioOficial.findMany(); 
-
-    res.json(desafios);
-  } catch (error) {
-    res.status(500).json({ error: "Erro ao buscar desafios." });
-  }
-};
+  await prisma.desafioOficial.delete({ where: { id } });
+  res.status(204).send();
+}

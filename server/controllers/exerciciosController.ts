@@ -1,108 +1,65 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
-import { Nivel } from "@prisma/client";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
-import {fileURLToPath} from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const uploadPath = path.join(__dirname, "..", "uploads", "videos");
-fs.mkdirSync(uploadPath, { recursive: true });
-
-export const createExercicio = async (req: Request, res: Response) => {
-  const { codigo, nome, descricao, nivel, categorias } = req.body;
-
-  let videoDemonstrativoUrl = null;
-  if (req.file) {
-    videoDemonstrativoUrl = `/uploads/videos/${req.file.filename}`;
-  }
-
+export const listarExercicios = async (req: Request, res: Response) => {
   try {
-    const exercicio = await prisma.exercicio.create({
-      data: {
-        codigo,
-        nome,
-        descricao,
-        nivel: nivel as Nivel,
-        categorias: categorias ? JSON.parse(categorias) : [],
-        videoDemonstrativoUrl,
-      },
-    });
-    res.status(201).json(exercicio);
+    const exercicios = await prisma.exercicio.findMany();
+    res.json(exercicios);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erro ao criar exercício." });
+    console.error("Erro ao listar exercícios:", error);
+    res.status(500).json({ message: "Erro ao listar exercícios." });
   }
 };
 
-export const updateExercicio = async (req: Request, res: Response) => {
+export const buscarExercicioPorId = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { codigo, nome, descricao, nivel, categorias, videoDemonstrativoUrl } = req.body;
-
-  try {
-    const updated = await prisma.exercicio.update({
-      where: { id },
-      data: {
-        codigo,
-        nome,
-        descricao,
-        nivel,
-        categorias,
-        videoDemonstrativoUrl,
-      },
-    });
-
-    res.json(updated);
-  } catch (error) {
-    res.status(500).json({ error: "Erro ao atualizar exercício." });
-  }
-};
-
-export const deleteExercicio = async (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  try {
-    await prisma.exercicio.delete({ where: { id } });
-    res.status(204).end();
-  } catch (error) {
-    res.status(500).json({ error: "Erro ao excluir exercício." });
-  }
-};
-
-export const getExercicioById = async (req: Request, res: Response) => {
-  const { id } = req.params;
-
   try {
     const exercicio = await prisma.exercicio.findUnique({
       where: { id },
     });
-
-    if (!exercicio) {
-      return res.status(404).json({ error: "Exercício não encontrado." });
-    }
-
+    if (!exercicio) return res.status(404).json({ message: "Exercício não encontrado." });
     res.json(exercicio);
   } catch (error) {
-    res.status(500).json({ error: "Erro ao buscar exercício." });
+    console.error("Erro ao buscar exercício:", error);
+    res.status(500).json({ message: "Erro ao buscar exercício." });
   }
-}
+};
 
-export const getAllExercicios = async (req: Request, res: Response) => {
+export const criarExercicio = async (req: Request, res: Response) => {
   try {
-    const exercicios = await prisma.exercicio.findMany({
-      select: {
-        id: true,
-        nome: true,
-        codigo: true, 
-      },
+    const novoExercicio = await prisma.exercicio.create({
+      data: req.body,
     });
-
-    res.json(exercicios);
+    res.status(201).json(novoExercicio);
   } catch (error) {
-    console.error("Erro ao buscar exercícios:", error);
-    res.status(500).json({ error: "Erro ao buscar exercícios" });
+    console.error("Erro ao criar exercício:", error);
+    res.status(500).json({ message: "Erro ao criar exercício." });
+  }
+};
+
+export const editarExercicio = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const exercicio = await prisma.exercicio.update({
+      where: { id },
+      data: req.body,
+    });
+    res.json(exercicio);
+  } catch (error) {
+    console.error("Erro ao editar exercício:", error);
+    res.status(500).json({ message: "Erro ao editar exercício." });
+  }
+};
+
+export const excluirExercicio = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    await prisma.exercicio.delete({
+      where: { id },
+    });
+    res.status(204).send();
+  } catch (error) {
+    console.error("Erro ao excluir exercício:", error);
+    res.status(500).json({ message: "Erro ao excluir exercício." });
   }
 };

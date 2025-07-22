@@ -48,6 +48,7 @@ model Professor {
   qualificacoes      String?
   certificacoes      String?
   fotoUrl            String?
+  statusCref         StatusCref?
   nome               String
   usuarioId          String             @unique
   usuario            Usuario            @relation(fields: [usuarioId], references: [id])
@@ -151,15 +152,16 @@ model Exercicio {
 }
 
 model DesafioOficial {
-  id         String             @id @default(uuid())
-  titulo     String
-  descricao  String
-  imagemUrl  String?
-  nivel      Nivel
-  pontos     Int
-  categoria  Categoria[]
-  createdAt  DateTime           @default(now())
-  submissoes SubmissaoDesafio[]
+  id              String             @id @default(uuid())
+  titulo          String
+  descricao       String
+  imagemUrl       String?
+  nivel           Nivel
+  pontos          Int
+  prazoSubmissao  DateTime?
+  categoria       Categoria[]
+  createdAt       DateTime           @default(now())
+  submissoes      SubmissaoDesafio[]
 }
 
 model Seguidor {
@@ -427,4 +429,10 @@ enum StatusConexao {
   Pendente
   Aprovado
   Recusado
+}
+
+enum StatusCref {
+  Ativo
+  Desativo
+  Pendente
 }
