@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import multer from "multer";
 
+const upload = multer({dest: "uploads/"});
+
 export const listarProfessores = async (req: Request, res: Response) => {
   try {
     const professores = await prisma.professor.findMany({
@@ -44,7 +46,6 @@ export const criarProfessor = async (req: Request, res: Response) => {
       statusCref,
     } = req.body;
 
-    // Arrays vindos de FormData podem vir como string única ou array
     let qualificacoes = req.body.qualificacoes;
     let certificacoes = req.body.certificacoes;
 
@@ -56,19 +57,22 @@ export const criarProfessor = async (req: Request, res: Response) => {
       certificacoes = [certificacoes];
     }
 
-    const novoProfessor = await prisma.professor.create({
-      data: {
-        codigo,
-        usuario,
-        cref,
-        nome,
-        areaFormacao,
-        statusCref,
-        qualificacoes,
-        certificacoes,
-        fotoUrl: req.file?.filename || "", 
-      },
-    });
+    const data: any = {
+      codigo,
+      cref,
+      nome,
+      areaFormacao,
+      statusCref,
+      qualificacoes,
+      certificacoes,
+      fotoUrl: req.file?.filename || "",
+    };
+
+    if (usuario) {
+      data.usuario = usuario;
+    }
+
+    const novoProfessor = await prisma.professor.create({ data });
 
     res.status(201).json(novoProfessor);
   } catch (error) {
@@ -77,18 +81,52 @@ export const criarProfessor = async (req: Request, res: Response) => {
   }
 };
 
-
 export const editarProfessor = async (req: Request, res: Response) => {
   const { id } = req.params;
+
   try {
-    const professor = await prisma.professor.update({
+    const {
+      codigo,
+      cref,
+      nome,
+      areaFormacao,
+      statusCref,
+    } = req.body;
+
+    let qualificacoes = req.body["qualificacoes[]"] || req.body.qualificacoes;
+    let certificacoes = req.body["certificacoes[]"] || req.body.certificacoes;
+
+    if (typeof qualificacoes === "string") {
+      qualificacoes = [qualificacoes];
+    }
+
+    if (typeof certificacoes === "string") {
+      certificacoes = [certificacoes];
+    }
+
+    const data: any = {
+      codigo,
+      cref,
+      nome,
+      areaFormacao,
+      statusCref,
+      qualificacoes,
+      certificacoes,
+    };
+
+    if (req.file) {
+      data.fotoUrl = req.file.filename;
+    }
+
+    const professorAtualizado = await prisma.professor.update({
       where: { id },
-      data: req.body,
+      data,
     });
-    res.json(professor);
+
+    res.json(professorAtualizado);
   } catch (error) {
     console.error("Erro ao editar professor:", error);
-    res.status(500).json({ message: "Erro ao editar professor." });
+    res.status(500).json({ message: "Erro ao editar professor.", error });
   }
 };
 

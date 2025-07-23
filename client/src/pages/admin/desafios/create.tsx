@@ -2,75 +2,96 @@
 
 import { useEffect, useState } from "react";
 
-export default function CriarDesafio() {
+export default function CreateOrEditDesafio() {
+  const [id, setId] = useState<string | null>(null);
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
   const [imagemUrl, setImagemUrl] = useState("");
   const [nivel, setNivel] = useState("Base");
-  const [pontuacao, setPontuacao] = useState(0);
+  const [pontos, setPontos] = useState(0);
   const [prazoSubmissao, setPrazoSubmissao] = useState("");
   const [categoriaAtual, setCategoriaAtual] = useState("");
-  const [categorias, setCategorias] = useState<string[]>([]);
+  const [categoria, setCategoria] = useState<string[]>([]);
   const [opcoesCategorias, setOpcoesCategorias] = useState<string[]>([]);
 
   useEffect(() => {
-    async function carregarCategorias() {
-      try {
-        const res = await fetch("http://localhost:3001/api/categorias");
-        const data = await res.json();
-        setOpcoesCategorias(data);
-      } catch (err) {
-        console.error("Erro ao carregar categorias:", err);
-      }
+    const params = new URLSearchParams(window.location.search);
+    const desafioId = params.get("id");
+    if (desafioId) {
+      setId(desafioId);
+      fetch(`http://localhost:3001/api/desafios/${desafioId}`)
+        .then(res => res.json())
+        .then(data => {
+          setTitulo(data.titulo || "");
+          setDescricao(data.descricao || "");
+          setImagemUrl(data.imagemUrl || "");
+          setNivel(data.nivel || "Base");
+          setPontos(data.pontos || 0);
+          setCategoria(data.categoria || []);
+          setPrazoSubmissao(data.prazoSubmissao?.split("T")[0] || "");
+        })
+        .catch(err => console.error("Erro ao carregar desafio:", err));
     }
+  }, []);
 
-    carregarCategorias();
+  useEffect(() => {
+    fetch("http://localhost:3001/api/categorias")
+      .then(res => res.json())
+      .then(data => setOpcoesCategorias(data))
+      .catch(err => console.error("Erro ao carregar categorias:", err));
   }, []);
 
   const handleAddCategoria = () => {
-    if (categoriaAtual && !categorias.includes(categoriaAtual)) {
-      setCategorias([...categorias, categoriaAtual]);
+    if (categoriaAtual && !categoria.includes(categoriaAtual)) {
+      setCategoria([...categoria, categoriaAtual]);
       setCategoriaAtual("");
     }
   };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  try {
-    const res = await fetch("http://localhost:3001/api/desafios", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        titulo,
-        descricao,
-        imagemUrl,
-        nivel,
-        pontuacao: Number(pontuacao),
-        categorias,
-        prazoSubmissao,
-      }),
-    });
+    const metodo = id ? "PUT" : "POST";
+    const url = id
+      ? `http://localhost:3001/api/desafios/${id}`
+      : "http://localhost:3001/api/desafios";
 
-    if (!res.ok) {
-      const erro = await res.text();
-      alert("Erro ao criar desafio: " + erro);
-      return;
+    try {
+      const res = await fetch(url, {
+        method: metodo,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          titulo,
+          descricao,
+          imagemUrl,
+          nivel,
+          pontos,
+          categoria,
+          prazoSubmissao,
+        }),
+      });
+
+      if (!res.ok) {
+        const erro = await res.text();
+        alert("Erro ao salvar desafio: " + erro);
+        return;
+      }
+
+      alert(`Desafio ${id ? "editado" : "criado"} com sucesso!`);
+      window.location.href = "/admin";
+    } catch (err) {
+      alert("Erro ao salvar desafio: " + err);
+      console.error(err);
     }
-
-    alert("Desafio criado com sucesso!");
-    window.location.href = "/admin";
-  } catch (err) {
-    alert("Erro ao criar desafio: " + err);
-    console.error(err);
-  }
-};
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <h1 className="text-2xl font-bold text-green-800 mb-4">Criar Desafio</h1>
+      <h1 className="text-2xl font-bold text-green-800 mb-4">
+        {id ? "Editar Desafio" : "Criar Desafio"}
+      </h1>
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow grid gap-4">
-        <label className="text-base -mb-2 text-green-800">Titulo do desafio</label>
+        <label className="text-base -mb-2 text-green-800">Título do desafio</label>
         <input
           type="text"
           placeholder="Ex: Desafio de Embaixadinhas"
@@ -89,16 +110,15 @@ export default function CriarDesafio() {
           required
         />
 
-        <label className="text-base -mb-2 text-green-800">Url da imagem</label>
+        <label className="text-base -mb-2 text-green-800">URL da imagem</label>
         <input
           type="url"
-          placeholder="https://example.com/imagem.jpg"
           value={imagemUrl}
           onChange={(e) => setImagemUrl(e.target.value)}
           className="border p-2 rounded"
         />
 
-        <label className="text-base -mb-2 text-green-800">Nivel</label>
+        <label className="text-base -mb-2 text-green-800">Nível</label>
         <select
           value={nivel}
           onChange={(e) => setNivel(e.target.value)}
@@ -112,8 +132,8 @@ export default function CriarDesafio() {
         <label className="text-base -mb-2 text-green-800">Pontos</label>
         <input
           type="number"
-          value={pontuacao}
-          onChange={(e) => setPontuacao(Number(e.target.value))}
+          value={pontos}
+          onChange={(e) => setPontos(Number(e.target.value))}
           className="border p-2 rounded"
         />
 
@@ -141,7 +161,7 @@ export default function CriarDesafio() {
         </div>
 
         <ul className="list-disc pl-5 text-sm text-gray-700">
-          {categorias.map((cat, i) => (
+          {categoria.map((cat, i) => (
             <li key={i}>{cat}</li>
           ))}
         </ul>
@@ -157,9 +177,13 @@ export default function CriarDesafio() {
 
         <div className="flex gap-4 mt-4">
           <button type="submit" className="bg-green-700 text-white px-4 py-2 rounded">
-            Criar
+            {id ? "Salvar Alterações" : "Criar"}
           </button>
-          <button type="button" className="bg-gray-300 px-4 py-2 rounded">
+          <button
+            type="button"
+            className="bg-gray-300 px-4 py-2 rounded"
+            onClick={() => window.location.href = "/admin"}
+          >
             Cancelar
           </button>
         </div>
