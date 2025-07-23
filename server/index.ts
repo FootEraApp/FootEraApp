@@ -12,6 +12,7 @@ import authRoutes from "./routes/auth";
 import amigosRoutes from "./routes/amigos";
 import cadastroRoutes from "./routes/cadastro";
 import clubeRoutes from "./routes/clube";
+import configuracoesRoutes from "./routes/configuracoes";
 import categoriasRoutes from "./routes/categorias"
 import desafiosRoutes from "./routes/desafios";
 import escolinhaRoutes from "./routes/escolinha";
@@ -51,6 +52,7 @@ app.use("/api/amigos", amigosRoutes);
 app.use("/api/cadastro", cadastroRoutes);
 app.use("/api/categorias", categoriasRoutes)
 app.use("/api/clubes", clubeRoutes);
+app.use("/api/configuracoes", configuracoesRoutes);
 app.use("/api/desafios", desafiosRoutes);
 app.use("/api/escolinhas", escolinhaRoutes);
 app.use("/api/explorar", explorarRoutes);

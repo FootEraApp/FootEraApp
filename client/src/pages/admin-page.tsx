@@ -18,6 +18,7 @@ export default function AdminDashboard() {
   const [treinos, setTreinos] = useState<Treinos[]>([]);
   const [professores, setProfessores] = useState<any[]>([]);
   const [desafios, setDesafios] = useState<any[]>([]);
+  const [configuracoes, setConfiguracoes] = useState<any>(null);
   
   useEffect(() => {
     fetch("http://localhost:3001/api/admin")
@@ -45,7 +46,10 @@ export default function AdminDashboard() {
       .then(setDesafios)
       .catch(console.error);
 
-
+    fetch("http://localhost:3001/api/configuracoes")
+      .then(res => res.json())
+      .then(setConfiguracoes)
+      .catch(console.error);
   }, []);
 
   if (!dados) return <div className="p-6">Carregando...</div>;
@@ -131,7 +135,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => window.location.href = `/admin/exercicios/edit/${ex.id}`}
+                      onClick={() => window.location.href = `/admin/exercicios/create?id=${ex.id}`}
                       className="text-blue-600"
                     >
                       ✏️
@@ -177,7 +181,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => window.location.href = `/admin/treinos/edit/${t.id}`}
+                      onClick={() => window.location.href = `/admin/treinos/create?id=${t.id}`}
                       className="text-blue-600"
                     >
                       ✏️
@@ -224,12 +228,13 @@ export default function AdminDashboard() {
               {dados.professores.map((p: any) => (
                 <li key={p.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
                   <div>
-                    <strong>{p.usuario?.nome}</strong> — CREF: {p.cref} — {p.areaFormacao}
-                    <p className="text-sm text-gray-600">{p.qualificacoes}</p>
-                    <p className="text-sm text-gray-500">{p.certificacoes}</p>
+                    <strong>{p.nome}</strong> 
+                    <p>  CREF: {p.cref} — {p.areaFormacao} </p>
+                    <p className="text-sm text-gray-600"> - Qualificações: {p.qualificacoes.join(", ")}</p>
+                    <p className="text-sm text-gray-500">- Certificações: {p.certificacoes.join(", ")}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => window.location.href = `/admin/professores/edit/${p.id}`}>✏️</button>
+                    <button onClick={() => window.location.href = `/admin/professores/create?id=${p.id}`}>✏️</button>
                     <button
                       onClick={async () => {
                         const confirmar = confirm("Deseja excluir este professor?");
@@ -268,7 +273,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => window.location.href = `/admin/desafios/edit/${d.id}`}
+                      onClick={() => window.location.href = `/admin/desafios/create?id=${d.id}`}
                       className="text-blue-600"
                     >✏️</button>
                     <button
@@ -297,37 +302,73 @@ export default function AdminDashboard() {
         )}
 
 
-        {aba === "configuracoes" && (
-          <div className="bg-transparent p-6 rounded shadow">
-            <h3 className="font-bold mb-4">Configurações</h3>
-            <div className="grid gap-4">
-              <label className="flex items-center justify-between">
-                <span>Cadastro Habilitado</span>
-                <input type="checkbox" defaultChecked className="scale-125" />
-              </label>
-              <label className="flex items-center justify-between">
-                <span>Modo Manutenção</span>
-                <input type="checkbox" className="scale-125" />
-              </label>
-              <label className="flex items-center justify-between">
-                <span>Permitir Desafios de Atleta</span>
-                <input type="checkbox" defaultChecked className="scale-125" />
-              </label>
-              <label className="flex items-center justify-between">
-                <span>Editar Perfil</span>
-                <input type="checkbox" defaultChecked className="scale-125" />
-              </label>
+        {aba === "configuracoes" && configuracoes && (
+          <div className="bg-white p-6 rounded shadow">
+            <h3 className="text-xl font-bold mb-4">Configurações do Sistema</h3>
+
+            <div className="mb-6">
+              <h4 className="font-semibold text-green-800 mb-2">🔍 Funcionalidades</h4>
+              {[
+                { key: "registrationEnabled", label: "registration_enabled", desc: "Habilita o registro de novos usuários na plataforma" },
+                { key: "maintenanceMode", label: "maintenance_mode", desc: "Coloca o site em modo de manutenção" },
+                { key: "allowAthleteChallenges", label: "allow_athete_challenges", desc: "Permite que atletas participem de desafios" },
+                { key: "allowProfileEditing", label: "allow_profile_editing", desc: "Permite edição de perfis pelos usuários" },
+              ].map((item) => (
+                <div key={item.key} className="flex items-center justify-between border-b py-2">
+                  <div>
+                    <p className="font-medium">{item.label} ✅</p>
+                    <p className="text-sm text-gray-600">{item.desc}</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={configuracoes[item.key]}
+                    onChange={async (e) => {
+                      const res = await fetch("http://localhost:3001/api/configuracoes", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ [item.key]: e.target.checked }),
+                      });
+                      if (res.ok) {
+                        setConfiguracoes({ ...configuracoes, [item.key]: e.target.checked });
+                      }
+                    }}
+                    className="scale-125"
+                  />
+                </div>
+              ))}
             </div>
-            <div className="mt-6">
-              <label className="block mb-1">Máx. posts diários</label>
-              <input type="number" defaultValue={5} className="border px-2 py-1 rounded w-24" />
+
+            <div className="mb-6">
+              <h4 className="font-semibold text-green-800 mb-2">⚙️ Outras Configurações</h4>
+              <label className="font-semibold flex items-center justify-between py-2">max_daily_posts </label> 
+                <p className="text-sm -mt-2">Número máximo de postagens diárias por usuário</p>
+              <input
+                type="number"
+                className="border px-2 py-1 rounded w-24"
+                value={configuracoes.maxDailyPosts}
+                onChange={async (e) => {
+                  const novoValor = parseInt(e.target.value);
+                  setConfiguracoes({ ...configuracoes, maxDailyPosts: novoValor });
+
+                  await fetch("http://localhost:3001/api/configuracoes", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ maxDailyPosts: novoValor }),
+                  });
+                }}
+              />
             </div>
-            <div className="mt-4 flex gap-4">
-              <button className="bg-gray-200 px-4 py-2 rounded">Atualizar Cache</button>
-              <button className="bg-gray-200 px-4 py-2 rounded">Verificar Integridade</button>
+
+            <div className="mt-4">
+              <h4 className="font-semibold text-green-800 mb-2">🔧 Ações Administrativas</h4>
+              <div className="flex gap-4">
+                <button className="bg-gray-200 px-4 py-2 rounded" onClick={() => alert("Cache atualizado!")}>Atualizar Cache</button>
+                <button className="bg-gray-200 px-4 py-2 rounded" onClick={() => alert("Verificação de integridade feita!")}>Verificar Integridade</button>
+              </div>
             </div>
           </div>
         )}
+
       </div>
     </div>
   );

@@ -1,188 +1,177 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-export default function CriarProfessor() {
+export default function CriarOuEditarProfessor() {
+  const [id, setId] = useState<string | null>(null);
   const [codigo, setCodigo] = useState("");
   const [cref, setCref] = useState("");
   const [nome, setNome] = useState("");
-  const [formacao, setFormacao] = useState("");
+  const [areaFormacao, setAreaFormacao] = useState("");
   const [statusCref, setStatusCref] = useState("Ativo");
   const [qualificacoes, setQualificacoes] = useState<string[]>([]);
   const [certificacoes, setCertificacoes] = useState<string[]>([]);
   const [qualificacaoAtual, setQualificacaoAtual] = useState("");
   const [certificacaoAtual, setCertificacaoAtual] = useState("");
-  const [foto, setFoto] = useState<File | null>(null);
+  const [fotoUrl, setFotoUrl] = useState<File | null>(null);
 
-  const adicionarQualificacao = () => {
-    if (qualificacaoAtual.trim()) {
-      setQualificacoes([...qualificacoes, qualificacaoAtual]);
-      setQualificacaoAtual("");
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const profId = params.get("id");
+    if (profId) {
+      setId(profId);
+      fetch(`http://localhost:3001/api/professores/${profId}`)
+        .then(res => res.json())
+        .then(data => {
+          setCodigo(data.codigo || "");
+          setCref(data.cref || "");
+          setNome(data.nome || "");
+          setAreaFormacao(data.areaFormacao || "");
+          setStatusCref(data.statusCref || "Ativo");
+          setQualificacoes(data.qualificacoes || []);
+          setCertificacoes(data.certificacoes || []);
+        })
+        .catch(err => console.error("Erro ao carregar professor:", err));
     }
-  };
-
-  const adicionarCertificacao = () => {
-    if (certificacaoAtual.trim()) {
-      setCertificacoes([...certificacoes, certificacaoAtual]);
-      setCertificacaoAtual("");
-    }
-  };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const formData = new FormData();
     formData.append("codigo", codigo);
     formData.append("cref", cref);
     formData.append("nome", nome);
-    formData.append("formacao", formacao);
+    formData.append("areaFormacao", areaFormacao);
     formData.append("statusCref", statusCref);
     qualificacoes.forEach((q, i) => formData.append(`qualificacoes[${i}]`, q));
     certificacoes.forEach((c, i) => formData.append(`certificacoes[${i}]`, c));
-    if (foto) formData.append("foto", foto);
+    if (fotoUrl) formData.append("fotoUrl", fotoUrl);
 
     try {
-      const res = await fetch("http://localhost:3001/api/professores", {
-        method: "POST",
+      const res = await fetch(`http://localhost:3001/api/professores${id ? `/${id}` : ""}`, {
+        method: id ? "PUT" : "POST",
         body: formData,
       });
 
       if (!res.ok) {
         const erro = await res.text();
-        alert("Erro ao criar professor: " + erro);
+        alert("Erro ao salvar professor: " + erro);
         return;
       }
 
-      alert("Professor criado com sucesso!");
+      alert(`Professor ${id ? "editado" : "criado"} com sucesso!`);
       window.location.href = "/admin";
     } catch (err) {
-      alert("Erro ao criar professor: " + err);
       console.error(err);
+      alert("Erro ao salvar professor");
+    }
+  };
+
+  const handleAddQualificacao = () => {
+    if (qualificacaoAtual && !qualificacoes.includes(qualificacaoAtual)) {
+      setQualificacoes([...qualificacoes, qualificacaoAtual]);
+      setQualificacaoAtual("");
+    }
+  };
+
+  const handleAddCertificacao = () => {
+    if (certificacaoAtual && !certificacoes.includes(certificacaoAtual)) {
+      setCertificacoes([...certificacoes, certificacaoAtual]);
+      setCertificacaoAtual("");
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <h1 className="text-2xl font-bold text-green-800 mb-4">Novo Professor</h1>
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow space-y-4">
-        <div className="flex gap-4">
-          <div className="w-1/2">
-            <label className="text-base text-green-800 mb-2 block">Código</label>
-            <input
-              type="text"
-              placeholder="PROF001"
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value)}
-              className="border p-2 rounded w-full"
-              required
-            />
-          </div>
-          <div className="w-1/2">
-            <label className="text-base text-green-800 mb-2 block">CREF</label>
-            <input
-              type="text"
-              placeholder="12345-G/ES"
-              value={cref}
-              onChange={(e) => setCref(e.target.value)}
-              className="border p-2 rounded w-full"
-            />
-          </div>
-        </div>
+    <form onSubmit={handleSubmit} className="p-6 bg-white rounded shadow max-w-2xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4 text-green-800">{id ? "Editar" : "Novo"} Professor</h1>
 
-        <label className="text-base text-green-800 block -mb-2">Nome completo</label>
+      <label className="text-green-800">Código</label>
+      <input
+        className="border p-2 w-full mb-4"
+        value={codigo}
+        onChange={(e) => setCodigo(e.target.value)}
+        required
+      />
+
+      <label className="text-green-800">CREF</label>
+      <input
+        className="border p-2 w-full mb-4"
+        value={cref}
+        onChange={(e) => setCref(e.target.value)}
+        required
+      />
+
+      <label className="text-green-800">Nome</label>
+      <input
+        className="border p-2 w-full mb-4"
+        value={nome}
+        onChange={(e) => setNome(e.target.value)}
+        required
+      />
+
+      <label className="text-green-800">Área de Formação</label>
+      <input
+        className="border p-2 w-full mb-4"
+        value={areaFormacao}
+        onChange={(e) => setAreaFormacao(e.target.value)}
+      />
+
+      <label className="text-green-800">Status do CREF</label>
+      <select
+        className="border p-2 w-full mb-4"
+        value={statusCref}
+        onChange={(e) => setStatusCref(e.target.value)}
+      >
+        <option value="Ativo">Ativo</option>
+        <option value="Inativo">Inativo</option>
+      </select>
+
+      <label className="text-green-800">Qualificações</label>
+      <div className="flex gap-2 mb-2">
         <input
-          type="text"
-          placeholder="Nome completo do professor"
-          value={nome}
-          onChange={(e) => setNome(e.target.value)}
-          className="border p-2 rounded w-full"
-          required
+          value={qualificacaoAtual}
+          onChange={(e) => setQualificacaoAtual(e.target.value)}
+          className="border p-2 flex-grow"
         />
+        <button type="button" onClick={handleAddQualificacao} className="bg-green-600 text-white px-4 py-1 rounded">
+          +
+        </button>
+      </div>
+      <ul className="list-disc pl-5 mb-4">
+        {qualificacoes.map((q, i) => <li key={i}>{q}</li>)}
+      </ul>
 
-        <label className="text-base text-green-800 block -mb-2">Área de formação</label>
+      <label className="text-green-800">Certificações</label>
+      <div className="flex gap-2 mb-2">
         <input
-          type="text"
-          placeholder="Ex: Educação Física - UFES"
-          value={formacao}
-          onChange={(e) => setFormacao(e.target.value)}
-          className="border p-2 rounded w-full"
+          value={certificacaoAtual}
+          onChange={(e) => setCertificacaoAtual(e.target.value)}
+          className="border p-2 flex-grow"
         />
+        <button type="button" onClick={handleAddCertificacao} className="bg-green-600 text-white px-4 py-1 rounded">
+          +
+        </button>
+      </div>
+      <ul className="list-disc pl-5 mb-4">
+        {certificacoes.map((c, i) => <li key={i}>{c}</li>)}
+      </ul>
 
-        <label className="text-base text-green-800 block -mb-2">Status CREF</label>
-        <select
-          value={statusCref}
-          onChange={(e) => setStatusCref(e.target.value)}
-          className="border p-2 rounded w-full"
-        >
-          <option value="Ativo">Ativo</option>
-          <option value="Inativo">Inativo</option>
-          <option value="Pendente">Pendente</option>
-        </select>
+      <label className="text-green-800">Foto do Professor (opcional)</label>
+      <input
+        type="file"
+        accept="image/*"
+        onChange={(e) => setFotoUrl(e.target.files?.[0] || null)}
+        className="mb-6"
+      />
 
-        <div>
-          <label className="text-base text-green-800 mb-1">Qualificações</label>
-          <div className="flex gap-2 mb-2">
-            <input
-              value={qualificacaoAtual}
-              onChange={(e) => setQualificacaoAtual(e.target.value)}
-              className="border p-2 rounded w-full"
-              placeholder="Ex: Mestrado em Educação Física"
-            />
-            <button
-              type="button"
-              className="bg-green-800 text-white px-3 py-1 rounded"
-              onClick={adicionarQualificacao}
-            >
-              +
-            </button>
-          </div>
-          <ul className="list-disc pl-5 text-sm text-gray-700">
-            {qualificacoes.map((q, i) => <li key={i}>{q}</li>)}
-          </ul>
-        </div>
-
-        <div>
-          <label className="text-base text-green-800 -mb-2">Certificações</label>
-          <div className="flex gap-2 mb-2">
-            <input
-              value={certificacaoAtual}
-              onChange={(e) => setCertificacaoAtual(e.target.value)}
-              className="border p-2 rounded w-full"
-              placeholder="Ex: Curso de Preparação Física"
-            />
-            <button
-              type="button"
-              className="bg-green-800 text-white px-3 py-1 rounded"
-              onClick={adicionarCertificacao}
-            >
-              +
-            </button>
-          </div>
-          <ul className="list-disc pl-5 text-sm text-gray-700">
-            {certificacoes.map((c, i) => <li key={i}>{c}</li>)}
-          </ul>
-        </div>
-
-        <div>
-          <label className="text-base text-green-800 -mb-2">Foto do Professor (opcional)</label>
-          <input
-            type="file"
-            accept="image/png, image/jpeg"
-            onChange={(e) => setFoto(e.target.files?.[0] || null)}
-            className="border p-2 rounded w-full"
-          />
-          <p className="text-sm text-gray-500">Formatos aceitos: JPG, PNG (máx. 5MB)</p>
-        </div>
-
-        <div className="flex gap-4 justify-end">
-          <button type="submit" className="bg-green-700 text-white px-4 py-2 rounded">
-            Criar
-          </button>
-          <button type="button" className="bg-gray-300 px-4 py-2 rounded">
-            Cancelar
-          </button>
-        </div>
-      </form>
-    </div>
+      <div className="flex justify-end gap-4">
+        <button type="submit" className="bg-green-700 text-white px-4 py-2 rounded">
+          {id ? "Salvar Alterações" : "Criar"}
+        </button>
+        <button type="button" className="bg-gray-300 px-4 py-2 rounded" onClick={() => window.location.href = "/admin"}>
+          Cancelar
+        </button>
+      </div>
+    </form>
   );
 }

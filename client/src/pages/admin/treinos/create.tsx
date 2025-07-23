@@ -2,254 +2,177 @@
 
 import { useEffect, useState } from "react";
 
-interface Exercicio {
-  id: string;
-  nome: string;
-  codigo: string;
-}
-
-interface Professor {
-  id: string;
-  usuario?: { nome: string };
-  codigo: string;
-  cref: string;
-}
-
-interface TreinoExercicio {
-  exercicioId: string;
-  ordem: number;
-  repeticoes: string;
-}
-
-export default function CriarTreino() {
-  const [titulo, setTitulo] = useState("");
+export default function CriarOuEditarTreino() {
+  const [id, setId] = useState<string | null>(null);
   const [codigo, setCodigo] = useState("");
-  const [nivel, setNivel] = useState("Base");
+  const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [exercicios, setExercicios] = useState<Exercicio[]>([]);
-  const [professores, setProfessores] = useState<Professor[]>([]);
-  const [profSelecionado, setProfSelecionado] = useState("");
-  const [treinoExercicios, setTreinoExercicios] = useState<TreinoExercicio[]>([]);
+  const [nivel, setNivel] = useState("Base");
+  const [professorId, setProfessorId] = useState("");
+  const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<any[]>([]);
+  const [professoresDisponiveis, setProfessoresDisponiveis] = useState<any[]>([]);
+  const [exercicios, setExercicios] = useState<{ id: string; ordem: number; repeticoes: string }[]>([]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const treinoId = params.get("id");
+    if (treinoId) {
+      setId(treinoId);
+      fetch(`http://localhost:3001/api/treinosprogramados/${treinoId}`)
+        .then(res => res.json())
+        .then(data => {
+          setCodigo(data.codigo || "");
+          setNome(data.nome || "");
+          setDescricao(data.descricao || "");
+          setNivel(data.nivel || "Base");
+          setProfessorId(data.professorId || "");
+          setExercicios(data.exercicios?.map((e: any) => ({
+            id: e.exercicioId,
+            ordem: e.ordem,
+            repeticoes: e.repeticoes,
+          })) || []);
+        });
+    }
+
     fetch("http://localhost:3001/api/exercicios")
-      .then((res) => res.json())
-      .then((data) => {
-        setExercicios(data);
-      });
+      .then(res => res.json())
+      .then(setExerciciosDisponiveis);
 
     fetch("http://localhost:3001/api/professores")
-      .then((res) => res.json())
-      .then((data) => {
-        setProfessores(data);
-      });
+      .then(res => res.json())
+      .then(setProfessoresDisponiveis);
   }, []);
 
   const adicionarExercicio = () => {
-    setTreinoExercicios((prev) => [
-      ...prev,
-      { exercicioId: "", ordem: prev.length + 1, repeticoes: "" },
-    ]);
-  };
-
-  const atualizarExercicio = <K extends keyof TreinoExercicio>(
-    index: number,
-    campo: K,
-    valor: TreinoExercicio[K]
-  ) => {
-    const atualizados = [...treinoExercicios];
-    atualizados[index][campo] = valor;
-    setTreinoExercicios(atualizados);
-  };
-
-  const removerExercicio = (index: number) => {
-    const atualizados = [...treinoExercicios];
-    atualizados.splice(index, 1);
-    setTreinoExercicios(atualizados);
+    setExercicios([...exercicios, { id: "", ordem: exercicios.length + 1, repeticoes: "" }]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const payload = {
+      codigo,
+      nome,
+      descricao,
+      nivel,
+      professorId,
+      exercicios,
+    };
 
-    const temExercicioSemId = treinoExercicios.some((ex) => !ex.exercicioId);
-      if (temExercicioSemId) {
-        alert("Por favor, selecione todos os exercícios.");
-        return;
-      }
-    if (!profSelecionado) {
-      alert("Por favor, selecione um professor responsável.");  
-      return;
-    }
-    if (!titulo || !codigo || !profSelecionado) {
-      alert("Por favor, preencha todos os campos obrigatórios.");
-      return;
-    }
-
-
-    const response = await fetch("http://localhost:3001/api/treinosprogramados", {
-      method: "POST",
+    const res = await fetch(`http://localhost:3001/api/treinosprogramados${id ? `/${id}` : ""}`, {
+      method: id ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nome: titulo,
-        codigo,
-        nivel,
-        descricao,
-        professorId: profSelecionado,
-        exercicios: treinoExercicios,
-      }),
+      body: JSON.stringify(payload),
     });
 
-    if (response.status === 400) {
-      const erro = await response.json();
-      alert(erro.message);
-      return;
-    }
-
-    if (response.ok) {
-      alert("Treino criado com sucesso!");
-      window.location.href = "/admin"; 
+    if (res.ok) {
+      alert(`Treino ${id ? "atualizado" : "criado"} com sucesso!`);
+      window.location.href = "/admin";
     } else {
-      const error = await response.json();
-      console.error("Erro ao criar treino:", error);
-      alert("Erro ao criar treino.");
+      const erro = await res.text();
+      alert("Erro ao salvar treino: " + erro);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <h1 className="text-2xl font-bold text-green-800 mb-4">Novo Treino</h1>
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow grid gap-4">
-        <div className="grid grid-cols-2 gap-4">
-          <label className="text-base -mb-2  text-green-800">Codigo</label>
-          <input
-            type="text"
-            placeholder="TR001"
-            value={codigo}
-            onChange={(e) => setCodigo(e.target.value)}
-            className="border p-2 rounded"
-            required
-          />
+    <form onSubmit={handleSubmit} className="p-6 bg-white rounded shadow max-w-2xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4 text-green-800">{id ? "Editar" : "Novo"} Treino</h1>
 
-          <label className="text-base -mb-2 text-green-800">Nível</label>
+      <label className="text-green-800">Código</label>
+      <input className="border p-2 w-full mb-4" value={codigo} onChange={(e) => setCodigo(e.target.value)} required />
+
+      <label className="text-green-800">Nome</label>
+      <input className="border p-2 w-full mb-4" value={nome} onChange={(e) => setNome(e.target.value)} required />
+
+      <label className="text-green-800">Descrição</label>
+      <textarea className="border p-2 w-full mb-4" value={descricao} onChange={(e) => setDescricao(e.target.value)} />
+
+      <label className="text-green-800">Nível</label>
+      <select className="border p-2 w-full mb-4" value={nivel} onChange={(e) => setNivel(e.target.value)}>
+        <option value="Base">Base</option>
+        <option value="Avancado">Avancado</option>
+        <option value="Performance">Performance</option>
+      </select>
+
+      <label className="text-green-800">Professor</label>
+      <select
+        className="border p-2 w-full mb-4"
+        value={professorId}
+        onChange={(e) => setProfessorId(e.target.value)}
+        required
+      >
+        <option value="">Selecione um professor</option>
+        {professoresDisponiveis.map((prof) => (
+          <option key={prof.id} value={prof.id}>
+            {prof.nome} ({prof.codigo}) - {prof.cref}
+          </option>
+        ))}
+      </select>
+
+      <label className="text-green-800">Exercícios do Treino</label>
+      {exercicios.map((ex, idx) => (
+        <div key={idx} className="mb-4 border p-3 rounded">
           <select
-            value={nivel}
-            onChange={(e) => setNivel(e.target.value)}
-            className="border p-2 rounded"
+            className="border p-2 w-full mb-2"
+            value={ex.id}
+            onChange={(e) => {
+              const novos = [...exercicios];
+              novos[idx].id = e.target.value;
+              setExercicios(novos);
+            }}
+            required
           >
-            <option value="Base">Base</option>
-            <option value="Avancado">Avançado</option>
-            <option value="Performance">Performance</option>
+            <option value="">Selecione um exercício</option>
+            {exerciciosDisponiveis.map((exOpt) => (
+              <option key={exOpt.id} value={exOpt.id}>
+                {exOpt.nome} ({exOpt.codigo})
+              </option>
+            ))}
           </select>
-        </div>
 
-        <label className="text-base -mb-2  text-green-800">Professor </label>
-          
-        <select
-          value={profSelecionado}
-          onChange={(e) => setProfSelecionado(e.target.value)}
-          className="border p-2 rounded"
-        >
-          <option value="">Professor Responsável</option>
-          {professores.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.usuario?.nome} ({p.codigo}) - CREF: {p.cref}
-            </option>
-          ))}
-        </select>
-
-          <label className="text-base -mb-2  text-green-800">Nome</label>
-          
-       <input
-          type="text"
-          placeholder="Nome do treino"
-          value={titulo}
-          onChange={(e) => setTitulo(e.target.value)}
-          className="border p-2 rounded"
-        />
-
-<label className="text-base -mb-2  text-green-800">Descrição </label>
-          
-       <textarea
-          placeholder="Descrição do treino"
-          value={descricao}
-          onChange={(e) => setDescricao(e.target.value)}
-          className="border p-2 rounded"
-        />
-
-        <div>
-          <h2 className="font-semibold text-green-800 mb-2">Exercícios do Treino</h2>
-          {treinoExercicios.map((item, index) => (
-            <div key={index} className="flex gap-2 mb-2 items-center">
-              <select
-                value={item.exercicioId}
-                onChange={(e) =>
-                  atualizarExercicio(index, "exercicioId", e.target.value)
-                }
-                className="border p-2 rounded w-1/2"
-              >
-                <option value="">Selecione o exercício</option>
-                {exercicios.map((ex) => (
-                  <option key={ex.id} value={ex.id}>
-                    {ex.nome} ({ex.codigo})
-                  </option>
-                ))}
-              </select>
-
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <label>Ordem</label>
               <input
                 type="number"
-                value={item.ordem}
-                onChange={(e) =>
-                  atualizarExercicio(index, "ordem", Number(e.target.value))
-                }
-                className="border p-2 rounded w-16"
-                min={1}
+                className="border p-2 w-full"
+                value={ex.ordem}
+                onChange={(e) => {
+                  const novos = [...exercicios];
+                  novos[idx].ordem = parseInt(e.target.value);
+                  setExercicios(novos);
+                }}
               />
+            </div>
 
+            <div className="flex-1">
+              <label>Repetições</label>
               <input
                 type="text"
-                placeholder="3x10 ou 30s"
-                value={item.repeticoes}
-                onChange={(e) =>
-                  atualizarExercicio(index, "repeticoes", e.target.value)
-                }
-                className="border p-2 rounded w-32"
+                className="border p-2 w-full"
+                value={ex.repeticoes}
+                onChange={(e) => {
+                  const novos = [...exercicios];
+                  novos[idx].repeticoes = e.target.value;
+                  setExercicios(novos);
+                }}
               />
-
-              <button
-                type="button"
-                onClick={() => removerExercicio(index)}
-                className="text-red-500 text-xl"
-              >
-                🗑
-              </button>
             </div>
-          ))}
-
-          <button
-            type="button"
-            onClick={adicionarExercicio}
-            className="text-green-700 font-semibold mt-2 flex items-center gap-1"
-          >
-            <span className="text-xl text-green-800">+</span> Adicionar Exercício
-          </button>
+          </div>
         </div>
+      ))}
 
-        <div className="flex gap-4 mt-4">
-          <button
-            type="submit"
-            className="bg-green-700 text-white px-4 py-2 rounded"
-          >
-            Criar
-          </button>
-          <button
-            type="button"
-            className="bg-gray-300 px-4 py-2 rounded"
-            onClick={() => history.back()}
-          >
-            Cancelar
-          </button>
-        </div>
-      </form>
-    </div>
+      <button type="button" onClick={adicionarExercicio} className="bg-green-600 text-white px-4 py-1 rounded mb-6">
+        + Adicionar Exercício
+      </button>
+
+      <div className="flex justify-end gap-4">
+        <button type="submit" className="bg-green-700 text-white px-4 py-2 rounded">
+          {id ? "Salvar Alterações" : "Criar"}
+        </button>
+        <button type="button" className="bg-gray-300 px-4 py-2 rounded" onClick={() => window.location.href = "/admin"}>
+          Cancelar
+        </button>
+      </div>
+    </form>
   );
 }

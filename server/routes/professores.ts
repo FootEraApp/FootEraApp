@@ -7,8 +7,8 @@ const upload = multer({ dest: "upload/" });
 
 router.get("/", listarProfessores);
 router.get("/:id", buscarProfessorPorId);
-router.post("/", upload.single("foto"), criarProfessor);
-router.put("/:id", editarProfessor);
+router.post("/", upload.single("fotoUrl"), criarProfessor);
+router.put("/:id", upload.single("fotoUrl"), editarProfessor);
 router.delete("/:id", excluirProfessor);
 
 export default router;
