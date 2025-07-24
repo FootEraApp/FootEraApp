@@ -13,6 +13,7 @@ import PaginaCreateDesafios from "./pages/admin/desafios/create";
 import PaginaCreateExercicios from "./pages/admin/exercicios/create";
 import PaginaCreateTreinos from "./pages/admin/treinos/create";
 import PaginaCreateProfessores from "./pages/admin/professores/create";
+import PaginaLoginAdmin from "./pages/admin/login";
 
 export function AppRoutes() {
   return (
@@ -58,6 +59,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/admin/professores/create">
         <PaginaCreateProfessores />
+      </Route>
+      <Route path="/admin/login">
+        <PaginaLoginAdmin />
       </Route>
     </>
   );

@@ -18,6 +18,7 @@ export default function CriarOuEditarTreino() {
     const treinoId = params.get("id");
     if (treinoId) {
       setId(treinoId);
+
       fetch(`http://localhost:3001/api/treinosprogramados/${treinoId}`)
         .then(res => res.json())
         .then(data => {
@@ -49,13 +50,23 @@ export default function CriarOuEditarTreino() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (exercicios.some(e => !e.id)) {
+      alert("Todos os exercícios devem estar selecionados.");
+      return;
+    }
+
     const payload = {
       codigo,
       nome,
       descricao,
       nivel,
       professorId,
-      exercicios,
+      exercicios: exercicios.map((ex) => ({
+        exercicioId: ex.id,
+        ordem: ex.ordem,
+        repeticoes: ex.repeticoes,
+      })),
     };
 
     const res = await fetch(`http://localhost:3001/api/treinosprogramados${id ? `/${id}` : ""}`, {

@@ -74,7 +74,7 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
           <p className="text-sm text-green-600 mb-4">Preencha os campos abaixo para criar sua conta</p>
 
           <label className="block mb-2 font-medium">Tipo de Perfil</label>
-          {["Atleta", "Escolinha de Futebol", "Clube Profissional", "Profissional do Futebol"].map((perfil) => (
+          {["Atleta", "Escolinha de Futebol", "Clube Profissional", "Profissional do Futebol", "Admin"].map((perfil) => (
             <label className="flex items-center text-sm mb-1" key={perfil}>
               <input
                 type="radio"

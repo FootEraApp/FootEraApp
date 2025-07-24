@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { verificarAdmin } from "@/utils/protegerAdmin";
 
 type Tab = "dashboard" | "exercicios" | "treinos" | "professores" | "desafios" | "configuracoes";
 
@@ -19,6 +20,7 @@ export default function AdminDashboard() {
   const [professores, setProfessores] = useState<any[]>([]);
   const [desafios, setDesafios] = useState<any[]>([]);
   const [configuracoes, setConfiguracoes] = useState<any>(null);
+  const [carregando, setCarregando] = useState(true);
   
   useEffect(() => {
     fetch("http://localhost:3001/api/admin")
@@ -51,6 +53,20 @@ export default function AdminDashboard() {
       .then(setConfiguracoes)
       .catch(console.error);
   }, []);
+
+  useEffect(() => {
+    const isAdmin = verificarAdmin();
+
+    if (!isAdmin) {
+        window.location.href = "/admin/login";
+      } else {
+        setCarregando(false); 
+      }
+    }, []);
+
+    if (carregando) {
+      return <div className="p-6"> Verificando Permissões</div>
+    }
 
   if (!dados) return <div className="p-6">Carregando...</div>;
 

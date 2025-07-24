@@ -22,6 +22,10 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Treino com nome ou código já existe." });
     }
 
+    if (exercicios.some(e => !e.exercicioId)) {
+      return res.status(400).json({ message: "Todos os exercícios devem ser selecionados." });
+    }
+
     const treinoCriado = await prisma.treinoProgramado.create({
       data: {
         nome,
@@ -68,7 +72,6 @@ export const getTreinoById = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Erro ao buscar treino." });
   }
 };
-
 
 export async function updateTreino(req: Request, res: Response) {
   try {

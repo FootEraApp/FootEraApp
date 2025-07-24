@@ -156,13 +156,15 @@ export default function CriarOuEditarProfessor() {
         {certificacoes.map((c, i) => <li key={i}>{c}</li>)}
       </ul>
 
-      <label className="text-green-800">Foto do Professor (opcional)</label>
-      <input
-        type="file"
-        accept="image/*"
-        onChange={(e) => setFotoUrl(e.target.files?.[0] || null)}
-        className="mb-6"
-      />
+      <label className="text-green-800 text-base mb-2">Foto do Professor (opcional) </label>
+      <div>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => setFotoUrl(e.target.files?.[0] || null)}
+          className="mb-6"
+        />
+      </div>
 
       <div className="flex justify-end gap-4">
         <button type="submit" className="bg-green-700 text-white px-4 py-2 rounded">
