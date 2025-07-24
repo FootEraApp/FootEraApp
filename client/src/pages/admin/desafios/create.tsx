@@ -51,6 +51,11 @@ export default function CreateOrEditDesafio() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (categoria.length === 0) {
+      alert("Adicione ao menos uma categoria.");
+      return;
+    }
+
     const metodo = id ? "PUT" : "POST";
     const url = id
       ? `http://localhost:3001/api/desafios/${id}`
