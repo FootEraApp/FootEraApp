@@ -1,4 +1,5 @@
 import { Route } from "wouter";
+import React from "react";
 import PaginaLogin from "./pages/login";
 import PaginaCadastro from "./pages/cadastro";
 import HomeRedirect from "./pages/index";
@@ -6,7 +7,6 @@ import PaginaFeed from "./pages/feed";
 import PaginaTreinos from "./pages/treinos";
 import PaginaCreatePost from "./pages/post/create";
 import PaginaMostrarPost from "./pages/post/showPost";
-import PostagemIndividual from "./pages/post/postagemIndividual";
 import PaginaExplorar from "./pages/explorar";
 import PaginaAdmin from "./pages/admin-page";
 import PaginaCreateDesafios from "./pages/admin/desafios/create";
@@ -14,6 +14,9 @@ import PaginaCreateExercicios from "./pages/admin/exercicios/create";
 import PaginaCreateTreinos from "./pages/admin/treinos/create";
 import PaginaCreateProfessores from "./pages/admin/professores/create";
 import PaginaLoginAdmin from "./pages/admin/login";
+import PaginaPerfil from "./pages/perfil";
+import PaginaNovoTreino from "./pages/novoTreino";
+import PaginaPostUnico from "./pages/postUnico";
 
 export function AppRoutes() {
   return (
@@ -33,11 +36,14 @@ export function AppRoutes() {
       <Route path="/treinos">
         <PaginaTreinos />
       </Route>
+      <Route path="/treinos/novo">
+        <PaginaNovoTreino />
+      </Route>
       <Route path="/post">
         <PaginaCreatePost />
       </Route>
-      <Route path="/postagens/:id">
-        <PostagemIndividual />
+      <Route path="/post/:id">
+        <PaginaPostUnico />
       </Route>
       <Route path="/posts">
         <PaginaMostrarPost />
@@ -62,6 +68,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/admin/login">
         <PaginaLoginAdmin />
+      </Route>
+      <Route path="/perfil">
+        <PaginaPerfil />
       </Route>
     </>
   );

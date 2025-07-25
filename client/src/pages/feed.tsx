@@ -6,7 +6,9 @@ import {
   FaShare,
   FaPaperPlane,
   FaTrash,
+  FaLink
 } from "react-icons/fa";
+
 import {
   getFeedPosts,
   likePost,
@@ -22,6 +24,13 @@ function PaginaFeed(): JSX.Element {
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
   const [comentarioTextoPorPost, setComentarioTextoPorPost] = useState<Record<string, string>>({});
   const userId = localStorage.getItem("usuarioId") ?? "";
+
+  const [modalAberto, setModalAberto] = useState(false);
+  const [linkCompartilhado, setLinkCompartilhado] = useState("");
+
+  const [comentariosModalAberto, setComentariosModalAberto] = useState(false);
+  const [postSelecionado, setPostSelecionado] = useState<PostagemComUsuario | null>(null);
+
 
   useEffect(() => {
     async function carregarFeed() {
@@ -61,20 +70,17 @@ function PaginaFeed(): JSX.Element {
     }
   };
 
-  const handleCompartilhar = async (postId: string) => {
-    await compartilharPost(postId);
+  const handleCompartilhar = (postId: string) => {
+  const link = `${window.location.origin}/post/${postId}`;
+  setLinkCompartilhado(link);
+  setModalAberto(true);
   };
 
-  const excluirPost = async (postId: string) => {
-    const confirmacao = confirm("Deseja mesmo excluir?");
-    if (!confirmacao) return;
-
-    await fetch(`http://localhost:3001/api/post/posts/${postId}`, {
-      method: "DELETE",
-    });
-
-    setPosts((prev) => prev.filter((p) => p.id !== postId));
+  const abrirModalComentarios = (post: PostagemComUsuario) => {
+  setPostSelecionado(post);
+  setComentariosModalAberto(true);
   };
+
 
   return (
     <div className="px-4 py-6 space-y-6 pb-24">
@@ -87,7 +93,7 @@ function PaginaFeed(): JSX.Element {
         const comentarioTexto = comentarioTextoPorPost[post.id] || "";
 
         return (
-          <div key={post.id} className="bg-white rounded-2xl shadow-md p-4 space-y-3">
+          <div key={post.id} className="max-w-xl mx-auto pt-2 bg-white rounded-2xl shadow-md p-4 space-y-3">
             <div className="flex items-center gap-2">
               <img
                 src={
@@ -108,35 +114,43 @@ function PaginaFeed(): JSX.Element {
 
             <div>
               <p className="text-gray-800 font-medium">{post.conteudo}</p>
-              {post.tipoMidia === "Imagem" && (
+
+              {post.tipoMidia === "Imagem" && post.imagemUrl && (
                 <img
                   src={
                     post.imagemUrl?.startsWith("http")
                       ? post.imagemUrl
-                      : `/assets/${post.imagemUrl || "fallback.png"}`
+                      : `http://localhost:3001${post.imagemUrl}`
                   }
                   alt="Post"
                   className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
                 />
               )}
+
               {post.tipoMidia === "Video" && post.videoUrl && (
-                <video controls className="w-full mt-2 rounded-lg" src={post.videoUrl} />
+                <video controls className="w-full mt-2 rounded-lg">
+                  <source
+                    src={
+                      post.videoUrl.startsWith("http")
+                        ? post.videoUrl
+                        : `http://localhost:3001${post.videoUrl}`
+                    }
+                    type="video/mp4"
+                  />
+                  Seu navegador não suporta vídeo.
+                </video>
               )}
             </div>
 
             <div className="flex justify-between text-gray-600 mt-2 px-2">
               <button className="flex items-center gap-1" onClick={() => handleLike(post.id)}>
-                {jaCurtiu ? <FaHeart className="text-black" /> : <FaRegHeart />} <span>{curtidas.length}</span>
+                {jaCurtiu ? <FaHeart className="text-black" /> : <FaRegHeart />}{" "}
+                <span>{curtidas.length}</span>
               </button>
 
               <button
                 className="flex items-center gap-1"
-                onClick={() =>
-                  setMostrarInputPorPost((prev) => ({
-                    ...prev,
-                    [post.id]: !prev[post.id],
-                  }))
-                }
+                onClick={() => abrirModalComentarios(post)}
               >
                 <FaRegCommentDots /> <span>{post.comentarios?.length || 0}</span>
               </button>
@@ -145,54 +159,53 @@ function PaginaFeed(): JSX.Element {
                 <FaShare />
               </button>
 
-              <button onClick={() => excluirPost(post.id)} className="text-red-600">
-                <FaTrash />
-              </button>
             </div>
 
             {mostrarInput && (
-              <div className="mt-2 flex items-center gap-2">
-                <input
-                  type="text"
-                  value={comentarioTexto}
-                  onChange={(e) =>
-                    setComentarioTextoPorPost((prev) => ({
-                      ...prev,
-                      [post.id]: e.target.value,
-                    }))
-                  }
-                  placeholder="Adicione um comentário..."
-                  className="w-full border rounded px-3 py-2 text-sm"
-                />
-                <button onClick={() => handleComentario(post.id, comentarioTexto)}>
-                  <FaPaperPlane className="text-green-800" />
-                </button>
-              </div>
-            )}
+              <>
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={comentarioTexto}
+                    onChange={(e) =>
+                      setComentarioTextoPorPost((prev) => ({
+                        ...prev,
+                        [post.id]: e.target.value,
+                      }))
+                    }
+                    placeholder="Adicione um comentário..."
+                    className="w-full border rounded px-3 py-2 text-sm"
+                  />
+                  <button onClick={() => handleComentario(post.id, comentarioTexto)}>
+                    <FaPaperPlane className="text-green-800" />
+                  </button>
+                </div>
 
-            {post.comentarios?.length > 0 && (
-              <div className="mt-2 space-y-2">
-                {post.comentarios.map((comentario) => (
-                  <div key={comentario.id} className="flex gap-2 items-start">
-                    <img
-                      src={
-                        comentario.usuario?.foto?.startsWith("http")
-                          ? comentario.usuario.foto
-                          : `/assets/usuarios/${comentario.usuario?.foto || "default-user.png"}`
-                      }
-                      alt="avatar"
-                      className="w-8 h-8 rounded-full object-cover"
-                    />
-                    <div className="bg-gray-100 rounded-lg px-3 py-2 w-full">
-                      <div className="flex justify-between text-sm text-gray-600">
-                        <span className="font-semibold">{comentario.usuario?.nome}</span>
-                        <span>{format(new Date(comentario.dataCriacao), "dd/MM, HH:mm")}</span>
+                {post.comentarios?.length > 0 && (
+                  <div className="mt-2 space-y-2">
+                    {post.comentarios.map((comentario) => (
+                      <div key={comentario.id} className="flex gap-2 items-start">
+                        <img
+                          src={
+                            comentario.usuario?.foto?.startsWith("http")
+                              ? comentario.usuario.foto
+                              : `/assets/usuarios/${comentario.usuario?.foto || "default-user.png"}`
+                          }
+                          alt="avatar"
+                          className="w-8 h-8 rounded-full object-cover"
+                        />
+                        <div className="bg-gray-100 rounded-lg px-3 py-2 w-full">
+                          <div className="flex justify-between text-sm text-gray-600">
+                            <span className="font-semibold">{comentario.usuario?.nome}</span>
+                            <span>{format(new Date(comentario.dataCriacao), "dd/MM, HH:mm")}</span>
+                          </div>
+                          <p className="text-sm text-gray-800">{comentario.conteudo}</p>
+                        </div>
                       </div>
-                      <p className="text-sm text-gray-800">{comentario.conteudo}</p>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
         );
@@ -202,7 +215,7 @@ function PaginaFeed(): JSX.Element {
         <Link href="/feed" className="hover:underline">
           Feed
         </Link>
-        <Link href="/explorar" className="hover:underline">
+        <Link href="/search" className="hover:underline">
           Explorar
         </Link>
         <Link href="/post" className="hover:underline">
@@ -215,6 +228,129 @@ function PaginaFeed(): JSX.Element {
           Perfil
         </Link>
       </nav>
+
+      {modalAberto && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-40 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-xl w-96 shadow-lg relative">
+            <h2 className="text-lg font-bold mb-4 text-center">Compartilhar Postagem</h2>
+
+            <input
+              type="text"
+              value={linkCompartilhado}
+              readOnly
+              onFocus={(e) => e.target.select()}
+              className="w-full border rounded px-3 py-2 text-sm mb-3"
+            />
+
+            <button
+              className="w-full bg-green-700 text-white py-2 rounded mb-4 hover:bg-green-800"
+              onClick={() => {
+                navigator.clipboard.writeText(linkCompartilhado);
+                alert("Link copiado para a área de transferência!");
+              }}
+            >
+              Copiar Link
+            </button>
+
+            <div className="flex justify-between items-center space-x-2">
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(linkCompartilhado)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 text-sm text-center flex-1"
+              >
+                WhatsApp
+              </a>
+
+              <a
+                href={`mailto:?subject=Veja esta postagem&body=${encodeURIComponent(linkCompartilhado)}`}
+                className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 text-sm text-center flex-1"
+              >
+                Email
+              </a>
+
+              <a
+                href={linkCompartilhado}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-gray-800 text-white py-2 px-4 rounded hover:bg-gray-900 text-sm text-center flex-1"
+              >
+                FootEra
+              </a>
+
+            </div>
+
+            <button
+              onClick={() => setModalAberto(false)}
+              className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl"
+            >
+              X
+            </button>
+          </div>
+        </div>
+      )}
+
+      {comentariosModalAberto && postSelecionado && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-40 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-xl w-96 shadow-lg relative max-h-[80vh] overflow-y-auto">
+            <h2 className="text-lg font-bold mb-4 text-center">Comentários</h2>
+
+            <div className="space-y-2 mb-4">
+              {postSelecionado.comentarios.map((comentario) => (
+                <div key={comentario.id} className="flex gap-2 items-start">
+                  <img
+                    src={
+                      comentario.usuario?.foto?.startsWith("http")
+                        ? comentario.usuario.foto
+                        : `/assets/usuarios/${comentario.usuario?.foto || "default-user.png"}`
+                    }
+                    alt="avatar"
+                    className="w-8 h-8 rounded-full object-cover"
+                  />
+                  <div className="bg-gray-100 rounded-lg px-3 py-2 w-full">
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span className="font-semibold">{comentario.usuario?.nome}</span>
+                      <span>{format(new Date(comentario.dataCriacao), "dd/MM, HH:mm")}</span>
+                    </div>
+                    <p className="text-sm text-gray-800">{comentario.conteudo}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={comentarioTextoPorPost[postSelecionado.id] || ""}
+                onChange={(e) =>
+                  setComentarioTextoPorPost((prev) => ({
+                    ...prev,
+                    [postSelecionado.id]: e.target.value,
+                  }))
+                }
+                placeholder="Adicione um comentário..."
+                className="w-full border rounded px-3 py-2 text-sm"
+              />
+              <button
+                onClick={() =>
+                  handleComentario(postSelecionado.id, comentarioTextoPorPost[postSelecionado.id] || "")
+                }
+              >
+                <FaPaperPlane className="text-green-800" />
+              </button>
+            </div>
+
+            <button
+              onClick={() => setComentariosModalAberto(false)}
+              className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl"
+            >
+              X
+            </button>
+          </div>
+        </div>
+      )}
+
+
     </div>
   );
 }

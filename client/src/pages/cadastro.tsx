@@ -15,6 +15,19 @@ export default function Cadastro() {
   const [sucesso, setSucesso] = useState("");
   const [_, navigate] = useLocation();
 
+   const [idade, setIdade] = useState<number | "">("");
+  const [categoria, setCategoria] = useState(""); // novo estado para categoria
+
+  const [areaFormacao, setAreaFormacao] = useState("");
+
+  const [nomeClube, setNomeClube] = useState("");
+  const [cnpjClube, setCnpjClube] = useState("");
+  const [cidadeClube, setCidadeClube] = useState("");
+
+  const [nomeEscolinha, setNomeEscolinha] = useState("");
+  const [cnpjEscolinha, setCnpjEscolinha] = useState("");
+  const [cidadeEscolinha, setCidadeEscolinha] = useState("");
+
   const handleSubmit = async () => {
     setErro("");
     setSucesso("");
@@ -22,6 +35,8 @@ export default function Cadastro() {
     if (!aceitaTermos) return setErro("Você deve aceitar os termos.");
     if (senha !== confirmarSenha) return setErro("As senhas não coincidem.");
     if (!nome || !email || !nomeDeUsuario || !senha) return setErro("Preencha todos os campos obrigatórios.");
+
+    if (tipoPerfil === "Atleta" && !categoria) return setErro("Por favor, selecione a categoria.");
 
     try {
       const res = await fetch("http://localhost:3001/api/cadastro/cadastro", {
@@ -34,6 +49,15 @@ export default function Cadastro() {
           nomeDeUsuario,
           senha,
           treinaEscolinha,
+          idade: tipoPerfil === "Atleta" ? idade : undefined,
+          categoria: tipoPerfil === "Atleta" ? [categoria] : undefined,
+          areaFormacao: tipoPerfil === "Professor" ? areaFormacao : undefined,
+          nomeEscolinha: tipoPerfil === "Escolinha" ? nomeEscolinha : undefined,
+          cnpjEscolinha: tipoPerfil === "Escolinha" ? cnpjEscolinha : undefined,
+          cidadeEscolinha: tipoPerfil === "Escolinha" ? cidadeEscolinha : undefined,
+          nomeClube: tipoPerfil === "Clube" ? nomeClube : undefined,
+          cnpjClube: tipoPerfil === "Clube" ? cnpjClube : undefined,
+          cidadeClube: tipoPerfil === "Clube" ? cidadeClube : undefined,
         }),
       });
 
@@ -74,17 +98,23 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
           <p className="text-sm text-green-600 mb-4">Preencha os campos abaixo para criar sua conta</p>
 
           <label className="block mb-2 font-medium">Tipo de Perfil</label>
-          {["Atleta", "Escolinha de Futebol", "Clube Profissional", "Profissional do Futebol", "Admin"].map((perfil) => (
-            <label className="flex items-center text-sm mb-1" key={perfil}>
+          {[
+            { label: "Atleta", value: "Atleta" },
+            { label: "Escolinha de Futebol", value: "Escolinha" },
+            { label: "Clube Profissional", value: "Clube" },
+            { label: "Profissional do Futebol", value: "Professor" },
+            { label: "Admin", value: "Admin"}
+          ].map((perfil) => (
+            <label className="flex items-center text-sm mb-1" key={perfil.value}>
               <input
                 type="radio"
                 name="tipo"
                 className="mr-2"
-                value={perfil}
-                checked={tipoPerfil === perfil}
+                value={perfil.value}
+                checked={tipoPerfil === perfil.value}
                 onChange={(e) => setTipoPerfil(e.target.value)}
               />
-              {perfil}
+              {perfil.label}
             </label>
           ))}
 
@@ -113,15 +143,148 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
             <input type="password" className="w-full border rounded px-3 py-2" value={confirmarSenha} onChange={(e) => setConfirmarSenha(e.target.value)} />
           </div>
 
-          <div className="mt-4">
-            <label className="block text-sm font-medium mb-1">Você treina em alguma escolinha cadastrada na FootEra?</label>
-            <label className="flex items-center text-sm mb-1">
-              <input type="radio" className="mr-2" name="escolinha" value="sim" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Sim, treino em uma escolinha
-            </label>
-            <label className="flex items-center text-sm mb-1">
-              <input type="radio" className="mr-2" name="escolinha" value="nao" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Não, sou um atleta independente
-            </label>
-          </div>
+          {/* Campos adicionais para Atleta */}
+          {tipoPerfil === "Atleta" && (
+            <>
+              <div className="mt-4">
+                  <label className="block text-sm font-medium mb-1">Você treina em alguma escolinha cadastrada na FootEra?</label>
+                  <label className="flex items-center text-sm mb-1">
+                    <input type="radio" className="mr-2" name="escolinha" value="sim" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Sim, treino em uma escolinha
+                  </label>
+                  <label className="flex items-center text-sm mb-1">
+                    <input type="radio" className="mr-2" name="escolinha" value="nao" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Não, sou um atleta independente
+                  </label>
+              </div>
+
+              <div className="mt-4">
+                <label className="block text-sm font-medium mb-1">Idade</label>
+                <input
+                  type="number"
+                  className="w-full border rounded px-3 py-2"
+                  value={idade}
+                  onChange={(e) => setIdade(e.target.value ? parseInt(e.target.value) : "")}
+                />
+              </div>
+              <div className="mt-4">
+                <label className="block text-sm font-medium mb-1">Categoria</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={categoria}
+                  onChange={(e) => setCategoria(e.target.value)}
+                >
+                  <option value="">Selecione a categoria</option>
+                  <option value="Sub9">Sub9</option>
+                  <option value="Sub11">Sub11</option>
+                  <option value="Sub13">Sub13</option>
+                  <option value="Sub15">Sub15</option>
+                  <option value="Sub17">Sub17</option>
+                  <option value="Sub20">Sub20</option>
+                  <option value="Livre">Livre</option>
+                </select>
+              </div>
+            </>
+          )}
+
+          {/* Campos adicionais para Professor */}
+          {tipoPerfil === "Professor" && (
+            <>
+              <div className="mt-4">
+                  <label className="block text-sm font-medium mb-1">Você da aula em alguma escolinha cadastrada na FootEra?</label>
+                  <label className="flex items-center text-sm mb-1">
+                    <input type="radio" className="mr-2" name="escolinha" value="sim" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Sim, dou aula em uma escolinha
+                  </label>
+                  <label className="flex items-center text-sm mb-1">
+                    <input type="radio" className="mr-2" name="escolinha" value="nao" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Não, sou um profissional independente
+                  </label>
+              </div>
+              <div className="mt-3">
+                <label className="block text-sm font-medium mb-1">Área de Formação</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={areaFormacao}
+                  onChange={(e) => setAreaFormacao(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+
+          {/* Campos adicionais para Clube */}
+          {tipoPerfil === "Clube" && (
+            <>
+              <div className="mt-4">
+                <label className="block text-sm font-medium mb-1">Você faz parte de alguma escolinha cadastrada na FootEra?</label>
+                <label className="flex items-center text-sm mb-1">
+                  <input type="radio" className="mr-2" name="escolinha" value="sim" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Sim, faço parte de uma escolinha
+                </label>
+                <label className="flex items-center text-sm mb-1">
+                  <input type="radio" className="mr-2" name="escolinha" value="nao" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Não, sou um clube independente
+                </label>
+              </div>
+              <div className="mt-4">
+                <label className="block text-sm font-medium mb-1">Nome do Clube</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={nomeClube}
+                  onChange={(e) => setNomeClube(e.target.value)}
+                />
+              </div>
+              <div className="mt-3">
+                <label className="block text-sm font-medium mb-1">CNPJ</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={cnpjClube}
+                  onChange={(e) => setCnpjClube(e.target.value)}
+                />
+              </div>
+              <div className="mt-3">
+                <label className="block text-sm font-medium mb-1">Cidade</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={cidadeClube}
+                  onChange={(e) => setCidadeClube(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+
+          {/* Campos adicionais para Escolinha */}
+          {tipoPerfil === "Escolinha" && (
+            <>
+              <div className="mt-4">
+                <label className="block text-sm font-medium mb-1">Você é alguma escolinha cadastrada na FootEra?</label>
+                <label className="flex items-center text-sm mb-1">
+                  <input type="radio" className="mr-2" name="escolinha" value="sim" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Sim, sou uma escolinha cadastrada
+                </label>
+                <label className="flex items-center text-sm mb-1">
+                  <input type="radio" className="mr-2" name="escolinha" value="nao" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Não, sou uma escolinha independente
+                </label>
+              </div>
+              <div className="mt-4">
+                <label className="block text-sm font-medium mb-1">Nome da Escolinha</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={nomeEscolinha}
+                  onChange={(e) => setNomeEscolinha(e.target.value)}
+                />
+              </div>
+              <div className="mt-3">
+                <label className="block text-sm font-medium mb-1">CNPJ</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={cnpjEscolinha}
+                  onChange={(e) => setCnpjEscolinha(e.target.value)}
+                />
+              </div>
+              <div className="mt-3">
+                <label className="block text-sm font-medium mb-1">Cidade</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={cidadeEscolinha}
+                  onChange={(e) => setCidadeEscolinha(e.target.value)}
+                />
+              </div>
+            </>
+          )}
 
           <div className="mt-4 mb-3">
             <label className="flex items-center text-sm">

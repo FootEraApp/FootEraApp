@@ -14,10 +14,10 @@
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
-    "lib": ["esnext", "dom"],
+    "lib": ["esnext", "DOM", "ES2020", "DOM.Iterable"],
     "jsx": "react-jsx",
     "baseUrl": ".",
-    "types": ["react", "react-dom"],
+    "types": ["react", "react-dom", "node"],
     "paths": {
       "@/*": ["client/src/*"],
       "@shared/*": ["shared/*"],

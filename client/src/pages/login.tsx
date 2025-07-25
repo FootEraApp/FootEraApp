@@ -25,10 +25,10 @@ export default function PaginaLogin() {
 
       localStorage.setItem("token", resposta.data.token);
 
-      localStorage.setItem("nomeUsuario", resposta.data.usuario.nome);
-      localStorage.setItem("usuarioId", resposta.data.usuario.id);
+      localStorage.setItem("nomeUsuario", resposta.data.nome);
+      localStorage.setItem("usuarioId", resposta.data.id);
 
-      const tipoOriginal = resposta.data.usuario.tipo;
+      const tipoOriginal = resposta.data.tipo;
       const tipoFormatado = tipoOriginal.toLowerCase();
 
       let tipoPadrao: 'atleta' | 'escola' | 'clube' | 'professor' | null = null;
@@ -44,6 +44,10 @@ export default function PaginaLogin() {
         console.warn("Tipo de usuário não reconhecido:", tipoOriginal);
       }
 
+      if (resposta.data.tipoUsuarioId) {
+        localStorage.setItem("tipoUsuarioId", resposta.data.tipoUsuarioId);
+      }
+      
       navigate("/feed");
     } catch (err: any) {
       console.error(err);
