@@ -404,6 +404,32 @@ if (professorArthur && exSprint && exCabeceio) {
   });
 }
 
+const usuarioLucas = await prisma.usuario.findUnique({
+  where: { nomeDeUsuario: 'lucas.ferreira' }
+});
+
+const usuarioAna = await prisma.usuario.findUnique({
+  where: { nomeDeUsuario: 'ana.mendes' }
+});
+
+if (usuarioLucas) {
+  await prisma.postagem.create({
+    data: {
+      conteudo: "Finalizei meu treino com explosões hoje! 💨",
+      imagemUrl: "https://images.unsplash.com/photo-1605296867304-46d5465a13f1",
+      usuarioId: usuarioLucas.id
+    }
+  });
+}
+
+if (usuarioAna) {
+  await prisma.postagem.create({
+    data: {
+      conteudo: "Muito aprendizado no treino técnico de hoje. Vamos pra cima! ⚽🔥",
+      usuarioId: usuarioAna.id
+    }
+  });
+}
 
 main()
   .then(() => prisma.$disconnect())

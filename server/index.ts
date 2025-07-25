@@ -17,6 +17,7 @@ import categoriasRoutes from "./routes/categorias"
 import desafiosRoutes from "./routes/desafios";
 import escolinhaRoutes from "./routes/escolinha";
 import exerciciosRoutes from "./routes/exercicios";
+import explorarRoutes from "./routes/explorar";
 import feedRoutes from "./routes/feed";
 import gruposRoutes from "./routes/grupos";
 import homeRoutes from "./routes/home";
@@ -29,13 +30,13 @@ import pontuacaoRoutes from "./routes/pontuacao";
 import postRoutes from "./routes/post";
 import professorRoutes from "./routes/professores";
 import rankingRoutes from "./routes/ranking"
-import explorarRoutes from "./routes/explorar";
 import termoRoutes from "./routes/termo";
 import treinoRoutes from "./routes/treinos";
 import treinoLivreRoutes from "./routes/treinoLivre";
 import treinoProgramadoRoutes from "./routes/treinoProgramado";
 import uploadRoutes from "./routes/upload";
 import vinculoRoutes from "./routes/vinculo";
+// import { removerTreinosExpirados } from "./routes/removerTreinosExpirados";
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -44,6 +45,7 @@ dotenv.config();
 
 app.use(cors());
 app.use(express.json());
+app.use(bodyParser.json());
 
 app.use("/api/admin", adminRoutes);
 app.use("/api/atletas", atletaRoutes);

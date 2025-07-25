@@ -8,35 +8,39 @@ datasource db {
 }
 
 model Usuario {
-  id                 String         @id @default(uuid())
-  nomeDeUsuario      String         @unique
-  senhaHash          String
-  nome               String
-  email              String         @unique
-  foto               String?
-  tipo               TipoUsuario
-  cidade             String?
-  estado             String?
-  pais               String?
-  bairro             String?
-  cpf                String?
-  dataCriacao        DateTime       @default(now())
-  codigo             String?
-  administrador      Administrador?
+  id            String      @id @default(uuid())
+  nomeDeUsuario String      @unique
+  senhaHash     String
+  nome          String
+  email         String      @unique
+  foto          String?
+  tipo          TipoUsuario
+  cidade        String?
+  estado        String?
+  pais          String?
+  bairro        String?
+  cpf           String?
+  dataCriacao   DateTime    @default(now())
+  codigo        String?
   verified           Boolean        @default(false)
-  amigosDe           Amigo[]        @relation("AmigoUsuario")
-  amigos             Amigo[]        @relation("UsuarioAmigo")
-  atleta             Atleta?
-  clube              Clube?
+
+  submissaoDesafios  SubmissaoDesafio[]
+  submissaoTreinos   SubmissaoTreino[]
+  seguidores         Seguidor[]         @relation("Seguido")
+  seguindo           Seguidor[]         @relation("Seguidor")
+  amigos             Amigo[]            @relation("UsuarioAmigo")
+  amigosDe           Amigo[]            @relation("AmigoUsuario")
+  mensagensEnviadas  Mensagem[]         @relation("MensagensEnviadas")
+  mensagensRecebidas Mensagem[]         @relation("MensagensRecebidas")
+  postagens          Postagem[]
   comentarios        Comentario[]
   curtidas           Curtida[]
-  escolinha          Escolinha?
-  mensagensEnviadas  Mensagem[]     @relation("MensagensEnviadas")
-  mensagensRecebidas Mensagem[]     @relation("MensagensRecebidas")
-  postagens          Postagem[]
-  professor          Professor?
-  seguidores         Seguidor[]     @relation("Seguido")
-  seguindo           Seguidor[]     @relation("Seguidor")
+
+  atleta        Atleta?
+  professor     Professor?
+  clube         Clube?
+  escolinha     Escolinha?
+  administrador Administrador?
 }
 
 model Professor {
@@ -50,9 +54,12 @@ model Professor {
   fotoUrl            String?
   statusCref         StatusCref?
   nome               String
+  
   usuarioId          String?             @unique
   usuario            Usuario?            @relation(fields: [usuarioId], references: [id])
+  
   treinosProgramados TreinoProgramado[]
+  relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoProfessor)
 }
 
 model Amigo {
@@ -61,6 +68,7 @@ model Amigo {
   amigoId   String
   local     String?
   seguindo  Boolean? @default(false)
+
   amigo     Usuario  @relation("AmigoUsuario", fields: [amigoId], references: [id])
   usuario   Usuario  @relation("UsuarioAmigo", fields: [usuarioId], references: [id])
 }
@@ -72,13 +80,15 @@ model Mensagem {
   conteudo String
   criadaEm DateTime @default(now())
   lida     Boolean  @default(false)
+
   de       Usuario  @relation("MensagensEnviadas", fields: [deId], references: [id])
   para     Usuario  @relation("MensagensRecebidas", fields: [paraId], references: [id])
 }
 
 model Atleta {
-  id                    String               @id @default(uuid())
-  usuarioId             String?              @unique
+  id                    String           @id @default(uuid())
+  usuarioId             String           @unique
+  usuario               Usuario          @relation(fields: [usuarioId], references: [id])
   nome                  String?
   sobrenome             String?
   email                 String?
@@ -95,25 +105,27 @@ model Atleta {
   seloQualidade         String?
   foto                  String?
   categoria             Categoria[]
-  consentimento         Boolean              @default(false)
+  consentimento         Boolean          @default(false)
   clubeId               String?
+  clube                 Clube?           @relation(fields: [clubeId], references: [id])
   escolinhaId           String?
-  statusConexao         StatusConexao        @default(Pendente)
-  dataCriacao           DateTime             @default(now())
+  escolinha             Escolinha?       @relation(fields: [escolinhaId], references: [id])
+  statusConexao         StatusConexao    @default(Pendente)
+  dataCriacao           DateTime         @default(now())
   dataUltimaModificacao DateTime?
-  clube                 Clube?               @relation(fields: [clubeId], references: [id])
-  escolinha             Escolinha?           @relation(fields: [escolinhaId], references: [id])
-  usuario               Usuario?              @relation(fields: [usuarioId], references: [id])
-  membrosGrupo          MembroGrupo[]
-  midias                Midia[]
   pontuacao             PontuacaoAtleta?
-  postagens             Postagem[]
-  Ranking               Ranking?
-  solicitacoesVinculo   SolicitacaoVinculo[]
-  submissoesDesafio     SubmissaoDesafio[]
-  treinosAgendados      TreinoAgendado[]
-  treinosLivres         TreinoLivre[]
-  Video                 Video[]
+
+  postagens           Postagem[]
+  midias              Midia[]
+  solicitacoesVinculo SolicitacaoVinculo[]
+  submissoesDesafio   SubmissaoDesafio[]
+  membrosGrupo        MembroGrupo[]
+  treinosAgendados    TreinoAgendado[]
+  treinosLivres       TreinoLivre[]
+  Video               Video[]
+  Ranking             Ranking?
+  SubmissaoTreino     SubmissaoTreino[]
+  relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoAtleta")
 }
 
 model TreinoProgramado {
@@ -122,12 +134,22 @@ model TreinoProgramado {
   nome           String
   descricao      String?
   nivel          Nivel
+  categoria      Categoria[]
+  TipoTreino     TipoTreino?
   dataAgendada   DateTime?
-  professorId    String?
+  objetivo       String?
+  duracao        Int?
+  dicas          String[]
+
+  professorId String?
+  professor   Professor? @relation(fields: [professorId], references: [id])
+
+  escolinhaId String?
+  escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id])
+
+  exercicios     TreinoProgramadoExercicio[]
   createdAt      DateTime                    @default(now())
   treinoAgendado TreinoAgendado[]
-  professor      Professor?                  @relation(fields: [professorId], references: [id])
-  exercicios     TreinoProgramadoExercicio[]
 }
 
 model TreinoProgramadoExercicio {
@@ -136,6 +158,7 @@ model TreinoProgramadoExercicio {
   exercicioId        String
   ordem              Int
   repeticoes         String
+
   exercicio          Exercicio        @relation(fields: [exercicioId], references: [id])
   treinoProgramado   TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id])
 }
@@ -148,6 +171,7 @@ model Exercicio {
   nivel                      Nivel
   categorias                 Categoria[]
   videoDemonstrativoUrl      String?
+
   treinoProgramadoExercicios TreinoProgramadoExercicio[]
 }
 
@@ -161,6 +185,7 @@ model DesafioOficial {
   prazoSubmissao  DateTime?
   categoria       Categoria[]
   createdAt       DateTime           @default(now())
+  
   submissoes      SubmissaoDesafio[]
 }
 
@@ -168,8 +193,26 @@ model Seguidor {
   id                String  @id @default(uuid())
   seguidoUsuarioId  String
   seguidorUsuarioId String
+
   seguidoUsuario    Usuario @relation("Seguido", fields: [seguidoUsuarioId], references: [id])
   seguidorUsuario   Usuario @relation("Seguidor", fields: [seguidorUsuarioId], references: [id])
+}
+
+model RelacaoTreinamento {
+  id          String  @id @default(uuid())
+  professorId String?
+  atletaId    String?
+  escolinhaId String?
+  clubeId     String?
+
+  professor Professor? @relation("RelacaoProfessor", fields: [professorId], references: [id])
+  atleta    Atleta?    @relation("RelacaoAtleta", fields: [atletaId], references: [id])
+  escolinha Escolinha? @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id])
+  clube     Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id])
+
+  criadoEm DateTime @default(now())
+
+  @@unique([professorId, atletaId, escolinhaId, clubeId])
 }
 
 model Postagem {
@@ -179,17 +222,21 @@ model Postagem {
   videoUrl    String?
   tipoMidia   TipoMidia?
   dataCriacao DateTime     @default(now())
-  usuarioId   String
-  atletaId    String?
-  clubeId     String?
+  
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  atletaId String?
+  atleta   Atleta? @relation(fields: [atletaId], references: [id])
+
+  clubeId String?
+  clube   Clube?  @relation(fields: [clubeId], references: [id])
+
   escolinhaId String?
+  escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id])
+
   comentarios Comentario[]
   curtidas    Curtida[]
-  compartilhamentos Int @default(0)
-  atleta      Atleta?      @relation(fields: [atletaId], references: [id])
-  clube       Clube?       @relation(fields: [clubeId], references: [id])
-  escolinha   Escolinha?   @relation(fields: [escolinhaId], references: [id])
-  usuario     Usuario      @relation(fields: [usuarioId], references: [id])
 }
 
 model Midia {
@@ -200,17 +247,25 @@ model Midia {
   dataEnvio   DateTime
   descricao   String
   titulo      String
+
   atletaId    String?
   escolinhaId String?
   clubeId     String?
   atleta      Atleta?    @relation(fields: [atletaId], references: [id])
   clube       Clube?     @relation(fields: [clubeId], references: [id])
   escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id])
+
+  submissaoDesafioId String?
+  submissaoDesafio   SubmissaoDesafio? @relation("Midias_SubmissaoDesafio", fields: [submissaoDesafioId], references: [id])
+
+  submissaoTreinoId String?
+  submissaoTreino   SubmissaoTreino? @relation("Midias_SubmissaoTreino", fields: [submissaoTreinoId], references: [id])
 }
 
 model Escolinha {
   id          String     @id @default(uuid())
   usuarioId   String?     @unique
+  usuario     Usuario?    @relation(fields: [usuarioId], references: [id])
   nome        String
   cnpj        String?
   telefone1   String?
@@ -228,10 +283,12 @@ model Escolinha {
   cep         String?
   logo        String?
   dataCriacao DateTime   @default(now())
-  atletas     Atleta[]
-  usuario     Usuario?    @relation(fields: [usuarioId], references: [id])
-  midias      Midia[]
-  postagens   Postagem[]
+
+  atletas               Atleta[]
+  midias                Midia[]
+  postagens             Postagem[]
+  treinoProgramado      TreinoProgramado[]
+  relacoesTreinamento   RelacaoTreinamento[] @relation("RelacaoEscolhinha")
 }
 
 model Comentario {
@@ -245,8 +302,10 @@ model Comentario {
 }
 
 model Clube {
-  id          String     @id @default(uuid())
-  usuarioId   String?     @unique
+    id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
   nome        String
   cnpj        String?
   telefone1   String?
@@ -264,11 +323,12 @@ model Clube {
   pais        String?
   cep         String?
   logo        String?
-  dataCriacao DateTime   @default(now())
-  atletas     Atleta[]
-  usuario     Usuario?    @relation(fields: [usuarioId], references: [id])
-  midias      Midia[]
-  postagens   Postagem[]
+  dataCriacao DateTime @default(now())
+
+  atletas               Atleta[]
+  midias                Midia[]
+  postagens             Postagem[]
+  relacoesTreinamento   RelacaoTreinamento[] @relation("RelacaoClube")
 }
 
 model SolicitacaoVinculo {
@@ -278,6 +338,7 @@ model SolicitacaoVinculo {
   tipoEntidade String
   status       String
   criadoEm     DateTime @default(now())
+
   atleta       Atleta   @relation(fields: [atletaId], references: [id])
 }
 
@@ -288,9 +349,30 @@ model SubmissaoDesafio {
   videoUrl  String
   aprovado  Boolean?
   createdAt DateTime       @default(now())
+
   atleta    Atleta         @relation(fields: [atletaId], references: [id])
   desafio   DesafioOficial @relation(fields: [desafioId], references: [id])
+  midias    Midia[]        @relation("Midias_SubmissaoDesafio")
+  Usuario   Usuario?       @relation(fields: [usuarioId], references: [id])
+  usuarioId String?
 }
+
+model SubmissaoTreino {
+  id               String   @id @default(uuid())
+  atletaId         String
+  treinoAgendadoId String
+  aprovado         Boolean? 
+  observacao       String?
+  criadoEm         DateTime @default(now())
+  atualizadoEm     DateTime @updatedAt
+
+  atleta         Atleta         @relation(fields: [atletaId], references: [id])
+  treinoAgendado TreinoAgendado @relation(fields: [treinoAgendadoId], references: [id])
+  midias         Midia[]        @relation("Midias_SubmissaoTreino")
+  Usuario        Usuario?       @relation(fields: [usuarioId], references: [id])
+  usuarioId      String?
+}
+
 
 model Grupo {
   id        String        @id @default(uuid())
@@ -303,6 +385,7 @@ model MembroGrupo {
   id       String @id @default(uuid())
   grupoId  String
   atletaId String
+
   atleta   Atleta @relation(fields: [atletaId], references: [id])
   grupo    Grupo  @relation(fields: [grupoId], references: [id])
 }
@@ -340,20 +423,25 @@ model TreinoAgendado {
   titulo             String
   dataHora           DateTime
   local              String?
+  dataTreino         DateTime?
+
   atletaId           String
   treinoProgramadoId String?
   atleta             Atleta            @relation(fields: [atletaId], references: [id])
   treinoProgramado   TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id])
+
+  submissaoTreinos   SubmissaoTreino[]
 }
 
 model TreinoLivre {
-  id         String           @id @default(uuid())
+  id         String   @id @default(uuid())
   atletaId   String
+  atleta     Atleta   @relation(fields: [atletaId], references: [id])
   data       DateTime
   descricao  String?
   duracaoMin Int?
-  registros  RegistroTreino[]
-  atleta     Atleta           @relation(fields: [atletaId], references: [id])
+
+  registros RegistroTreino[]
 }
 
 model RegistroTreino {
@@ -444,4 +532,10 @@ enum StatusCref {
   Ativo
   Desativo
   Pendente
+}
+
+enum TipoTreino {
+  Tecnico
+  Físico
+  Tatico
 }

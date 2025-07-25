@@ -3,48 +3,58 @@ import { Link } from "wouter";
 
 export default function PaginaPostagem() {
   const [descricao, setDescricao] = useState("");
-  const [mídia, setMídia] = useState<File | null>(null);
+  const [midia, setMidia] = useState<File | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [mensagem, setMensagem] = useState("");
 
   const handleEnviar = async () => {
-    if (!descricao.trim() && !mídia) {
+    if (!descricao.trim() && !midia) {
       setMensagem("É necessário pelo menos uma descrição ou uma mídia.");
       return;
     }
 
-    const body = {
-      conteudo: descricao,
-      ...(mídia && {
-        tipoMidia: mídia.type.startsWith("video") ? "Video" : "Imagem",
-        imagemUrl: mídia.name || "",
-        videoUrl: mídia.name || "",
-      }),
-    };
+    const usuarioId = localStorage.getItem("usuarioId");
+    const nomeUsuario = localStorage.getItem("nomeUsuario");
+    const token = localStorage.getItem("token");
 
-    setCarregando(true);
+    if (!usuarioId || !token) {
+      setMensagem("Usuário não autenticado.");
+      return;
+    }
+
     const formData = new FormData();
     formData.append("descricao", descricao);
-    if (mídia) {
-      formData.append("arquivo", mídia);
+    formData.append("usuarioId", usuarioId); 
+    formData.append("nomeUsuario", nomeUsuario || "");
+
+    if (midia) {
+      formData.append("arquivo", midia);
+      formData.append("tipoMidia", midia.type.startsWith("video") ? "Video" : "Imagem");
     }
+
+    setCarregando(true);
+
 
     try {
       const res = await fetch("http://localhost:3001/api/post/postar", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify(body),
-      });
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`, 
+      },
+      body: formData,
+    });
 
-      if (!res.ok) throw new Error("Erro ao enviar");
+    if (!res.ok) {
+      const erroTexto = await res.text();
+      console.error("❌ Erro do backend:", erroTexto); 
+      throw new Error("Erro ao enviar");
+    }
 
       setMensagem("Postagem enviada com sucesso!");
       setDescricao("");
-      setMídia(null);
+      setMidia(null);
     } catch (err) {
+      console.error("❌ Erro completo no frontend:", err);
       setMensagem("Erro ao enviar a postagem.");
     } finally {
       setCarregando(false);
@@ -67,7 +77,7 @@ export default function PaginaPostagem() {
         <input
           type="file"
           accept="image/*,video/*"
-          onChange={(e) => setMídia(e.target.files?.[0] || null)}
+          onChange={(e) => setMidia(e.target.files?.[0] || null)}
           className="mb-4"
         />
 

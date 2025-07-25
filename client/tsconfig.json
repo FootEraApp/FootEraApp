@@ -6,17 +6,17 @@
       "@pages/*": ["pages/*"]
     },
     "module": "esnext",
-    "target": "esnext",
-    "jsx": "preserve",
-    "moduleResolution": "bundler",
+    "target": "ES2020",
+    "jsx": "react-jsx",
+    "moduleResolution": "node",
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "isolatedModules": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "types": ["next", "next/types/global", "vite/client", "react"]
+    "lib": ["DOM", "ES2020", "dom.iterable", "esnext"],
+    "types": ["next", "next/types/global", "vite/client", "react", "node"]
   },
   "include": ["src/**/*", "../api"],
   "exclude": ["node_modules", "dist"]
