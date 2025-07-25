@@ -158,10 +158,10 @@ async function main() {
         create: {
           codigo: 'PROF001',
           cref: 'ES123456',
-          areaFormacao: 'Educação Física',
+          areaFormacao: 'Educação Física - UFES',
           escola: 'Escola Estrelas',
-          qualificacoes: 'Treinamento físico, técnico',
-          certificacoes: 'Licença CBF A',
+          qualificacoes: ['Treinamento físico, técnico'],
+          certificacoes: ['Licença CBF A'],
           fotoUrl: '/assets/usuarios/arthur.jpg',
           nome: 'Arthur Persio de Azevedo'
         }
@@ -189,8 +189,8 @@ async function main() {
           cref: 'RJ987654',
           areaFormacao: 'Fisiologia do Exercício',
           escola: 'Academia RJ',
-          qualificacoes: 'Fisiologia, Agilidade',
-          certificacoes: 'CBF Nível C',
+          qualificacoes: ['Fisiologia, Agilidade'],
+          certificacoes: ['CBF Nível C'],
           fotoUrl: 'https://images.unsplash.com/photo-1607746882042-944635dfe10e',
           nome: 'Juliana Souza'
         }
@@ -278,19 +278,24 @@ async function main() {
   });
 
   const atletas = await prisma.atleta.findMany();
-  for (const atleta of atletas) {
-    await prisma.pontuacaoAtleta.upsert({
+    for (const atleta of atletas) {
+    const existing = await prisma.pontuacaoAtleta.findUnique({
       where: { atletaId: atleta.id },
-      update: {},
-      create: {
-        atletaId: atleta.id,
-        pontuacaoTotal: 85,
-        pontuacaoPerformance: 30,
-        pontuacaoDisciplina: 25,
-        pontuacaoResponsabilidade: 30
-      }
     });
+
+    if (!existing) {
+      await prisma.pontuacaoAtleta.create({
+        data: {
+          atletaId: atleta.id,
+          pontuacaoTotal: 85,
+          pontuacaoPerformance: 30,
+          pontuacaoDisciplina: 25,
+          pontuacaoResponsabilidade: 30
+        }
+      });
+    }
   }
+
 
   const exercicios = [
     {
@@ -345,6 +350,60 @@ async function main() {
 
   console.log("✅ Seed do banco de dados FootEra criado com sucesso!");
 }
+
+const professorArthur = await prisma.professor.findFirst({
+  where: { usuario: { nomeDeUsuario: 'arthur.persio' } }
+});
+
+const exSprint = await prisma.exercicio.findUnique({ where: { codigo: 'EX005' } });
+const exCabeceio = await prisma.exercicio.findUnique({ where: { codigo: 'EX006' } });
+
+if (professorArthur && exSprint && exCabeceio) {
+  const treino1 = await prisma.treinoProgramado.upsert({
+    where: { codigo: 'TR001' },
+    update: {},
+    create: {
+      codigo: 'TR001',
+      nome: 'Treino de Agilidade com Sprint',
+      descricao: 'Foco em explosão e mudanças rápidas de direção',
+      nivel: Nivel.Performance,
+      professorId: professorArthur.id,
+      dataAgendada: new Date(),
+      exercicios: {
+        create: [
+          {
+            exercicioId: exSprint.id,
+            ordem: 1,
+            repeticoes: '3x 30m com 2min descanso'
+          }
+        ]
+      }
+    }
+  });
+
+  const treino2 = await prisma.treinoProgramado.upsert({
+    where: { codigo: 'TR002' },
+    update: {},
+    create: {
+      codigo: 'TR002',
+      nome: 'Treino Técnico de Defesa',
+      descricao: 'Prática de cabeceios defensivos e posicionamento',
+      nivel: Nivel.Avancado,
+      professorId: professorArthur.id,
+      dataAgendada: new Date(),
+      exercicios: {
+        create: [
+          {
+            exercicioId: exCabeceio.id,
+            ordem: 1,
+            repeticoes: '4x 10 cabeceios em dupla'
+          }
+        ]
+      }
+    }
+  });
+}
+
 
 main()
   .then(() => prisma.$disconnect())
