@@ -34,7 +34,6 @@ export default function BadgesList({ badges = [] }: BadgesListProps) {
     }
   };
   
-  // Default badges for demo if none are available
   const displayBadges = badges.length > 0 ? badges : [
     { id: 1, name: "Badge 1", icon: "medal" },
     { id: 2, name: "Badge 2", icon: "stopwatch" },

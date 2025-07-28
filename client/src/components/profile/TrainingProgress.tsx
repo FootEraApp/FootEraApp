@@ -26,14 +26,11 @@ import {
   CardDescription 
 } from '../ui/card';
 import { Button } from '../ui/button';
-
 import { Badge } from '../ui/badge';
-
 import { Separator } from '../ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Link } from 'wouter';
 
-//tipos de treino e desafios
 type Training = {
   id: string;
   status: 'completed' | 'scheduled' | string;
@@ -60,9 +57,6 @@ type Challenge = {
   };
 };
 
-
-
-// Ícones para categorias
 const categoryIcons: Record<string, React.ReactNode> = {
   'Físico': <Dumbbell className="h-4 w-4" />,
   'Técnico': <Target className="h-4 w-4" />,
@@ -75,7 +69,6 @@ interface TrainingProgressProps {
 }
 
 export default function TrainingProgress({ userId }: TrainingProgressProps) {
-  // Buscar treinamentos do usuário
   const {
   data: userTrainings = [],
   isLoading: isLoadingTrainings
@@ -88,15 +81,12 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
       return res.json();
     },
     enabled: !!userId,
-    onError: (err) => {
+    onError: (err: Error) => {
       console.error("Erro ao buscar treinos:", err);
     }
   } as UseQueryOptions<Training[], Error>
 );
 
-
-
-  // Buscar desafios do usuário
   const {
   data: userChallenges = [],
   isLoading: isLoadingChallenges
@@ -109,34 +99,27 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
       return res.json();
     },
     enabled: !!userId,
-    onError: (err) => {
+    onError: (err: Error) => {
       console.error("Erro ao buscar desafios:", err);
     }
   } as UseQueryOptions<Challenge[], Error>
 );
 
-
-
-  // Filtra os treinamentos completados
   const completedTrainings = useMemo(() => {
     if (!userTrainings || !Array.isArray(userTrainings)) return [];
     return userTrainings.filter((t: any) => t.status === 'completed');
   }, [userTrainings]);
 
-  // Filtra os treinamentos agendados
   const scheduledTrainings = useMemo(() => {
     if (!userTrainings || !Array.isArray(userTrainings)) return [];
     return userTrainings.filter((t: any) => t.status === 'scheduled')
       .sort((a: any, b: any) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime());
   }, [userTrainings]);
-
-  // Filtra os desafios completados
   const completedChallenges = useMemo(() => {
     if (!userChallenges || !Array.isArray(userChallenges)) return [];
     return userChallenges.filter((c: any) => c.status === 'completed');
   }, [userChallenges]);
 
-  // Filtra os desafios pendentes
   const pendingChallenges = useMemo(() => {
     if (!userChallenges || !Array.isArray(userChallenges)) return [];
     return userChallenges.filter((c: any) => c.status === 'pending')
@@ -147,7 +130,6 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
       });
   }, [userChallenges]);
 
-  // Calculando estatísticas de treinamento
   const trainingStats = useMemo(() => {
     if (!userTrainings) return { completed: 0, scheduled: 0, totalHours: 0 };
     
@@ -159,7 +141,6 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
     return { completed, scheduled, totalHours };
   }, [userTrainings, completedTrainings, scheduledTrainings]);
 
-  // Calculando estatísticas de desafio
   const challengeStats = useMemo(() => {
     if (!userChallenges) return { completed: 0, pending: 0, totalPoints: 0 };
     
@@ -171,8 +152,7 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
     return { completed, pending, totalPoints };
   }, [userChallenges, completedChallenges, pendingChallenges]);
 
-  // Verificando se tem atividades agendadas para hoje
-  const hasTodayActivities = useMemo(() => {
+ const hasTodayActivities = useMemo(() => {
     if (!scheduledTrainings.length) return false;
     const today = new Date();
     return scheduledTrainings.some((t: any) => {
@@ -181,7 +161,6 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
     });
   }, [scheduledTrainings]);
 
-  // Formato de data para exibição
   const formatDate = (date: string) => {
     return format(new Date(date), "dd 'de' MMMM", { locale: ptBR });
   };

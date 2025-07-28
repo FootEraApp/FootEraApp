@@ -20,7 +20,7 @@ function PostUnico(): JSX.Element {
     if (!params?.id) return;
     async function fetchPost() {
       try {
-        const postUnico = await getPostById(params.id);
+        const postUnico = await getPostById(params!.id);
         setPost(postUnico);
       } catch (error) {
         console.error("Erro ao buscar post:", error);

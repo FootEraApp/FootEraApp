@@ -17,6 +17,7 @@ import PaginaLoginAdmin from "./pages/admin/login";
 import PaginaPerfil from "./pages/perfil";
 import PaginaNovoTreino from "./pages/novoTreino";
 import PaginaPostUnico from "./pages/postUnico";
+import PaginaPerfilUnico from "./pages/perfilUnico"
 
 export function AppRoutes() {
   return (
@@ -71,6 +72,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/perfil">
         <PaginaPerfil />
+      </Route>
+      <Route path="/perfil/:id">
+        <PaginaPerfilUnico />
       </Route>
     </>
   );

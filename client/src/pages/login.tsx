@@ -23,8 +23,12 @@ export default function PaginaLogin() {
         senha,
       });
 
-      localStorage.setItem("token", resposta.data.token);
+      if (!resposta.data || !resposta.data.token || !resposta.data.id) {
+        setErro("Nome de usuário ou senha inválidos.");
+        return;
+      }
 
+      localStorage.setItem("token", resposta.data.token);
       localStorage.setItem("nomeUsuario", resposta.data.nome);
       localStorage.setItem("usuarioId", resposta.data.id);
 
@@ -47,8 +51,11 @@ export default function PaginaLogin() {
       if (resposta.data.tipoUsuarioId) {
         localStorage.setItem("tipoUsuarioId", resposta.data.tipoUsuarioId);
       }
-      
+
+      localStorage.setItem("user", JSON.stringify(resposta.data)); // salvar tudo
+
       navigate("/feed");
+
     } catch (err: any) {
       console.error(err);
       setErro("Nome de usuário ou senha inválidos.");

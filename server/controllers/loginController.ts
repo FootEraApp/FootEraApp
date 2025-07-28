@@ -1,44 +1,43 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
+import { PrismaClient, TipoUsuario } from "@prisma/client";
+import { createHash } from "crypto";
 import jwt from "jsonwebtoken";
 
 const prisma = new PrismaClient();
 
+const hashSenha = (senha: string) =>
+  createHash("sha256").update(senha).digest("base64");
+
 export const login = async (req: Request, res: Response) => {
   const { nomeDeUsuario, senha } = req.body;
-
-  console.log("BODY RECEBIDO:", req.body);
 
   if (!nomeDeUsuario || !senha) {
     return res.status(400).json({ message: "Usuário e senha obrigatórios." });
   }
 
   try {
-    const usuario = await prisma.usuario.findUnique({ where: { nomeDeUsuario: nomeDeUsuario.toLowerCase() } });
+    const senhaHash = hashSenha(senha);
+
+    const usuario = await prisma.usuario.findFirst({
+      where: { nomeDeUsuario, senhaHash }
+    });
 
     if (!usuario) {
-      console.log("Usuário não encontrado:", nomeDeUsuario);
       return res.status(401).json({ message: "Usuário ou senha inválidos." });
     }
 
-    console.log("Buscando por nomeDeUsuario:", nomeDeUsuario);
-    console.log("Senha digitada:", senha);
-    console.log("Hash salvo no banco:", usuario.senhaHash);
-
-    const senhaCorreta = await bcrypt.compare(senha, usuario.senhaHash);
-    if (!senhaCorreta) {
-      return res.status(401).json({ message: "Usuário ou senha inválidos." });
+    if (usuario.tipo === "Atleta") {
+      const atleta = await prisma.atleta.findUnique({ where: { usuarioId: usuario.id } });
+      if (!atleta) {
+        return res.status(403).json({ message: "Perfil de atleta não encontrado." });
+      }
     }
-
-    
-console.log("Senha correta?", senhaCorreta);
 
     const token = jwt.sign(
       {
         id: usuario.id,
         tipo: usuario.tipo,
-        nome: usuario.nomeDeUsuario,
+        nome: usuario.nomeDeUsuario
       },
       process.env.JWT_SECRET || "defaultsecret",
       { expiresIn: "1d" }
@@ -51,8 +50,8 @@ console.log("Senha correta?", senhaCorreta);
         id: usuario.id,
         nome: usuario.nome,
         tipo: usuario.tipo,
-        email: usuario.email,
-      },
+        email: usuario.email
+      }
     });
   } catch (err) {
     console.error("Erro no login:", err);
@@ -61,5 +60,5 @@ console.log("Senha correta?", senhaCorreta);
 };
 
 export const logout = async (_req: Request, res: Response) => {
-  res.status(200).json({ message: "Logout efetuado com sucesso (o front deve apagar o token)." });
+  res.status(200).json({ message: "Logout efetuado com sucesso (front deve apagar o token)." });
 };

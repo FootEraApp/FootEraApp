@@ -6,9 +6,10 @@ import { PrismaClient } from "@prisma/client";
 import {
   getFeed,
   seguirUsuario,
+  postar,
   deletarPostagem,
   getPerfil,
-  deletarUsuario,
+  deletarUsuario
 } from "../controllers/feedController";
 
 import multer from "multer";
@@ -23,12 +24,23 @@ router.get("/feed", authenticateToken, getFeed);
 router.get("/perfil/:id", authenticateToken, getPerfil);
 router.delete("/usuario/:id", adminAuth, deletarUsuario);
 router.post("/seguir", seguirUsuario);
-router.delete("/posts/:id", adminAuth, deletarPostagem);
+router.post("/postar", upload.single("arquivo"), postar);
+
+router.delete("/posts/:id", authenticateToken, deletarPostagem);
+
 router.get("/", authenticateToken, async (req, res) => {
   try {
     const posts = await prisma.postagem.findMany({
       orderBy: { dataCriacao: "desc" },
-      include: { usuario: true }, 
+      include: {
+        usuario: true,
+        curtidas: true,
+        comentarios: {
+          include: {
+            usuario: true, 
+          },
+        },
+      },
     });
 
     res.json(posts);

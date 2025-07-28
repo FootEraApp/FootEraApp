@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { verificarAdmin } from "@/utils/protegerAdmin";
+import { withAuth } from "@/components/ProtectedRoute";
 
 type Tab = "dashboard" | "exercicios" | "treinos" | "professores" | "desafios" | "configuracoes";
 
@@ -11,16 +11,14 @@ interface Treinos {
   descricao: string;
 }
 
-export default function AdminDashboard() {
+ function AdminDashboard() {
   const [aba, setAba] = useState("dashboard");
   const [dados, setDados] = useState<any>(null);
-  const [dashboardData, setDashboardData] = useState<Tab>('dashboard');
   const [exercicios, setExercicios] = useState<any[]>([]);
   const [treinos, setTreinos] = useState<Treinos[]>([]);
   const [professores, setProfessores] = useState<any[]>([]);
   const [desafios, setDesafios] = useState<any[]>([]);
   const [configuracoes, setConfiguracoes] = useState<any>(null);
-  const [carregando, setCarregando] = useState(true);
   
   useEffect(() => {
     fetch("http://localhost:3001/api/admin")
@@ -53,20 +51,6 @@ export default function AdminDashboard() {
       .then(setConfiguracoes)
       .catch(console.error);
   }, []);
-
-  useEffect(() => {
-    const isAdmin = verificarAdmin();
-
-    if (!isAdmin) {
-        window.location.href = "/admin/login";
-      } else {
-        setCarregando(false); 
-      }
-    }, []);
-
-    if (carregando) {
-      return <div className="p-6"> Verificando Permissões</div>
-    }
 
   if (!dados) return <div className="p-6">Carregando...</div>;
 
@@ -389,6 +373,7 @@ export default function AdminDashboard() {
     </div>
   );
 }
+export default withAuth(AdminDashboard, { adminOnly: true });
 
 function Card({ title, icon, value }: { title: string; icon: string; value: number }) {
   return (
