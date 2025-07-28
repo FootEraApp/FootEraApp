@@ -4,7 +4,7 @@ import {
   getEscolhaTipo,
   getCriar,
   deletarUsuario,
-  criarUsuario
+  cadastrarUsuario
 } from "../controllers/cadastroController";
 
 const router = express.Router();
@@ -13,6 +13,6 @@ router.get("/", getCadastroIndex);
 router.get("/escolha", getEscolhaTipo);
 router.get("/criar", getCriar);
 router.delete("/deletar/:id", deletarUsuario);
-router.post("/cadastro", criarUsuario);
+router.post("/", cadastrarUsuario);
 
 export default router;

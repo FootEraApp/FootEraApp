@@ -1,8 +1,75 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth";
+import { prisma } from "../lib/prisma"
 
-const prisma = new PrismaClient();
+
+export const postarConteudo = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+    const userId = req.userId;
+    const { descricao, tipoMidia } = req.body;
+    const arquivo = req.file;
+
+    if (!descricao && !arquivo) {
+      return res.status(400).json({ message: "Descrição ou mídia obrigatória." });
+    }
+
+    let imagemUrl: string | null = null;
+    let videoUrl: string | null = null;
+
+    if (arquivo) {
+      const caminho = `/uploads/${arquivo.filename}`;
+      if (tipoMidia === "Imagem") imagemUrl = caminho;
+      else if (tipoMidia === "Video") videoUrl = caminho;
+    }
+
+    const novaPostagem = await prisma.postagem.create({
+      data: {
+        conteudo: descricao,
+        tipoMidia,
+        imagemUrl,
+        videoUrl,
+        usuarioId: userId,
+      },
+    });
+
+    return res.status(201).json({ message: "Postagem criada com sucesso.", post: novaPostagem });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Erro ao criar postagem." });
+  }
+};
+
+export async function adicionarComentario(req: Request, res: Response) {
+  const { postId } = req.params;
+  const { conteudo } = req.body;
+  const userId = (req as any).userId;
+
+  if (!userId) return res.status(401).json({ message: "Usuário não autenticado" });
+
+  if (!conteudo || conteudo.trim() === "") {
+    return res.status(400).json({ message: "Conteúdo do comentário é obrigatório" });
+  }
+
+  try {
+    const novoComentario = await prisma.comentario.create({
+      data: {
+        conteudo,
+        postagemId: postId,
+        usuarioId: userId,
+      },
+    });
+    return res.status(201).json(novoComentario);
+  } catch (error) {
+    console.error("Erro ao adicionar comentário:", error);
+    return res.status(500).json({ message: "Erro interno ao adicionar comentário" });
+  }
+}
+
+
 
 export const editarPostagemGet = async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
@@ -62,101 +129,5 @@ export const deletarPostagem = async (req: AuthenticatedRequest, res: Response) 
     return res.json({ message: "Postagem deletada com sucesso." });
   } catch (err) {
     return res.status(500).json({ message: "Erro ao deletar postagem." });
-  }
-};
-
-export const getFeed = async (_req: Request, res: Response) => {
-  const posts = await prisma.postagem.findMany({
-    include: {
-      usuario: true,
-      curtidas: true,
-      comentarios: true,
-    },
-    orderBy: {
-      dataCriacao: "desc",
-    },
-  });
-
-  res.json(posts);
-};
-
-export const curtirPost = async (req: AuthenticatedRequest, res: Response) => {
-  const { id: postId } = req.params;
-  const usuarioId = req.userId;
-
-  if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
-
-  const curtidaExistente = await prisma.curtida.findFirst({
-    where: { postagemId: postId, usuarioId },
-  });
-
-  if (curtidaExistente) {
-    await prisma.curtida.delete({ where: { id: curtidaExistente.id } });
-    return res.status(200).json({ message: "Descurtido" });
-  }
-
-  await prisma.curtida.create({ data: { usuarioId, postagemId: postId } });
-  res.status(201).json({ message: "Curtido" });
-
-  };
-
-export const comentarPost = async (req: AuthenticatedRequest, res: Response) => {
-  const { id: postId } = req.params;
-  const usuarioId = req.userId;
-  const { conteudo } = req.body;
-
-  if (!conteudo || !usuarioId) {
-    return res.status(400).json({ message: "Comentário inválido" });
-  }
-
-  const comentario = await prisma.comentario.create({
-    data: {
-      conteudo,
-      postagemId: postId,
-      usuarioId,
-    },
-  });
-
-  res.status(201).json({ message: "comentado com sucesso", comentario });
-};
-
-export const criarPostagem = async (req: AuthenticatedRequest, res: Response) => {
-  const { videoUrl, tipoMidia, conteudo, imagemUrl } = req.body;
-  const usuarioId = req.userId;
-
-  if (!usuarioId) {
-    return res.status(401).json({ message: "Usuário não autenticado." });
-  }
-
-  try {
-    const novaPostagem = await prisma.postagem.create({
-      data: {
-        conteudo,
-        imagemUrl,
-        usuarioId,
-        videoUrl,
-        tipoMidia
-      },
-    });
-
-    res.status(201).json(novaPostagem);
-  } catch (err) {
-    console.error("Erro ao criar postagem:", err);
-    res.status(500).json({ message: "Erro ao criar a postagem" });
-  }
-};
-
-export const compartilharPostagem = async (req: AuthenticatedRequest, res: Response) => {
-  const { id: postId } = req.params;
-  try {
-   await prisma.postagem.update ({
-    where: { id: postId },
-    data: { compartilhamentos: { increment: 1 } },
-   })
-   
-    res.status(200).json({ message: "Compartilhamento registrado." });
-  } catch (error) {
-    console.error("Erro ao compartilhar:", error);
-    res.status(500).json({ message: "Erro interno ao compartilhar." });
   }
 };

@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import ProfileHeader from "../components/profile/ProfileHeader";
+import { withAuth } from "@/components/ProtectedRoute";
+import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 
+import ProfileHeader from "../components/profile/ProfileHeader";
 import ActivityGrid from "../components/profile/ActivityGrid";
 import BadgesList from "../components/profile/BadgesList";
-
 import ScorePanel from "../components/profile/ScorePanel";
 import TrainingProgress from "../components/profile/TrainingProgress";
 
-export default function ProfilePage() {
+function ProfilePage() {
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [nomeUsuario, setNomeUsuario] = useState<string | null>(null);
 
@@ -33,7 +34,6 @@ export default function ProfilePage() {
   useEffect(() => {
     const id = localStorage.getItem("usuarioId");
     const nome = localStorage.getItem("nomeUsuario");
-
     if (id) setUsuarioId(id);
     if (nome) setNomeUsuario(nome);
   }, []);
@@ -49,33 +49,40 @@ export default function ProfilePage() {
         score={scores.performance + scores.discipline + scores.responsibility}
         isOwnProfile
       />
+
       <TrainingProgress userId={usuarioId} />
+
       <ActivityGrid activities={activities} />
+
       <BadgesList badges={badges} />
+
       <ScorePanel
         performance={scores.performance}
         discipline={scores.discipline}
         responsibility={scores.responsibility}
       />
+      
 
+      {/* Navegação inferior */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
-          Feed
+          <House /> 
         </Link>
         <Link href="/explorar" className="hover:underline">
-          Explorar
+          <Search /> 
         </Link>
         <Link href="/post" className="hover:underline">
-          Publicar
+          <CirclePlus /> 
         </Link>
         <Link href="/treinos" className="hover:underline">
-          Treinos
+          <Volleyball /> 
         </Link>
         <Link href="/perfil" className="hover:underline">
-          Perfil
+          <User /> 
         </Link>
       </nav>
     </div>
-    
   );
 }
+
+export default withAuth(ProfilePage);;

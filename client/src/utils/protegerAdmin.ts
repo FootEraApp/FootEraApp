@@ -1,13 +1,19 @@
-export function verificarAdmin() {
-  if (typeof window === "undefined") return false;
-
-  const userStr = localStorage.getItem("user");
-  if (!userStr) return false;
+export function getUserFromLocalStorage() {
+  if (typeof window === "undefined") return null;
 
   try {
-    const usuario = JSON.parse(userStr);
-    return usuario?.tipo === "Admin";
+    const user = localStorage.getItem("user");
+    return user ? JSON.parse(user) : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+export function isAdmin() {
+  const user = getUserFromLocalStorage();
+  return user?.usuario?.tipo === "Admin";
+}
+
+export function isAuthenticated() {
+  return !!getUserFromLocalStorage();
 }

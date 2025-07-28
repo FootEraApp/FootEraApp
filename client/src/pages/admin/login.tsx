@@ -23,11 +23,15 @@ export default function AdminLogin() {
         return;
       }
 
-      alert(data.message || "Login realizado");
+      if (data.usuario.tipo === "Admin") {
+        localStorage.setItem("user", JSON.stringify(data.usuario));
+        localStorage.setItem("token", data.token);
+        alert("Seu login como admin foi feito com sucesso!");
+        window.location.href = "/admin";
+      } else {
+        setErro("Você não é um administrador.");
+      }
 
-      localStorage.setItem("user", JSON.stringify(data.usuario));
-      localStorage.setItem("token", data.token);
-      window.location.href = "/admin";
     } catch (err) {
       setErro("Erro de conexão com o servidor.");
     }

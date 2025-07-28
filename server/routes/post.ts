@@ -1,17 +1,67 @@
 import { Router } from "express";
-import { editarPostagemGet, editarPostagemPost, deletarPostagem, curtirPost, comentarPost, getFeed, criarPostagem, compartilharPostagem } from "../controllers/postController";
+import multer from "multer";
+import path from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+import { PrismaClient } from "@prisma/client";
+import {
+  editarPostagemGet,
+  editarPostagemPost,
+  deletarPostagem,
+  postarConteudo,
+  adicionarComentario,
+} from "../controllers/postController";
 import { authenticateToken } from "../middlewares/auth";
+import { curtirPostagem } from "server/controllers/feedController";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const prisma = new PrismaClient();
 const router = Router();
 
-router.post("/postar", authenticateToken, criarPostagem);
-router.get("/:id", authenticateToken, editarPostagemGet);
-router.put("/:id", authenticateToken, editarPostagemPost);
-router.delete("/:postagemId", authenticateToken, deletarPostagem);
-router.post("/:id/like", authenticateToken, curtirPost);
-router.post("/:id/comentario", authenticateToken, comentarPost);    
-router.post("/:id/compartilhar", authenticateToken, compartilharPostagem);  
-router.get("/feed", authenticateToken, getFeed);
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, "../../public/uploads"));
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + "-" + file.originalname);
+  },
+});
 
+const upload = multer({ storage });
+
+router.post("/postar", authenticateToken, upload.single("arquivo"), postarConteudo);
+router.post("/:postId/comentario", authenticateToken, adicionarComentario);
+router.post("/:postId/like", authenticateToken, curtirPostagem);
+router.get("/visualizar/:id", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const post = await prisma.postagem.findUnique({
+      where: { id },
+      include: {
+        usuario: true,
+        curtidas: true,
+        comentarios: {
+          include: {
+            usuario: true,
+          },
+        },
+      },
+    });
+
+    if (!post) return res.status(404).json({ message: "Post não encontrado" });
+
+    res.json(post);
+  } catch (error) {
+    console.error("Erro ao buscar postagem:", error);
+    res.status(500).json({ message: "Erro ao buscar postagem" });
+  }
+});
+
+router.get("/:id", authenticateToken, editarPostagemGet);
+router.post("/:id", authenticateToken, editarPostagemPost);
+router.delete("/:postagemId", authenticateToken, deletarPostagem);
 
 export default router;

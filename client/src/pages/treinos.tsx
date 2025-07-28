@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { withAuth } from "@/components/ProtectedRoute";
 
 interface Exercicio {
   id: string;
@@ -15,6 +16,11 @@ interface TreinoProgramado {
   nivel: string;
   dataAgendada?: string;
   exercicios: Exercicio[];
+  objetivo?: string;
+  duracao?: number;
+  dicas?: string[];
+  professorId?: string;
+  escolinhaId?: string;
 }
 
 interface Desafio {
@@ -32,8 +38,7 @@ interface UsuarioLogado {
   tipoUsuarioId: string;
 }
 
-
-export default function PaginaTreinos() {
+ function PaginaTreinos() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
   const [desafios, setDesafios] = useState<Desafio[]>([]);
@@ -228,21 +233,23 @@ export default function PaginaTreinos() {
       {/* Navegação inferior */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
-          <House /> Feed
+          <House /> 
         </Link>
-        <Link href="/search" className="hover:underline">
-          <Search /> Explorar
+        <Link href="/explorar" className="hover:underline">
+          <Search /> 
         </Link>
         <Link href="/post" className="hover:underline">
-          <CirclePlus /> Publicar
+          <CirclePlus /> 
         </Link>
         <Link href="/treinos" className="hover:underline">
-          <Volleyball /> Treinos
+          <Volleyball /> 
         </Link>
         <Link href="/perfil" className="hover:underline">
-          <User /> Perfil
+          <User /> 
         </Link>
       </nav>
     </div>
   );
 }
+
+export default withAuth(PaginaTreinos);

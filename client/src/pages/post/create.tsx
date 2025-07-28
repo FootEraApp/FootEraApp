@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { withAuth } from "@/components/ProtectedRoute";
 
-export default function PaginaPostagem() {
+function PaginaPostagem() {
   const [descricao, setDescricao] = useState("");
   const [midia, setMidia] = useState<File | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -39,7 +41,7 @@ export default function PaginaPostagem() {
       const res = await fetch("http://localhost:3001/api/post/postar", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`, 
+        Authorization: `Bearer ${token}`,
       },
       body: formData,
     });
@@ -92,13 +94,26 @@ export default function PaginaPostagem() {
         </button>
       </div>
 
+      {/* Navegação inferior */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed" className="hover:underline">Feed</Link>
-        <Link href="/explorar" className="hover:underline">Explorar</Link>
-        <Link href="/post" className="hover:underline">Publicar</Link>
-        <Link href="/treinos" className="hover:underline">Treinos</Link>
-        <Link href="/perfil" className="hover:underline">Perfil</Link>
+        <Link href="/feed" className="hover:underline">
+          <House /> 
+        </Link>
+        <Link href="/explorar" className="hover:underline">
+          <Search /> 
+        </Link>
+        <Link href="/post" className="hover:underline">
+          <CirclePlus /> 
+        </Link>
+        <Link href="/treinos" className="hover:underline">
+          <Volleyball /> 
+        </Link>
+        <Link href="/perfil" className="hover:underline">
+          <User /> 
+        </Link>
       </nav>
     </div>
   );
 }
+
+export default withAuth(PaginaPostagem);

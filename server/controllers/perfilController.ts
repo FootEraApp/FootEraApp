@@ -4,21 +4,24 @@ import { PrismaClient, TipoUsuario } from "@prisma/client";
 const prisma = new PrismaClient();
 
 export const getPerfil = async (req: Request, res: Response) => {
-  const id = req.params.id;
+ const id = req.params.id || (req.userId as string);
   const userId = req.userId as string;
 
   try {
     const usuario = await prisma.usuario.findUnique({
       where: { id },
-      include: {
-        seguidores: true,
-        seguindo: true,
-      },
     });
 
     if (!usuario) {
       return res.status(404).json({ error: "Usuário não encontrado." });
     }
+
+    const seguindo = await prisma.seguidor.findFirst({
+      where: {
+        seguidorUsuarioId: userId,
+        seguidoUsuarioId: id,
+      },
+    });
 
     switch (usuario.tipo) {
       case "Atleta": {
@@ -32,13 +35,6 @@ export const getPerfil = async (req: Request, res: Response) => {
         });
 
         if (!atleta) return res.status(404).json({ error: "Perfil de atleta não encontrado." });
-
-        const seguindo = await prisma.seguidor.findFirst({
-          where: {
-            seguidorUsuarioId: userId,
-            seguidoUsuarioId: usuario.id,
-          },
-        });
 
         return res.json({
           ...atleta,
@@ -57,13 +53,6 @@ export const getPerfil = async (req: Request, res: Response) => {
 
         if (!clube) return res.status(404).json({ error: "Perfil de clube não encontrado." });
 
-        const seguindo = await prisma.seguidor.findFirst({
-          where: {
-            seguidorUsuarioId: userId,
-            seguidoUsuarioId: usuario.id,
-          },
-        });
-
         return res.json({
           ...clube,
           seguindo: !!seguindo,
@@ -80,15 +69,24 @@ export const getPerfil = async (req: Request, res: Response) => {
 
         if (!escolinha) return res.status(404).json({ error: "Perfil de escolinha não encontrado." });
 
-        const seguindo = await prisma.seguidor.findFirst({
-          where: {
-            seguidorUsuarioId: userId,
-            seguidoUsuarioId: usuario.id,
+        return res.json({
+          ...escolinha,
+          seguindo: !!seguindo,
+        });
+      }
+
+      case "Professor": {
+        const professor = await prisma.professor.findUnique({
+          where: { usuarioId: id },
+          include: {
+            
           },
         });
 
+        if (!professor) return res.status(404).json({ error: "Perfil de professor não encontrado." });
+
         return res.json({
-          ...escolinha,
+          ...professor,
           seguindo: !!seguindo,
         });
       }

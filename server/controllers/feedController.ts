@@ -1,14 +1,9 @@
 import { Response } from "express";
-import { PrismaClient, TipoMidia } from "@prisma/client";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
+import { prisma } from "server/lib/prisma";
+import { Request } from "express";
+import { TipoMidia } from "@prisma/client";
 import { AuthenticatedRequest } from "../types/auth"; 
 
-const prisma = new PrismaClient();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export const getFeed = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -40,6 +35,68 @@ export const getFeed = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
+export async function getPostById(req: Request, res: Response) {
+  const { id } = req.params;
+
+  try {
+    const post = await prisma.postagem.findUnique({
+      where: { id },
+      include: {
+        usuario: true,
+        comentarios: {
+          include: { usuario: true },
+        },
+        curtidas: true,
+      },
+    });
+
+    if (!post) {
+      return res.status(404).json({ erro: "Post não encontrado" });
+    }
+
+    return res.json(post);
+  } catch (error) {
+    console.error("Erro ao buscar post:", error);
+    return res.status(500).json({ erro: "Erro interno ao buscar o post" });
+  }
+}
+
+export const curtirPostagem = async (req: AuthenticatedRequest, res: Response) => {
+  const { postId } = req.params;
+  const usuarioId = req.userId;
+
+  if (!usuarioId) {
+    return res.status(401).json({ error: "Usuário não autenticado" });
+  }
+
+  try {
+    const curtidaExistente = await prisma.curtida.findFirst({
+      where: {
+        postagemId: postId,
+        usuarioId,
+      },
+    });
+
+    if (curtidaExistente) {
+      await prisma.curtida.delete({
+        where: { id: curtidaExistente.id },
+      });
+      return res.json({ message: "Curtida removida" });
+    } else {
+      await prisma.curtida.create({
+        data: {
+          postagemId: postId,
+          usuarioId,
+        },
+      });
+      return res.json({ message: "Curtida adicionada" });
+    }
+  } catch (error) {
+    console.error("Erro ao curtir post:", error);
+    return res.status(500).json({ error: "Erro interno ao curtir post" });
+  }
+};
+
 export const seguirUsuario = async (req: AuthenticatedRequest, res: Response) => {
   const seguidorUsuarioId = req.userId;
   const { seguidoUsuarioId } = req.body;
@@ -67,30 +124,55 @@ export const seguirUsuario = async (req: AuthenticatedRequest, res: Response) =>
   }
 };
 
-
-export const deletarPostagem = async (req: AuthenticatedRequest, res: Response) => {
+export const postar = async (req: AuthenticatedRequest, res: Response) => {
   const usuarioId = req.userId;
-  const postId = req.params.id;
-
   if (!usuarioId) return res.status(401).json({ message: "Usuário não autenticado." });
 
+  const { conteudo } = req.body;
+  const file = (req as any).file;
+
   try {
-    const post = await prisma.postagem.findUnique({ where: { id: postId } });
+    const postagem = await prisma.postagem.create({
+      data: {
+        conteudo,
+        usuarioId,
+        dataCriacao: new Date(),
+        tipoMidia: file ? (file.mimetype.startsWith("video") ? "Video" : "Imagem") as TipoMidia : undefined,
+        imagemUrl: file ? `/uploads/posts/${file.filename}` : undefined,
+      },
+    });
 
-    if (!post || post.usuarioId !== usuarioId) {
-      return res.status(403).json({ message: "Não autorizado." });
-    }
-
-    if (post.imagemUrl) {
-      const fullPath = path.join(__dirname, `../../public${post.imagemUrl}`);
-      if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
-    }
-
-    await prisma.postagem.delete({ where: { id: postId } });
-    res.json({ message: "Postagem deletada." });
+    res.status(201).json(postagem);
   } catch (error) {
-    console.error("Erro ao deletar postagem:", error);
+    console.error("Erro ao postar:", error);
     res.status(500).json({ message: "Erro interno." });
+  }
+};
+
+export const deletarPostagem = async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  const usuarioId = req.userId;
+
+  if (!usuarioId) {
+    return res.status(401).json({ mensagem: "Usuário não autenticado." });
+  }
+
+  try {
+    const post = await prisma.postagem.findUnique({ where: { id } });
+
+    if (!post) {
+      return res.status(404).json({ mensagem: "Postagem não encontrada." });
+    }
+
+    if (post.usuarioId !== usuarioId) {
+      return res.status(403).json({ mensagem: "Não autorizado a excluir esta postagem." });
+    }
+
+    await prisma.postagem.delete({ where: { id } });
+    res.json({ mensagem: "Postagem excluída com sucesso." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ mensagem: "Erro ao excluir postagem." });
   }
 };
 
@@ -141,7 +223,7 @@ export const deletarUsuario = async (req: AuthenticatedRequest, res: Response) =
       return res.status(404).json({ message: "Usuário não encontrado." });
     }
 
- await prisma.seguidor.deleteMany({
+    await prisma.seguidor.deleteMany({
       where: {
         OR: [
           { seguidorUsuarioId: id },
@@ -160,4 +242,3 @@ export const deletarUsuario = async (req: AuthenticatedRequest, res: Response) =
     res.status(500).json({ message: "Erro interno ao deletar usuário." });
   }
 };
-

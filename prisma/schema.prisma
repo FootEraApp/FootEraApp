@@ -59,7 +59,7 @@ model Professor {
   usuario            Usuario?            @relation(fields: [usuarioId], references: [id])
   
   treinosProgramados TreinoProgramado[]
-  relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoProfessor)
+  relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoProfessor")
 }
 
 model Amigo {
@@ -237,6 +237,8 @@ model Postagem {
 
   comentarios Comentario[]
   curtidas    Curtida[]
+
+  @@unique([usuarioId, conteudo])
 }
 
 model Midia {
@@ -288,7 +290,7 @@ model Escolinha {
   midias                Midia[]
   postagens             Postagem[]
   treinoProgramado      TreinoProgramado[]
-  relacoesTreinamento   RelacaoTreinamento[] @relation("RelacaoEscolhinha")
+  relacoesTreinamento   RelacaoTreinamento[] @relation("RelacaoEscolinha")
 }
 
 model Comentario {

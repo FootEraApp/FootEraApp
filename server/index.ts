@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { dirname } from "path";
 import bodyParser from "body-parser";
 import dotenv from "dotenv";
+import cron from "node-cron";
 
 import adminRoutes from "./routes/admin";
 import atletaRoutes from "./routes/atleta";
@@ -36,7 +37,8 @@ import treinoLivreRoutes from "./routes/treinoLivre";
 import treinoProgramadoRoutes from "./routes/treinoProgramado";
 import uploadRoutes from "./routes/upload";
 import vinculoRoutes from "./routes/vinculo";
-// import { removerTreinosExpirados } from "./routes/removerTreinosExpirados";
+
+import { removerTreinosExpirados } from "./routes/removerTreinosExpirados";
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -77,8 +79,8 @@ app.use("/api/treinoslivres", treinoLivreRoutes);
 app.use("/api/treinosprogramados", treinoProgramadoRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
-app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
+app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
 app.get("/", (req, res) => {
   res.send("FootEra API está ativa!");
@@ -88,4 +90,9 @@ const PORT = process.env.PORT || 3001;
 
 app.listen(3001, () => {
   console.log(`Servidor rodando em http://localhost:3001`);
+});
+
+cron.schedule("*/10 * * * *", async () => {
+  console.log("Verificando treinos expirados...");
+  await removerTreinosExpirados();
 });

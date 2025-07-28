@@ -54,7 +54,9 @@ export default function NovoTreino() {
     setExerciciosSelecionados([...exerciciosSelecionados, { nome: '', series: '', repeticoes: '', descricao: '' }]);
   };
 
-  const atualizarExercicio = (index: number, campo: string, valor: string) => {
+  type CampoExercicio = 'nome' | 'series' | 'repeticoes' | 'descricao' | 'exercicioId';
+
+  const atualizarExercicio = (index: number, campo: CampoExercicio, valor: string) => {
     const copia = [...exerciciosSelecionados];
     copia[index][campo] = valor;
     setExerciciosSelecionados(copia);
@@ -111,7 +113,6 @@ export default function NovoTreino() {
     alert("Erro ao criar treino. Verifique o console.");
   }
 };
-
 
   const adicionarExercicioExistente = (exercicio: Exercicio) => {
     setExerciciosSelecionados([

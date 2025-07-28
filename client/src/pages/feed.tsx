@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { withAuth } from "@/components/ProtectedRoute";
 import {
   FaHeart,
   FaRegHeart,
@@ -8,6 +9,8 @@ import {
   FaTrash,
   FaLink
 } from "react-icons/fa";
+
+import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 
 import {
   getFeedPosts,
@@ -93,7 +96,7 @@ function PaginaFeed(): JSX.Element {
         const comentarioTexto = comentarioTextoPorPost[post.id] || "";
 
         return (
-          <div key={post.id} className="max-w-xl mx-auto pt-2 bg-white rounded-2xl shadow-md p-4 space-y-3">
+          <div key={post.id} className="max-w-xl mx-auto bg-white rounded-2xl shadow-md p-4 space-y-3">
             <div className="flex items-center gap-2">
               <img
                 src={
@@ -211,21 +214,22 @@ function PaginaFeed(): JSX.Element {
         );
       })}
 
+            {/* Navegação inferior */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
-          Feed
+          <House /> 
         </Link>
-        <Link href="/search" className="hover:underline">
-          Explorar
+        <Link href="/explorar" className="hover:underline">
+          <Search /> 
         </Link>
         <Link href="/post" className="hover:underline">
-          Publicar
+          <CirclePlus /> 
         </Link>
         <Link href="/treinos" className="hover:underline">
-          Treinos
+          <Volleyball /> 
         </Link>
         <Link href="/perfil" className="hover:underline">
-          Perfil
+          <User /> 
         </Link>
       </nav>
 
@@ -349,10 +353,8 @@ function PaginaFeed(): JSX.Element {
           </div>
         </div>
       )}
-
-
     </div>
   );
 }
 
-export default PaginaFeed;
+export default withAuth(PaginaFeed);

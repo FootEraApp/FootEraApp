@@ -5,7 +5,6 @@ import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 
 dotenv.config();
-
 const prisma = new PrismaClient();
 
 export async function login(req: Request, res: Response) {
@@ -17,9 +16,7 @@ export async function login(req: Request, res: Response) {
 
   try {
     const usuario = await prisma.usuario.findUnique({
-      where: {
-        nomeDeUsuario,
-      },
+      where: { nomeDeUsuario },
     });
 
     if (!usuario) {
@@ -32,24 +29,38 @@ export async function login(req: Request, res: Response) {
       return res.status(401).json({ message: "Senha incorreta" });
     }
 
+    let tipoUsuarioId: string | null = null;
+
+    if (usuario.tipo === "Atleta") {
+      const atleta = await prisma.atleta.findUnique({ where: { usuarioId: usuario.id } });
+      tipoUsuarioId = atleta?.id || null;
+    } else if (usuario.tipo === "Professor") {
+      const professor = await prisma.professor.findUnique({ where: { usuarioId: usuario.id } });
+      tipoUsuarioId = professor?.id || null;
+    } else if (usuario.tipo === "Clube") {
+      const clube = await prisma.clube.findUnique({ where: { usuarioId: usuario.id } });
+      tipoUsuarioId = clube?.id || null;
+    } else if (usuario.tipo === "Escolinha") {
+      const escolinha = await prisma.escolinha.findUnique({ where: { usuarioId: usuario.id } });
+      tipoUsuarioId = escolinha?.id || null;
+    }
+
     const token = jwt.sign(
-      { id: usuario.id,
+      {
+        id: usuario.id,
         tipo: usuario.tipo,
-       },
+      },
       process.env.JWT_SECRET || "defaultsecret",
       { expiresIn: "7d" }
     );
 
-    console.log("TOKEN GERADO:", token);
-    console.log("USUÁRIO ENCONTRADO:", usuario);
-
     return res.json({
       message: "Login bem-sucedido",
       token,
-      usuario,
-      tipo: usuario.tipo, 
+      tipo: usuario.tipo,
       nome: usuario.nomeDeUsuario,
       id: usuario.id,
+      tipoUsuarioId, 
     });
   } catch (error) {
     console.error("Erro no login:", error);
@@ -73,33 +84,3 @@ export const validateToken = async (req: Request, res: Response) => {
     res.status(401).json({ message: "Token inválido ou expirado" });
   }
 };
-
-export async function cadastrarUsuario(req: Request, res: Response) {
-  const { tipo, nome, email, nomeDeUsuario, senha } = req.body;
-
-  if (!tipo || !nome || !email || !nomeDeUsuario || !senha) {
-    return res.status(400).json({ message: "Dados incompletos." });
-  }
-
-  const usuarioExistente = await prisma.usuario.findUnique({
-    where: { nomeDeUsuario },
-  });
-
-  if (usuarioExistente) {
-    return res.status(400).json({ message: "Usuário já existe." });
-  }
-
-  const senhaHash = bcrypt.hashSync(senha, 10);
-
-  const usuario = await prisma.usuario.create({
-    data: {
-      nome,
-      nomeDeUsuario,
-      email,
-      senhaHash,
-      tipo,
-    },
-  });
-
-  return res.status(201).json({ usuario });
-}

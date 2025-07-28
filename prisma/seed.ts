@@ -347,94 +347,111 @@ async function main() {
       await prisma.desafioOficial.create({ data: desafio });
     }
   }
-
-  console.log("✅ Seed do banco de dados FootEra criado com sucesso!");
 }
 
-const professorArthur = await prisma.professor.findFirst({
-  where: { usuario: { nomeDeUsuario: 'arthur.persio' } }
-});
+  const professorArthur = await prisma.professor.findFirst({
+    where: { usuario: { nomeDeUsuario: 'arthur.persio' } }
+  });
 
-const exSprint = await prisma.exercicio.findUnique({ where: { codigo: 'EX005' } });
-const exCabeceio = await prisma.exercicio.findUnique({ where: { codigo: 'EX006' } });
+  const exSprint = await prisma.exercicio.findUnique({ where: { codigo: 'EX005' } });
+  const exCabeceio = await prisma.exercicio.findUnique({ where: { codigo: 'EX006' } });
 
-if (professorArthur && exSprint && exCabeceio) {
-  const treino1 = await prisma.treinoProgramado.upsert({
-    where: { codigo: 'TR001' },
-    update: {},
-    create: {
-      codigo: 'TR001',
-      nome: 'Treino de Agilidade com Sprint',
-      descricao: 'Foco em explosão e mudanças rápidas de direção',
-      nivel: Nivel.Performance,
-      professorId: professorArthur.id,
-      dataAgendada: new Date(),
-      exercicios: {
-        create: [
-          {
-            exercicioId: exSprint.id,
-            ordem: 1,
-            repeticoes: '3x 30m com 2min descanso'
-          }
-        ]
+  if (professorArthur && exSprint && exCabeceio) {
+    const treino1 = await prisma.treinoProgramado.upsert({
+      where: { codigo: 'TR001' },
+      update: {},
+      create: {
+        codigo: 'TR001',
+        nome: 'Treino de Agilidade com Sprint',
+        descricao: 'Foco em explosão e mudanças rápidas de direção',
+        nivel: Nivel.Performance,
+        professorId: professorArthur.id,
+        dataAgendada: new Date(),
+        exercicios: {
+          create: [
+            {
+              exercicioId: exSprint.id,
+              ordem: 1,
+              repeticoes: '3x 30m com 2min descanso'
+            }
+          ]
+        }
       }
-    }
-  });
+    });
 
-  const treino2 = await prisma.treinoProgramado.upsert({
-    where: { codigo: 'TR002' },
-    update: {},
-    create: {
-      codigo: 'TR002',
-      nome: 'Treino Técnico de Defesa',
-      descricao: 'Prática de cabeceios defensivos e posicionamento',
-      nivel: Nivel.Avancado,
-      professorId: professorArthur.id,
-      dataAgendada: new Date(),
-      exercicios: {
-        create: [
-          {
-            exercicioId: exCabeceio.id,
-            ordem: 1,
-            repeticoes: '4x 10 cabeceios em dupla'
-          }
-        ]
+    const treino2 = await prisma.treinoProgramado.upsert({
+      where: { codigo: 'TR002' },
+      update: {},
+      create: {
+        codigo: 'TR002',
+        nome: 'Treino Técnico de Defesa',
+        descricao: 'Prática de cabeceios defensivos e posicionamento',
+        nivel: Nivel.Avancado,
+        professorId: professorArthur.id,
+        dataAgendada: new Date(),
+        exercicios: {
+          create: [
+            {
+              exercicioId: exCabeceio.id,
+              ordem: 1,
+              repeticoes: '4x 10 cabeceios em dupla'
+            }
+          ]
+        }
       }
-    }
+    });
+  }
+
+  const usuarioLucas = await prisma.usuario.findUnique({
+    where: { nomeDeUsuario: 'lucas.ferreira' }
   });
-}
 
-const usuarioLucas = await prisma.usuario.findUnique({
-  where: { nomeDeUsuario: 'lucas.ferreira' }
-});
-
-const usuarioAna = await prisma.usuario.findUnique({
-  where: { nomeDeUsuario: 'ana.mendes' }
-});
-
-if (usuarioLucas) {
-  await prisma.postagem.create({
-    data: {
-      conteudo: "Finalizei meu treino com explosões hoje! 💨",
-      imagemUrl: "https://images.unsplash.com/photo-1605296867304-46d5465a13f1",
-      usuarioId: usuarioLucas.id
-    }
+  const usuarioAna = await prisma.usuario.findUnique({
+    where: { nomeDeUsuario: 'ana.mendes' }
   });
-}
 
-if (usuarioAna) {
-  await prisma.postagem.create({
-    data: {
-      conteudo: "Muito aprendizado no treino técnico de hoje. Vamos pra cima! ⚽🔥",
-      usuarioId: usuarioAna.id
+  if (usuarioLucas) {
+    const exists = await prisma.postagem.findFirst({
+      where: {
+        conteudo: "Finalizei meu treino com explosões hoje! 💨",
+        usuarioId: usuarioLucas.id
+      }
+    });
+
+    if (!exists) {
+      await prisma.postagem.create({
+        data: {
+          conteudo: "Finalizei meu treino com explosões hoje! 💨",
+          imagemUrl: "https://images.unsplash.com/photo-1605296867304-46d5465a13f1",
+          usuarioId: usuarioLucas.id
+        }
+      });
     }
-  });
-}
+  }
+
+  if (usuarioAna) {
+    const exists = await prisma.postagem.findFirst({
+      where: {
+        conteudo: "Muito aprendizado no treino técnico de hoje. Vamos pra cima! ⚽🔥",
+        usuarioId: usuarioAna.id
+      }
+    });
+
+    if (!exists) {
+      await prisma.postagem.create({
+        data: {
+          conteudo: "Muito aprendizado no treino técnico de hoje. Vamos pra cima! ⚽🔥",
+          usuarioId: usuarioAna.id
+        }
+      });
+    }
+  }
+
+   console.log("✅ Seed do banco de dados FootEra criado com sucesso!");
 
 main()
   .then(() => prisma.$disconnect())
   .catch(async (e) => {
     console.error(e);
     await prisma.$disconnect();
-    process.exit(1);
   });

@@ -1,4 +1,3 @@
-// client/src/components/layout/MobileLayout.tsx
 import React from "react";
 
 type Props = {
@@ -29,7 +28,7 @@ const MobileLayout: React.FC<Props> = ({
             </button>
           )}
           {showGroupsButton && (
-            <button className="text-white">Grupos</button> // Exemplo simples
+            <button className="text-white">Grupos</button> 
           )}
         </header>
       )}

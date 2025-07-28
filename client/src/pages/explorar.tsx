@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
+import { withAuth } from "@/components/ProtectedRoute";
+import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 
-export default function Explorar() {
+ function Explorar() {
   const [busca, setBusca] = useState("");
   const [aba, setAba] = useState("atletas");
   const [dados, setDados] = useState({
@@ -54,14 +56,16 @@ export default function Explorar() {
             <h2 className="text-xl font-bold my-2">Atletas em Destaque</h2>
             <div className="grid grid-cols-2 gap-3">
               {dados.atletas.map((a: any) => (
-                <div key={a.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
-                  <img
-                    src={a.foto || "/placeholder.png"}
-                    alt={`${a.usuario.nome} profile`}
-                    className="w-24 h-24 rounded-full object-cover"
-                  />
-                  <p className="mt-2 font-medium">{a.usuario.nome}</p>
-                </div>
+                <Link href={`/perfil/${a.usuario.id}`} key={a.id}>
+                  <div key={a.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
+                    <img
+                      src={a.foto || "/placeholder.png"}
+                      alt={`${a.usuario.nome} profile`}
+                      className="w-24 h-24 rounded-full object-cover"
+                    />
+                    <p className="mt-2 font-medium">{a.usuario.nome}</p>
+                  </div>
+                </Link>
               ))}
             </div>
           </>
@@ -125,14 +129,16 @@ export default function Explorar() {
             {dados.professores.length > 0 ? (
             <div className="grid grid-cols-2 gap-3">
               {dados.professores.map((p: any) => (
-                <div key={p.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
-                  <img
-                    src={p.fotoUrl || p.foto || "/placeholder.png"}
-                    alt={`${p.usuario.nome} profile`}
-                    className="w-24 h-24 rounded-full object-cover"
-                  />
-                  <p className="mt-2 font-medium">{p.usuario.nome}</p>
-                </div>
+                <Link href={`/perfil/${p.usuario.id}`} key={p.id}>
+                  <div key={p.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
+                    <img
+                      src={p.fotoUrl || p.foto || "/placeholder.png"}
+                      alt={`${p.usuario.nome} profile`}
+                      className="w-24 h-24 rounded-full object-cover"
+                    />
+                    <p className="mt-2 font-medium">{p.usuario.nome}</p>
+                  </div>
+                </Link>
               ))}
             </div>
             ) : (
@@ -142,13 +148,26 @@ export default function Explorar() {
         )}
       </div>
 
+            {/* Navegação inferior */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed" className="hover:underline">Feed</Link>
-        <Link href="/explorar" className="hover:underline">Explorar</Link>
-        <Link href="/post" className="hover:underline">Publicar</Link>
-        <Link href="/treinos" className="hover:underline">Treinos</Link>
-        <Link href="/perfil" className="hover:underline">Perfil</Link>
+        <Link href="/feed" className="hover:underline">
+          <House /> 
+        </Link>
+        <Link href="/explorar" className="hover:underline">
+          <Search /> 
+        </Link>
+        <Link href="/post" className="hover:underline">
+          <CirclePlus /> 
+        </Link>
+        <Link href="/treinos" className="hover:underline">
+          <Volleyball /> 
+        </Link>
+        <Link href="/perfil" className="hover:underline">
+          <User /> 
+        </Link>
       </nav>
     </div>
   );
 }
+
+export default withAuth(Explorar);
