@@ -1,20 +1,30 @@
 import { Request, Response } from "express";
-import { s3Service } from "../services/s3Service";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 
-export const uploadController = {
-  async uploadFile(req: Request, res: Response) {
-    const file = req.file;
-    const folder = req.body.folder;
-
-    if (!file || !folder) {
-      return res.status(400).json({ message: "Arquivo ou pasta não fornecidos" });
-    }
-
-    try {
-      const url = await s3Service.uploadFileAsync(file, folder);
-      return res.json({ url });
-    } catch (error) {
-      return res.status(500).json({ message: "Erro ao fazer upload do arquivo", error });
-    }
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const folder = req.body.folder || "uploads";
+    const dir = `uploads/${folder}`;
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
   },
-};
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `${file.fieldname}-${unique}${ext}`);
+  }
+});
+
+const upload = multer({ storage });
+
+export const uploadFile = [
+  upload.single("file"),
+  (req: Request, res: Response) => {
+    if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado." });
+
+    const fileUrl = `http://localhost:3001/${req.file.path.replace(/\\/g, "/")}`;
+    res.json({ url: fileUrl });
+  }
+];

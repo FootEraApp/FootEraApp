@@ -1,5 +1,3 @@
-import axios from "axios";
-
 export interface Usuario {
   id: string;
   nome: string;
@@ -27,10 +25,12 @@ export interface PostagemComUsuario {
   usuario: Usuario;
   curtidas: { usuarioId: string }[];
   comentarios: Comentarios[];
+  compartilhamentos: number;
 }
 
 export async function getFeedPosts(): Promise<PostagemComUsuario[]> {
 try {
+
   const token = localStorage.getItem("token");
    const response = await fetch("http://localhost:3001/api/feed/", {
     headers: {
@@ -55,6 +55,7 @@ try {
         foto: "/default-user.png",
       },
     }));
+    
 
     return postsCompletos;
 } catch (error) {
@@ -87,29 +88,38 @@ export async function comentarPost(postId: string, conteudo: string) {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify({ conteudo, postagemId: postId }),
+    body: JSON.stringify({ conteudo }),
   });
 }
 
 export async function compartilharPost(postId: string) {
+  const token = localStorage.getItem("token");
+
   const link = `${window.location.origin}/post/${postId}`;
   try {
     await navigator.clipboard.writeText(link);
-    
+
     await fetch(`http://localhost:3001/api/post/${postId}/compartilhar`, {
       method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     });
+
     alert("Link copiado para a área de transferência!");
   } catch (error) {
-    console.error("Erro ao copiar link:", error);
-    alert("Não foi possível copiar o link.");
+    console.error("Erro ao compartilhar:", error);
+    alert("Não foi possível compartilhar.");
   }
 }
 
+
 export async function getPostById(id: string): Promise<PostagemComUsuario> {
   const token = localStorage.getItem("token");
-  const response = await fetch(`http://localhost:3001/api/posts/${id}`, {
+  
+  const response = await fetch(`http://localhost:3001/api/post/${id}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

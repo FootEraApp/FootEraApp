@@ -17,7 +17,8 @@ function PostUnico(): JSX.Element {
   const usuarioId = localStorage.getItem("usuarioId") || "";
 
   useEffect(() => {
-    if (!params?.id) return;
+    if (!match || !params?.id) return;
+
     async function fetchPost() {
       try {
         const postUnico = await getPostById(params!.id);
@@ -28,7 +29,7 @@ function PostUnico(): JSX.Element {
       }
     }
     fetchPost();
-  }, [params]);
+  }, [match, params]);
 
   async function handleCurtir() {
     if (!post?.id) return;
@@ -120,6 +121,7 @@ function PostUnico(): JSX.Element {
         <button onClick={() => setModalAberto(true)} className="text-black-600 hover:text-black-800 ml-auto">
           <FaShare />
         </button>
+        <span className="text-sm">{post.compartilhamentos || 0}</span>
       </div>
 
       <div className="mt-6">
@@ -166,7 +168,6 @@ function PostUnico(): JSX.Element {
       </Link>
     </nav>
 
-      {/* Modal de compartilhamento */}
       {modalAberto && (
         <div className="fixed inset-0 z-50 bg-black bg-opacity-40 flex items-center justify-center">
           <div className="bg-white p-6 rounded-xl w-96 shadow-lg relative">
@@ -225,8 +226,6 @@ function PostUnico(): JSX.Element {
         </div>
       )}
     </div>
-
-    
   );
 }
 

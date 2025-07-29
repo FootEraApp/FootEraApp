@@ -17,7 +17,9 @@ import PaginaLoginAdmin from "./pages/admin/login";
 import PaginaPerfil from "./pages/perfil";
 import PaginaNovoTreino from "./pages/novoTreino";
 import PaginaPostUnico from "./pages/postUnico";
-import PaginaPerfilUnico from "./pages/perfilUnico"
+import PaginaPerfilUnico from "./pages/perfilUnico";
+import PaginaEditarPerfil from "./pages/editarPerfil";
+import PaginaConfiguracoesPerfil from "./pages/configuracoesPerfil";
 
 export function AppRoutes() {
   return (
@@ -75,6 +77,12 @@ export function AppRoutes() {
       </Route>
       <Route path="/perfil/:id">
         <PaginaPerfilUnico />
+      </Route>
+      <Route path="/perfil/editar">
+        <PaginaEditarPerfil />
+      </Route>
+      <Route path="/perfil/configuracoes">
+        <PaginaConfiguracoesPerfil />
       </Route>
     </>
   );

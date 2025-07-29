@@ -237,6 +237,7 @@ model Postagem {
 
   comentarios Comentario[]
   curtidas    Curtida[]
+  compartilhamentos  Int?  @default(0)
 
   @@unique([usuarioId, conteudo])
 }
