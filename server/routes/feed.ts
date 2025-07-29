@@ -4,7 +4,7 @@ import { adminAuth } from "../middlewares/admin-auth";
 import { PrismaClient } from "@prisma/client";
 
 import {
-  getFeed,
+  getFeedPosts,
   seguirUsuario,
   postar,
   deletarPostagem,
@@ -20,7 +20,7 @@ const prisma = new PrismaClient();
 
 router.use(authenticateToken);
 
-router.get("/feed", authenticateToken, getFeed);
+router.get("/feed", authenticateToken, getFeedPosts);
 router.get("/perfil/:id", authenticateToken, getPerfil);
 router.delete("/usuario/:id", adminAuth, deletarUsuario);
 router.post("/seguir", seguirUsuario);

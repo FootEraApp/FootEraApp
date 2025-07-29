@@ -1,39 +1,50 @@
 import { Response } from "express";
-import { prisma } from "server/lib/prisma";
+import { prisma } from "../lib/prisma";
 import { Request } from "express";
-import { TipoMidia } from "@prisma/client";
+import { TipoMidia, Prisma } from "@prisma/client";
 import { AuthenticatedRequest } from "../types/auth"; 
 
-
-export const getFeed = async (req: AuthenticatedRequest, res: Response) => {
+export const getFeedPosts = async (req: Request, res: Response) => {
   try {
-    const usuarioId = req.userId;
-    if (!usuarioId) return res.status(401).json({ message: "Usuário não autenticado." });
-
-    const seguidos = await prisma.seguidor.findMany({
-      where: { seguidorUsuarioId: usuarioId },
-      select: { seguidoUsuarioId: true },
-    });
-
-    const ids = seguidos.map(s => s.seguidoUsuarioId);
-    ids.push(usuarioId);
-
     const postagens = await prisma.postagem.findMany({
-      where: { usuarioId: { in: ids } },
       include: {
-        usuario: true,
-        comentarios: { include: { usuario: true } },
-        curtidas: true,
+        usuario: {
+          select: {
+            id: true,
+            nome: true,
+            foto: true,
+            tipo: true,
+          },
+        },
+        curtidas: {
+          select: {
+            usuarioId: true,
+          },
+        },
+        comentarios: {
+          orderBy: { dataCriacao: "asc" },
+          include: {
+            usuario: {
+              select: {
+                nome: true,
+                foto: true,
+              },
+            },
+          },
+        },
       },
-      orderBy: { dataCriacao: "desc" },
+      orderBy: {
+        dataCriacao: "desc",
+      },
     });
 
-    res.json(postagens);
+    return res.json(postagens);
   } catch (error) {
-    console.error("Erro no feed:", error);
-    res.status(500).json({ message: "Erro interno." });
+    console.error("Erro ao buscar feed:", error);
+    return res.status(500).json({ message: "Erro ao buscar postagens." });
   }
 };
+
 
 export async function getPostById(req: Request, res: Response) {
   const { id } = req.params;

@@ -1,37 +1,117 @@
 import { useEffect, useState } from "react";
-import { useParams } from "wouter";
+import { useParams, Link } from "wouter";
+import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+
+import ProfileHeader from "../components/profile/ProfileHeader";
+import ActivityGrid from "../components/profile/ActivityGrid";
+import BadgesList from "../components/profile/BadgesList";
+import ScorePanel from "../components/profile/ScorePanel";
+import TrainingProgress from "../components/profile/TrainingProgress";
 
 export default function PerfilUnico() {
   const { id } = useParams<{ id: string }>();
   const [usuario, setUsuario] = useState<any>(null);
+  const [isOwnProfile, setIsOwnProfile] = useState(false);
+
+  const [activities] = useState([
+    { id: 1, type: "Treino Técnico", imageUrl: "/attached_assets/treino.jpg" },
+    { id: 2, type: "Desafio", imageUrl: "/attached_assets/desafio.jpg" },
+    { id: 3, type: "Partida", imageUrl: "/attached_assets/partida.jpg" }
+  ]);
+
+  const [badges] = useState([
+    { id: 1, name: "Disciplina", icon: "stopwatch" },
+    { id: 2, name: "Pontualidade", icon: "bullseye" },
+    { id: 3, name: "Liderança", icon: "medal" }
+  ]);
+
+  const [scores] = useState({
+    performance: 75,
+    discipline: 90,
+    responsibility: 80
+  });
 
   useEffect(() => {
-    if (!id) return; 
 
-    fetch(`http://localhost:3001/api/perfil/${id}`)
-      .then(res => res.json())
-      .then(setUsuario)
-      .catch(console.error);
+  if (!id || id === "editar" || id === "configuracoes") {
+    console.warn("⚠️ id inválido detectado (nulo,'editar' ou 'configuracoes'), abortando fetch.");
+    return;
+  }
+
+  const loggedInId = localStorage.getItem("usuarioId");
+  const token = localStorage.getItem("token");
+
+  if (id === loggedInId) {
+    setIsOwnProfile(true);
+  }
+
+  fetch(`http://localhost:3001/api/perfil/${id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  })
+    .then(res => {
+      if (!res.ok) throw new Error("Não autorizado");
+      return res.json();
+    })
+    .then(data => {
+      console.log("✅ Dados recebidos:", data);
+      setUsuario(data);
+    })
+    .catch((err) => {
+      console.error("❌ Erro ao buscar perfil:", err);
+    });
   }, [id]);
 
-  if (!usuario) return <p>Carregando perfil...</p>;
+
+  if (!usuario ) return <div className="text-center p-10 text-gray-600">Carregando perfil...</div>;
 
   return (
-    <div className="p-4 min-h-screen bg-cream text-green-900">
-      <div className="text-center">
-        <img
-          src={usuario.foto || "/placeholder.png"}
-          className="w-32 h-32 rounded-full mx-auto object-cover"
-          alt="Foto de perfil"
-        />
-        <h1 className="text-xl font-bold mt-2">{usuario.nome}</h1>
-        <p className="text-sm text-gray-700">{usuario.tipo}</p>
+    <div className="max-w-3xl mx-auto px-4 py-6">
+      <ProfileHeader
+        name={
+          usuario.dadosEspecificos?.nome && usuario.dadosEspecificos?.sobrenome
+            ? `${usuario.dadosEspecificos.nome} ${usuario.dadosEspecificos.sobrenome}`
+            : usuario.dadosEspecificos?.nome || usuario.usuario.nome || "Usuário"
+        }
+        score={scores.performance + scores.discipline + scores.responsibility}
+        isOwnProfile={isOwnProfile}
+        foto={usuario.usuario.foto}
+      />
 
-        <div className="mt-4 flex gap-2 justify-center">
+      {!isOwnProfile && (
+        <div className="flex justify-center gap-4 mb-6">
           <button className="px-4 py-2 bg-green-600 text-white rounded-full">Seguir</button>
           <button className="px-4 py-2 bg-green-100 text-green-800 rounded-full">Treinar Juntos</button>
         </div>
-      </div>
+      )}
+
+      <TrainingProgress userId={id} />
+      <ActivityGrid activities={activities} />
+      <BadgesList badges={badges} />
+      <ScorePanel
+        performance={scores.performance}
+        discipline={scores.discipline}
+        responsibility={scores.responsibility}
+      />
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
+        <Link href="/feed" className="hover:underline">
+          <House /> 
+        </Link>
+        <Link href="/explorar" className="hover:underline">
+          <Search /> 
+        </Link>
+        <Link href="/post" className="hover:underline">
+          <CirclePlus /> 
+        </Link>
+        <Link href="/treinos" className="hover:underline">
+          <Volleyball /> 
+        </Link>
+        <Link href="/perfil" className="hover:underline">
+          <User /> 
+        </Link>
+      </nav>
     </div>
   );
 }

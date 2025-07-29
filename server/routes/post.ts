@@ -10,6 +10,8 @@ import {
   deletarPostagem,
   postarConteudo,
   adicionarComentario,
+  buscarPostagemPorId,
+  registrarCompartilhamento
 } from "../controllers/postController";
 import { authenticateToken } from "../middlewares/auth";
 import { curtirPostagem } from "server/controllers/feedController";
@@ -33,6 +35,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 router.post("/postar", authenticateToken, upload.single("arquivo"), postarConteudo);
+router.get("/:id", authenticateToken, buscarPostagemPorId);
 router.post("/:postId/comentario", authenticateToken, adicionarComentario);
 router.post("/:postId/like", authenticateToken, curtirPostagem);
 router.get("/visualizar/:id", authenticateToken, async (req, res) => {
@@ -63,5 +66,5 @@ router.get("/visualizar/:id", authenticateToken, async (req, res) => {
 router.get("/:id", authenticateToken, editarPostagemGet);
 router.post("/:id", authenticateToken, editarPostagemPost);
 router.delete("/:postagemId", authenticateToken, deletarPostagem);
-
+router.post("/:postId/compartlhar", authenticateToken, registrarCompartilhamento);
 export default router;
