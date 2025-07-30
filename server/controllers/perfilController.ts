@@ -4,6 +4,143 @@ import { AuthenticatedRequest } from "server/middlewares/auth";
 
 const prisma = new PrismaClient();
 
+export const getAtividadesRecentes = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const atividades = await prisma.atividadeRecente.findMany({
+      where: { usuarioId: id },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        tipo: true,
+        imagemUrl: true,
+      },
+    });
+
+    const formatted = atividades.map((a: { id: string; tipo: string; imagemUrl: string | null }) => ({
+      id: a.id,
+      type: a.tipo,
+      imageUrl: a.imagemUrl || null,
+    }));
+
+    res.json(formatted);
+  } catch (err) {
+    console.error("Erro ao buscar atividades:", err);
+    res.status(500).json({ error: "Erro ao buscar atividades recentes." });
+  }
+};
+
+export const getBadges = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const badges = [
+      { id: "1", name: "Disciplina", icon: "stopwatch" },
+      { id: "2", name: "Pontualidade", icon: "bullseye" },
+      { id: "3", name: "Liderança", icon: "medal" },
+    ];
+
+    res.json(badges);
+  } catch (err) {
+    console.error("Erro ao buscar badges:", err);
+    res.status(500).json({ error: "Erro ao buscar badges." });
+  }
+};
+
+export const getPontuacao = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const atleta = await prisma.atleta.findUnique({
+      where: { usuarioId: id },
+      include: { pontuacao: true },
+    });
+
+    if (!atleta || !atleta.pontuacao) {
+      return res.status(404).json({
+        performance: 0,
+        discipline: 0,
+        responsibility: 0,
+      });
+    }
+
+    const { pontuacaoPerformance, pontuacaoDisciplina, pontuacaoResponsabilidade } = atleta.pontuacao;
+
+    res.json({
+      performance: pontuacaoPerformance,
+      discipline: pontuacaoDisciplina,
+      responsibility: pontuacaoResponsabilidade,
+    });
+  } catch (err) {
+    console.error("Erro ao buscar pontuação:", err);
+    res.status(500).json({ error: "Erro ao buscar pontuação." });
+  }
+};
+
+export const getPontuacaoDetalhada = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const usuario = await prisma.usuario.findUnique({ where: { id } });
+    if (!usuario) return res.status(404).json({ message: "Usuário não encontrado." });
+
+    const atleta = await prisma.atleta.findUnique({
+      where: { usuarioId: id },
+    });
+
+    if (!atleta) return res.status(404).json({ message: "Atleta não encontrado." });
+
+    const pontuacao = await prisma.pontuacaoAtleta.findUnique({
+      where: { atletaId: atleta.id },
+    });
+
+    const historicoDesafios = await prisma.submissaoDesafio.findMany({
+      where: { atletaId: atleta.id },
+      include: {
+        desafio: true,
+      }
+    });
+
+    const historicoTreinos = await prisma.submissaoTreino.findMany({
+      where: { atletaId: atleta.id },
+      include: {
+        treinoAgendado: {
+          include: { treinoProgramado: true }
+        }
+      }
+    });
+
+    const videos = historicoDesafios.map(d => d.videoUrl).filter(Boolean);
+
+    const historico = [
+      ...historicoDesafios.map(d => ({
+        tipo: "Desafio",
+        status: d.aprovado ? "Aprovado" : "Pendente",
+        data: d.createdAt.toLocaleDateString(),
+        duracao: "N/A"
+      })),
+      ...historicoTreinos.map(t => ({
+        tipo: "Treino",
+        status: t.aprovado ? "Concluído" : "Pendente",
+        data: t.createdAt.toLocaleDateString(),
+        duracao: "N/A"
+      })),
+    ];
+
+    return res.json({
+      performance: pontuacao?.pontuacaoPerformance || 0,
+      disciplina: pontuacao?.pontuacaoDisciplina || 0,
+      responsabilidade: pontuacao?.pontuacaoResponsabilidade || 0,
+      historico,
+      videos,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Erro ao buscar pontuação detalhada." });
+  }
+};
+
 export const getPerfilUsuario = async (req: Request, res: Response) => {
   const { id } = req.params;
 

@@ -1,36 +1,26 @@
-import { Play } from "lucide-react";
+import React from "react";
 
 interface Activity {
-  id: number;
-  type: string;
-  imageUrl: string;
+  id: string;
+  tipo: "Desafio" | "Treino" | "Vídeo";
+  imagemUrl: string;
 }
 
 interface ActivityGridProps {
   activities: Activity[];
 }
 
-export default function ActivityGrid({ activities }: ActivityGridProps) {
+export function ActivityGrid({ activities }: ActivityGridProps) {
   return (
-    <section className="mb-6">
-      <h2 className="text-lg font-bold footera-text-green mb-3">Atividade Recente</h2>
-      <div className="grid grid-cols-3 gap-3">
-        {activities.map(activity => (
-          <div key={activity.id} className="footera-bg-cream border border-gray-200 rounded-lg overflow-hidden shadow">
-            <img 
-              src={activity.imageUrl} 
-              className="w-full h-20 object-cover" 
-              alt={activity.type} 
-            />
-            <div className="p-2 text-center">
-              <p className="text-xs font-medium footera-text-green">{activity.type}</p>
-              <div className="mt-1">
-                <Play className="mx-auto h-3 w-3 footera-text-green" />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
+    <div className="grid grid-cols-3 gap-2 mt-2">
+      {activities.map((activity) => (
+        <div key={activity.id} className="rounded-lg overflow-hidden shadow">
+          <img src={activity.imagemUrl} alt={activity.tipo} className="w-full h-24 object-cover" />
+          <div className="text-sm text-center font-semibold text-green-900 py-1">{activity.tipo}</div>
+        </div>
+      ))}
+    </div>
   );
 }
+
+export default ActivityGrid;

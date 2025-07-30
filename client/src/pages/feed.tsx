@@ -8,6 +8,7 @@ import {
 } from "react-icons/fa";
 
 import { Volleyball, User, CirclePlus, Search, House, CircleX } from "lucide-react";
+import { withAuth } from "@/components/ProtectedRoute";
 
 import {
   getFeedPosts,
@@ -19,6 +20,7 @@ import {
 } from "../services/feedService";
 import { format } from "date-fns";
 import { Link } from "wouter";
+import Usuario from "./usuario";
 
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
@@ -372,4 +374,4 @@ function PaginaFeed(): JSX.Element {
   );
 }
 
-export default PaginaFeed;
+export default withAuth(PaginaFeed);

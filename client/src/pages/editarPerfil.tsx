@@ -35,8 +35,8 @@ const EditarPerfil = () => {
     return <div className="text-center text-gray-600 mt-10">Carregando perfil...</div>;
   }
 
-  if (!dadosUsuario) {
-    return <div className="text-center text-red-600 mt-10">Erro ao carregar perfil.</div>;
+  if (!dadosUsuario || !dadosTipo) {
+    return <div className="text-center text-red-600 mt-10">Erro ao carregar o perfil.</div>;
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {

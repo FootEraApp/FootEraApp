@@ -22,7 +22,7 @@ model Usuario {
   cpf           String?
   dataCriacao   DateTime    @default(now())
   codigo        String?
-  verified           Boolean        @default(false)
+  verified      Boolean     @default(false)
 
   submissaoDesafios  SubmissaoDesafio[]
   submissaoTreinos   SubmissaoTreino[]
@@ -35,6 +35,7 @@ model Usuario {
   postagens          Postagem[]
   comentarios        Comentario[]
   curtidas           Curtida[]
+  atividadesRecentes AtividadeRecente[]
 
   atleta        Atleta?
   professor     Professor?
@@ -44,21 +45,21 @@ model Usuario {
 }
 
 model Professor {
-  id                 String             @id @default(uuid())
-  codigo             String             @unique
-  cref               String?
-  areaFormacao       String
-  escola             String?
-  qualificacoes      String[]
-  certificacoes      String[]
-  fotoUrl            String?
-  statusCref         StatusCref?
-  nome               String
-  
-  usuarioId          String?             @unique
-  usuario            Usuario?            @relation(fields: [usuarioId], references: [id])
-  
-  treinosProgramados TreinoProgramado[]
+  id            String      @id @default(uuid())
+  codigo        String      @unique
+  cref          String?
+  areaFormacao  String
+  escola        String?
+  qualificacoes String[]
+  certificacoes String[]
+  fotoUrl       String?
+  statusCref    StatusCref?
+  nome          String
+
+  usuarioId String?  @unique
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id])
+
+  treinosProgramados  TreinoProgramado[]
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoProfessor")
 }
 
@@ -69,8 +70,8 @@ model Amigo {
   local     String?
   seguindo  Boolean? @default(false)
 
-  amigo     Usuario  @relation("AmigoUsuario", fields: [amigoId], references: [id])
-  usuario   Usuario  @relation("UsuarioAmigo", fields: [usuarioId], references: [id])
+  amigo   Usuario @relation("AmigoUsuario", fields: [amigoId], references: [id])
+  usuario Usuario @relation("UsuarioAmigo", fields: [usuarioId], references: [id])
 }
 
 model Mensagem {
@@ -81,8 +82,8 @@ model Mensagem {
   criadaEm DateTime @default(now())
   lida     Boolean  @default(false)
 
-  de       Usuario  @relation("MensagensEnviadas", fields: [deId], references: [id])
-  para     Usuario  @relation("MensagensRecebidas", fields: [paraId], references: [id])
+  de   Usuario @relation("MensagensEnviadas", fields: [deId], references: [id])
+  para Usuario @relation("MensagensRecebidas", fields: [paraId], references: [id])
 }
 
 model Atleta {
@@ -129,17 +130,17 @@ model Atleta {
 }
 
 model TreinoProgramado {
-  id             String                      @id @default(uuid())
-  codigo         String                      @unique
-  nome           String
-  descricao      String?
-  nivel          Nivel
-  categoria      Categoria[]
-  TipoTreino     TipoTreino?
-  dataAgendada   DateTime?
-  objetivo       String?
-  duracao        Int?
-  dicas          String[]
+  id           String      @id @default(uuid())
+  codigo       String      @unique
+  nome         String
+  descricao    String?
+  nivel        Nivel
+  categoria    Categoria[]
+  TipoTreino   TipoTreino?
+  dataAgendada DateTime?
+  objetivo     String?
+  duracao      Int?
+  dicas        String[]
 
   professorId String?
   professor   Professor? @relation(fields: [professorId], references: [id])
@@ -153,49 +154,49 @@ model TreinoProgramado {
 }
 
 model TreinoProgramadoExercicio {
-  id                 String           @id @default(uuid())
+  id                 String @id @default(uuid())
   treinoProgramadoId String
   exercicioId        String
   ordem              Int
   repeticoes         String
 
-  exercicio          Exercicio        @relation(fields: [exercicioId], references: [id])
-  treinoProgramado   TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id])
+  exercicio        Exercicio        @relation(fields: [exercicioId], references: [id])
+  treinoProgramado TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id])
 }
 
 model Exercicio {
-  id                         String                      @id @default(uuid())
-  codigo                     String                      @unique
-  nome                       String
-  descricao                  String?
-  nivel                      Nivel
-  categorias                 Categoria[]
-  videoDemonstrativoUrl      String?
+  id                    String      @id @default(uuid())
+  codigo                String      @unique
+  nome                  String
+  descricao             String?
+  nivel                 Nivel
+  categorias            Categoria[]
+  videoDemonstrativoUrl String?
 
   treinoProgramadoExercicios TreinoProgramadoExercicio[]
 }
 
 model DesafioOficial {
-  id              String             @id @default(uuid())
-  titulo          String
-  descricao       String
-  imagemUrl       String?
-  nivel           Nivel
-  pontos          Int
-  prazoSubmissao  DateTime?
-  categoria       Categoria[]
-  createdAt       DateTime           @default(now())
-  
-  submissoes      SubmissaoDesafio[]
+  id             String      @id @default(uuid())
+  titulo         String      @unique
+  descricao      String
+  imagemUrl      String?
+  nivel          Nivel
+  pontos         Int
+  prazoSubmissao DateTime?
+  categoria      Categoria[]
+  createdAt      DateTime    @default(now())
+
+  submissoes SubmissaoDesafio[]
 }
 
 model Seguidor {
-  id                String  @id @default(uuid())
+  id                String @id @default(uuid())
   seguidoUsuarioId  String
   seguidorUsuarioId String
 
-  seguidoUsuario    Usuario @relation("Seguido", fields: [seguidoUsuarioId], references: [id])
-  seguidorUsuario   Usuario @relation("Seguidor", fields: [seguidorUsuarioId], references: [id])
+  seguidoUsuario  Usuario @relation("Seguido", fields: [seguidoUsuarioId], references: [id])
+  seguidorUsuario Usuario @relation("Seguidor", fields: [seguidorUsuarioId], references: [id])
 }
 
 model RelacaoTreinamento {
@@ -216,13 +217,13 @@ model RelacaoTreinamento {
 }
 
 model Postagem {
-  id          String       @id @default(uuid())
+  id          String     @id @default(uuid())
   conteudo    String
   imagemUrl   String?
   videoUrl    String?
   tipoMidia   TipoMidia?
-  dataCriacao DateTime     @default(now())
-  
+  dataCriacao DateTime   @default(now())
+
   usuarioId String
   usuario   Usuario @relation(fields: [usuarioId], references: [id])
 
@@ -235,18 +236,18 @@ model Postagem {
   escolinhaId String?
   escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id])
 
-  comentarios Comentario[]
-  curtidas    Curtida[]
-  compartilhamentos  Int?  @default(0)
+  comentarios       Comentario[]
+  curtidas          Curtida[]
+  compartilhamentos Int?         @default(0)
 
   @@unique([usuarioId, conteudo])
 }
 
 model Midia {
-  id          String     @id @default(uuid())
+  id          String    @id @default(uuid())
   url         String
   tipo        TipoMidia
-  dataCriacao DateTime   @default(now())
+  dataCriacao DateTime  @default(now())
   dataEnvio   DateTime
   descricao   String
   titulo      String
@@ -266,9 +267,9 @@ model Midia {
 }
 
 model Escolinha {
-  id          String     @id @default(uuid())
-  usuarioId   String?     @unique
-  usuario     Usuario?    @relation(fields: [usuarioId], references: [id])
+  id          String   @id @default(uuid())
+  usuarioId   String?  @unique
+  usuario     Usuario? @relation(fields: [usuarioId], references: [id])
   nome        String
   cnpj        String?
   telefone1   String?
@@ -285,13 +286,13 @@ model Escolinha {
   pais        String?
   cep         String?
   logo        String?
-  dataCriacao DateTime   @default(now())
+  dataCriacao DateTime @default(now())
 
-  atletas               Atleta[]
-  midias                Midia[]
-  postagens             Postagem[]
-  treinoProgramado      TreinoProgramado[]
-  relacoesTreinamento   RelacaoTreinamento[] @relation("RelacaoEscolinha")
+  atletas             Atleta[]
+  midias              Midia[]
+  postagens           Postagem[]
+  treinoProgramado    TreinoProgramado[]
+  relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoEscolinha")
 }
 
 model Comentario {
@@ -305,7 +306,7 @@ model Comentario {
 }
 
 model Clube {
-    id        String  @id @default(uuid())
+  id        String  @id @default(uuid())
   usuarioId String  @unique
   usuario   Usuario @relation(fields: [usuarioId], references: [id])
 
@@ -328,10 +329,10 @@ model Clube {
   logo        String?
   dataCriacao DateTime @default(now())
 
-  atletas               Atleta[]
-  midias                Midia[]
-  postagens             Postagem[]
-  relacoesTreinamento   RelacaoTreinamento[] @relation("RelacaoClube")
+  atletas             Atleta[]
+  midias              Midia[]
+  postagens           Postagem[]
+  relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoClube")
 }
 
 model SolicitacaoVinculo {
@@ -342,16 +343,16 @@ model SolicitacaoVinculo {
   status       String
   criadoEm     DateTime @default(now())
 
-  atleta       Atleta   @relation(fields: [atletaId], references: [id])
+  atleta Atleta @relation(fields: [atletaId], references: [id])
 }
 
 model SubmissaoDesafio {
-  id        String         @id @default(uuid())
+  id        String   @id @default(uuid())
   atletaId  String
   desafioId String
   videoUrl  String
   aprovado  Boolean?
-  createdAt DateTime       @default(now())
+  createdAt DateTime @default(now())
 
   atleta    Atleta         @relation(fields: [atletaId], references: [id])
   desafio   DesafioOficial @relation(fields: [desafioId], references: [id])
@@ -364,7 +365,7 @@ model SubmissaoTreino {
   id               String   @id @default(uuid())
   atletaId         String
   treinoAgendadoId String
-  aprovado         Boolean? 
+  aprovado         Boolean?
   observacao       String?
   criadoEm         DateTime @default(now())
   atualizadoEm     DateTime @updatedAt
@@ -375,7 +376,6 @@ model SubmissaoTreino {
   Usuario        Usuario?       @relation(fields: [usuarioId], references: [id])
   usuarioId      String?
 }
-
 
 model Grupo {
   id        String        @id @default(uuid())
@@ -389,8 +389,8 @@ model MembroGrupo {
   grupoId  String
   atletaId String
 
-  atleta   Atleta @relation(fields: [atletaId], references: [id])
-  grupo    Grupo  @relation(fields: [grupoId], references: [id])
+  atleta Atleta @relation(fields: [atletaId], references: [id])
+  grupo  Grupo  @relation(fields: [grupoId], references: [id])
 }
 
 model Administrador {
@@ -422,18 +422,18 @@ model Curtida {
 }
 
 model TreinoAgendado {
-  id                 String            @id @default(uuid())
-  titulo             String
-  dataHora           DateTime
-  local              String?
-  dataTreino         DateTime?
+  id         String    @id @default(uuid())
+  titulo     String
+  dataHora   DateTime
+  local      String?
+  dataTreino DateTime?
 
   atletaId           String
   treinoProgramadoId String?
   atleta             Atleta            @relation(fields: [atletaId], references: [id])
   treinoProgramado   TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id])
 
-  submissaoTreinos   SubmissaoTreino[]
+  submissaoTreinos SubmissaoTreino[]
 }
 
 model TreinoLivre {
@@ -487,12 +487,22 @@ model Ranking {
 }
 
 model ConfiguracaoSistema {
-  id                   String  @id @default(uuid())
-  registrationEnabled  Boolean @default(true)
-  maintenanceMode      Boolean @default(false)
+  id                     String  @id @default(uuid())
+  registrationEnabled    Boolean @default(true)
+  maintenanceMode        Boolean @default(false)
   allowAthleteChallenges Boolean @default(true)
-  allowProfileEditing  Boolean @default(true)
-  maxDailyPosts        Int     @default(5)
+  allowProfileEditing    Boolean @default(true)
+  maxDailyPosts          Int     @default(5)
+}
+
+model AtividadeRecente {
+  id        String   @id @default(uuid())
+  usuarioId String
+  tipo      String // "Treino", "Desafio", "Partida", etc.
+  imagemUrl String?
+  createdAt DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
 }
 
 enum Nivel {
