@@ -1,5 +1,4 @@
 import { Route } from "wouter";
-import React from "react";
 import PaginaLogin from "./pages/login";
 import PaginaCadastro from "./pages/cadastro";
 import HomeRedirect from "./pages/index";
@@ -20,6 +19,7 @@ import PaginaPostUnico from "./pages/postUnico";
 import PaginaPerfilUnico from "./pages/perfilUnico";
 import PaginaEditarPerfil from "./pages/editarPerfil";
 import PaginaConfiguracoesPerfil from "./pages/configuracoesPerfil";
+import PaginaPontuacaoPerfil from "./pages/pontuacoesPerfil";
 
 export function AppRoutes() {
   return (
@@ -83,6 +83,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/perfil/configuracoes">
         <PaginaConfiguracoesPerfil />
+      </Route>
+      <Route path="/perfil/pontuacao">
+        <PaginaPontuacaoPerfil />
       </Route>
     </>
   );

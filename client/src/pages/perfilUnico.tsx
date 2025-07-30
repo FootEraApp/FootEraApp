@@ -4,27 +4,31 @@ import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 
 import ProfileHeader from "../components/profile/ProfileHeader";
 import ActivityGrid from "../components/profile/ActivityGrid";
-import BadgesList from "../components/profile/BadgesList";
+import { BadgesList } from "../components/profile/BadgesList";
 import ScorePanel from "../components/profile/ScorePanel";
 import TrainingProgress from "../components/profile/TrainingProgress";
+
+interface Badge {
+  id: string;
+  titulo: string;
+  imagemUrl: string;
+}
+
+interface Activity {
+  id: string;
+  tipo: "Desafio" | "Treino" | "Vídeo";
+  imagemUrl: string;
+}
 
 export default function PerfilUnico() {
   const { id } = useParams<{ id: string }>();
   const [usuario, setUsuario] = useState<any>(null);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
 
-  const [activities] = useState([
-    { id: 1, type: "Treino Técnico", imageUrl: "/attached_assets/treino.jpg" },
-    { id: 2, type: "Desafio", imageUrl: "/attached_assets/desafio.jpg" },
-    { id: 3, type: "Partida", imageUrl: "/attached_assets/partida.jpg" }
-  ]);
-
-  const [badges] = useState([
-    { id: 1, name: "Disciplina", icon: "stopwatch" },
-    { id: 2, name: "Pontualidade", icon: "bullseye" },
-    { id: 3, name: "Liderança", icon: "medal" }
-  ]);
-
+  const [usuarioId, setUsuarioId] = useState<string | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [badges, setBadges] = useState<Badge[]>([]);
+    
   const [scores] = useState({
     performance: 75,
     discipline: 90,
@@ -37,6 +41,8 @@ export default function PerfilUnico() {
     console.warn("⚠️ id inválido detectado (nulo,'editar' ou 'configuracoes'), abortando fetch.");
     return;
   }
+
+  setUsuarioId(id);
 
   const loggedInId = localStorage.getItem("usuarioId");
   const token = localStorage.getItem("token");
@@ -64,7 +70,7 @@ export default function PerfilUnico() {
   }, [id]);
 
 
-  if (!usuario ) return <div className="text-center p-10 text-gray-600">Carregando perfil...</div>;
+  if (!usuario ) return <div className="text-center p-10 text-gray-600"></div>;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
@@ -88,7 +94,7 @@ export default function PerfilUnico() {
 
       <TrainingProgress userId={id} />
       <ActivityGrid activities={activities} />
-      <BadgesList badges={badges} />
+      <BadgesList userId={usuarioId} />
       <ScorePanel
         performance={scores.performance}
         discipline={scores.discipline}

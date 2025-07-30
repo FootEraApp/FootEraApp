@@ -148,7 +148,6 @@ import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
         )}
       </div>
 
-            {/* Navegação inferior */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
           <House /> 

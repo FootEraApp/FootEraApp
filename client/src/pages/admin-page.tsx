@@ -59,11 +59,19 @@ interface Treinos {
     return Math.round((val * 100) / total);
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("usuarioId");
+    localStorage.removeItem("tipoUsuario");
+    alert("Você saiu com sucesso.");
+    window.location.href = "/admin/login";
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <header className="flex justify-between items-center bg-green-900 text-white px-6 py-4 rounded">
         <h1 className="text-2xl font-bold">FOOTERA</h1>
-        <button className="bg-red-600 px-4 py-2 rounded">Sair</button>
+        <button className="bg-red-600 px-4 py-2 rounded" onClick={handleLogout}>Sair</button>
       </header>
 
       <h2 className="text-xl font-semibold text-green-900 my-4">Painel Administrativo</h2>

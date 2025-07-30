@@ -296,7 +296,6 @@ async function main() {
     }
   }
 
-
   const exercicios = [
     {
       codigo: 'EX005',
@@ -447,7 +446,159 @@ async function main() {
     }
   }
 
-   console.log("✅ Seed do banco de dados FootEra criado com sucesso!");
+  const safeUpsertUsuario = async (data: any) => {
+    return await prisma.usuario.upsert({
+      where: { nomeDeUsuario: data.nomeDeUsuario },
+      update: {},
+      create: data
+    });
+  };
+
+  const safeCreateIfNotExists = async (model: any, where: any, data: any) => {
+    const exists = await model.findFirst({ where });
+    if (!exists) {
+      return await model.create({ data });
+    }
+    return exists;
+  };
+
+  const usuarioTeste = await prisma.usuario.upsert({
+    where: { nomeDeUsuario: "teste" },
+    update: {},
+    create: {
+      nome: "teste",
+      nomeDeUsuario: "teste",
+      email: "teste@",
+      senhaHash: "hash123",
+      tipo: TipoUsuario.Atleta,
+      cidade: "Curitiba",
+      estado: "PR",
+      pais: "Brasil",
+      atleta: {
+        create: {
+          nome: "teste",
+          sobrenome: "",
+          idade: 16,
+          posicao: "Zagueiro",
+          altura: 1.8,
+          peso: 72,
+          nacionalidade: "Brasileira",
+          naturalidade: "Curitiba - PR",
+          telefone1: "11999999999",
+          seloQualidade: "Bronze",
+          categoria: [Categoria.Sub17],
+          foto: "/assets/usuarios/footera-logo.png"
+        }
+      }
+    }
+  });
+
+  const atletaTeste = await prisma.atleta.upsert({
+    where: { usuarioId: usuarioTeste.id },
+    update: {},
+    create: {
+      usuarioId: usuarioTeste.id,
+      nome: "teste",
+      sobrenome: "",
+      idade: 16,
+      posicao: "Zagueiro",
+      altura: 1.8,
+      peso: 72,
+      nacionalidade: "Brasileira",
+      naturalidade: "Curitiba - PR",
+      telefone1: "11999999999",
+      seloQualidade: "Bronze",
+      categoria: [Categoria.Sub17],
+      foto: "/assets/usuarios/footera-logo.png"
+    }
+  });
+
+  await prisma.pontuacaoAtleta.upsert({
+    where: { atletaId: atletaTeste.id },
+    update: {},
+    create: {
+      atletaId: atletaTeste.id,
+      pontuacaoTotal: 150,
+      pontuacaoPerformance: 60,
+      pontuacaoDisciplina: 50,
+      pontuacaoResponsabilidade: 40,
+    }
+  });
+
+  await prisma.atividadeRecente.createMany({
+    data: [
+      {
+        usuarioId: usuarioTeste.id,
+        tipo: "Desafio",
+        imagemUrl: "/assets/desafios/velocidade.jpg",
+      },
+      {
+        usuarioId: usuarioTeste.id,
+        tipo: "Treino",
+        imagemUrl: "/assets/treinos/resistencia.jpg",
+      },
+      {
+        usuarioId: usuarioTeste.id,
+        tipo: "Vídeo",
+        imagemUrl: "https://www.youtube.com/watch?v=GVjM0KepIDI",
+      },
+    ]
+  });
+
+  const desafioExtra = await prisma.desafioOficial.upsert({
+    where: { titulo: "Desafio de Velocidade" },
+    update: {},
+    create: {
+      titulo: "Desafio de Velocidade",
+      descricao: "Complete um circuito em tempo recorde.",
+      nivel: Nivel.Performance,
+      pontos: 25,
+      categoria: [Categoria.Sub17],
+      imagemUrl: "/assets/desafios/velocidade.jpg"
+    }
+  });
+
+  await prisma.submissaoDesafio.create({
+    data: {
+      atletaId: atletaTeste.id,
+      desafioId: desafioExtra.id,
+      videoUrl: "https://www.google.com/imgres?q=desafio%20velocidade%20futebol&imgurl=https%3A%2F%2Fwww.tiktok.com%2Fapi%2Fimg%2F%3FitemId%3D7358856354527857926%26location%3D0%26aid%3D1988&imgrefurl=https%3A%2F%2Fwww.tiktok.com%2F%40adonias%2Fvideo%2F7358856354527857926&docid=Q3i_9CrrR3OQFM&tbnid=3SL_XXb6IEl1zM&vet=12ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA..i&w=1080&h=1920&hcb=2&ved=2ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA",
+      aprovado: true,
+    }
+  });
+
+  const treinoExtra = await prisma.treinoProgramado.upsert({
+    where: { codigo: "TR003" },
+    update: {},
+    create: {
+      codigo: "TR003",
+      nome: "Treino Teste de Resistência",
+      descricao: "Circuito contínuo para melhorar resistência física",
+      nivel: Nivel.Base,
+      categoria: [Categoria.Sub17],
+    }
+  });
+
+  const treinoAgendado = await prisma.treinoAgendado.create({
+    data: {
+      atletaId: atletaTeste.id,
+      treinoProgramadoId: treinoExtra.id,
+      titulo: "Treino de Resistência - Teste",
+      dataHora: new Date(),
+      local: "Campo Municipal",
+    }
+  });
+
+  await prisma.submissaoTreino.create({
+    data: {
+      atletaId: atletaTeste.id,
+      treinoAgendadoId: treinoAgendado.id,
+      aprovado: true,
+      observacao: "Bom desempenho do atleta teste.",
+    }
+  });
+
+  console.log("✅ Seed completo executado com sucesso!");
 
 main()
   .then(() => prisma.$disconnect())
