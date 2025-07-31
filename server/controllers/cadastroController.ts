@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient, TipoUsuario, Categoria } from "@prisma/client";
+import { PrismaClient, TipoUsuario, Nivel } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -70,136 +70,129 @@ export const criarUsuario = async (req: Request, res: Response) => {
   }
 };
 
-export async function cadastrarUsuario(req: Request, res: Response) {
-  const {
-    tipo,
-    nome,
-    email,
-    nomeDeUsuario,
-    senha,
-    idade,
-    categoria,
-    codigo,
-    areaFormacao,
-    nomeEscolinha,
-    cnpjEscolinha,
-    cidadeEscolinha,
-    nomeClube,
-    cnpjClube,
-    cidadeClube,
-  } = req.body;
+export const cadastrarUsuario = async (req: Request, res: Response) => {
+  const { nome, email, senha, tipo } = req.body;
 
-  if (!tipo || !nome || !email || !nomeDeUsuario || !senha) {
-    console.log("Dados incompletos:", { tipo, nome, email, nomeDeUsuario, senha });
-    return res.status(400).json({ message: "Dados incompletos." });
+  if (!nome || !email || !senha || !tipo) {
+    return res.status(400).json({ error: "Todos os campos são obrigatórios." });
   }
-
-  const tipoLower = tipo.toLowerCase();
-  console.log("Tipo de usuário (lowercase):", tipoLower);
-
-  const usuarioExistente = await prisma.usuario.findUnique({
-    where: { nomeDeUsuario },
-  });
-
-  if (usuarioExistente) {
-    console.log("Usuário já existe:", nomeDeUsuario);
-    return res.status(400).json({ message: "Usuário já existe." });
-  }
-
-  const senhaHash = bcrypt.hashSync(senha, 10);
 
   try {
-    
-    const usuario = await prisma.usuario.create({
+    const usuarioExistente = await prisma.usuario.findUnique({ where: { email } });
+
+    if (usuarioExistente) {
+      return res.status(400).json({ error: "E-mail já cadastrado." });
+    }
+
+    const senhaHash = await bcrypt.hash(senha, 10);
+
+    const novoUsuario = await prisma.usuario.create({
       data: {
         nome,
-        nomeDeUsuario,
         email,
         senhaHash,
+        nomeDeUsuario: nome.toLowerCase().replace(/\s+/g, "_"),
         tipo,
       },
     });
 
-    const { categoria } = req.body;
+    switch (tipo) {
+      case TipoUsuario.Atleta:
+        const novoAtleta = await prisma.atleta.create({
+          data: {
+            usuarioId: novoUsuario.id,
+            nome: nome,
+            sobrenome: "",
+            idade: 0,
+            cpf: "",
+            telefone1: "",
+            telefone2: "",
+            nacionalidade: "",
+            naturalidade: "",
+            posicao: "",
+            altura: 0,
+            peso: 0,
+            seloQualidade: "false",
+            foto: null,
+          },
+        });
 
-    if (tipoLower === "atleta") {
-      console.log("Criando atleta para usuarioId:", usuario.id, "com idade:", idade, "e categoria:", categoria);
+        await prisma.pontuacaoAtleta.create({
+          data: {
+            atletaId: novoAtleta.id,
+            pontuacaoPerformance: 0,
+            pontuacaoDisciplina: 0,
+            pontuacaoResponsabilidade: 0,
+          }
+        });
+        break;
 
-      if (idade === undefined) {
-        console.log("Idade ausente para atleta");
-        return res.status(400).json({ message: "Idade é obrigatória para atletas." });
-      }
 
-      if (!categoria || !Array.isArray(categoria)) {
-        return res.status(400).json({ message: "Categoria é obrigatória e deve ser um array para atletas." });
-      }
+      case TipoUsuario.Professor:
+        await prisma.professor.create({
+          data: {
+            usuarioId: novoUsuario.id,
+            nome,
+            codigo: "PRF-" + Math.floor(Math.random() * 10000),
+            cref: "000000-G/SP",
+            areaFormacao: "Educação Física",
+            statusCref: "Ativo",
+            qualificacoes: [],
+            certificacoes: [],
+          },
+        });
+        break;
 
-      await prisma.atleta.create({
-        data: {
-          usuarioId: usuario.id,
-          idade: parseInt(idade),
-          categoria,
-        },
-      });
-      console.log("Atleta criado com sucesso.");
-    } else if (tipoLower === "professor") {
-      console.log("Criando professor para usuarioId:", usuario.id, "areaFormacao:", areaFormacao);
+      case TipoUsuario.Clube:
+        await prisma.clube.create({
+          data: {
+            usuarioId: novoUsuario.id,
+            nome,
+            cidade: "Cidade Exemplo",
+            estado: "SP",
+            pais: "Brasil",
+            bairro: "Centro",
+            telefone1: "(11) 99999-0000",
+            telefone2: "(11) 98888-0000",
+            estadio: "Estádio Padrão",
+            siteOficial: "https://www.clubeexemplo.com",
+          },
+        });
+        break;
 
-      if (!areaFormacao) {
-        return res.status(400).json({ message: "Área de formação é obrigatória para professores." });
-      }
+      case TipoUsuario.Escolinha:
+        await prisma.escolinha.create({
+          data: {
+            usuarioId: novoUsuario.id,
+            nome,
+            cidade: "Cidade Exemplo",
+            estado: "SP",
+            pais: "Brasil",
+            bairro: "Bairro Exemplo",
+            telefone1: "(11) 97777-0000",
+            telefone2: "(11) 96666-0000",
+            siteOficial: "https://www.escolinhaexemplo.com",
+          },
+        });
+        break;
 
-      const totalProfessores = await prisma.professor.count();
-      const codigoGerado = `PROF${String(totalProfessores + 1).padStart(3, "0")}`;
+      case TipoUsuario.Admin:
+        await prisma.administrador.create({
+          data: {
+            usuarioId: novoUsuario.id,
+            cargo: "Administrador Geral",
+            nivel: Nivel.Base, // Ou outro valor do enum que você definir
+          },
+        });
+        break;
 
-      await prisma.professor.create({
-        data: {
-          usuarioId: usuario.id,
-          codigo: codigoGerado,
-          areaFormacao,
-          nome,
-        },
-      });
-      console.log(`Professor criado com sucesso. Código: ${codigoGerado}`);
-    } else if (tipoLower === "escolinha") {
-      console.log("Criando escolinha para usuarioId:", usuario.id);
-
-      if (!nomeEscolinha || !cnpjEscolinha || !cidadeEscolinha) {
-        console.log("Dados incompletos para escolinha");
-        return res.status(400).json({ message: "Dados da escolinha incompletos." });
-      }
-
-      await prisma.escolinha.create({
-        data: {
-          usuarioId: usuario.id,
-          nome: nomeEscolinha,
-          cnpj: cnpjEscolinha,
-          cidade: cidadeEscolinha,
-        },
-      });
-      console.log("Escolinha criada com sucesso.");
-    } else if (tipoLower === "clube") {
-      console.log("Criando clube para usuarioId:", usuario.id);
-
-      if (!nomeClube || !cnpjClube || !cidadeClube) {
-        console.log("Dados incompletos para clube");
-        return res.status(400).json({ message: "Dados do clube incompletos." });
-      }
-
-      await prisma.clube.create({
-        data: {
-          usuarioId: usuario.id,
-          nome: nomeClube,
-          cnpj: cnpjClube,
-          cidade: cidadeClube,
-        },
-      });
-      console.log("Clube criado com sucesso.");
+      default:
+        return res.status(400).json({ error: "Tipo de usuário inválido." });
     }
 
-    return res.status(201).json({ usuario });
-  } catch (error) {
-    console.error("Erro ao cadastrar usuário:", error);
-    return res.status(500).json({ message: "Erro ao cadastrar usuário." });
+    return res.status(201).json({ message: "Usuário cadastrado com sucesso." });
+  } catch (err) {
+    console.error("Erro ao cadastrar usuário:", err);
+    return res.status(500).json({ error: "Erro interno no servidor." });
   }
-}
+};

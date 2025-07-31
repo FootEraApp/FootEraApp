@@ -19,7 +19,7 @@ export default function ConfiguracoesPerfil() {
   function confirmarLogout() {
     if (confirm("Tem certeza que deseja sair?")) {
       localStorage.clear();
-      setLocation("/admin/login");
+      setLocation("/login");
     }
   }
 

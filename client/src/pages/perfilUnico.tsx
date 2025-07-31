@@ -94,7 +94,7 @@ export default function PerfilUnico() {
 
       <TrainingProgress userId={id} />
       <ActivityGrid activities={activities} />
-      <BadgesList userId={usuarioId} />
+      {usuarioId && <BadgesList userId={usuarioId} />}
       <ScorePanel
         performance={scores.performance}
         discipline={scores.discipline}

@@ -598,6 +598,142 @@ async function main() {
     }
   });
 
+  await prisma.usuario.create({
+  data: {
+    id: "f0c77ddc-615e-4627-ad55-d61c86ded28d", // mesmo id do erro
+    nome: "teste 2",
+    nomeDeUsuario: "teste 2",
+    email: "teste@teste",
+    senhaHash: "123456",
+    tipo: "Atleta",
+    atleta: {
+      create: {
+        nome: "teste 2",
+        idade: 14,
+        posicao: "Meia",
+        pontuacao: {
+          create: {
+            pontuacaoPerformance: 10,
+            pontuacaoDisciplina: 9,
+            pontuacaoResponsabilidade: 8,
+          },
+        },
+      },
+    },
+  },
+});
+
+const atletaTeste2 = await prisma.atleta.findUnique({
+  where: { usuarioId: "f0c77ddc-615e-4627-ad55-d61c86ded28d" },
+});
+
+const desafioTeste2 = await prisma.desafioOficial.upsert({
+  where: { titulo: "Desafio de Controle Avançado" },
+  update: {},
+  create: {
+    titulo: "Desafio de Controle Avançado",
+    descricao: "Mantenha a posse da bola com domínio total durante 60 segundos.",
+    nivel: Nivel.Performance,
+    pontos: 20,
+    categoria: [Categoria.Sub15],
+    imagemUrl: "/assets/desafios/controle-avancado.jpg",
+  },
+});
+
+await prisma.submissaoDesafio.create({
+  data: {
+    atletaId: atletaTeste2!.id,
+    desafioId: desafioTeste2.id,
+    videoUrl: "https://www.youtube.com/watch?v=controle_avancado",
+    aprovado: true,
+  },
+});
+
+const exControle = await prisma.exercicio.upsert({
+  where: { codigo: "EX007" },
+  update: {},
+  create: {
+    codigo: "EX007",
+    nome: "Controle de Bola Avançado",
+    descricao: "Execução contínua de controle com ambos os pés em espaço reduzido.",
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub15],
+    videoDemonstrativoUrl: "https://www.youtube.com/watch?v=controle_exercicio"
+  }
+});
+
+const treinoTeste2 = await prisma.treinoProgramado.upsert({
+  where: { codigo: "TR004" },
+  update: {},
+  create: {
+    codigo: "TR004",
+    nome: "Treino Avançado de Controle",
+    descricao: "Melhoria do domínio de bola sob pressão.",
+    nivel: Nivel.Performance,
+    categoria: [Categoria.Sub15],
+    dataAgendada: new Date(),
+    exercicios: {
+      create: [{
+        exercicioId: exControle.id,
+        ordem: 1,
+        repeticoes: "3x 60s com 30s descanso"
+      }]
+    }
+  }
+});
+
+const treinoAgendadoTeste2 = await prisma.treinoAgendado.create({
+  data: {
+    atletaId: atletaTeste2!.id,
+    treinoProgramadoId: treinoTeste2.id,
+    titulo: "Treino de Controle Avançado",
+    dataHora: new Date(),
+    local: "Centro de Treinamento A",
+  }
+});
+
+await prisma.submissaoTreino.create({
+  data: {
+    atletaId: atletaTeste2!.id,
+    treinoAgendadoId: treinoAgendadoTeste2.id,
+    aprovado: true,
+    observacao: "Execução excelente com controle e ritmo.",
+  }
+});
+
+await prisma.atividadeRecente.createMany({
+  data: [
+    {
+      usuarioId: atletaTeste2!.usuarioId,
+      tipo: "Treino",
+      imagemUrl: "/assets/treinos/controle-avancado.jpg",
+    },
+    {
+      usuarioId: atletaTeste2!.usuarioId,
+      tipo: "Desafio",
+      imagemUrl: "/assets/desafios/controle-avancado.jpg",
+    },
+  ],
+  skipDuplicates: true,
+});
+
+await prisma.pontuacaoAtleta.upsert({
+  where: { atletaId: atletaTeste2!.id },
+  update: {
+    pontuacaoPerformance: 25,
+    pontuacaoDisciplina: 20,
+    pontuacaoResponsabilidade: 18,
+    pontuacaoTotal: 63,
+  },
+  create: {
+    atletaId: atletaTeste2!.id,
+    pontuacaoPerformance: 25,
+    pontuacaoDisciplina: 20,
+    pontuacaoResponsabilidade: 18,
+    pontuacaoTotal: 63,
+  },
+});
+
   console.log("✅ Seed completo executado com sucesso!");
 
 main()

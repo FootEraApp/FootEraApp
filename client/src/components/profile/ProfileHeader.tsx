@@ -23,6 +23,7 @@ export default function ProfileHeader({
   isOwnProfile = false,
   foto
 }: ProfileHeaderProps) {
+  
   const imageSrc = foto || avatar || "/attached_assets/Perfil.jpg";
 
   return (

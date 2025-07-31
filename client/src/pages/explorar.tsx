@@ -35,7 +35,6 @@ import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
         />
       </div>
 
-      {/* Tabs */}
       <div className="flex justify-around mb-2 px-2">
         {["atletas", "escolas", "clubes", "desafios", "profilers"].map((tab) => (
           <button

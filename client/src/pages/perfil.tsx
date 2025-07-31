@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
@@ -71,20 +72,20 @@ export default function ProfilePage() {
     ])
       .then(([perfilRes, atividadesRes, badgesRes, pontuacaoRes]) => {
         setPerfil(perfilRes.data);
-        setActivities(atividadesRes.data.map((a: any) => ({
-          id: a.id,
-          type: a.tipo,
-          imageUrl: a.imagemUrl || "",
-        })));
-        setBadges(badgesRes.data);
+        setActivities(
+          atividadesRes.data.map((a: any) => ({
+            id: a.id,
+            tipo: a.tipo,
+            imagemUrl: a.imagemUrl || "",
+          }))
+        );
+
+        const { performance = 0, discipline = 0, responsibility = 0 } = pontuacaoRes.data || {};
         setPontuacao({
-          pontuacaoTotal:
-            (pontuacaoRes.data.performance || 0) +
-            (pontuacaoRes.data.discipline || 0) +
-            (pontuacaoRes.data.responsibility || 0),
-          pontuacaoPerformance: pontuacaoRes.data.performance,
-          pontuacaoDisciplina: pontuacaoRes.data.discipline,
-          pontuacaoResponsabilidade: pontuacaoRes.data.responsibility,
+          pontuacaoTotal: performance + discipline + responsibility,
+          pontuacaoPerformance: performance,
+          pontuacaoDisciplina: discipline,
+          pontuacaoResponsabilidade: responsibility,
         });
       })
       .catch((err) => {

@@ -1,4 +1,3 @@
-import React from "react";
 
 interface Activity {
   id: string;
@@ -6,21 +5,24 @@ interface Activity {
   imagemUrl: string;
 }
 
-interface ActivityGridProps {
-  activities: Activity[];
-}
-
-export function ActivityGrid({ activities }: ActivityGridProps) {
+export default function ActivityGrid({ activities }: { activities: Activity[] }) {
   return (
-    <div className="grid grid-cols-3 gap-2 mt-2">
-      {activities.map((activity) => (
-        <div key={activity.id} className="rounded-lg overflow-hidden shadow">
-          <img src={activity.imagemUrl} alt={activity.tipo} className="w-full h-24 object-cover" />
-          <div className="text-sm text-center font-semibold text-green-900 py-1">{activity.tipo}</div>
-        </div>
-      ))}
+    <div className="my-6">
+      <h2 className="text-green-900 font-bold text-lg px-4 mt-4 mb-2 hover:underline">Atividades Recentes</h2>
+      <div className="grid grid-cols-3 gap-4">
+        {activities.map((activity) => (
+          <div key={activity.id} className="rounded-lg overflow-hidden shadow">
+            <img
+              src={activity.imagemUrl}
+              alt={activity.tipo}
+              className="w-full h-24 object-cover"
+            />
+            <div className="text-sm text-center font-semibold text-green-900 py-1">
+              {activity.tipo}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
-
-export default ActivityGrid;
