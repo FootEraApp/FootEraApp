@@ -62,8 +62,8 @@ export default function Cadastro() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Erro ao cadastrar");
+        const text = await res.text();
+        throw new Error(text);
       }
 
       setSucesso("Cadastro realizado com sucesso!");
@@ -92,7 +92,7 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
         </ul>
       </div>
 
-      <div className="w-1/2 bg-cream flex justify-center items-center p-10">
+      <div className="bg-cream flex justify-center items-center p-10">
         <div className="bg-white rounded shadow-md w-full max-w-md p-6">
           <h2 className="text-xl font-semibold mb-1 mt-11">Criar conta</h2>
           <p className="text-sm text-green-600 mb-4">Preencha os campos abaixo para criar sua conta</p>
@@ -143,8 +143,7 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
             <input type="password" className="w-full border rounded px-3 py-2" value={confirmarSenha} onChange={(e) => setConfirmarSenha(e.target.value)} />
           </div>
 
-          {/* Campos adicionais para Atleta */}
-          {tipoPerfil === "Atleta" && (
+         {tipoPerfil === "Atleta" && (
             <>
               <div className="mt-4">
                   <label className="block text-sm font-medium mb-1">Você treina em alguma escolinha cadastrada na FootEra?</label>
@@ -185,7 +184,6 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
             </>
           )}
 
-          {/* Campos adicionais para Professor */}
           {tipoPerfil === "Professor" && (
             <>
               <div className="mt-4">
@@ -208,7 +206,6 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
             </>
           )}
 
-          {/* Campos adicionais para Clube */}
           {tipoPerfil === "Clube" && (
             <>
               <div className="mt-4">
@@ -247,8 +244,7 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
             </>
           )}
 
-          {/* Campos adicionais para Escolinha */}
-          {tipoPerfil === "Escolinha" && (
+         {tipoPerfil === "Escolinha" && (
             <>
               <div className="mt-4">
                 <label className="block text-sm font-medium mb-1">Você é alguma escolinha cadastrada na FootEra?</label>

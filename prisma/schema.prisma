@@ -37,11 +37,12 @@ model Usuario {
   curtidas           Curtida[]
   atividadesRecentes AtividadeRecente[]
 
-  atleta        Atleta?
-  professor     Professor?
-  clube         Clube?
-  escolinha     Escolinha?
-  administrador Administrador?
+  atleta          Atleta?
+  professor       Professor?
+  clube           Clube?
+  escolinha       Escolinha?
+  administrador   Administrador?
+  TreinoRealizado TreinoRealizado[]
 }
 
 model Professor {
@@ -126,7 +127,8 @@ model Atleta {
   Video               Video[]
   Ranking             Ranking?
   SubmissaoTreino     SubmissaoTreino[]
-  relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoAtleta")
+  relacoesTreinamento RelacaoTreinamento[]       @relation("RelacaoAtleta")
+  treinosRecebidos    TreinoProgramadoRecebido[]
 }
 
 model TreinoProgramado {
@@ -148,9 +150,11 @@ model TreinoProgramado {
   escolinhaId String?
   escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id])
 
-  exercicios     TreinoProgramadoExercicio[]
-  createdAt      DateTime                    @default(now())
-  treinoAgendado TreinoAgendado[]
+  exercicios               TreinoProgramadoExercicio[]
+  createdAt                DateTime                    @default(now())
+  treinoAgendado           TreinoAgendado[]
+  realizados               TreinoRealizado[]
+  TreinoProgramadoRecebido TreinoProgramadoRecebido[]
 }
 
 model TreinoProgramadoExercicio {
@@ -503,6 +507,26 @@ model AtividadeRecente {
   createdAt DateTime @default(now())
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
+}
+
+model TreinoRealizado {
+  id        String   @id @default(uuid())
+  usuarioId String
+  treinoId  String
+  dataHora  DateTime
+  local     String?
+
+  usuario Usuario          @relation(fields: [usuarioId], references: [id])
+  treino  TreinoProgramado @relation(fields: [treinoId], references: [id])
+}
+
+model TreinoProgramadoRecebido {
+  id       String @id @default(uuid())
+  atletaId String
+  treinoId String
+
+  atleta Atleta           @relation(fields: [atletaId], references: [id])
+  treino TreinoProgramado @relation(fields: [treinoId], references: [id])
 }
 
 enum Nivel {

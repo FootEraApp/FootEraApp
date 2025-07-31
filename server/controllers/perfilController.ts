@@ -4,6 +4,35 @@ import { AuthenticatedRequest } from "server/middlewares/auth";
 
 const prisma = new PrismaClient();
 
+export const getTreinosPorUsuario = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const treinos = await prisma.treinoRealizado.findMany({
+      where: {
+        usuarioId: id,
+      },
+      include: {
+        treino: true,
+      },
+      orderBy: {
+        dataHora: "desc",
+      },
+    });
+
+    const resultado = treinos.map((t: any) => ({
+      titulo: t.treino?.nome || "Treino",
+      dataHora: t.dataHora,
+      local: t.local || "Local não informado",
+    }));
+
+    return res.json(resultado);
+  } catch (err) {
+    console.error("Erro ao buscar treinos:", err);
+    return res.status(500).json({ message: "Erro ao buscar treinos." });
+  }
+};
+
 export const getAtividadesRecentes = async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -53,29 +82,44 @@ export const getPontuacao = async (req: Request, res: Response) => {
   const { id } = req.params;
 
   try {
-    const atleta = await prisma.atleta.findUnique({
-      where: { usuarioId: id },
-      include: { pontuacao: true },
+    const usuario = await prisma.usuario.findUnique({
+      where: { id },
+      select: { tipo: true }
     });
 
-    if (!atleta || !atleta.pontuacao) {
-      return res.status(404).json({
+    if (!usuario) {
+      return res.status(404).json({ message: "Usuário não encontrado." });
+    }
+
+    if (usuario.tipo !== "Atleta") {
+      return res.json({
+        performance: 0,
+        discipline: 0,
+        responsibility: 0,
+      }); 
+    }
+
+    const atleta = await prisma.atleta.findUnique({
+      where: { usuarioId: id },
+      include: { pontuacao: true }
+    });
+
+     if (!atleta || !atleta.pontuacao) {
+      return res.json({
         performance: 0,
         discipline: 0,
         responsibility: 0,
       });
     }
 
-    const { pontuacaoPerformance, pontuacaoDisciplina, pontuacaoResponsabilidade } = atleta.pontuacao;
-
-    res.json({
-      performance: pontuacaoPerformance,
-      discipline: pontuacaoDisciplina,
-      responsibility: pontuacaoResponsabilidade,
+    return res.json({
+      performance: atleta.pontuacao.pontuacaoPerformance,
+      discipline: atleta.pontuacao.pontuacaoDisciplina,
+      responsibility: atleta.pontuacao.pontuacaoResponsabilidade,
     });
   } catch (err) {
     console.error("Erro ao buscar pontuação:", err);
-    res.status(500).json({ error: "Erro ao buscar pontuação." });
+    return res.status(500).json({ message: "Erro interno no servidor." });
   }
 };
 
@@ -123,7 +167,7 @@ export const getPontuacaoDetalhada = async (req: Request, res: Response) => {
       ...historicoTreinos.map(t => ({
         tipo: "Treino",
         status: t.aprovado ? "Concluído" : "Pendente",
-        data: t.createdAt.toLocaleDateString(),
+        data: t.treinoAgendado?.treinoProgramado?.createdAt.toLocaleDateString() || "Data não disponivel",
         duracao: "N/A"
       })),
     ];
@@ -365,5 +409,74 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
   } catch (error) {
     console.error("Erro ao atualizar perfil:", error);
     return res.status(500).json({ error: "Erro interno ao atualizar perfil." });
+  }
+};
+
+export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const atleta = await prisma.atleta.findUnique({
+      where: { usuarioId: id },
+      include: {
+        treinosRecebidos: {
+          include: {
+            treino: {
+              include: {
+                exercicios: {
+                  include: { exercicio: true }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!atleta) {
+      return res.status(404).json({ error: "Atleta não encontrado" });
+    }
+
+    const categoriaContagem: Record<string, number> = {
+      fisico: 0,
+      tecnico: 0,
+      tatico: 0,
+      mental: 0,
+    };
+
+    const desafiosCompletos = await prisma.submissaoDesafio.count({
+      where: {
+        atletaId: atleta.id,
+        aprovado: true,
+      },
+    });
+
+    const pontuacao = await prisma.pontuacaoAtleta.findUnique({
+      where: { atletaId: atleta.id }
+    });
+
+    const pontosConquistados = pontuacao
+      ? pontuacao.pontuacaoDisciplina + pontuacao.pontuacaoPerformance + pontuacao.pontuacaoResponsabilidade
+      : 0;
+
+    for (const recebido of atleta.treinosRecebidos) {
+      for (const ex of recebido.treino.exercicios) {
+        const cat = ex.exercicio?.categoria?.toLowerCase();
+        if (cat && categoriaContagem[cat] !== undefined) {
+          categoriaContagem[cat]++;
+        }
+      }
+    }
+
+    return res.json({
+      ...categoriaContagem,
+      totalTreinos: atleta.treinosRecebidos.length,
+      horasTreinadas: Number((atleta.treinosRecebidos.length * 0.5).toFixed(1)), // estimativa de 0.5h por treino
+      desafiosCompletos,
+      pontosConquistados
+    });
+  } catch (err) {
+    console.error("Erro ao buscar progresso dos treinos:", err);
+    return res.status(500).json({ error: "Erro interno no servidor" });
   }
 };
