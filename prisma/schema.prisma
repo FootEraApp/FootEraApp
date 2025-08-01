@@ -53,9 +53,9 @@ model Professor {
   escola        String?
   qualificacoes String[]
   certificacoes String[]
-  fotoUrl       String?
+  fotoUrl       String?     @unique
   statusCref    StatusCref?
-  nome          String
+  nome          String      @unique
 
   usuarioId String?  @unique
   usuario   Usuario? @relation(fields: [usuarioId], references: [id])
@@ -93,7 +93,7 @@ model Atleta {
   usuario               Usuario          @relation(fields: [usuarioId], references: [id])
   nome                  String?
   sobrenome             String?
-  email                 String?
+  email                 String?          @unique
   senhaHash             String?
   idade                 Int
   cpf                   String?
@@ -134,7 +134,7 @@ model Atleta {
 model TreinoProgramado {
   id           String      @id @default(uuid())
   codigo       String      @unique
-  nome         String
+  nome         String      @unique
   descricao    String?
   nivel        Nivel
   categoria    Categoria[]
@@ -143,6 +143,7 @@ model TreinoProgramado {
   objetivo     String?
   duracao      Int?
   dicas        String[]
+  imagemUrl    String?
 
   professorId String?
   professor   Professor? @relation(fields: [professorId], references: [id])
@@ -171,11 +172,11 @@ model TreinoProgramadoExercicio {
 model Exercicio {
   id                    String      @id @default(uuid())
   codigo                String      @unique
-  nome                  String
+  nome                  String      @unique
   descricao             String?
   nivel                 Nivel
   categorias            Categoria[]
-  videoDemonstrativoUrl String?
+  videoDemonstrativoUrl String?     @unique
 
   treinoProgramadoExercicios TreinoProgramadoExercicio[]
 }
@@ -184,7 +185,7 @@ model DesafioOficial {
   id             String      @id @default(uuid())
   titulo         String      @unique
   descricao      String
-  imagemUrl      String?
+  imagemUrl      String?     @unique
   nivel          Nivel
   pontos         Int
   prazoSubmissao DateTime?
@@ -222,8 +223,8 @@ model RelacaoTreinamento {
 
 model Postagem {
   id          String     @id @default(uuid())
-  conteudo    String
-  imagemUrl   String?
+  conteudo    String     @unique
+  imagemUrl   String?    
   videoUrl    String?
   tipoMidia   TipoMidia?
   dataCriacao DateTime   @default(now())
@@ -249,7 +250,7 @@ model Postagem {
 
 model Midia {
   id          String    @id @default(uuid())
-  url         String
+  url         String    @unique
   tipo        TipoMidia
   dataCriacao DateTime  @default(now())
   dataEnvio   DateTime
@@ -274,11 +275,11 @@ model Escolinha {
   id          String   @id @default(uuid())
   usuarioId   String?  @unique
   usuario     Usuario? @relation(fields: [usuarioId], references: [id])
-  nome        String
-  cnpj        String?
+  nome        String   @unique
+  cnpj        String?  @unique
   telefone1   String?
   telefone2   String?
-  email       String?
+  email       String?  @unique
   siteOficial String?
   sede        String?
   logradouro  String?
@@ -310,16 +311,16 @@ model Comentario {
 }
 
 model Clube {
-  id        String  @id @default(uuid())
-  usuarioId String  @unique
-  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+  id        String     @id @default(uuid())
+  usuarioId String     @unique
+  usuario   Usuario    @relation(fields: [usuarioId], references: [id])
 
-  nome        String
-  cnpj        String?
+  nome        String   @unique
+  cnpj        String?  @unique
   telefone1   String?
   telefone2   String?
-  email       String?
-  siteOficial String?
+  email       String?  @unique
+  siteOficial String?  @unique
   sede        String?
   estadio     String?
   logradouro  String?
@@ -354,7 +355,7 @@ model SubmissaoDesafio {
   id        String   @id @default(uuid())
   atletaId  String
   desafioId String
-  videoUrl  String
+  videoUrl  String   @unique
   aprovado  Boolean?
   createdAt DateTime @default(now())
 
@@ -370,7 +371,7 @@ model SubmissaoTreino {
   atletaId         String
   treinoAgendadoId String
   aprovado         Boolean?
-  observacao       String?
+  observacao       String?  @unique
   criadoEm         DateTime @default(now())
   atualizadoEm     DateTime @updatedAt
 
@@ -383,7 +384,7 @@ model SubmissaoTreino {
 
 model Grupo {
   id        String        @id @default(uuid())
-  nome      String
+  nome      String        @unique
   descricao String?
   membros   MembroGrupo[]
 }
@@ -427,7 +428,7 @@ model Curtida {
 
 model TreinoAgendado {
   id         String    @id @default(uuid())
-  titulo     String
+  titulo     String    @unique
   dataHora   DateTime
   local      String?
   dataTreino DateTime?
@@ -471,8 +472,8 @@ model PontuacaoAtleta {
 
 model Video {
   id        String      @id @default(uuid())
-  titulo    String
-  url       String
+  titulo    String      
+  url       String      @unique
   thumbnail String?
   atletaId  String
   createdAt DateTime    @default(now())
@@ -502,8 +503,8 @@ model ConfiguracaoSistema {
 model AtividadeRecente {
   id        String   @id @default(uuid())
   usuarioId String
-  tipo      String // "Treino", "Desafio", "Partida", etc.
-  imagemUrl String?
+  tipo      String 
+  imagemUrl String?  @unique
   createdAt DateTime @default(now())
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])

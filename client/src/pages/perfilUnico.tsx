@@ -18,6 +18,7 @@ interface Activity {
   id: string;
   tipo: "Desafio" | "Treino" | "Vídeo";
   imagemUrl: string;
+  nome: string;
 }
 
 export default function PerfilUnico() {
