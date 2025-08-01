@@ -1,7 +1,67 @@
 import { PrismaClient, TipoUsuario, Nivel, Categoria } from '@prisma/client';
+import { Profiler } from 'react';
+
 const prisma = new PrismaClient();
 
 async function main() {
+
+   const upsertUsuarioComTipo = async (nomeDeUsuario: string, data: any) => {
+    return prisma.usuario.upsert({
+      where: { nomeDeUsuario },
+      update: {},
+      create: data
+    });
+  };
+
+  const upsertAtleta = async (usuarioId: string, data: any) => {
+    return prisma.atleta.upsert({
+      where: { usuarioId },
+      update: {},
+      create: { usuarioId, ...data }
+    });
+  };
+
+  const upsertPontuacao = async (atletaId: string, data: any) => {
+    return prisma.pontuacaoAtleta.upsert({
+      where: { atletaId },
+      update: data,
+      create: { atletaId, ...data }
+    });
+  };
+
+  const safeCreateMany = async (model: any, datas: any[], uniqueField: string) => {
+    for (const data of datas) {
+      const exists = await model.findFirst({ where: { [uniqueField]: data[uniqueField] } });
+      if (!exists) {
+        await model.create({ data });
+      }
+    }
+  };
+
+  const upsertExercicio = async (codigo: string, data: any) => {
+    return prisma.exercicio.upsert({
+      where: { codigo },
+      update: {},
+      create: data
+    });
+  };
+
+  const upsertTreinoProgramado = async (codigo: string, data: any) => {
+    return prisma.treinoProgramado.upsert({
+      where: { codigo },
+      update: {},
+      create: data
+    });
+  };
+
+  const upsertDesafio = async (titulo: string, data: any) => {
+    return prisma.desafioOficial.upsert({
+      where: { titulo },
+      update: {},
+      create: data
+    });
+  };
+
   const clube1 = await prisma.usuario.upsert({
     where: { nomeDeUsuario: 'clube_footera' },
     update: {},
@@ -364,8 +424,10 @@ async function main() {
         nome: 'Treino de Agilidade com Sprint',
         descricao: 'Foco em explosão e mudanças rápidas de direção',
         nivel: Nivel.Performance,
+        duracao: 40,
         professorId: professorArthur.id,
         dataAgendada: new Date(),
+        imagemUrl: "/assets/treinos/agilidade.jpg",
         exercicios: {
           create: [
             {
@@ -386,7 +448,9 @@ async function main() {
         nome: 'Treino Técnico de Defesa',
         descricao: 'Prática de cabeceios defensivos e posicionamento',
         nivel: Nivel.Avancado,
+        duracao: 20,
         professorId: professorArthur.id,
+        imagemUrl: "/assets/treinos/tecnico-defesa.jpg",
         dataAgendada: new Date(),
         exercicios: {
           create: [
@@ -576,6 +640,8 @@ async function main() {
       descricao: "Circuito contínuo para melhorar resistência física",
       nivel: Nivel.Base,
       categoria: [Categoria.Sub17],
+      duracao: 45,
+      imagemUrl: "/assets/treinos/teste-resistencia.jpg",
     }
   });
 
@@ -598,29 +664,36 @@ async function main() {
     }
   });
 
-  await prisma.usuario.create({
-  data: {
-    id: "f0c77ddc-615e-4627-ad55-d61c86ded28d", // mesmo id do erro
+  const usuarioTeste2 = await prisma.usuario.upsert({
+  where: { nomeDeUsuario: "teste 2" },
+  update: {},
+  create: {
+    id: "f0c77ddc-615e-4627-ad55-d61c86ded28d",
     nome: "teste 2",
     nomeDeUsuario: "teste 2",
     email: "teste@teste",
     senhaHash: "123456",
-    tipo: "Atleta",
+    tipo: TipoUsuario.Atleta,
+    cidade: "Curitiba",
+    estado: "PR",
+    pais: "Brasil",
     atleta: {
       create: {
         nome: "teste 2",
         idade: 14,
         posicao: "Meia",
+        categoria: [Categoria.Sub15],
         pontuacao: {
           create: {
+            pontuacaoTotal: 27,
             pontuacaoPerformance: 10,
             pontuacaoDisciplina: 9,
-            pontuacaoResponsabilidade: 8,
-          },
-        },
-      },
-    },
-  },
+            pontuacaoResponsabilidade: 8
+          }
+        }
+      }
+    }
+  }
 });
 
 const atletaTeste2 = await prisma.atleta.findUnique({
@@ -670,7 +743,9 @@ const treinoTeste2 = await prisma.treinoProgramado.upsert({
     nome: "Treino Avançado de Controle",
     descricao: "Melhoria do domínio de bola sob pressão.",
     nivel: Nivel.Performance,
+    duracao: 30,
     categoria: [Categoria.Sub15],
+    imagemUrl: "/assets/treinos/controle.jpg",
     dataAgendada: new Date(),
     exercicios: {
       create: [{
@@ -733,6 +808,104 @@ await prisma.pontuacaoAtleta.upsert({
     pontuacaoTotal: 63,
   },
 });
+
+const atletaAaaaa = await prisma.atleta.findFirst({
+  where: { nome: "aaaaa" },
+});
+
+if (atletaAaaaa) {
+  const treino = await prisma.treinoProgramado.create({
+    data: {
+      nome: "Treino Resistencia Física",
+      codigo: "TRF-001",
+      descricao: "Treino voltado para resistência",
+      nivel: "Avancado",
+      imagemUrl: "/assets/treinos/resistencia.jpg",
+      professor: { connect: { id: professorArthur?.id ?? "" } },
+      exercicios: {
+        create: [
+          {
+            ordem: 1,
+            repeticoes: "3x15",
+            exercicio: { connect: { id: exControle.id } },
+          },
+        ],
+      },
+    },
+  });
+
+  const treinoAgendado = await prisma.treinoAgendado.create({
+    data: {
+      titulo: treino.nome,
+      dataHora: new Date(),
+      dataTreino: new Date(),
+      local: "Quadra A",
+      atleta: { connect: { id: atletaAaaaa.id } },
+      treinoProgramado: { connect: { id: treino.id } },
+    },
+  });
+
+  await prisma.submissaoTreino.create({
+    data: {
+      atleta: { connect: { id: atletaAaaaa.id } },
+      treinoAgendado: { connect: { id: treinoAgendado.id } },
+      observacao: "Concluído com sucesso",
+      aprovado: true,
+    },
+  });
+
+  const desafio = await prisma.desafioOficial.create({
+    data: {
+      titulo: "Desafio Técnica com Bola",
+      descricao: "Controle e passes curtos",
+      nivel: "Base",
+      categoria: [Categoria.Sub9],
+      pontos: 15,
+      imagemUrl: "/assets/desafios/tecnico-bola.jpg"
+    },
+  });
+
+  await prisma.submissaoDesafio.create({
+    data: {
+      atleta: { connect: { id: atletaAaaaa.id } },
+      desafio: { connect: { id: desafio.id } },
+      videoUrl: "https://video.url/desafio.mp4",
+      aprovado: true,
+    },
+  });
+
+  await prisma.pontuacaoAtleta.upsert({
+    where: { atletaId: atletaAaaaa.id },
+    update: {
+      pontuacaoTotal: 255,
+      pontuacaoPerformance: 80,
+      pontuacaoDisciplina: 90,
+      pontuacaoResponsabilidade: 85,
+    },
+    create: {
+      atleta: { connect: { id: atletaAaaaa.id } },
+      pontuacaoTotal: 255,
+      pontuacaoPerformance: 80,
+      pontuacaoDisciplina: 90,
+      pontuacaoResponsabilidade: 85,
+    },
+  });
+
+  await prisma.atividadeRecente.createMany({
+    data: [
+      {
+        usuarioId: atletaAaaaa.usuarioId,
+        tipo: "treino",
+        imagemUrl: "/assets/treinos/resistencia.jpg",
+      },
+      {
+        usuarioId: atletaAaaaa.usuarioId,
+        tipo: "desafio",
+        imagemUrl: "/assets/desafios/tecnico-bola.jpg",
+      },
+    ],
+  });
+}
 
   console.log("✅ Seed completo executado com sucesso!");
 

@@ -38,6 +38,7 @@ interface Activity {
   id: string;
   tipo: "Desafio" | "Treino" | "Vídeo";
   imagemUrl: string;
+  nome: string;
 }
 
 interface Pontuacao {
@@ -77,6 +78,7 @@ export default function ProfilePage() {
             id: a.id,
             tipo: a.tipo,
             imagemUrl: a.imagemUrl || "",
+            nome: a.nome || a.tipo
           }))
         );
 

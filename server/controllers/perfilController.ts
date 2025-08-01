@@ -33,33 +33,40 @@ export const getTreinosPorUsuario = async (req: Request, res: Response) => {
   }
 };
 
-export const getAtividadesRecentes = async (req: Request, res: Response) => {
-  const { id } = req.params;
+export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.params.id;
 
-  try {
-    const atividades = await prisma.atividadeRecente.findMany({
-      where: { usuarioId: id },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      select: {
-        id: true,
-        tipo: true,
-        imagemUrl: true,
-      },
-    });
+  const atividades = await prisma.atividadeRecente.findMany({
+    where: { usuarioId: userId },
+    orderBy: { createdAt: 'desc' },
+    take: 10
+  });
 
-    const formatted = atividades.map((a: { id: string; tipo: string; imagemUrl: string | null }) => ({
+  const enriched = await Promise.all(atividades.map(async (a) => {
+    let nome = "";
+    if (a.tipo === "Treino") {
+      const treino = await prisma.treinoProgramado.findFirst({
+        where: { treinoAgendado: { some: { atleta: { usuarioId: userId } } } }
+      });
+      nome = treino?.nome || "Treino";
+    } else if (a.tipo === "Desafio") {
+      const desafio = await prisma.desafioOficial.findFirst({
+        where: { imagemUrl: a.imagemUrl }
+      });
+      nome = desafio?.titulo || "Desafio";
+    }
+
+    return {
       id: a.id,
-      type: a.tipo,
-      imageUrl: a.imagemUrl || null,
-    }));
+      tipo: a.tipo,
+      imagemUrl: a.imagemUrl || "",
+      nome
+    };
+  }));
 
-    res.json(formatted);
-  } catch (err) {
-    console.error("Erro ao buscar atividades:", err);
-    res.status(500).json({ error: "Erro ao buscar atividades recentes." });
-  }
+  return res.json(enriched);
 };
+
 
 export const getBadges = async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -321,14 +328,14 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
           data: {
             nome: tipo.nome,
             sobrenome: tipo.sobrenome,
-            idade: tipo.idade,
+            idade: isNaN(parseInt(tipo.idade)) ? undefined : parseInt(tipo.idade),
             telefone1: tipo.telefone1,
             telefone2: tipo.telefone2,
             nacionalidade: tipo.nacionalidade,
             naturalidade: tipo.naturalidade,
             posicao: tipo.posicao,
-            altura: tipo.altura,
-            peso: tipo.peso,
+            altura: isNaN(parseInt(tipo.altura)) ? undefined : parseInt(tipo.altura),
+            peso: isNaN(parseInt(tipo.peso)) ? undefined : parseInt(tipo.peso),
             seloQualidade: tipo.seloQualidade,
             foto: usuario.foto
           }
@@ -461,9 +468,13 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
 
     for (const recebido of atleta.treinosRecebidos) {
       for (const ex of recebido.treino.exercicios) {
-        const cat = ex.exercicio?.categoria?.toLowerCase();
-        if (cat && categoriaContagem[cat] !== undefined) {
-          categoriaContagem[cat]++;
+        const categorias = ex.exercicio?.categorias || [];
+
+        for (const cat of categorias) {
+          const catLower = cat.toLowerCase();
+          if (categoriaContagem[catLower] !== undefined) {
+            categoriaContagem[catLower]++;
+          }
         }
       }
     }
@@ -479,4 +490,44 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
     console.error("Erro ao buscar progresso dos treinos:", err);
     return res.status(500).json({ error: "Erro interno no servidor" });
   }
+};
+
+export const getTreinosResumo = async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.params.id;
+  const usuario = await prisma.usuario.findUnique({ where: { id: userId } });
+
+  if (!usuario) return res.status(404).json({ error: "Usuário não encontrado" });
+
+  const atleta = await prisma.atleta.findUnique({
+    where: { usuarioId: userId },
+    include: {
+      SubmissaoTreino: {
+        include: { treinoAgendado: { include: { treinoProgramado: true } } }
+      },
+      submissoesDesafio: {
+        include: { desafio: true }
+      }
+    }
+  });
+
+  if (!atleta) return res.status(404).json({ error: "Atleta não encontrado" });
+
+  const completos = atleta.SubmissaoTreino.length;
+  const horas = atleta.SubmissaoTreino.reduce((total, sub) =>
+    total + (sub.treinoAgendado?.treinoProgramado?.duracao || 0), 0);
+  const desafios = atleta.submissoesDesafio.length;
+  const pontos = atleta.submissoesDesafio.reduce((total, sub) =>
+    total + (sub.desafio?.pontos || 0), 0);
+
+  const categorias: Record<string, number> = {
+    Fisico: 0, Tecnico: 0, Tatico: 0, Mental: 0
+  };
+  for (const sub of atleta.SubmissaoTreino) {
+    const treino = sub.treinoAgendado?.treinoProgramado;
+    treino?.categoria?.forEach(cat => {
+      categorias[cat] = (categorias[cat] || 0) + 1;
+    });
+  }
+
+  return res.json({ completos, horas, desafios, pontos, categorias });
 };

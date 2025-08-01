@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient, TipoUsuario } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { createHash } from "crypto";
 import jwt from "jsonwebtoken";
 

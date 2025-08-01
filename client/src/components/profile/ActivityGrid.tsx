@@ -1,8 +1,8 @@
-
 interface Activity {
   id: string;
   tipo: "Desafio" | "Treino" | "Vídeo";
   imagemUrl: string;
+  nome: string;
 }
 
 export default function ActivityGrid({ activities }: { activities: Activity[] }) {
@@ -13,12 +13,12 @@ export default function ActivityGrid({ activities }: { activities: Activity[] })
         {activities.map((activity) => (
           <div key={activity.id} className="rounded-lg overflow-hidden shadow">
             <img
-              src={activity.imagemUrl}
+              src={activity.imagemUrl.startsWith("/") ? `http://localhost:3001${activity.imagemUrl}` : activity.imagemUrl}
               alt={activity.tipo}
               className="w-full h-24 object-cover"
             />
             <div className="text-sm text-center font-semibold text-green-900 py-1">
-              {activity.tipo}
+              {activity.nome || activity.tipo}
             </div>
           </div>
         ))}
@@ -26,3 +26,4 @@ export default function ActivityGrid({ activities }: { activities: Activity[] })
     </div>
   );
 }
+
