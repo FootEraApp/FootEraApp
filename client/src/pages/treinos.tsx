@@ -23,6 +23,26 @@ interface TreinoProgramado {
   escolinhaId?: string;
 }
 
+interface TreinoAgendado {
+  id: string;
+  titulo: string;
+  dataTreino: string;
+  treinoProgramado?: {
+    descricao?: string;
+    nivel: string;
+    dicas?: string[];
+    objetivo?: string;
+    duracao?: number;
+    exercicios: {
+      exercicio: {
+        id: string;
+        nome: string;
+      };
+      repeticoes: string;
+    }[];
+  };
+}
+
 interface Desafio {
   id: string;
   titulo: string;
@@ -38,19 +58,34 @@ interface UsuarioLogado {
   tipoUsuarioId: string;
 }
 
- function PaginaTreinos() {
+export default function PaginaTreinos() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
   const [desafios, setDesafios] = useState<Desafio[]>([]);
   const [, navigate] = useLocation();
   const [abaProfessor, setAbaProfessor] = useState<"avaliar" | "criar">("avaliar");
+  const [treinosAgendados, setTreinosAgendados] = useState<TreinoAgendado[]>([]);
 
   useEffect(() => {
     const carregar = async () => {
-      const res = await fetch("http://localhost:3001/api/treinos");
-      const json = await res.json();
-      setTreinos(json.treinosProgramados);
-      setDesafios(json.desafiosOficiais);
+      const tipo = localStorage.getItem("tipoUsuario");
+      const tipoUsuarioId = localStorage.getItem("tipoUsuarioId");
+      const token = localStorage.getItem("token");
+
+      if (tipo === "atleta" && tipoUsuarioId && token) {
+        const res = await fetch(`http://localhost:3001/api/treinos/agendados?tipoUsuarioId=${tipoUsuarioId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const json = await res.json();
+        setTreinosAgendados(json);
+      } else {
+        const res = await fetch("http://localhost:3001/api/treinos");
+        const json = await res.json();
+        setTreinos(json.treinosProgramados);
+        setDesafios(json.desafiosOficiais);
+      }
     };
 
     const carregarUsuario = () => {
@@ -87,7 +122,6 @@ interface UsuarioLogado {
     <div key={treino.id} className="bg-white p-4 rounded shadow border mb-4">
       <h4 className="font-bold text-lg text-green-800">{treino.nome}</h4>
       {treino.descricao && <p className="text-sm text-gray-700 mb-1">{treino.descricao}</p>}
-
       <div className="text-sm text-gray-600 space-y-1">
         <p><strong>Nível:</strong> {treino.nivel}</p>
         {treino.dataAgendada && <p><strong>Data:</strong> {formatarData(treino.dataAgendada)}</p>}
@@ -121,6 +155,57 @@ interface UsuarioLogado {
     </div>
   );
 
+const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
+  const programado = treino.treinoProgramado;
+
+  return (
+    <div key={treino.id} className="bg-white p-4 rounded shadow border mb-4">
+      <h4 className="font-bold text-lg text-green-800">{treino.titulo}</h4>
+      {programado?.descricao && <p className="text-sm text-gray-700 mb-1">{programado.descricao}</p>}
+
+      <div className="text-sm text-gray-600 space-y-1">
+        <p><strong>Nível:</strong> {programado?.nivel}</p>
+        <p><strong>Data:</strong> {formatarData(treino.dataTreino)}</p>
+        {programado?.duracao && <p><strong>Duração:</strong> {programado.duracao} min</p>}
+        {programado?.objetivo && <p><strong>Objetivo:</strong> {programado.objetivo}</p>}
+        {Array.isArray(programado?.dicas) && programado.dicas.length > 0 && (
+          <div>
+            <strong>Dicas:</strong>
+            <ul className="list-disc list-inside pl-4">
+              {programado.dicas.map((dica, idx) => (
+                <li key={idx}>{dica}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {Array.isArray(programado?.exercicios) && programado!.exercicios.length > 0 && (
+        <div className="mt-3">
+          <strong className="text-sm text-gray-800">Exercícios:</strong>
+          <div className="max-h-32 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
+            {programado?.exercicios?.map((ex, i) => (
+              <div key={ex.exercicio.id} className="border-b pb-1">
+                <strong>{i + 1}.</strong> {ex.exercicio.nome}{" "}
+                {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4 text-right">
+        <button
+          onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+        >
+          Fazer Submissão
+        </button>
+      </div>
+    </div>
+  );
+};
+
   return (
     <div className="min-h-screen bg-yellow-50 pb-20">
       <div className="p-4 max-w-2xl mx-auto">
@@ -133,40 +218,41 @@ interface UsuarioLogado {
           <>
             {usuario.tipo === 'atleta' && (
               <div className="space-y-6">
-                {/* Ranking */} 
+
                 <div className="bg-white p-4 rounded shadow mb-4">
                   <h2 className="text-lg font-bold">Ranking</h2>
                   <p className="text-green-800">Sua posição: <span className="font-semibold">#12</span></p>
                   <p className="text-gray-600">Pontos acumulados: <span className="font-semibold">1420</span></p>
                 </div>
 
-                {/* Agendar botão */}
-                <div className="text-right">
-                  <button
-                    className="bg-green-800 text-white px-4 py-2 rounded"
-                    onClick={() => navigate("/treinos/novo")}
-                  >
-                    Agendar novo treino
-                  </button>
-                </div>
+                <div className="bg-white rounded shadow p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-semibold">Meus Treinos</h3>
+                    <button
+                      className="bg-green-800 text-white px-4 py-2 rounded text-sm"
+                      onClick={() => navigate("/treinos/novo")}
+                    >
+                      Agendar novo treino
+                    </button>
+                  </div>
 
-                {/* Lista de treinos */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-2">Meus Treinos</h3>
-                  {treinos.length > 0 ? treinos.map(renderTreinoCard) : (
+                  {treinosAgendados.length > 0 ? (
+                    treinosAgendados.map(renderTreinoAgendadoCard)
+                  ) : (
                     <p className="text-gray-500">Nenhum treino disponível ainda.</p>
                   )}
                 </div>
 
-                {/* Desafios */}
-                <div>
+                <div className="bg-white rounded shadow p-4">
                   <h3 className="text-lg font-semibold mb-2">Desafios</h3>
-                  {desafios.length > 0 ? desafios.map((d) => (
-                    <div key={d.id} className="bg-white p-4 rounded shadow border border-yellow-400 mb-3">
-                      <h4 className="font-bold text-yellow-700">{d.titulo}</h4>
-                      <p className="text-sm text-gray-600">{d.descricao}</p>
-                    </div>
-                  )) : (
+                  {desafios.length > 0 ? (
+                    desafios.map((d) => (
+                      <div key={d.id} className="border border-yellow-300 bg-yellow-50 p-3 rounded mb-3">
+                        <h4 className="font-bold text-yellow-700">{d.titulo}</h4>
+                        <p className="text-sm text-gray-600">{d.descricao}</p>
+                      </div>
+                    ))
+                  ) : (
                     <p className="text-gray-500">Nenhum desafio disponível no momento.</p>
                   )}
                 </div>
@@ -175,7 +261,6 @@ interface UsuarioLogado {
 
             {usuario.tipo === 'professor' && (
               <div className="space-y-6">
-                {/* Abas */}
                 <div className="flex space-x-4 mb-4">
                   <button
                     onClick={() => setAbaProfessor("avaliar")}
@@ -191,7 +276,6 @@ interface UsuarioLogado {
                   </button>
                 </div>
 
-                {/* Conteúdo da aba */}
                 {abaProfessor === "avaliar" && (
                   <div>
                     <h3 className="text-lg font-semibold mb-2">Treinos dos atletas afiliados</h3>
@@ -230,7 +314,6 @@ interface UsuarioLogado {
         )}
       </div>
 
-      {/* Navegação inferior */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
           <House /> 
@@ -251,5 +334,3 @@ interface UsuarioLogado {
     </div>
   );
 }
-
-export default withAuth(PaginaTreinos);

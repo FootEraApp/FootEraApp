@@ -2,29 +2,50 @@ import { Request, Response } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { prisma } from "../lib/prisma";
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const folder = req.body.folder || "uploads";
-    const dir = `uploads/${folder}`;
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const dir = path.join(__dirname, "..", "..", "client", "public", "assets", "usuarios");
+    fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
   filename: (req, file, cb) => {
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${unique}${ext}`);
-  }
+    const uniqueName = Date.now() + "-" + file.originalname;
+    cb(null, uniqueName);
+  },
 });
 
 const upload = multer({ storage });
 
-export const uploadFile = [
-  upload.single("file"),
-  (req: Request, res: Response) => {
-    if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado." });
+export const uploadFotoPerfil = [
+  upload.single("foto"),
+  async (req: Request, res: Response) => {
+    const { usuarioId, tipo } = req.body;
 
-    const fileUrl = `http://localhost:3001/${req.file.path.replace(/\\/g, "/")}`;
-    res.json({ url: fileUrl });
-  }
+    if (!req.file) return res.status(400).json({ erro: "Arquivo não enviado" });
+
+    const caminho = `/assets/usuarios/${req.file.filename}`;
+
+    try {
+      await prisma.usuario.update({
+        where: { id: usuarioId },
+        data: {
+          foto: caminho,
+        },
+      });
+
+      if (tipo === "professor") {
+        await prisma.professor.updateMany({
+          where: { usuarioId },
+          data: { fotoUrl: caminho },
+        });
+      }
+
+      res.json({ sucesso: true, caminho });
+    } catch (err) {
+      console.error("Erro ao salvar foto:", err);
+      res.status(500).json({ erro: "Erro ao salvar foto" });
+    }
+  },
 ];

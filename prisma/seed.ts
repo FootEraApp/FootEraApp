@@ -1,5 +1,4 @@
 import { PrismaClient, TipoUsuario, Nivel, Categoria } from '@prisma/client';
-import { Profiler } from 'react';
 
 const prisma = new PrismaClient();
 
@@ -296,7 +295,7 @@ async function main() {
           peso: 65.0,
           seloQualidade: "Prata",
           categoria: ['Sub17'],
-          foto: "assets/usuarios/lucas.jpg"
+          foto: "/assets/usuarios/lucas.jpg"
         }
       }
     }
@@ -331,7 +330,7 @@ async function main() {
           peso: 58.0,
           seloQualidade: "Ouro",
           categoria: ['Sub15'],
-          foto: "assets/usuarios/ana.webp"
+          foto: "/assets/usuarios/ana.webp"
         }
       }
     }
@@ -386,7 +385,7 @@ async function main() {
     {
       titulo: 'Desafio Controle Aéreo',
       descricao: 'Mantenha a bola no ar pelo maior tempo possível usando diferentes partes do corpo.',
-      imagemUrl: 'assets/controle-aereo.jpg',
+      imagemUrl: '/assets/controle-aereo.jpg',
       nivel: Nivel.Avancado,
       pontos: 10,
       categoria: [Categoria.Sub15]
@@ -394,7 +393,7 @@ async function main() {
     {
       titulo: 'Desafio Equilíbrio e Agilidade',
       descricao: 'Supere um percurso de obstáculos mantendo o controle da bola.',
-      imagemUrl: 'assets/treino-agilidade.webp',
+      imagemUrl: '/assets/treino-agilidade.webp',
       nivel: Nivel.Avancado,
       pontos: 8,
       categoria: [Categoria.Sub13]
@@ -895,12 +894,12 @@ if (atletaAaaaa) {
     data: [
       {
         usuarioId: atletaAaaaa.usuarioId,
-        tipo: "treino",
+        tipo: "Treino",
         imagemUrl: "/assets/treinos/resistencia.jpg",
       },
       {
         usuarioId: atletaAaaaa.usuarioId,
-        tipo: "desafio",
+        tipo: "Desafio",
         imagemUrl: "/assets/desafios/tecnico-bola.jpg",
       },
     ],

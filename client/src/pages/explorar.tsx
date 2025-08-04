@@ -131,10 +131,15 @@ import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
                 <Link href={`/perfil/${p.usuario.id}`} key={p.id}>
                   <div key={p.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
                     <img
-                      src={p.fotoUrl || p.foto || "/placeholder.png"}
-                      alt={`${p.usuario.nome} profile`}
-                      className="w-24 h-24 rounded-full object-cover"
+                      src={
+                        p.usuario.foto?.startsWith("http") || p.usuario.foto?.startsWith("/")
+                          ? p.usuario.foto
+                          : `/assets/usuarios/${p.usuario.foto}`
+                      }
+                      alt="Foto do usuário"
+                      className="w-10 h-10 rounded-full"
                     />
+
                     <p className="mt-2 font-medium">{p.usuario.nome}</p>
                   </div>
                 </Link>

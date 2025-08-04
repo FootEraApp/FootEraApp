@@ -26,4 +26,3 @@ export default function ActivityGrid({ activities }: { activities: Activity[] })
     </div>
   );
 }
-

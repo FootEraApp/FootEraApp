@@ -20,6 +20,8 @@ import PaginaPerfilUnico from "./pages/perfilUnico";
 import PaginaEditarPerfil from "./pages/editarPerfil";
 import PaginaConfiguracoesPerfil from "./pages/configuracoesPerfil";
 import PaginaPontuacaoPerfil from "./pages/pontuacoesPerfil";
+import PaginaNotificacoes from "./pages/notificacoes";
+import PaginaSubmissao from "./pages/submissao";
 
 export function AppRoutes() {
   return (
@@ -86,6 +88,12 @@ export function AppRoutes() {
       </Route>
       <Route path="/perfil/pontuacao">
         <PaginaPontuacaoPerfil />
+      </Route>
+      <Route path="/notificacoes">
+        <PaginaNotificacoes />
+      </Route>
+      <Route path="/submissao">
+        <PaginaSubmissao />
       </Route>
     </>
   );
