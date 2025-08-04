@@ -143,7 +143,15 @@ const EditarPerfil = () => {
       {dadosUsuario.foto && typeof dadosUsuario.foto === "string" && (
         <div className="mb-6">
           <label className="block text-sm font-medium">Foto Atual</label>
-          <img src={dadosUsuario.foto} alt="Foto de perfil" className="w-24 h-24 rounded-full object-cover mt-2" />
+          <img
+            src={
+              dadosUsuario.foto?.startsWith("http") || dadosUsuario.foto?.startsWith("/")
+                ? dadosUsuario.foto
+                : `/assets/usuarios/${dadosUsuario.foto}`
+            }
+            alt="Foto de perfil"
+            className="w-24 h-24 rounded-full object-cover mt-2"
+          />
         </div>
       )}
 
@@ -194,19 +202,15 @@ const EditarPerfil = () => {
 
             if (dadosUsuario.foto instanceof File) {
               const formData = new FormData();
-              formData.append("file", dadosUsuario.foto);
-              formData.append("folder", "usuarios");
+              formData.append("foto", dadosUsuario.foto);
+              formData.append("usuarioId", usuarioId!);
+              formData.append("tipo", tipoUsuario!);
 
               const uploadRes = await axios.post(
-                "http://localhost:3001/api/upload/file",
-                formData,
-                {
-                  headers: {
-                    Authorization: `Bearer ${token}`,
-                  }
-                }
+                "http://localhost:3001/api/upload/perfil",
+                formData
               );
-              fotoUrl = uploadRes.data.url;
+              fotoUrl = uploadRes.data.caminho;
             }
 
           const tipo = { ...dadosTipo };

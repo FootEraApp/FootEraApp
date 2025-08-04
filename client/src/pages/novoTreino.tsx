@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import react, { useEffect, useState } from "react";
+import { Link } from "wouter";
+import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 
 interface UsuarioLogado {
   tipo: 'atleta' | 'escola' | 'clube' | 'professor';
@@ -10,54 +12,74 @@ interface Exercicio {
   repeticoes?: string;
 }
 
+interface AtletaVinculado {
+  id: string;
+  nome: string;
+  foto?: string;
+}
+
+interface ExercicioSelecionado {
+  nome: string;
+  series: string;
+  descricao: string;
+  repeticoes: string;
+  exercicioId?: string;
+  [key: string]: any;
+}
+
 export default function NovoTreino() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<Exercicio[]>([]);
-
   const [etapa, setEtapa] = useState<number>(1);
   const [nome, setNome] = useState("");
-
   const [descricao, setDescricao] = useState("");
-
   const [nivel, setNivel] = useState("Base");
   const [duracao, setDuracao] = useState<number>(60);
   const [dataTreino, setDataTreino] = useState<string>("");
   const [categoria, setCategoria] = useState<string>('Sub-13');
   const [tipoTreino, setTipoTreino] = useState<string>('Tecnico'); 
-
   const [objetivo, setObjetivo] = useState<string>('');
-
-  const [exerciciosSelecionados, setExerciciosSelecionados] = useState<
-  { nome: string, series: string, repeticoes: string, descricao: string, exercicioId?: string }[]
-  >([]);
+  const [exerciciosSelecionados, setExerciciosSelecionados] = useState<ExercicioSelecionado[]>([]);
   const [dicas, setDicas] = useState<string[]>([]);
   const [dicaAtual, setDicaAtual] = useState<string>('');
+  const [atletasVinculados, setAtletasVinculados] = useState<AtletaVinculado[]>([]);
+  const [atletasSelecionados, setAtletasSelecionados] = useState<string[]>([]);
 
-  useEffect(() => {
-    const tipoSalvo = localStorage.getItem("tipoUsuario");
-    const idSalvo = localStorage.getItem("usuarioId");
-    if (["atleta", "escola", "clube", "professor"].includes(tipoSalvo || "")) {
-      setUsuario({ tipo: tipoSalvo as UsuarioLogado["tipo"] });
-      if (idSalvo) setUsuarioId(idSalvo);
-    }
+useEffect(() => {
+  const tipoSalvo = localStorage.getItem("tipoUsuario");
+  const idSalvo = localStorage.getItem("usuarioId");
+  const tipoUsuarioId = localStorage.getItem("tipoUsuarioId");
 
-    const carregarExercicios = async () => {
-      const res = await fetch("http://localhost:3001/api/exercicios");
-      const json = await res.json();
-      setExerciciosDisponiveis(json);
-    };
-    carregarExercicios();
-  }, []);
+  if (["atleta", "escola", "clube", "professor"].includes(tipoSalvo || "")) {
+    setUsuario({ tipo: tipoSalvo as UsuarioLogado["tipo"] });
+    if (idSalvo) setUsuarioId(idSalvo);
+  }
+
+  const carregarExercicios = async () => {
+    const res = await fetch("http://localhost:3001/api/exercicios");
+    const json = await res.json();
+    setExerciciosDisponiveis(json);
+  };
+
+  const carregarAtletas = async () => {
+    if (!tipoUsuarioId) return;
+    const res = await fetch(`http://localhost:3001/api/treinos/atletas-vinculados?tipoUsuarioId=${tipoUsuarioId}`);
+    const json = await res.json();
+    console.log("👥 Atletas vinculados:", json);
+    setAtletasVinculados(json); 
+  };
+
+  carregarExercicios();
+  carregarAtletas();
+}, []);
 
   const adicionarExercicio = () => {
     setExerciciosSelecionados([...exerciciosSelecionados, { nome: '', series: '', repeticoes: '', descricao: '' }]);
   };
 
-  type CampoExercicio = 'nome' | 'series' | 'repeticoes' | 'descricao' | 'exercicioId';
-
-  const atualizarExercicio = (index: number, campo: CampoExercicio, valor: string) => {
-    const copia = [...exerciciosSelecionados];
+  const atualizarExercicio = (index: number, campo: string, valor: string) => {
+    const copia: ExercicioSelecionado[] = [...exerciciosSelecionados];
     copia[index][campo] = valor;
     setExerciciosSelecionados(copia);
   };
@@ -84,10 +106,15 @@ export default function NovoTreino() {
       return;
     }
 
+    const gerarCodigoAleatorio = () => {
+      return `TREINO-${Math.floor(Math.random() * 100000)}`;
+    };
+
   const res = await fetch("http://localhost:3001/api/treinos", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      codigo: gerarCodigoAleatorio(),
       nome,
       descricao,
       nivel,
@@ -100,7 +127,8 @@ export default function NovoTreino() {
       exercicios: exerciciosParaEnvio,
       usuarioId,
       tipoUsuario: usuario?.tipo,          
-      tipoUsuarioId: localStorage.getItem("tipoUsuarioId"), 
+      tipoUsuarioId: localStorage.getItem("tipoUsuarioId"),  
+      atletasIds: atletasSelecionados,
     }),
   });
 
@@ -135,7 +163,7 @@ export default function NovoTreino() {
 
   if (!usuario) return <p className="text-center p-4">Carregando...</p>;
 
-  if (usuario.tipo === 'atleta') { 
+  if (usuario.tipo === 'atleta') {  
   
     return (
       <div className="p-4 max-w-xl mx-auto">
@@ -147,8 +175,7 @@ export default function NovoTreino() {
 
   return (
     <div className="p-4 max-w-xl mx-auto">
-      <h2 className="text-lg font-bold mb-4">Criar Novo Treino</h2> 
-       
+      <h2 className="text-lg font-bold mb-4">Criar Novo Treino</h2>
 
       {etapa === 1 && (
         <>
@@ -211,7 +238,7 @@ export default function NovoTreino() {
             <option value="Tatico">Tático</option>
           </select>
 
-           <label className="block text-sm text-gray-700 mb-1">Duração do Treino (minutos)</label>
+          <label className="block text-sm text-gray-700 mb-1">Duração do Treino (minutos)</label>
             <input
               className="border w-full mb-2 p-2"
               type="number"
@@ -219,6 +246,7 @@ export default function NovoTreino() {
               value={duracao}
               onChange={e => setDuracao(parseInt(e.target.value))}
             />
+
 
           <label className="block text-sm text-gray-700 mb-1">
             Data Agendada (prazo para envio)
@@ -232,16 +260,14 @@ export default function NovoTreino() {
 
           <button
             onClick={() => setEtapa(2)}
-            className="bg-green-800 text-white px-4 py-2 rounded"
+            className="bg-green-800 text-white px-4 py-2 mb-9 rounded"
           >
             Próximo
           </button>
         </>
       )}
-
-
         
-      {etapa === 2 && ( 
+      {etapa === 2 && (
         <>
           <h3 className="font-bold text-lg mb-2">Exercícios Selecionados</h3>
           {exerciciosSelecionados.map((ex, i) => (
@@ -295,12 +321,11 @@ export default function NovoTreino() {
           </div>
 
           <div className="flex justify-between mt-6">
-            <button onClick={() => setEtapa(1)} className="bg-gray-200 px-4 py-2 rounded">Voltar</button>
-            <button onClick={() => setEtapa(3)} className="bg-green-800 text-white px-4 py-2 rounded">Próximo</button>
+            <button onClick={() => setEtapa(1)} className="bg-gray-200 px-4 py-2 mb-9 rounded">Voltar</button>
+            <button onClick={() => setEtapa(3)} className="bg-green-800 text-white px-4 py-2 mb-9 rounded">Próximo</button>
           </div>
         </>
       )}
-
 
       {etapa === 3 && (
         <>
@@ -319,16 +344,71 @@ export default function NovoTreino() {
 
       {etapa === 4 && (
         <>
-          <h3 className="font-bold text-lg mb-2">Selecionar Atletas</h3>
-          <div className="bg-gray-100 text-gray-600 text-center py-6 rounded">
-            Você precisa ter atletas vinculados à sua escola para criar treinos com participantes.
-          </div>
-          <div className="flex justify-between mt-4">
+          <h3 className="font-bold text-lg mb-2">Selecionar Atletas Vinculados</h3>
+
+          {atletasVinculados.length === 0 ? (
+            <div className="bg-gray-100 text-gray-600 text-center py-6 rounded">
+              Nenhum atleta vinculado encontrado.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              {atletasVinculados.map((atleta) => {
+                const selecionado = atletasSelecionados.includes(atleta.id);
+                return (
+                  <div
+                    key={atleta.id}
+                    onClick={() => {
+                      setAtletasSelecionados((prev) =>
+                        selecionado
+                          ? prev.filter((id) => id !== atleta.id)
+                          : [...prev, atleta.id]
+                      );
+                    }}
+                    className={`cursor-pointer p-4 rounded-xl shadow-md text-center border-2 transition-all duration-200 ${
+                      selecionado ? 'border-green-500 bg-green-50' : 'border-gray-200'
+                    }`}
+                  >
+                    <img
+                      src={
+                        atleta.foto
+                          ? `http://localhost:3001${atleta.foto}`
+                          : "https://via.placeholder.com/80"
+                      }
+                      alt={atleta.nome}
+                      className="w-20 h-20 mx-auto rounded-full object-cover mb-2"
+                    />
+                    <p className="font-semibold">{atleta.nome}</p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex justify-between mt-6 mb-5">
             <button onClick={() => setEtapa(3)} className="bg-gray-200 px-4 py-2 rounded">Voltar</button>
             <button onClick={criarTreino} className="bg-green-800 text-white px-4 py-2 rounded">Salvar Treino</button>
           </div>
         </>
       )}
+
+        <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
+          <Link href="/feed" className="hover:underline">
+            <House /> 
+          </Link>
+          <Link href="/explorar" className="hover:underline">
+            <Search /> 
+          </Link>
+          <Link href="/post" className="hover:underline">
+            <CirclePlus /> 
+          </Link>
+          <Link href="/treinos" className="hover:underline">
+            <Volleyball /> 
+          </Link>
+          <Link href="/perfil" className="hover:underline">
+            <User /> 
+          </Link>
+        </nav>
+
     </div>
   );
 }

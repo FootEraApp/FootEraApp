@@ -1,4 +1,4 @@
-import { Settings, Edit } from "lucide-react";
+import { Settings, Edit, Bell } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "../ui/button";
 
@@ -23,13 +23,40 @@ export default function ProfileHeader({
   isOwnProfile = false,
   foto
 }: ProfileHeaderProps) {
+
+  const formatImagePath = (path: string) =>
+  path.startsWith("/uploads/") ? path.replace("/uploads/", "") : path;
+
+  const imageBaseUrl = "http://localhost:3001/uploads/";
   
-  const imageSrc = foto || avatar || "/attached_assets/Perfil.jpg";
+  const resolveImageSrc = () => {
+    if (!foto && !avatar) return "/attached_assets/Perfil.jpg";
+
+    const caminho = foto || avatar;
+
+    if (caminho?.startsWith("http") || caminho?.startsWith("/")) {
+      return caminho;
+    }
+
+    return `http://localhost:3001/uploads/${caminho}`;
+  };
+
+ const imageSrc = resolveImageSrc();
 
   return (
     <div className="footera-bg-green p-6 flex flex-col items-center relative">
       {isOwnProfile && (
-        <div className="absolute top-4 right-4">
+        <div className="absolute top-4 right-4 flex gap-2">
+        <Link href="/notificacoes">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="bg-white/10 hover:bg-white/20 text-white rounded-full"
+          >
+            <Bell size={18} />
+          </Button>
+        </Link>
+
           <Link href="/perfil/editar">
             <Button
               variant="ghost"
@@ -54,7 +81,7 @@ export default function ProfileHeader({
 
       {(age || position || team) && (
         <p className="footera-text-cream text-sm mb-1 text-center">
-          {age && `${age} anos `}{(age && position) && "  • "}
+          {age && `${age} anos`}{(age && position) && " • "}
           {position}{(position && team) && " • "}
           {team}
         </p>

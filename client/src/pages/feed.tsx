@@ -5,10 +5,11 @@ import {
   FaRegCommentDots,
   FaShare,
   FaPaperPlane,
+  FaTrash,
+  FaLink
 } from "react-icons/fa";
 
 import { Volleyball, User, CirclePlus, Search, House, CircleX } from "lucide-react";
-import { withAuth } from "@/components/ProtectedRoute";
 
 import {
   getFeedPosts,
@@ -16,11 +17,9 @@ import {
   comentarPost,
   compartilharPost,
   PostagemComUsuario,
-  getPostById
 } from "../services/feedService";
 import { format } from "date-fns";
 import { Link } from "wouter";
-import Usuario from "./usuario";
 
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
@@ -33,6 +32,7 @@ function PaginaFeed(): JSX.Element {
 
   const [comentariosModalAberto, setComentariosModalAberto] = useState(false);
   const [postSelecionado, setPostSelecionado] = useState<PostagemComUsuario | null>(null);
+
 
   useEffect(() => {
     async function carregarFeed() {
@@ -63,42 +63,26 @@ function PaginaFeed(): JSX.Element {
     }
   };
 
- const handleComentario = async (postId: string, texto: string) => {
+  const handleComentario = async (postId: string, texto: string) => {
     if (texto.trim()) {
       await comentarPost(postId, texto);
-      const atualizado = await getPostById(postId); 
-      setPosts((prev) =>
-        prev.map((p) => (p.id === postId ? atualizado : p))
-      );
-
-      if (postSelecionado?.id === postId) {
-        setPostSelecionado(atualizado); 
-      }
+      const dados = await getFeedPosts();
+      setPosts(dados);
       setComentarioTextoPorPost((prev) => ({ ...prev, [postId]: "" }));
     }
   };
 
-  const handleCompartilhar = async (postId: string) => {
-    try {
-      await compartilharPost(postId);  
-      setPosts((prev) =>
-      prev.map((p) =>
-      p.id === postId ? { ...p, compartilhamentos: p.compartilhamentos + 1 } : p 
-    )
-  );
-    } catch (err) {
-      console.error("Erro ao registrar compartilhamento:", err);
-    }
-
-    const link = `${window.location.origin}/post/${postId}`;
-    setLinkCompartilhado(link);
-    setModalAberto(true);
+  const handleCompartilhar = (postId: string) => {
+  const link = `${window.location.origin}/post/${postId}`;
+  setLinkCompartilhado(link);
+  setModalAberto(true);
   };
 
   const abrirModalComentarios = (post: PostagemComUsuario) => {
-    setPostSelecionado(post);
-    setComentariosModalAberto(true);
+  setPostSelecionado(post);
+  setComentariosModalAberto(true);
   };
+
 
   return (
     <div className="px-4 py-6 space-y-6 pb-24">
@@ -115,13 +99,14 @@ function PaginaFeed(): JSX.Element {
             <div className="flex items-center gap-2">
               <img
                 src={
-                  post.usuario.foto?.startsWith("http")
+                  post.usuario.foto?.startsWith("http") || post.usuario.foto?.startsWith("/")
                     ? post.usuario.foto
-                    : `/assets/usuarios/${post.usuario.foto || "default-user.png"}`
+                    : `/assets/usuarios/${post.usuario.foto}`
                 }
-                alt="avatar"
-                className="w-10 h-10 rounded-full object-cover"
+                alt="Foto do usuário"
+                className="w-10 h-10 rounded-full"
               />
+
               <div>
                 <p className="font-semibold">{post.usuario.nome}</p>
                 <p className="text-xs text-gray-500">
@@ -175,7 +160,6 @@ function PaginaFeed(): JSX.Element {
 
               <button className="flex items-center gap-1" onClick={() => handleCompartilhar(post.id)}>
                 <FaShare />
-                <span>{post.compartilhamentos || 0}</span>
               </button>
 
             </div>
@@ -374,4 +358,4 @@ function PaginaFeed(): JSX.Element {
   );
 }
 
-export default withAuth(PaginaFeed);
+export default PaginaFeed;

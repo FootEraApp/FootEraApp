@@ -36,6 +36,47 @@ export default function PerfilUnico() {
     responsibility: 80
   });
 
+  const seguirUsuario = async () => {
+  const token = localStorage.getItem("token");
+  try {
+    const response = await fetch(`http://localhost:3001/api/seguidores`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ seguidoUsuarioId: id }), // id do perfil visitado
+    });
+
+    if (!response.ok) throw new Error("Erro ao seguir usuário");
+
+    alert("Agora você está seguindo este usuário!");
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const solicitarTreino = async () => {
+  const token = localStorage.getItem("token");
+
+  try {
+    const response = await fetch(`http://localhost:3001/api/solicitacoes-treino`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ destinatarioId: id }), // id do perfil visitado
+    });
+
+    if (!response.ok) throw new Error("Erro ao solicitar treino");
+
+    alert("Solicitação enviada!");
+  } catch (error) {
+    console.error(error);
+  }
+};
+
   useEffect(() => {
 
   if (!id || id === "editar" || id === "configuracoes") {
@@ -70,7 +111,6 @@ export default function PerfilUnico() {
     });
   }, [id]);
 
-
   if (!usuario ) return <div className="text-center p-10 text-gray-600"></div>;
 
   return (
@@ -88,8 +128,18 @@ export default function PerfilUnico() {
 
       {!isOwnProfile && (
         <div className="flex justify-center gap-4 mb-6">
-          <button className="px-4 py-2 bg-green-600 text-white rounded-full">Seguir</button>
-          <button className="px-4 py-2 bg-green-100 text-green-800 rounded-full">Treinar Juntos</button>
+          <button
+            onClick={seguirUsuario}
+            className="px-4 py-2 bg-green-600 text-white rounded-full"
+          >
+            Seguir
+          </button>
+          <button
+            onClick={solicitarTreino}
+            className="px-4 py-2 bg-green-100 text-green-800 rounded-full"
+          >
+            Treinar Juntos
+          </button>
         </div>
       )}
 

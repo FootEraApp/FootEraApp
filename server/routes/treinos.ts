@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { Nivel, Categoria, TipoTreino } from "@prisma/client";
 import { prisma } from "../lib/prisma";
+import { authenticateToken } from "server/middlewares/auth";
 
 const router = Router();
 
@@ -23,7 +24,6 @@ interface CriarTreinoInput {
   }[];
   tipoUsuarioId: string;  
 }
-
 
 router.get("/", async (req, res) => {
   try {
@@ -58,6 +58,56 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.get("/agendados", authenticateToken, async (req, res) => {
+  const { tipoUsuarioId } = req.query;
+
+  if (!tipoUsuarioId || typeof tipoUsuarioId !== "string") {
+    return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+  }
+
+  try {
+    const treinosAgendados = await prisma.treinoAgendado.findMany({
+      where: {
+        atletaId: tipoUsuarioId,
+        submissaoTreinos: {
+          none: {
+            atletaId: tipoUsuarioId
+          }
+        }
+      },
+      include: {
+        treinoProgramado: {
+          include: {
+            exercicios: {
+              include: {
+                exercicio: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { dataTreino: "desc" }
+    });
+
+    const formatado = treinosAgendados.map((t) => ({
+      id: t.id,
+      titulo: t.titulo,
+      dataTreino: t.dataTreino,
+      treinoProgramadoId: t.treinoProgramadoId,
+      exercicios: t.treinoProgramado?.exercicios?.map((ex) => ({
+        id: ex.exercicio.id,
+        nome: ex.exercicio.nome,
+        repeticoes: ex.repeticoes
+      })) || [],
+    }));
+
+    return res.json(formatado);
+  } catch (err) {
+    console.error("Erro ao buscar treinos agendados:", err);
+    return res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
 router.get("/exercicios", async (req, res) => {
   try {
     const exercicios = await prisma.exercicio.findMany();
@@ -65,6 +115,42 @@ router.get("/exercicios", async (req, res) => {
   } catch (err) {
     console.error("Erro ao buscar exercícios:", err);
     return res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+router.get("/atletas-vinculados", async (req, res) => {
+  const { tipoUsuarioId } = req.query;
+
+  if (!tipoUsuarioId || typeof tipoUsuarioId !== "string") {
+    return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+  }
+
+  try {
+    const relacoes = await prisma.relacaoTreinamento.findMany({
+      where: {
+        OR: [
+          { professorId: tipoUsuarioId },
+          { escolinhaId: tipoUsuarioId },
+          { clubeId: tipoUsuarioId }
+        ]
+      },
+      include: {
+        atleta: {
+          include: {
+            usuario: true
+          }
+        }
+      }
+    });
+
+    const atletas = relacoes
+      .map((rel) => rel.atleta?.usuario)
+      .filter((u) => u != null);
+
+    return res.json(atletas);
+  } catch (error) {
+    console.error("Erro ao buscar atletas vinculados:", error);
+    return res.status(500).json({ error: "Erro ao buscar atletas vinculados" });
   }
 });
 
@@ -129,13 +215,39 @@ router.post("/", async (req, res) => {
     } else if (tipoUsuario === "escolinha") {
       dataCreate.escolinhaId = tipoUsuarioId;
     } else if (tipoUsuario === "clube") {
-      dataCreate.clubeId = tipoUsuarioId; 
+      dataCreate.clubeId = tipoUsuarioId;  // Só se adicionar esse campo no seu schema depois
     }
 
     const treino = await prisma.treinoProgramado.create({
       data: dataCreate,
     });
 
+    const relacoes = await prisma.relacaoTreinamento.findMany({
+      where: {
+        OR: [
+          { professorId: tipoUsuarioId },
+          { escolinhaId: tipoUsuarioId },
+          { clubeId: tipoUsuarioId },
+        ]
+      },
+      select: { atletaId: true },
+    });
+
+    const dataAgendada = treino.dataAgendada ?? new Date();
+
+    await Promise.all(
+      relacoes.map(rel => {
+        return prisma.treinoAgendado.create({
+          data: {
+            titulo: treino.nome,
+            dataHora: dataAgendada,
+            dataTreino: dataAgendada,
+            atletaId: rel.atletaId!,
+            treinoProgramadoId: treino.id,
+          }
+        });
+      })
+    );
     return res.status(201).json(treino);
   } catch (err) {
     console.error("Erro ao criar treino:", err);

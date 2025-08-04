@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";

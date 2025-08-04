@@ -24,14 +24,17 @@ model Usuario {
   codigo        String?
   verified      Boolean     @default(false)
 
-  submissaoDesafios  SubmissaoDesafio[]
-  submissaoTreinos   SubmissaoTreino[]
-  seguidores         Seguidor[]         @relation("Seguido")
-  seguindo           Seguidor[]         @relation("Seguidor")
-  amigos             Amigo[]            @relation("UsuarioAmigo")
-  amigosDe           Amigo[]            @relation("AmigoUsuario")
-  mensagensEnviadas  Mensagem[]         @relation("MensagensEnviadas")
-  mensagensRecebidas Mensagem[]         @relation("MensagensRecebidas")
+  submissaoDesafios     SubmissaoDesafio[]
+  submissaoTreinos      SubmissaoTreino[]
+  seguidores            Seguidor[]          @relation("Seguido")
+  seguindo              Seguidor[]          @relation("Seguidor")
+  amigos                Amigo[]             @relation("UsuarioAmigo")
+  amigosDe              Amigo[]             @relation("AmigoUsuario")
+  mensagensEnviadas     Mensagem[]          @relation("MensagensEnviadas")
+  mensagensRecebidas    Mensagem[]          @relation("MensagensRecebidas")
+  solicitacoesEnviadas  SolicitacaoTreino[] @relation("SolicitacoesEnviadas")
+  solicitacoesRecebidas SolicitacaoTreino[] @relation("SolicitacoesRecebidas")
+
   postagens          Postagem[]
   comentarios        Comentario[]
   curtidas           Curtida[]
@@ -138,7 +141,7 @@ model TreinoProgramado {
   descricao    String?
   nivel        Nivel
   categoria    Categoria[]
-  TipoTreino   TipoTreino?
+  tipoTreino   TipoTreino?
   dataAgendada DateTime?
   objetivo     String?
   duracao      Int?
@@ -349,6 +352,16 @@ model SolicitacaoVinculo {
   criadoEm     DateTime @default(now())
 
   atleta Atleta @relation(fields: [atletaId], references: [id])
+}
+
+model SolicitacaoTreino {
+  id              String   @id @default(uuid())
+  remetenteId     String
+  destinatarioId  String
+  criadoEm        DateTime @default(now())
+
+  remetente       Usuario  @relation("SolicitacoesEnviadas", fields: [remetenteId], references: [id], onDelete: Cascade)
+  destinatario    Usuario  @relation("SolicitacoesRecebidas", fields: [destinatarioId], references: [id], onDelete: Cascade)
 }
 
 model SubmissaoDesafio {
