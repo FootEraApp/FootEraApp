@@ -39,13 +39,14 @@ model Usuario {
   comentarios        Comentario[]
   curtidas           Curtida[]
   atividadesRecentes AtividadeRecente[]
+  logsErro           LogErro[]
+  treinoRealizado    TreinoRealizado[]
 
-  atleta          Atleta?
-  professor       Professor?
-  clube           Clube?
-  escolinha       Escolinha?
-  administrador   Administrador?
-  TreinoRealizado TreinoRealizado[]
+  atleta        Atleta?
+  professor     Professor?
+  clube         Clube?
+  escolinha     Escolinha?
+  administrador Administrador?
 }
 
 model Professor {
@@ -148,6 +149,9 @@ model TreinoProgramado {
   dicas        String[]
   imagemUrl    String?
 
+  clubeId String?
+  clube   Clube?  @relation(fields: [clubeId], references: [id])
+
   professorId String?
   professor   Professor? @relation(fields: [professorId], references: [id])
 
@@ -169,7 +173,7 @@ model TreinoProgramadoExercicio {
   repeticoes         String
 
   exercicio        Exercicio        @relation(fields: [exercicioId], references: [id])
-  treinoProgramado TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id])
+  treinoProgramado TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
 }
 
 model Exercicio {
@@ -227,7 +231,7 @@ model RelacaoTreinamento {
 model Postagem {
   id          String     @id @default(uuid())
   conteudo    String     @unique
-  imagemUrl   String?    
+  imagemUrl   String?
   videoUrl    String?
   tipoMidia   TipoMidia?
   dataCriacao DateTime   @default(now())
@@ -246,6 +250,7 @@ model Postagem {
 
   comentarios       Comentario[]
   curtidas          Curtida[]
+  logsErro          LogErro[]
   compartilhamentos Int?         @default(0)
 
   @@unique([usuarioId, conteudo])
@@ -259,6 +264,7 @@ model Midia {
   dataEnvio   DateTime
   descricao   String
   titulo      String
+  criadoEm    DateTime  @default(now())
 
   atletaId    String?
   escolinhaId String?
@@ -314,9 +320,9 @@ model Comentario {
 }
 
 model Clube {
-  id        String     @id @default(uuid())
-  usuarioId String     @unique
-  usuario   Usuario    @relation(fields: [usuarioId], references: [id])
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
 
   nome        String   @unique
   cnpj        String?  @unique
@@ -341,6 +347,7 @@ model Clube {
   midias              Midia[]
   postagens           Postagem[]
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoClube")
+  treinosProgramados  TreinoProgramado[]
 }
 
 model SolicitacaoVinculo {
@@ -355,28 +362,29 @@ model SolicitacaoVinculo {
 }
 
 model SolicitacaoTreino {
-  id              String   @id @default(uuid())
-  remetenteId     String
-  destinatarioId  String
-  criadoEm        DateTime @default(now())
+  id             String   @id @default(uuid())
+  remetenteId    String
+  destinatarioId String
+  criadoEm       DateTime @default(now())
 
-  remetente       Usuario  @relation("SolicitacoesEnviadas", fields: [remetenteId], references: [id], onDelete: Cascade)
-  destinatario    Usuario  @relation("SolicitacoesRecebidas", fields: [destinatarioId], references: [id], onDelete: Cascade)
+  remetente    Usuario @relation("SolicitacoesEnviadas", fields: [remetenteId], references: [id], onDelete: Cascade)
+  destinatario Usuario @relation("SolicitacoesRecebidas", fields: [destinatarioId], references: [id], onDelete: Cascade)
 }
 
 model SubmissaoDesafio {
-  id        String   @id @default(uuid())
-  atletaId  String
-  desafioId String
-  videoUrl  String   @unique
-  aprovado  Boolean?
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid())
+  atletaId   String
+  desafioId  String
+  videoUrl   String   @unique
+  aprovado   Boolean?
+  createdAt  DateTime @default(now())
+  usuarioId  String?
+  observacao String?
 
-  atleta    Atleta         @relation(fields: [atletaId], references: [id])
-  desafio   DesafioOficial @relation(fields: [desafioId], references: [id])
-  midias    Midia[]        @relation("Midias_SubmissaoDesafio")
-  Usuario   Usuario?       @relation(fields: [usuarioId], references: [id])
-  usuarioId String?
+  atleta  Atleta         @relation(fields: [atletaId], references: [id])
+  desafio DesafioOficial @relation(fields: [desafioId], references: [id])
+  midias  Midia[]        @relation("Midias_SubmissaoDesafio")
+  Usuario Usuario?       @relation(fields: [usuarioId], references: [id])
 }
 
 model SubmissaoTreino {
@@ -387,12 +395,12 @@ model SubmissaoTreino {
   observacao       String?  @unique
   criadoEm         DateTime @default(now())
   atualizadoEm     DateTime @updatedAt
+  usuarioId        String?
 
   atleta         Atleta         @relation(fields: [atletaId], references: [id])
   treinoAgendado TreinoAgendado @relation(fields: [treinoAgendadoId], references: [id])
   midias         Midia[]        @relation("Midias_SubmissaoTreino")
   Usuario        Usuario?       @relation(fields: [usuarioId], references: [id])
-  usuarioId      String?
 }
 
 model Grupo {
@@ -426,8 +434,11 @@ model LogErro {
   timestamp    DateTime
   path         String
   clientIp     String
-  userAgent    String
-  referer      String?
+  usuarioId    String
+  postagemId   String
+
+  postagem Postagem @relation(fields: [postagemId], references: [id], onDelete: Cascade)
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id])
 }
 
 model Curtida {
@@ -485,7 +496,7 @@ model PontuacaoAtleta {
 
 model Video {
   id        String      @id @default(uuid())
-  titulo    String      
+  titulo    String
   url       String      @unique
   thumbnail String?
   atletaId  String
@@ -516,7 +527,7 @@ model ConfiguracaoSistema {
 model AtividadeRecente {
   id        String   @id @default(uuid())
   usuarioId String
-  tipo      String 
+  tipo      String
   imagemUrl String?  @unique
   createdAt DateTime @default(now())
 

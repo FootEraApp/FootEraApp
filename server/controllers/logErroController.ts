@@ -41,8 +41,8 @@ export const createLog = async (req: Request, res: Response) => {
         timestamp: new Date(timestamp),
         path,
         clientIp,
-        userAgent,
-        referer
+        usuarioId: req.body.usuarioId ?? null,
+        postagemId: req.body.postagemId ?? null,
       }
     });
 

@@ -7,6 +7,7 @@ export default function PaginaSubmissao() {
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [treinoAgendadoId, setTreinoAgendadoId] = useState<string | null>(null);
+  const [desafioId, setDesafioId] = useState<string | null>(null);
   const [atletaId, setAtletaId] = useState<string | null>(null);
 
   const [location] = useLocation();
@@ -14,7 +15,10 @@ export default function PaginaSubmissao() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const treinoId = params.get("treinoAgendadoId");
-    setTreinoAgendadoId(treinoId);
+    const desafioParam = params.get("desafioId");
+
+    if (treinoId) setTreinoAgendadoId(treinoId);
+    if (desafioParam) setDesafioId(desafioParam);
 
     const tipoId = localStorage.getItem("tipoUsuarioId");
     if (tipoId) setAtletaId(tipoId);
@@ -31,7 +35,7 @@ export default function PaginaSubmissao() {
   };
 
   const handleEnviar = async () => {
-    if (!treinoAgendadoId || !atletaId || !arquivo) {
+    if (!arquivo || !atletaId || (!treinoAgendadoId && !desafioId)) {
       alert("Preencha todos os campos obrigatórios.");
       return;
     }
@@ -39,11 +43,20 @@ export default function PaginaSubmissao() {
     const formData = new FormData();
     formData.append("observacao", observacao);
     formData.append("arquivo", arquivo);
-    formData.append("treinoAgendadoId", treinoAgendadoId);
     formData.append("atletaId", atletaId);
 
+    let url = "";
+
+    if (treinoAgendadoId) {
+      formData.append("treinoAgendadoId", treinoAgendadoId);
+      url = "http://localhost:3001/api/submissoes/treino";
+    } else if (desafioId) {
+      formData.append("desafioId", desafioId);
+      url = "http://localhost:3001/api/submissoes/desafio";
+    }
+
     try {
-      const res = await fetch("http://localhost:3001/api/submissoes/treino", {
+      const res = await fetch(url, {
         method: "POST",
         body: formData,
         headers: {
@@ -75,7 +88,7 @@ export default function PaginaSubmissao() {
           onChange={(e) => setObservacao(e.target.value)}
           className="w-full border p-3 mb-4 rounded-md shadow-sm"
           rows={4}
-          placeholder="Digite uma observação sobre seu treino..."
+          placeholder="Digite uma observação sobre seu treino ou desafio..."
         />
 
         <label className="block text-sm font-medium mb-1 text-gray-700">Imagem ou Vídeo</label>

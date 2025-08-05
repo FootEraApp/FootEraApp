@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { formatarUrlFoto } from '@/utils/formatarFoto';
 
 const EditarPerfil = () => {
   const usuarioId = localStorage.getItem('usuarioId');
@@ -145,9 +146,7 @@ const EditarPerfil = () => {
           <label className="block text-sm font-medium">Foto Atual</label>
           <img
             src={
-              dadosUsuario.foto?.startsWith("http") || dadosUsuario.foto?.startsWith("/")
-                ? dadosUsuario.foto
-                : `/assets/usuarios/${dadosUsuario.foto}`
+              formatarUrlFoto(dadosUsuario.foto)
             }
             alt="Foto de perfil"
             className="w-24 h-24 rounded-full object-cover mt-2"

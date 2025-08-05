@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { formatarUrlFoto } from "@/utils/formatarFoto";
 
 interface Solicitacao {
   id: string;
   remetenteId: string;
   remetente: {
-    nome: string;
-    avatarUrl?: string;
+    nomeDeUsuario: string;
+    foto?: string;
   };
 }
 
@@ -72,18 +73,13 @@ export default function PaginaNotificacoes() {
             >
               <div className="flex items-center gap-4">
                 <img
-                  src={
-                    solicitacao.remetente.avatarUrl ||
-                    "https://via.placeholder.com/50"
-                  }
-                  alt="Avatar"
+                  src={formatarUrlFoto(solicitacao.remetente.foto) }
+                  alt={solicitacao.remetente.nomeDeUsuario}
                   className="w-12 h-12 rounded-full object-cover"
                 />
                 <div>
-                  <p className="font-semibold">{solicitacao.remetente.nome}</p>
-                  <p className="text-sm text-gray-600">
-                    quer treinar junto com você
-                  </p>
+                  <p className="text-sm text-gray-500">@{solicitacao.remetente.nomeDeUsuario}</p>
+                  <p className="text-sm text-gray-600">quer treinar junto com você</p>
                 </div>
               </div>
 

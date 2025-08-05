@@ -1,6 +1,7 @@
 import { Settings, Edit, Bell } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "../ui/button";
+import { formatarUrlFoto } from "@/utils/formatarFoto";
 
 interface ProfileHeaderProps {
   name: string;
@@ -71,7 +72,7 @@ export default function ProfileHeader({
 
       <div className="w-24 h-24 rounded-full mb-3 flex items-center justify-center bg-white border-2 border-white overflow-hidden">
         <img
-          src={imageSrc}
+          src={formatarUrlFoto(imageSrc)}
           alt={`${name} profile`}
           className="w-full h-full object-cover"
         />

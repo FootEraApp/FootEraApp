@@ -33,16 +33,16 @@ router.post(
           treinoAgendadoId,
           atletaId,
           observacao,
-          usuarioId: req.userId,
+          usuarioId: req.userId ?? undefined,
           midias: {
             create: [
-                {
-                    url: `/uploads/${file.filename}`,
-                    tipo: file.mimetype.startsWith("video") ? "Video" : "Imagem",
-                    dataEnvio: new Date(),
-                    descricao: "",
-                    titulo: ""
-                }
+              {
+                url: `/uploads/${file.filename}`,
+                tipo: file.mimetype.startsWith("video") ? "Video" : "Imagem",
+                dataEnvio: new Date(),
+                descricao: "",
+                titulo: ""
+              }
             ],
           },
         },
@@ -50,8 +50,52 @@ router.post(
 
       return res.status(201).json(submissao);
     } catch (error) {
-      console.error("Erro ao salvar submissão:", error);
-      return res.status(500).json({ error: "Erro ao salvar submissão" });
+      console.error("Erro ao salvar submissão de treino:", error);
+      return res.status(500).json({ error: "Erro ao salvar submissão de treino" });
+    }
+  }
+);
+
+router.post(
+  "/desafio",
+  authenticateToken,
+  upload.single("arquivo"),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const { observacao, desafioId, atletaId } = req.body;
+      const file = req.file;
+
+      if (!desafioId || !atletaId || !file) {
+        return res.status(400).json({ error: "Dados obrigatórios ausentes." });
+      }
+
+      const midia = {
+        url: `/uploads/${file.filename}`,
+        tipo: file.mimetype.startsWith("video") ? "Video" : "Imagem",
+        dataEnvio: new Date(),
+        descricao: "",
+        titulo: ""
+      };
+
+      const data: any = {
+        desafioId,
+        atletaId,
+        observacao,
+        midias: {
+          create: [midia],
+        },
+      };
+
+      if (typeof req.userId === "string") {
+        data.usuarioId = req.userId;
+      }
+
+      const submissao = await prisma.submissaoDesafio.create({ data });
+
+      return res.status(201).json(submissao);
+    } catch (error) {
+      console.error("Erro ao salvar submissão de desafio:", error);
+      return res.status(500).json({ error: "Erro ao salvar submissão de desafio" });
     }
   }
 );

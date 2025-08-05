@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
-import { withAuth } from "@/components/ProtectedRoute";
 
 interface Exercicio {
   id: string;
@@ -15,12 +14,12 @@ interface TreinoProgramado {
   descricao?: string;
   nivel: string;
   dataAgendada?: string;
-  exercicios: Exercicio[];
-  objetivo?: string;
   duracao?: number;
+  objetivo?: string;
   dicas?: string[];
   professorId?: string;
   escolinhaId?: string;
+  exercicios: Exercicio[];
 }
 
 interface TreinoAgendado {
@@ -53,7 +52,7 @@ interface Desafio {
 }
 
 interface UsuarioLogado {
-  tipo: 'atleta' | 'escola' | 'clube' | 'professor';
+  tipo: 'atleta' | 'escola' | 'clube' | 'professor' | 'admin';
   usuarioId: string;
   tipoUsuarioId: string;
 }
@@ -73,18 +72,30 @@ export default function PaginaTreinos() {
       const token = localStorage.getItem("token");
 
       if (tipo === "atleta" && tipoUsuarioId && token) {
-        const res = await fetch(`http://localhost:3001/api/treinos/agendados?tipoUsuarioId=${tipoUsuarioId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const json = await res.json();
-        setTreinosAgendados(json);
+        const [resTreinos, resDesafios] = await Promise.all([
+          fetch(`http://localhost:3001/api/treinos/agendados?tipoUsuarioId=${tipoUsuarioId}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+          fetch(`http://localhost:3001/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+        ]);
+
+        const treinosJson = await resTreinos.json();
+        const desafiosJson = await resDesafios.json();
+
+        setTreinosAgendados(treinosJson || []);
+        setDesafios(desafiosJson || []);
       } else {
         const res = await fetch("http://localhost:3001/api/treinos");
         const json = await res.json();
-        setTreinos(json.treinosProgramados);
-        setDesafios(json.desafiosOficiais);
+
+        setTreinos(json.treinosProgramados || []);
+        setDesafios(json.desafiosOficiais || []);
       }
     };
 
@@ -94,7 +105,7 @@ export default function PaginaTreinos() {
       const tipoUsuarioId = localStorage.getItem("tipoUsuarioId");
 
       if (
-        ["atleta", "escola", "clube", "professor"].includes(tipoSalvo || "") &&
+        ["atleta", "escola", "clube", "professor", "admin"].includes(tipoSalvo || "") &&
         usuarioId && tipoUsuarioId
       ) {
         setUsuario({
@@ -116,7 +127,25 @@ export default function PaginaTreinos() {
     return new Date(data).toLocaleDateString("pt-BR");
   };
 
+  const renderDesafioCard = (desafio: Desafio) => (
+    <div key={desafio.id} className="bg-white p-4 rounded shadow border border-yellow-400 mb-3">
+      <h4 className="font-bold text-yellow-700 text-lg mb-1">{desafio.titulo}</h4>
+      <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
+      <p className="text-sm text-gray-500">Nível: {desafio.nivel}</p>
+      <p className="text-sm text-gray-500">Pontos: {desafio.pontos}</p>
+      <div className="mt-3 text-right">
+        <button
+          onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm"
+        >
+          Fazer Submissão
+        </button>
+      </div>
+    </div>
+  );
+
   if (!usuario) return <p className="text-center p-4">Carregando...</p>;
+
 
   const renderTreinoCard = (treino: TreinoProgramado) => (
     <div key={treino.id} className="bg-white p-4 rounded shadow border mb-4">
@@ -127,11 +156,11 @@ export default function PaginaTreinos() {
         {treino.dataAgendada && <p><strong>Data:</strong> {formatarData(treino.dataAgendada)}</p>}
         {treino["duracao"] && <p><strong>Duração:</strong> {treino["duracao"]} min</p>}
         {treino["objetivo"] && <p><strong>Objetivo:</strong> {treino["objetivo"]}</p>}
-        {Array.isArray(treino["dicas"]) && treino["dicas"].length > 0 && (
+        {Array.isArray(treino.dicas) && treino.dicas.length > 0 && (
           <div>
             <strong>Dicas:</strong>
             <ul className="list-disc list-inside pl-4">
-              {treino["dicas"].map((dica, idx) => (
+              {treino.dicas.map((dica, idx) => (
                 <li key={idx}>{dica}</li>
               ))}
             </ul>
@@ -207,7 +236,7 @@ const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
 };
 
   return (
-    <div className="min-h-screen bg-yellow-50 pb-20">
+    <div className="min-h-screen bg-transparent pb-20">
       <div className="p-4 max-w-2xl mx-auto">
         {usuario.tipo === 'clube' ? (
           <div className="text-center py-10">
@@ -219,7 +248,7 @@ const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
             {usuario.tipo === 'atleta' && (
               <div className="space-y-6">
 
-                <div className="bg-white p-4 rounded shadow mb-4">
+               <div className="bg-white p-4 rounded shadow mb-4">
                   <h2 className="text-lg font-bold">Ranking</h2>
                   <p className="text-green-800">Sua posição: <span className="font-semibold">#12</span></p>
                   <p className="text-gray-600">Pontos acumulados: <span className="font-semibold">1420</span></p>
@@ -246,12 +275,7 @@ const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
                 <div className="bg-white rounded shadow p-4">
                   <h3 className="text-lg font-semibold mb-2">Desafios</h3>
                   {desafios.length > 0 ? (
-                    desafios.map((d) => (
-                      <div key={d.id} className="border border-yellow-300 bg-yellow-50 p-3 rounded mb-3">
-                        <h4 className="font-bold text-yellow-700">{d.titulo}</h4>
-                        <p className="text-sm text-gray-600">{d.descricao}</p>
-                      </div>
-                    ))
+                    desafios.map(renderDesafioCard)
                   ) : (
                     <p className="text-gray-500">Nenhum desafio disponível no momento.</p>
                   )}
@@ -296,11 +320,11 @@ const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
 
                     <h3 className="text-lg font-semibold mb-2">Treinos que você criou</h3>
                     {treinos.filter((t) =>
-                      t["professorId"] === usuario.tipoUsuarioId || t["escolinhaId"] === usuario.tipoUsuarioId
+                      t.professorId === usuario.tipoUsuarioId || t.escolinhaId === usuario.tipoUsuarioId
                     ).length > 0 ? (
                       treinos
                         .filter((t) =>
-                          t["professorId"] === usuario.tipoUsuarioId || t["escolinhaId"] === usuario.tipoUsuarioId
+                          t.professorId === usuario.tipoUsuarioId || t.escolinhaId === usuario.tipoUsuarioId
                         )
                         .map(renderTreinoCard)
                     ) : (

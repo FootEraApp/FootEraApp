@@ -20,11 +20,9 @@ export default function Cadastro() {
 
   const [areaFormacao, setAreaFormacao] = useState("");
 
-  const [nomeClube, setNomeClube] = useState("");
   const [cnpjClube, setCnpjClube] = useState("");
   const [cidadeClube, setCidadeClube] = useState("");
 
-  const [nomeEscolinha, setNomeEscolinha] = useState("");
   const [cnpjEscolinha, setCnpjEscolinha] = useState("");
   const [cidadeEscolinha, setCidadeEscolinha] = useState("");
 
@@ -52,10 +50,9 @@ export default function Cadastro() {
           idade: tipoPerfil === "Atleta" ? idade : undefined,
           categoria: tipoPerfil === "Atleta" ? [categoria] : undefined,
           areaFormacao: tipoPerfil === "Professor" ? areaFormacao : undefined,
-          nomeEscolinha: tipoPerfil === "Escolinha" ? nomeEscolinha : undefined,
+          
           cnpjEscolinha: tipoPerfil === "Escolinha" ? cnpjEscolinha : undefined,
           cidadeEscolinha: tipoPerfil === "Escolinha" ? cidadeEscolinha : undefined,
-          nomeClube: tipoPerfil === "Clube" ? nomeClube : undefined,
           cnpjClube: tipoPerfil === "Clube" ? cnpjClube : undefined,
           cidadeClube: tipoPerfil === "Clube" ? cidadeClube : undefined,
         }),
@@ -209,27 +206,20 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
           {tipoPerfil === "Clube" && (
             <>
               <div className="mt-4">
-                <label className="block text-sm font-medium mb-1">Você faz parte de alguma escolinha cadastrada na FootEra?</label>
+                <label className="block text-sm font-medium mb-1">Você tem parceria com a plataforma FootEra?</label>
                 <label className="flex items-center text-sm mb-1">
-                  <input type="radio" className="mr-2" name="escolinha" value="sim" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Sim, faço parte de uma escolinha
+                  <input type="radio" className="mr-2" name="escolinha" value="sim" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Sim, faço parte da plataforma
                 </label>
                 <label className="flex items-center text-sm mb-1">
                   <input type="radio" className="mr-2" name="escolinha" value="nao" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Não, sou um clube independente
                 </label>
-              </div>
-              <div className="mt-4">
-                <label className="block text-sm font-medium mb-1">Nome do Clube</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={nomeClube}
-                  onChange={(e) => setNomeClube(e.target.value)}
-                />
               </div>
               <div className="mt-3">
                 <label className="block text-sm font-medium mb-1">CNPJ</label>
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={cnpjClube}
+                  placeholder="Ex: 00.000.00/0000-00"
                   onChange={(e) => setCnpjClube(e.target.value)}
                 />
               </div>
@@ -238,6 +228,7 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={cidadeClube}
+                  placeholder="Ex: São Paulo - SP"
                   onChange={(e) => setCidadeClube(e.target.value)}
                 />
               </div>
@@ -255,19 +246,12 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
                   <input type="radio" className="mr-2" name="escolinha" value="nao" onChange={(e) => setTreinaEscolinha(e.target.value)} /> Não, sou uma escolinha independente
                 </label>
               </div>
-              <div className="mt-4">
-                <label className="block text-sm font-medium mb-1">Nome da Escolinha</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={nomeEscolinha}
-                  onChange={(e) => setNomeEscolinha(e.target.value)}
-                />
-              </div>
               <div className="mt-3">
                 <label className="block text-sm font-medium mb-1">CNPJ</label>
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={cnpjEscolinha}
+                  placeholder="Ex: 00.000.00/0000-00"
                   onChange={(e) => setCnpjEscolinha(e.target.value)}
                 />
               </div>
@@ -276,6 +260,7 @@ FootEra. A metodologia dos profissionais, para quem vive futebol.
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={cidadeEscolinha}
+                  placeholder="Ex: São Paulo - SP"
                   onChange={(e) => setCidadeEscolinha(e.target.value)}
                 />
               </div>

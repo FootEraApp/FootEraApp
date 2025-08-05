@@ -12,13 +12,17 @@ export async function removerTreinosExpirados() {
       const expiracao = new Date(treino.createdAt.getTime() + treino.duracao * 60000); 
 
       if (agora > expiracao) {
-        await prisma.treinoProgramado.delete({
-          where: { id: treino.id },
-        });
+      await prisma.treinoProgramadoExercicio.deleteMany({
+        where: { treinoProgramadoId: treino.id },
+      });
 
-        console.log(`Treino ${treino.nome} removido por expiração.`);
-      }
-    }
+      await prisma.treinoProgramado.delete({
+        where: { id: treino.id },
+      });
+
+      console.log(`Treino ${treino.nome} removido por expiração.`);
+    } 
+  }
   }
 }
 

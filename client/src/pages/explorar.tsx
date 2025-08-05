@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { withAuth } from "@/components/ProtectedRoute";
+import { formatarUrlFoto } from "@/utils/formatarFoto";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 
  function Explorar() {
@@ -58,7 +59,7 @@ import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
                 <Link href={`/perfil/${a.usuario.id}`} key={a.id}>
                   <div key={a.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
                     <img
-                      src={a.foto || "/placeholder.png"}
+                      src={formatarUrlFoto(a.foto) || "/placeholder.png"}
                       alt={`${a.usuario.nome} profile`}
                       className="w-24 h-24 rounded-full object-cover"
                     />
@@ -111,9 +112,9 @@ import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
               {dados.desafios.map((d: any) => (
                 <div key={d.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
                   <img
-                    src={d.imagemUrl || "/placeholder.png"}
+                    src={formatarUrlFoto(d.imagemUrl) || "/placeholder.png"}
                     alt={d.titulo}
-                    className="w-24 h-24 object-cover"
+                    className="w-24 h-24 object-cover rounded-full"
                   />
                   <p className="mt-2 text-center text-sm">{d.titulo}</p>
                 </div>
@@ -132,12 +133,9 @@ import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
                   <div key={p.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
                     <img
                       src={
-                        p.usuario.foto?.startsWith("http") || p.usuario.foto?.startsWith("/")
-                          ? p.usuario.foto
-                          : `/assets/usuarios/${p.usuario.foto}`
-                      }
+                        formatarUrlFoto(p.usuario.foto)}
                       alt="Foto do usuário"
-                      className="w-10 h-10 rounded-full"
+                      className="w-24 h-24 rounded-full object-cover"
                     />
 
                     <p className="mt-2 font-medium">{p.usuario.nome}</p>
