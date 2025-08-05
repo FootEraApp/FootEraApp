@@ -5,18 +5,14 @@ import fs from "fs";
 import { prisma } from "../lib/prisma";
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, "..", "..", "client", "public", "assets", "usuarios");
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueName = Date.now() + "-" + file.originalname;
+  destination: "public/uploads",
+  filename: (_, file, cb) => {
+    const uniqueName = `${Date.now()}-${file.originalname}`;
     cb(null, uniqueName);
   },
 });
 
-const upload = multer({ storage });
+export const upload = multer({ storage });
 
 export const uploadFotoPerfil = [
   upload.single("foto"),

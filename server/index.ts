@@ -84,7 +84,8 @@ app.use("/api/treinosprogramados", treinoProgramadoRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
 
-app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
+app.use("/uploads", express.static("uploads"));
+app.use("/assets", express.static("client/public/assets/")); 
 
 app.get("/", (req, res) => {
   res.send("FootEra API está ativa!");

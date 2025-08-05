@@ -90,11 +90,10 @@ function PaginaPostagem() {
           disabled={carregando}
           className="w-full bg-green-800 text-white py-2 rounded hover:bg-green-700 disabled:opacity-50"
         >
-          {carregando ? "Enviando..." : "Publicar"}
+          {carregando ? "Enviando..." : "Publicar "}
         </button>
       </div>
 
-      {/* Navegação inferior */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
           <House /> 

@@ -46,7 +46,11 @@ export const listarSolicitacoesRecebidas = async (req: Request, res: Response) =
       where: { destinatarioId: usuarioId },
       include: {
         remetente: {
-          select: { id: true, nomeDeUsuario: true },
+          select: { 
+            id: true, 
+            nomeDeUsuario: true,
+            foto: true 
+          },
         },
       },
     });

@@ -1,3 +1,5 @@
+import { formatarUrlFoto } from "@/utils/formatarFoto";
+
 interface Activity {
   id: string;
   tipo: "Desafio" | "Treino" | "Vídeo";
@@ -13,7 +15,7 @@ export default function ActivityGrid({ activities }: { activities: Activity[] })
         {activities.map((activity) => (
           <div key={activity.id} className="rounded-lg overflow-hidden shadow">
             <img
-              src={activity.imagemUrl.startsWith("/") ? `http://localhost:3001${activity.imagemUrl}` : activity.imagemUrl}
+              src={formatarUrlFoto(activity.imagemUrl) }
               alt={activity.tipo}
               className="w-full h-24 object-cover"
             />

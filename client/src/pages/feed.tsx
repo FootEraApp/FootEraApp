@@ -20,6 +20,7 @@ import {
 } from "../services/feedService";
 import { format } from "date-fns";
 import { Link } from "wouter";
+import { formatarUrlFoto } from "@/utils/formatarFoto";
 
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
@@ -98,12 +99,8 @@ function PaginaFeed(): JSX.Element {
           <div key={post.id} className="max-w-xl mx-auto bg-white rounded-2xl shadow-md p-4 space-y-3">
             <div className="flex items-center gap-2">
               <img
-                src={
-                  post.usuario.foto?.startsWith("http") || post.usuario.foto?.startsWith("/")
-                    ? post.usuario.foto
-                    : `/assets/usuarios/${post.usuario.foto}`
-                }
-                alt="Foto do usuário"
+                src={formatarUrlFoto(post.usuario.foto)}
+                alt={post.usuario.nome}
                 className="w-10 h-10 rounded-full"
               />
 
@@ -121,9 +118,7 @@ function PaginaFeed(): JSX.Element {
               {post.tipoMidia === "Imagem" && post.imagemUrl && (
                 <img
                   src={
-                    post.imagemUrl?.startsWith("http")
-                      ? post.imagemUrl
-                      : `http://localhost:3001${post.imagemUrl}`
+                    formatarUrlFoto(post.imagemUrl)
                   }
                   alt="Post"
                   className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
@@ -190,9 +185,7 @@ function PaginaFeed(): JSX.Element {
                       <div key={comentario.id} className="flex gap-2 items-start">
                         <img
                           src={
-                            comentario.usuario?.foto?.startsWith("http")
-                              ? comentario.usuario.foto
-                              : `/assets/usuarios/${comentario.usuario?.foto || "default-user.png"}`
+                            formatarUrlFoto(comentario.usuario?.foto)
                           }
                           alt="avatar"
                           className="w-8 h-8 rounded-full object-cover"
@@ -303,9 +296,7 @@ function PaginaFeed(): JSX.Element {
                 <div key={comentario.id} className="flex gap-2 items-start">
                   <img
                     src={
-                      comentario.usuario?.foto?.startsWith("http")
-                        ? comentario.usuario.foto
-                        : `/assets/usuarios/${comentario.usuario?.foto || "default-user.png"}`
+                      formatarUrlFoto(comentario.usuario?.foto)
                     }
                     alt="avatar"
                     className="w-8 h-8 rounded-full object-cover"

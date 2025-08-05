@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "wouter";
 import { getFeedPosts } from "../../services/feedService";
 import { formatDistanceToNow } from "date-fns";
+import { formatarUrlFoto } from "@/utils/formatarFoto";
 
 export default function PaginaMostrarPost() {
   const params = useParams();
@@ -41,7 +42,7 @@ export default function PaginaMostrarPost() {
         <div>
           <p className="text-gray-800 font-medium">{post.conteudo}</p>
           {post.tipoMidia === "Imagem" && post.imagemUrl && (
-            <img src={post.imagemUrl} alt="Post" className="mt-2 rounded-lg" />
+            <img src={formatarUrlFoto(post.imagemUrl)} alt="Post" className="mt-2 rounded-lg" />
           )}
         </div>
       </div>

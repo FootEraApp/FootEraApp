@@ -22,7 +22,7 @@ interface CriarTreinoInput {
     series?: string;
     repeticoes: string;
   }[];
-  tipoUsuarioId: string;  
+  tipoUsuarioId: string; 
 }
 
 router.get("/", async (req, res) => {
@@ -168,7 +168,7 @@ router.post("/", async (req, res) => {
     dataTreino,
     dicas,
     tipoUsuario,
-    tipoUsuarioId,  
+    tipoUsuarioId, 
   } = req.body;
 
    if (!nome || !nivel || !Array.isArray(exercicios) || !usuarioId || !tipoUsuarioId) {
@@ -215,43 +215,102 @@ router.post("/", async (req, res) => {
     } else if (tipoUsuario === "escolinha") {
       dataCreate.escolinhaId = tipoUsuarioId;
     } else if (tipoUsuario === "clube") {
-      dataCreate.clubeId = tipoUsuarioId;  // Só se adicionar esse campo no seu schema depois
+      dataCreate.clubeId = tipoUsuarioId;
     }
 
     const treino = await prisma.treinoProgramado.create({
       data: dataCreate,
     });
 
-    const relacoes = await prisma.relacaoTreinamento.findMany({
-      where: {
-        OR: [
-          { professorId: tipoUsuarioId },
-          { escolinhaId: tipoUsuarioId },
-          { clubeId: tipoUsuarioId },
-        ]
-      },
-      select: { atletaId: true },
-    });
+    if (Array.isArray(req.body.atletasIds) && req.body.atletasIds.length > 0) {
+      const dataAgendada = treino.dataAgendada ?? new Date();
 
-    const dataAgendada = treino.dataAgendada ?? new Date();
+      await Promise.all(
+        req.body.atletasIds.map((atletaId: string) => {
+          return prisma.treinoAgendado.create({
+            data: {
+              titulo: treino.nome,
+              dataHora: dataAgendada,
+              dataTreino: dataAgendada,
+              atletaId,
+              treinoProgramadoId: treino.id,
+            }
+          });
+        })
+      );
+    }
 
-    await Promise.all(
-      relacoes.map(rel => {
-        return prisma.treinoAgendado.create({
-          data: {
-            titulo: treino.nome,
-            dataHora: dataAgendada,
-            dataTreino: dataAgendada,
-            atletaId: rel.atletaId!,
-            treinoProgramadoId: treino.id,
-          }
-        });
-      })
-    );
+
     return res.status(201).json(treino);
   } catch (err) {
     console.error("Erro ao criar treino:", err);
     return res.status(500).json({ error: "Erro ao criar treino" });
+  }
+});
+
+router.get("/disponiveis", authenticateToken, async (req, res) => {
+  const { tipoUsuarioId } = req.query;
+  if (!tipoUsuarioId || typeof tipoUsuarioId !== "string") {
+    return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+  }
+
+  try {
+   const relacoes = await prisma.relacaoTreinamento.findMany({
+      where: { atletaId: tipoUsuarioId },
+      select: { professorId: true, escolinhaId: true, clubeId: true }
+    });
+
+    const idsRelacionados = relacoes.reduce<string[]>((acc, r) => {
+      if (r.professorId) acc.push(r.professorId);
+      if (r.escolinhaId) acc.push(r.escolinhaId);
+      if (r.clubeId) acc.push(r.clubeId);
+      return acc;
+    }, []);
+
+    const treinos = await prisma.treinoProgramado.findMany({
+      where: {
+        OR: [
+          { professorId: { in: idsRelacionados } },
+          { escolinhaId: { in: idsRelacionados } },
+          { clubeId: { in: idsRelacionados } }
+        ],
+        treinoAgendado: {
+          none: {
+            submissaoTreinos: {
+              some: {
+                atletaId: tipoUsuarioId
+              }
+            }
+          }
+        }
+      },
+      include: {
+        exercicios: {
+          include: {
+            exercicio: true
+          }
+        }
+      },
+      orderBy: { dataAgendada: "desc" }
+    });
+
+    const formatado = treinos.map(t => ({
+      id: t.id,
+      nome: t.nome,
+      descricao: t.descricao,
+      nivel: t.nivel,
+      dataAgendada: t.dataAgendada,
+      exercicios: t.exercicios.map((ex: any) => ({
+        id: ex.exercicio.id,
+        nome: ex.exercicio.nome,
+        repeticoes: ex.repeticoes
+      }))
+    }));
+
+    return res.json(formatado);
+  } catch (err) {
+    console.error("Erro ao buscar treinos disponíveis:", err);
+    return res.status(500).json({ error: "Erro interno ao buscar treinos" });
   }
 });
 
