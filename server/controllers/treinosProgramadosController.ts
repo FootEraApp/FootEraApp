@@ -3,10 +3,14 @@ import { prisma } from "../lib/prisma";
 
 export const createTreinoProgramado = async (req: Request, res: Response) => {
   try {
-    const { nome, codigo, nivel, descricao, professorId, exercicios } = req.body;
+    const { nome, codigo, nivel, descricao, professorId, exercicios, metas, pontuacao, categoria } = req.body;
 
     if (!nome || !codigo || !professorId || !Array.isArray(exercicios)) {
       return res.status(400).json({ message: "Dados incompletos" });
+    }
+
+    if (!Array.isArray(categoria) || categoria.length === 0) {
+      return res.status(400).json({ message: "Pelo menos uma categoria deve ser selecionada." });
     }
 
     const treinoExistente = await prisma.treinoProgramado.findFirst({
@@ -32,6 +36,9 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         codigo,
         nivel,
         descricao,
+        metas,
+        pontuacao: pontuacao ? Number(pontuacao) : 5,
+        categoria,
         professor: { connect: { id: professorId } },
         exercicios: {
           create: exercicios.map((ex: any) => ({
@@ -76,7 +83,7 @@ export const getTreinoById = async (req: Request, res: Response) => {
 export async function updateTreino(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const { nome, codigo, descricao, nivel, professorId } = req.body;
+    const { nome, codigo, descricao, nivel, professorId, metas, pontuacao, categoria } = req.body;
 
     const treinoExistente = await prisma.treinoProgramado.findFirst({
       where: {
@@ -96,7 +103,10 @@ export async function updateTreino(req: Request, res: Response) {
         codigo,
         descricao,
         nivel,
-        professorId
+        professorId,
+        metas,
+        pontuacao: pontuacao ? Number(pontuacao) : 5,
+        categoria
       }
     });
 

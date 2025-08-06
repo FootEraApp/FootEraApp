@@ -517,7 +517,7 @@ export const getTreinosResumo = async (req: AuthenticatedRequest, res: Response)
     total + (sub.treinoAgendado?.treinoProgramado?.duracao || 0), 0);
   const desafios = atleta.submissoesDesafio.length;
   const pontos = atleta.submissoesDesafio.reduce((total, sub) =>
-    total + (sub.desafio?.pontos || 0), 0);
+    total + (sub.desafio?.pontuacao || 0), 0);
 
   const categorias: Record<string, number> = {
     Fisico: 0, Tecnico: 0, Tatico: 0, Mental: 0

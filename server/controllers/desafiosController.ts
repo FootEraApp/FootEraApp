@@ -107,6 +107,43 @@ export const getSubmissoesPorAtleta = async (req: Request, res: Response) => {
   }
 };
 
+export async function criarDesafio(req: Request, res: Response) {
+  try {
+    const {
+      titulo,
+      descricao,
+      imagemUrl,
+      nivel,
+      categoria,
+      prazoSubmissao,
+      pontuacao,
+      regras,
+      tipoMetrificacao
+    } = req.body;
+
+    const dataPrazo = prazoSubmissao ? new Date(prazoSubmissao) : undefined;
+
+    const desafio = await prisma.desafioOficial.create({
+      data: {
+        titulo,
+        descricao,
+        imagemUrl,
+        nivel,
+        categoria,
+        prazoSubmissao: dataPrazo,
+        pontuacao,
+        regras,
+        tipoMetrificação: tipoMetrificacao
+      }
+    });
+
+    res.status(201).json(desafio);
+  } catch (error) {
+    console.error("Erro ao criar desafio:", error);
+    res.status(500).json({ message: "Erro ao criar desafio." });
+  }
+}
+
 export async function editarDesafio(req: Request, res: Response) {
   try {
     const { id } = req.params;
@@ -115,9 +152,11 @@ export async function editarDesafio(req: Request, res: Response) {
       descricao,
       imagemUrl,
       nivel,
-      pontos,
       categoria,
-      prazoSubmissao
+      prazoSubmissao,
+      pontuacao,
+      regras,
+      tipoMetrificacao
     } = req.body;
 
     const dataPrazo = prazoSubmissao ? new Date(prazoSubmissao) : undefined;
@@ -129,9 +168,11 @@ export async function editarDesafio(req: Request, res: Response) {
         descricao,
         imagemUrl,
         nivel,
-        pontos: Number(pontos),
         categoria,
-        prazoSubmissao: dataPrazo
+        prazoSubmissao: dataPrazo,
+        pontuacao,
+        regras,
+        tipoMetrificação: tipoMetrificacao
       }
     });
 

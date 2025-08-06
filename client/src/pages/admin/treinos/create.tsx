@@ -12,6 +12,10 @@ export default function CriarOuEditarTreino() {
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<any[]>([]);
   const [professoresDisponiveis, setProfessoresDisponiveis] = useState<any[]>([]);
   const [exercicios, setExercicios] = useState<{ id: string; ordem: number; repeticoes: string }[]>([]);
+  const [metas, setMetas] = useState("");
+  const [pontuacao, setPontuacao] = useState<number | undefined>(undefined);
+  const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<string[]>([]);
+  const opcoesCategorias = ["Sub9", "Sub11", "Sub13", "Sub15", "Sub17", "Sub20", "Livre"];
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -27,6 +31,9 @@ export default function CriarOuEditarTreino() {
           setDescricao(data.descricao || "");
           setNivel(data.nivel || "Base");
           setProfessorId(data.professorId || "");
+          setMetas(data.metas || "");
+          setPontuacao(data.pontuacao || 5);
+          setCategoriasSelecionadas(data.categorias || []);
           setExercicios(data.exercicios?.map((e: any) => ({
             id: e.exercicioId,
             ordem: e.ordem,
@@ -62,6 +69,9 @@ export default function CriarOuEditarTreino() {
       descricao,
       nivel,
       professorId,
+      metas,
+      pontuacao,
+      categoria: categoriasSelecionadas,
       exercicios: exercicios.map((ex) => ({
         exercicioId: ex.id,
         ordem: ex.ordem,
@@ -119,6 +129,41 @@ export default function CriarOuEditarTreino() {
         ))}
       </select>
 
+      <label className="text-green-800">Metas</label>
+        <textarea
+          className="border p-2 w-full mb-4"
+          value={metas}
+          onChange={(e) => setMetas(e.target.value)}
+        />
+
+        <label className="text-green-800">Pontuação</label>
+        <input
+          type="number"
+          className="border p-2 w-full mb-4"
+          value={pontuacao}
+          onChange={(e) => setPontuacao(parseInt(e.target.value))}
+        />
+
+        <label className="text-green-800">Categorias</label>
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          {opcoesCategorias.map((cat) => (
+            <label key={cat} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={categoriasSelecionadas.includes(cat)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setCategoriasSelecionadas([...categoriasSelecionadas, cat]);
+                  } else {
+                    setCategoriasSelecionadas(categoriasSelecionadas.filter((c) => c !== cat));
+                  }
+                }}
+              />
+              {cat}
+            </label>
+          ))}
+        </div>
+
       <label className="text-green-800">Exercícios do Treino</label>
       {exercicios.map((ex, idx) => (
         <div key={idx} className="mb-4 border p-3 rounded">
@@ -172,7 +217,7 @@ export default function CriarOuEditarTreino() {
         </div>
       ))}
 
-      <button type="button" onClick={adicionarExercicio} className="bg-green-600 text-white px-4 py-1 rounded mb-6">
+      <button type="button" onClick={adicionarExercicio} className="bg-green-800 text-white px-3 ml-3 py-1 rounded mb-4">
         + Adicionar Exercício
       </button>
 

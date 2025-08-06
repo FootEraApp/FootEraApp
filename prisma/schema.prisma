@@ -148,6 +148,8 @@ model TreinoProgramado {
   duracao      Int?
   dicas        String[]
   imagemUrl    String?
+  metas        String?
+  pontuacao    Int?
 
   clubeId String?
   clube   Clube?  @relation(fields: [clubeId], references: [id])
@@ -189,15 +191,17 @@ model Exercicio {
 }
 
 model DesafioOficial {
-  id             String      @id @default(uuid())
-  titulo         String      @unique
-  descricao      String
-  imagemUrl      String?     @unique
-  nivel          Nivel
-  pontos         Int
-  prazoSubmissao DateTime?
-  categoria      Categoria[]
-  createdAt      DateTime    @default(now())
+  id                String      @id @default(uuid())
+  titulo            String      @unique
+  descricao         String
+  imagemUrl         String?     @unique
+  nivel             Nivel
+  pontuacao         Int?
+  regras            String?
+  tipoMetrificação  String?
+  prazoSubmissao    DateTime?
+  categoria         Categoria[]
+  createdAt         DateTime    @default(now())
 
   submissoes SubmissaoDesafio[]
 }
