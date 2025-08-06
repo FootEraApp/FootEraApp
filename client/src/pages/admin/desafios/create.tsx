@@ -8,11 +8,13 @@ export default function CreateOrEditDesafio() {
   const [descricao, setDescricao] = useState("");
   const [imagemUrl, setImagemUrl] = useState("");
   const [nivel, setNivel] = useState("Base");
-  const [pontos, setPontos] = useState(0);
   const [prazoSubmissao, setPrazoSubmissao] = useState("");
   const [categoriaAtual, setCategoriaAtual] = useState("");
   const [categoria, setCategoria] = useState<string[]>([]);
   const [opcoesCategorias, setOpcoesCategorias] = useState<string[]>([]);
+  const [pontuacao, setPontuacao] = useState<number>(10);
+  const [regras, setRegras] = useState("");
+  const [tipoMetrificacao, setTipoMetrificacao] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -26,9 +28,11 @@ export default function CreateOrEditDesafio() {
           setDescricao(data.descricao || "");
           setImagemUrl(data.imagemUrl || "");
           setNivel(data.nivel || "Base");
-          setPontos(data.pontos || 0);
           setCategoria(data.categoria || []);
           setPrazoSubmissao(data.prazoSubmissao?.split("T")[0] || "");
+          setPontuacao(data.pontuacao || 10);
+          setRegras(data.regras || "");
+          setTipoMetrificacao(data.tipoMetrificacao || "");
         })
         .catch(err => console.error("Erro ao carregar desafio:", err));
     }
@@ -62,17 +66,21 @@ export default function CreateOrEditDesafio() {
       : "http://localhost:3001/api/desafios";
 
     try {
+      const token = localStorage.getItem("token");
+
       const res = await fetch(url, {
         method: metodo,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({
           titulo,
           descricao,
           imagemUrl,
           nivel,
-          pontos,
           categoria,
           prazoSubmissao,
+          pontuacao,
+          regras,
+          tipoMetrificacao
         }),
       });
 
@@ -117,7 +125,7 @@ export default function CreateOrEditDesafio() {
 
         <label className="text-base -mb-2 text-green-800">URL da imagem</label>
         <input
-          type="url"
+          type="text"
           value={imagemUrl}
           onChange={(e) => setImagemUrl(e.target.value)}
           className="border p-2 rounded"
@@ -133,14 +141,6 @@ export default function CreateOrEditDesafio() {
           <option>Avancado</option>
           <option>Performance</option>
         </select>
-
-        <label className="text-base -mb-2 text-green-800">Pontos</label>
-        <input
-          type="number"
-          value={pontos}
-          onChange={(e) => setPontos(Number(e.target.value))}
-          className="border p-2 rounded"
-        />
 
         <label className="text-base -mb-2 text-green-800">Categorias</label>
         <div className="flex gap-2 mb-2">
@@ -178,6 +178,30 @@ export default function CreateOrEditDesafio() {
           onChange={(e) => setPrazoSubmissao(e.target.value)}
           className="border p-2 rounded"
           required
+        />
+
+        <label className="text-base -mb-2 text-green-800">Pontuação</label>
+        <input
+          type="number"
+          value={pontuacao}
+          onChange={(e) => setPontuacao(Number(e.target.value))}
+          className="border p-2 rounded"
+          required
+        />
+
+        <label className="text-base -mb-2 text-green-800">Regras</label>
+        <textarea
+          value={regras}
+          onChange={(e) => setRegras(e.target.value)}
+          className="border p-2 rounded"
+        />
+
+        <label className="text-base -mb-2 text-green-800">Tipo de Metrificação</label>
+        <input
+          type="text"
+          value={tipoMetrificacao}
+          onChange={(e) => setTipoMetrificacao(e.target.value)}
+          className="border p-2 rounded"
         />
 
         <div className="flex gap-4 mt-4">

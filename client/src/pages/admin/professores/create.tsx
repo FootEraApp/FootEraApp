@@ -43,8 +43,9 @@ export default function CriarOuEditarProfessor() {
     formData.append("nome", nome);
     formData.append("areaFormacao", areaFormacao);
     formData.append("statusCref", statusCref);
-    qualificacoes.forEach((q, i) => formData.append(`qualificacoes[${i}]`, q));
-    certificacoes.forEach((c, i) => formData.append(`certificacoes[${i}]`, c));
+    formData.append("qualificacoes", JSON.stringify(qualificacoes));
+    formData.append("certificacoes", JSON.stringify(certificacoes));
+
     if (fotoUrl) formData.append("fotoUrl", fotoUrl);
 
     try {

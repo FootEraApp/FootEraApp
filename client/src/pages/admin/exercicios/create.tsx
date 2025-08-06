@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import UploadVideo from "@/components/UploadVideo";
 
 export default function CreateOrEditExercicio() {
   const [codigo, setCodigo] = useState("");
@@ -9,7 +10,8 @@ export default function CreateOrEditExercicio() {
   const [nivel, setNivel] = useState("Base");
   const [categorias, setCategorias] = useState<string[]>([]);
   const [categoriaAtual, setCategoriaAtual] = useState("");
-  const [id, setId] = useState<string | null>(null); // <- Novo estado
+  const [id, setId] = useState<string | null>(null);
+  const [video, setVideo] = useState<File | null>(null); 
 
   const opcoesCategorias = ["Sub9", "Sub11", "Sub13", "Sub15", "Sub17", "Sub20", "Livre"];
 
@@ -46,13 +48,18 @@ export default function CreateOrEditExercicio() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const payload = { codigo, nome, descricao, nivel, categorias };
+    const formData = new FormData();
+    formData.append("codigo", codigo);
+    formData.append("nome", nome);
+    formData.append("descricao", descricao);
+    formData.append("nivel", nivel);
+    formData.append("categorias", JSON.stringify(categorias));
+    if (video) formData.append("video", video);
 
     try {
       const res = await fetch(`http://localhost:3001/api/exercicios${id ? `/${id}` : ""}`, {
         method: id ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: formData,
       });
 
       if (!res.ok) {
@@ -71,7 +78,7 @@ export default function CreateOrEditExercicio() {
   return (
     <div className="p-6 max-w-xl mx-auto bg-white rounded shadow">
       <h2 className="text-xl font-bold mb-4">{id ? "Editar Exercício" : "Novo Exercício"}</h2>
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} encType="multipart/form-data">
         <label className="text-green-800">Código</label>
         <input value={codigo} onChange={(e) => setCodigo(e.target.value)} className="border p-2 w-full rounded mb-4" />
 
@@ -104,6 +111,8 @@ export default function CreateOrEditExercicio() {
             <span key={i} className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">{cat}</span>
           ))}
         </div>
+
+        <UploadVideo onVideoSelect={setVideo} />
 
         <div className="flex justify-end gap-4">
           <button type="button" onClick={() => window.location.href = "/admin"} className="px-4 py-2 bg-gray-200 rounded">Cancelar</button>
