@@ -19,17 +19,19 @@ export const buscarExplorar = async (req: Request, res: Response) => {
       prisma.clube.findMany({
         where: {
           nome: { contains: termo, mode: "insensitive" }
-        }
+        },
+        include: { usuario: true }
       }),
       prisma.escolinha.findMany({
         where: {
           nome: { contains: termo, mode: "insensitive" }
-        }
+        },
+        include: { usuario: true }
       }),
       prisma.desafioOficial.findMany({
         where: {
           titulo: { contains: termo, mode: "insensitive" }
-        }
+        },
       }),
       prisma.professor.findMany({
         where: {
