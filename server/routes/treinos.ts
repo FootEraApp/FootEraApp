@@ -314,4 +314,38 @@ router.get("/disponiveis", authenticateToken, async (req, res) => {
   }
 });
 
+router.post("/agendar", authenticateToken, async (req, res) => {
+  const { atletaId, treinoProgramadoId, dataTreino } = req.body;
+
+  if (!atletaId || !treinoProgramadoId) {
+    return res.status(400).json({ error: "atletaId e treinoProgramadoId são obrigatórios" });
+  }
+
+  try {
+    const treinoProgramado = await prisma.treinoProgramado.findUnique({
+      where: { id: treinoProgramadoId }
+    });
+
+    if (!treinoProgramado) {
+      return res.status(404).json({ error: "Treino programado não encontrado" });
+    }
+
+    const agendado = await prisma.treinoAgendado.create({
+      data: {
+        titulo: treinoProgramado.nome,
+        dataHora: dataTreino ? new Date(dataTreino) : new Date(),
+        dataTreino: dataTreino ? new Date(dataTreino) : new Date(),
+        atletaId,
+        treinoProgramadoId,
+      },
+    });
+
+    return res.status(201).json(agendado);
+  } catch (err) {
+    console.error("Erro ao agendar treino:", err);
+    return res.status(500).json({ error: "Erro ao agendar treino" });
+  }
+});
+
+
 export default router;

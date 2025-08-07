@@ -76,12 +76,17 @@ import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
             <h2 className="text-xl font-bold my-4">Escolas de Futebol</h2>
             <div className="space-y-3">
               {dados.escolas.map((e: any) => (
-                <div key={e.id} className="bg-white rounded shadow p-3">
-                  <h3 className="font-bold">{e.nome}</h3>
-                  <p className="text-sm text-gray-600">
-                    {e.cidade}, {e.estado}
-                  </p>
-                  <p className="text-sm">{e.siteOficial || "Formando jovens atletas desde..."}</p>
+                <div key={e.id} className="bg-white rounded shadow p-3 flex items-center gap-3">
+                  <img
+                    src={formatarUrlFoto(e.logo) || "/placeholder.png"}
+                    alt="Logo da escola"
+                    className="w-16 h-16 rounded-full object-cover"
+                  />
+                  <div>
+                    <h3 className="font-bold">{e.nome}</h3>
+                    <p className="text-sm text-gray-600">{e.cidade}, {e.estado}</p>
+                    <p className="text-sm">{e.siteOficial || "Site indisponível"}</p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -93,12 +98,17 @@ import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
             <h2 className="text-xl font-bold my-4">Clubes</h2>
             <div className="space-y-3">
               {dados.clubes.map((c: any) => (
-                <div key={c.id} className="bg-white rounded shadow p-3">
-                  <h3 className="font-bold">{c.nome}</h3>
-                  <p className="text-sm text-gray-600">
-                    {c.cidade}, {c.estado}
-                  </p>
-                  <p className="text-sm">Clube Profissional</p>
+                <div key={c.id} className="bg-white rounded shadow p-3 flex items-center gap-3">
+                  <img
+                    src={formatarUrlFoto(c.logo) || "/placeholder.png"}
+                    alt="Logo do clube"
+                    className="w-16 h-16 rounded-full object-cover"
+                  />
+                  <div>
+                    <h3 className="font-bold">{c.nome}</h3>
+                    <p className="text-sm text-gray-600">{c.cidade}, {c.estado}</p>
+                    <p className="text-sm">Clube Profissional</p>
+                  </div>
                 </div>
               ))}
             </div>

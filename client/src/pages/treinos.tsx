@@ -47,7 +47,7 @@ interface Desafio {
   titulo: string;
   descricao: string;
   nivel: string;
-  pontos: number;
+  pontuacao: number;
   imagemUrl?: string;
 }
 
@@ -132,7 +132,7 @@ export default function PaginaTreinos() {
       <h4 className="font-bold text-yellow-700 text-lg mb-1">{desafio.titulo}</h4>
       <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
       <p className="text-sm text-gray-500">Nível: {desafio.nivel}</p>
-      <p className="text-sm text-gray-500">Pontos: {desafio.pontos}</p>
+      <p className="text-sm text-gray-500">Pontos: {desafio.pontuacao}</p>
       <div className="mt-3 text-right">
         <button
           onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
@@ -247,12 +247,6 @@ const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
           <>
             {usuario.tipo === 'atleta' && (
               <div className="space-y-6">
-
-               <div className="bg-white p-4 rounded shadow mb-4">
-                  <h2 className="text-lg font-bold">Ranking</h2>
-                  <p className="text-green-800">Sua posição: <span className="font-semibold">#12</span></p>
-                  <p className="text-gray-600">Pontos acumulados: <span className="font-semibold">1420</span></p>
-                </div>
 
                 <div className="bg-white rounded shadow p-4">
                   <div className="flex justify-between items-center mb-3">

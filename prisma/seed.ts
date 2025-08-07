@@ -387,7 +387,7 @@ async function main() {
       descricao: 'Mantenha a bola no ar pelo maior tempo possível usando diferentes partes do corpo.',
       imagemUrl: '/assets/controle-aereo.jpg',
       nivel: Nivel.Avancado,
-      pontos: 10,
+      pontuacao: 10,
       categoria: [Categoria.Sub15]
     },
     {
@@ -395,7 +395,7 @@ async function main() {
       descricao: 'Supere um percurso de obstáculos mantendo o controle da bola.',
       imagemUrl: '/assets/treino-agilidade.webp',
       nivel: Nivel.Avancado,
-      pontos: 8,
+      pontuacao: 8,
       categoria: [Categoria.Sub13]
     }
   ];
@@ -615,7 +615,7 @@ async function main() {
       titulo: "Desafio de Velocidade",
       descricao: "Complete um circuito em tempo recorde.",
       nivel: Nivel.Performance,
-      pontos: 25,
+      pontuacao: 25,
       categoria: [Categoria.Sub17],
       imagemUrl: "/assets/desafios/velocidade.jpg"
     }
@@ -706,7 +706,7 @@ const desafioTeste2 = await prisma.desafioOficial.upsert({
     titulo: "Desafio de Controle Avançado",
     descricao: "Mantenha a posse da bola com domínio total durante 60 segundos.",
     nivel: Nivel.Performance,
-    pontos: 20,
+    pontuacao: 20,
     categoria: [Categoria.Sub15],
     imagemUrl: "/assets/desafios/controle-avancado.jpg",
   },
@@ -859,7 +859,7 @@ if (atletaAaaaa) {
       descricao: "Controle e passes curtos",
       nivel: "Base",
       categoria: [Categoria.Sub9],
-      pontos: 15,
+      pontuacao: 15,
       imagemUrl: "/assets/desafios/tecnico-bola.jpg"
     },
   });
