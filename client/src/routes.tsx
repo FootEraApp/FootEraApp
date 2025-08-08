@@ -22,6 +22,7 @@ import PaginaConfiguracoesPerfil from "./pages/configuracoesPerfil";
 import PaginaPontuacaoPerfil from "./pages/pontuacoesPerfil";
 import PaginaNotificacoes from "./pages/notificacoes";
 import PaginaSubmissao from "./pages/submissao";
+import PaginaMensagens from "./pages/mensagens";
 
 export function AppRoutes() {
   return (
@@ -94,6 +95,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/submissao">
         <PaginaSubmissao />
+      </Route>
+      <Route path="/mensagens">
+        <PaginaMensagens />
       </Route>
     </>
   );

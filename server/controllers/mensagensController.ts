@@ -1,110 +1,54 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
-import { AuthenticatedRequest } from "../types/auth"; 
+import { prisma } from "../lib/prisma";
+import { AuthenticatedRequest } from "../middlewares/auth";
 
-const prisma = new PrismaClient();
-
-export const getMensagens = async (req: AuthenticatedRequest, res: Response) => {
-  const { destinatarioId } = req.params;
-  const usuarioId = req.userId;
-
-  if (!usuarioId || !destinatarioId) {
-    return res.status(400).json({ message: "Parâmetros inválidos." });
-  }
-
+export const enviarMensagem = async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const deId = req.userId; 
+    const { paraId, conteudo } = req.body;
+
+    if (!deId || !paraId || !conteudo) {
+      return res.status(400).json({ error: "Campos obrigatórios faltando" });
+    }
+
+    const novaMensagem = await prisma.mensagem.create({
+      data: {
+        deId,
+        paraId,
+        conteudo,
+      },
+    });
+
+    res.status(201).json(novaMensagem);
+  } catch (error) {
+    console.error("Erro ao enviar mensagem:", error);
+    res.status(500).json({ error: "Erro ao enviar mensagem" });
+  }
+};
+
+export const buscarMensagens = async (req: Request, res: Response) => {
+  try {
+    const { deId, paraId, cursor, limit = 20 } = req.query;
+
     const mensagens = await prisma.mensagem.findMany({
       where: {
         OR: [
-          { deId: usuarioId, paraId: destinatarioId },
-          { deId: destinatarioId, paraId: usuarioId }
-        ]
+          { deId: deId as string, paraId: paraId as string },
+          { deId: paraId as string, paraId: deId as string },
+        ],
       },
-      orderBy: { criadaEm: "asc" },
-      include: {
-        de: true,
-        para: true
-      }
-    });
-
-    await prisma.mensagem.updateMany({
-      where: {
-        deId: destinatarioId,
-        paraId: usuarioId,
-        lida: false
-      },
-      data: { lida: true }
+      orderBy: { criadaEm: "desc" },
+      take: Number(limit),
+      ...(cursor && {
+        skip: 1,
+        cursor: {
+          id: cursor as string,
+        },
+      }),
     });
 
     res.json(mensagens);
-  } catch (err) {
-    console.error("Erro ao buscar mensagens:", err);
-    res.status(500).json({ message: "Erro interno ao buscar mensagens." });
-  }
-};
-
-export const enviarMensagem = async (req: AuthenticatedRequest, res: Response) => {
-  const { destinatarioId } = req.params;
-  const { conteudo } = req.body;
-  const usuarioId = req.userId;
-
-  if (!usuarioId || !conteudo) {
-    return res.status(400).json({ message: "Dados incompletos." });
-  }
-
-  try {
-    const mensagem = await prisma.mensagem.create({
-      data: {
-        deId: usuarioId,
-        paraId: destinatarioId,
-        conteudo
-      }
-    });
-
-    res.status(201).json(mensagem);
-  } catch (err) {
-    console.error("Erro ao enviar mensagem:", err);
-    res.status(500).json({ message: "Erro interno ao enviar mensagem." });
-  }
-};
-
-export const getCaixasDeMensagens = async (req: AuthenticatedRequest, res: Response) => {
-  const usuarioId = req.userId;
-
-  try {
-    const mensagens = await prisma.mensagem.findMany({
-      where: {
-        OR: [
-          { deId: usuarioId },
-          { paraId: usuarioId }
-        ]
-      },
-      include: {
-        de: true,
-        para: true
-      }
-    });
-
-    const caixasMap = new Map<string, any>();
-
-    for (const m of mensagens.reverse()) {
-      const outroId = m.deId === usuarioId ? m.paraId : m.deId;
-
-      if (!caixasMap.has(outroId)) {
-        caixasMap.set(outroId, {
-          outroUsuarioId: outroId,
-          outroUsuarioNome: m.deId === usuarioId ? m.para.nome : m.de.nome,
-          outroUsuarioFoto: m.deId === usuarioId ? m.para.foto : m.de.foto,
-          ultimaMensagem: m.conteudo,
-          dataUltimaMensagem: m.criadaEm,
-          lida: m.lida
-        });
-      }
-    }
-
-    res.json(Array.from(caixasMap.values()));
-  } catch (err) {
-    console.error("Erro ao carregar caixas de mensagens:", err);
-    res.status(500).json({ message: "Erro interno." });
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao buscar mensagens" });
   }
 };

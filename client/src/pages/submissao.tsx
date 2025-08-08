@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import Storage from "../../../server/utils/storage";
+import { API } from "../config";
 
 export default function PaginaSubmissao() {
   const [observacao, setObservacao] = useState("");
@@ -20,7 +22,7 @@ export default function PaginaSubmissao() {
     if (treinoId) setTreinoAgendadoId(treinoId);
     if (desafioParam) setDesafioId(desafioParam);
 
-    const tipoId = localStorage.getItem("tipoUsuarioId");
+    const tipoId = Storage.tipoUsuarioId;
     if (tipoId) setAtletaId(tipoId);
   }, [location]);
 
@@ -49,10 +51,10 @@ export default function PaginaSubmissao() {
 
     if (treinoAgendadoId) {
       formData.append("treinoAgendadoId", treinoAgendadoId);
-      url = "http://localhost:3001/api/submissoes/treino";
+      url = "${API.BASE_URL}/api/submissoes/treino";
     } else if (desafioId) {
       formData.append("desafioId", desafioId);
-      url = "http://localhost:3001/api/submissoes/desafio";
+      url = "${API.BASE_URL}/api/submissoes/desafio";
     }
 
     try {
@@ -60,7 +62,7 @@ export default function PaginaSubmissao() {
         method: "POST",
         body: formData,
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`
+          Authorization: `Bearer ${Storage.token || ""}`
         },
       });
 

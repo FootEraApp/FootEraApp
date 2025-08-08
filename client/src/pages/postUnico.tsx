@@ -4,6 +4,9 @@ import { getPostById, PostagemComUsuario, likePost, comentarPost } from "../serv
 import { format } from "date-fns";
 import { FaHeart, FaRegHeart, FaTrash, FaShare } from "react-icons/fa";
 import { Link } from "wouter";
+import Storage from "../../../server/utils/storage";
+import { API } from "../config";
+import { CircleX } from "lucide-react";
 
 function PostUnico(): JSX.Element {
   const [match, params] = useRoute<{ id: string }>("/post/:id");
@@ -13,9 +16,8 @@ function PostUnico(): JSX.Element {
   const [, setLocation] = useLocation();
   const [modalAberto, setModalAberto] = useState(false);
 
-  const token = localStorage.getItem("token") || "";
-  const usuarioId = localStorage.getItem("usuarioId") || "";
-
+  const token = Storage.token || "";
+  const usuarioId = Storage.usuarioId || "";
   useEffect(() => {
     if (!match || !params?.id) return;
 
@@ -61,7 +63,7 @@ function PostUnico(): JSX.Element {
   async function handleExcluirPost() {
     if (!post?.id || !confirm("Tem certeza que deseja excluir esta postagem?")) return;
     try {
-      const response = await fetch(`http://localhost:3001/api/feed/posts/${post.id}`, {
+      const response = await fetch(`${API.BASE_URL}/api/feed/posts/${post.id}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -86,7 +88,7 @@ function PostUnico(): JSX.Element {
   if (!match) return <p className="text-center mt-10">Post não encontrado na URL.</p>;
   if (!post) return <p className="text-center mt-10">Carregando postagem...</p>;
 
-  const linkCompartilhado = `http://localhost:5173/post/${post.id}`;
+  const linkCompartilhado = `${API.BASE_URL}/post/${post.id}`;
   const jaCurtiu = post.curtidas.some((c) => c.usuarioId === usuarioId);
 
   return (
@@ -98,11 +100,11 @@ function PostUnico(): JSX.Element {
       <p className="mb-4">{post.conteudo}</p>
 
       {post.tipoMidia === "Imagem" && post.imagemUrl && (
-        <img src={`http://localhost:3001${post.imagemUrl}`} className="rounded-lg max-h-80 mx-auto" />
+        <img src={`${API.BASE_URL}${post.imagemUrl}`} className="rounded-lg max-h-80 mx-auto" />
       )}
       {post.tipoMidia === "Video" && post.videoUrl && (
         <video controls className="w-full rounded-lg">
-          <source src={`http://localhost:3001${post.videoUrl}`} type="video/mp4" />
+          <source src={`${API.BASE_URL}${post.videoUrl}`} type="video/mp4" />
         </video>
       )}
 
@@ -220,7 +222,7 @@ function PostUnico(): JSX.Element {
               onClick={() => setModalAberto(false)}
               className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl"
             >
-              X
+              <CircleX />
             </button>
           </div>
         </div>

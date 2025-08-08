@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { withAuth } from "@/components/ProtectedRoute";
+import Storage from "../../../../server/utils/storage";
+import { API } from "../../config";
 
 function PaginaPostagem() {
   const [descricao, setDescricao] = useState("");
@@ -15,9 +17,9 @@ function PaginaPostagem() {
       return;
     }
 
-    const usuarioId = localStorage.getItem("usuarioId");
-    const nomeUsuario = localStorage.getItem("nomeUsuario");
-    const token = localStorage.getItem("token");
+    const usuarioId = Storage.usuarioId || "";
+    const nomeUsuario = Storage.nomeUsuario || "";
+    const token = Storage.token;
 
     if (!usuarioId || !token) {
       setMensagem("Usuário não autenticado.");
@@ -38,7 +40,7 @@ function PaginaPostagem() {
 
 
     try {
-      const res = await fetch("http://localhost:3001/api/post/postar", {
+      const res = await fetch("${API.BASE_URL}/api/post/postar", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,

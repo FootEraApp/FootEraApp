@@ -18,6 +18,6 @@
     "lib": ["DOM", "ES2020", "dom.iterable", "esnext"],
     "types": ["next", "next/types/global", "vite/client", "react", "node"]
   },
-  "include": ["src/**/*", "../api"],
+  "include": ["src/**/*", "../api", "vite-env.d.ts"],
   "exclude": ["node_modules", "dist"]
 }

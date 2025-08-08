@@ -2,6 +2,7 @@ import { Switch } from "../components/ui/switch";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import Storage from "../../../server/utils/storage";
 
 export default function ConfiguracoesPerfil() {
   const [, setLocation] = useLocation();
@@ -10,7 +11,7 @@ export default function ConfiguracoesPerfil() {
   const [mostrarEmail, setMostrarEmail] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = Storage.token;
       if (!token) {
         setLocation("/login");
       }
@@ -19,6 +20,7 @@ export default function ConfiguracoesPerfil() {
   function confirmarLogout() {
     if (confirm("Tem certeza que deseja sair?")) {
       localStorage.clear();
+      sessionStorage.clear();
       setLocation("/login");
     }
   }
@@ -107,7 +109,6 @@ export default function ConfiguracoesPerfil() {
                 <User /> 
               </Link>
             </nav>
-
     </div>
   );
 }

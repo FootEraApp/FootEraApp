@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import UploadVideo from "@/components/UploadVideo";
+import { API } from "../../../config";
 
 export default function CreateOrEditExercicio() {
   const [codigo, setCodigo] = useState("");
@@ -26,7 +27,7 @@ export default function CreateOrEditExercicio() {
   useEffect(() => {
     if (!id) return;
 
-    fetch(`http://localhost:3001/api/exercicios/${id}`)
+    fetch(`${API.BASE_URL}/api/exercicios/${id}`)
       .then(res => res.json())
       .then(data => {
         setCodigo(data.codigo);
@@ -57,7 +58,7 @@ export default function CreateOrEditExercicio() {
     if (video) formData.append("video", video);
 
     try {
-      const res = await fetch(`http://localhost:3001/api/exercicios${id ? `/${id}` : ""}`, {
+      const res = await fetch(`${API.BASE_URL}/api/exercicios${id ? `/${id}` : ""}`, {
         method: id ? "PUT" : "POST",
         body: formData,
       });

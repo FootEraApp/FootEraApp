@@ -2,22 +2,24 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { useLocation } from "wouter";
 import { BarChart2, Timer, KeyRound, CheckCircle, Play } from "lucide-react";
+import Storage from "../../../server/utils/storage";
+import { API } from "../config";
 
 export default function PontuacaoDetalhada() {
-  const [usuarioId] = useState(localStorage.getItem("usuarioId"));
+  const [usuarioId] = useState(Storage.usuarioId);
   const [pontuacao, setPontuacao] = useState({ performance: 0, disciplina: 0, responsabilidade: 0 });
   const [historico, setHistorico] = useState<any[]>([]);
   const [videos, setVideos] = useState<string[]>([]);
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = Storage.token;
     if (!token || !usuarioId) {
       setLocation("/login");
       return;
     }
     
-    axios.get(`http://localhost:3001/api/perfil/pontuacao/${usuarioId}`, {
+    axios.get(`${API.BASE_URL}/api/perfil/pontuacao/${usuarioId}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => {

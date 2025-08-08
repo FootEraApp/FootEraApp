@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { withAuth } from "@/components/ProtectedRoute";
+import{ API } from "../config";
 
 type Tab = "dashboard" | "exercicios" | "treinos" | "professores" | "desafios" | "configuracoes";
 
@@ -21,32 +22,32 @@ interface Treinos {
   const [configuracoes, setConfiguracoes] = useState<any>(null);
   
   useEffect(() => {
-    fetch("http://localhost:3001/api/admin")
+    fetch("${API.BASE_URL}/api/admin")
       .then(res => res.json())
       .then(setDados)
       .catch(console.error);
 
-    fetch('http://localhost:3001/api/exercicios')
+    fetch('${API.BASE_URL}/api/exercicios')
       .then(res => res.json())
       .then(setExercicios)
       .catch(console.error);
       
-    fetch('http://localhost:3001/api/treinos')
+    fetch('${API.BASE_URL}/api/treinos')
       .then(res => res.json())
       .then(setTreinos)
       .catch(console.error);
 
-    fetch('http://localhost:3001/api/professores')
+    fetch('${API.BASE_URL}/api/professores')
       .then(res => res.json())
       .then(setProfessores)
       .catch(console.error);
 
-    fetch('http://localhost:3001/api/desafios')
+    fetch('${API.BASE_URL}/api/desafios')
       .then(res => res.json())
       .then(setDesafios)
       .catch(console.error);
 
-    fetch("http://localhost:3001/api/configuracoes")
+    fetch("${API.BASE_URL}/api/configuracoes")
       .then(res => res.json())
       .then(setConfiguracoes)
       .catch(console.error);
@@ -153,7 +154,7 @@ interface Treinos {
                         const confirmar = confirm("Deseja excluir este exercício?");
                         if (!confirmar) return;
 
-                        const response = await fetch(`http://localhost:3001/api/exercicios/${ex.id}`, {
+                        const response = await fetch(`${API.BASE_URL}/api/exercicios/${ex.id}`, {
                           method: "DELETE",
                         });
 
@@ -200,7 +201,7 @@ interface Treinos {
                         const confirmar = confirm("Deseja mesmo excluir este treino?");
                         if (!confirmar) return;
 
-                        const response = await fetch(`http://localhost:3001/api/treinosprogramados/${t.id}`, {
+                        const response = await fetch(`${API.BASE_URL}/api/treinosprogramados/${t.id}`, {
                           method: "DELETE",
                         });
 
@@ -247,7 +248,7 @@ interface Treinos {
                       onClick={async () => {
                         const confirmar = confirm("Deseja excluir este professor?");
                         if (!confirmar) return;
-                        const response = await fetch(`http://localhost:3001/api/professores/${p.id}`, {
+                        const response = await fetch(`${API.BASE_URL}/api/professores/${p.id}`, {
                           method: "DELETE",
                         });
                         response.ok ? alert("Professor excluído!") : alert("Erro ao excluir professor.");
@@ -289,7 +290,7 @@ interface Treinos {
                         const confirmar = confirm("Deseja mesmo excluir este desafio?");
                         if (!confirmar) return;
 
-                        const response = await fetch(`http://localhost:3001/api/desafios/${d.id}`, {
+                        const response = await fetch(`${API.BASE_URL}/api/desafios/${d.id}`, {
                           method: "DELETE",
                         });
 
@@ -331,7 +332,7 @@ interface Treinos {
                     type="checkbox"
                     checked={configuracoes[item.key]}
                     onChange={async (e) => {
-                      const res = await fetch("http://localhost:3001/api/configuracoes", {
+                      const res = await fetch("${API.BASE_URL}/api/configuracoes", {
                         method: "PATCH",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ [item.key]: e.target.checked }),
@@ -358,7 +359,7 @@ interface Treinos {
                   const novoValor = parseInt(e.target.value);
                   setConfiguracoes({ ...configuracoes, maxDailyPosts: novoValor });
 
-                  await fetch("http://localhost:3001/api/configuracoes", {
+                  await fetch("${API.BASE_URL}/api/configuracoes", {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ maxDailyPosts: novoValor }),

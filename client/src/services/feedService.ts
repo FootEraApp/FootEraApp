@@ -1,3 +1,6 @@
+import { API } from "../config";
+import Storage from "../../../server/utils/storage";
+
 export interface Usuario {
   id: string;
   nome: string;
@@ -32,7 +35,7 @@ export async function getFeedPosts(): Promise<PostagemComUsuario[]> {
 try {
 
   const token = localStorage.getItem("token");
-   const response = await fetch("http://localhost:3001/api/feed/", {
+   const response = await fetch("${API.BASE_URL}/api/feed/", {
     headers: {
         Authorization: `Bearer ${token}`,
    },
@@ -67,7 +70,7 @@ try {
 export async function likePost(postId: string) {
   const token = localStorage.getItem("token");
 
-  const response = await fetch(`http://localhost:3001/api/post/${postId}/like`, {
+  const response = await fetch(`${API.BASE_URL}/api/post/${postId}/like`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -84,7 +87,7 @@ export async function likePost(postId: string) {
 export async function comentarPost(postId: string, conteudo: string) {
   const token = localStorage.getItem("token");
  
-  await fetch(`http://localhost:3001/api/post/${postId}/comentario`, {
+  await fetch(`${API.BASE_URL}/api/post/${postId}/comentario`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -95,13 +98,13 @@ export async function comentarPost(postId: string, conteudo: string) {
 }
 
 export async function compartilharPost(postId: string) {
-  const token = localStorage.getItem("token");
+  const token = Storage.token;
 
   const link = `${window.location.origin}/post/${postId}`;
   try {
     await navigator.clipboard.writeText(link);
 
-    await fetch(`http://localhost:3001/api/post/${postId}/compartilhar`, {
+    await fetch(`${API.BASE_URL}/api/post/${postId}/compartilhar`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -119,7 +122,7 @@ export async function compartilharPost(postId: string) {
 export async function getPostById(id: string): Promise<PostagemComUsuario> {
   const token = localStorage.getItem("token");
   
-  const response = await fetch(`http://localhost:3001/api/post/${id}`, {
+  const response = await fetch(`${API.BASE_URL}/api/post/${id}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

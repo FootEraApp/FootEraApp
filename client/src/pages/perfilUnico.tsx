@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import Storage from "../../../server/utils/storage";
+import { API } from "../config";
 
 import ProfileHeader from "../components/profile/ProfileHeader";
 import ActivityGrid from "../components/profile/ActivityGrid";
@@ -37,15 +39,15 @@ export default function PerfilUnico() {
   });
 
   const seguirUsuario = async () => {
-  const token = localStorage.getItem("token");
+  const token = Storage.token;
   try {
-    const response = await fetch(`http://localhost:3001/api/seguidores`, {
+    const response = await fetch(`${API.BASE_URL}/api/seguidores`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ seguidoUsuarioId: id }), // id do perfil visitado
+      body: JSON.stringify({ seguidoUsuarioId: id }), 
     });
 
     if (!response.ok) throw new Error("Erro ao seguir usuário");
@@ -57,16 +59,16 @@ export default function PerfilUnico() {
 };
 
 const solicitarTreino = async () => {
-  const token = localStorage.getItem("token");
+  const token = Storage.token;
 
   try {
-    const response = await fetch(`http://localhost:3001/api/solicitacoes-treino`, {
+    const response = await fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ destinatarioId: id }), // id do perfil visitado
+      body: JSON.stringify({ destinatarioId: id }),
     });
 
     if (!response.ok) throw new Error("Erro ao solicitar treino");
@@ -86,14 +88,14 @@ const solicitarTreino = async () => {
 
   setUsuarioId(id);
 
-  const loggedInId = localStorage.getItem("usuarioId");
-  const token = localStorage.getItem("token");
+  const loggedInId = Storage.usuarioId || "";
+  const token = Storage.token;
 
   if (id === loggedInId) {
     setIsOwnProfile(true);
   }
 
-  fetch(`http://localhost:3001/api/perfil/${id}`, {
+  fetch(`${API.BASE_URL}/api/perfil/${id}`, {
     headers: {
       Authorization: `Bearer ${token}`
     }

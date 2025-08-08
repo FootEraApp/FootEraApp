@@ -38,26 +38,36 @@ export const criarSolicitacao = async (req: AuthenticatedRequest, res: Response)
   }
 };
 
-export const listarSolicitacoesRecebidas = async (req: Request, res: Response) => {
-  const usuarioId = (req as any).usuarioId;
+export const listarSolicitacoesRecebidas = async (req: AuthenticatedRequest, res: Response) => {
+  const usuarioId = req.userId;
+
+  if (!usuarioId) {
+    return res.status(401).json({ error: "Usuário não autenticado." });
+  }
 
   try {
     const solicitacoes = await prisma.solicitacaoTreino.findMany({
-      where: { destinatarioId: usuarioId },
+      where: {
+        destinatarioId: usuarioId,
+      },
       include: {
         remetente: {
-          select: { 
-            id: true, 
+          select: {
+            id: true,
+            nome: true,
             nomeDeUsuario: true,
-            foto: true 
+            foto: true,
           },
         },
+      },
+      orderBy: {
+        criadoEm: "desc",
       },
     });
 
     return res.json(solicitacoes);
   } catch (error) {
-    console.error("Erro ao listar solicitações:", error);
+    console.error("Erro ao listar solicitações recebidas:", error);
     return res.status(500).json({ error: "Erro interno do servidor" });
   }
 };
@@ -150,9 +160,6 @@ export const recusarSolicitacao = async (req: AuthenticatedRequest, res: Respons
     const solicitacao = await prisma.solicitacaoTreino.findUnique({
       where: { id },
     });
-
-    console.log("🔍 solicitacao encontrada:", solicitacao);
-    console.log("🧑 usuario logado:", usuarioId);
 
     if (!solicitacao || solicitacao.destinatarioId !== usuarioId) {
       console.warn("❌ Não é o destinatário ou solicitação inexistente");

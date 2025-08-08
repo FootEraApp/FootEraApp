@@ -1,8 +1,10 @@
+import Storage from "../../../server/utils/storage";
+
 export function getUserFromLocalStorage() {
   if (typeof window === "undefined") return null;
 
   try {
-    const user = localStorage.getItem("user");
+    const user = Storage.nomeUsuario;
     return user ? JSON.parse(user) : null;
   } catch {
     return null;

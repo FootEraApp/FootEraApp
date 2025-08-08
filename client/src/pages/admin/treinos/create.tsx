@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API } from "../../../config";
 
 export default function CriarOuEditarTreino() {
   const [id, setId] = useState<string | null>(null);
@@ -23,7 +24,7 @@ export default function CriarOuEditarTreino() {
     if (treinoId) {
       setId(treinoId);
 
-      fetch(`http://localhost:3001/api/treinosprogramados/${treinoId}`)
+      fetch(`${API.BASE_URL}/api/treinosprogramados/${treinoId}`)
         .then(res => res.json())
         .then(data => {
           setCodigo(data.codigo || "");
@@ -42,11 +43,11 @@ export default function CriarOuEditarTreino() {
         });
     }
 
-    fetch("http://localhost:3001/api/exercicios")
+    fetch("${API.BASE_URL}/api/exercicios")
       .then(res => res.json())
       .then(setExerciciosDisponiveis);
 
-    fetch("http://localhost:3001/api/professores")
+    fetch("${API.BASE_URL}/api/professores")
       .then(res => res.json())
       .then(setProfessoresDisponiveis);
   }, []);
@@ -79,7 +80,7 @@ export default function CriarOuEditarTreino() {
       })),
     };
 
-    const res = await fetch(`http://localhost:3001/api/treinosprogramados${id ? `/${id}` : ""}`, {
+    const res = await fetch(`${API.BASE_URL}/api/treinosprogramados${id ? `/${id}` : ""}`, {
       method: id ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

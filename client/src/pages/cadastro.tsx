@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png"; 
+import { API } from "../config";
 
 export default function Cadastro() {
   const [tipoPerfil, setTipoPerfil] = useState("Atleta");
@@ -37,7 +38,7 @@ export default function Cadastro() {
     if (tipoPerfil === "Atleta" && !categoria) return setErro("Por favor, selecione a categoria.");
 
     try {
-      const res = await fetch("http://localhost:3001/api/cadastro/cadastro", {
+      const res = await fetch("${API.BASE_URL}/api/cadastro/cadastro", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
