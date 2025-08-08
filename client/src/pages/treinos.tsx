@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { Volleyball, User, CirclePlus, Search, House, Trash2 } from "lucide-react";
+import Storage from "../../../server/utils/storage";
+import { API } from "../config";
 
 interface Exercicio {
   id: string;
@@ -20,6 +22,7 @@ interface TreinoProgramado {
   professorId?: string;
   escolinhaId?: string;
   exercicios: Exercicio[];
+  pontuacao: number;
 }
 
 interface TreinoAgendado {
@@ -29,6 +32,7 @@ interface TreinoAgendado {
   treinoProgramado?: {
     descricao?: string;
     nivel: string;
+    pontuacao: number;
     dicas?: string[];
     objetivo?: string;
     duracao?: number;
@@ -64,63 +68,67 @@ export default function PaginaTreinos() {
   const [, navigate] = useLocation();
   const [abaProfessor, setAbaProfessor] = useState<"avaliar" | "criar">("avaliar");
   const [treinosAgendados, setTreinosAgendados] = useState<TreinoAgendado[]>([]);
-
+  
   useEffect(() => {
-    const carregar = async () => {
-      const tipo = localStorage.getItem("tipoUsuario");
-      const tipoUsuarioId = localStorage.getItem("tipoUsuarioId");
-      const token = localStorage.getItem("token");
+  const carregar = async () => {
+    const desafiosRes = await fetch("${API.BASE_URL}/api/desafios");
+    const desafiosJson: Desafio[] = await desafiosRes.json();
+    setDesafios(desafiosJson);
 
-      if (tipo === "atleta" && tipoUsuarioId && token) {
-        const [resTreinos, resDesafios] = await Promise.all([
-          fetch(`http://localhost:3001/api/treinos/agendados?tipoUsuarioId=${tipoUsuarioId}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }),
-          fetch(`http://localhost:3001/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }),
-        ]);
+    const treinosRes = await fetch("${API.BASE_URL}/api/treinos");
+    const programadosJson: TreinoProgramado[] = await treinosRes.json();
+    setTreinos(programadosJson);
 
-        const treinosJson = await resTreinos.json();
-        const desafiosJson = await resDesafios.json();
+    const tipo = Storage.tipoSalvo;
+    const tipoUsuarioId = Storage.tipoUsuarioId;
+    const token = Storage.token;
+    const usuarioId = Storage.usuarioId;
 
-        setTreinosAgendados(treinosJson || []);
-        setDesafios(desafiosJson || []);
-      } else {
-        const res = await fetch("http://localhost:3001/api/treinos");
-        const json = await res.json();
+    if (tipo && usuarioId && tipoUsuarioId) {
+      setUsuario({ tipo: tipo as any, usuarioId, tipoUsuarioId });
+    }
 
-        setTreinos(json.treinosProgramados || []);
-        setDesafios(json.desafiosOficiais || []);
-      }
-    };
+    if (tipo === "atleta" && tipoUsuarioId && token) {
+      const res = await fetch(`${API.BASE_URL}/api/treinos/agendados?tipoUsuarioId=${tipoUsuarioId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-    const carregarUsuario = () => {
-      const tipoSalvo = localStorage.getItem("tipoUsuario");
-      const usuarioId = localStorage.getItem("usuarioId");
-      const tipoUsuarioId = localStorage.getItem("tipoUsuarioId");
+      let treinosJson: TreinoAgendado[] = await res.json();
+        console.log("Treinos agendados:", treinosJson);
 
-      if (
-        ["atleta", "escola", "clube", "professor", "admin"].includes(tipoSalvo || "") &&
-        usuarioId && tipoUsuarioId
-      ) {
-        setUsuario({
-          tipo: tipoSalvo as UsuarioLogado["tipo"],
-          usuarioId,
-          tipoUsuarioId,
-        });
-      } else {
-        console.warn("Tipo de usuário, tipoUsuarioId ou ID inválido ou não encontrado.");
-      }
-    };
+      const agora = new Date();
+      const treinosAtuais = await Promise.all(
+        treinosJson.map(async (treino) => {
+          const data = new Date(treino.dataTreino);
+          if (data < agora) {
+            try {
+              const res = await fetch(`${API.BASE_URL}/api/treinos/agendados/${treino.id}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+              });
 
-    carregar();
-    carregarUsuario();
-  }, []);
+              if (res.status === 404) {
+                console.warn(`Treino agendado com id ${treino.id} não encontrado (404).`);
+              } else if (!res.ok) {
+                console.error(`Erro ao excluir treino ${treino.id}:`, await res.text());
+              }
+            } catch (err) {
+              console.error(`Erro na requisição ao deletar treino ${treino.id}:`, err);
+            }
+            return null; 
+          }
+          return treino; 
+        })
+      );
+
+      setTreinosAgendados(treinosAtuais.filter(Boolean) as TreinoAgendado[]);
+
+    }
+  };
+
+  carregar();
+}, []);
+
 
   const formatarData = (data?: string) => {
     if (!data) return "";
@@ -165,6 +173,7 @@ export default function PaginaTreinos() {
               ))}
             </ul>
           </div>
+          
         )}
       </div>
 
@@ -184,17 +193,51 @@ export default function PaginaTreinos() {
     </div>
   );
 
+const excluirTreino = async (treinoId: string) => {
+  const confirm = window.confirm("Deseja cancelar este treino?");
+  if (!confirm) return;
+
+  console.log("Tentando deletar treino agendado com ID:", treinoId);
+
+  const token = Storage.token;
+  const res = await fetch(`${API.BASE_URL}/api/treinos/agendados/${treinoId}`, {
+  method: "DELETE",
+  headers: { Authorization: `Bearer ${token}` },
+});
+
+if (res.status === 404) {
+  console.warn("Treino já foi deletado ou não existe.");
+  setTreinosAgendados(prev => prev.filter(t => t.id !== treinoId));
+  return;
+}
+
+if (res.ok) {
+  setTreinosAgendados(prev => prev.filter(t => t.id !== treinoId));
+  alert("Treino cancelado.");
+} else {
+  alert("Erro ao cancelar treino.");
+}
+};
+
 const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
   const programado = treino.treinoProgramado;
 
   return (
     <div key={treino.id} className="bg-white p-4 rounded shadow border mb-4">
       <h4 className="font-bold text-lg text-green-800">{treino.titulo}</h4>
-      {programado?.descricao && <p className="text-sm text-gray-700 mb-1">{programado.descricao}</p>}
 
       <div className="text-sm text-gray-600 space-y-1">
+        <p><strong>Descrição:</strong> {programado?.descricao}</p>
         <p><strong>Nível:</strong> {programado?.nivel}</p>
-        <p><strong>Data:</strong> {formatarData(treino.dataTreino)}</p>
+        <p><strong>Pontuação:</strong> {programado?.pontuacao}</p>
+        <p><strong>Data Final:</strong> {formatarData(treino.dataTreino)}</p>
+        
+        <div
+          className="text-red-600 hover:text-red-800 cursor-pointer flex items-center"
+          onClick={() => excluirTreino(treino.id)}
+        >
+          <Trash2 size={16} className="mr-1" /> Cancelar
+        </div>
         {programado?.duracao && <p><strong>Duração:</strong> {programado.duracao} min</p>}
         {programado?.objetivo && <p><strong>Objetivo:</strong> {programado.objetivo}</p>}
         {Array.isArray(programado?.dicas) && programado.dicas.length > 0 && (

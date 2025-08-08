@@ -8,9 +8,9 @@ import {
   FaTrash,
   FaLink
 } from "react-icons/fa";
-
+import Storage from "../../../server/utils/storage";
 import { Volleyball, User, CirclePlus, Search, House, CircleX } from "lucide-react";
-
+import { API } from "../config";
 import {
   getFeedPosts,
   likePost,
@@ -26,7 +26,7 @@ function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
   const [comentarioTextoPorPost, setComentarioTextoPorPost] = useState<Record<string, string>>({});
-  const userId = localStorage.getItem("usuarioId") ?? "";
+  const userId = Storage.usuarioId || "";
 
   const [modalAberto, setModalAberto] = useState(false);
   const [linkCompartilhado, setLinkCompartilhado] = useState("");
@@ -131,7 +131,7 @@ function PaginaFeed(): JSX.Element {
                     src={
                       post.videoUrl.startsWith("http")
                         ? post.videoUrl
-                        : `http://localhost:3001${post.videoUrl}`
+                        : `${API.BASE_URL}${post.videoUrl}`
                     }
                     type="video/mp4"
                   />

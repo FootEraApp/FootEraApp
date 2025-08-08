@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { formatarUrlFoto } from "@/utils/formatarFoto";
+import Storage from "../../../server/utils/storage";
+import {API} from "../config";
 
 interface Solicitacao {
   id: string;
   remetenteId: string;
   remetente: {
-    nomeDeUsuario: string;
-    foto?: string;
+    nome: string;
+    avatarUrl?: string;
   };
 }
 
@@ -15,10 +16,12 @@ export default function PaginaNotificacoes() {
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [location, setLocation] = useLocation();
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
+  
 
-    fetch("http://localhost:3001/api/solicitacoes-treino", {
+  useEffect(() => {
+    const token = Storage.token;
+
+    fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -29,7 +32,7 @@ export default function PaginaNotificacoes() {
   }, []);
 
   const responderSolicitacao = async (id: string, aceitar: boolean) => {
-  const token = localStorage.getItem("token");
+  const token = Storage.token;
 
   if (!token) {
     alert("Você precisa estar logado para responder a solicitação.");
@@ -37,7 +40,7 @@ export default function PaginaNotificacoes() {
   }
 
   try {
-    await fetch(`http://localhost:3001/api/solicitacoes-treino/${id}`, {
+    await fetch(`${API.BASE_URL}/api/solicitacoes-treino/${id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -73,13 +76,18 @@ export default function PaginaNotificacoes() {
             >
               <div className="flex items-center gap-4">
                 <img
-                  src={formatarUrlFoto(solicitacao.remetente.foto) }
-                  alt={solicitacao.remetente.nomeDeUsuario}
+                  src={
+                    solicitacao.remetente.avatarUrl ||
+                    "https://via.placeholder.com/50"
+                  }
+                  alt="Avatar"
                   className="w-12 h-12 rounded-full object-cover"
                 />
                 <div>
-                  <p className="text-sm text-gray-500">@{solicitacao.remetente.nomeDeUsuario}</p>
-                  <p className="text-sm text-gray-600">quer treinar junto com você</p>
+                  <p className="font-semibold">{solicitacao.remetente.nome}</p>
+                  <p className="text-sm text-gray-600">
+                    quer treinar junto com você
+                  </p>
                 </div>
               </div>
 

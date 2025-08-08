@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API } from "../../../config";
 
 export default function CriarOuEditarProfessor() {
   const [id, setId] = useState<string | null>(null);
@@ -20,7 +21,7 @@ export default function CriarOuEditarProfessor() {
     const profId = params.get("id");
     if (profId) {
       setId(profId);
-      fetch(`http://localhost:3001/api/professores/${profId}`)
+      fetch(`${API.BASE_URL}/api/professores/${profId}`)
         .then(res => res.json())
         .then(data => {
           setCodigo(data.codigo || "");
@@ -49,7 +50,7 @@ export default function CriarOuEditarProfessor() {
     if (fotoUrl) formData.append("fotoUrl", fotoUrl);
 
     try {
-      const res = await fetch(`http://localhost:3001/api/professores${id ? `/${id}` : ""}`, {
+      const res = await fetch(`${API.BASE_URL}/api/professores${id ? `/${id}` : ""}`, {
         method: id ? "PUT" : "POST",
         body: formData,
       });

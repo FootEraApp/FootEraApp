@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import axios from "axios";
+import Storage from "../../../server/utils/storage";
+import { API } from "../config";
 
 import ProfileHeader from "../components/profile/ProfileHeader";
 import ActivityGrid from "../components/profile/ActivityGrid";
@@ -56,8 +58,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const id = localStorage.getItem("usuarioId");
-    const token = localStorage.getItem("token");
+    const id = Storage.usuarioId;
+    const token = Storage.token;
 
     if (!id || !token) return;
 
@@ -65,10 +67,10 @@ export default function ProfilePage() {
     const headers = { Authorization: `Bearer ${token}` };
 
     Promise.all([
-      axios.get(`http://localhost:3001/api/perfil/${id}`, { headers }),
-      axios.get(`http://localhost:3001/api/perfil/${id}/atividades`, { headers }),
-      axios.get(`http://localhost:3001/api/perfil/${id}/badges`, { headers }),
-      axios.get(`http://localhost:3001/api/perfil/${id}/pontuacao`, { headers }),
+      axios.get(`${API.BASE_URL}/api/perfil/${id}`, { headers }),
+      axios.get(`${API.BASE_URL}/api/perfil/${id}/atividades`, { headers }),
+      axios.get(`${API.BASE_URL}/api/perfil/${id}/badges`, { headers }),
+      axios.get(`${API.BASE_URL}/api/perfil/${id}/pontuacao`, { headers }),
     ])
       .then(([perfilRes, atividadesRes, badgesRes, pontuacaoRes]) => {
         setPerfil(perfilRes.data);

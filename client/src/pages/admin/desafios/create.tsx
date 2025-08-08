@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { API } from "../../../config";
+import Storage from "../../../../../server/utils/storage";
 
 export default function CreateOrEditDesafio() {
   const [id, setId] = useState<string | null>(null);
@@ -21,7 +23,7 @@ export default function CreateOrEditDesafio() {
     const desafioId = params.get("id");
     if (desafioId) {
       setId(desafioId);
-      fetch(`http://localhost:3001/api/desafios/${desafioId}`)
+      fetch(`${API.BASE_URL}/api/desafios/${desafioId}`)
         .then(res => res.json())
         .then(data => {
           setTitulo(data.titulo || "");
@@ -39,7 +41,7 @@ export default function CreateOrEditDesafio() {
   }, []);
 
   useEffect(() => {
-    fetch("http://localhost:3001/api/categorias")
+    fetch("${API.BASE_URL}/api/categorias")
       .then(res => res.json())
       .then(data => setOpcoesCategorias(data))
       .catch(err => console.error("Erro ao carregar categorias:", err));
@@ -62,11 +64,11 @@ export default function CreateOrEditDesafio() {
 
     const metodo = id ? "PUT" : "POST";
     const url = id
-      ? `http://localhost:3001/api/desafios/${id}`
-      : "http://localhost:3001/api/desafios";
+      ? `${API.BASE_URL}/api/desafios/${id}`
+      : "${API.BASE_URL}/api/desafios";
 
     try {
-      const token = localStorage.getItem("token");
+      const token = Storage.token;
 
       const res = await fetch(url, {
         method: metodo,

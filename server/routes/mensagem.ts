@@ -1,17 +1,13 @@
 import { Router } from "express";
+import { authenticateToken } from "../middlewares/auth";
 import {
-  getMensagens,
   enviarMensagem,
-  getCaixasDeMensagens
+  buscarMensagens
 } from "../controllers/mensagensController";
-import { authenticateToken as authenticate} from "../middlewares/auth"; 
 
 const router = Router();
 
-router.use(authenticate); 
-
-router.get("/caixa", getCaixasDeMensagens);
-router.get("/:destinatarioId", getMensagens);
-router.post("/:destinatarioId", enviarMensagem);
+router.post("/", authenticateToken, enviarMensagem);
+router.get("/", authenticateToken, buscarMensagens);
 
 export default router;

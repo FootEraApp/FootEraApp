@@ -22,5 +22,28 @@ router.delete("/:id", authenticateToken, excluirDesafio);
 router.post("/:id/submissoes", criarSubmissaoDesafio);
 router.get("/:id/submissoes", getSubmissoesPorDesafio);
 router.get("/atleta/:atletaId/submissoes", getSubmissoesPorAtleta);
+router.get("/submissoes", authenticateToken, async (req, res) => {
+  try {
+    const submissoes = await prisma.submissaoDesafio.findMany({
+      include: {
+        desafio: true,
+        midias: true,
+        atleta: {
+          include: {
+            usuario: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    });
+
+    return res.json(submissoes);
+  } catch (err) {
+    console.error("Erro ao buscar submissões:", err);
+    return res.status(500).json({ error: "Erro interno ao buscar submissões" });
+  }
+});
 
 export default router;

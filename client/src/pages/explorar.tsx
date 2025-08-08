@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { withAuth } from "@/components/ProtectedRoute";
 import { formatarUrlFoto } from "@/utils/formatarFoto";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { API } from "../config";
 
  function Explorar() {
   const [busca, setBusca] = useState("");
@@ -16,7 +17,7 @@ import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
   });
 
   useEffect(() => {
-    fetch(`http://localhost:3001/api/explorar?q=${busca}`)
+    fetch(`${API.BASE_URL}/api/explorar?q=${busca}`)
       .then((res) => res.json())
       .then(setDados)
       .catch(console.error);

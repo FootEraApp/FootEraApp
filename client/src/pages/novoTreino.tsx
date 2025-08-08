@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import Storage from "../../../server/utils/storage";
+import { API } from "../config";
 
 interface UsuarioLogado {
   tipo: 'atleta' | 'escola' | 'clube' | 'professor' | 'admin';
@@ -22,6 +24,7 @@ interface TreinoProgramado {
   objetivo?: string;
   dicas?: string[];
   exercicios: Exercicio[];
+  pontuacao: number;
 }
 
 export default function NovoTreinoParaAtleta() {
@@ -30,28 +33,50 @@ export default function NovoTreinoParaAtleta() {
   const [, navigate] = useLocation();
 
   useEffect(() => {
-    const tipo = localStorage.getItem("tipoUsuario");
-    const usuarioId = localStorage.getItem("usuarioId");
-    const tipoUsuarioId = localStorage.getItem("tipoUsuarioId");
+    const tipo = Storage.tipoSalvo;
+    const usuarioId = Storage.usuarioId;
+    const tipoUsuarioId = Storage.tipoUsuarioId;
+    const token = Storage.token;
 
-    if (tipo && usuarioId && tipoUsuarioId) {
+    if (tipo && usuarioId && tipoUsuarioId && token) {
       setUsuario({
         tipo: tipo as UsuarioLogado["tipo"],
         usuarioId,
         tipoUsuarioId,
       });
 
-      fetch("http://localhost:3001/api/treinosprogramados")
-        .then(res => res.json())
-        .then(data => setTreinos(data || []));
+      fetch("${API.BASE_URL}/api/treinos/todos", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        }
+      })
+        .then(res => {
+          if (!res.ok) throw new Error("Erro ao buscar treinos");
+          return res.json();
+        })
+        .then((data: TreinoProgramado[]) => {
+          setTreinos(data);
+        })
+        .catch((err) => {
+          console.error("Erro ao carregar treinos:", err);
+        });
     }
   }, []);
 
   const agendarTreino = async (treinoId: string) => {
     if (!usuario) return;
 
-    const token = localStorage.getItem("token");
-    const res = await fetch("http://localhost:3001/api/treinos/agendar", {
+    const dataEscolhida = prompt("Escolha uma data para o treino (MM-DD-YYYY):");
+    if (!dataEscolhida) return;
+
+    const dataValida = new Date(dataEscolhida);
+    if (isNaN(dataValida.getTime())) {
+      alert("Data inválida.");
+      return;
+    }
+
+    const token = Storage.token;
+    const res = await fetch("${API.BASE_URL}/api/treinos/agendar", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -60,7 +85,7 @@ export default function NovoTreinoParaAtleta() {
       body: JSON.stringify({
         atletaId: usuario.tipoUsuarioId,
         treinoProgramadoId: treinoId,
-        dataTreino: new Date().toISOString()
+        dataTreino: dataEscolhida,
       }),
     });
 
@@ -85,6 +110,7 @@ export default function NovoTreinoParaAtleta() {
             <h4 className="text-lg font-semibold text-green-700">{treino.nome}</h4>
             <p className="text-sm text-gray-600 mb-1">{treino.descricao}</p>
             <p className="text-sm text-gray-500"><strong>Nível:</strong> {treino.nivel}</p>
+            <p className="text-sm text-gray-500"><strong>Pontuação:</strong> {treino.pontuacao} </p>
             <button
               onClick={() => agendarTreino(treino.id)}
               className="mt-2 bg-green-700 text-white px-4 py-2 rounded"

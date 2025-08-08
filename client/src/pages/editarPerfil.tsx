@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { formatarUrlFoto } from '@/utils/formatarFoto';
+import Storage from "../../../server/utils/storage";
+import { API } from '../config';
 
 const EditarPerfil = () => {
-  const usuarioId = localStorage.getItem('usuarioId');
-  const tipoUsuario = localStorage.getItem('tipoUsuario');
-  const token = localStorage.getItem('token');
+  const usuarioId = Storage.usuarioId;
+  const tipoUsuario = Storage.tipoSalvo;
+  const token = Storage.token;
 
   const [dadosUsuario, setDadosUsuario] = useState<any>(null);
   const [dadosTipo, setDadosTipo] = useState<any>(null);
@@ -14,7 +16,7 @@ const EditarPerfil = () => {
   useEffect(() => {
     const fetchDados = async () => {
       try {
-        const res = await axios.get(`http://localhost:3001/api/perfil/${usuarioId}`, {
+        const res = await axios.get(`${API.BASE_URL}/api/perfil/${usuarioId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
@@ -206,7 +208,7 @@ const EditarPerfil = () => {
               formData.append("tipo", tipoUsuario!);
 
               const uploadRes = await axios.post(
-                "http://localhost:3001/api/upload/perfil",
+                "${API.BASE_URL}/api/upload/perfil",
                 formData
               );
               fotoUrl = uploadRes.data.caminho;
@@ -223,7 +225,7 @@ const EditarPerfil = () => {
             }
 
             await axios.put(
-              `http://localhost:3001/api/perfil/${usuarioId}`,
+              `${API.BASE_URL}/api/perfil/${usuarioId}`,
               {
                 usuario: { ...dadosUsuario, foto: fotoUrl },
                 tipo,
