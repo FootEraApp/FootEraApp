@@ -1,7 +1,7 @@
-import { Route } from "wouter";
+import { Route, Switch } from "wouter";
+import { Private, PublicOnly, HomeRedirect } from "./auth";
 import PaginaLogin from "./pages/login";
 import PaginaCadastro from "./pages/cadastro";
-import HomeRedirect from "./pages/index";
 import PaginaFeed from "./pages/feed";
 import PaginaTreinos from "./pages/treinos";
 import PaginaCreatePost from "./pages/post/create";
@@ -26,27 +26,27 @@ import PaginaMensagens from "./pages/mensagens";
 
 export function AppRoutes() {
   return (
-    <>
+    <Switch>
       <Route path="/">
         <HomeRedirect />
       </Route>
       <Route path="/login">
-        <PaginaLogin />
+        <PublicOnly><PaginaLogin /></PublicOnly>
       </Route>
       <Route path="/cadastro">
         <PaginaCadastro />
       </Route>
       <Route path="/feed">
-        <PaginaFeed />
+        <Private>< PaginaFeed /></Private>
       </Route>
       <Route path="/treinos">
-        <PaginaTreinos />
+        <Private><PaginaTreinos /></Private>
       </Route>
       <Route path="/treinos/novo">
         <PaginaNovoTreino />
       </Route>
       <Route path="/post">
-        <PaginaCreatePost />
+        <Private><PaginaCreatePost /></Private>
       </Route>
       <Route path="/post/:id">
         <PaginaPostUnico />
@@ -55,7 +55,7 @@ export function AppRoutes() {
         <PaginaMostrarPost />
       </Route>
       <Route path="/explorar">
-        <PaginaExplorar />
+        <Private><PaginaExplorar /></Private>
       </Route>
       <Route path="/admin">
         <PaginaAdmin />
@@ -76,10 +76,10 @@ export function AppRoutes() {
         <PaginaLoginAdmin />
       </Route>
       <Route path="/perfil">
-        <PaginaPerfil />
+        <Private><PaginaPerfil /></Private>
       </Route>
       <Route path="/perfil/:id">
-        <PaginaPerfilUnico />
+        <Private><PaginaPerfilUnico /></Private>
       </Route>
       <Route path="/perfil/editar">
         <PaginaEditarPerfil />
@@ -99,6 +99,7 @@ export function AppRoutes() {
       <Route path="/mensagens">
         <PaginaMensagens />
       </Route>
-    </>
+      <Route><div style={{ padding: 16 }}>Página não encontrada</div></Route>
+    </Switch>
   );
 }

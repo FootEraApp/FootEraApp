@@ -71,11 +71,11 @@ export default function PaginaTreinos() {
   
   useEffect(() => {
   const carregar = async () => {
-    const desafiosRes = await fetch("${API.BASE_URL}/api/desafios");
+    const desafiosRes = await fetch(`${API.BASE_URL}/api/desafios`);
     const desafiosJson: Desafio[] = await desafiosRes.json();
     setDesafios(desafiosJson);
 
-    const treinosRes = await fetch("${API.BASE_URL}/api/treinos");
+    const treinosRes = await fetch(`${API.BASE_URL}/api/treinos`);
     const programadosJson: TreinoProgramado[] = await treinosRes.json();
     setTreinos(programadosJson);
 

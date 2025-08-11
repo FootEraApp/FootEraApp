@@ -11,7 +11,7 @@ export default function AdminLogin() {
     setErro("");
 
     try {
-      const response = await fetch("${API.BASE_URL}/api/admin/login", {
+      const response = await fetch(`${API.BASE_URL}/api/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: usuario, senha }),

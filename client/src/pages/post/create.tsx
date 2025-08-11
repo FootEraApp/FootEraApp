@@ -40,7 +40,7 @@ function PaginaPostagem() {
 
 
     try {
-      const res = await fetch("${API.BASE_URL}/api/post/postar", {
+      const res = await fetch(`${API.BASE_URL}/api/post/postar`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,

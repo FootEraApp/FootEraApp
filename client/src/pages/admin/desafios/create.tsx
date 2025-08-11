@@ -41,7 +41,7 @@ export default function CreateOrEditDesafio() {
   }, []);
 
   useEffect(() => {
-    fetch("${API.BASE_URL}/api/categorias")
+    fetch(`${API.BASE_URL}/api/categorias`)
       .then(res => res.json())
       .then(data => setOpcoesCategorias(data))
       .catch(err => console.error("Erro ao carregar categorias:", err));
@@ -65,7 +65,7 @@ export default function CreateOrEditDesafio() {
     const metodo = id ? "PUT" : "POST";
     const url = id
       ? `${API.BASE_URL}/api/desafios/${id}`
-      : "${API.BASE_URL}/api/desafios";
+      : `${API.BASE_URL}/api/desafios`;
 
     try {
       const token = Storage.token;

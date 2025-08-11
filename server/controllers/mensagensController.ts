@@ -4,7 +4,7 @@ import { AuthenticatedRequest } from "../middlewares/auth";
 
 export const enviarMensagem = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const deId = req.userId; 
+    const deId = req.userId;  
     const { paraId, conteudo } = req.body;
 
     if (!deId || !paraId || !conteudo) {

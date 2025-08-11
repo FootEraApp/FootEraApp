@@ -1,11 +1,11 @@
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "../lib/prisma";
 
 export async function removerTreinosExpirados() {
   const agora = new Date();
 
-  const treinos = await prisma.treinoProgramado.findMany();
+  const treinos = await prisma.treinoProgramado.findMany({
+    select: { id: true, nome: true, createdAt: true, duracao: true },
+  });
 
   for (const treino of treinos) {
     if (treino.duracao && treino.createdAt) {
@@ -22,7 +22,7 @@ export async function removerTreinosExpirados() {
 
       console.log(`Treino ${treino.nome} removido por expiração.`);
     } 
-  }
+   }
   }
 }
 

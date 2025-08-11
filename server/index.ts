@@ -6,6 +6,8 @@ import { dirname } from "path";
 import bodyParser from "body-parser";
 import dotenv from "dotenv";
 import cron from "node-cron";
+import http from "http";
+import { initSocket } from "./socket";
 
 import adminRoutes from "./routes/admin";
 import atletaRoutes from "./routes/atleta";
@@ -48,6 +50,10 @@ import { removerTreinosExpirados } from "./routes/removerTreinosExpirados";
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const server = http.createServer(app);
+const io = initSocket(server);
+
 dotenv.config();
 
 app.use(cors());
@@ -71,7 +77,7 @@ app.use("/api/grupos", gruposRoutes);
 app.use("/api/home", homeRoutes);
 app.use("/api/logerro", logErroRoutes);
 app.use("/api/login", loginRoutes);
-app.use("/api/mensagens", mensagemRoutes);
+app.use("/api/mensagem", mensagemRoutes);
 app.use("/api/midias", midiaRoutes);
 app.use("/api/perfil", perfilRoutes);
 app.use("/api/pontuacao", pontuacaoRoutes);
@@ -93,14 +99,15 @@ app.use("/api/vinculo", vinculoRoutes);
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 app.use("/assets", express.static("client/public/assets/")); 
 
+app.get("/api/health", (_req, res) => res.send("ok"));
 app.get("/", (req, res) => {
   res.send("FootEra API está ativa!");
 });
 
 const PORT = process.env.PORT || 3001;
 
-app.listen(3001, () => {
-  console.log(`Servidor rodando em http://localhost:3001`);
+server.listen(PORT, () => {
+  console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
 
 cron.schedule("*/10 * * * *", async () => {

@@ -45,7 +45,7 @@ export default function NovoTreinoParaAtleta() {
         tipoUsuarioId,
       });
 
-      fetch("${API.BASE_URL}/api/treinos/todos", {
+      fetch(`${API.BASE_URL}/api/treinos/todos`, {
         headers: {
           Authorization: `Bearer ${token}`,
         }
@@ -76,7 +76,7 @@ export default function NovoTreinoParaAtleta() {
     }
 
     const token = Storage.token;
-    const res = await fetch("${API.BASE_URL}/api/treinos/agendar", {
+    const res = await fetch(`${API.BASE_URL}/api/treinos/agendar`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

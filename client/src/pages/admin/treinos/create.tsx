@@ -43,11 +43,11 @@ export default function CriarOuEditarTreino() {
         });
     }
 
-    fetch("${API.BASE_URL}/api/exercicios")
+    fetch(`${API.BASE_URL}/api/exercicios`)
       .then(res => res.json())
       .then(setExerciciosDisponiveis);
 
-    fetch("${API.BASE_URL}/api/professores")
+    fetch(`${API.BASE_URL}/api/professores`)
       .then(res => res.json())
       .then(setProfessoresDisponiveis);
   }, []);

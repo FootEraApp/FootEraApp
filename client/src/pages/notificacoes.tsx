@@ -7,8 +7,9 @@ interface Solicitacao {
   id: string;
   remetenteId: string;
   remetente: {
-    nome: string;
-    avatarUrl?: string;
+    id: string;
+    nomeDeUsuario: string;   
+    foto: string | null;  
   };
 }
 
@@ -76,15 +77,13 @@ export default function PaginaNotificacoes() {
             >
               <div className="flex items-center gap-4">
                 <img
-                  src={
-                    solicitacao.remetente.avatarUrl ||
-                    "https://via.placeholder.com/50"
-                  }
-                  alt="Avatar"
+                  src={solicitacao.remetente.foto ?? "https://via.placeholder.com/50"}
+                  alt={`Foto de ${solicitacao.remetente.nomeDeUsuario}`}
                   className="w-12 h-12 rounded-full object-cover"
                 />
+
                 <div>
-                  <p className="font-semibold">{solicitacao.remetente.nome}</p>
+                  <p className="font-semibold">{solicitacao.remetente.nomeDeUsuario}</p>
                   <p className="text-sm text-gray-600">
                     quer treinar junto com você
                   </p>
