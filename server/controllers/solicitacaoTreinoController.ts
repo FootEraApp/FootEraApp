@@ -1,8 +1,13 @@
-import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { Response } from "express";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth";
+import { API } from "../../client/src/config";
 
 const prisma = new PrismaClient();
+
+type SolicitacaoComRemetente = Prisma.SolicitacaoTreinoGetPayload<{
+  include: { remetente: { select: { id: true; nomeDeUsuario: true; foto: true } } }
+}>;
 
 export const criarSolicitacao = async (req: AuthenticatedRequest, res: Response) => {
   const { destinatarioId } = req.body;
@@ -28,6 +33,7 @@ export const criarSolicitacao = async (req: AuthenticatedRequest, res: Response)
       data: {
         remetenteId,
         destinatarioId,
+        status: "PENDENTE", 
       },
     });
 
@@ -40,32 +46,29 @@ export const criarSolicitacao = async (req: AuthenticatedRequest, res: Response)
 
 export const listarSolicitacoesRecebidas = async (req: AuthenticatedRequest, res: Response) => {
   const usuarioId = req.userId;
-
-  if (!usuarioId) {
-    return res.status(401).json({ error: "Usuário não autenticado." });
-  }
+  if (!usuarioId) return res.status(401).json({ error: "Usuário não autenticado." });
 
   try {
-    const solicitacoes = await prisma.solicitacaoTreino.findMany({
-      where: {
-        destinatarioId: usuarioId,
-      },
-      include: {
-        remetente: {
-          select: {
-            id: true,
-            nome: true,
-            nomeDeUsuario: true,
-            foto: true,
-          },
-        },
-      },
-      orderBy: {
-        criadoEm: "desc",
-      },
-    });
+    const solicitacoes: SolicitacaoComRemetente[] =
+      await prisma.solicitacaoTreino.findMany({
+        where: { destinatarioId: usuarioId, status: "PENDENTE" },
+        include: { remetente: { select: { id: true, nomeDeUsuario: true, foto: true } } },
+        orderBy: { criadoEm: "desc" },
+      });
 
-    return res.json(solicitacoes);
+    const BASE_URL = process.env.BASE_URL ?? `${API.BASE_URL}`;
+
+    const payload = solicitacoes.map((s) => ({
+      id: s.id,
+      remetenteId: s.remetenteId,
+      remetente: {
+        id: s.remetente.id,
+        nomeDeUsuario: s.remetente.nomeDeUsuario,
+        fotoUrl: s.remetente.foto ? `${BASE_URL}${s.remetente.foto}` : null,
+      },
+    }));
+
+    return res.json(payload);
   } catch (error) {
     console.error("Erro ao listar solicitações recebidas:", error);
     return res.status(500).json({ error: "Erro interno do servidor" });

@@ -1,5 +1,6 @@
-import { API } from "../config";
 import Storage from "../../../server/utils/storage";
+import { API } from "../config";
+import { apiGet } from "./api";
 
 export interface Usuario {
   id: string;
@@ -12,10 +13,7 @@ export interface Comentarios {
   id: string;
   conteudo: string;
   dataCriacao: string;
-  usuario: {
-    nome: string;
-    foto?: string;
-  };
+  usuario: { nome: string; foto?: string };
 }
 
 export interface PostagemComUsuario {
@@ -31,23 +29,14 @@ export interface PostagemComUsuario {
   compartilhamentos: number;
 }
 
-export async function getFeedPosts(): Promise<PostagemComUsuario[]> {
-try {
+export async function getFeedPosts(
+  onUnauthorized?: () => void
+): Promise<PostagemComUsuario[]> {
+  try {
+    const res = await apiGet("/api/feed/", onUnauthorized);
+    const data = await res.json();
 
-  const token = localStorage.getItem("token");
-   const response = await fetch("${API.BASE_URL}/api/feed/", {
-    headers: {
-        Authorization: `Bearer ${token}`,
-   },
-    });
-
-    if (!response.ok) {
-        throw new Error(`Erro ao buscar feed: ${response.statusText}`);
-    }
-
-  const data = await response.json();
-
-  const postsCompletos = data.map((post: any) => ({
+    return data.map((post: any) => ({
       ...post,
       curtidas: Array.isArray(post.curtidas) ? post.curtidas : [],
       comentarios: Array.isArray(post.comentarios) ? post.comentarios : [],
@@ -57,37 +46,27 @@ try {
         tipo: "Desconhecido",
         foto: "/default-user.png",
       },
-    }));
-    
-
-    return postsCompletos;
-} catch (error) {
-  console.error("Erro ao buscar posts do feed:", error); 
-  return []; 
+      compartilhamentos: Number(post?.compartilhamentos ?? 0),
+    })) as PostagemComUsuario[];
+  } catch (error) {
+    console.error("Erro ao buscar posts do feed:", error);
+    return [];
+  }
 }
-}  
 
 export async function likePost(postId: string) {
-  const token = localStorage.getItem("token");
-
+  const token = Storage.token;
   const response = await fetch(`${API.BASE_URL}/api/post/${postId}/like`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
-
-  if (!response.ok) {
-    throw new Error(`Erro ao curtir post: ${response.statusText}`);
-  }
-
+  if (!response.ok) throw new Error(`Erro ao curtir post: ${response.statusText}`);
   return response.json();
 }
 
 export async function comentarPost(postId: string, conteudo: string) {
-  const token = localStorage.getItem("token");
- 
-  await fetch(`${API.BASE_URL}/api/post/${postId}/comentario`, {
+  const token = Storage.token;
+  const response = await fetch(`${API.BASE_URL}/api/post/${postId}/comentario`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -95,40 +74,34 @@ export async function comentarPost(postId: string, conteudo: string) {
     },
     body: JSON.stringify({ conteudo }),
   });
+  if (!response.ok) throw new Error(`Erro ao comentar post: ${response.statusText}`);
+  return response.json();
 }
 
 export async function compartilharPost(postId: string) {
-  const token = Storage.token;
-
   const link = `${window.location.origin}/post/${postId}`;
   try {
     await navigator.clipboard.writeText(link);
-
-    await fetch(`${API.BASE_URL}/api/post/${postId}/compartilhar`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
+    await fetch(`${API.BASE_URL}/api/post/${postId}/compartilhar`, { method: "POST" });
     alert("Link copiado para a área de transferência!");
   } catch (error) {
-    console.error("Erro ao compartilhar:", error);
-    alert("Não foi possível compartilhar.");
+    console.error("Erro ao copiar link:", error);
+    alert("Não foi possível copiar o link.");
   }
 }
 
-
 export async function getPostById(id: string): Promise<PostagemComUsuario> {
-  const token = localStorage.getItem("token");
-  
-  const response = await fetch(`${API.BASE_URL}/api/post/${id}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+  const token = Storage.token;
+  const response = await fetch(`${API.BASE_URL}/api/post/visualizar/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
-
   if (!response.ok) throw new Error("Erro ao buscar post");
 
-  return response.json();
+  const raw = await response.json();
+  return {
+    ...raw,
+    compartilhamentos: Number(raw?.compartilhamentos ?? 0),
+    curtidas: Array.isArray(raw.curtidas) ? raw.curtidas : [],
+    comentarios: Array.isArray(raw.comentarios) ? raw.comentarios : [],
+  } as PostagemComUsuario;
 }

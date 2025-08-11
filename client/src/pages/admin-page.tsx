@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { withAuth } from "@/components/ProtectedRoute";
-import{ API } from "../config";
+import { API } from "../config";
 
 type Tab = "dashboard" | "exercicios" | "treinos" | "professores" | "desafios" | "configuracoes";
 
@@ -22,32 +22,32 @@ interface Treinos {
   const [configuracoes, setConfiguracoes] = useState<any>(null);
   
   useEffect(() => {
-    fetch("${API.BASE_URL}/api/admin")
+    fetch(`${API.BASE_URL}/api/admin`)
       .then(res => res.json())
       .then(setDados)
       .catch(console.error);
 
-    fetch('${API.BASE_URL}/api/exercicios')
+    fetch(`${API.BASE_URL}/api/exercicios`)
       .then(res => res.json())
       .then(setExercicios)
       .catch(console.error);
       
-    fetch('${API.BASE_URL}/api/treinos')
+    fetch(`${API.BASE_URL}/api/treinos`)
       .then(res => res.json())
       .then(setTreinos)
       .catch(console.error);
 
-    fetch('${API.BASE_URL}/api/professores')
+    fetch(`${API.BASE_URL}/api/professores`)
       .then(res => res.json())
       .then(setProfessores)
       .catch(console.error);
 
-    fetch('${API.BASE_URL}/api/desafios')
+    fetch(`${API.BASE_URL}/api/desafios`)
       .then(res => res.json())
       .then(setDesafios)
       .catch(console.error);
 
-    fetch("${API.BASE_URL}/api/configuracoes")
+    fetch(`${API.BASE_URL}/api/configuracoes`)
       .then(res => res.json())
       .then(setConfiguracoes)
       .catch(console.error);
@@ -332,7 +332,7 @@ interface Treinos {
                     type="checkbox"
                     checked={configuracoes[item.key]}
                     onChange={async (e) => {
-                      const res = await fetch("${API.BASE_URL}/api/configuracoes", {
+                      const res = await fetch(`${API.BASE_URL}/api/configuracoes`, {
                         method: "PATCH",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ [item.key]: e.target.checked }),
@@ -359,7 +359,7 @@ interface Treinos {
                   const novoValor = parseInt(e.target.value);
                   setConfiguracoes({ ...configuracoes, maxDailyPosts: novoValor });
 
-                  await fetch("${API.BASE_URL}/api/configuracoes", {
+                  await fetch(`${API.BASE_URL}/api/configuracoes`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ maxDailyPosts: novoValor }),

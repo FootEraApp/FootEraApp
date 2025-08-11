@@ -359,7 +359,7 @@ model SolicitacaoVinculo {
   atletaId     String
   entidadeId   String
   tipoEntidade String
-  status       String
+  status       String?
   criadoEm     DateTime @default(now())
 
   atleta Atleta @relation(fields: [atletaId], references: [id])
@@ -369,6 +369,7 @@ model SolicitacaoTreino {
   id             String   @id @default(uuid())
   remetenteId    String
   destinatarioId String
+  status         String?
   criadoEm       DateTime @default(now())
 
   remetente    Usuario @relation("SolicitacoesEnviadas", fields: [remetenteId], references: [id], onDelete: Cascade)

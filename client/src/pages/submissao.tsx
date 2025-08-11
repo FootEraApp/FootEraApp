@@ -51,10 +51,10 @@ export default function PaginaSubmissao() {
 
     if (treinoAgendadoId) {
       formData.append("treinoAgendadoId", treinoAgendadoId);
-      url = "${API.BASE_URL}/api/submissoes/treino";
+      url = `${API.BASE_URL}/api/submissoes/treino`;
     } else if (desafioId) {
       formData.append("desafioId", desafioId);
-      url = "${API.BASE_URL}/api/submissoes/desafio";
+      url = `${API.BASE_URL}/api/submissoes/desafio`;
     }
 
     try {

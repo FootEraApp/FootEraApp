@@ -208,7 +208,7 @@ const EditarPerfil = () => {
               formData.append("tipo", tipoUsuario!);
 
               const uploadRes = await axios.post(
-                "${API.BASE_URL}/api/upload/perfil",
+                `${API.BASE_URL}/api/upload/perfil`,
                 formData
               );
               fotoUrl = uploadRes.data.caminho;

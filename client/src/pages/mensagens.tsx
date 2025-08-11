@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { Send, Share2 } from "lucide-react";
 import Storage from "../../../server/utils/storage";
 import { API } from "../config";
+import socket from "../services/socket";
 
 interface Usuario {
   id: string;
@@ -20,92 +21,193 @@ interface Mensagem {
 
 export default function PaginaMensagens() {
   const [usuariosMutuos, setUsuariosMutuos] = useState<Usuario[]>([]);
+
   const [usuarioSelecionado, setUsuarioSelecionado] = useState<Usuario | null>(null);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
+
   const [novaMensagem, setNovaMensagem] = useState("");
   const [, navigate] = useLocation();
+
+  const limite = 20;
+  const [temMais, setTemMais] = useState(true);
+  const [carregandoMais, setCarregandoMais] = useState(false);
 
   const usuarioId = Storage.usuarioId;
   const token = Storage.token;
 
-useEffect(() => {
-  async function carregarDados() {
-    try {
-      const mutuos = await getUsuariosMutuos();
-      setUsuariosMutuos(mutuos);
-    } catch (err) {
-      console.error(err);
+  function requireUserId(): string {
+    if (!usuarioId) {
+      throw new Error("Usuário não autenticado");
     }
+    return usuarioId;
   }
-  carregarDados();
-}, []);
 
+  const usuarioSelecionadoRef = useRef<Usuario | null>(null);
 
   useEffect(() => {
-    if (usuarioSelecionado) {
-      carregarMensagens(usuarioSelecionado.id);
-    }
+    usuarioSelecionadoRef.current = usuarioSelecionado;
   }, [usuarioSelecionado]);
 
-  const carregarMensagens = async (usuarioIdAlvo: string) => {
-    try {
-      const res = await fetch(`${API.BASE_URL}/mensagens/${usuarioIdAlvo}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+useEffect(() => {
+  socket.connect();
 
-      const data: Mensagem[] = await res.json();
-      setMensagens(data);
+  socket.on("connect", () => {
+    console.log("Socket conectado", socket.id);
+    if (usuarioId) {
+      socket.emit("join", usuarioId);
+    }
+  });
+
+  socket.on("novaMensagem", (mensagem: Mensagem) => {
+    const selecionado = usuarioSelecionadoRef.current;
+    if (
+      selecionado &&
+      (mensagem.deId === selecionado.id || mensagem.paraId === selecionado.id)
+    ) {
+      setMensagens((prev) => [...prev, mensagem]);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Socket desconectado");
+  });
+
+  return () => {
+    socket.off("novaMensagem");
+    socket.disconnect();
+  };
+}, []);
+
+  useEffect(() => {
+    async function carregarDados() {
+      try {
+        const mutuos = await getUsuariosMutuos();
+        setUsuariosMutuos(mutuos);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    carregarDados();
+  }, []);
+
+  const carregarMensagens = async (usuarioIdAlvo: string, append = false) => {
+  try {
+    const ultimoId = append && mensagens.length > 0 ? mensagens[0].id : undefined;
+
+    const params: Record<string, string> = {
+      deId: requireUserId(),
+      paraId: usuarioIdAlvo,
+      limit: String(limite),
+    };
+    if (usuarioId) params.deId = usuarioId;
+    if (ultimoId) params.cursor = ultimoId;
+
+    const query = new URLSearchParams(params);
+
+    const res = await fetch(`${API.BASE_URL}/api/mensagem?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+      const novas: Mensagem[] = await res.json();
+      if (novas.length < limite) setTemMais(false);
+
+      const novasOrdenadas = novas.reverse();
+
+      if (append) {
+        setMensagens((prev) => {
+          const combined = [...novasOrdenadas, ...prev];
+          const uniqueMap = new Map<string, Mensagem>();
+          for (const msg of combined) uniqueMap.set(msg.id, msg);
+          return Array.from(uniqueMap.values()).sort(
+            (a, b) => new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime()
+          );
+        });
+      } else {
+        setMensagens(novasOrdenadas);
+      }
+
+      const chave = `conversa_${usuarioId}_${usuarioIdAlvo}`;
+      const mensagensSalvas = append ? [...novasOrdenadas, ...mensagens] : novasOrdenadas;
+      const ultimas100 = mensagensSalvas.slice(-100);
+      localStorage.setItem(chave, JSON.stringify(ultimas100));
     } catch (err) {
       console.error("Erro ao carregar mensagens:", err);
     }
   };
 
-  const enviarMensagem = async () => {
-    if (!novaMensagem.trim() || !usuarioSelecionado) return;
+  useEffect(() => {
+    if (!usuarioSelecionado) {
+      setMensagens([]);
+      setTemMais(true);
+      return;
+    }
 
-    await fetch(`${API.BASE_URL}/mensagens`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        paraId: usuarioSelecionado.id,
-        conteudo: novaMensagem,
-      }),
-    });
+    const chave = `conversa_${usuarioId}_${usuarioSelecionado.id}`;
+    const cache = JSON.parse(localStorage.getItem(chave) || "[]");
+    setMensagens(cache);
+    setTemMais(true);
+    carregarMensagens(usuarioSelecionado.id, false);
+  }, [usuarioSelecionado]);
 
-    setMensagens((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        criadaEm: new Date().toISOString(),
-        conteudo: novaMensagem,
-        deId: usuarioId,
-        paraId: usuarioSelecionado.id,
-      },
-    ]);
-
-    setNovaMensagem("");
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const top = e.currentTarget.scrollTop;
+    if (top < 50 && temMais && !carregandoMais && usuarioSelecionado) {
+      setCarregandoMais(true);
+      carregarMensagens(usuarioSelecionado.id, true).finally(() => {
+        setCarregandoMais(false);
+      });
+    }
   };
 
-  async function getUsuariosMutuos(): Promise<Usuario[]> {
-  const token = Storage.token;
+const enviarMensagem = async () => {
+  const myUsuarioId = requireUserId();
+  if (!novaMensagem.trim() || !usuarioSelecionado) return;
 
-  const res = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!res.ok) {
-    throw new Error("Erro ao buscar usuários mutuos");
+  if (!usuarioId) {
+    alert("Faça login para enviar mensagens.");
+    return;
   }
 
-  return await res.json();
-}
+  const payload = {
+    paraId: usuarioSelecionado.id,
+    conteudo: novaMensagem,
+  };
+
+  await fetch(`${API.BASE_URL}/api/mensagem`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const novaMsg: Mensagem = {
+    id: Date.now().toString(),
+    criadaEm: new Date().toISOString(),
+    conteudo: novaMensagem,
+    deId: myUsuarioId,            
+    paraId: usuarioSelecionado.id,
+  };
+
+  setMensagens((prev) => [...prev, novaMsg]);
+  socket.emit("sendMessage", novaMsg);
+  setNovaMensagem("");
+};
+
+  async function getUsuariosMutuos(): Promise<Usuario[]> {
+    const res = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error("Erro ao buscar usuários mutuos");
+    }
+
+    return await res.json();
+  }
 
   return (
     <div className="flex h-screen">
@@ -123,7 +225,7 @@ useEffect(() => {
             onClick={() => setUsuarioSelecionado(usuario)}
           >
             <img
-              src={ `${API.BASE_URL}${usuario.foto}` || "https://via.placeholder.com/40"} 
+              src={usuario.foto ? `${API.BASE_URL}${usuario.foto}` : "https://via.placeholder.com/40"}
               alt={`Foto de ${usuario.nome}`}
               className="w-12 h-12 rounded-full object-cover border"
             />
@@ -147,7 +249,10 @@ useEffect(() => {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-2 border rounded p-2 mb-4 bg-gray-50">
+            <div
+              className="flex-1 overflow-y-auto space-y-2 border rounded p-2 mb-4 bg-gray-50"
+              onScroll={handleScroll}
+            >
               {mensagens.map((msg) => (
                 <div
                   key={msg.id}
@@ -158,6 +263,7 @@ useEffect(() => {
                   {msg.conteudo}
                 </div>
               ))}
+              {carregandoMais && <p className="text-center text-sm text-gray-400">Carregando mais...</p>}
             </div>
 
             <div className="flex gap-2">

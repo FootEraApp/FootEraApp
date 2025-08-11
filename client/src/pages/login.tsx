@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
 import axios from "axios";
 import { API } from "../config";
+import Storage from "../../../server/utils/storage";
 
 export default function PaginaLogin() {
   const [nomeDeUsuario, setNomeDeUsuario] = useState("");
@@ -20,16 +21,16 @@ export default function PaginaLogin() {
     }
 
     try {
-      const resposta = await axios.post("${API.BASE_URL}/api/auth/login", {
-        nomeDeUsuario,
-        senha,
-      });
+      const resposta = await axios.post(
+        `${API.BASE_URL}/api/auth/login`, 
+        { nomeDeUsuario, senha }
+      );
 
       const storage = lembrarDeMim ? localStorage : sessionStorage;
 
       storage.setItem("token", resposta.data.token);
-      storage.setItem("nomeUsuario", resposta.data.nome);
-      storage.setItem("usuarioId", resposta.data.id);
+      storage.setItem("nomeUsuario", resposta.data.usuario.nomeDeUsuario);
+      storage.setItem("usuarioId", resposta.data.usuario.id);
 
       const tipoOriginal = resposta.data.tipo;
       const tipoFormatado = tipoOriginal.toLowerCase();
@@ -59,8 +60,7 @@ export default function PaginaLogin() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-
+    const token = Storage.token;
     if (token) {
       navigate("/feed");
     }

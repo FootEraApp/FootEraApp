@@ -1,7 +1,5 @@
 import { Request, Response } from "express";
 import multer from "multer";
-import path from "path";
-import fs from "fs";
 import { prisma } from "../lib/prisma";
 
 const storage = multer.diskStorage({

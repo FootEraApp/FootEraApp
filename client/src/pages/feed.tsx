@@ -5,8 +5,6 @@ import {
   FaRegCommentDots,
   FaShare,
   FaPaperPlane,
-  FaTrash,
-  FaLink
 } from "react-icons/fa";
 import Storage from "../../../server/utils/storage";
 import { Volleyball, User, CirclePlus, Search, House, CircleX } from "lucide-react";
@@ -15,12 +13,13 @@ import {
   getFeedPosts,
   likePost,
   comentarPost,
-  compartilharPost,
   PostagemComUsuario,
 } from "../services/feedService";
 import { format } from "date-fns";
 import { Link } from "wouter";
 import { formatarUrlFoto } from "@/utils/formatarFoto";
+import { useLocation } from "wouter";
+import { logout } from "@/utils/session";
 
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
@@ -33,16 +32,19 @@ function PaginaFeed(): JSX.Element {
 
   const [comentariosModalAberto, setComentariosModalAberto] = useState(false);
   const [postSelecionado, setPostSelecionado] = useState<PostagemComUsuario | null>(null);
-
+  const [, navigate] = useLocation();
 
   useEffect(() => {
-    async function carregarFeed() {
-      const dados = await getFeedPosts();
-      if (!dados) return;
+    (async () => {
+      const dados = await getFeedPosts(() => navigate("/login"));
       setPosts(dados);
-    }
-    carregarFeed();
+    })();
   }, []);
+
+  function handleLogout() {
+    logout();
+    navigate("/login");
+  }
 
   const handleLike = async (postId: string) => {
     try {
@@ -88,6 +90,7 @@ function PaginaFeed(): JSX.Element {
   return (
     <div className="px-4 py-6 space-y-6 pb-24">
       <h1 className="text-2xl font-bold mb-4 text-center">Feed de Postagens</h1>
+
 
       {posts.map((post) => {
         const curtidas = post.curtidas || [];
@@ -223,6 +226,9 @@ function PaginaFeed(): JSX.Element {
         <Link href="/perfil" className="hover:underline">
           <User /> 
         </Link>
+        <button onClick={handleLogout} title="Sair">
+          🚪
+        </button>
       </nav>
 
       {modalAberto && (
@@ -343,8 +349,6 @@ function PaginaFeed(): JSX.Element {
           </div>
         </div>
       )}
-
-
     </div>
   );
 }

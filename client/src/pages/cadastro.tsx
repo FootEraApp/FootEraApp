@@ -38,7 +38,7 @@ export default function Cadastro() {
     if (tipoPerfil === "Atleta" && !categoria) return setErro("Por favor, selecione a categoria.");
 
     try {
-      const res = await fetch("${API.BASE_URL}/api/cadastro/cadastro", {
+      const res = await fetch(`${API.BASE_URL}/api/cadastro/cadastro`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
