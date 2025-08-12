@@ -58,9 +58,15 @@ export async function login(req: Request, res: Response) {
       message: "Login bem-sucedido",
       token,
       tipo: usuario.tipo,
-      nome: usuario.nomeDeUsuario,
+      nomeDeUsuario: usuario.nomeDeUsuario,
       id: usuario.id,
       tipoUsuarioId, 
+      usuario: {
+        id: usuario.id,
+        nomeDeUsuario: usuario.nomeDeUsuario,
+        tipo: usuario.tipo,
+        email: usuario.email,
+      },
     });
   } catch (error) {
     console.error("Erro no login:", error);

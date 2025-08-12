@@ -24,16 +24,17 @@ model Usuario {
   codigo        String?
   verified      Boolean     @default(false)
 
-  submissaoDesafios     SubmissaoDesafio[]
-  submissaoTreinos      SubmissaoTreino[]
-  seguidores            Seguidor[]          @relation("Seguido")
-  seguindo              Seguidor[]          @relation("Seguidor")
-  amigos                Amigo[]             @relation("UsuarioAmigo")
-  amigosDe              Amigo[]             @relation("AmigoUsuario")
-  mensagensEnviadas     Mensagem[]          @relation("MensagensEnviadas")
-  mensagensRecebidas    Mensagem[]          @relation("MensagensRecebidas")
-  solicitacoesEnviadas  SolicitacaoTreino[] @relation("SolicitacoesEnviadas")
-  solicitacoesRecebidas SolicitacaoTreino[] @relation("SolicitacoesRecebidas")
+  submissaoDesafios      SubmissaoDesafio[]
+  submissaoTreinos       SubmissaoTreino[]
+  seguidores             Seguidor[]          @relation("Seguido")
+  seguindo               Seguidor[]          @relation("Seguidor")
+  amigos                 Amigo[]             @relation("UsuarioAmigo")
+  amigosDe               Amigo[]             @relation("AmigoUsuario")
+  mensagensEnviadas      Mensagem[]          @relation("MensagensEnviadas")
+  mensagensRecebidas     Mensagem[]          @relation("MensagensRecebidas")
+  solicitacoesEnviadas   SolicitacaoTreino[] @relation("SolicitacoesEnviadas")
+  solicitacoesRecebidas  SolicitacaoTreino[] @relation("SolicitacoesRecebidas")
+  mensagensReferenciando Mensagem[]          @relation("UsuarioMensagemReferencia")
 
   postagens          Postagem[]
   comentarios        Comentario[]
@@ -80,15 +81,28 @@ model Amigo {
 }
 
 model Mensagem {
-  id       String   @id @default(uuid())
+  id       String       @id @default(uuid())
   deId     String
   paraId   String
   conteudo String
-  criadaEm DateTime @default(now())
-  lida     Boolean  @default(false)
+  tipo     TipoMensagem @default(NORMAL)
+  criadaEm DateTime     @default(now())
+  lida     Boolean      @default(false)
 
   de   Usuario @relation("MensagensEnviadas", fields: [deId], references: [id])
   para Usuario @relation("MensagensRecebidas", fields: [paraId], references: [id])
+
+  desafioId String?
+  desafio   DesafioOficial? @relation("DesafioMensagemReferencia", fields: [desafioId], references: [id])
+
+  postId String?
+  post   Postagem? @relation("PostMensagemReferencia", fields: [postId], references: [id])
+
+  usuarioId String?
+  usuario   Usuario? @relation("UsuarioMensagemReferencia", fields: [usuarioId], references: [id])
+
+  atletaId String?
+  atleta   Atleta? @relation("AtletaMensagens", fields: [atletaId], references: [id])
 }
 
 model Atleta {
@@ -133,6 +147,7 @@ model Atleta {
   SubmissaoTreino     SubmissaoTreino[]
   relacoesTreinamento RelacaoTreinamento[]       @relation("RelacaoAtleta")
   treinosRecebidos    TreinoProgramadoRecebido[]
+  mensagens           Mensagem[]                 @relation("AtletaMensagens")
 }
 
 model TreinoProgramado {
@@ -191,19 +206,20 @@ model Exercicio {
 }
 
 model DesafioOficial {
-  id                String      @id @default(uuid())
-  titulo            String      @unique
-  descricao         String
-  imagemUrl         String?     @unique
-  nivel             Nivel
-  pontuacao         Int?
-  regras            String?
-  tipoMetrificação  String?
-  prazoSubmissao    DateTime?
-  categoria         Categoria[]
-  createdAt         DateTime    @default(now())
+  id                 String      @id @default(uuid())
+  titulo             String      @unique
+  descricao          String
+  imagemUrl          String?     @unique
+  nivel              Nivel
+  pontuacao          Int?
+  regras             String?
+  tipoMetrificação String?
+  prazoSubmissao     DateTime?
+  categoria          Categoria[]
+  createdAt          DateTime    @default(now())
 
   submissoes SubmissaoDesafio[]
+  mensagens  Mensagem[]         @relation("DesafioMensagemReferencia")
 }
 
 model Seguidor {
@@ -255,6 +271,7 @@ model Postagem {
   comentarios       Comentario[]
   curtidas          Curtida[]
   logsErro          LogErro[]
+  mensagens         Mensagem[]   @relation("PostMensagemReferencia")
   compartilhamentos Int?         @default(0)
 
   @@unique([usuarioId, conteudo])
@@ -605,4 +622,11 @@ enum TipoTreino {
   Tecnico
   Físico
   Tatico
+}
+
+enum TipoMensagem {
+  NORMAL
+  DESAFIO
+  POST
+  USUARIO
 }

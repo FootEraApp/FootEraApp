@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { withAuth } from "@/components/ProtectedRoute";
 import { formatarUrlFoto } from "@/utils/formatarFoto";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { API } from "../config";
@@ -182,4 +181,4 @@ import { API } from "../config";
   );
 }
 
-export default withAuth(Explorar);
+export default Explorar;

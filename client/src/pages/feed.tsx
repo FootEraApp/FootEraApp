@@ -226,9 +226,6 @@ function PaginaFeed(): JSX.Element {
         <Link href="/perfil" className="hover:underline">
           <User /> 
         </Link>
-        <button onClick={handleLogout} title="Sair">
-          🚪
-        </button>
       </nav>
 
       {modalAberto && (

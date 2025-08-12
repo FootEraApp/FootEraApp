@@ -27,35 +27,17 @@ import PaginaMensagens from "./pages/mensagens";
 export function AppRoutes() {
   return (
     <Switch>
-      <Route path="/">
-        <HomeRedirect />
-      </Route>
       <Route path="/login">
         <PublicOnly><PaginaLogin /></PublicOnly>
       </Route>
       <Route path="/cadastro">
         <PaginaCadastro />
       </Route>
-      <Route path="/feed">
-        <Private>< PaginaFeed /></Private>
-      </Route>
-      <Route path="/treinos">
-        <Private><PaginaTreinos /></Private>
-      </Route>
       <Route path="/treinos/novo">
         <PaginaNovoTreino />
       </Route>
-      <Route path="/post">
-        <Private><PaginaCreatePost /></Private>
-      </Route>
-      <Route path="/post/:id">
-        <PaginaPostUnico />
-      </Route>
       <Route path="/posts">
         <PaginaMostrarPost />
-      </Route>
-      <Route path="/explorar">
-        <Private><PaginaExplorar /></Private>
       </Route>
       <Route path="/admin">
         <PaginaAdmin />
@@ -75,12 +57,6 @@ export function AppRoutes() {
       <Route path="/admin/login">
         <PaginaLoginAdmin />
       </Route>
-      <Route path="/perfil">
-        <Private><PaginaPerfil /></Private>
-      </Route>
-      <Route path="/perfil/:id">
-        <Private><PaginaPerfilUnico /></Private>
-      </Route>
       <Route path="/perfil/editar">
         <PaginaEditarPerfil />
       </Route>
@@ -98,6 +74,32 @@ export function AppRoutes() {
       </Route>
       <Route path="/mensagens">
         <PaginaMensagens />
+      </Route>
+
+      <Route path="/feed">
+        <Private>< PaginaFeed /></Private>
+      </Route>
+      <Route path="/treinos">
+        <Private><PaginaTreinos /></Private>
+      </Route>
+      <Route path="/perfil">
+        <Private><PaginaPerfil /></Private>
+      </Route>
+      <Route path="/perfil/:id">
+        <Private><PaginaPerfilUnico /></Private>
+      </Route>
+      <Route path="/post">
+        <Private><PaginaCreatePost /></Private>
+      </Route>
+      <Route path="/explorar">
+        <Private><PaginaExplorar /></Private>
+      </Route>
+      <Route path="/post/:id">
+        <Private><PaginaPostUnico /></Private>
+      </Route>
+
+      <Route path="/">
+        <HomeRedirect />
       </Route>
       <Route><div style={{ padding: 16 }}>Página não encontrada</div></Route>
     </Switch>

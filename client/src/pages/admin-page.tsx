@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { withAuth } from "@/components/ProtectedRoute";
 import { API } from "../config";
 
 type Tab = "dashboard" | "exercicios" | "treinos" | "professores" | "desafios" | "configuracoes";
@@ -382,7 +381,7 @@ interface Treinos {
     </div>
   );
 }
-export default withAuth(AdminDashboard, { adminOnly: true });
+export default AdminDashboard;
 
 function Card({ title, icon, value }: { title: string; icon: string; value: number }) {
   return (

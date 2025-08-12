@@ -2,7 +2,7 @@ import { Router } from "express";
 import { Nivel, Categoria, TipoTreino } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { authenticateToken } from "server/middlewares/auth";
-import { treinosController, excluirTreinoAgendado, listarTodosTreinosProgramados } from "../controllers/treinosController";
+import { obterTreinoProgramadoPorId, listarTreinosAgendados, treinosController, excluirTreinoAgendado, listarTodosTreinosProgramados } from "../controllers/treinosController";
 const router = Router();
 
 interface CriarTreinoInput {
@@ -25,88 +25,11 @@ interface CriarTreinoInput {
   tipoUsuarioId: string; 
 }
 
-router.get("/", async (req, res) => {
-  try {
-    const treinosProgramados = await prisma.treinoProgramado.findMany({
-      include: {
-        exercicios: {
-          include: { exercicio: true }
-        }
-      }
-    });
-
-    const desafiosOficiais = await prisma.desafioOficial.findMany();
-
-    const treinosFormatados = treinosProgramados.map((t) => ({
-      id: t.id,
-      nome: t.nome,
-      descricao: t.descricao,
-      nivel: t.nivel,
-      dataAgendada: t.dataAgendada,
-      professorId: t.professorId, 
-      exercicios: t.exercicios.map((ex) => ({
-        id: ex.exercicioId,
-        nome: ex.exercicio.nome,
-        repeticoes: ex.repeticoes
-      }))
-    }));
-
-    return res.json({ treinosProgramados: treinosFormatados, desafiosOficiais });
-  } catch (err) {
-    console.error("Erro ao buscar treinos:", err);
-    return res.status(500).json({ error: "Erro interno do servidor" });
-  }
-});
 router.delete('/agendados/:id', excluirTreinoAgendado);
-router.get("/agendados", authenticateToken, async (req, res) => {
-  const { tipoUsuarioId } = req.query;
-
-  if (!tipoUsuarioId || typeof tipoUsuarioId !== "string") {
-    return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
-  }
-
-  try {
-    const treinos = await prisma.treinoAgendado.findMany({
-      where: {
-        atletaId: tipoUsuarioId,
-        submissaoTreinos: {
-          none: {
-            atletaId: tipoUsuarioId
-          }
-        }
-      },
-      include: {
-        treinoProgramado: {
-          include: {
-            exercicios: {
-              include: {
-                exercicio: true
-              }
-            }
-          }
-        }
-      },
-      orderBy: { dataTreino: "desc" }
-    });
-
-    const formatado = treinos.map((t) => ({
-      id: t.id,
-      titulo: t.titulo,
-      dataTreino: t.dataTreino,
-      treinoProgramadoId: t.treinoProgramadoId,
-      exercicios: t.treinoProgramado?.exercicios?.map((ex) => ({
-        id: ex.exercicio.id,
-        nome: ex.exercicio.nome,
-        repeticoes: ex.repeticoes
-      })) || [],
-    }));
-
-    return res.json(formatado);
-  } catch (err) {
-    console.error("Erro ao buscar treinos agendados:", err);
-    return res.status(500).json({ error: "Erro interno do servidor" });
-  }
-});
+router.get("/agendados", authenticateToken, listarTreinosAgendados);
+router.get("/disponiveis", treinosController.disponiveis);
+router.post("/agendar", authenticateToken, treinosController.agendarTreino);
+router.get("/todos", listarTodosTreinosProgramados);
 router.get("/exercicios", async (req, res) => {
   try {
     const exercicios = await prisma.exercicio.findMany();
@@ -116,6 +39,7 @@ router.get("/exercicios", async (req, res) => {
     return res.status(500).json({ error: "Erro interno do servidor" });
   }
 });
+
 router.get("/atletas-vinculados", async (req, res) => {
   const { tipoUsuarioId } = req.query;
 
@@ -151,6 +75,39 @@ router.get("/atletas-vinculados", async (req, res) => {
     return res.status(500).json({ error: "Erro ao buscar atletas vinculados" });
   }
 });
+router.get("/", async (req, res) => {
+  try {
+    const treinosProgramados = await prisma.treinoProgramado.findMany({
+      include: {
+        exercicios: {
+          include: { exercicio: true }
+        }
+      }
+    });
+
+    const desafiosOficiais = await prisma.desafioOficial.findMany();
+
+    const treinosFormatados = treinosProgramados.map((t) => ({
+      id: t.id,
+      nome: t.nome,
+      descricao: t.descricao,
+      nivel: t.nivel,
+      dataAgendada: t.dataAgendada,
+      professorId: t.professorId, 
+      exercicios: t.exercicios.map((ex) => ({
+        id: ex.exercicioId,
+        nome: ex.exercicio.nome,
+        repeticoes: ex.repeticoes
+      }))
+    }));
+
+    return res.json({ treinosProgramados: treinosFormatados, desafiosOficiais });
+  } catch (err) {
+    console.error("Erro ao buscar treinos:", err);
+    return res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
 router.post("/", async (req, res) => {
   const {
     nome,
@@ -242,8 +199,7 @@ router.post("/", async (req, res) => {
     return res.status(500).json({ error: "Erro ao criar treino" });
   }
 });
-router.get("/disponiveis", treinosController.disponiveis);
-router.post("/agendar", authenticateToken, treinosController.agendarTreino);
-router.get("/todos", listarTodosTreinosProgramados);
+
+router.get("/:id", authenticateToken, obterTreinoProgramadoPorId);
 
 export default router;

@@ -29,13 +29,15 @@ interface TreinoAgendado {
   id: string;
   titulo: string;
   dataTreino: string;
+  treinoProgramadoId?: string | null;
   treinoProgramado?: {
-    descricao?: string;
+    nome?: string | null;
+    descricao?: string | null;
     nivel: string;
-    pontuacao: number;
+    pontuacao: number | null;
     dicas?: string[];
-    objetivo?: string;
-    duracao?: number;
+    objetivo?: string | null;
+    duracao?: number | null;
     exercicios: {
       exercicio: {
         id: string;
@@ -43,7 +45,7 @@ interface TreinoAgendado {
       };
       repeticoes: string;
     }[];
-  };
+  } | null;
 }
 
 interface Desafio {
@@ -76,8 +78,11 @@ export default function PaginaTreinos() {
     setDesafios(desafiosJson);
 
     const treinosRes = await fetch(`${API.BASE_URL}/api/treinos`);
-    const programadosJson: TreinoProgramado[] = await treinosRes.json();
-    setTreinos(programadosJson);
+    const data = await treinosRes.json();
+    console.log("GET /api/treinos:", data);
+
+    const lista= Array.isArray(data) ? data : data.treinosProgramados || [];
+    setTreinos(Array.isArray(lista) ? lista : []);
 
     const tipo = Storage.tipoSalvo;
     const tipoUsuarioId = Storage.tipoUsuarioId;
@@ -95,33 +100,46 @@ export default function PaginaTreinos() {
 
       let treinosJson: TreinoAgendado[] = await res.json();
         console.log("Treinos agendados:", treinosJson);
+        console.log("Primeiro treinoProgramado:", treinosJson[0]?.treinoProgramado);
 
-      const agora = new Date();
-      const treinosAtuais = await Promise.all(
-        treinosJson.map(async (treino) => {
-          const data = new Date(treino.dataTreino);
-          if (data < agora) {
-            try {
-              const res = await fetch(`${API.BASE_URL}/api/treinos/agendados/${treino.id}`, {
-                method: "DELETE",
+       const enriquecidos = await Promise.all(
+          treinosJson.map(async (t) => {
+            if (!t.treinoProgramado && t.treinoProgramadoId) {
+              const r = await fetch(`${API.BASE_URL}/api/treinos/${t.treinoProgramadoId}`, {
                 headers: { Authorization: `Bearer ${token}` },
               });
-
-              if (res.status === 404) {
-                console.warn(`Treino agendado com id ${treino.id} não encontrado (404).`);
-              } else if (!res.ok) {
-                console.error(`Erro ao excluir treino ${treino.id}:`, await res.text());
+              if (r.ok) {
+                const prog = await r.json();
+                return { ...t, treinoProgramado: prog };
               }
-            } catch (err) {
-              console.error(`Erro na requisição ao deletar treino ${treino.id}:`, err);
             }
-            return null; 
-          }
-          return treino; 
-        })
-      );
+            return t;
+          })
+        );
 
-      setTreinosAgendados(treinosAtuais.filter(Boolean) as TreinoAgendado[]);
+        const agora = new Date();
+        const atuais = await Promise.all(
+          enriquecidos.map(async (treino) => {
+            const data = new Date(treino.dataTreino);
+            if (data < agora) {
+              try {
+                const res = await fetch(`${API.BASE_URL}/api/treinos/agendados/${treino.id}`, {
+                  method: "DELETE",
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                if (!res.ok && res.status !== 404) {
+                  console.error(`Erro ao excluir treino ${treino.id}:`, await res.text());
+                }
+              } catch (err) {
+                console.error(`Erro na requisição ao deletar treino ${treino.id}:`, err);
+              }
+              return null;
+            }
+            return treino;
+          })
+        );
+
+        setTreinosAgendados(atuais.filter(Boolean) as TreinoAgendado[]);
 
     }
   };
@@ -154,6 +172,13 @@ export default function PaginaTreinos() {
 
   if (!usuario) return <p className="text-center p-4">Carregando...</p>;
 
+  const meusTreinos = Array.isArray(treinos)
+  ? treinos.filter(
+      (t) =>
+        t.professorId === usuario.tipoUsuarioId ||
+        t.escolinhaId === usuario.tipoUsuarioId
+    )
+  : [];
 
   const renderTreinoCard = (treino: TreinoProgramado) => (
     <div key={treino.id} className="bg-white p-4 rounded shadow border mb-4">
@@ -220,43 +245,35 @@ if (res.ok) {
 };
 
 const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
-  const programado = treino.treinoProgramado;
+  const p = treino.treinoProgramado;
 
   return (
     <div key={treino.id} className="bg-white p-4 rounded shadow border mb-4">
       <h4 className="font-bold text-lg text-green-800">{treino.titulo}</h4>
 
       <div className="text-sm text-gray-600 space-y-1">
-        <p><strong>Descrição:</strong> {programado?.descricao}</p>
-        <p><strong>Nível:</strong> {programado?.nivel}</p>
-        <p><strong>Pontuação:</strong> {programado?.pontuacao}</p>
+        <p><strong>Nome:</strong> {p?.nome ?? "—"}</p>
+        <p><strong>Nível:</strong> {p?.nivel ?? "—"}</p>
+        <p><strong>Pontuação:</strong> {p?.pontuacao ?? "—"}</p>
         <p><strong>Data Final:</strong> {formatarData(treino.dataTreino)}</p>
-        
-        <div
-          className="text-red-600 hover:text-red-800 cursor-pointer flex items-center"
-          onClick={() => excluirTreino(treino.id)}
-        >
-          <Trash2 size={16} className="mr-1" /> Cancelar
-        </div>
-        {programado?.duracao && <p><strong>Duração:</strong> {programado.duracao} min</p>}
-        {programado?.objetivo && <p><strong>Objetivo:</strong> {programado.objetivo}</p>}
-        {Array.isArray(programado?.dicas) && programado.dicas.length > 0 && (
+        {p?.duracao ? <p><strong>Duração:</strong> {p.duracao} min</p> : null}
+        {p?.objetivo ? <p><strong>Objetivo:</strong> {p.objetivo}</p> : null}
+
+        {Array.isArray(p?.dicas) && p!.dicas!.length > 0 && (
           <div>
             <strong>Dicas:</strong>
             <ul className="list-disc list-inside pl-4">
-              {programado.dicas.map((dica, idx) => (
-                <li key={idx}>{dica}</li>
-              ))}
+              {p!.dicas!.map((dica, idx) => <li key={idx}>{dica}</li>)}
             </ul>
           </div>
         )}
       </div>
 
-      {Array.isArray(programado?.exercicios) && programado!.exercicios.length > 0 && (
+      {Array.isArray(p?.exercicios) && p!.exercicios!.length > 0 && (
         <div className="mt-3">
           <strong className="text-sm text-gray-800">Exercícios:</strong>
           <div className="max-h-32 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
-            {programado?.exercicios?.map((ex, i) => (
+            {p!.exercicios!.map((ex, i) => (
               <div key={ex.exercicio.id} className="border-b pb-1">
                 <strong>{i + 1}.</strong> {ex.exercicio.nome}{" "}
                 {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
@@ -277,6 +294,7 @@ const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
     </div>
   );
 };
+
 
   return (
     <div className="min-h-screen bg-transparent pb-20">
@@ -355,15 +373,9 @@ const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
                       </button>
                     </div>
 
-                    <h3 className="text-lg font-semibold mb-2">Treinos que você criou</h3>
-                    {treinos.filter((t) =>
-                      t.professorId === usuario.tipoUsuarioId || t.escolinhaId === usuario.tipoUsuarioId
-                    ).length > 0 ? (
-                      treinos
-                        .filter((t) =>
-                          t.professorId === usuario.tipoUsuarioId || t.escolinhaId === usuario.tipoUsuarioId
-                        )
-                        .map(renderTreinoCard)
+                   <h3 className="text-lg font-semibold mb-2">Treinos que você criou</h3>
+                    {meusTreinos.length > 0 ? (
+                      meusTreinos.map(renderTreinoCard)
                     ) : (
                       <p className="text-gray-500">Você ainda não criou nenhum treino.</p>
                     )}
