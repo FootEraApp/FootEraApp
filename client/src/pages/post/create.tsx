@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
-import { withAuth } from "@/components/ProtectedRoute";
 import Storage from "../../../../server/utils/storage";
 import { API } from "../../config";
 
@@ -117,4 +116,4 @@ function PaginaPostagem() {
   );
 }
 
-export default withAuth(PaginaPostagem);
+export default PaginaPostagem;

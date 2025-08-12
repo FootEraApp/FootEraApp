@@ -34,12 +34,12 @@ export default function CriarOuEditarTreino() {
           setProfessorId(data.professorId || "");
           setMetas(data.metas || "");
           setPontuacao(data.pontuacao || 5);
-          setCategoriasSelecionadas(data.categorias || []);
           setExercicios(data.exercicios?.map((e: any) => ({
             id: e.exercicioId,
             ordem: e.ordem,
             repeticoes: e.repeticoes,
           })) || []);
+          setCategoriasSelecionadas(data.categoria || []);
         });
     }
 
@@ -73,26 +73,32 @@ export default function CriarOuEditarTreino() {
       metas,
       pontuacao,
       categoria: categoriasSelecionadas,
-      exercicios: exercicios.map((ex) => ({
-        exercicioId: ex.id,
-        ordem: ex.ordem,
-        repeticoes: ex.repeticoes,
-      })),
+      exercicios: exercicios
+        .filter(e => e.id) 
+        .map((ex, i) => ({
+          exercicioId: ex.id,
+          ordem: Number(ex.ordem ?? i + 1),
+          repeticoes: ex.repeticoes ?? "",
+        })),
     };
 
-    const res = await fetch(`${API.BASE_URL}/api/treinosprogramados${id ? `/${id}` : ""}`, {
+    const url = `${API.BASE_URL}/api/treinosprogramados${id ? `/${id}` : ""}`;
+    const res = await fetch(url, {
       method: id ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    console.log("PUT/POST status:", res.status);
+    const body = await res.json().catch(() => ({}));
+    console.log("PUT/POST body:", body);
 
-    if (res.ok) {
-      alert(`Treino ${id ? "atualizado" : "criado"} com sucesso!`);
-      window.location.href = "/admin";
-    } else {
-      const erro = await res.text();
-      alert("Erro ao salvar treino: " + erro);
+    if (!res.ok) {
+      alert("Erro ao salvar treino.");
+      return;
     }
+
+    alert(`Treino ${id ? "atualizado" : "criado"} com sucesso!`);
+    window.location.href = "/admin";
   };
 
   return (

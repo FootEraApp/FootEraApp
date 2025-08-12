@@ -49,12 +49,14 @@ export const listarSolicitacoesRecebidas = async (req: AuthenticatedRequest, res
   if (!usuarioId) return res.status(401).json({ error: "Usuário não autenticado." });
 
   try {
-    const solicitacoes: SolicitacaoComRemetente[] =
-      await prisma.solicitacaoTreino.findMany({
-        where: { destinatarioId: usuarioId, status: "PENDENTE" },
-        include: { remetente: { select: { id: true, nomeDeUsuario: true, foto: true } } },
-        orderBy: { criadoEm: "desc" },
-      });
+    const solicitacoes = await prisma.solicitacaoTreino.findMany({
+      where: { destinatarioId: usuarioId, status: null },
+      include: {
+        remetente: {       
+          select: { id: true, nomeDeUsuario: true, foto: true }
+        }
+      }
+    });
 
     const BASE_URL = process.env.BASE_URL ?? `${API.BASE_URL}`;
 

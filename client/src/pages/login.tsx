@@ -13,48 +13,50 @@ export default function PaginaLogin() {
   const [_, navigate] = useLocation();
 
   const handleLogin = async (e: React.FormEvent) => {
-    setErro("");
     e.preventDefault();
+    setErro("");
 
     if (!nomeDeUsuario || !senha) {
-      return setErro("Por favor, preencha todos os campos.");
+      setErro("Por favor, preencha todos os campos.");
+      return;
     }
 
     try {
-      const resposta = await axios.post(
-        `${API.BASE_URL}/api/auth/login`, 
-        { nomeDeUsuario, senha }
-      );
+      const resp = await axios.post(`${API.BASE_URL}/api/auth/login`, {
+        nomeDeUsuario,
+        senha,
+      });
+
+      const data = resp.data ?? {};
+      const token: string | undefined = data.token;
+
+      const usuario = data.usuario ?? {};
+      const usuarioId = usuario.id ?? data.id ?? "";
+      const usuarioNome = usuario.nomeDeUsuario ?? data.nomeDeUsuario ?? "";
+      const tipoOriginal: string | undefined = usuario.tipo ?? data.tipo;
+
+      if (!token || !usuarioId) {
+        throw new Error("Resposta inválida do servidor");
+      }
 
       const storage = lembrarDeMim ? localStorage : sessionStorage;
+      storage.setItem("token", token);
+      storage.setItem("usuarioId", usuarioId);
+      storage.setItem("nomeUsuario", usuarioNome);
 
-      storage.setItem("token", resposta.data.token);
-      storage.setItem("nomeUsuario", resposta.data.usuario.nomeDeUsuario);
-      storage.setItem("usuarioId", resposta.data.usuario.id);
+      const t = (tipoOriginal ?? "").toLowerCase();
+      const tipoPadrao =
+        t === "atleta" ? "atleta" :
+        t === "escolinha" ? "escola" :
+        t === "clube" ? "clube" :
+        t === "professor" ? "professor" : null;
 
-      const tipoOriginal = resposta.data.tipo;
-      const tipoFormatado = tipoOriginal.toLowerCase();
-
-      let tipoPadrao: 'atleta' | 'escola' | 'clube' | 'professor' | null = null;
-
-      if (tipoFormatado === 'atleta') tipoPadrao = 'atleta';
-      if (tipoFormatado === 'escolinha') tipoPadrao = 'escola';
-      if (tipoFormatado === 'clube') tipoPadrao = 'clube';
-      if (tipoFormatado === 'professor') tipoPadrao = 'professor';
-
-      if (tipoPadrao) {
-        storage.setItem("tipoUsuario", tipoPadrao);
-      } else {
-        console.warn("Tipo de usuário não reconhecido:", tipoOriginal);
-      }
-
-      if (resposta.data.tipoUsuarioId) {
-        storage.setItem("tipoUsuarioId", resposta.data.tipoUsuarioId);
-      }
+      if (tipoPadrao) storage.setItem("tipoUsuario", tipoPadrao);
+      if (data.tipoUsuarioId) storage.setItem("tipoUsuarioId", String(data.tipoUsuarioId));
 
       navigate("/feed");
-    } catch (err: any) {
-      console.error(err);
+    } catch (err) {
+      console.error("Erro no login:", err);
       setErro("Nome de usuário ou senha inválidos.");
     }
   };

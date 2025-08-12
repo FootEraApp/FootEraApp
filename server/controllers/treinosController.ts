@@ -1,39 +1,41 @@
 import { Request, Response } from "express";
-import { prisma } from "../lib/prisma";
+import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth";
 
-export const listarTreinosAgendados = async (req: AuthenticatedRequest, res: Response) => {
+const prisma = new PrismaClient();
+
+export async function listarTreinosAgendados(req: Request, res: Response) {
+  const raw = req.query.tipoUsuarioId;
+  const tipoUsuarioId =
+    Array.isArray(raw) ? (raw[0] as string | undefined) : (raw as string | undefined);
+
+  if (!tipoUsuarioId) {
+    return res.status(400).json({ message: "tipoUsuarioId é obrigatório" });
+  }
+
   try {
-    const { tipoUsuarioId } = req.query;
-
-    if (!tipoUsuarioId) {
-      return res.status(400).json({ message: "tipoUsuarioId é obrigatório" });
-    }
-
     const treinos = await prisma.treinoAgendado.findMany({
-      where: {
-        atletaId: String(tipoUsuarioId),
-      },
+      where: { atletaId: tipoUsuarioId },        
+      orderBy: { dataTreino: "asc" },
       include: {
-        treinoProgramado: {
+       treinoProgramado: {
           include: {
             exercicios: {
-              include: {
-                exercicio: true
-              }
-            }
-          }
-        }
+              select: {
+                repeticoes: true,
+                exercicio: { select: { id: true, nome: true } },
+              },
+            },
+          },
+        },
       },
-      orderBy: { dataTreino: 'asc' }
     });
-
-    res.json(treinos);
-  } catch (error) {
-    console.error("Erro ao listar treinos agendados:", error);
-    res.status(500).json({ message: "Erro interno ao buscar treinos." });
+    return res.json(treinos);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ message: "Erro ao listar treinos agendados" });
   }
-};
+}
 
 export const listarTodosTreinosProgramados = async (req: Request, res: Response) => {
   try {
@@ -75,10 +77,8 @@ export const excluirTreinoAgendado = async (req: Request, res: Response) => {
   }
 };
 
-
 export const treinosController = {
-  // server/controllers/treinosController.ts
-async disponiveis(req: AuthenticatedRequest, res: Response) {
+ async disponiveis(req: AuthenticatedRequest, res: Response) {
   try {
     const treinos = await prisma.treinoProgramado.findMany({
       include: {
@@ -159,3 +159,24 @@ async disponiveis(req: AuthenticatedRequest, res: Response) {
   },
 };
 
+export async function obterTreinoProgramadoPorId(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const treino = await prisma.treinoProgramado.findUnique({
+      where: { id },
+      include: {
+        exercicios: {
+          select: {
+            repeticoes: true,
+            exercicio: { select: { id: true, nome: true } },
+          },
+        },
+      },
+    });
+    if (!treino) return res.status(404).json({ message: "Treino não encontrado" });
+    res.json(treino);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Erro ao buscar treino programado" });
+  }
+}
