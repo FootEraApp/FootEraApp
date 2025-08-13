@@ -4,6 +4,34 @@ import { AuthenticatedRequest } from "server/middlewares/auth";
 
 const prisma = new PrismaClient();
 
+export const getPerfilUsuarioMe = async (req: AuthenticatedRequest, res: Response) => {
+  const id = req.userId;
+  if (!id) return res.status(401).json({ error: "Sem autenticação" });
+  (req as any).params = { ...(req as any).params, id };
+  return getPerfilUsuario(req as any, res);
+};
+
+export const getPontuacaoMe = async (req: AuthenticatedRequest, res: Response) => {
+  const id = req.userId;
+  if (!id) return res.status(401).json({ error: "Sem autenticação" });
+  (req as any).params = { id };
+  return getPontuacao(req as any, res);
+};
+
+export const getAtividadesRecentesMe = async (req: AuthenticatedRequest, res: Response) => {
+  const id = req.userId;
+  if (!id) return res.status(401).json({ error: "Sem autenticação" });
+  (req as any).params = { id };
+  return getAtividadesRecentes(req as any, res);
+};
+
+export const getBadgesMe = async (req: AuthenticatedRequest, res: Response) => {
+  const id = req.userId;
+  if (!id) return res.status(401).json({ error: "Sem autenticação" });
+  (req as any).params = { id };
+  return getBadges(req as any, res);
+};
+
 export const getTreinosPorUsuario = async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -67,7 +95,6 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
   return res.json(enriched);
 };
 
-
 export const getBadges = async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -101,8 +128,8 @@ export const getPontuacao = async (req: Request, res: Response) => {
     if (usuario.tipo !== "Atleta") {
       return res.json({
         performance: 0,
-        discipline: 0,
-        responsibility: 0,
+        disciplina: 0,
+        responsabilidade: 0,
       }); 
     }
 
@@ -114,15 +141,15 @@ export const getPontuacao = async (req: Request, res: Response) => {
      if (!atleta || !atleta.pontuacao) {
       return res.json({
         performance: 0,
-        discipline: 0,
-        responsibility: 0,
+        disciplina: 0,
+        responsabilidade: 0,
       });
     }
 
     return res.json({
       performance: atleta.pontuacao.pontuacaoPerformance,
-      discipline: atleta.pontuacao.pontuacaoDisciplina,
-      responsibility: atleta.pontuacao.pontuacaoResponsabilidade,
+      disciplina: atleta.pontuacao.pontuacaoDisciplina,
+      responsabilidade: atleta.pontuacao.pontuacaoResponsabilidade,
     });
   } catch (err) {
     console.error("Erro ao buscar pontuação:", err);
@@ -130,67 +157,106 @@ export const getPontuacao = async (req: Request, res: Response) => {
   }
 };
 
-export const getPontuacaoDetalhada = async (req: Request, res: Response) => {
-  const { id } = req.params;
+export async function getPontuacaoPerfil(req: Request, res: Response) {
+  const { usuarioId } = req.params as { usuarioId: string };
+
   try {
-    const usuario = await prisma.usuario.findUnique({ where: { id } });
-    if (!usuario) return res.status(404).json({ message: "Usuário não encontrado." });
-
-    const atleta = await prisma.atleta.findUnique({
-      where: { usuarioId: id },
+    const atleta = await prisma.atleta.findFirst({
+      where: { usuarioId },
+      select: { id: true, usuarioId: true },
     });
 
-    if (!atleta) return res.status(404).json({ message: "Atleta não encontrado." });
+    if (!atleta) {
+      return res.status(404).json({ message: "Atleta não encontrado." });
+    }
 
-    const pontuacao = await prisma.pontuacaoAtleta.findUnique({
-      where: { atletaId: atleta.id },
-    });
+    const atletaId = atleta.id;
 
-    const historicoDesafios = await prisma.submissaoDesafio.findMany({
-      where: { atletaId: atleta.id },
-      include: {
-        desafio: true,
-      }
-    });
-
-    const historicoTreinos = await prisma.submissaoTreino.findMany({
-      where: { atletaId: atleta.id },
+    const submissoesTreino = await prisma.submissaoTreino?.findMany({
+      where: { atletaId, aprovado: true as any }, 
       include: {
         treinoAgendado: {
-          include: { treinoProgramado: true }
-        }
-      }
+          include: {
+            treinoProgramado: true,
+          },
+        },
+      },
+      orderBy: { criadoEm: "desc" },
+    }).catch(() => [] as any[]);
+
+    const submissoesDesafio = await prisma.submissaoDesafio?.findMany({
+      where: { atletaId, aprovado: true as any },
+      include: {
+        desafio: true,
+      },
+    }).catch(() => [] as any[]);
+
+      const pontosTreinos = (submissoesTreino || []).reduce((acc, s: any) => {
+      const p = s?.treinoAgendado?.treinoProgramado?.pontuacao ?? 0;
+      return acc + (Number(p) || 0);
+    }, 0);
+
+    const pontosDesafios = (submissoesDesafio || []).reduce((acc, s: any) => {
+      const p = s?.desafio?.pontos ?? s?.desafio?.pontuacao ?? 0;
+      return acc + (Number(p) || 0);
+    }, 0);
+
+    const performance = pontosTreinos + pontosDesafios;
+    const disciplina = (submissoesTreino?.length || 0) * 2;
+    const responsabilidade = (submissoesDesafio?.length || 0) * 2; 
+
+    const historicoTreinos = (submissoesTreino || []).map((s: any) => ({
+      tipo: "Treino",
+      status: s.aprovado ? "Concluído" : "Pendente",
+      data: new Date(s.criadoEm ?? s.dataCriacao ?? Date.now()).toLocaleDateString("pt-BR"),
+      duracao: s.duracaoMinutos ? `${s.duracaoMinutos} min` : undefined,
+      titulo: s?.treinoAgendado?.treinoProgramado?.nome ?? s?.treinoAgendado?.titulo ?? "Treino",
+      pontos: s?.treinoAgendado?.treinoProgramado?.pontuacao ?? 0,
+    }));
+
+    const historicoDesafios = (submissoesDesafio || []).map((s: any) => ({
+      tipo: "Desafio",
+      status: "Concluído",
+      data: new Date(s.criadoEm ?? s.dataCriacao ?? Date.now()).toLocaleDateString("pt-BR"),
+      duracao: s.duracaoMinutos ? `${s.duracaoMinutos} min` : undefined,
+      titulo: s?.desafio?.titulo ?? "Desafio",
+      pontos: s?.desafio?.pontos ?? s?.desafio?.pontuacao ?? 0,
+    }));
+
+    const historico = [...historicoTreinos, ...historicoDesafios]
+
+      .sort((a, b) => (a.data > b.data ? -1 : 1))
+      .slice(0, 20);
+    const postagensVideo = await prisma.postagem?.findMany({
+      where: {
+        usuarioId,
+        OR: [
+          { videoUrl: { not: null } },
+          ],
+      },
+      select: { videoUrl: true },
+      orderBy: { dataCriacao: "desc" },
+      take: 30,
+    }).catch(() => [] as any[]);
+
+    const videos = (postagensVideo || []).flatMap((p: any) => {
+      const list: string[] = [];
+      if (p.videoUrl) list.push(p.videoUrl);
+      return list;
     });
 
-    const videos = historicoDesafios.map(d => d.videoUrl).filter(Boolean);
-
-    const historico = [
-      ...historicoDesafios.map(d => ({
-        tipo: "Desafio",
-        status: d.aprovado ? "Aprovado" : "Pendente",
-        data: d.createdAt.toLocaleDateString(),
-        duracao: "N/A"
-      })),
-      ...historicoTreinos.map(t => ({
-        tipo: "Treino",
-        status: t.aprovado ? "Concluído" : "Pendente",
-        data: t.treinoAgendado?.treinoProgramado?.createdAt.toLocaleDateString() || "Data não disponivel",
-        duracao: "N/A"
-      })),
-    ];
-
     return res.json({
-      performance: pontuacao?.pontuacaoPerformance || 0,
-      disciplina: pontuacao?.pontuacaoDisciplina || 0,
-      responsabilidade: pontuacao?.pontuacaoResponsabilidade || 0,
+      performance,
+      disciplina,
+      responsabilidade,
       historico,
       videos,
     });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: "Erro ao buscar pontuação detalhada." });
+    console.error("getPontuacaoPerfil error:", err);
+    return res.status(500).json({ message: "Erro ao carregar pontuação." });
   }
-};
+}
 
 export const getPerfilUsuario = async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -280,6 +346,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
     return res.json({
       tipo: tipoPerfil,
       usuario: {
+        id: usuario.id,
         nome: usuario.nome,
         email: usuario.email,
         foto: usuario.foto,
@@ -482,7 +549,7 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
     return res.json({
       ...categoriaContagem,
       totalTreinos: atleta.treinosRecebidos.length,
-      horasTreinadas: Number((atleta.treinosRecebidos.length * 0.5).toFixed(1)), // estimativa de 0.5h por treino
+      horasTreinadas: Number((atleta.treinosRecebidos.length * 0.5).toFixed(1)), 
       desafiosCompletos,
       pontosConquistados
     });

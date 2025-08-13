@@ -17,7 +17,7 @@ export default function Cadastro() {
   const [_, navigate] = useLocation();
 
    const [idade, setIdade] = useState<number | "">("");
-  const [categoria, setCategoria] = useState(""); // novo estado para categoria
+  const [categoria, setCategoria] = useState(""); 
 
   const [areaFormacao, setAreaFormacao] = useState("");
 

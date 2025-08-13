@@ -91,7 +91,7 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
   {
     queryKey: ['userChallenges', userId],
     queryFn: async () => {
-      const res = await fetch(`/api/user/${userId}/challenges`);
+      const res = await fetch(`/api/usuario/${userId}/challenges`);
       if (!res.ok) throw new Error("Erro ao buscar desafios");
       return res.json();
     },

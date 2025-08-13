@@ -25,13 +25,13 @@ export default function PontuacaoDetalhada() {
       .then(res => {
         const { performance, disciplina, responsabilidade, historico, videos } = res.data;
         setPontuacao({ performance, disciplina, responsabilidade });
-        setHistorico(historico);
-        setVideos(videos);
+        setHistorico(historico ?? []);
+        setVideos(videos ?? []);
       })
       .catch(err => {
         console.error("Erro ao carregar pontuação:", err);
       });
-  }, []);
+  }, [usuarioId, setLocation]);
 
   return (
     <div className="min-h-screen bg-transparent pb-28">
@@ -74,8 +74,10 @@ export default function PontuacaoDetalhada() {
                 <Play className="text-green-600" />
               )}
               <div>
-                <div className="font-semibold">{item.tipo} {item.status}</div>
-                <div className="text-sm text-gray-600">{item.data} • ± {item.duracao}</div>
+                <div className="font-semibold">{item.titulo} - {item.tipo} {item.status}</div>
+                <div className="text-sm text-gray-600">
+                  {item.data}{item.duracao ? ` • ${item.duracao}` : ""} {typeof item.pontos==='number' ? `• +${item.pontos} pts` : ""}
+                </div>
               </div>
             </div>
             <span className="text-green-800 text-sm font-medium">Ver Tudo &gt;</span>
