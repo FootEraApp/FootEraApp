@@ -23,6 +23,8 @@ import PaginaPontuacaoPerfil from "./pages/pontuacoesPerfil";
 import PaginaNotificacoes from "./pages/notificacoes";
 import PaginaSubmissao from "./pages/submissao";
 import PaginaMensagens from "./pages/mensagens";
+import PaginaEsqueciSenha from "./pages/esqueciSenha";
+import PaginaResetarSenha from "./pages/resetarSenha";
 
 export function AppRoutes() {
   return (
@@ -74,6 +76,12 @@ export function AppRoutes() {
       </Route>
       <Route path="/mensagens">
         <PaginaMensagens />
+      </Route>
+      <Route path="/esqueci-senha">
+        <PublicOnly><PaginaEsqueciSenha /></PublicOnly>
+      </Route>
+      <Route path="/resetar-senha">
+        <PublicOnly><PaginaResetarSenha /></PublicOnly>
       </Route>
 
       <Route path="/feed">

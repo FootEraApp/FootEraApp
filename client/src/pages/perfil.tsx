@@ -31,8 +31,8 @@ interface Perfil {
 
 interface Badge {
   id: string;
-  titulo: string;
-  imagemUrl: string;
+  nome: string;
+  icon: string;
 }
 
 interface Activity {
@@ -58,37 +58,38 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const id = Storage.usuarioId;
     const token = Storage.token;
+    if (!token) return;
 
-    if (!id || !token) return;
-
-    setUsuarioId(id);
     const headers = { Authorization: `Bearer ${token}` };
 
     Promise.all([
-      axios.get(`${API.BASE_URL}/api/perfil/${id}`, { headers }),
-      axios.get(`${API.BASE_URL}/api/perfil/${id}/atividades`, { headers }),
-      axios.get(`${API.BASE_URL}/api/perfil/${id}/badges`, { headers }),
-      axios.get(`${API.BASE_URL}/api/perfil/${id}/pontuacao`, { headers }),
+      axios.get(`${API.BASE_URL}/api/perfil/me`, { headers }),
+      axios.get(`${API.BASE_URL}/api/perfil/me/atividades`, { headers }),
+      axios.get(`${API.BASE_URL}/api/perfil/me/badges`, { headers }),
+      axios.get(`${API.BASE_URL}/api/perfil/me/pontuacao`, { headers }),
     ])
       .then(([perfilRes, atividadesRes, badgesRes, pontuacaoRes]) => {
         setPerfil(perfilRes.data);
-        setActivities(
-          atividadesRes.data.map((a: any) => ({
-            id: a.id,
-            tipo: a.tipo,
-            imagemUrl: a.imagemUrl || "",
-            nome: a.nome || a.tipo
-          }))
-        );
-
-        const { performance = 0, discipline = 0, responsibility = 0 } = pontuacaoRes.data || {};
+        setUsuarioId(perfilRes.data?.usuario?.id ?? null);
+        setBadges(badgesRes.data || []);
+        setActivities(atividadesRes.data.map((a: any) => ({
+          id: a.id,
+          tipo: a.tipo,
+          imagemUrl: a.imagemUrl || "",
+          nome: a.nome || a.tipo
+        })));
+        
+        const {
+          performance = 0,
+          disciplina = 0,
+          responsabilidade = 0
+        } = pontuacaoRes.data || {};
         setPontuacao({
-          pontuacaoTotal: performance + discipline + responsibility,
+          pontuacaoTotal: performance + disciplina + responsabilidade,
           pontuacaoPerformance: performance,
-          pontuacaoDisciplina: discipline,
-          pontuacaoResponsabilidade: responsibility,
+          pontuacaoDisciplina: disciplina,
+          pontuacaoResponsabilidade: responsabilidade,
         });
       })
       .catch((err) => {
@@ -98,7 +99,7 @@ export default function ProfilePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading || !usuarioId) {
+  if (loading) {
     return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
   }
 
@@ -141,7 +142,7 @@ export default function ProfilePage() {
 
         <TrainingProgress userId={usuarioId} />
         <ActivityGrid activities={activities} />
-        <BadgesList userId={usuarioId} />
+        <BadgesList userId={usuarioId} badges={badges} />
         {pontuacao && (
           <ScorePanel
             performance={pontuacao.pontuacaoPerformance}

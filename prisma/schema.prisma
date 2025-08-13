@@ -48,6 +48,7 @@ model Usuario {
   clube         Clube?
   escolinha     Escolinha?
   administrador Administrador?
+  PasswordReset PasswordReset[]
 }
 
 model Professor {
@@ -574,6 +575,18 @@ model TreinoProgramadoRecebido {
 
   atleta Atleta           @relation(fields: [atletaId], references: [id])
   treino TreinoProgramado @relation(fields: [treinoId], references: [id])
+}
+
+model PasswordReset {
+  id        String    @id @default(uuid())
+  usuarioId String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([usuarioId])
 }
 
 enum Nivel {

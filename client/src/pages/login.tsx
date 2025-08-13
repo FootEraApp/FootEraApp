@@ -140,6 +140,11 @@ export default function PaginaLogin() {
             >
               Entrar
             </button>
+            
+            <a href="/esqueci-senha" className="text-green-700 underline text-right text-sm mt-2 block">
+              Esqueci minha senha
+            </a>
+
           </form>
 
           <p className="text-center text-sm text-gray-600 mt-4">
@@ -148,6 +153,7 @@ export default function PaginaLogin() {
               Cadastre-se
             </a>
           </p>
+          
         </div>
       </div>
     </div>
