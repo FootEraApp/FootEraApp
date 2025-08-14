@@ -25,7 +25,7 @@ interface CriarTreinoInput {
   tipoUsuarioId: string; 
 }
 
-router.delete('/agendados/:id', excluirTreinoAgendado);
+router.delete('/agendados/:id', authenticateToken, excluirTreinoAgendado);
 router.get("/agendados", authenticateToken, listarTreinosAgendados);
 router.get("/disponiveis", treinosController.disponiveis);
 router.post("/agendar", authenticateToken, treinosController.agendarTreino);

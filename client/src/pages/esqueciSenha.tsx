@@ -9,13 +9,11 @@ export default function EsqueciSenha() {
   const [ok, setOk] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const emailValido = /\S+@\S+\.\S+/.test(email);
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro(""); setOk("");
 
-    if (!emailValido) {
+    if (!email || !/\S+@\S+\.\S+/.test(email)) {
       setErro("Informe um e-mail válido.");
       return;
     }
@@ -32,34 +30,64 @@ export default function EsqueciSenha() {
   }
 
   return (
-    
-    <div className="max-w-md mx-auto p-6">
-      <div className="w-full lg:w-1/2 bg-green-800 text-white flex flex-col justify-center items-center p-10 mb-5">
-      <img src={logo} alt="Logo FootEra" className="w-20 mb-4" />
-              <h1 className="text-3xl font-bold mb-4">Bem-vindo à FootEra</h1>
-        </div>     
-      <h1 className="text-2xl text-green-800 font-semibold mb-4">Redefinir senha</h1>
-      <p className="text-green-900 mb-3 text-base"> Enviaremos um email com instruções de como redefinir sua senha. Informe o email correto.</p>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <input
-          className="border w-full p-2 rounded"
-          placeholder="Seu e-mail"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          type="email"
-        />
-        {erro && <p className="text-red-600 text-sm">{erro}</p>}
-        {ok && <p className="text-green-700 text-sm">{ok}</p>}
-        <button
-          disabled={loading}
-          className="bg-green-800 text-center text-white p-2 rounded mt-2"
-        >
-          {loading ? "Enviando..." : "Enviar link de redefinição"}
-        </button>
-        <p className="text-center text-sm mt-3">
-          <a href="/login" className="text-green-700 underline">Volte à pagina de login</a>
+    <div className="flex flex-col md:flex-row min-h-screen bg-cream">
+      <div className="md:w-1/2 bg-green-800 text-white flex flex-col justify-center items-center p-10">
+        <img src={logo} alt="Logo FootEra" className="w-24 mb-6" />
+        <h1 className="text-3xl md:text-4xl font-bold text-center mb-4">
+          Bem-vindo à FootEra
+        </h1>
+        <p className="text-center text-lg max-w-md">
+          Se você sonha em conquistar uma oportunidade, joga por amor ou quer se superar...
+          aqui é o seu lugar. FootEra. A metodologia dos profissionais, para quem vive futebol.
         </p>
-      </form>
+
+        <ul className="mt-8 text-base max-w-md w-full list-disc list-inside space-y-1">
+          <li>Treinamentos personalizados</li>
+          <li>Desafios para testar suas habilidades</li>
+          <li>Compartilhe seu progresso com a comunidade</li>
+          <li>Conecte-se com escolinhas e clubes profissionais</li>
+          <li>Acompanhe sua evolução com pontuações e rankings</li>
+        </ul>
+      </div>
+
+      <div className="md:w-1/2 flex items-center justify-center p-10">
+        <div className="w-full max-w-md bg-white shadow-md rounded-lg p-8">
+          <h2 className="text-xl font-semibold mb-2 text-center">Redefinir senha</h2>
+          <p className="text-sm text-center text-gray-600 mb-6">
+            Enviaremos um e-mail com instruções de como redefinir sua senha.
+            Informe o e-mail correto.
+          </p>
+
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">Seu e-mail</label>
+              <input
+                type="email"
+                className="w-full border border-gray-300 rounded px-3 py-2"
+                placeholder="seu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            {erro && <p className="text-sm text-red-600">{erro}</p>}
+            {ok && <p className="text-sm text-green-700">{ok}</p>}
+
+            <button
+              disabled={loading}
+              className="w-full bg-green-900 hover:bg-green-800 text-white font-medium py-2 rounded disabled:opacity-60"
+            >
+              {loading ? "Enviando..." : "Enviar link de redefinição"}
+            </button>
+
+            <p className="text-center text-sm mt-3">
+              <a href="/login" className="text-green-700 underline">
+                Volte à página de login
+              </a>
+            </p>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

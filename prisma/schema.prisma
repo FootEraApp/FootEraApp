@@ -149,6 +149,7 @@ model Atleta {
   relacoesTreinamento RelacaoTreinamento[]       @relation("RelacaoAtleta")
   treinosRecebidos    TreinoProgramadoRecebido[]
   mensagens           Mensagem[]                 @relation("AtletaMensagens")
+  EstatisticaAtleta   EstatisticaAtleta[]
 }
 
 model TreinoProgramado {
@@ -589,6 +590,21 @@ model PasswordReset {
   @@index([usuarioId])
 }
 
+model EstatisticaAtleta {
+  atletaId       String   @id
+  totalTreinos   Int      @default(0)
+  totalDesafios  Int      @default(0)
+  totalPontos    Int      @default(0)
+  horasTreinadas Float    @default(0)
+  fisico         Int      @default(0)
+  tecnico        Int      @default(0)
+  tatico         Int      @default(0)
+  mental         Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  atleta Atleta @relation(fields: [atletaId], references: [id])
+}
+
 enum Nivel {
   Base
   Avancado
@@ -635,6 +651,7 @@ enum TipoTreino {
   Tecnico
   Físico
   Tatico
+  Mental
 }
 
 enum TipoMensagem {
@@ -642,4 +659,5 @@ enum TipoMensagem {
   DESAFIO
   POST
   USUARIO
+  CONQUISTA
 }

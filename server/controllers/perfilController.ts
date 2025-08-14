@@ -100,9 +100,9 @@ export const getBadges = async (req: Request, res: Response) => {
 
   try {
     const badges = [
-      { id: "1", name: "Disciplina", icon: "stopwatch" },
-      { id: "2", name: "Pontualidade", icon: "bullseye" },
-      { id: "3", name: "Liderança", icon: "medal" },
+      { id: "1", nome: "Disciplina", icon: "stopwatch" },
+      { id: "2", nome: "Pontualidade", icon: "bullseye" },
+      { id: "3", nome: "Liderança", icon: "medal" },
     ];
 
     res.json(badges);
@@ -561,39 +561,70 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
 
 export const getTreinosResumo = async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.params.id;
-  const usuario = await prisma.usuario.findUnique({ where: { id: userId } });
 
+  const usuario = await prisma.usuario.findUnique({ where: { id: userId } });
   if (!usuario) return res.status(404).json({ error: "Usuário não encontrado" });
 
   const atleta = await prisma.atleta.findUnique({
     where: { usuarioId: userId },
     include: {
       SubmissaoTreino: {
-        include: { treinoAgendado: { include: { treinoProgramado: true } } }
+        include: {
+          treinoAgendado: {
+            include: { treinoProgramado: true },
+          },
+        },
       },
-      submissoesDesafio: {
-        include: { desafio: true }
-      }
-    }
+     submissoesDesafio: {
+        include: { desafio: true },
+      },
+    },
   });
 
   if (!atleta) return res.status(404).json({ error: "Atleta não encontrado" });
 
   const completos = atleta.SubmissaoTreino.length;
-  const horas = atleta.SubmissaoTreino.reduce((total, sub) =>
-    total + (sub.treinoAgendado?.treinoProgramado?.duracao || 0), 0);
-  const desafios = atleta.submissoesDesafio.length;
-  const pontos = atleta.submissoesDesafio.reduce((total, sub) =>
-    total + (sub.desafio?.pontuacao || 0), 0);
 
-  const categorias: Record<string, number> = {
-    Fisico: 0, Tecnico: 0, Tatico: 0, Mental: 0
+  const minutos = atleta.SubmissaoTreino.reduce((total, sub) => {
+    const m =
+      (sub as any).duracaoMinutos ??
+      sub.treinoAgendado?.treinoProgramado?.duracao ??
+      60; 
+    return total + Number(m || 0);
+  }, 0);
+  const horas = Number((minutos / 60).toFixed(1));
+
+  const desafios = atleta.submissoesDesafio.length;
+  const pontos = atleta.submissoesDesafio.reduce((total, sub) => {
+    const p = sub.desafio?.pontuacao ?? sub.desafio?.pontuacao ?? 0;
+    return total + Number(p || 0);
+  }, 0);
+
+  const categorias: Record<"Fisico" | "Tecnico" | "Tatico" | "Mental", number> = {
+    Fisico: 0,
+    Tecnico: 0,
+    Tatico: 0,
+    Mental: 0,
   };
+
   for (const sub of atleta.SubmissaoTreino) {
-    const treino = sub.treinoAgendado?.treinoProgramado;
-    treino?.categoria?.forEach(cat => {
-      categorias[cat] = (categorias[cat] || 0) + 1;
-    });
+    const tipo = sub.treinoAgendado?.treinoProgramado?.tipoTreino as string | undefined;
+    switch (tipo) {
+      case "Físico":  
+        categorias.Fisico++;
+        break;
+      case "Tecnico":
+        categorias.Tecnico++;
+        break;
+      case "Tatico":
+        categorias.Tatico++;
+        break;
+      case "Mental":
+        categorias.Mental++;
+        break;
+      default:
+        break;
+    }
   }
 
   return res.json({ completos, horas, desafios, pontos, categorias });

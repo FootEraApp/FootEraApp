@@ -4,37 +4,31 @@ import { AuthenticatedRequest } from "server/middlewares/auth";
 
 const prisma = new PrismaClient();
 
-export async function listarTreinosAgendados(req: Request, res: Response) {
-  const raw = req.query.tipoUsuarioId;
-  const tipoUsuarioId =
-    Array.isArray(raw) ? (raw[0] as string | undefined) : (raw as string | undefined);
+export async function listarTreinosAgendados(req: AuthenticatedRequest, res: Response) {
+  const { tipoUsuarioId } = req.query as { tipoUsuarioId?: string };
 
-  if (!tipoUsuarioId) {
-    return res.status(400).json({ message: "tipoUsuarioId é obrigatório" });
-  }
+  if (!req.userId) return res.status(401).json({ error: "Sem autenticação" });
+  if (!tipoUsuarioId) return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
 
-  try {
-    const treinos = await prisma.treinoAgendado.findMany({
-      where: { atletaId: tipoUsuarioId },        
-      orderBy: { dataTreino: "asc" },
-      include: {
-       treinoProgramado: {
-          include: {
-            exercicios: {
-              select: {
-                repeticoes: true,
-                exercicio: { select: { id: true, nome: true } },
-              },
-            },
-          },
-        },
+  const agendados = await prisma.treinoAgendado.findMany({
+    where: { atletaId: tipoUsuarioId },
+    include: { treinoProgramado: { include: { exercicios: true } } },
+    orderBy: { dataTreino: "asc" },
+  });
+
+  return res.json(
+    agendados.map((t) => ({
+      id: t.id,
+      titulo: t.titulo ?? t.treinoProgramado?.nome ?? "Treino",
+      dataTreino: t.dataTreino,
+      exercicios: t.treinoProgramado?.exercicios ?? [],
+      training: {
+        title: t.treinoProgramado?.nome ?? t.titulo ?? "Treino",
+        duration: t.treinoProgramado?.duracao ?? 0,
+        category: (t.treinoProgramado?.categoria?.[0] ?? "Físico") as string,
       },
-    });
-    return res.json(treinos);
-  } catch (e) {
-    console.error(e);
-    return res.status(500).json({ message: "Erro ao listar treinos agendados" });
-  }
+    }))
+  );
 }
 
 export const listarTodosTreinosProgramados = async (req: Request, res: Response) => {

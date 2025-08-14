@@ -3,14 +3,14 @@ import { useLocation } from "wouter";
 
 interface ScorePanelProps {
   performance: number;
-  discipline: number;
-  responsibility: number;
+  disciplina: number;
+  responsabilidade: number;
 }
 
 export default function ScorePanel({
   performance,
-  discipline,
-  responsibility
+  disciplina,
+  responsabilidade
 }: ScorePanelProps) {
   const [_, navigate] = useLocation();
   const [, setLocation] = useLocation();
@@ -46,7 +46,7 @@ export default function ScorePanel({
           <div className="flex-1">
             <h3 className="font-semibold footera-text-green">DISCIPLINA</h3>
           </div>
-          <div className="footera-text-green font-bold">{discipline} pts</div>
+          <div className="footera-text-green font-bold">{disciplina} pts</div>
         </div>
         
         <div className="p-3 flex items-center">
@@ -56,7 +56,7 @@ export default function ScorePanel({
           <div className="flex-1">
             <h3 className="font-semibold footera-text-green">RESPONSABILIDADE</h3>
           </div>
-          <div className="footera-text-green font-bold">{responsibility} pts</div>
+          <div className="footera-text-green font-bold">{responsabilidade} pts</div>
         </div>
       </div>
       
