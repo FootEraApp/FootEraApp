@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { jwtDecode } from "jwt-decode";
+import Storage  from "../../server/utils/storage";
 
 function getToken() {
-  return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+  return Storage.token || sessionStorage.getItem("token") || "";
 }
 
 function isTokenValid(token: string) {

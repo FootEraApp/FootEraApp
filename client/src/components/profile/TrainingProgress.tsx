@@ -1,61 +1,43 @@
 import React, { useMemo } from 'react';
-import { useQuery, UseQueryOptions } from '@tanstack/react-query';
-import { format, isAfter, isBefore, isSameDay } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
+import { format, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { 
-  ArrowUpRight, 
-  Calendar, 
-  CheckCircle2, 
-  Clock, 
-  Layers, 
-  Rotate3D, 
-  Timer, 
-  Dumbbell, 
-  CalendarClock,
-  Zap,
-  Target,
-  Medal,
-  TrendingUp,
-  Trophy
+import {
+  ArrowUpRight, Calendar, CheckCircle2, Clock, Layers, Rotate3D, Timer,
+  Dumbbell, CalendarClock, Zap, Target, Medal, TrendingUp, Trophy
 } from 'lucide-react';
-import { 
-  Card, 
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription 
-} from '../ui/card';
+import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Separator } from '../ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Link } from 'wouter';
+import { API } from '../../config';
+import Storage from '../../../../server/utils/storage';
 
 type Training = {
   id: string;
-  status: 'completed' | 'scheduled' | string;
-  scheduledFor: string;
-  training: {
-    title: string;
-    duration: number;
-    category: 'Físico' | 'Técnico' | 'Tático' | 'Mental' | string;
-  };
+  titulo: string;
+  dataTreino: string;
+  exercicios?: Array<any>;
 };
 
-type Challenge = {
-  id: string;
-  status: 'completed' | 'pending' | string;
-  pointsEarned?: number;
-  submittedAt?: string;
-  challenge: {
-    id: string;
-    title: string;
-    category: string;
-    ageGroup: string;
-    pointsValue: number;
-    expiresAt: string;
-  };
-};
+interface TrainingProgressProps {
+  userId: string | null;
+}
+
+interface ResumoTreinos {
+  completos: number;
+  horas: number;
+  desafios: number;
+  pontos: number;
+  categorias: Record<string, number>;
+}
+
+interface PontuacaoPerfil {
+  performance: number;
+  disciplina: number;
+  responsabilidade: number;
+}
 
 const categoryIcons: Record<string, React.ReactNode> = {
   'Físico': <Dumbbell className="h-4 w-4" />,
@@ -64,104 +46,84 @@ const categoryIcons: Record<string, React.ReactNode> = {
   'Mental': <Zap className="h-4 w-4" />
 };
 
-interface TrainingProgressProps {
-  userId: string;
-}
-
 export default function TrainingProgress({ userId }: TrainingProgressProps) {
+  const token = Storage.token || '';
+  const usuarioId = (Storage.usuarioId as string) || userId || '';
+  const atletaId  = (Storage.tipoUsuarioId as string) || '';
 
-  const { data: treinosAgendados = [], isLoading: isLoadingTrainings } = useQuery({
-    queryKey: ['treinosAgendados', userId],
+  const { data: treinosAgendados = [], isLoading: isLoadingTrainings } = useQuery<Training[]>({
+    queryKey: ['treinosAgendados', atletaId],
+    enabled: Boolean(token && atletaId),
     queryFn: async () => {
-      const res = await fetch(`http://localhost:3001/api/treinos/agendados?tipoUsuarioId=${userId}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-        }
-      });
-      if (!res.ok) throw new Error("Erro ao buscar treinos agendados");
+      const res = await fetch(
+        `${API.BASE_URL}/api/treinos/agendados?tipoUsuarioId=${encodeURIComponent(atletaId)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) throw new Error('Erro ao buscar treinos agendados');
       return res.json();
     },
-    enabled: !! userId
   });
 
-  const {
-  data: userChallenges = [],
-  isLoading: isLoadingChallenges
-} = useQuery<Challenge[], Error>(
-  {
-    queryKey: ['userChallenges', userId],
+  const { data: resumo, isLoading: isLoadingResumo } = useQuery<ResumoTreinos>({
+    queryKey: ['perfilResumoTreinos', usuarioId],
+    enabled: Boolean(token && usuarioId),
     queryFn: async () => {
-      const res = await fetch(`/api/usuario/${userId}/challenges`);
-      if (!res.ok) throw new Error("Erro ao buscar desafios");
+      const res = await fetch(
+        `${API.BASE_URL}/api/perfil/${encodeURIComponent(usuarioId)}/treinos`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) throw new Error('Erro ao buscar resumo de treinos');
       return res.json();
     },
-    enabled: !!userId,
-    onError: (err: unknown) => {
-      const error = err as Error;
-      console.error("Erro ao buscar desafios:", err);
-    }
-  } as UseQueryOptions<Challenge[], Error>
-);
+  });
 
-  const completedTrainings = useMemo(() => {
-    return []; 
-  }, [treinosAgendados]);
+   const { data: pontuacao, isLoading: isLoadingPontuacao } = useQuery<PontuacaoPerfil>({
+    queryKey: ['pontuacaoPerfil', usuarioId],
+    enabled: Boolean(token && usuarioId),
+    queryFn: async () => {
+      const res = await fetch(
+        `${API.BASE_URL}/api/perfil/pontuacao/${encodeURIComponent(usuarioId)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) throw new Error('Erro ao buscar pontuação do perfil');
+      return res.json();
+    },
+  });
 
-  const scheduledTrainings = useMemo(() => {
-    return treinosAgendados.sort((a: any, b: any) =>
-      new Date(a.dataTreino).getTime() - new Date(b.dataTreino).getTime()
-    );
-  }, [treinosAgendados]);
+  const trainingStats = useMemo(() => ({
+    completed: resumo?.completos ?? 0,
+    totalHours: Number(resumo?.horas ?? 0).toFixed(1),
+  }), [resumo]);
 
-  const completedChallenges = useMemo(() => {
-    if (!userChallenges || !Array.isArray(userChallenges)) return [];
-    return userChallenges.filter((c: any) => c.status === 'completed');
-  }, [userChallenges]);
+  const totalPontosTopo =
+    (pontuacao?.performance ?? 0) +
+    (pontuacao?.disciplina ?? 0) +
+    (pontuacao?.responsabilidade ?? 0);
 
-  const pendingChallenges = useMemo(() => {
-    if (!userChallenges || !Array.isArray(userChallenges)) return [];
-    return userChallenges.filter((c: any) => c.status === 'pending')
-      .sort((a: any, b: any) => {
-        const aDate = new Date(a.challenge.expiresAt);
-        const bDate = new Date(b.challenge.expiresAt);
-        return aDate.getTime() - bDate.getTime();
-      });
-  }, [userChallenges]);
+  const raw = resumo?.categorias || {};
+  const catFisico  = (raw as any).Fisico   ?? (raw as any)['Físico']  ?? 0;
+  const catTecnico = (raw as any).Tecnico  ?? (raw as any)['Técnico'] ?? 0;
+  const catTatico  = (raw as any).Tatico   ?? (raw as any)['Tático']  ?? 0;
+  const catMental  = (raw as any).Mental   ?? 0;
 
-  const trainingStats = useMemo(() => {
-    const scheduled = scheduledTrainings.length;
-    return {
-      completed: 0,
-      scheduled,
-      totalHours: (scheduled * 1).toFixed(1), 
-    };
-  }, [scheduledTrainings]);
+  const totalConcluidos = trainingStats.completed || 1;
 
-  const challengeStats = useMemo(() => {
-    if (!userChallenges) return { completed: 0, pending: 0, totalPoints: 0 };
-    
-    const completed = completedChallenges.length;
-    const pending = pendingChallenges.length;
-    const totalPoints = completedChallenges.reduce((acc: number, c: any) => 
-      acc + (c.pointsEarned || 0), 0);
-    
-    return { completed, pending, totalPoints };
-  }, [userChallenges, completedChallenges, pendingChallenges]);
+  const scheduledTrainings = useMemo(
+    () => [...treinosAgendados].sort(
+      (a, b) => new Date(a.dataTreino).getTime() - new Date(b.dataTreino).getTime()
+    ),
+    [treinosAgendados]
+  );
 
   const hasTodayActivities = useMemo(() => {
     if (!scheduledTrainings.length) return false;
-    const today = new Date();
-    return scheduledTrainings.some((t: any) => {
-      const scheduleDate = new Date(t.scheduledFor);
-      return isSameDay(today, scheduleDate);
-    });
+    const hoje = new Date();
+    return scheduledTrainings.some((t) => isSameDay(hoje, new Date(t.dataTreino)));
   }, [scheduledTrainings]);
 
-  const formatDate = (date: string) => {
-    return format(new Date(date), "dd 'de' MMMM", { locale: ptBR });
-  };
+  const isLoading = isLoadingTrainings || isLoadingResumo || isLoadingPontuacao;
 
-  if (isLoadingTrainings || isLoadingChallenges) {
+  if (isLoading) {
     return (
       <Card className="w-full mb-6">
         <CardContent className="p-6 text-center">
@@ -207,7 +169,7 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
                     <span className="text-xl font-bold text-green-700">{trainingStats.completed}</span>
                   </div>
                 </div>
-                
+
                 <div className="bg-blue-50 rounded-lg p-3 flex flex-col items-center justify-center">
                   <span className="text-xs text-blue-600 font-medium">Horas Treinadas</span>
                   <div className="flex items-center mt-1">
@@ -222,51 +184,18 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
                   <span className="text-xs text-purple-600 font-medium">Desafios Completos</span>
                   <div className="flex items-center mt-1">
                     <Trophy className="text-purple-600 h-4 w-4 mr-1" />
-                    <span className="text-xl font-bold text-purple-700">{challengeStats.completed}</span>
+                    <span className="text-xl font-bold text-purple-700">{resumo?.desafios ?? 0}</span>
                   </div>
                 </div>
-                
+
                 <div className="bg-amber-50 rounded-lg p-3 flex flex-col items-center justify-center">
                   <span className="text-xs text-amber-600 font-medium">Pontos Conquistados</span>
                   <div className="flex items-center mt-1">
                     <Medal className="text-amber-600 h-4 w-4 mr-1" />
-                    <span className="text-xl font-bold text-amber-700">{challengeStats.totalPoints}</span>
+                    <span className="text-xl font-bold text-amber-700">{totalPontosTopo}</span>
                   </div>
                 </div>
               </div>
-
-              {hasTodayActivities && (
-                <div className="bg-footera-cream-light border border-footera-cream rounded-lg p-4 mb-3">
-                  <h4 className="text-sm font-semibold flex items-center mb-2 footera-text-green">
-                    <Calendar className="h-4 w-4 mr-1" /> Atividades para Hoje
-                  </h4>
-                  
-                  <div className="space-y-2">
-                    {scheduledTrainings
-                      .filter((t: any) => isSameDay(new Date(), new Date(t.scheduledFor)))
-                      .map((training: any) => (
-                        <div key={training.id} className="flex justify-between items-center bg-white p-2 rounded-md">
-                          <div className="flex items-center">
-                            <div className="bg-footera-green-light p-1.5 rounded-md mr-2">
-                              {categoryIcons[training.training.category] || <Rotate3D className="h-4 w-4 text-footera-green" />}
-                            </div>
-                            <div>
-                              <p className="text-xs font-medium">{training.training.title}</p>
-                              <p className="text-[10px] text-gray-500 flex items-center">
-                                <Timer className="h-3 w-3 inline mr-1" /> 
-                                {training.training.duration} min
-                              </p>
-                            </div>
-                          </div>
-                          <Button size="sm" variant="outline" className="h-7 text-xs">
-                            Iniciar
-                          </Button>
-                        </div>
-                      ))
-                    }
-                  </div>
-                </div>
-              )}
 
               <div className="mt-3">
                 <h4 className="text-sm font-semibold mb-2">Desempenho por Categoria</h4>
@@ -276,94 +205,46 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
                       <span className="flex items-center">
                         <Dumbbell className="h-3 w-3 mr-1 text-red-500" /> Físico
                       </span>
-                      <span className="font-medium">
-                        {completedTrainings.filter((t: any) => t.training.category === 'Físico').length} treinos
-                      </span>
+                      <span className="font-medium">{catFisico} treinos</span>
                     </div>
                     <div className="bg-gray-100 h-2 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-red-500 rounded-full" 
-                        style={{ 
-                          width: `${
-                            completedTrainings.length 
-                              ? (completedTrainings.filter((t: any) => 
-                                  t.training.category === 'Físico').length / completedTrainings.length) * 100 
-                              : 0
-                          }%` 
-                        }} 
-                      />
+                      <div className="h-full bg-red-500 rounded-full" style={{ width: `${(catFisico / totalConcluidos) * 100}%` }} />
                     </div>
                   </div>
-                  
+
                   <div>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="flex items-center">
                         <Target className="h-3 w-3 mr-1 text-blue-500" /> Técnico
                       </span>
-                      <span className="font-medium">
-                        {completedTrainings.filter((t: any) => t.training.category === 'Técnico').length} treinos
-                      </span>
+                      <span className="font-medium">{catTecnico} treinos</span>
                     </div>
                     <div className="bg-gray-100 h-2 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-blue-500 rounded-full" 
-                        style={{ 
-                          width: `${
-                            completedTrainings.length 
-                              ? (completedTrainings.filter((t: any) => 
-                                  t.training.category === 'Técnico').length / completedTrainings.length) * 100 
-                              : 0
-                          }%` 
-                        }} 
-                      />
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(catTecnico / totalConcluidos) * 100}%` }} />
                     </div>
                   </div>
-                  
+
                   <div>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="flex items-center">
                         <Layers className="h-3 w-3 mr-1 text-green-500" /> Tático
                       </span>
-                      <span className="font-medium">
-                        {completedTrainings.filter((t: any) => t.training.category === 'Tático').length} treinos
-                      </span>
+                      <span className="font-medium">{catTatico} treinos</span>
                     </div>
                     <div className="bg-gray-100 h-2 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-green-500 rounded-full" 
-                        style={{ 
-                          width: `${
-                            completedTrainings.length 
-                              ? (completedTrainings.filter((t: any) => 
-                                  t.training.category === 'Tático').length / completedTrainings.length) * 100 
-                              : 0
-                          }%` 
-                        }} 
-                      />
+                      <div className="h-full bg-green-500 rounded-full" style={{ width: `${(catTatico / totalConcluidos) * 100}%` }} />
                     </div>
                   </div>
-                  
+
                   <div>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="flex items-center">
                         <Zap className="h-3 w-3 mr-1 text-purple-500" /> Mental
                       </span>
-                      <span className="font-medium">
-                        {completedTrainings.filter((t: any) => t.training.category === 'Mental').length} treinos
-                      </span>
+                      <span className="font-medium">{catMental} treinos</span>
                     </div>
                     <div className="bg-gray-100 h-2 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-purple-500 rounded-full" 
-                        style={{ 
-                          width: `${
-                            completedTrainings.length 
-                              ? (completedTrainings.filter((t: any) => 
-                                  t.training.category === 'Mental').length / completedTrainings.length) * 100 
-                              : 0
-                          }%` 
-                        }} 
-                      />
+                      <div className="h-full bg-purple-500 rounded-full" style={{ width: `${(catMental / totalConcluidos) * 100}%` }} />
                     </div>
                   </div>
                 </div>
@@ -376,160 +257,73 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
           <Card className="bg-white">
             <CardContent className="p-4">
               {treinosAgendados.length > 0 ? (
-    <div className="space-y-3">
-      {treinosAgendados.slice(0, 4).map((treino: any) => (
-        <div key={treino.id} className="border rounded-lg p-3">
-          <div className="flex justify-between items-start">
-            <div>
-              <h4 className="font-medium text-sm">{treino.titulo}</h4>
-              <p className="text-xs text-gray-500 mt-1">
-                {treino.exercicios?.length || 0} exercícios
-              </p>
-            </div>
-            <Badge
-              variant="outline"
-              className="text-xs bg-green-100 text-green-700 border-green-200"
-            >
-              {format(new Date(treino.dataTreino), "dd 'de' MMM", { locale: ptBR })}
-            </Badge>
-          </div>
+                <div className="space-y-3">
+                  {treinosAgendados.slice(0, 4).map((treino) => (
+                    <div key={treino.id} className="border rounded-lg p-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium text-sm">{treino.titulo}</h4>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {treino.exercicios?.length || 0} exercícios
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-200">
+                          {format(new Date(treino.dataTreino), "dd 'de' MMM", { locale: ptBR })}
+                        </Badge>
+                      </div>
 
-          <div className="mt-3 flex justify-between items-center">
-            <div className="flex items-center text-xs text-gray-600">
-              <CalendarClock className="h-3.5 w-3.5 mr-1" />
-              {format(new Date(treino.dataTreino), 'HH:mm', { locale: ptBR })}
-            </div>
+                      <div className="mt-3 flex justify-between items-center">
+                        <div className="flex items-center text-xs text-gray-600">
+                          <CalendarClock className="h-3.5 w-3.5 mr-1" />
+                          {format(new Date(treino.dataTreino), 'HH:mm', { locale: ptBR })}
+                        </div>
 
-            <Link href={`/submissao?treinoAgendadoId=${treino.id}`}>
-              <Button
-                size="sm"
-                className="h-7 text-xs"
-              >
-                Fazer Submissão
-              </Button>
-            </Link>
-          </div>
-        </div>
-      ))}
-    </div>
-  ) : (
-    <div className="text-center py-6">
-      <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-      <h4 className="text-gray-500 font-medium">Nenhum treino agendado</h4>
-      <p className="text-gray-400 text-sm mt-1">
-        Agende treinos com seu professor ou clube para visualizar aqui.
-      </p>
-    </div>
-  )}
-
+                        <Link href={`/submissao?treinoAgendadoId=${treino.id}`}>
+                          <Button size="sm" className="h-7 text-xs">Fazer Submissão</Button>
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <h4 className="text-gray-500 font-medium">Nenhum treino agendado</h4>
+                  <p className="text-gray-400 text-sm mt-1">Agende treinos com seu professor ou clube para visualizar aqui.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
+
         <TabsContent value="challenges">
           <Card className="bg-white">
             <CardContent className="p-2">
-              {pendingChallenges.length > 0 && (
-                <>
-                  <h4 className="text-sm font-medium mb-3 flex items-center">
-                    <Target className="h-4 w-4 mr-1 text-amber-500" />
-                    Desafios Ativos
-                  </h4>
-                  
-                  <div className="space-y-3 mb-4">
-                    {pendingChallenges.slice(0, 2).map((challenge: any) => (
-                      <div key={challenge.id} className="border border-amber-200 bg-amber-50 rounded-lg p-3">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h4 className="font-medium text-sm">{challenge.challenge.title}</h4>
-                            <p className="text-xs text-gray-600 mt-1 flex items-center">
-                              <Trophy className="h-3 w-3 mr-1 text-amber-500" />
-                              {challenge.challenge.pointsValue} pontos
-                            </p>
-                          </div>
-                          <Badge 
-                            variant="outline" 
-                            className="text-xs bg-amber-100 text-amber-800 border-amber-200"
-                          >
-                            Expira: {formatDate(challenge.challenge.expiresAt)}
-                          </Badge>
-                        </div>
-                        
-                        <Separator className="my-2 bg-amber-200" />
-                        
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-amber-700">
-                            {challenge.challenge.category} • {challenge.challenge.ageGroup}
-                          </span>
-                          <Link href={`/challenges/${challenge.challenge.id}`}>
-                            <Button 
-                              size="sm" 
-                              className="h-7 text-xs bg-amber-500 hover:bg-amber-600"
-                            >
-                              Realizar
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
-                    ))}
-                    
-                    {pendingChallenges.length > 2 && (
-                      <div className="text-center">
-                        <Link href="/challenges">
-                          <Button variant="link" className="text-sm text-amber-600">
-                            Ver mais {pendingChallenges.length - 2} desafios
-                          </Button>
-                        </Link>
-                      </div>
-                    )}
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="bg-purple-50 rounded-lg p-3 flex flex-col items-center justify-center">
+                  <span className="text-xs text-purple-600 font-medium">Completos</span>
+                  <div className="flex items-center mt-1">
+                    <Trophy className="text-purple-600 h-4 w-4 mr-1" />
+                    <span className="text-xl font-bold text-purple-700">{resumo?.desafios ?? 0}</span>
                   </div>
-                </>
-              )}
-              
-              {completedChallenges.length > 0 ? (
-                <>
-                  <h4 className="text-sm font-medium mb-3 flex items-center">
-                    <CheckCircle2 className="h-4 w-4 mr-1 text-green-500" />
-                    Desafios Completados
-                  </h4>
-                  
-                  <div className="space-y-2">
-                    {completedChallenges.slice(0, 3).map((challenge: any) => (
-                      <div key={challenge.id} className="border rounded-lg p-2 flex items-center justify-between">
-                        <div className="flex items-center">
-                          <div className="bg-green-100 p-1.5 rounded-md mr-2">
-                            <CheckCircle2 className="h-4 w-4 text-green-600" />
-                          </div>
-                          <div>
-                            <p className="text-xs font-medium">{challenge.challenge.title}</p>
-                            <p className="text-[10px] text-gray-500">
-                              {formatDate(challenge.submittedAt)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center text-amber-600 font-medium text-xs">
-                          <Trophy className="h-3.5 w-3.5 mr-1" />
-                          {challenge.pointsEarned || 0} pts
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-6">
-                  <Trophy className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                  <h4 className="text-gray-500 font-medium">Nenhum desafio completado</h4>
-                  <p className="text-gray-400 text-sm mt-1">
-                    Complete desafios para ganhar pontos e subir no ranking
-                  </p>
-                  <Link href="/challenges">
-                    <Button 
-                      className="mt-4 bg-footera-green hover:bg-footera-green-dark"
-                    >
-                      Ver Desafios
-                    </Button>
-                  </Link>
                 </div>
-              )}
+                <div className="bg-amber-50 rounded-lg p-3 flex flex-col items-center justify-center">
+                  <span className="text-xs text-amber-600 font-medium">Pontos</span>
+                  <div className="flex items-center mt-1">
+                    <Medal className="text-amber-600 h-4 w-4 mr-1" />
+                    <span className="text-xl font-bold text-amber-700">{totalPontosTopo}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-center py-6">
+                <Trophy className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <h4 className="text-gray-500 font-medium">Nenhum desafio completado</h4>
+                <p className="text-gray-400 text-sm mt-1">Complete desafios para ganhar pontos e subir no ranking</p>
+                <Link href="/challenges">
+                  <Button className="mt-4 bg-footera-green hover:bg-footera-green-dark">Ver Desafios</Button>
+                </Link>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

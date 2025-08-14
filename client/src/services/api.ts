@@ -1,5 +1,6 @@
 import { API } from "@/config";
 import { logout } from "@/utils/session";
+import Storage  from "../../../server/utils/storage";
 
 export async function apiFetch(
   path: string,
@@ -7,7 +8,7 @@ export async function apiFetch(
   onUnauthorized?: () => void
 ) {
   const token =
-    localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+    Storage.token || sessionStorage.getItem("token") || "";
 
   const res = await fetch(`${API.BASE_URL}${path}`, {
     ...options,

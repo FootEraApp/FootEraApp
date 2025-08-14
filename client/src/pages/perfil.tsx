@@ -67,7 +67,7 @@ export default function ProfilePage() {
       axios.get(`${API.BASE_URL}/api/perfil/me`, { headers }),
       axios.get(`${API.BASE_URL}/api/perfil/me/atividades`, { headers }),
       axios.get(`${API.BASE_URL}/api/perfil/me/badges`, { headers }),
-      axios.get(`${API.BASE_URL}/api/perfil/me/pontuacao`, { headers }),
+      axios.get(`${API.BASE_URL}/api/perfil/pontuacao/${Storage.usuarioId}`, { headers }),
     ])
       .then(([perfilRes, atividadesRes, badgesRes, pontuacaoRes]) => {
         setPerfil(perfilRes.data);
@@ -118,17 +118,17 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-transparent pb-20">
       <div className="max-w-3xl mx-auto px-4 py-6">
         <ProfileHeader
-          name={perfil.usuario.nome}
-          age={perfil.dadosEspecificos.idade}
-          position={perfil.dadosEspecificos.posicao}
-          team={
+          nome={perfil.usuario.nome}
+          idade={perfil.dadosEspecificos.idade}
+          posicao={perfil.dadosEspecificos.posicao}
+          time={
             perfil.tipo === "Atleta"
               ? perfil.dadosEspecificos.escola ||
                 perfil.dadosEspecificos.clube ||
                 "Independente"
               : undefined
           }
-          score={total}
+          ponto={total}
           isOwnProfile
           foto={perfil.usuario.foto || perfil.dadosEspecificos.foto}
         />
@@ -146,8 +146,8 @@ export default function ProfilePage() {
         {pontuacao && (
           <ScorePanel
             performance={pontuacao.pontuacaoPerformance}
-            discipline={pontuacao.pontuacaoDisciplina}
-            responsibility={pontuacao.pontuacaoResponsabilidade}
+            disciplina={pontuacao.pontuacaoDisciplina}
+            responsabilidade={pontuacao.pontuacaoResponsabilidade}
           />
         )}
 

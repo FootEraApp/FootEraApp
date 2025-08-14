@@ -2,24 +2,25 @@ import { Settings, Edit, Bell } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "../ui/button";
 import { formatarUrlFoto } from "@/utils/formatarFoto";
+import { API } from "../../config";
 
 interface ProfileHeaderProps {
-  name: string;
-  age?: number;
-  position?: string;
-  team?: string;
-  score?: number;
+  nome: string;
+  idade?: number;
+  posicao?: string;
+  time?: string;
+  ponto?: number;
   avatar?: string | null;
   isOwnProfile?: boolean;
   foto?: string | null;
 }
 
 export default function ProfileHeader({
-  name,
-  age,
-  position,
-  team,
-  score = 0,
+  nome,
+  idade,
+  posicao,
+  time,
+  ponto = 0,
   avatar,
   isOwnProfile = false,
   foto
@@ -28,7 +29,7 @@ export default function ProfileHeader({
   const formatImagePath = (path: string) =>
   path.startsWith("/uploads/") ? path.replace("/uploads/", "") : path;
 
-  const imageBaseUrl = "http://localhost:3001/uploads/";
+  const imageBaseUrl = `${ API.BASE_URL}/uploads/`;
   
   const resolveImageSrc = () => {
     if (!foto && !avatar) return "/attached_assets/Perfil.jpg";
@@ -39,7 +40,7 @@ export default function ProfileHeader({
       return caminho;
     }
 
-    return `http://localhost:3001/uploads/${caminho}`;
+    return `${API.BASE_URL}/uploads/${caminho}`;
   };
 
  const imageSrc = resolveImageSrc();
@@ -73,25 +74,25 @@ export default function ProfileHeader({
       <div className="w-24 h-24 rounded-full mb-3 flex items-center justify-center bg-white border-2 border-white overflow-hidden">
         <img
           src={formatarUrlFoto(imageSrc)}
-          alt={`${name} profile`}
+          alt={`${nome} profile`}
           className="w-full h-full object-cover"
         />
       </div>
 
-      <h1 className="footera-text-cream text-2xl font-bold">{name.toUpperCase()}</h1>
+      <h1 className="footera-text-cream text-2xl font-bold">{nome.toUpperCase()}</h1>
 
-      {(age || position || team) && (
+      {(idade || posicao || time) && (
         <p className="footera-text-cream text-sm mb-1 text-center">
-          {age && `${age} anos`}{(age && position) && " • "}
-          {position}{(position && team) && " • "}
-          {team}
+          {idade && `${idade} anos`}{(idade && posicao) && " • "}
+          {posicao}{(posicao && time) && " • "}
+          {time}
         </p>
       )}
 
       <div className="w-full mt-4">
         <h2 className="footera-text-cream text-center mb-2">Pontuação FootEra</h2>
         <div className="footera-bg-green border border-footera-cream rounded-lg p-3 flex justify-center">
-          <span className="footera-text-cream text-3xl font-bold">{score} pts</span>
+          <span className="footera-text-cream text-3xl font-bold">{ponto} pts</span>
         </div>
       </div>
 
