@@ -1,5 +1,5 @@
-import { db } from "./db"; // assume que usa drizzle
-import { users } from "@shared/schema"; // tabela users
+import { db } from "./db.js"; 
+import { users } from "@shared/schema.js";
 import { eq } from "drizzle-orm";
 
 export const storage = {

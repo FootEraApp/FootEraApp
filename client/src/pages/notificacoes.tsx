@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import Storage from "../../../server/utils/storage";
-import {API} from "../config";
+import Storage from "../../../server/utils/storage.js";
+import {API} from "../config.js";
 
 interface Solicitacao {
   id: string;

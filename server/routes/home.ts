@@ -9,7 +9,7 @@ import {
   comentar,
   postar,
   faleConosco
-} from "../controllers/homeController";
+} from "../controllers/homeController.js";
 
 const router = express.Router();
 const upload = multer({ dest: "public/uploads/posts" });

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import axios from "axios";
-import { API } from "../config";
+import { API } from "../config.js";
 
 export default function ResetarSenha() {
   const [, navigate] = useLocation();

@@ -5,7 +5,7 @@ import {
   createEscolinha,
   updateEscolinha,
   deleteEscolinha
-} from "../controllers/escolinhasController";
+} from "../controllers/escolinhasController.js";
 
 const router = express.Router();
 

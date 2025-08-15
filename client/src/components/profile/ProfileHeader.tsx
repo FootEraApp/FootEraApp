@@ -1,8 +1,8 @@
 import { Settings, Edit, Bell } from "lucide-react";
 import { Link } from "wouter";
-import { Button } from "../ui/button";
-import { formatarUrlFoto } from "@/utils/formatarFoto";
-import { API } from "../../config";
+import { Button } from "../ui/button.js";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import { API } from "../../config.js";
 
 interface ProfileHeaderProps {
   nome: string;

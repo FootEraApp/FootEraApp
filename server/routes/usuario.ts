@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { getUsuarioPorId, getUsuarioChallenges } from "../controllers/usuarioController";
-import { authenticateToken } from "server/middlewares/auth";
+import { getUsuarioPorId, getUsuarioChallenges } from "../controllers/usuarioController.js";
+import { authenticateToken } from "server/middlewares/auth.js";
 const router = Router();
 
 router.get("/:id", getUsuarioPorId);

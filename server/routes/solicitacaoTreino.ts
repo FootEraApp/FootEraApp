@@ -1,11 +1,11 @@
 import express from "express";
-import { authenticateToken } from "../middlewares/auth";
+import { authenticateToken } from "../middlewares/auth.js";
 import {
   criarSolicitacao,
   listarSolicitacoesRecebidas,
   aceitarSolicitacao,
   recusarSolicitacao
-} from "../controllers/solicitacaoTreinoController";
+} from "../controllers/solicitacaoTreinoController.js";
 
 const router = express.Router();
 

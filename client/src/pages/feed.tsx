@@ -6,20 +6,19 @@ import {
   FaShare,
   FaPaperPlane,
 } from "react-icons/fa";
-import Storage from "../../../server/utils/storage";
+import Storage from "../../../server/utils/storage.js";
 import { Volleyball, User, CirclePlus, Search, House, CircleX } from "lucide-react";
-import { API } from "../config";
+import { API } from "../config.js";
 import {
   getFeedPosts,
   likePost,
   comentarPost,
   PostagemComUsuario,
-} from "../services/feedService";
+} from "../services/feedService.js";
 import { format } from "date-fns";
-import { Link } from "wouter";
-import { formatarUrlFoto } from "@/utils/formatarFoto";
-import { useLocation } from "wouter";
-import { logout } from "@/utils/session";
+import { Link, useLocation } from "wouter";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import { logout } from "@/utils/session.js";
 
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);

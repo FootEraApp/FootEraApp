@@ -1,4 +1,4 @@
-import { formatarUrlFoto } from "@/utils/formatarFoto";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 
 interface Activity {
   id: string;

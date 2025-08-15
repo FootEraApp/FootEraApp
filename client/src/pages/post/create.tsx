@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
-import Storage from "../../../../server/utils/storage";
-import { API } from "../../config";
+import Storage from "../../../../server/utils/storage.js";
+import { API } from "../../config.js";
 
 function PaginaPostagem() {
   const [descricao, setDescricao] = useState("");

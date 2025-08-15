@@ -5,7 +5,7 @@ import {
   deixarDeSeguir,
   listarSeguidores,
   listarSeguindo
-} from "../controllers/amigosController";
+} from "../controllers/amigosController.js";
 
 const router = express.Router();
 

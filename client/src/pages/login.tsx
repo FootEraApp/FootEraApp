@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
 import axios from "axios";
-import { API } from "../config";
-import Storage from "../../../server/utils/storage";
+import { API } from "../config.js";
+import Storage from "../../../server/utils/storage.js";
 
 export default function PaginaLogin() {
   const [nomeDeUsuario, setNomeDeUsuario] = useState("");

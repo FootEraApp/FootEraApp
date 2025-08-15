@@ -1,5 +1,5 @@
 import express from "express";
-import { getConfiguracoes, atualizarConfiguracoes } from "../controllers/configuracoesController";
+import { getConfiguracoes, atualizarConfiguracoes } from "../controllers/configuracoesController.js";
 
 const router = express.Router();
 

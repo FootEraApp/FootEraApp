@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { prisma } from "../lib/prisma";
 import multer from "multer";
-import { authenticateToken, AuthenticatedRequest } from "../middlewares/auth";
+import { authenticateToken, AuthenticatedRequest } from "../middlewares/auth.js";
+import { PrismaClient } from "@prisma/client";
 
+const prisma = new PrismaClient;
 const router = Router();
 
 const storage = multer.diskStorage({

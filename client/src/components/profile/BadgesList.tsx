@@ -1,10 +1,10 @@
 import { useState } from "react";
 import axios from "axios";
-import { API } from "../../config";
-import Storage from "../../../../server/utils/storage";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
-import { Button } from "../ui/button";
-import { Textarea } from "../ui/textarea";
+import { API } from "../../config.js";
+import Storage from "../../../../server/utils/storage.js";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog.js";
+import { Button } from "../ui/button.js";
+import { Textarea } from "../ui/textarea.js";
 import { Share2 } from "lucide-react";
 
 type Badge = {
@@ -28,7 +28,7 @@ function BadgeIcon({ src, fallback }: { src: string; fallback: string }) {
   return <img src={src} className="w-12 h-12 mb-2" onError={() => setErr(true)} />;
 }
 
-export function BadgesList({ userId, badges = [] as Badge[] }: { userId?: string; badges?: Badge[] }) {
+export function BadgesList({ userId, badges = [] as Badge[] }: { userId?: string | null; badges?: Badge[] }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Badge | null>(null);
   const [mensagem, setMensagem] = useState("");

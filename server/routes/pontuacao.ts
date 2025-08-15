@@ -3,7 +3,7 @@ import {
   getPontuacaoAtleta,
   atualizarPontuacaoAtleta,
   getRanking
-} from "../controllers/pontuacoesController";
+} from "../controllers/pontuacoesController.js";
 
 const router = Router();
 

@@ -4,7 +4,7 @@ import {
   politicaDePrivacidade,
   regulamento,
   termosDeUso,
-} from "../controllers/termoController";
+} from "../controllers/termoController.js";
 
 const router = Router();
 

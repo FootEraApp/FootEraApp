@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API } from "../../../config";
+import { API } from "../../../config.js";
 
 export default function CriarOuEditarProfessor() {
   const [id, setId] = useState<string | null>(null);

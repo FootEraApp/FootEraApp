@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House, Trash2 } from "lucide-react";
-import Storage from "../../../server/utils/storage";
-import { API } from "../config";
+import Storage from "../../../server/utils/storage.js";
+import { API } from "../config.js";
 
 interface Exercicio {
   id: string;

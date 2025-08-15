@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { Nivel, Categoria, TipoTreino } from "@prisma/client";
-import { prisma } from "../lib/prisma";
-import { authenticateToken } from "server/middlewares/auth";
-import { obterTreinoProgramadoPorId, listarTreinosAgendados, treinosController, excluirTreinoAgendado, listarTodosTreinosProgramados } from "../controllers/treinosController";
+import { PrismaClient } from "@prisma/client";
+import { authenticateToken } from "server/middlewares/auth.js";
+import { listarTreinosAgendados, treinosController, excluirTreinoAgendado, listarTodosTreinosProgramados, obterTreinoProgramadoPorId } from "server/controllers/treinosController.js";
+
 const router = Router();
+const prisma = new PrismaClient;
 
 interface CriarTreinoInput {
   nome: string;
@@ -201,5 +203,33 @@ router.post("/", async (req, res) => {
 });
 
 router.get("/:id", authenticateToken, obterTreinoProgramadoPorId);
+router.post("/restaurar", authenticateToken, async (req, res) => {
+  const { nomes } = req.body as { nomes: string[] };
+  if (!Array.isArray(nomes) || nomes.length === 0) {
+    return res.status(400).json({ error: "Informe 'nomes: string[]'." });
+  }
+
+  const ops = nomes.map((nome) =>
+    prisma.treinoProgramado.upsert({
+      where: { nome },
+      update: { naoExpira: true, dataAgendada: null },
+      create: {
+        nome,
+        codigo: `${nome}-${Date.now()}`,
+        nivel: "Base",
+        tipoTreino: "Físico",
+        categoria: [],
+        duracao: 60,
+        pontuacao: 15,
+        dicas: [],
+        naoExpira: true,
+        dataAgendada: null,
+      },
+    })
+  );
+
+  await Promise.all(ops);
+  return res.json({ ok: true, restaurados: nomes.length });
+});
 
 export default router;

@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import axios from "axios";
-import Storage from "../../../server/utils/storage";
-import { API } from "../config";
+import Storage from "../../../server/utils/storage.js";
+import { API } from "../config.js";
 
-import ProfileHeader from "../components/profile/ProfileHeader";
-import ActivityGrid from "../components/profile/ActivityGrid";
-import { BadgesList } from "../components/profile/BadgesList";
-import ScorePanel from "../components/profile/ScorePanel";
-import TrainingProgress from "../components/profile/TrainingProgress";
+import ProfileHeader from "../components/profile/ProfileHeader.js";
+import ActivityGrid from "../components/profile/ActivityGrid.js";
+import { BadgesList } from "../components/profile/BadgesList.js";
+import ScorePanel from "../components/profile/ScorePanel.js";
+import TrainingProgress from "../components/profile/TrainingProgress.js";
 
 interface Perfil {
   tipo: string;
@@ -142,7 +142,7 @@ export default function ProfilePage() {
 
         <TrainingProgress userId={usuarioId} />
         <ActivityGrid activities={activities} />
-        <BadgesList userId={usuarioId} badges={badges} />
+        <BadgesList userId={usuarioId ?? undefined } badges={badges} />
         {pontuacao && (
           <ScorePanel
             performance={pontuacao.pontuacaoPerformance}

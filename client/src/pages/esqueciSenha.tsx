@@ -1,6 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
-import { API } from "../config";
+import { API } from "../config.js";
 import logo from "/assets/usuarios/footera-logo.png";
 
 export default function EsqueciSenha() {

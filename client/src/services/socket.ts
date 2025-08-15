@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
-import { API } from "../config";
-import Storage from "../../../server/utils/storage";
+import { API } from "../config.js";
+import Storage from "../../../server/utils/storage.js";
 
 const token = Storage.token; 
 

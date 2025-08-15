@@ -1,6 +1,6 @@
 import express, { Router} from "express";
-import { authenticateToken } from "../middlewares/auth";
-import { adminAuth } from "../middlewares/admin-auth";
+import { authenticateToken } from "../middlewares/auth.js";
+import { adminAuth } from "../middlewares/admin-auth.js";
 import { PrismaClient } from "@prisma/client";
 
 import {
@@ -10,7 +10,7 @@ import {
   deletarPostagem,
   getPerfil,
   deletarUsuario
-} from "../controllers/feedController";
+} from "../controllers/feedController.js";
 
 import multer from "multer";
 const upload = multer({ dest: "public/uploads/posts" });

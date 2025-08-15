@@ -1,6 +1,6 @@
 import express from "express";
 import multer from "multer"
-import { criarProfessor, editarProfessor, excluirProfessor, listarProfessores, buscarProfessorPorId } from "../controllers/professoresController";
+import { criarProfessor, editarProfessor, excluirProfessor, listarProfessores, buscarProfessorPorId } from "../controllers/professoresController.js";
 
 const router = express.Router();
 const upload = multer({ dest: "upload/" });

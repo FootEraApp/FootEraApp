@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { compartilharConquista } from "../controllers/conquistaController";
-import { authenticateToken } from "../middlewares/auth";
+import { compartilharConquista } from "../controllers/conquistaController.js";
+import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
 router.post("/compartilhar", authenticateToken, compartilharConquista);

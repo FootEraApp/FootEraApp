@@ -1,6 +1,6 @@
-import Storage from "../../../server/utils/storage";
-import { API } from "../config";
-import { apiGet } from "./api";
+import Storage from "../../../server/utils/storage.js";
+import { API } from "../config.js";
+import { apiGet } from "./api.js";
 
 export interface Usuario {
   id: string;

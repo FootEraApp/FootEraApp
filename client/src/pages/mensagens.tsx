@@ -1,9 +1,9 @@
 import { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { Send, Share2 } from "lucide-react";
-import Storage from "../../../server/utils/storage";
-import { API } from "../config";
-import socket from "../services/socket";
+import Storage from "../../../server/utils/storage.js";
+import { API } from "../config.js";
+import socket from "../services/socket.js";
 
 interface Usuario {
   id: string;
@@ -211,7 +211,6 @@ const enviarMensagem = async () => {
 
   return (
     <div className="flex h-screen">
-      {/* Sidebar de contatos */}
       <aside className="w-1/4 border-r p-4 overflow-y-auto">
         <h2 className="text-lg font-semibold mb-2">Conversas</h2>
         {usuariosMutuos.map((usuario) => (
@@ -237,7 +236,6 @@ const enviarMensagem = async () => {
         ))}
       </aside>
 
-      {/* Chat */}
       <main className="flex-1 flex flex-col justify-between p-4">
         {usuarioSelecionado ? (
           <>

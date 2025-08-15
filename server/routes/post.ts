@@ -12,9 +12,9 @@ import {
   adicionarComentario,
   buscarPostagemPorId,
   registrarCompartilhamento
-} from "../controllers/postController";
-import { authenticateToken } from "../middlewares/auth";
-import { curtirPostagem } from "server/controllers/feedController";
+} from "../controllers/postController.js";
+import { authenticateToken } from "../middlewares/auth.js";
+import { curtirPostagem } from "server/controllers/feedController.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

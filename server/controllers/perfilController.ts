@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import { AuthenticatedRequest } from "server/middlewares/auth";
+import { AuthenticatedRequest } from "server/middlewares/auth.js";
 
 const prisma = new PrismaClient();
 
@@ -192,9 +192,13 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
     }).catch(() => [] as any[]);
 
       const pontosTreinos = (submissoesTreino || []).reduce((acc, s: any) => {
-      const p = s?.treinoAgendado?.treinoProgramado?.pontuacao ?? 0;
-      return acc + (Number(p) || 0);
-    }, 0);
+        const p =
+          s?.pontosCreditados ??
+          s?.pontuacaoSnapshot ??
+          s?.treinoAgendado?.treinoProgramado?.pontuacao ??
+          0;
+        return acc + (Number(p) || 0);
+      }, 0);
 
     const pontosDesafios = (submissoesDesafio || []).reduce((acc, s: any) => {
       const p = s?.desafio?.pontos ?? s?.desafio?.pontuacao ?? 0;
@@ -205,14 +209,26 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
     const disciplina = (submissoesTreino?.length || 0) * 2;
     const responsabilidade = (submissoesDesafio?.length || 0) * 2; 
 
-    const historicoTreinos = (submissoesTreino || []).map((s: any) => ({
-      tipo: "Treino",
-      status: s.aprovado ? "Concluído" : "Pendente",
-      data: new Date(s.criadoEm ?? s.dataCriacao ?? Date.now()).toLocaleDateString("pt-BR"),
-      duracao: s.duracaoMinutos ? `${s.duracaoMinutos} min` : undefined,
-      titulo: s?.treinoAgendado?.treinoProgramado?.nome ?? s?.treinoAgendado?.titulo ?? "Treino",
-      pontos: s?.treinoAgendado?.treinoProgramado?.pontuacao ?? 0,
-    }));
+    const historicoTreinos = (submissoesTreino || []).map((s: any) => {
+      const dur =
+        s?.duracaoMinutos ??
+        s?.treinoAgendado?.treinoProgramado?.duracao ??
+        0;
+      const pts =
+        s?.pontosCreditados ??
+        s?.pontuacaoSnapshot ??
+        s?.treinoAgendado?.treinoProgramado?.pontuacao ??
+        0;
+
+      return {
+        tipo: "Treino",
+        status: s.aprovado ? "Concluído" : "Pendente",
+        data: new Date(s.criadoEm ?? s.dataCriacao ?? Date.now()).toLocaleDateString("pt-BR"),
+        duracao: dur ? `${dur} min` : undefined,
+        titulo: s?.treinoAgendado?.treinoProgramado?.nome ?? s?.treinoAgendado?.titulo ?? "Treino",
+        pontos: Number(pts) || 0,
+      };
+    });
 
     const historicoDesafios = (submissoesDesafio || []).map((s: any) => ({
       tipo: "Desafio",
@@ -562,70 +578,53 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
 export const getTreinosResumo = async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.params.id;
 
-  const usuario = await prisma.usuario.findUnique({ where: { id: userId } });
-  if (!usuario) return res.status(404).json({ error: "Usuário não encontrado" });
-
   const atleta = await prisma.atleta.findUnique({
     where: { usuarioId: userId },
-    include: {
-      SubmissaoTreino: {
-        include: {
-          treinoAgendado: {
-            include: { treinoProgramado: true },
-          },
-        },
-      },
-     submissoesDesafio: {
-        include: { desafio: true },
-      },
+    select: { id: true },
+  });
+  if (!atleta) return res.status(404).json({ error: "Atleta não encontrado" });
+
+  const [estat, desafiosAprovados] = await Promise.all([
+    prisma.estatisticaAtleta.findUnique({ where: { atletaId: atleta.id } }),
+    prisma.submissaoDesafio.count({ where: { atletaId: atleta.id, aprovado: true } })
+  ]);
+
+  if (estat) {
+    const categorias = {
+      Fisico: estat.fisico,
+      Tecnico: estat.tecnico,
+      Tatico: estat.tatico,
+      Mental: estat.mental,
+    };
+    return res.json({
+      completos: estat.totalTreinos,
+      horas: estat.horasTreinadas,
+      desafios: desafiosAprovados,       
+      categorias,
+    });
+  }
+
+  const subs = await prisma.submissaoTreino.findMany({
+    where: { atletaId: atleta.id, aprovado: true },
+    select: {
+      tipoTreinoSnapshot: true,
+      duracaoMinutos: true,
+      pontosCreditados: true,
     },
   });
 
-  if (!atleta) return res.status(404).json({ error: "Atleta não encontrado" });
+  const completos = subs.length;
+  const horas = +(subs.reduce((acc, s) => acc + (s.duracaoMinutos || 0), 0) / 60).toFixed(1);
+  const pontos = subs.reduce((acc, s) => acc + (s.pontosCreditados || 0), 0);
 
-  const completos = atleta.SubmissaoTreino.length;
-
-  const minutos = atleta.SubmissaoTreino.reduce((total, sub) => {
-    const m =
-      (sub as any).duracaoMinutos ??
-      sub.treinoAgendado?.treinoProgramado?.duracao ??
-      60; 
-    return total + Number(m || 0);
-  }, 0);
-  const horas = Number((minutos / 60).toFixed(1));
-
-  const desafios = atleta.submissoesDesafio.length;
-  const pontos = atleta.submissoesDesafio.reduce((total, sub) => {
-    const p = sub.desafio?.pontuacao ?? sub.desafio?.pontuacao ?? 0;
-    return total + Number(p || 0);
-  }, 0);
-
-  const categorias: Record<"Fisico" | "Tecnico" | "Tatico" | "Mental", number> = {
-    Fisico: 0,
-    Tecnico: 0,
-    Tatico: 0,
-    Mental: 0,
-  };
-
-  for (const sub of atleta.SubmissaoTreino) {
-    const tipo = sub.treinoAgendado?.treinoProgramado?.tipoTreino as string | undefined;
-    switch (tipo) {
-      case "Físico":  
-        categorias.Fisico++;
-        break;
-      case "Tecnico":
-        categorias.Tecnico++;
-        break;
-      case "Tatico":
-        categorias.Tatico++;
-        break;
-      case "Mental":
-        categorias.Mental++;
-        break;
-      default:
-        break;
-    }
+  const categorias = { Fisico: 0, Tecnico: 0, Tatico: 0, Mental: 0 };
+  for (const s of subs) {
+    if (s.tipoTreinoSnapshot === 'Físico') categorias.Fisico++;
+    else if (s.tipoTreinoSnapshot === 'Tecnico') categorias.Tecnico++;
+    else if (s.tipoTreinoSnapshot === 'Tatico') categorias.Tatico++;
+    else if (s.tipoTreinoSnapshot === 'Mental') categorias.Mental++;
   }
 
-  return res.json({ completos, horas, desafios, pontos, categorias });
+  return res.json({ completos, horas, desafios: desafiosAprovados, pontos, categorias });
 };
+

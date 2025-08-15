@@ -3,16 +3,16 @@ import { useQuery } from '@tanstack/react-query';
 import { format, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  ArrowUpRight, Calendar, CheckCircle2, Clock, Layers, Rotate3D, Timer,
+  ArrowUpRight, Calendar, CheckCircle2, Clock, Layers, 
   Dumbbell, CalendarClock, Zap, Target, Medal, TrendingUp, Trophy
 } from 'lucide-react';
-import { Card, CardContent } from '../ui/card';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Card, CardContent } from '../ui/card.js';
+import { Button } from '../ui/button.js';
+import { Badge } from '../ui/badge.js';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs.js';
 import { Link } from 'wouter';
-import { API } from '../../config';
-import Storage from '../../../../server/utils/storage';
+import { API } from '../../config.js';
+import Storage from '../../../../server/utils/storage.js';
 
 type Training = {
   id: string;
@@ -316,14 +316,25 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
                 </div>
               </div>
 
-              <div className="text-center py-6">
-                <Trophy className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                <h4 className="text-gray-500 font-medium">Nenhum desafio completado</h4>
-                <p className="text-gray-400 text-sm mt-1">Complete desafios para ganhar pontos e subir no ranking</p>
-                <Link href="/challenges">
-                  <Button className="mt-4 bg-footera-green hover:bg-footera-green-dark">Ver Desafios</Button>
-                </Link>
-              </div>
+              {(resumo?.desafios ?? 0) > 0 ? (
+                <div className="text-center py-6 text-green-800 text-sm">
+                  Você já concluiu {resumo?.desafios} desafio(s). Confira o ranking e novos desafios.
+                  <div className="mt-3">
+                    <Link href="/challenges">
+                      <Button className="bg-footera-green hover:bg-footera-green-dark">Abrir Desafios</Button>
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <Trophy className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <h4 className="text-gray-500 font-medium">Nenhum desafio completado</h4>
+                  <p className="text-gray-400 text-sm mt-1">Complete desafios para ganhar pontos e subir no ranking</p>
+                  <Link href="/challenges">
+                    <Button className="mt-4 bg-footera-green hover:bg-footera-green-dark">Ver Desafios</Button>
+                  </Link>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

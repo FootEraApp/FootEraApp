@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "wouter";
-import { getFeedPosts } from "../../services/feedService";
+import { getFeedPosts } from "../../services/feedService.js";
 import { formatDistanceToNow } from "date-fns";
-import { formatarUrlFoto } from "@/utils/formatarFoto";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 
 export default function PaginaMostrarPost() {
   const params = useParams();

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { jwtDecode } from "jwt-decode";
-import Storage  from "../../server/utils/storage";
+import Storage  from "../../server/utils/storage.js";
 
 function getToken() {
   return Storage.token || sessionStorage.getItem("token") || "";

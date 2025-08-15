@@ -167,6 +167,9 @@ model TreinoProgramado {
   imagemUrl    String?
   metas        String?
   pontuacao    Int?
+  expiraEm     DateTime?
+
+  naoExpira Boolean @default(false)
 
   clubeId String?
   clube   Clube?  @relation(fields: [clubeId], references: [id])
@@ -425,6 +428,12 @@ model SubmissaoTreino {
   treinoAgendado TreinoAgendado @relation(fields: [treinoAgendadoId], references: [id])
   midias         Midia[]        @relation("Midias_SubmissaoTreino")
   Usuario        Usuario?       @relation(fields: [usuarioId], references: [id])
+
+  treinoTituloSnapshot String?
+  tipoTreinoSnapshot   TipoTreino?
+  duracaoMinutos       Int?
+  pontuacaoSnapshot    Int?
+  pontosCreditados     Int?
 }
 
 model Grupo {

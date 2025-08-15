@@ -1,3 +1,7 @@
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient;
+
 export async function incTreino(atletaId: string, minutos: number, categoria: string) {
   const incCat: any = {};
   if (categoria?.toLowerCase() === 'físico' || categoria?.toLowerCase() === 'fisico') incCat.fisico = { increment: 1 };

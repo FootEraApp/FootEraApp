@@ -1,6 +1,5 @@
 import express from "express";
-import { authenticateToken } from "server/middlewares/auth";
-import { prisma } from "server/lib/prisma";
+import { authenticateToken } from "server/middlewares/auth.js";
 import {
   getDesafioById,
   criarSubmissaoDesafio,
@@ -10,8 +9,10 @@ import {
   editarDesafio,
   excluirDesafio,
   getDesafios
-} from "../controllers/desafiosController";
+} from "../controllers/desafiosController.js";
+import { PrismaClient } from "@prisma/client";
 
+const prisma = new PrismaClient;
 const router = express.Router();
 
 router.get("/", getDesafios);

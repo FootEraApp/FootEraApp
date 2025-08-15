@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { authenticateToken } from "../middlewares/auth";
+import { authenticateToken } from "../middlewares/auth.js";
 import {
   enviarMensagem,
   buscarMensagens
-} from "../controllers/mensagensController";
+} from "../controllers/mensagensController.js";
 
 const router = Router();
 
