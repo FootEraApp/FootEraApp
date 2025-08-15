@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import UploadVideo from "@/components/UploadVideo";
-import { API } from "../../../config";
+import UploadVideo from "@/components/UploadVideo.js";
+import { API } from "../../../config.js";
 
 export default function CreateOrEditExercicio() {
   const [codigo, setCodigo] = useState("");

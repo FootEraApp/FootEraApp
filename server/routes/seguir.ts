@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { seguirUsuario, deixarDeSeguir, listarSeguindo } from "../controllers/seguirController";
-import { authenticateToken } from "../middlewares/auth";
+import { seguirUsuario, deixarDeSeguir, listarSeguindo } from "../controllers/seguirController.js";
+import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
 

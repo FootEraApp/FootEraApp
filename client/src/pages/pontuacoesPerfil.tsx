@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { useLocation } from "wouter";
 import { BarChart2, Timer, KeyRound, CheckCircle, Play } from "lucide-react";
-import Storage from "../../../server/utils/storage";
-import { API } from "../config";
+import Storage from "../../../server/utils/storage.js";
+import { API } from "../config.js";
 
 export default function PontuacaoDetalhada() {
   const [usuarioId] = useState(Storage.usuarioId);
@@ -80,7 +80,7 @@ export default function PontuacaoDetalhada() {
                 </div>
               </div>
             </div>
-            <span className="text-green-800 text-sm font-medium">Ver Tudo &gt;</span>
+            <button><span className="text-green-800 text-sm font-medium">Ver Tudo &gt;</span></button>
           </div>
         ))}
       </section>

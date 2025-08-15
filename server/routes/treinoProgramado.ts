@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { PrismaClient, Categoria, Nivel } from "@prisma/client";
-import { getAllTreinos } from "../controllers/treinosProgramadosController";
+import { getAllTreinos } from "../controllers/treinosProgramadosController.js";
 
 const prisma = new PrismaClient({
   log: ["query","error","warn","info"], 

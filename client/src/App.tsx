@@ -1,5 +1,5 @@
-import { AppRoutes } from "./routes";
-import { UserProvider } from "./context/UserContext";
+import { AppRoutes } from "./routes.js";
+import { UserProvider } from "./context/UserContext.js";
 
 export default function App() {
   return (

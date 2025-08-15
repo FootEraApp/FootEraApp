@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { formatarUrlFoto } from '@/utils/formatarFoto';
-import Storage from "../../../server/utils/storage";
-import { API } from '../config';
+import { formatarUrlFoto } from '@/utils/formatarFoto.js';
+import Storage from "../../../server/utils/storage.js";
+import { API } from '../config.js';
 
 const EditarPerfil = () => {
   const usuarioId = Storage.usuarioId;

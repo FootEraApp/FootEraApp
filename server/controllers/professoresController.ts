@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
-import { prisma } from "../lib/prisma";
 import multer from "multer";
+import { PrismaClient } from "@prisma/client";
 
+const prisma = new PrismaClient;
 const upload = multer({dest: "uploads/"});
 
 export const listarProfessores = async (req: Request, res: Response) => {

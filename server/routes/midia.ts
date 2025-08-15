@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { getMidias, uploadMidia, deleteMidia } from "../controllers/midiaController";
-import { upload } from "../middlewares/upload"; // middleware do multer
+import { getMidias, uploadMidia, deleteMidia } from "../controllers/midiaController.js";
+import { upload } from "../middlewares/upload.js"; 
 
 const router = Router();
 

@@ -5,7 +5,7 @@ import {
   createGrupo,
   adicionarMembro,
   removerMembro
-} from "../controllers/gruposController";
+} from "../controllers/gruposController.js";
 
 const router = Router();
 

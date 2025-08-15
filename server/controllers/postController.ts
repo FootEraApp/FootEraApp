@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
-import { AuthenticatedRequest } from "../middlewares/auth";
-import { prisma } from "../lib/prisma"
+import { AuthenticatedRequest } from "../middlewares/auth.js";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient;
 
 export const postarConteudo = async (req: AuthenticatedRequest, res: Response) => {
    try {

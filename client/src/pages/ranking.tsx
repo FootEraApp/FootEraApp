@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import MobileLayout from "../components/layout/MobileLayout";
+import MobileLayout from "../components/layout/MobileLayout.js";
 
 export default function RankingPage() {
   const { data: rankings = [], isLoading } = useQuery({

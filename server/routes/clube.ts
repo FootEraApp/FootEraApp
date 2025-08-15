@@ -5,7 +5,7 @@ import {
   createClube,
   updateClube,
   deleteClube
-} from "../controllers/clubesController";
+} from "../controllers/clubesController.js";
 
 const router = express.Router();
 

@@ -1,35 +1,52 @@
-import { prisma } from "../lib/prisma";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient;
 
 export async function removerTreinosExpirados() {
   const agora = new Date();
 
   const treinos = await prisma.treinoProgramado.findMany({
-    select: { id: true, nome: true, createdAt: true, duracao: true },
+    select: {
+      id: true,
+      nome: true,
+      createdAt: true,
+      expiraEm: true,    
+      naoExpira: true,   
+    },
   });
 
   for (const treino of treinos) {
-    if (treino.duracao && treino.createdAt) {
-      const expiracao = new Date(treino.createdAt.getTime() + treino.duracao * 60000); 
+    if (treino.naoExpira) {
+      console.log(`[SKIP] ${treino.nome} marcado como 'naoExpira'.`);
+      continue;
+    }
 
-      if (agora > expiracao) {
-      await prisma.treinoProgramadoExercicio.deleteMany({
+    const expiracao: Date | null = treino.expiraEm ? new Date(treino.expiraEm) : null;
+    const expirado = !!(expiracao && agora > expiracao);
+
+    if (!expirado) {
+      console.log(`[OK] ${treino.nome} ainda válido.`);
+      continue;
+    }
+
+    const temSub = await prisma.submissaoTreino.count({
+      where: { treinoAgendado: { treinoProgramadoId: treino.id } },
+    });
+
+    if (temSub > 0) {
+      console.log(
+        `[SKIP] ${treino.nome} expirado mas tem ${temSub} submissão(ões) – não será deletado.`
+      );
+      continue;
+    }
+
+    await prisma.$transaction([
+      prisma.treinoProgramadoExercicio.deleteMany({
         where: { treinoProgramadoId: treino.id },
-      });
+      }),
+      prisma.treinoProgramado.delete({ where: { id: treino.id } }),
+    ]);
 
-      await prisma.treinoProgramado.delete({
-        where: { id: treino.id },
-      });
-
-      console.log(`Treino ${treino.nome} removido por expiração.`);
-    } 
-   }
+    console.log(`[DEL] ${treino.nome} expirado e sem submissões – removido.`);
   }
 }
-
-removerTreinosExpirados()
-  .catch((e) => {
-    console.error("Erro ao remover treinos expirados:", e);
-  })
-  .finally(() => {
-    prisma.$disconnect();
-  });

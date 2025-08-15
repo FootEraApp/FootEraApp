@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { formatarUrlFoto } from "@/utils/formatarFoto";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
-import { API } from "../config";
+import { API } from "../config.js";
 
  function Explorar() {
   const [busca, setBusca] = useState("");

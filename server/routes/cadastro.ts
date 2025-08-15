@@ -5,7 +5,7 @@ import {
   getCriar,
   deletarUsuario,
   cadastrarUsuario
-} from "../controllers/cadastroController";
+} from "../controllers/cadastroController.js";
 
 const router = express.Router();
 

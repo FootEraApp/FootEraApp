@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { login } from "../controllers/authController"; 
-import { cadastrarUsuario } from "server/controllers/cadastroController";
-import { forgotPassword, resetPassword} from "server/controllers/senhaController";
+import { login } from "../controllers/authController.js"; 
+import { cadastrarUsuario } from "server/controllers/cadastroController.js";
+import { forgotPassword, resetPassword} from "server/controllers/senhaController.js";
 
 const router = Router();
 

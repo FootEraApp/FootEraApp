@@ -1,4 +1,4 @@
-import Storage from "../../../server/utils/storage";
+import Storage from "../../../server/utils/storage.js";
 
 export function getUserFromLocalStorage() {
   if (typeof window === "undefined") return null;

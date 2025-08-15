@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { API } from "../../config";
+import { API } from "../../config.js";
 
 export default function AdminLogin() {
   const [usuario, setUsuario] = useState("");

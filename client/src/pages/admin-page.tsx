@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API } from "../config";
+import { API } from "../config.js";
 
 type Tab = "dashboard" | "exercicios" | "treinos" | "professores" | "desafios" | "configuracoes";
 

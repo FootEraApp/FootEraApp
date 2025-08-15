@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getUserFromLocalStorage } from "../utils/protegerAdmin";
+import { getUserFromLocalStorage } from "../utils/protegerAdmin.js";
 
 export function withAuth(Component: React.FC, options?: { adminOnly?: boolean }) {
   return function AuthenticatedPage(props: any) {

@@ -1,9 +1,10 @@
 import { Response } from "express";
-import { prisma } from "../lib/prisma";
 import { Request } from "express";
 import { TipoMidia, Prisma } from "@prisma/client";
-import { AuthenticatedRequest } from "../types/auth"; 
+import { AuthenticatedRequest } from "server/middlewares/auth.js";
+import { PrismaClient } from "@prisma/client";
 
+const prisma = new PrismaClient;
 export const getFeedPosts = async (req: Request, res: Response) => {
   try {
     const postagens = await prisma.postagem.findMany({

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { vinculoController } from "../controllers/vinculoController";
+import { vinculoController } from "../controllers/vinculoController.js";
 
 const router = Router();
 

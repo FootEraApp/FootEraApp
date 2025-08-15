@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useRoute, useLocation } from "wouter";
-import { getPostById, PostagemComUsuario, likePost, comentarPost } from "../services/feedService";
+import { getPostById, PostagemComUsuario, likePost, comentarPost } from "../services/feedService.js";
 import { format } from "date-fns";
 import { FaHeart, FaRegHeart, FaTrash, FaShare } from "react-icons/fa";
 import { Link } from "wouter";
-import Storage from "../../../server/utils/storage";
-import { API } from "../config";
+import Storage from "../../../server/utils/storage.js";
+import { API } from "../config.js";
 import { CircleX } from "lucide-react";
 
 function PostUnico(): JSX.Element {

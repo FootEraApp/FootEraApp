@@ -1,8 +1,8 @@
-import { Switch } from "../components/ui/switch";
+import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
-import Storage from "../../../server/utils/storage";
+import Storage from "../../../server/utils/storage.js";
 
 export default function ConfiguracoesPerfil() {
   const [, setLocation] = useLocation();

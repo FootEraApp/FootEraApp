@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
-import Storage from "../../../server/utils/storage";
-import { API } from "../config";
+import Storage from "../../../server/utils/storage.js";
+import { API } from "../config.js";
 
-import ProfileHeader from "../components/profile/ProfileHeader";
-import ActivityGrid from "../components/profile/ActivityGrid";
-import { BadgesList } from "../components/profile/BadgesList";
-import ScorePanel from "../components/profile/ScorePanel";
-import TrainingProgress from "../components/profile/TrainingProgress";
+import ProfileHeader from "../components/profile/ProfileHeader.js";
+import ActivityGrid from "../components/profile/ActivityGrid.js";
+import { BadgesList } from "../components/profile/BadgesList.js";
+import ScorePanel from "../components/profile/ScorePanel.js";
+import TrainingProgress from "../components/profile/TrainingProgress.js";
 
 interface Badge {
   id: string;
@@ -34,8 +34,8 @@ export default function PerfilUnico() {
     
   const [scores] = useState({
     performance: 75,
-    discipline: 90,
-    responsibility: 80
+    disciplina: 90,
+    responsabilidade: 80
   });
 
   const seguirUsuario = async () => {
@@ -118,12 +118,12 @@ const solicitarTreino = async () => {
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
       <ProfileHeader
-        name={
+        nome={
           usuario.dadosEspecificos?.nome && usuario.dadosEspecificos?.sobrenome
             ? `${usuario.dadosEspecificos.nome} ${usuario.dadosEspecificos.sobrenome}`
             : usuario.dadosEspecificos?.nome || usuario.usuario.nome || "Usuário"
         }
-        score={scores.performance + scores.discipline + scores.responsibility}
+        ponto={scores.performance + scores.disciplina + scores.responsabilidade}
         isOwnProfile={isOwnProfile}
         foto={usuario.usuario.foto}
       />
@@ -150,8 +150,8 @@ const solicitarTreino = async () => {
       {usuarioId && <BadgesList userId={usuarioId} />}
       <ScorePanel
         performance={scores.performance}
-        discipline={scores.discipline}
-        responsibility={scores.responsibility}
+        disciplina={scores.disciplina}
+        responsabilidade={scores.responsabilidade}
       />
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">

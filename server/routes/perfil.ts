@@ -3,8 +3,8 @@ import {
   getPerfilUsuario, getPontuacao, getAtividadesRecentes, getBadges,
   getTreinosResumo, getProgressoTreinos, getPontuacaoPerfil,
   getPerfilUsuarioMe, getPontuacaoMe, getAtividadesRecentesMe, getBadgesMe, atualizarPerfil
-} from "../controllers/perfilController";
-import { authenticateToken } from "../middlewares/auth";
+} from "../controllers/perfilController.js";
+import { authenticateToken } from "../middlewares/auth.js";
 import { PrismaClient, TipoUsuario } from "@prisma/client";
 import multer from "multer";
 

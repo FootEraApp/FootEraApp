@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API } from "../../../config";
-import Storage from "../../../../../server/utils/storage";
+import { API } from "../../../config.js";
+import Storage from "../../../../../server/utils/storage.js";
 
 export default function CreateOrEditDesafio() {
   const [id, setId] = useState<string | null>(null);

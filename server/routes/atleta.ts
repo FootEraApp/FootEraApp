@@ -7,7 +7,7 @@ import {
   deleteAtleta,
   getMidiasAtleta,
   uploadMidiaAtleta
-} from "../controllers/atletaController";
+} from "../controllers/atletaController.js";
 
 const router = express.Router();
 

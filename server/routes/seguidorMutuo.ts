@@ -1,6 +1,6 @@
 import express from "express";
-import { buscarSeguidoresMutuos } from "../controllers/seguidorMutuoController";
-import {authenticateToken} from "../middlewares/auth";
+import { buscarSeguidoresMutuos } from "../controllers/seguidorMutuoController.js";
+import {authenticateToken} from "../middlewares/auth.js";
 
 const router = express.Router();
 

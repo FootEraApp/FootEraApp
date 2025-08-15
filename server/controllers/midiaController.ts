@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-import { PrismaClient, TipoMidia } from "@prisma/client";
-import { uploadFile } from "../utils/s3";
+import { PrismaClient } from "@prisma/client";
+import { uploadFile } from "server/utils/s3.js";
 
 const prisma = new PrismaClient();
 
