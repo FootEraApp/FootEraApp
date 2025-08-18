@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { format, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  ArrowUpRight, Calendar, CheckCircle2, Clock, Layers, 
+  ArrowUpRight, Calendar, CheckCircle2, Clock, Layers,
   Dumbbell, CalendarClock, Zap, Target, Medal, TrendingUp, Trophy
 } from 'lucide-react';
 import { Card, CardContent } from '../ui/card.js';
@@ -17,7 +17,9 @@ import Storage from '../../../../server/utils/storage.js';
 type Training = {
   id: string;
   titulo: string;
-  dataTreino: string;
+  dataTreino: string | null;   
+  prazoEnvio?: string | null;
+  duracaoMinutos?: number | null;
   exercicios?: Array<any>;
 };
 
@@ -39,12 +41,11 @@ interface PontuacaoPerfil {
   responsabilidade: number;
 }
 
-const categoryIcons: Record<string, React.ReactNode> = {
-  'Físico': <Dumbbell className="h-4 w-4" />,
-  'Técnico': <Target className="h-4 w-4" />,
-  'Tático': <Layers className="h-4 w-4" />,
-  'Mental': <Zap className="h-4 w-4" />
-};
+const toDate = (v?: string | null) => (v ? new Date(v) : null);
+const timeKey = (t: Training) =>
+  (toDate(t.prazoEnvio)?.getTime() ??
+   toDate(t.dataTreino)?.getTime() ??
+   Number.MAX_SAFE_INTEGER);
 
 export default function TrainingProgress({ userId }: TrainingProgressProps) {
   const token = Storage.token || '';
@@ -77,7 +78,7 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
     },
   });
 
-   const { data: pontuacao, isLoading: isLoadingPontuacao } = useQuery<PontuacaoPerfil>({
+  const { data: pontuacao, isLoading: isLoadingPontuacao } = useQuery<PontuacaoPerfil>({
     queryKey: ['pontuacaoPerfil', usuarioId],
     enabled: Boolean(token && usuarioId),
     queryFn: async () => {
@@ -109,16 +110,17 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
   const totalConcluidos = trainingStats.completed || 1;
 
   const scheduledTrainings = useMemo(
-    () => [...treinosAgendados].sort(
-      (a, b) => new Date(a.dataTreino).getTime() - new Date(b.dataTreino).getTime()
-    ),
+    () => treinosAgendados.slice().sort((a, b) => timeKey(a) - timeKey(b)),
     [treinosAgendados]
   );
 
   const hasTodayActivities = useMemo(() => {
     if (!scheduledTrainings.length) return false;
     const hoje = new Date();
-    return scheduledTrainings.some((t) => isSameDay(hoje, new Date(t.dataTreino)));
+    return scheduledTrainings.some((t) => {
+      const d = toDate(t.dataTreino);
+      return d ? isSameDay(hoje, d) : false;
+    });
   }, [scheduledTrainings]);
 
   const isLoading = isLoadingTrainings || isLoadingResumo || isLoadingPontuacao;
@@ -158,7 +160,7 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
           <TabsTrigger value="challenges" className="flex-1">Desafios</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview">
+       <TabsContent value="overview">
           <Card className="bg-white">
             <CardContent className="p-4">
               <div className="grid grid-cols-2 gap-2 mb-4">
@@ -200,53 +202,22 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
               <div className="mt-3">
                 <h4 className="text-sm font-semibold mb-2">Desempenho por Categoria</h4>
                 <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="flex items-center">
-                        <Dumbbell className="h-3 w-3 mr-1 text-red-500" /> Físico
-                      </span>
-                      <span className="font-medium">{catFisico} treinos</span>
+                  {[
+                    { label: 'Físico', value: catFisico, bar: 'bg-red-500' },
+                    { label: 'Técnico', value: catTecnico, bar: 'bg-blue-500' },
+                    { label: 'Tático', value: catTatico, bar: 'bg-green-500' },
+                    { label: 'Mental', value: catMental, bar: 'bg-purple-500' },
+                  ].map(({ label, value, bar }) => (
+                    <div key={label}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span>{label}</span>
+                        <span className="font-medium">{value} treinos</span>
+                      </div>
+                      <div className="bg-gray-100 h-2 rounded-full overflow-hidden">
+                        <div className={`h-full ${bar} rounded-full`} style={{ width: `${(value / totalConcluidos) * 100}%` }} />
+                      </div>
                     </div>
-                    <div className="bg-gray-100 h-2 rounded-full overflow-hidden">
-                      <div className="h-full bg-red-500 rounded-full" style={{ width: `${(catFisico / totalConcluidos) * 100}%` }} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="flex items-center">
-                        <Target className="h-3 w-3 mr-1 text-blue-500" /> Técnico
-                      </span>
-                      <span className="font-medium">{catTecnico} treinos</span>
-                    </div>
-                    <div className="bg-gray-100 h-2 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(catTecnico / totalConcluidos) * 100}%` }} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="flex items-center">
-                        <Layers className="h-3 w-3 mr-1 text-green-500" /> Tático
-                      </span>
-                      <span className="font-medium">{catTatico} treinos</span>
-                    </div>
-                    <div className="bg-gray-100 h-2 rounded-full overflow-hidden">
-                      <div className="h-full bg-green-500 rounded-full" style={{ width: `${(catTatico / totalConcluidos) * 100}%` }} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="flex items-center">
-                        <Zap className="h-3 w-3 mr-1 text-purple-500" /> Mental
-                      </span>
-                      <span className="font-medium">{catMental} treinos</span>
-                    </div>
-                    <div className="bg-gray-100 h-2 rounded-full overflow-hidden">
-                      <div className="h-full bg-purple-500 rounded-full" style={{ width: `${(catMental / totalConcluidos) * 100}%` }} />
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
             </CardContent>
@@ -256,40 +227,51 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
         <TabsContent value="upcoming">
           <Card className="bg-white">
             <CardContent className="p-4">
-              {treinosAgendados.length > 0 ? (
+              {scheduledTrainings.length > 0 ? (
                 <div className="space-y-3">
-                  {treinosAgendados.slice(0, 4).map((treino) => (
-                    <div key={treino.id} className="border rounded-lg p-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-medium text-sm">{treino.titulo}</h4>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {treino.exercicios?.length || 0} exercícios
-                          </p>
-                        </div>
-                        <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-200">
-                          {format(new Date(treino.dataTreino), "dd 'de' MMM", { locale: ptBR })}
-                        </Badge>
-                      </div>
+                  {scheduledTrainings.slice(0, 6).map((treino) => {
+                    const lancado = toDate(treino.dataTreino);
+                    const prazo   = toDate(treino.prazoEnvio);
+                    return (
+                      <div key={treino.id} className="border rounded-lg p-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-medium text-sm">{treino.titulo}</h4>
 
-                      <div className="mt-3 flex justify-between items-center">
-                        <div className="flex items-center text-xs text-gray-600">
-                          <CalendarClock className="h-3.5 w-3.5 mr-1" />
-                          {format(new Date(treino.dataTreino), 'HH:mm', { locale: ptBR })}
-                        </div>
+                            <div className="text-xs text-gray-600 mt-1 space-y-1">
+                              {lancado && (
+                                <div>lançado em {format(lancado, "dd/MM/yyyy", { locale: ptBR })}</div>
+                              )}
+                              {typeof treino.duracaoMinutos === "number" && (
+                                <div>Duração: {treino.duracaoMinutos} min</div>
+                              )}
+                              {prazo && (
+                                <div className="flex items-center">
+                                  <CalendarClock className="h-3.5 w-3.5 mr-1" />
+                                  prazo para envio:
+                                  <Badge variant="outline" className="ml-1 text-[10px] bg-green-100 text-green-700 border-green-200">
+                                    {format(prazo, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                          </div>
 
-                        <Link href={`/submissao?treinoAgendadoId=${treino.id}`}>
-                          <Button size="sm" className="h-7 text-xs">Fazer Submissão</Button>
-                        </Link>
+                          <Link href={`/submissao?treinoAgendadoId=${treino.id}`}>
+                            <Button size="sm" className="h-7 text-xs">Fazer Submissão</Button>
+                          </Link>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-6">
                   <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-300" />
                   <h4 className="text-gray-500 font-medium">Nenhum treino agendado</h4>
-                  <p className="text-gray-400 text-sm mt-1">Agende treinos com seu professor ou clube para visualizar aqui.</p>
+                  <p className="text-gray-400 text-sm mt-1">
+                    Agende treinos com seu professor ou clube para visualizar aqui.
+                  </p>
                 </div>
               )}
             </CardContent>

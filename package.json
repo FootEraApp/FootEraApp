@@ -12,7 +12,8 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "backfill:snapshots": "tsx scripts/backfillSnapshots.ts",
-    "clean:expired-trainings": "tsx server/routes/removerTreinosExpirados.ts"
+    "clean:expired-trainings": "tsx server/routes/removerTreinosExpirados.ts",
+    "backfill:exercicios": "tsx scripts/backfillTreinoProgramadoExercicios.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.4",
