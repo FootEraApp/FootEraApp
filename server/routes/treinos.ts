@@ -2,7 +2,7 @@ import { Router } from "express";
 import { Nivel, Categoria, TipoTreino } from "@prisma/client";
 import { PrismaClient } from "@prisma/client";
 import { authenticateToken } from "server/middlewares/auth.js";
-import { listarTreinosAgendados, treinosController, excluirTreinoAgendado, listarTodosTreinosProgramados, obterTreinoProgramadoPorId } from "server/controllers/treinosController.js";
+import { getTreinosAgendados, treinosController, excluirTreinoAgendado, listarTodosTreinosProgramados, obterTreinoProgramadoPorId } from "server/controllers/treinosController.js";
 
 const router = Router();
 const prisma = new PrismaClient;
@@ -28,10 +28,10 @@ interface CriarTreinoInput {
 }
 
 router.delete('/agendados/:id', authenticateToken, excluirTreinoAgendado);
-router.get("/agendados", authenticateToken, listarTreinosAgendados);
+router.get("/agendados", authenticateToken, getTreinosAgendados);
 router.get("/disponiveis", treinosController.disponiveis);
 router.post("/agendar", authenticateToken, treinosController.agendarTreino);
-router.get("/todos", listarTodosTreinosProgramados);
+router.get("/programados", listarTodosTreinosProgramados);
 router.get("/exercicios", async (req, res) => {
   try {
     const exercicios = await prisma.exercicio.findMany();
@@ -186,7 +186,7 @@ router.post("/", async (req, res) => {
           return prisma.treinoAgendado.create({
             data: {
               titulo: treino.nome,
-              dataHora: dataAgendada,
+              dataExpiracao: dataAgendada,
               dataTreino: dataAgendada,
               atletaId,
               treinoProgramadoId: treino.id,

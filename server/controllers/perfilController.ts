@@ -44,13 +44,13 @@ export const getTreinosPorUsuario = async (req: Request, res: Response) => {
         treino: true,
       },
       orderBy: {
-        dataHora: "desc",
+        dataExpiracao: "desc",
       },
     });
 
     const resultado = treinos.map((t: any) => ({
       titulo: t.treino?.nome || "Treino",
-      dataHora: t.dataHora,
+      dataExpiracao: t.dataExpiracao,
       local: t.local || "Local não informado",
     }));
 

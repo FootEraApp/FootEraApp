@@ -4,57 +4,86 @@ import { AuthenticatedRequest } from "server/middlewares/auth.js";
 
 const prisma = new PrismaClient();
 
-export async function listarTreinosAgendados(req: AuthenticatedRequest, res: Response) {
-  const { tipoUsuarioId } = req.query as { tipoUsuarioId?: string };
+export async function getTreinosAgendados(req: Request, res: Response) {
+  const atletaId = String(req.query.tipoUsuarioId ?? "");
+  if (!atletaId) return res.status(400).json({ error: "tipoUsuarioId obrigatório" });
 
-  if (!req.userId) return res.status(401).json({ error: "Sem autenticação" });
-  if (!tipoUsuarioId) return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+  const agora = new Date();
 
-  const agendados = await prisma.treinoAgendado.findMany({
-    where: { atletaId: tipoUsuarioId },
-    include: { treinoProgramado: { include: { exercicios: true } } },
-    orderBy: { dataTreino: "asc" },
+  const rows = await prisma.treinoAgendado.findMany({
+    where: {
+      atletaId,
+      submissaoTreinos: { none: {} },
+    },
+    include: {
+      treinoProgramado: {
+        select: { nome: true, duracao: true, createdAt: true, dataAgendada: true }
+      }
+    },
+    orderBy: { id: "asc" }
   });
 
-  return res.json(
-    agendados.map((t) => ({
-      id: t.id,
-      titulo: t.titulo ?? t.treinoProgramado?.nome ?? "Treino",
-      dataTreino: t.dataTreino,
-      exercicios: t.treinoProgramado?.exercicios ?? [],
-      training: {
-        title: t.treinoProgramado?.nome ?? t.titulo ?? "Treino",
-        duration: t.treinoProgramado?.duracao ?? 0,
-        category: (t.treinoProgramado?.categoria?.[0] ?? "Físico") as string,
-      },
-    }))
-  );
+  const list = rows
+    .map((r) => {
+      const prazoEnvio =
+        r.dataExpiracao ?? r.treinoProgramado?.dataAgendada ?? null; 
+      const expirado = prazoEnvio ? new Date(prazoEnvio).getTime() < agora.getTime() : false;
+
+      return {
+        id: r.id,
+        titulo: r.titulo ?? r.treinoProgramado?.nome ?? "Treino",
+        dataTreino: r.treinoProgramado?.createdAt?.toISOString() ?? null,
+        prazoEnvio: prazoEnvio ? new Date(prazoEnvio).toISOString() : null,
+        duracaoMinutos: r.treinoProgramado?.duracao ?? null,
+        expirado,
+      };
+    })
+    .filter((t) => !t.expirado)
+    .sort((a, b) =>
+      new Date(a.prazoEnvio ?? a.dataTreino ?? 0).getTime() -
+      new Date(b.prazoEnvio ?? b.dataTreino ?? 0).getTime()
+    );
+
+  return res.json(list);
 }
 
-export const listarTodosTreinosProgramados = async (req: Request, res: Response) => {
+export async function listarTodosTreinosProgramados(req: Request, res: Response) {
   try {
-    const treinos = await prisma.treinoProgramado.findMany({
+    const rows = await prisma.treinoProgramado.findMany({
       include: {
-        exercicios: {
-          include: {
-            exercicio: true
-          }
-        },
-        professor: true,
-        clube: true,
-        escolinha: true
+        exercicios: { include: { exercicio: true } },
+        professor: { select: { nome: true } },
+        clube: { select: { nome: true } },
+        escolinha: { select: { nome: true } },
       },
-      orderBy: {
-        createdAt: 'desc'
-      }
+      orderBy: { createdAt: "desc" },
     });
 
-    res.json(treinos);
-  } catch (error) {
-    console.error("Erro ao buscar treinos programados:", error);
+    const out = rows.map((t) => ({
+      id: t.id,
+      nome: t.nome,
+      descricao: t.descricao ?? null,
+      tipoTreino: t.tipoTreino ?? null,
+      duracao: t.duracao ?? null,
+      pontuacao: t.pontuacao ?? null,
+      dataAgendada: t.dataAgendada ? t.dataAgendada.toISOString() : null,
+      createdAt: t.createdAt.toISOString(),
+      categoria: t.categoria ?? [], // enum[]
+      exercicios: t.exercicios.map((x) => ({
+        repeticoes: x.repeticoes ?? "",
+        exercicio: { nome: x.exercicio?.nome ?? "" },
+      })),
+      professor: t.professor ? { nome: t.professor.nome } : null,
+      clube: t.clube ? { nome: t.clube.nome } : null,
+      escolinha: t.escolinha ? { nome: t.escolinha.nome } : null,
+    }));
+
+    res.json(out);
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ message: "Erro ao buscar treinos programados" });
   }
-};
+}
 
 export const excluirTreinoAgendado = async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -119,7 +148,7 @@ export const treinosController = {
         treinoProgramadoId,
         atletaId,
         dataTreino: new Date(dataTreino),
-        dataHora: new Date(dataTreino),
+        dataExpiracao: new Date(dataTreino),
         titulo: "Treino Agendado",
       },
     });

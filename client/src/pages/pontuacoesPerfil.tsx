@@ -80,7 +80,6 @@ export default function PontuacaoDetalhada() {
                 </div>
               </div>
             </div>
-            <button><span className="text-green-800 text-sm font-medium">Ver Tudo &gt;</span></button>
           </div>
         ))}
       </section>

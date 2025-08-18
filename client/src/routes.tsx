@@ -25,7 +25,7 @@ import PaginaSubmissao from "./pages/submissao.js";
 import PaginaMensagens from "./pages/mensagens.js";
 import PaginaEsqueciSenha from "./pages/esqueciSenha.js";
 import PaginaResetarSenha from "./pages/resetarSenha.js";
-
+import PaginaTraining from "./pages/trainings.js";
 export function AppRoutes() {
   return (
     <Switch>
@@ -37,6 +37,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/treinos/novo">
         <PaginaNovoTreino />
+      </Route>
+      <Route path="/trainings">
+        <PaginaTraining />
       </Route>
       <Route path="/posts">
         <PaginaMostrarPost />

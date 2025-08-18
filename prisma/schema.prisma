@@ -484,11 +484,11 @@ model Curtida {
 }
 
 model TreinoAgendado {
-  id         String    @id @default(uuid())
-  titulo     String    @unique
-  dataHora   DateTime
-  local      String?
-  dataTreino DateTime?
+  id            String    @id @default(uuid())
+  titulo        String    @unique
+  dataExpiracao DateTime?
+  local         String?
+  dataTreino    DateTime?
 
   atletaId           String
   treinoProgramadoId String?
@@ -568,11 +568,11 @@ model AtividadeRecente {
 }
 
 model TreinoRealizado {
-  id        String   @id @default(uuid())
-  usuarioId String
-  treinoId  String
-  dataHora  DateTime
-  local     String?
+  id            String    @id @default(uuid())
+  usuarioId     String
+  treinoId      String
+  dataExpiracao DateTime?
+  local         String?
 
   usuario Usuario          @relation(fields: [usuarioId], references: [id])
   treino  TreinoProgramado @relation(fields: [treinoId], references: [id])

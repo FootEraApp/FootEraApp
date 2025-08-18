@@ -32,7 +32,7 @@ async function main() {
   const agendado = await prisma.treinoAgendado.create({
     data: {
       titulo: treino.nome,
-      dataHora: new Date(),
+      dataExpiracao: new Date(),
       dataTreino: new Date(),
       atletaId: atleta.id,
       treinoProgramadoId: treino.id
