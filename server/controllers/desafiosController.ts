@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient;
+const prisma = new PrismaClient();
 
 export const getDesafios = async (req: Request, res: Response) => {
   const ativosOnly = req.query.ativosOnly !== "false"; 
@@ -108,85 +108,3 @@ export const getSubmissoesPorAtleta = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Erro ao buscar submissões." });
   }
 };
-
-export async function criarDesafio(req: Request, res: Response) {
-  try {
-    const {
-      titulo,
-      descricao,
-      imagemUrl,
-      nivel,
-      categoria,
-      prazoSubmissao,
-      pontuacao,
-      regras,
-      tipoMetrificacao
-    } = req.body;
-
-    const dataPrazo = prazoSubmissao ? new Date(prazoSubmissao) : undefined;
-
-    const desafio = await prisma.desafioOficial.create({
-      data: {
-        titulo,
-        descricao,
-        imagemUrl,
-        nivel,
-        categoria,
-        prazoSubmissao: dataPrazo,
-        pontuacao,
-        regras,
-        tipoMetrificação: tipoMetrificacao
-      }
-    });
-
-    res.status(201).json(desafio);
-  } catch (error) {
-    console.error("Erro ao criar desafio:", error);
-    res.status(500).json({ message: "Erro ao criar desafio." });
-  }
-}
-
-export async function editarDesafio(req: Request, res: Response) {
-  try {
-    const { id } = req.params;
-    const {
-      titulo,
-      descricao,
-      imagemUrl,
-      nivel,
-      categoria,
-      prazoSubmissao,
-      pontuacao,
-      regras,
-      tipoMetrificacao
-    } = req.body;
-
-    const dataPrazo = prazoSubmissao ? new Date(prazoSubmissao) : undefined;
-
-    const desafio = await prisma.desafioOficial.update({
-      where: { id },
-      data: {
-        titulo,
-        descricao,
-        imagemUrl,
-        nivel,
-        categoria,
-        prazoSubmissao: dataPrazo,
-        pontuacao,
-        regras,
-        tipoMetrificação: tipoMetrificacao
-      }
-    });
-
-    res.json(desafio);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erro ao editar desafio." });
-  }
-}
-
-export async function excluirDesafio(req: Request, res: Response) {
-  const { id } = req.params;
-  await prisma.desafioOficial.delete({ where: { id } });
-  res.status(204).send();
-}

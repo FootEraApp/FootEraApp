@@ -31,7 +31,7 @@ function PostUnico(): JSX.Element {
       }
     }
     fetchPost();
-  }, [match, params]);
+  }, [match, params?.id]);
 
   async function handleCurtir() {
     if (!post?.id) return;

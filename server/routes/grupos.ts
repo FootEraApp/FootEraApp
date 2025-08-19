@@ -1,18 +1,13 @@
-import { Router } from "express";
-import {
-  getGrupos,
-  getGrupoById,
-  createGrupo,
-  adicionarMembro,
-  removerMembro
-} from "../controllers/gruposController.js";
+import express from "express";
+import { authenticateToken } from "../middlewares/auth.js";
+import { criarGrupo, listarMeusGrupos } from "../controllers/gruposController.js";
+import { listarMensagensGrupo, enviarMensagemGrupo, } from "../controllers/mensagensController.js";
 
-const router = Router();
+const router = express.Router();
 
-router.get("/", getGrupos);
-router.get("/:id", getGrupoById);
-router.post("/", createGrupo);
-router.post("/:id/membros", adicionarMembro);
-router.delete("/:id/membros/:userId", removerMembro);
+router.post("/", authenticateToken, criarGrupo);
+router.get("/me", authenticateToken, listarMeusGrupos);
 
+router.get("/:grupoId/mensagens", authenticateToken, listarMensagensGrupo);
+router.post("/:grupoId/mensagens", authenticateToken, enviarMensagemGrupo);
 export default router;

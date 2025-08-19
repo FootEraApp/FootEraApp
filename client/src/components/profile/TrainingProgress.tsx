@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useMemo, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -48,6 +48,7 @@ const timeKey = (t: Training) =>
    Number.MAX_SAFE_INTEGER);
 
 export default function TrainingProgress({ userId }: TrainingProgressProps) {
+  const qc = useQueryClient();
   const token = Storage.token || '';
   const usuarioId = (Storage.usuarioId as string) || userId || '';
   const atletaId  = (Storage.tipoUsuarioId as string) || '';
@@ -58,12 +59,29 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
     queryFn: async () => {
       const res = await fetch(
         `${API.BASE_URL}/api/treinos/agendados?tipoUsuarioId=${encodeURIComponent(atletaId)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
       if (!res.ok) throw new Error('Erro ao buscar treinos agendados');
-      return res.json();
+      const raw = await res.json();
+
+      return (Array.isArray(raw) ? raw : []).map((t: any): Training => ({
+        id: t.id,
+        titulo: t.titulo ?? t?.treinoProgramado?.nome ?? 'Treino',
+        dataTreino: t.dataTreino ?? null,
+        prazoEnvio: t.dataExpiracao ?? t.dataTreino ?? t?.treinoProgramado?.dataAgendada ?? null,
+        duracaoMinutos: t?.treinoProgramado?.duracao ?? null,
+        exercicios: t?.treinoProgramado?.exercicios ?? [],
+      }));
     },
   });
+
+  useEffect(() => {
+    const onAgendado = () => {
+      qc.invalidateQueries({ queryKey: ['treinosAgendados', atletaId] });
+    };
+    window.addEventListener('treino:agendado', onAgendado);
+    return () => window.removeEventListener('treino:agendado', onAgendado);
+  }, [qc, atletaId]);
 
   const { data: resumo, isLoading: isLoadingResumo } = useQuery<ResumoTreinos>({
     queryKey: ['perfilResumoTreinos', usuarioId],
@@ -71,7 +89,7 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
     queryFn: async () => {
       const res = await fetch(
         `${API.BASE_URL}/api/perfil/${encodeURIComponent(usuarioId)}/treinos`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${Storage.token}` } }
       );
       if (!res.ok) throw new Error('Erro ao buscar resumo de treinos');
       return res.json();

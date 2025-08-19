@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Volleyball, User, CirclePlus, Search, House, Trash2 } from "lucide-react";
+import { CalendarClock, Volleyball, User, CirclePlus, Search, House, CircleX, CircleCheck, Send, Share2} from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
+import { Badge } from "@/components/ui/badge.js";
 
 interface Exercicio {
   id: string;
@@ -16,28 +17,26 @@ interface TreinoProgramado {
   descricao?: string;
   nivel: string;
   dataAgendada?: string;
+  exercicios: Exercicio[];
   duracao?: number;
   objetivo?: string;
   dicas?: string[];
   professorId?: string;
   escolinhaId?: string;
-  exercicios: Exercicio[];
-  pontuacao: number;
 }
 
 interface TreinoAgendado {
   id: string;
   titulo: string;
   dataTreino: string;
-  treinoProgramadoId?: string | null;
+  dataExpiracao?: string | null;
   treinoProgramado?: {
-    nome?: string | null;
-    descricao?: string | null;
+    descricao?: string;
     nivel: string;
-    pontuacao: number | null;
     dicas?: string[];
-    objetivo?: string | null;
-    duracao?: number | null;
+    objetivo?: string;
+    duracao?: number;
+    dataAgendada?: string | null;
     exercicios: {
       exercicio: {
         id: string;
@@ -45,7 +44,7 @@ interface TreinoAgendado {
       };
       repeticoes: string;
     }[];
-  } | null;
+  };
 }
 
 interface Desafio {
@@ -53,15 +52,16 @@ interface Desafio {
   titulo: string;
   descricao: string;
   nivel: string;
-  pontuacao: number;
+  pontos: number;
   imagemUrl?: string;
 }
 
 interface UsuarioLogado {
-  tipo: 'atleta' | 'escola' | 'clube' | 'professor' | 'admin';
+  tipo: 'atleta' | 'escola' | 'clube' | 'professor';
   usuarioId: string;
   tipoUsuarioId: string;
 }
+
 
 export default function PaginaTreinos() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
@@ -70,115 +70,111 @@ export default function PaginaTreinos() {
   const [, navigate] = useLocation();
   const [abaProfessor, setAbaProfessor] = useState<"avaliar" | "criar">("avaliar");
   const [treinosAgendados, setTreinosAgendados] = useState<TreinoAgendado[]>([]);
-  
+
+  const [modalAberto, setModalAberto] = useState(false);
+  const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [enviandoDM, setEnviandoDM] = useState(false);
+  const [carregandoMutuos, setCarregandoMutuos] = useState(false);
+  const [desafioParaCompartilhar, setDesafioParaCompartilhar] = useState<string | null>(null);
+
+
   useEffect(() => {
-  const carregar = async () => {
-    const desafiosRes = await fetch(`${API.BASE_URL}/api/desafios`);
-    const desafiosJson: Desafio[] = await desafiosRes.json();
-    setDesafios(desafiosJson);
+    const carregar = async () => {
+      const tipo = Storage.tipoSalvo;
+      const tipoUsuarioId = Storage.tipoUsuarioId;
+      const token = Storage.token;
 
-    const treinosRes = await fetch(`${API.BASE_URL}/api/treinos`);
-    const data = await treinosRes.json();
-    console.log("GET /api/treinos:", data);
+      if (tipo === "atleta" && tipoUsuarioId && token) {
+        const [resTreinos, resDesafios] = await Promise.all([
+          fetch(`${API.BASE_URL}/api/treinos/agendados?tipoUsuarioId=${tipoUsuarioId}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+          fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+        ]);
 
-    const lista= Array.isArray(data) ? data : data.treinosProgramados || [];
-    setTreinos(Array.isArray(lista) ? lista : []);
+        const treinosJson = await resTreinos.json();
+        const desafiosJson = await resDesafios.json();
 
-    const tipo = Storage.tipoSalvo;
-    const tipoUsuarioId = Storage.tipoUsuarioId;
-    const token = Storage.token;
-    const usuarioId = Storage.usuarioId;
+        setTreinosAgendados(treinosJson || []);
+        setDesafios(desafiosJson || []);
+      } else {
+        const res = await fetch(`${API.BASE_URL}/api/treinos`);
+        const json = await res.json();
 
-    if (tipo && usuarioId && tipoUsuarioId) {
-      setUsuario({ tipo: tipo as any, usuarioId, tipoUsuarioId });
-    }
+        setTreinos(json.treinosProgramados || []);
+        setDesafios(json.desafiosOficiais || []);
+      }
+    };
 
-    if (tipo === "atleta" && tipoUsuarioId && token) {
-      const res = await fetch(`${API.BASE_URL}/api/treinos/agendados?tipoUsuarioId=${tipoUsuarioId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
 
-      let treinosJson: TreinoAgendado[] = await res.json();
-        console.log("Treinos agendados:", treinosJson);
-        console.log("Primeiro treinoProgramado:", treinosJson[0]?.treinoProgramado);
+    const carregarUsuario = () => {
+      const tipoSalvo = Storage.tipoSalvo;
+      const usuarioId = Storage.usuarioId;
+      const tipoUsuarioId = Storage.tipoUsuarioId;
 
-       const enriquecidos = await Promise.all(
-          treinosJson.map(async (t) => {
-            if (!t.treinoProgramado && t.treinoProgramadoId) {
-              const r = await fetch(`${API.BASE_URL}/api/treinos/${t.treinoProgramadoId}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (r.ok) {
-                const prog = await r.json();
-                return { ...t, treinoProgramado: prog };
-              }
-            }
-            return t;
-          })
-        );
+      if (
+        ["atleta", "escola", "clube", "professor"].includes(tipoSalvo || "") &&
+        usuarioId && tipoUsuarioId
+      ) {
+        setUsuario({
+          tipo: tipoSalvo as UsuarioLogado["tipo"],
+          usuarioId,
+          tipoUsuarioId,
+        });
+      } else {
+        console.warn("Tipo de usuário, tipoUsuarioId ou ID inválido ou não encontrado.");
+      }
+    };
 
-        const agora = new Date();
-        const atuais = await Promise.all(
-          enriquecidos.map(async (treino) => {
-            const data = new Date(treino.dataTreino);
-            if (data < agora) {
-              try {
-                const res = await fetch(`${API.BASE_URL}/api/treinos/agendados/${treino.id}`, {
-                  method: "DELETE",
-                  headers: { Authorization: `Bearer ${token}` },
-                });
-                if (!res.ok && res.status !== 404) {
-                  console.error(`Erro ao excluir treino ${treino.id}:`, await res.text());
-                }
-              } catch (err) {
-                console.error(`Erro na requisição ao deletar treino ${treino.id}:`, err);
-              }
-              return null;
-            }
-            return treino;
-          })
-        );
+    carregar();
+    carregarUsuario();
+  }, []);
 
-        setTreinosAgendados(atuais.filter(Boolean) as TreinoAgendado[]);
 
-    }
-  };
-
-  carregar();
-}, []);
-
+  const formatarDataHora = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
 
   const formatarData = (data?: string) => {
     if (!data) return "";
     return new Date(data).toLocaleDateString("pt-BR");
   };
 
-  const renderDesafioCard = (desafio: Desafio) => (
-    <div key={desafio.id} className="bg-white p-4 rounded shadow border border-yellow-400 mb-3">
-      <h4 className="font-bold text-yellow-700 text-lg mb-1">{desafio.titulo}</h4>
-      <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
-      <p className="text-sm text-gray-500">Nível: {desafio.nivel}</p>
-      <p className="text-sm text-gray-500">Pontos: {desafio.pontuacao}</p>
-      <div className="mt-3 text-right">
-        <button
-          onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm"
-        >
-          Fazer Submissão
-        </button>
-      </div>
+const renderDesafioCard = (desafio: Desafio) => (
+  <div
+    key={desafio.id}
+    className="bg-white p-4 rounded shadow border border-yellow-400 mb-3"
+  >
+    <h4 className="font-bold text-yellow-700 text-lg mb-1">
+      {desafio.titulo}
+    </h4>
+    <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
+    <p className="text-sm text-gray-500">Nível: {desafio.nivel}</p>
+    <p className="text-sm text-gray-500">Pontos: {desafio.pontos}</p>
+    <div className="mt-3 flex justify-between">
+      <button
+        onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
+        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm"
+      >
+        Fazer Submissão
+      </button>
+      <button
+        onClick={() => abrirModalCompartilhar(desafio.id)}
+        className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded flex items-center gap-1 text-sm"
+      >
+        <Share2 className="w-4 h-4" /> Compartilhar
+      </button>
     </div>
-  );
+  </div>
+);
 
   if (!usuario) return <p className="text-center p-4">Carregando...</p>;
-
-  const meusTreinos = Array.isArray(treinos)
-  ? treinos.filter(
-      (t) =>
-        t.professorId === usuario.tipoUsuarioId ||
-        t.escolinhaId === usuario.tipoUsuarioId
-    )
-  : [];
 
   const renderTreinoCard = (treino: TreinoProgramado) => (
     <div key={treino.id} className="bg-white p-4 rounded shadow border mb-4">
@@ -187,8 +183,10 @@ export default function PaginaTreinos() {
       <div className="text-sm text-gray-600 space-y-1">
         <p><strong>Nível:</strong> {treino.nivel}</p>
         {treino.dataAgendada && <p><strong>Data:</strong> {formatarData(treino.dataAgendada)}</p>}
-        {treino["duracao"] && <p><strong>Duração:</strong> {treino["duracao"]} min</p>}
-        {treino["objetivo"] && <p><strong>Objetivo:</strong> {treino["objetivo"]}</p>}
+        {typeof treino.duracao === "number" && (
+        <p><strong>Duração:</strong> {treino.duracao} min</p>
+        )}
+        {treino.objetivo && <p><strong>Objetivo:</strong> {treino.objetivo}</p>}
         {Array.isArray(treino.dicas) && treino.dicas.length > 0 && (
           <div>
             <strong>Dicas:</strong>
@@ -198,8 +196,7 @@ export default function PaginaTreinos() {
               ))}
             </ul>
           </div>
-          
-        )}
+      )}
       </div>
 
       {treino.exercicios?.length > 0 && (
@@ -218,86 +215,147 @@ export default function PaginaTreinos() {
     </div>
   );
 
-const excluirTreino = async (treinoId: string) => {
-  const confirm = window.confirm("Deseja cancelar este treino?");
-  if (!confirm) return;
+  const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
+    const programado = treino.treinoProgramado;
+    const prazoIso =
+     treino.dataExpiracao ??
+     treino.dataTreino ??
+     programado?.dataAgendada ??
+     null;
+    const exercicios = programado?.exercicios ?? [];
 
-  console.log("Tentando deletar treino agendado com ID:", treinoId);
+    return (
+      <div key={treino.id} className="bg-white p-4 rounded shadow border mb-4">
+        <h4 className="font-bold text-lg text-green-800">{treino.titulo}</h4>
+        {programado?.descricao && <p className="text-sm text-gray-700 mb-1">{programado.descricao}</p>}
 
-  const token = Storage.token;
-  const res = await fetch(`${API.BASE_URL}/api/treinos/agendados/${treinoId}`, {
-  method: "DELETE",
-  headers: { Authorization: `Bearer ${token}` },
-});
-
-if (res.status === 404) {
-  console.warn("Treino já foi deletado ou não existe.");
-  setTreinosAgendados(prev => prev.filter(t => t.id !== treinoId));
-  return;
-}
-
-if (res.ok) {
-  setTreinosAgendados(prev => prev.filter(t => t.id !== treinoId));
-  alert("Treino cancelado.");
-} else {
-  alert("Erro ao cancelar treino.");
-}
-};
-
-const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
-  const p = treino.treinoProgramado;
-
-  return (
-    <div key={treino.id} className="bg-white p-4 rounded shadow border mb-4">
-      <h4 className="font-bold text-lg text-green-800">{treino.titulo}</h4>
-
-      <div className="text-sm text-gray-600 space-y-1">
-        <p><strong>Nome:</strong> {p?.nome ?? "—"}</p>
-        <p><strong>Nível:</strong> {p?.nivel ?? "—"}</p>
-        <p><strong>Pontuação:</strong> {p?.pontuacao ?? "—"}</p>
-        <p><strong>Data Final:</strong> {formatarData(treino.dataTreino)}</p>
-        {p?.duracao ? <p><strong>Duração:</strong> {p.duracao} min</p> : null}
-        {p?.objetivo ? <p><strong>Objetivo:</strong> {p.objetivo}</p> : null}
-
-        {Array.isArray(p?.dicas) && p!.dicas!.length > 0 && (
-          <div>
-            <strong>Dicas:</strong>
-            <ul className="list-disc list-inside pl-4">
-              {p!.dicas!.map((dica, idx) => <li key={idx}>{dica}</li>)}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      {Array.isArray(p?.exercicios) && p!.exercicios!.length > 0 && (
-        <div className="mt-3">
-          <strong className="text-sm text-gray-800">Exercícios:</strong>
-          <div className="max-h-32 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
-            {p!.exercicios!.map((ex, i) => (
-              <div key={ex.exercicio.id} className="border-b pb-1">
-                <strong>{i + 1}.</strong> {ex.exercicio.nome}{" "}
-                {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
-              </div>
-            ))}
-          </div>
+        <div className="text-sm text-gray-600 space-y-1">
+          <p><strong>Nível:</strong> {programado?.nivel ?? "-"}</p>
+          {prazoIso && (
+            <div className="flex items-center">
+             <CalendarClock className="h-4 w-4 mr-1" />
+             Prazo para envio:
+             <Badge variant="outline" className="ml-1 text-[10px] bg-green-100 text-green-700 border-green-200">
+              {formatarDataHora(prazoIso)}
+             </Badge>
+            </div>
+          )}
+          {programado?.duracao && <p><strong>Duração:</strong> {programado.duracao} min</p>}
+          {programado?.objetivo && <p><strong>Objetivo:</strong> {programado.objetivo}</p>}
+          {Array.isArray(programado?.dicas) && programado.dicas.length > 0 && (
+            <div>
+              <strong>Dicas:</strong>
+              <ul className="list-disc list-inside pl-4">
+                {programado.dicas.map((dica, idx) => (
+                  <li key={idx}>{dica}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
-      )}
+        
+          {exercicios.length > 0 && (
+            <div className="mt-3">
+              <strong className="text-sm text-gray-800">Exercícios:</strong>
+              <div className="max-h-32 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
+                {exercicios.map((ex, i) => (
+                  <div key={ex.exercicio.id} className="border-b pb-1">
+                    <strong>{i + 1}.</strong> {ex.exercicio.nome}{" "}
+                    {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-      <div className="mt-4 text-right">
-        <button
-          onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-        >
-          Fazer Submissão
-        </button>
+        <div className="mt-4 text-right">
+          <button
+            onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+          >
+            Fazer Submissão
+          </button>
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
+
+async function carregarUsuariosMutuos() {
+  const token = Storage.token;
+  setCarregandoMutuos(true);
+  try {
+    const res = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error("Erro ao buscar usuários mutuos");
+    const data = await res.json();
+    setUsuariosMutuos(data);
+  } catch (err) {
+    console.error(err);
+    setUsuariosMutuos([]);
+  } finally {
+    setCarregandoMutuos(false);
+  }
+}
+
+function abrirModalCompartilhar(desafioId: string) {
+  setDesafioParaCompartilhar(desafioId);
+  setModalAberto(true);
+  carregarUsuariosMutuos();
+  setSelecionados(new Set());
+}
+
+function toggleSelecionado(idUsuario: string) {
+  setSelecionados((prev) => {
+    const novo = new Set(prev);
+    if (novo.has(idUsuario)) {
+      novo.delete(idUsuario);
+    } else {
+      novo.add(idUsuario);
+    }
+    return novo;
+  });
+}
+
+async function enviarCompartilhamentoPorDM() {
+  if (selecionados.size === 0 || !desafioParaCompartilhar) {
+    alert("Selecione ao menos uma pessoa para compartilhar.");
+    return;
+  }
+  const token = Storage.token;
+
+  try {
+    setEnviandoDM(true);
+    await Promise.all(
+      Array.from(selecionados).map((paraId) =>
+        fetch(`${API.BASE_URL}/api/mensagem`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            paraId,
+            conteudo: desafioParaCompartilhar,
+            tipo: "DESAFIO",
+          }),
+        })
+      )
+    );
+
+    alert("Desafio compartilhado por mensagem!");
+    setModalAberto(false);
+  } catch (e) {
+    console.error(e);
+    alert("Falha ao enviar mensagens.");
+  } finally {
+    setEnviandoDM(false);
+  }
+}
 
 
   return (
-    <div className="min-h-screen bg-transparent pb-20">
+    <div className="min-h-screen bg-yellow-50 pb-20">
       <div className="p-4 max-w-2xl mx-auto">
         {usuario.tipo === 'clube' ? (
           <div className="text-center py-10">
@@ -309,7 +367,7 @@ const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
             {usuario.tipo === 'atleta' && (
               <div className="space-y-6">
 
-                <div className="bg-white rounded shadow p-4">
+                 <div className="bg-white rounded shadow p-4">
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="text-lg font-semibold">Meus Treinos</h3>
                     <button
@@ -337,6 +395,7 @@ const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
                 </div>
               </div>
             )}
+
 
             {usuario.tipo === 'professor' && (
               <div className="space-y-6">
@@ -373,9 +432,15 @@ const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
                       </button>
                     </div>
 
-                   <h3 className="text-lg font-semibold mb-2">Treinos que você criou</h3>
-                    {meusTreinos.length > 0 ? (
-                      meusTreinos.map(renderTreinoCard)
+                    <h3 className="text-lg font-semibold mb-2">Treinos que você criou</h3>
+                    {treinos.filter(
+                      (t) => t.professorId === usuario.tipoUsuarioId || t.escolinhaId === usuario.tipoUsuarioId
+                    ).length > 0 ? (
+                      treinos
+                        .filter((t) =>
+                          t.professorId === usuario.tipoUsuarioId || t.escolinhaId === usuario.tipoUsuarioId
+                        )
+                        .map(renderTreinoCard)
                     ) : (
                       <p className="text-gray-500">Você ainda não criou nenhum treino.</p>
                     )}
@@ -404,6 +469,86 @@ const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
           <User /> 
         </Link>
       </nav>
+
+
+        {modalAberto && (
+          <div className="fixed inset-0 z-50 bg-black bg-opacity-40 flex items-center justify-center">
+            <div className="bg-white p-6 rounded-xl w-96 shadow-lg relative">
+              <h2 className="text-lg font-bold mb-4 text-center">
+                Compartilhar Desafio
+              </h2>
+
+              <div className="mb-4">
+                <p className="text-sm text-gray-700 mb-2">Enviar por mensagem:</p>
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  {carregandoMutuos && (
+                    <span className="text-sm text-gray-500">
+                      Carregando contatos...
+                    </span>
+                  )}
+
+                  {!carregandoMutuos && usuariosMutuos.length === 0 && (
+                    <span className="text-sm text-gray-500">
+                      Você ainda não tem contatos mútuos.
+                    </span>
+                  )}
+
+                  {usuariosMutuos.map((u) => {
+                    const selecionado = selecionados.has(u.id);
+                    const fotoSrc = u.foto?.startsWith("http")
+                      ? u.foto
+                      : `${API.BASE_URL}${u.foto || "default-user.png"}`;
+                    return (
+                      <button
+                        key={u.id}
+                        onClick={() => toggleSelecionado(u.id)}
+                        title={u.nome}
+                        className={`relative shrink-0 rounded-full border-2 ${
+                          selecionado ? "border-green-600" : "border-transparent"
+                        }`}
+                      >
+                        <img
+                          src={fotoSrc}
+                          alt={u.nome}
+                          className="w-14 h-14 rounded-full object-cover"
+                        />
+                        {selecionado && (
+                          <span className="absolute -bottom-1 -right-1 bg-white rounded-full">
+                            <CircleCheck className="w-5 h-5 text-green-600" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  disabled={selecionados.size === 0 || enviandoDM}
+                  onClick={enviarCompartilhamentoPorDM}
+                  className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded 
+                    ${
+                      selecionados.size === 0 || enviandoDM
+                        ? "bg-gray-300 text-gray-600"
+                        : "bg-green-700 text-white hover:bg-green-800"
+                    }`}
+                >
+                  <Send className="w-4 h-4" />
+                  {enviandoDM
+                    ? "Enviando..."
+                    : `Enviar para ${selecionados.size} contato(s)`}
+                </button>
+              </div>
+
+              <button
+                onClick={() => setModalAberto(false)}
+                className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl"
+                aria-label="Fechar modal"
+              >
+                <CircleX />
+              </button>
+            </div>
+          </div>
+        )}
     </div>
   );
 }

@@ -13,8 +13,9 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { Link } from "wouter";
+
 import Storage from "../../../server/utils/storage.js";
-import { API } from "../config.js";
+import {API} from "../config.js";
 
 interface Midia {
   id: string;
@@ -94,7 +95,9 @@ const DesafiosPage: React.FC = () => {
     return submissoes.filter((s) => {
       const nivelOk = !filtroNivel || s.desafio.nivel.toLowerCase() === filtroNivel;
       const categoriaOk = !filtroCategoria || s.desafio.categoria.includes(filtroCategoria);
+
       const usuarioIdLower = s.usuarioId.toLowerCase();
+
       const seguindoOk = !filtroSeguindo || seguindoSet.has(usuarioIdLower);
 
       console.log(`Submissão ${s.id} do usuario ${s.usuarioId} (lower: ${usuarioIdLower}) - seguindoOk: ${seguindoOk}`);
@@ -252,7 +255,6 @@ const DesafiosPage: React.FC = () => {
           <User />
         </Link>
       </nav>
-
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { Settings, Edit, Bell } from "lucide-react";
+import { Settings, Edit, Bell, Mail} from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "../ui/button.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
@@ -48,7 +48,22 @@ export default function ProfileHeader({
   return (
     <div className="footera-bg-green p-6 flex flex-col items-center relative">
       {isOwnProfile && (
+      <div>
+        <div className="absolute top-4 left-4 flex gap-2">
+          {/*Botão de Mensagens */}
+          <Link href="/mensagens">
+            <Button
+            variant="ghost"
+            size="icon"
+            className="bg-white/10 hover:bg-white/20 text-white rounded-full"
+            >
+              <Mail />
+            </Button>
+          </Link>
+        </div>
+        
         <div className="absolute top-4 right-4 flex gap-2">
+          {/* Botão de notificações */}
         <Link href="/notificacoes">
           <Button
             variant="ghost"
@@ -59,6 +74,7 @@ export default function ProfileHeader({
           </Button>
         </Link>
 
+          {/* Botão de editar perfil */}
           <Link href="/perfil/editar">
             <Button
               variant="ghost"
@@ -69,11 +85,12 @@ export default function ProfileHeader({
             </Button>
           </Link>
         </div>
+      </div>
       )}
 
       <div className="w-24 h-24 rounded-full mb-3 flex items-center justify-center bg-white border-2 border-white overflow-hidden">
         <img
-          src={formatarUrlFoto(imageSrc)}
+          src={imageSrc}
           alt={`${nome} profile`}
           className="w-full h-full object-cover"
         />
@@ -98,7 +115,7 @@ export default function ProfileHeader({
 
       {isOwnProfile && (
         <div className="mt-4 w-full">
-          <Link href="/perfil/configuracoes">
+          <Link href="/configuracoes">
             <Button
               variant="outline"
               className="w-full bg-white/10 hover:bg-white/20 text-white border-white/30"
