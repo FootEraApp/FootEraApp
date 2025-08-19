@@ -4,6 +4,29 @@ import { AuthenticatedRequest } from "server/middlewares/auth.js";
 
 const prisma = new PrismaClient();
 
+export const agendarTreino = async (req: Request , res: Response) => {
+  try {
+    const { atletaId, treinoProgramadoId, titulo, dataTreino } = req.body;
+    if (!atletaId || !treinoProgramadoId || !titulo || !dataTreino) {
+      return res.status(400).json({ message: "Dados insuficientes." });
+    }
+
+    const novo = await prisma.treinoAgendado.create({
+      data: {
+        titulo,
+        dataTreino: new Date(dataTreino),
+        atletaId,
+        treinoProgramadoId,
+      },
+    });
+
+    return res.status(201).json(novo);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ message: "Erro ao agendar treino." });
+  }
+};
+
 export async function getTreinosAgendados(req: Request, res: Response) {
   const atletaId = String(req.query.tipoUsuarioId ?? "");
   if (!atletaId) return res.status(400).json({ error: "tipoUsuarioId obrigatório" });
@@ -68,7 +91,7 @@ export async function listarTodosTreinosProgramados(req: Request, res: Response)
       pontuacao: t.pontuacao ?? null,
       dataAgendada: t.dataAgendada ? t.dataAgendada.toISOString() : null,
       createdAt: t.createdAt.toISOString(),
-      categoria: t.categoria ?? [], // enum[]
+      categoria: t.categoria ?? [],
       exercicios: t.exercicios.map((x) => ({
         repeticoes: x.repeticoes ?? "",
         exercicio: { nome: x.exercicio?.nome ?? "" },
@@ -135,29 +158,7 @@ export const treinosController = {
   }
 },
 
-  async agendarTreino(req: AuthenticatedRequest, res: Response) {
-  try {
-    const { treinoProgramadoId, atletaId, dataTreino } = req.body;
 
-    if (!treinoProgramadoId || !atletaId || !dataTreino) {
-      return res.status(400).json({ message: "Dados incompletos." });
-    }
-
-    const treinoAgendado = await prisma.treinoAgendado.create({
-      data: {
-        treinoProgramadoId,
-        atletaId,
-        dataTreino: new Date(dataTreino),
-        dataExpiracao: new Date(dataTreino),
-        titulo: "Treino Agendado",
-      },
-    });
-
-    res.json(treinoAgendado);
-  } catch (error) {
-    res.status(500).json({ message: "Erro ao agendar treino", error });
-  }
-},
 
   async dashboard(req: Request, res: Response) {
     try {

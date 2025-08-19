@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
 import axios from "axios";
-import { API } from "../config.js";
+import { API } from "../config.js";     
 import Storage from "../../../server/utils/storage.js";
 
 export default function PaginaLogin() {
@@ -22,10 +22,8 @@ export default function PaginaLogin() {
     }
 
     try {
-      const resp = await axios.post(`${API.BASE_URL}/api/auth/login`, {
-        nomeDeUsuario,
-        senha,
-      });
+      const url = `${API.BASE_URL}/api/auth/login`;   
+      const resp = await axios.post(url, { nomeDeUsuario, senha });
 
       const data = resp.data ?? {};
       const token: string | undefined = data.token;
@@ -35,9 +33,7 @@ export default function PaginaLogin() {
       const usuarioNome = usuario.nomeDeUsuario ?? data.nomeDeUsuario ?? "";
       const tipoOriginal: string | undefined = usuario.tipo ?? data.tipo;
 
-      if (!token || !usuarioId) {
-        throw new Error("Resposta inválida do servidor");
-      }
+      if (!token || !usuarioId) throw new Error("Resposta inválida do servidor");
 
       const storage = lembrarDeMim ? localStorage : sessionStorage;
       storage.setItem("token", token);
@@ -55,17 +51,15 @@ export default function PaginaLogin() {
       if (data.tipoUsuarioId) storage.setItem("tipoUsuarioId", String(data.tipoUsuarioId));
 
       navigate("/feed");
-    } catch (err) {
-      console.error("Erro no login:", err);
-      setErro("Nome de usuário ou senha inválidos.");
+    } catch (err: any) {
+      console.error("Erro no login:", err.response?.status, err.response?.data || err.message);
+      setErro(err.response?.data?.message || "Nome de usuário ou senha inválidos.");
     }
   };
 
   useEffect(() => {
     const token = Storage.token;
-    if (token) {
-      navigate("/feed");
-    }
+    if (token) navigate("/feed");
   }, []);
 
   return (

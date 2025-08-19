@@ -7,7 +7,8 @@ import bodyParser from "body-parser";
 import dotenv from "dotenv";
 import cron from "node-cron";
 import http from "http";
-import { initSocket } from "./socket.js";
+import { setupSocket } from "./socket.js";
+import qrcode from "qrcode-terminal";
 
 import adminRoutes from "./routes/admin.js";
 import atletaRoutes from "./routes/atleta.js";
@@ -54,7 +55,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const server = http.createServer(app);
-const io = initSocket(server);
+const io = setupSocket(server);
 
 dotenv.config();
 startExpiredTrainingsJob();
@@ -88,8 +89,8 @@ app.use("/api/pontuacao", pontuacaoRoutes);
 app.use("/api/post", postRoutes);
 app.use("/api/professores", professorRoutes);
 app.use("/api/ranking", rankingRoutes);
+app.use("/api/seguidores/mutuos", rotaSeguidorMutuo);
 app.use("/api/seguidores", seguirRoutes);
-app.use("/api/seguidores/mutuo", rotaSeguidorMutuo);
 app.use("/api/usuarios", usuarioRoutes);
 app.use("/api/solicitacoes-treino", solicitacaoTreinoRoutes);
 app.use("/api/submissoes", submissoesRoutes);
@@ -103,15 +104,21 @@ app.use("/api/vinculo", vinculoRoutes);
 app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 app.use("/assets", express.static("client/public/assets/")); 
 
-app.get("/api/health", (_req, res) => res.send("ok"));
 app.get("/", (req, res) => {
   res.send("FootEra API está ativa!");
 });
 
 const PORT = process.env.PORT || 3001;
+const FRONT_PORT = 5173;
+const LOCAL_IP = "192.168.18.8";
 
-server.listen(PORT, () => {
+server.listen({port: PORT, host: "0.0.0.0"}, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
+  console.log(`Servidor acessível na rede: http://192.168.18.8:${PORT}`);
+
+  const frontendURL = `http://${LOCAL_IP}:${FRONT_PORT}`;
+  qrcode.generate(frontendURL, { small: true });
+  console.log(`QR Code para acessar o front-end: ${frontendURL}`);
 });
 
 cron.schedule("*/10 * * * *", async () => {

@@ -23,7 +23,7 @@ type TreinoProgramado = {
   pontuacao?: number | null;
   dataAgendada?: string | null;
   createdAt?: string | null;
-  categoria?: string[];        
+  categoria?: string[];
   exercicios?: TpExercicio[];
   professor?: { nome: string } | null;
   clube?: { nome: string } | null;
@@ -44,6 +44,14 @@ const uniq = <T,>(arr: T[]) => Array.from(new Set(arr));
 const sorted = (arr: string[]) => [...arr].sort((a, b) => a.localeCompare(b, "pt-BR"));
 const sortedNum = (arr: number[]) => [...arr].sort((a, b) => a - b);
 
+const pontuacaoRanges = [
+  { label: "0 - 5 pontos", min: 0, max: 5 },
+  { label: "6 - 10 pontos", min: 6, max: 10 },
+  { label: "11 - 15 pontos", min: 11, max: 15 },
+  { label: "16 - 20 pontos", min: 16, max: 20 },
+  { label: "21+ pontos", min: 21, max: Infinity },
+];
+
 export default function TrainingsPage() {
   const [q, setQ] = useState("");
   const [selCats, setSelCats] = useState<string[]>([]);
@@ -51,8 +59,8 @@ export default function TrainingsPage() {
   const [selExs, setSelExs] = useState<string[]>([]);
   const [selProfs, setSelProfs] = useState<string[]>([]);
   const [selDur, setSelDur] = useState<number[]>([]);
-    
-  const [open, setOpen] = useState<null | "cats" | "tipos" | "exs" | "profs" | "dur">(null);
+  const [selPontuacao, setSelPontuacao] = useState<string[]>([]);
+  const [open, setOpen] = useState<null | "cats" | "tipos" | "exs" | "profs" | "dur" | "pontuacao">(null);
 
   const [loading, setLoading] = useState(true);
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
@@ -104,6 +112,14 @@ export default function TrainingsPage() {
       if (selProfs.length && !selProfs.includes(t.professor?.nome ?? "")) return false;
       if (selDur.length && !selDur.includes(Number(t.duracao ?? 0))) return false;
 
+      if (selPontuacao.length) {
+        const p = t.pontuacao ?? 0;
+        const ok = pontuacaoRanges.some(r =>
+          selPontuacao.includes(r.label) && p >= r.min && p <= r.max
+        );
+        if (!ok) return false;
+      }
+
       if (!term) return true;
 
       const alvo = [
@@ -111,6 +127,7 @@ export default function TrainingsPage() {
         t.descricao ?? "",
         t.tipoTreino ?? "",
         String(t.duracao ?? ""),
+        String(t.pontuacao ?? ""),
         t.professor?.nome ?? "",
         t.clube?.nome ?? "",
         t.escolinha?.nome ?? "",
@@ -120,7 +137,7 @@ export default function TrainingsPage() {
 
       return alvo.includes(term);
     });
-  }, [treinos, q, selCats, selTipos, selExs, selProfs, selDur]);
+  }, [treinos, q, selCats, selTipos, selExs, selProfs, selDur, selPontuacao]);
 
   const clearAll = () => {
     setQ("");
@@ -129,6 +146,7 @@ export default function TrainingsPage() {
     setSelExs([]);
     setSelProfs([]);
     setSelDur([]);
+    setSelPontuacao([]);
   };
 
   const toggle = <T,>(value: T, arr: T[], setArr: (v: T[]) => void) => {
@@ -266,76 +284,140 @@ export default function TrainingsPage() {
               </div>
             </div>
           </details>
+
+          <details className="relative" open={open === "pontuacao"} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open ? "pontuacao" : null)}>
+            <summary className="list-none cursor-pointer flex items-center gap-1 px-3 py-2 border rounded-lg">
+              Pontuação <ChevronDown className="h-4 w-4" />
+            </summary>
+            <div className="absolute z-10 mt-2 w-60 bg-white border rounded-lg p-2 shadow">
+              <div className="max-h-64 overflow-auto space-y-1">
+                {pontuacaoRanges.map((r) => (
+                  <label key={r.label} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={selPontuacao.includes(r.label)} onChange={() => toggle(r.label, selPontuacao, setSelPontuacao)} />
+                    {r.label}
+                  </label>
+                ))}
+              </div>
+              <div className="flex justify-end gap-2 mt-2">
+                <Button size="sm" variant="ghost" onClick={() => setSelPontuacao([])}>Limpar</Button>
+                <Button size="sm" onClick={() => setOpen(null)}>Aplicar</Button>
+              </div>
+            </div>
+          </details>
         </div>
 
         {list.length === 0 ? (
           <div className="text-center text-green-800 py-10">Nenhum treino encontrado.</div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {list.map((t) => {
-              const prazo  = t.dataAgendada ? new Date(t.dataAgendada) : null;
-              const criado = t.createdAt ? new Date(t.createdAt) : null;
+          <>
+            <div className="text-sm text-green-900/70">{list.length} treino(s) encontrado(s)</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {list.map((t) => {
+                const prazo  = t.dataAgendada ? new Date(t.dataAgendada) : null;
+                const criado = t.createdAt ? new Date(t.createdAt) : null;
 
-              return (
-                <Card key={t.id} className="bg-white">
-                  <CardContent className="p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {tipoIcon(t.tipoTreino)}
-                        <h3 className="font-semibold">{t.nome}</h3>
+                return (
+                  <Card key={t.id} className="bg-white">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {tipoIcon(t.tipoTreino)}
+                          <h3 className="font-semibold">{t.nome}</h3>
+                        </div>
+                        {typeof t.pontuacao === "number" && (
+                          <Badge className="bg-amber-100 text-amber-700 border-amber-200">
+                            <Medal className="h-3.5 w-3.5 mr-1" /> {t.pontuacao}
+                          </Badge>
+                        )}
                       </div>
-                      {typeof t.pontuacao === "number" && (
-                        <Badge className="bg-amber-100 text-amber-700 border-amber-200">
-                          <Medal className="h-3.5 w-3.5 mr-1" /> {t.pontuacao} pts
-                        </Badge>
-                      )}
-                    </div>
 
-                    {t.descricao && <p className="text-xs text-green-800">{t.descricao}</p>}
+                      {t.descricao && (
+                        <p className="text-sm text-gray-700 line-clamp-3">{t.descricao}</p>
+                      )}
 
-                    <div className="text-xs text-green-900 space-y-1">
-                      {t.categoria && t.categoria.length > 0 && (
-                        <div>Categoria: {t.categoria.join(", ")}</div>
-                      )}
-                      {typeof t.duracao === "number" && (
-                        <div className="flex items-center gap-1">
-                          <Timer className="h-3.5 w-3.5" /> Duração: {t.duracao} min
-                        </div>
-                      )}
-                      {prazo && (
-                        <div className="flex items-center gap-1">
-                          <CalendarClock className="h-3.5 w-3.5" /> Prazo (dataAgendada):{" "}
-                          <strong>{format(prazo, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</strong>
-                        </div>
-                      )}
-                      {criado && (
-                        <div className="text-[11px] text-green-800">
-                          Criado em {format(criado, "dd/MM/yyyy", { locale: ptBR })}
-                        </div>
-                      )}
-                      {t.professor?.nome && (
-                        <div className="text-[11px] text-green-800">Professor: {t.professor.nome}</div>
-                      )}
-                    </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-700">
+                        {t.duracao ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-gray-50">
+                            <Timer className="h-3.5 w-3.5" />
+                            {t.duracao} min
+                          </span>
+                        ) : null}
 
-                    {t.exercicios && t.exercicios.length > 0 && (
-                      <div className="mt-2">
-                        <div className="text-[11px] text-green-800 mb-1">Exercícios:</div>
-                        <ul className="list-disc pl-4 text-xs text-green-900 space-y-0.5">
-                          {t.exercicios.slice(0, 5).map((e, i) => (
-                            <li key={i}>
-                              {e.exercicio.nome}{e.repeticoes ? ` • ${e.repeticoes}` : ""}
-                            </li>
+                        {t.tipoTreino ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-gray-50">
+                            {tipoIcon(t.tipoTreino)}
+                            {t.tipoTreino}
+                          </span>
+                        ) : null}
+
+                        {t.professor?.nome && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-gray-50">
+                            Prof.: {t.professor.nome}
+                          </span>
+                        )}
+
+                        {t.clube?.nome && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-gray-50">
+                            Clube: {t.clube.nome}
+                          </span>
+                        )}
+
+                        {t.escolinha?.nome && (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded border bg-gray-50">
+                            Escolinha: {t.escolinha.nome}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                        {prazo && (
+                          <span className="inline-flex items-center gap-1">
+                            <CalendarClock className="h-3.5 w-3.5" />
+                            Prazo: {format(prazo, "dd/MM/yyyy", { locale: ptBR })}
+                          </span>
+                        )}
+                        {criado && (
+                          <span className="inline-flex items-center gap-1">
+                            Criado em: {format(criado, "dd/MM/yyyy", { locale: ptBR })}
+                          </span>
+                        )}
+                      </div>
+
+                      {!!(t.categoria?.length) && (
+                        <div className="flex flex-wrap gap-1">
+                          {t.categoria!.map((c) => (
+                            <Badge key={c} variant="outline" className="text-xs">{c}</Badge>
                           ))}
-                          {t.exercicios.length > 5 && <li>…</li>}
-                        </ul>
+                        </div>
+                      )}
+
+                      {!!(t.exercicios?.length) && (
+                        <div className="space-y-1">
+                          <div className="text-sm font-medium">Exercícios</div>
+                          <ul className="list-disc list-inside text-sm text-gray-700 space-y-0.5">
+                            {t.exercicios!.map((e, idx) => (
+                              <li key={idx}>
+                                {e.exercicio?.nome ?? "Exercício"} {e.repeticoes ? `— ${e.repeticoes}` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-end gap-2 pt-1">
+
+                        <Button
+                          onClick={() => (window.location.href = `/treinos/novo`)}
+                        >
+                          Agendar
+                        </Button>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     </div>

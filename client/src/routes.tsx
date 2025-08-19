@@ -23,9 +23,13 @@ import PaginaPontuacaoPerfil from "./pages/pontuacoesPerfil.js";
 import PaginaNotificacoes from "./pages/notificacoes.js";
 import PaginaSubmissao from "./pages/submissao.js";
 import PaginaMensagens from "./pages/mensagens.js";
+import PaginaDesafios from "./pages/desafios.js";
+import PaginaDesafioUnico from "./pages/desafioUnico.js"
+import PaginaSubmissaoDesafioEmGrupo from "./pages/submissaoDesafioEmGrupo.js"
 import PaginaEsqueciSenha from "./pages/esqueciSenha.js";
 import PaginaResetarSenha from "./pages/resetarSenha.js";
 import PaginaTraining from "./pages/trainings.js";
+
 export function AppRoutes() {
   return (
     <Switch>
@@ -77,6 +81,9 @@ export function AppRoutes() {
       <Route path="/submissao">
         <PaginaSubmissao />
       </Route>
+       <Route path="/submissao/grupo/:grupoId/:desafioId">
+        < PaginaSubmissaoDesafioEmGrupo/>
+      </Route>
       <Route path="/mensagens">
         <PaginaMensagens />
       </Route>
@@ -89,6 +96,12 @@ export function AppRoutes() {
 
       <Route path="/feed">
         <Private>< PaginaFeed /></Private>
+      </Route>
+      <Route path="/feed/desafios">
+        <Private><PaginaDesafios /></Private>
+      </Route>
+      <Route path="/desafios/:id">
+        <Private><PaginaDesafioUnico /></Private>
       </Route>
       <Route path="/treinos">
         <Private><PaginaTreinos /></Private>

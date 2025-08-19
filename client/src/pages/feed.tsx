@@ -1,65 +1,75 @@
 import React, { useEffect, useState } from "react";
-import {
-  FaHeart,
-  FaRegHeart,
-  FaRegCommentDots,
-  FaShare,
-  FaPaperPlane,
-} from "react-icons/fa";
-import Storage from "../../../server/utils/storage.js";
-import { Volleyball, User, CirclePlus, Search, House, CircleX } from "lucide-react";
-import { API } from "../config.js";
-import {
-  getFeedPosts,
-  likePost,
-  comentarPost,
-  PostagemComUsuario,
-} from "../services/feedService.js";
+import { FaHeart, FaRegHeart, FaRegCommentDots, FaShare, FaPaperPlane, FaTrash, FaLink } from "react-icons/fa";
+import { Volleyball, User, CirclePlus, Search, House, CircleX, Send, CircleCheck } from "lucide-react";
+import { getFeedPosts, likePost, comentarPost, compartilharPost, PostagemComUsuario, } from "../services/feedService.js";
 import { format } from "date-fns";
-import { Link, useLocation } from "wouter";
-import { formatarUrlFoto } from "@/utils/formatarFoto.js";
-import { logout } from "@/utils/session.js";
+import { Link } from "wouter";
+import Storage from "../../../server/utils/storage.js";
+import { API, APP } from "../config.js";
+
+interface Usuario {
+  id: string;
+  nome: string;
+  foto?: string | null;
+}
+
+async function getUsuariosMutuos(token: string): Promise<Usuario[]> {
+  const res = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Erro ao buscar usuários mútuos");
+  return await res.json();
+}
 
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
   const [comentarioTextoPorPost, setComentarioTextoPorPost] = useState<Record<string, string>>({});
-  const userId = Storage.usuarioId || "";
+  const userId = Storage.usuarioId as string | null;
 
   const [modalAberto, setModalAberto] = useState(false);
   const [linkCompartilhado, setLinkCompartilhado] = useState("");
 
   const [comentariosModalAberto, setComentariosModalAberto] = useState(false);
   const [postSelecionado, setPostSelecionado] = useState<PostagemComUsuario | null>(null);
-  const [, navigate] = useLocation();
+
+  const [usuariosMutuos, setUsuariosMutuos] = useState<Usuario[]>([]);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [carregandoMutuos, setCarregandoMutuos] = useState(false);
+  const [enviandoDM, setEnviandoDM] = useState(false);
+
+  const [idCompartilhado, setIdCompartilhado] = useState<string | null>(null);
+
 
   useEffect(() => {
-    (async () => {
-      const dados = await getFeedPosts(() => navigate("/login"));
+    async function carregarFeed() {
+      const dados = await getFeedPosts();
+      if (!dados) return;
       setPosts(dados);
-    })();
+    }
+    carregarFeed();
   }, []);
 
-  function handleLogout() {
-    logout();
-    navigate("/login");
-  }
-
   const handleLike = async (postId: string) => {
-    try {
-      await likePost(postId);
-      setPosts((prev) =>
-        prev.map((p) =>
+      if(!userId) {
+        alert("Sessão expirada. Faça login novamente.");
+        return;
+      }
+      try {
+        await likePost(postId);
+        setPosts((prev) =>
+         prev.map((p) =>
           p.id === postId
             ? {
                 ...p,
                 curtidas: p.curtidas.some((c) => c.usuarioId === userId)
                   ? p.curtidas.filter((c) => c.usuarioId !== userId)
-                  : [...p.curtidas, { usuarioId: userId }],
+                  : [...p.curtidas, { usuarioId: userId as string}],
               }
             : p
         )
       );
+    
     } catch (error) {
       console.error("Erro ao curtir post:", error);
     }
@@ -74,10 +84,24 @@ function PaginaFeed(): JSX.Element {
     }
   };
 
-  const handleCompartilhar = (postId: string) => {
-  const link = `${window.location.origin}/post/${postId}`;
-  setLinkCompartilhado(link);
-  setModalAberto(true);
+  const handleCompartilhar = async (postId: string) => {
+    const link = `${APP.FRONTEND_BASE_URL}/post/${postId}`;
+    setLinkCompartilhado(link);
+    setIdCompartilhado(postId);
+    setModalAberto(true);
+
+    try {
+      setCarregandoMutuos(true);
+      setSelecionados(new Set()); 
+      const token = localStorage.getItem("token") || "";
+      const lista = await getUsuariosMutuos(token);
+      setUsuariosMutuos(lista);
+    } catch (e) {
+      console.error(e);
+      alert("Não foi possível carregar seus contatos.");
+    } finally {
+      setCarregandoMutuos(false);
+    }
   };
 
   const abrirModalComentarios = (post: PostagemComUsuario) => {
@@ -85,11 +109,51 @@ function PaginaFeed(): JSX.Element {
   setComentariosModalAberto(true);
   };
 
+  const toggleSelecionado = (id: string) => {
+    setSelecionados((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  };
+
+  const enviarCompartilhamentoPorDM = async () => {
+    if (selecionados.size === 0) return;
+    const token = Storage.token;
+
+    try {
+      setEnviandoDM(true);
+      await Promise.all(
+        Array.from(selecionados).map((paraId) =>
+          fetch(`${API.BASE_URL}/api/mensagem`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              paraId,
+              conteudo: idCompartilhado,
+              tipo: "POST",
+            }),
+          })
+        )
+      );
+
+      alert("Post compartilhado por mensagem!");
+      setModalAberto(false);
+    } catch (e) {
+      console.error(e);
+      alert("Falha ao enviar mensagens.");
+    } finally {
+      setEnviandoDM(false);
+    }
+  };
 
   return (
     <div className="px-4 py-6 space-y-6 pb-24">
       <h1 className="text-2xl font-bold mb-4 text-center">Feed de Postagens</h1>
-
 
       {posts.map((post) => {
         const curtidas = post.curtidas || [];
@@ -101,11 +165,14 @@ function PaginaFeed(): JSX.Element {
           <div key={post.id} className="max-w-xl mx-auto bg-white rounded-2xl shadow-md p-4 space-y-3">
             <div className="flex items-center gap-2">
               <img
-                src={formatarUrlFoto(post.usuario.foto)}
-                alt={post.usuario.nome}
-                className="w-10 h-10 rounded-full"
+                src={
+                  post.usuario.foto?.startsWith("http")
+                    ? post.usuario.foto
+                    : `${API.BASE_URL}${post.usuario.foto || "default-user.png"}`
+                }
+                alt="avatar"
+                className="w-10 h-10 rounded-full object-cover"
               />
-
               <div>
                 <p className="font-semibold">{post.usuario.nome}</p>
                 <p className="text-xs text-gray-500">
@@ -120,7 +187,9 @@ function PaginaFeed(): JSX.Element {
               {post.tipoMidia === "Imagem" && post.imagemUrl && (
                 <img
                   src={
-                    formatarUrlFoto(post.imagemUrl)
+                    post.imagemUrl?.startsWith("http")
+                      ? post.imagemUrl
+                      : `${API.BASE_URL}${post.imagemUrl}`
                   }
                   alt="Post"
                   className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
@@ -187,7 +256,9 @@ function PaginaFeed(): JSX.Element {
                       <div key={comentario.id} className="flex gap-2 items-start">
                         <img
                           src={
-                            formatarUrlFoto(comentario.usuario?.foto)
+                            comentario.usuario?.foto?.startsWith("http")
+                              ? comentario.usuario.foto
+                              : `${API.BASE_URL}${comentario.usuario?.foto || "default-user.png"}`
                           }
                           alt="avatar"
                           className="w-8 h-8 rounded-full object-cover"
@@ -209,6 +280,7 @@ function PaginaFeed(): JSX.Element {
         );
       })}
 
+            {/* Navegação inferior */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
           <House /> 
@@ -232,6 +304,63 @@ function PaginaFeed(): JSX.Element {
           <div className="bg-white p-6 rounded-xl w-96 shadow-lg relative">
             <h2 className="text-lg font-bold mb-4 text-center">Compartilhar Postagem</h2>
 
+            {/* FAIXA HORIZONTAL DE CONTATOS */}
+            <div className="mb-4">
+              <p className="text-sm text-gray-700 mb-2">Enviar por mensagem:</p>
+
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {carregandoMutuos && (
+                  <span className="text-sm text-gray-500">Carregando contatos...</span>
+                )}
+
+                {!carregandoMutuos && usuariosMutuos.length === 0 && (
+                  <span className="text-sm text-gray-500">Você ainda não tem contatos mútuos.</span>
+                )}
+
+                {usuariosMutuos.map((u) => {
+                  const selecionado = selecionados.has(u.id);
+                  const fotoSrc = u.foto?.startsWith("http")
+                    ? u.foto
+                    : `${API.BASE_URL}${u.foto || "default-user.png"}`;
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => toggleSelecionado(u.id)}
+                      title={u.nome}
+                      className={`relative shrink-0 rounded-full border-2 ${
+                        selecionado ? "border-green-600" : "border-transparent"
+                      }`}
+                    >
+                      <img
+                        src={fotoSrc}
+                        alt={u.nome}
+                        className="w-14 h-14 rounded-full object-cover"
+                      />
+                      {selecionado && (
+                        <span className="absolute -bottom-1 -right-1 bg-white rounded-full">
+                          <CircleCheck className="w-5 h-5 text-green-600" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                disabled={selecionados.size === 0 || enviandoDM}
+                onClick={enviarCompartilhamentoPorDM}
+                className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded 
+                  ${selecionados.size === 0 || enviandoDM ? "bg-gray-300 text-gray-600" : "bg-green-700 text-white hover:bg-green-800"}`}
+              >
+                <Send className="w-4 h-4" />
+                {enviandoDM ? "Enviando..." : `Enviar para ${selecionados.size} contato(s)`}
+              </button>
+            </div>
+
+            {/* LINHA SEPARADORA */}
+            <div className="border-t my-3" />
+
+            {/* COMPARTILHAR VIA LINK (o que você já tinha) */}
             <input
               type="text"
               value={linkCompartilhado}
@@ -267,17 +396,15 @@ function PaginaFeed(): JSX.Element {
                 Email
               </a>
 
-              <a
-                href={linkCompartilhado}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => (window.location.href = linkCompartilhado)}
                 className="bg-gray-800 text-white py-2 px-4 rounded hover:bg-gray-900 text-sm text-center flex-1"
               >
                 FootEra
-              </a>
-
+              </button>
             </div>
 
+            {/* BOTÃO FECHAR (mantém o seu) */}
             <button
               onClick={() => setModalAberto(false)}
               className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl"
@@ -298,7 +425,9 @@ function PaginaFeed(): JSX.Element {
                 <div key={comentario.id} className="flex gap-2 items-start">
                   <img
                     src={
-                      formatarUrlFoto(comentario.usuario?.foto)
+                      comentario.usuario?.foto?.startsWith("http")
+                        ? comentario.usuario.foto
+                        : `${API.BASE_URL}${comentario.usuario?.foto || "default-user.png"}`
                     }
                     alt="avatar"
                     className="w-8 h-8 rounded-full object-cover"

@@ -1,120 +1,89 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../lib/prisma.js"; 
+import { AuthenticatedRequest } from "server/middlewares/auth.js";
+import { TipoMembro } from "@prisma/client";
 
-const prisma = new PrismaClient();
+export async function criarGrupo(req: AuthenticatedRequest, res: Response) {
+  const { nome, descricao, membros } = req.body as {
+    nome: string;
+    descricao?: string;
+    membros: string[];
+  };
 
-export const getGrupos = async (_req: Request, res: Response) => {
-  try {
-    const grupos = await prisma.grupo.findMany({
-      orderBy: { nome: "asc" }
-    });
-    res.json(grupos);
-  } catch (err) {
-    res.status(500).json({ message: "Erro ao buscar grupos." });
-  }
-};
-
-export const getGrupoById = async (req: Request, res: Response) => {
-  try {
-    const grupo = await prisma.grupo.findUnique({
-      where: { id: req.params.id },
-      include: {
-        membros: {
-          include: {
-            atleta: {
-              include: {
-                usuario: true
-              }
-            }
-          }
-        }
-      }
-    });
-    if (!grupo) return res.status(404).json({ message: "Grupo não encontrado" });
-    res.json(grupo);
-  } catch (err) {
-    res.status(500).json({ message: "Erro ao buscar grupo." });
-  }
-};
-
-export const createGrupo = async (req: Request, res: Response) => {
-  const { nome, descricao, criadorId } = req.body;
-
-  if (!nome || !criadorId) {
-    return res.status(400).json({ message: "Nome e criadorId são obrigatórios." });
+  const ownerId = req.userId;
+  if (!ownerId) return res.status(401).json({ error: "Não autenticado" });
+  if (!nome || !Array.isArray(membros)) {
+    return res.status(400).json({ error: "Nome e lista de membros são obrigatórios" });
   }
 
   try {
+    const membrosUnicos = Array.from(new Set(membros)).filter((id) => id !== ownerId);
+
     const grupo = await prisma.grupo.create({
       data: {
         nome,
-        descricao,
+        descricao: descricao ?? null,
+        ownerId,
         membros: {
-          create: {
-            atleta: {
-              connect: { id: criadorId }
-            }
-          }
-        }
+          create: [
+            {
+              usuarioId: ownerId,         
+              tipo: TipoMembro.ADMIN,    
+            },
+            ...membrosUnicos.map((uid) => ({
+              usuarioId: uid,          
+              tipo: TipoMembro.MEMBRO,
+            })),
+          ],
+        },
       },
       include: {
-        membros: true
-      }
+        owner: true,
+        membros: { include: { usuario: true } },
+      },
     });
 
-    res.status(201).json(grupo);
-  } catch (err) {
-    console.error("Erro ao criar grupo:", err);
-    res.status(500).json({ message: "Erro interno ao criar grupo." });
+    return res.status(201).json(grupo);
+  } catch (error) {
+    console.error("Erro ao criar grupo:", error);
+    return res.status(500).json({ error: "Erro ao criar grupo" });
   }
-};
+}
 
-export const adicionarMembro = async (req: Request, res: Response) => {
-  const grupoId = req.params.id;
-  const { atletaId } = req.body;
+export async function listarMeusGrupos(req: AuthenticatedRequest, res: Response) {
+  const userId = req.userId;
+  if (!userId) return res.status(401).json({ error: "Não autenticado" });
 
   try {
-    const jaExiste = await prisma.membroGrupo.findFirst({
-      where: { grupoId, atletaId }
-    });
-
-    if (jaExiste) return res.status(409).json({ message: "Atleta já é membro do grupo." });
-
-    const membro = await prisma.membroGrupo.create({
-      data: {
-        grupo: {
-          connect: { id: grupoId }
+    const grupos = await prisma.grupo.findMany({
+      where: {
+        OR: [
+          { ownerId: userId },
+          { membros: { some: { usuarioId: userId } } },
+        ],
+      },
+      include: {
+        _count: { select: { membros: true } },
+        membros: {
+          take: 5,
+          include: { usuario: { select: { id: true, nome: true, foto: true } } },
         },
-        atleta: {
-          connect: { id: atletaId }
-        }
-      }
+      },
+      orderBy: { updatedAt: "desc" },
     });
 
-    res.status(201).json(membro);
-  } catch (err) {
-    console.error("Erro ao adicionar membro:", err);
-    res.status(500).json({ message: "Erro interno." });
+    const payload = grupos.map(g => ({
+      id: g.id,
+      nome: g.nome,
+      descricao: g.descricao,
+      ownerId: g.ownerId,
+      totalMembros: g._count.membros,
+      membrosPreview: g.membros.map(m => m.usuario),
+    }));
+
+    res.json(payload);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erro ao listar grupos" });
   }
-};
-
-export const removerMembro = async (req: Request, res: Response) => {
-  const { id: grupoId, atletaId } = req.params;
-
-  try {
-    const membro = await prisma.membroGrupo.findFirst({
-      where: { grupoId, atletaId }
-    });
-
-    if (!membro) return res.status(404).json({ message: "Membro não encontrado." });
-
-    await prisma.membroGrupo.delete({
-      where: { id: membro.id }
-    });
-
-    res.status(204).end();
-  } catch (err) {
-    console.error("Erro ao remover membro:", err);
-    res.status(500).json({ message: "Erro interno." });
-  }
-};
+}

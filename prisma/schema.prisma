@@ -49,6 +49,12 @@ model Usuario {
   escolinha     Escolinha?
   administrador Administrador?
   PasswordReset PasswordReset[]
+
+  MembroGrupo      MembroGrupo[]
+  MensagemGrupo    MensagemGrupo[]
+  gruposDono       Grupo[]                   @relation("GruposQuePossuo")
+  desafiosEmGrupo  DesafioEmGrupo[]          @relation("MembrosDesafioEmGrupo")
+  submissaoEmGrupo SubmissaoDesafioEmGrupo[]
 }
 
 model Professor {
@@ -140,7 +146,7 @@ model Atleta {
   midias              Midia[]
   solicitacoesVinculo SolicitacaoVinculo[]
   submissoesDesafio   SubmissaoDesafio[]
-  membrosGrupo        MembroGrupo[]
+
   treinosAgendados    TreinoAgendado[]
   treinosLivres       TreinoLivre[]
   Video               Video[]
@@ -223,8 +229,9 @@ model DesafioOficial {
   categoria          Categoria[]
   createdAt          DateTime    @default(now())
 
-  submissoes SubmissaoDesafio[]
-  mensagens  Mensagem[]         @relation("DesafioMensagemReferencia")
+  submissoes      SubmissaoDesafio[]
+  mensagens       Mensagem[]         @relation("DesafioMensagemReferencia")
+  desafiosEmGrupo DesafioEmGrupo[]   @relation("DesafioOficial_EmGrupo")
 }
 
 model Seguidor {
@@ -373,7 +380,7 @@ model Clube {
   midias              Midia[]
   postagens           Postagem[]
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoClube")
-  treinosProgramados  TreinoProgramado[]
+  treinoProgramado    TreinoProgramado[]
 }
 
 model SolicitacaoVinculo {
@@ -408,10 +415,11 @@ model SubmissaoDesafio {
   usuarioId  String?
   observacao String?
 
-  atleta  Atleta         @relation(fields: [atletaId], references: [id])
-  desafio DesafioOficial @relation(fields: [desafioId], references: [id])
-  midias  Midia[]        @relation("Midias_SubmissaoDesafio")
-  Usuario Usuario?       @relation(fields: [usuarioId], references: [id])
+  atleta           Atleta                    @relation(fields: [atletaId], references: [id])
+  desafio          DesafioOficial            @relation(fields: [desafioId], references: [id])
+  midias           Midia[]                   @relation("Midias_SubmissaoDesafio")
+  Usuario          Usuario?                  @relation(fields: [usuarioId], references: [id])
+  submissaoEmGrupo SubmissaoDesafioEmGrupo[]
 }
 
 model SubmissaoTreino {
@@ -437,19 +445,58 @@ model SubmissaoTreino {
 }
 
 model Grupo {
-  id        String        @id @default(uuid())
-  nome      String        @unique
+  id        String  @id @default(uuid())
+  nome      String
   descricao String?
+  foto      String? 
+
+  ownerId String
+  owner   Usuario @relation("GruposQuePossuo", fields: [ownerId], references: [id])
+
   membros   MembroGrupo[]
+  mensagens MensagemGrupo[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([createdAt])
+  @@index([updatedAt])
 }
 
 model MembroGrupo {
-  id       String @id @default(uuid())
-  grupoId  String
-  atletaId String
+  id        String     @id @default(uuid())
+  grupoId   String
+  usuarioId String
+  tipo      TipoMembro @default(MEMBRO)
+  criadoEm  DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
-  atleta Atleta @relation(fields: [atletaId], references: [id])
-  grupo  Grupo  @relation(fields: [grupoId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  grupo   Grupo   @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+
+  @@unique([grupoId, usuarioId])
+  @@index([usuarioId])
+  @@index([grupoId, tipo])
+}
+
+model MensagemGrupo {
+  id          String       @id @default(uuid())
+  grupoId     String
+  usuarioId   String
+  conteudo    String
+  tipo        TipoMensagem @default(NORMAL)
+  criadaEm    DateTime     @default(now())
+  excluida    Boolean      @default(false)
+  excluidaEm  DateTime?
+  excluidaPor String?
+
+  grupo   Grupo   @relation(fields: [grupoId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([grupoId])
+  @@index([usuarioId])
+  @@index([criadaEm])
 }
 
 model Administrador {
@@ -587,6 +634,42 @@ model TreinoProgramadoRecebido {
   treino TreinoProgramado @relation(fields: [treinoId], references: [id])
 }
 
+model DesafioEmGrupo {
+  id               String         @id @default(uuid())
+  desafioOficial   DesafioOficial @relation(fields: [desafioOficialId], references: [id], name: "DesafioOficial_EmGrupo")
+  desafioOficialId String
+
+  grupoId String
+  membros Usuario[] @relation("MembrosDesafioEmGrupo")
+
+  status        StatusDesafioGrupo @default(ativo)
+  dataCriacao   DateTime           @default(now())
+  dataExpiracao DateTime?
+
+  submissaoEmGrupo SubmissaoDesafioEmGrupo[]
+
+  pontosAcumulados Int? @default(0)
+}
+
+model SubmissaoDesafioEmGrupo {
+  id                 String           @id @default(uuid())
+  submissaoDesafio   SubmissaoDesafio @relation(fields: [submissaoDesafioId], references: [id])
+  submissaoDesafioId String
+
+  desafioEmGrupo   DesafioEmGrupo @relation(fields: [desafioEmGrupoId], references: [id])
+  desafioEmGrupoId String
+
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  dataEnvio    DateTime @default(now())
+  aprovado     Boolean?
+  pontosGanhos Int?
+
+  @@index([desafioEmGrupoId])
+  @@index([usuarioId])
+}
+
 model PasswordReset {
   id        String    @id @default(uuid())
   usuarioId String
@@ -612,6 +695,12 @@ model EstatisticaAtleta {
   updatedAt      DateTime @updatedAt
 
   atleta Atleta @relation(fields: [atletaId], references: [id])
+}
+
+enum StatusDesafioGrupo {
+  ativo
+  concluido
+  expirado
 }
 
 enum Nivel {
@@ -669,4 +758,10 @@ enum TipoMensagem {
   POST
   USUARIO
   CONQUISTA
+}
+
+enum TipoMembro {
+  DONO
+  ADMIN
+  MEMBRO
 }
