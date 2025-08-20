@@ -4,34 +4,52 @@ import { AuthenticatedRequest } from "server/middlewares/auth.js";
 
 const prisma = new PrismaClient();
 
-export const agendarTreino = async (req: Request , res: Response) => {
+export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
   try {
-    const { atletaId, treinoProgramadoId, titulo, dataTreino } = req.body;
-    if (!atletaId || !treinoProgramadoId || !titulo || !dataTreino) {
-      return res.status(400).json({ message: "Dados insuficientes." });
+    const {
+      treinoProgramadoId,
+      dataTreino,
+      dataExpiracao,
+      titulo,
+      atletaId: atletaIdBody,
+      tipoUsuarioId, 
+    } = req.body;
+
+    const atletaId = atletaIdBody || tipoUsuarioId; 
+    if (!treinoProgramadoId || !atletaId || !dataTreino) {
+      return res.status(400).json({ message: "Dados incompletos." });
     }
+
+    const tp = await prisma.treinoProgramado.findUnique({ where: { id: treinoProgramadoId } });
+    if (!tp) return res.status(404).json({ message: "Treino programado não encontrado." });
 
     const novo = await prisma.treinoAgendado.create({
       data: {
-        titulo,
-        dataTreino: new Date(dataTreino),
         atletaId,
         treinoProgramadoId,
+        titulo: titulo ?? tp.nome,
+        dataTreino: new Date(dataTreino),
+        dataExpiracao: dataExpiracao ? new Date(dataExpiracao) : null,
+      },
+      include: {
+        treinoProgramado: {
+          include: {
+            exercicios: { include: { exercicio: true } },
+          },
+        },
       },
     });
 
-    return res.status(201).json(novo);
-  } catch (e) {
-    console.error(e);
+    return res.json(novo);
+  } catch (error) {
+    console.error("Erro ao agendar treino:", error);
     return res.status(500).json({ message: "Erro ao agendar treino." });
   }
-};
+}
 
 export async function getTreinosAgendados(req: Request, res: Response) {
   const atletaId = String(req.query.tipoUsuarioId ?? "");
   if (!atletaId) return res.status(400).json({ error: "tipoUsuarioId obrigatório" });
-
-  const agora = new Date();
 
   const rows = await prisma.treinoAgendado.findMany({
     where: {
@@ -40,35 +58,46 @@ export async function getTreinosAgendados(req: Request, res: Response) {
     },
     include: {
       treinoProgramado: {
-        select: { nome: true, duracao: true, createdAt: true, dataAgendada: true }
-      }
+        include: {
+          exercicios: { include: { exercicio: true } },
+        },
+      },
     },
     orderBy: { id: "asc" }
   });
 
-  const list = rows
-    .map((r) => {
-      const prazoEnvio =
-        r.dataExpiracao ?? r.treinoProgramado?.dataAgendada ?? null; 
-      const expirado = prazoEnvio ? new Date(prazoEnvio).getTime() < agora.getTime() : false;
+  const list = rows.map((r) => {
+    const prazo = r.dataExpiracao ?? r.treinoProgramado?.dataAgendada ?? null;
 
-      return {
-        id: r.id,
-        titulo: r.titulo ?? r.treinoProgramado?.nome ?? "Treino",
-        dataTreino: r.treinoProgramado?.createdAt?.toISOString() ?? null,
-        prazoEnvio: prazoEnvio ? new Date(prazoEnvio).toISOString() : null,
-        duracaoMinutos: r.treinoProgramado?.duracao ?? null,
-        expirado,
-      };
-    })
-    .filter((t) => !t.expirado)
-    .sort((a, b) =>
-      new Date(a.prazoEnvio ?? a.dataTreino ?? 0).getTime() -
-      new Date(b.prazoEnvio ?? b.dataTreino ?? 0).getTime()
-    );
+    return {
+      id: r.id,
+      titulo: r.titulo ?? r.treinoProgramado?.nome ?? "Treino",
+      dataTreino: r.dataTreino ? r.dataTreino.toISOString() : null,
+      prazoEnvio: prazo ? new Date(prazo).toISOString() : null,
+
+      duracaoMinutos: r.treinoProgramado?.duracao ?? null,
+      nivel: r.treinoProgramado?.nivel ?? null,
+
+      treinoProgramado: r.treinoProgramado
+        ? {
+            descricao: r.treinoProgramado.descricao ?? null,
+            objetivo: r.treinoProgramado.objetivo ?? null,
+            dicas: r.treinoProgramado.dicas ?? [],
+            exercicios: r.treinoProgramado.exercicios.map((x) => ({
+              exercicio: {
+                id: x.exercicio?.id ?? "",
+                nome: x.exercicio?.nome ?? "",
+              },
+              repeticoes: x.repeticoes ?? "",
+            })),
+          }
+        : null,
+    };
+  });
 
   return res.json(list);
 }
+
 
 export async function listarTodosTreinosProgramados(req: Request, res: Response) {
   try {

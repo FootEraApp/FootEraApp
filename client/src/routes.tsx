@@ -69,7 +69,7 @@ export function AppRoutes() {
       <Route path="/perfil/editar">
         <PaginaEditarPerfil />
       </Route>
-      <Route path="/perfil/configuracoes">
+      <Route path="/configuracoes">
         <PaginaConfiguracoesPerfil />
       </Route>
       <Route path="/perfil/pontuacao">
@@ -81,7 +81,7 @@ export function AppRoutes() {
       <Route path="/submissao">
         <PaginaSubmissao />
       </Route>
-       <Route path="/submissao/grupo/:grupoId/:desafioId">
+      <Route path="/submissao/grupo/:grupoId/:desafioId">
         < PaginaSubmissaoDesafioEmGrupo/>
       </Route>
       <Route path="/mensagens">
