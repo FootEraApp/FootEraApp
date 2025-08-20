@@ -3,8 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  ArrowUpRight, Calendar, CheckCircle2, Clock, Layers,
-  Dumbbell, CalendarClock, Zap, Target, Medal, TrendingUp, Trophy
+  ArrowUpRight, Calendar, CheckCircle2, Clock,
+  CalendarClock, Medal, TrendingUp, Trophy
 } from 'lucide-react';
 import { Card, CardContent } from '../ui/card.js';
 import { Button } from '../ui/button.js';
@@ -17,7 +17,7 @@ import Storage from '../../../../server/utils/storage.js';
 type Training = {
   id: string;
   titulo: string;
-  dataTreino: string | null;   
+  dataTreino: string | null;
   prazoEnvio?: string | null;
   duracaoMinutos?: number | null;
   exercicios?: Array<any>;
@@ -44,14 +44,70 @@ interface PontuacaoPerfil {
 const toDate = (v?: string | null) => (v ? new Date(v) : null);
 const timeKey = (t: Training) =>
   (toDate(t.prazoEnvio)?.getTime() ??
-   toDate(t.dataTreino)?.getTime() ??
-   Number.MAX_SAFE_INTEGER);
+    toDate(t.dataTreino)?.getTime() ??
+    Number.MAX_SAFE_INTEGER);
 
 export default function TrainingProgress({ userId }: TrainingProgressProps) {
   const qc = useQueryClient();
   const token = Storage.token || '';
   const usuarioId = (Storage.usuarioId as string) || userId || '';
-  const atletaId  = (Storage.tipoUsuarioId as string) || '';
+  const atletaId = (Storage.tipoUsuarioId as string) || '';
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+  const { data: atividades = [] } = useQuery<any[]>({
+    queryKey: ['perfilAtividades', usuarioId, atletaId],
+    enabled: Boolean(token && (usuarioId || atletaId)),
+    queryFn: async () => {
+      const urls: string[] = [];
+      if (usuarioId) urls.push(`${API.BASE_URL}/api/perfil/${encodeURIComponent(usuarioId)}/atividades`);
+      if (atletaId && atletaId !== usuarioId) urls.push(`${API.BASE_URL}/api/perfil/${encodeURIComponent(atletaId)}/atividades`);
+
+      const results = await Promise.all(
+        urls.map(u =>
+          fetch(u, { headers })
+            .then(r => (r.ok ? r.json() : []))
+            .catch(() => [])
+        )
+      );
+
+      const merged = results.flat().filter(Boolean);
+      const unique = Array.from(
+        new Map(
+          merged.map((a: any) => [
+            a.id ?? `${a.tipo}-${a.nome}-${a.data ?? ''}`,
+            a,
+          ])
+        ).values()
+      );
+      return unique;
+    },
+  });
+
+  const isDesafio = (a: any) =>
+    /desafi/i.test(String(a?.tipo ?? '')) ||
+    /desafi/i.test(`${a?.nome ?? ''} ${a?.descricao ?? ''}`);
+
+  const getPts = (a: any): number => {
+    const candidates = [
+      a.pontos, a.pontuacao, a.pontosGanhos, a.pontosGanho,
+      a?.pontuacao?.total, a?.detalhes?.pontos, a?.meta?.pontos,
+    ];
+    for (const c of candidates) {
+      if (typeof c === 'number' && Number.isFinite(c)) return c;
+      if (typeof c === 'string') {
+        const n = parseInt(c.replace(/[^\d-]/g, ''), 10);
+        if (!Number.isNaN(n)) return n;
+      }
+    }
+    const txt = `${a.nome ?? ''} ${a.descricao ?? ''}`;
+    const m = txt.match(/([+-]?\d+)\s*pt/i);
+    return m ? parseInt(m[1], 10) : 0;
+  };
+
+  const pontosDesafios = useMemo(
+    () => (atividades || []).filter(isDesafio).reduce((acc, a) => acc + getPts(a), 0),
+    [atividades]
+  );
 
   const { data: treinosAgendados = [], isLoading: isLoadingTrainings } = useQuery<Training[]>({
     queryKey: ['treinosAgendados', atletaId],
@@ -68,8 +124,8 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
         id: t.id,
         titulo: t.titulo ?? t?.treinoProgramado?.nome ?? 'Treino',
         dataTreino: t.dataTreino ?? null,
-        prazoEnvio: t.dataExpiracao ?? t.dataTreino ?? t?.treinoProgramado?.dataAgendada ?? null,
-        duracaoMinutos: t?.treinoProgramado?.duracao ?? null,
+        prazoEnvio: t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t?.treinoProgramado?.dataAgendada ?? null,
+        duracaoMinutos: t?.treinoProgramado?.duracao ?? t.duracaoMinutos ?? null,
         exercicios: t?.treinoProgramado?.exercicios ?? [],
       }));
     },
@@ -89,7 +145,7 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
     queryFn: async () => {
       const res = await fetch(
         `${API.BASE_URL}/api/perfil/${encodeURIComponent(usuarioId)}/treinos`,
-        { headers: { Authorization: `Bearer ${Storage.token}` } }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!res.ok) throw new Error('Erro ao buscar resumo de treinos');
       return res.json();
@@ -109,10 +165,13 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
     },
   });
 
-  const trainingStats = useMemo(() => ({
-    completed: resumo?.completos ?? 0,
-    totalHours: Number(resumo?.horas ?? 0).toFixed(1),
-  }), [resumo]);
+  const trainingStats = useMemo(
+    () => ({
+      completed: resumo?.completos ?? 0,
+      totalHours: Number(resumo?.horas ?? 0).toFixed(1),
+    }),
+    [resumo]
+  );
 
   const totalPontosTopo =
     (pontuacao?.performance ?? 0) +
@@ -120,26 +179,31 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
     (pontuacao?.responsabilidade ?? 0);
 
   const raw = resumo?.categorias || {};
-  const catFisico  = (raw as any).Fisico   ?? (raw as any)['Físico']  ?? 0;
-  const catTecnico = (raw as any).Tecnico  ?? (raw as any)['Técnico'] ?? 0;
-  const catTatico  = (raw as any).Tatico   ?? (raw as any)['Tático']  ?? 0;
-  const catMental  = (raw as any).Mental   ?? 0;
+  const catFisico = (raw as any).Fisico ?? (raw as any)['Físico'] ?? 0;
+  const catTecnico = (raw as any).Tecnico ?? (raw as any)['Técnico'] ?? 0;
+  const catTatico = (raw as any).Tatico ?? (raw as any)['Tático'] ?? 0;
+  const catMental = (raw as any).Mental ?? 0;
 
   const totalConcluidos = trainingStats.completed || 1;
 
-  const scheduledTrainings = useMemo(
-    () => treinosAgendados.slice().sort((a, b) => timeKey(a) - timeKey(b)),
-    [treinosAgendados]
-  );
+  const upcomingTrainings = useMemo(() => {
+    const now = Date.now();
+    return treinosAgendados
+      .filter((t) => {
+        const ts = toDate(t.prazoEnvio)?.getTime();
+        return ts == null || ts >= now;
+      })
+      .sort((a, b) => timeKey(a) - timeKey(b));
+  }, [treinosAgendados]);
 
   const hasTodayActivities = useMemo(() => {
-    if (!scheduledTrainings.length) return false;
+    if (!upcomingTrainings.length) return false;
     const hoje = new Date();
-    return scheduledTrainings.some((t) => {
+    return upcomingTrainings.some((t) => {
       const d = toDate(t.dataTreino);
       return d ? isSameDay(hoje, d) : false;
     });
-  }, [scheduledTrainings]);
+  }, [upcomingTrainings]);
 
   const isLoading = isLoadingTrainings || isLoadingResumo || isLoadingPontuacao;
 
@@ -178,7 +242,8 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
           <TabsTrigger value="challenges" className="flex-1">Desafios</TabsTrigger>
         </TabsList>
 
-       <TabsContent value="overview">
+        {/* Resumo */}
+        <TabsContent value="overview">
           <Card className="bg-white">
             <CardContent className="p-4">
               <div className="grid grid-cols-2 gap-2 mb-4">
@@ -242,14 +307,15 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
           </Card>
         </TabsContent>
 
+        {/* Próximos */}
         <TabsContent value="upcoming">
           <Card className="bg-white">
             <CardContent className="p-4">
-              {scheduledTrainings.length > 0 ? (
+              {upcomingTrainings.length > 0 ? (
                 <div className="space-y-3">
-                  {scheduledTrainings.slice(0, 6).map((treino) => {
+                  {upcomingTrainings.slice(0, 6).map((treino) => {
                     const lancado = toDate(treino.dataTreino);
-                    const prazo   = toDate(treino.prazoEnvio);
+                    const prazo = toDate(treino.prazoEnvio);
                     return (
                       <div key={treino.id} className="border rounded-lg p-3">
                         <div className="flex justify-between items-start">
@@ -296,24 +362,16 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
           </Card>
         </TabsContent>
 
+        {/* Desafios */}
         <TabsContent value="challenges">
           <Card className="bg-white">
             <CardContent className="p-2">
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                <div className="bg-purple-50 rounded-lg p-3 flex flex-col items-center justify-center">
+              <div className="bg-purple-50 rounded-lg p-3 flex flex-col items-center justify-center">
                   <span className="text-xs text-purple-600 font-medium">Completos</span>
                   <div className="flex items-center mt-1">
                     <Trophy className="text-purple-600 h-4 w-4 mr-1" />
                     <span className="text-xl font-bold text-purple-700">{resumo?.desafios ?? 0}</span>
                   </div>
-                </div>
-                <div className="bg-amber-50 rounded-lg p-3 flex flex-col items-center justify-center">
-                  <span className="text-xs text-amber-600 font-medium">Pontos</span>
-                  <div className="flex items-center mt-1">
-                    <Medal className="text-amber-600 h-4 w-4 mr-1" />
-                    <span className="text-xl font-bold text-amber-700">{totalPontosTopo}</span>
-                  </div>
-                </div>
               </div>
 
               {(resumo?.desafios ?? 0) > 0 ? (

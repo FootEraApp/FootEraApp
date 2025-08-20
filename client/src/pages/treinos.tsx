@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { CalendarClock, Volleyball, User, CirclePlus, Search, House, CircleX, CircleCheck, Send, Share2} from "lucide-react";
+import { CalendarClock, Volleyball, User, CirclePlus, Search, House, CircleX, CircleCheck, Send, Share2, Trash2} from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { Badge } from "@/components/ui/badge.js";
@@ -30,6 +30,9 @@ interface TreinoAgendado {
   titulo: string;
   dataTreino: string;
   dataExpiracao?: string | null;
+  nivel?: string | null;
+  prazoEnvio?: string | null;
+  duracaoMinutos?: number | null;
   treinoProgramado?: {
     descricao?: string;
     nivel: string;
@@ -78,6 +81,11 @@ export default function PaginaTreinos() {
   const [carregandoMutuos, setCarregandoMutuos] = useState(false);
   const [desafioParaCompartilhar, setDesafioParaCompartilhar] = useState<string | null>(null);
 
+  useEffect(() => {
+    const handler = (e: any) => setTreinosAgendados((prev) => [e.detail, ...prev]);
+    window.addEventListener("treino:agendado", handler as EventListener);
+    return () => window.removeEventListener("treino:agendado", handler as EventListener);
+  }, []);
 
   useEffect(() => {
     const carregar = async () => {
@@ -102,7 +110,24 @@ export default function PaginaTreinos() {
         const treinosJson = await resTreinos.json();
         const desafiosJson = await resDesafios.json();
 
-        setTreinosAgendados(treinosJson || []);
+        const normalizados = (Array.isArray(treinosJson) ? treinosJson : []).map((t: any) => ({
+          id: t.id,
+          titulo: t.titulo,
+          dataTreino: t.dataTreino ?? null,
+          prazoEnvio: t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t.treinoProgramado?.dataAgendada ?? null,
+          nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
+          duracaoMinutos: t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
+          treinoProgramado: t.treinoProgramado ?? null,
+        }));
+
+        const agora = Date.now();
+        const apenasVigentes = normalizados.filter(t => {
+          if (!t.prazoEnvio) return true;
+          const ts = Date.parse(t.prazoEnvio);
+          return Number.isFinite(ts) ? ts >= agora : true;
+        });
+
+        setTreinosAgendados(apenasVigentes);
         setDesafios(desafiosJson || []);
       } else {
         const res = await fetch(`${API.BASE_URL}/api/treinos`);
@@ -160,7 +185,7 @@ const renderDesafioCard = (desafio: Desafio) => (
     <div className="mt-3 flex justify-between">
       <button
         onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
-        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm"
+        className="bg-green-800 hover:bg-green-900 text-white px-4 py-2 rounded text-sm"
       >
         Fazer Submissão
       </button>
@@ -217,20 +242,16 @@ const renderDesafioCard = (desafio: Desafio) => (
 
   const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
     const programado = treino.treinoProgramado;
-    const prazoIso =
-     treino.dataExpiracao ??
-     treino.dataTreino ??
-     programado?.dataAgendada ??
-     null;
+    const nivel = treino.nivel ?? treino.treinoProgramado?.nivel ?? "-";
+    const prazoIso = treino.prazoEnvio ?? treino.dataTreino ?? treino.treinoProgramado?.dataAgendada ?? null;
     const exercicios = programado?.exercicios ?? [];
 
     return (
       <div key={treino.id} className="bg-white p-4 rounded shadow border mb-4">
         <h4 className="font-bold text-lg text-green-800">{treino.titulo}</h4>
         {programado?.descricao && <p className="text-sm text-gray-700 mb-1">{programado.descricao}</p>}
-
         <div className="text-sm text-gray-600 space-y-1">
-          <p><strong>Nível:</strong> {programado?.nivel ?? "-"}</p>
+          <p><strong>Nível:</strong> {nivel}</p>
           {prazoIso && (
             <div className="flex items-center">
              <CalendarClock className="h-4 w-4 mr-1" />
@@ -240,6 +261,14 @@ const renderDesafioCard = (desafio: Desafio) => (
              </Badge>
             </div>
           )}
+          <button
+            onClick={() => removerTreinoAgendado(treino.id)}
+            title="Remover"
+            className="shrink-0 p-2 rounded-full bg-red-100 text-red-700 hover:bg-red-200"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        
           {programado?.duracao && <p><strong>Duração:</strong> {programado.duracao} min</p>}
           {programado?.objetivo && <p><strong>Objetivo:</strong> {programado.objetivo}</p>}
           {Array.isArray(programado?.dicas) && programado.dicas.length > 0 && (
@@ -271,7 +300,7 @@ const renderDesafioCard = (desafio: Desafio) => (
         <div className="mt-4 text-right">
           <button
             onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+            className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded"
           >
             Fazer Submissão
           </button>
@@ -279,6 +308,27 @@ const renderDesafioCard = (desafio: Desafio) => (
       </div>
     );
   };
+async function removerTreinoAgendado(id: string) {
+  const token = Storage.token;
+  if (!token) return alert("Sessão expirada.");
+  if (!confirm("Remover este treino dos seus treinos?")) return;
+
+  try {
+    const res = await fetch(`${API.BASE_URL}/api/treinos/agendados/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      console.error("Falha ao excluir:", res.status, txt);
+      return alert("Não foi possível excluir.");
+    }
+    setTreinosAgendados((prev) => prev.filter((t) => t.id !== id));
+  } catch (e) {
+    console.error(e);
+    alert("Erro inesperado ao excluir.");
+  }
+}
 
 async function carregarUsuariosMutuos() {
   const token = Storage.token;

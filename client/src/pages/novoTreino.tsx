@@ -50,7 +50,7 @@ export default function NovoTreino() {
   const [nivel, setNivel] = useState("Base");
   const [duracao, setDuracao] = useState<number>(60);
   const [dataTreino, setDataTreino] = useState<string>("");
-  const [categoria, setCategoria] = useState<string>("Sub-13");
+  const [categoria, setCategoria] = useState<string>("Sub13");
   const [tipoTreino, setTipoTreino] = useState<string>("Tecnico");
   const [objetivo, setObjetivo] = useState<string>("");
 
@@ -77,7 +77,7 @@ export default function NovoTreino() {
   useEffect(() => {
     const tipoSalvo = Storage.tipoSalvo;
     const idSalvo = Storage.usuarioId;
-    const tipoUsuarioId = Storage.tipoUsuarioId;
+    const atletaId = Storage.tipoUsuarioId;
     const token = Storage.token;
 
     if (["atleta", "escola", "clube", "professor"].includes(tipoSalvo || "")) {
@@ -92,18 +92,18 @@ export default function NovoTreino() {
     };
 
     const carregarAtletas = async () => {
-      if (!tipoUsuarioId) return;
+      if (!atletaId) return;
       const res = await fetch(
-        `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${tipoUsuarioId}`
+        `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${atletaId}`
       );
       const json = await res.json();
       setAtletasVinculados(json);
     };
 
     const carregarTreinosDisp = async () => {
-      if (!tipoUsuarioId || !token) return;
+      if (!atletaId || !token) return;
       const res = await fetch(
-        `${API.BASE_URL}/api/treinos/disponiveis?tipoUsuarioId=${tipoUsuarioId}`,
+        `${API.BASE_URL}/api/treinos/disponiveis?tipoUsuarioId=${atletaId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const json = await res.json();
@@ -205,10 +205,10 @@ export default function NovoTreino() {
 
   const agendarTreino = async (t: TreinoProgramado) => {
     try {
-      const tipoUsuarioId = Storage.tipoUsuarioId;  
+      const atletaId = Storage.tipoUsuarioId;  
       const token = Storage.token;
 
-      if (!tipoUsuarioId || !token) {
+      if (!atletaId || !token) {
         alert("Sessão expirada. Faça login novamente.");
         return;
       }
@@ -228,7 +228,7 @@ export default function NovoTreino() {
           titulo: t.nome,
           dataTreino: quandoISO,
           dataExpiracao: quandoISO,
-          tipoUsuarioId,           
+          atletaId,      
           treinoProgramadoId: t.id, 
         }),
       });
@@ -269,25 +269,21 @@ export default function NovoTreino() {
         ) : (
           treinosDisponiveis.map((t) => (
             <div key={t.id} className="bg-white border p-4 rounded shadow mb-4">
-              <h3 className="text-green-800 font-semibold">{t.nome}</h3>
-              {t.descricao && <p className="text-sm text-gray-600">{t.descricao}</p>}
+              <h3 className="text-green-800 text-lg  font-semibold">{t.nome}</h3>
+              
+              <p className="text-sm"><strong>Descrição:</strong> {t.descricao }</p>
+              
               <p className="text-sm">
                 <strong>Nível:</strong> {t.nivel}
               </p>
-              {t.dataAgendada && (
-                <p className="text-sm">
-                  <strong>Agendado para:</strong>{" "}
-                  {new Date(t.dataAgendada).toLocaleString("pt-BR")}
-                </p>
-              )}
 
-               <p className="text-sm mt-2 font-semibold">Exercícios:</p>
+               <p className="text-sm"><strong>Exercícios:</strong></p>
               <ul className="list-disc pl-5 text-sm text-gray-700">
                 {t.exercicios.map((ex, i) => (
                   <li key={i}>{ex.nome} ({ex.repeticoes})</li>
                 ))}
               </ul>
-              <label className="text-sm mt-2 block">Prazo para envio</label>
+              <label className="text-sm mt-2 block"><strong>Prazo para envio: </strong></label>
                <input
                 type="datetime-local"
                 className="border p-2 rounded"
@@ -297,7 +293,7 @@ export default function NovoTreino() {
                 }
                 />
               <button
-                className="mt-3 bg-blue-600 text-white px-3 py-1 rounded"
+                className="mt-3 bg-green-800 text-white px-5 py-2 rounded ml-10"
                 onClick={() => agendarTreino(t)}
               >
                 Agendar este treino

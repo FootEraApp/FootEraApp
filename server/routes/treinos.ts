@@ -27,40 +27,10 @@ interface CriarTreinoInput {
   tipoUsuarioId: string; 
 }
 
-router.post('/agendados', authenticateToken, async (req, res) => {
-  try {
-    const { titulo, dataTreino, tipoUsuarioId, treinoProgramadoId } = req.body;
-
-    if (!titulo || !dataTreino || !tipoUsuarioId || !treinoProgramadoId) {
-      return res.status(400).json({ message: 'Campos obrigatórios faltando.' });
-    }
-
-    const novo = await prisma.treinoAgendado.create({
-      data: {
-        titulo,
-        dataTreino: new Date(dataTreino),
-        atletaId: String(tipoUsuarioId), // se sua coluna for string
-        treinoProgramadoId: String(treinoProgramadoId),
-      },
-      include: {
-        treinoProgramado: {
-          include: {
-            exercicios: { include: { exercicio: true } },
-          },
-        },
-      },
-    });
-
-    return res.status(201).json(novo);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: 'Erro ao agendar treino.' });
-  }
-});
+router.post("/agendados", authenticateToken, agendarTreino);
 router.delete('/agendados/:id', authenticateToken, excluirTreinoAgendado);
 router.get("/agendados", authenticateToken, getTreinosAgendados);
 router.get("/disponiveis", treinosController.disponiveis);
-router.post("/agendar", authenticateToken, agendarTreino);
 router.get("/programados", listarTodosTreinosProgramados);
 router.get("/exercicios", async (req, res) => {
   try {

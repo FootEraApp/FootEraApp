@@ -58,46 +58,59 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = Storage.token;
-    if (!token) return;
+  const token = Storage.token;
+  if (!token) return;
 
-    const headers = { Authorization: `Bearer ${token}` };
+  const headers = { Authorization: `Bearer ${token}` };
 
-    Promise.all([
-      axios.get(`${API.BASE_URL}/api/perfil/me`, { headers }),
-      axios.get(`${API.BASE_URL}/api/perfil/me/atividades`, { headers }),
-      axios.get(`${API.BASE_URL}/api/perfil/me/badges`, { headers }),
-      axios.get(`${API.BASE_URL}/api/perfil/pontuacao/${Storage.usuarioId}`, { headers }),
-    ])
-      .then(([perfilRes, atividadesRes, badgesRes, pontuacaoRes]) => {
-        setPerfil(perfilRes.data);
-        setUsuarioId(perfilRes.data?.usuario?.id ?? null);
-        setBadges(badgesRes.data || []);
-        setActivities(atividadesRes.data.map((a: any) => ({
-          id: a.id,
-          tipo: a.tipo,
-          imagemUrl: a.imagemUrl || "",
-          nome: a.nome || a.tipo
-        })));
-        
-        const {
-          performance = 0,
-          disciplina = 0,
-          responsabilidade = 0
-        } = pontuacaoRes.data || {};
+  (async () => {
+    try {
+      const [{ data: me }, { data: atividades }, { data: badgesData }] =
+        await Promise.all([
+          axios.get(`${API.BASE_URL}/api/perfil/me`, { headers }),
+          axios.get(`${API.BASE_URL}/api/perfil/me/atividades`, { headers }),
+          axios.get(`${API.BASE_URL}/api/perfil/me/badges`, { headers }),
+        ]);
+
+      setPerfil(me);
+      const usuarioId = me?.usuario?.id || Storage.usuarioId || null;
+      setUsuarioId(usuarioId);
+
+      setActivities((atividades || []).map((a: any) => ({
+        id: a.id,
+        tipo: a.tipo,
+        imagemUrl: a.imagemUrl || "",
+        nome: a.nome || a.tipo,
+      })));
+      setBadges(badgesData || []);
+
+      if (usuarioId) {
+        const { data: p } = await axios.get(
+          `${API.BASE_URL}/api/perfil/pontuacao/${usuarioId}`,
+          { headers }
+        );
+
+        const performance = p?.performance ?? 0;
+        const disciplina = p?.disciplina ?? 0;
+        const responsabilidade = p?.responsabilidade ?? 0;
+
         setPontuacao({
           pontuacaoTotal: performance + disciplina + responsabilidade,
           pontuacaoPerformance: performance,
           pontuacaoDisciplina: disciplina,
           pontuacaoResponsabilidade: responsabilidade,
         });
-      })
-      .catch((err) => {
-        console.error("Erro ao carregar dados do perfil:", err);
-        setPerfil(null);
-      })
-      .finally(() => setLoading(false));
-  }, []);
+      } else {
+        setPontuacao(null);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar dados do perfil:", err);
+      setPerfil(null);
+    } finally {
+      setLoading(false);
+    }
+  })();
+}, []);
 
   if (loading) {
     return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
