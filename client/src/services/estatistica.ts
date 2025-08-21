@@ -25,10 +25,10 @@ export async function incTreino(atletaId: string, minutos: number, categoria: st
   });
 }
 
-export async function incDesafio(atletaId: string, pontos: number) {
+export async function incDesafio(atletaId: string, pontuacao: number) {
   await prisma.estatisticaAtleta.upsert({
     where: { atletaId },
-    create: { atletaId, totalDesafios: 1, totalPontos: pontos },
-    update: { totalDesafios: { increment: 1 }, totalPontos: { increment: pontos } }
+    create: { atletaId, totalDesafios: 1, totalPontos: pontuacao },
+    update: { totalDesafios: { increment: 1 }, totalPontos: { increment: pontuacao } }
   });
 }

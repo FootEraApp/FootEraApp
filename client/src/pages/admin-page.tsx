@@ -277,7 +277,7 @@ interface Treinos {
                   <div>
                     <strong>{d.titulo}</strong> 
                     <p>• {d.categoria.join(", ")} - {d.descricao} </p>
-                    <p className="text-sm text-gray-500">Pontos: {d.pontos}</p>
+                    <p className="text-sm text-gray-500">Pontos: {d.pontuacao}</p>
                   </div>
                   <div className="flex gap-2">
                     <button

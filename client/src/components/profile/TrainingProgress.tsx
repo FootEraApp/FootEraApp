@@ -21,24 +21,13 @@ type Training = {
   prazoEnvio?: string | null;
   duracaoMinutos?: number | null;
   exercicios?: Array<any>;
+  tipo?: string | null;
+  imagemUrl?: string | null;
 };
 
 interface TrainingProgressProps {
   userId: string | null;
-}
-
-interface ResumoTreinos {
-  completos: number;
-  horas: number;
-  desafios: number;
-  pontos: number;
-  categorias: Record<string, number>;
-}
-
-interface PontuacaoPerfil {
-  performance: number;
-  disciplina: number;
-  responsabilidade: number;
+  tipoUsuarioId?: string | null;
 }
 
 const toDate = (v?: string | null) => (v ? new Date(v) : null);
@@ -47,39 +36,22 @@ const timeKey = (t: Training) =>
     toDate(t.dataTreino)?.getTime() ??
     Number.MAX_SAFE_INTEGER);
 
-export default function TrainingProgress({ userId }: TrainingProgressProps) {
+export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProgressProps) {
   const qc = useQueryClient();
   const token = Storage.token || '';
-  const usuarioId = (Storage.usuarioId as string) || userId || '';
-  const atletaId = (Storage.tipoUsuarioId as string) || '';
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
+  const targetUserId = userId ?? (Storage.usuarioId as string) ?? "";
+  const targetTipoUsuarioId = tipoUsuarioId ?? (Storage.tipoUsuarioId as string) ?? "";
+  
   const { data: atividades = [] } = useQuery<any[]>({
-    queryKey: ['perfilAtividades', usuarioId, atletaId],
-    enabled: Boolean(token && (usuarioId || atletaId)),
+    queryKey: ["perfilAtividades", targetUserId],
+    enabled: Boolean(token && targetUserId),
     queryFn: async () => {
-      const urls: string[] = [];
-      if (usuarioId) urls.push(`${API.BASE_URL}/api/perfil/${encodeURIComponent(usuarioId)}/atividades`);
-      if (atletaId && atletaId !== usuarioId) urls.push(`${API.BASE_URL}/api/perfil/${encodeURIComponent(atletaId)}/atividades`);
-
-      const results = await Promise.all(
-        urls.map(u =>
-          fetch(u, { headers })
-            .then(r => (r.ok ? r.json() : []))
-            .catch(() => [])
-        )
-      );
-
-      const merged = results.flat().filter(Boolean);
-      const unique = Array.from(
-        new Map(
-          merged.map((a: any) => [
-            a.id ?? `${a.tipo}-${a.nome}-${a.data ?? ''}`,
-            a,
-          ])
-        ).values()
-      );
-      return unique;
+      const url = `${API.BASE_URL}/api/perfil/${encodeURIComponent(targetUserId)}/atividades`;
+      const r = await fetch(url, { headers });
+      if (!r.ok) return [];
+      return r.json();
     },
   });
 
@@ -109,59 +81,54 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
     [atividades]
   );
 
-  const { data: treinosAgendados = [], isLoading: isLoadingTrainings } = useQuery<Training[]>({
-    queryKey: ['treinosAgendados', atletaId],
-    enabled: Boolean(token && atletaId),
-    queryFn: async () => {
-      const res = await fetch(
-        `${API.BASE_URL}/api/treinos/agendados?tipoUsuarioId=${encodeURIComponent(atletaId)}`,
-        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
-      );
-      if (!res.ok) throw new Error('Erro ao buscar treinos agendados');
-      const raw = await res.json();
+ const { data: treinosAgendados = [], isLoading: isLoadingTreinos,} = useQuery<Training[]>({
+  queryKey: ["treinosAgendados", targetTipoUsuarioId],
+  enabled: Boolean(token && targetTipoUsuarioId),
+  queryFn: async () => {
+    const r = await fetch(
+      `${API.BASE_URL}/api/treinos/agendados?tipoUsuarioId=${encodeURIComponent(targetTipoUsuarioId)}`,
+      { headers }
+    );
+    if (!r.ok) throw new Error("Erro ao buscar treinos agendados");
+    const raw = await r.json();
 
-      return (Array.isArray(raw) ? raw : []).map((t: any): Training => ({
-        id: t.id,
-        titulo: t.titulo ?? t?.treinoProgramado?.nome ?? 'Treino',
-        dataTreino: t.dataTreino ?? null,
-        prazoEnvio: t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t?.treinoProgramado?.dataAgendada ?? null,
-        duracaoMinutos: t?.treinoProgramado?.duracao ?? t.duracaoMinutos ?? null,
-        exercicios: t?.treinoProgramado?.exercicios ?? [],
-      }));
-    },
-  });
+    return (Array.isArray(raw) ? raw : []).map((t: any): Training => ({
+      id: t.id,
+      titulo: t.titulo ?? t?.treinoProgramado?.nome ?? "Treino",
+      dataTreino: t.dataTreino ?? null,
+      prazoEnvio:
+        t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t?.treinoProgramado?.dataAgendada ?? null,
+      duracaoMinutos: t?.treinoProgramado?.duracao ?? t.duracaoMinutos ?? null,
+      tipo: t?.treinoProgramado?.tipo ?? t?.categoria ?? null,              // NEW
+      imagemUrl: t?.treinoProgramado?.imagemUrl ?? t?.imagemUrl ?? null,    // NEW
+    }));
+  },
+});
 
   useEffect(() => {
-    const onAgendado = () => {
-      qc.invalidateQueries({ queryKey: ['treinosAgendados', atletaId] });
-    };
-    window.addEventListener('treino:agendado', onAgendado);
-    return () => window.removeEventListener('treino:agendado', onAgendado);
-  }, [qc, atletaId]);
+    const onAgendado = () => qc.invalidateQueries({ queryKey: ["treinosAgendados", targetTipoUsuarioId] });
+    window.addEventListener("treino:agendado", onAgendado);
+    return () => window.removeEventListener("treino:agendado", onAgendado);
+  }, [qc, targetTipoUsuarioId]);
 
-  const { data: resumo, isLoading: isLoadingResumo } = useQuery<ResumoTreinos>({
-    queryKey: ['perfilResumoTreinos', usuarioId],
-    enabled: Boolean(token && usuarioId),
+  const { data: resumo, isLoading: isLoadingResumo } = useQuery({
+    queryKey: ["perfilResumoTreinos", targetUserId],
+    enabled: Boolean(token && targetUserId),
     queryFn: async () => {
-      const res = await fetch(
-        `${API.BASE_URL}/api/perfil/${encodeURIComponent(usuarioId)}/treinos`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!res.ok) throw new Error('Erro ao buscar resumo de treinos');
-      return res.json();
+      const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(targetUserId)}/treinos`, { headers });
+      if (!r.ok) throw new Error("Erro ao buscar resumo de treinos");
+      return r.json();
     },
   });
 
-  const { data: pontuacao, isLoading: isLoadingPontuacao } = useQuery<PontuacaoPerfil>({
-    queryKey: ['pontuacaoPerfil', usuarioId],
-    enabled: Boolean(token && usuarioId),
+  const  { data: pontuacao, isLoading: isLoadingPontuacao } = useQuery({
+    queryKey: ["pontuacaoPerfil", targetUserId],
+    enabled: Boolean(token && targetUserId),
     queryFn: async () => {
-      const res = await fetch(
-        `${API.BASE_URL}/api/perfil/pontuacao/${encodeURIComponent(usuarioId)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!res.ok) throw new Error('Erro ao buscar pontuação do perfil');
-      return res.json();
+      
+      const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(targetUserId)}/pontuacao`, { headers });
+      if (!r.ok) throw new Error("Erro ao buscar pontuação do perfil");
+      return r.json();
     },
   });
 
@@ -205,7 +172,7 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
     });
   }, [upcomingTrainings]);
 
-  const isLoading = isLoadingTrainings || isLoadingResumo || isLoadingPontuacao;
+  const isLoading = isLoadingTreinos || isLoadingResumo || isLoadingPontuacao;
 
   if (isLoading) {
     return (
@@ -318,10 +285,24 @@ export default function TrainingProgress({ userId }: TrainingProgressProps) {
                     const prazo = toDate(treino.prazoEnvio);
                     return (
                       <div key={treino.id} className="border rounded-lg p-3">
+                        {treino.imagemUrl && (
+                          <img
+                            className="w-full h-36 object-cover rounded mb-2"
+                            src={
+                              treino.imagemUrl.startsWith("http")
+                                ? treino.imagemUrl
+                                : `${API.BASE_URL}${treino.imagemUrl}`
+                            }
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/assets/treinos/placeholder.png"; }}
+                            alt={treino.titulo}
+                          />
+                        )}
                         <div className="flex justify-between items-start">
                           <div>
                             <h4 className="font-medium text-sm">{treino.titulo}</h4>
-
+                              {treino.tipo && (
+                                <Badge variant="outline" className="mt-1 text-[10px]">{treino.tipo}</Badge>
+                              )}
                             <div className="text-xs text-gray-600 mt-1 space-y-1">
                               {lancado && (
                                 <div>lançado em {format(lancado, "dd/MM/yyyy", { locale: ptBR })}</div>

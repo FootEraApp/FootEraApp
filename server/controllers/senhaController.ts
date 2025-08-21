@@ -1,17 +1,16 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { sendPasswordResetEmail } from "@/utils/mailer.js";
-import { API } from "@/config.js";
+import { APP } from "server/config.js";
 
-const prisma = new PrismaClient;
+const prisma = new PrismaClient();
 const RESET_TTL_MS = 30 * 60 * 1000;
 
 export async function forgotPassword(req: Request, res: Response) {
   const { email } = req.body as { email?: string };
   const okMessage = { message: "Se este e-mail estiver cadastrado, enviaremos instruções." };
-
   if (!email) return res.status(200).json(okMessage);
 
   try {
@@ -21,37 +20,30 @@ export async function forgotPassword(req: Request, res: Response) {
     const token = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 
-    await prisma.passwordReset.deleteMany({
-      where: { usuarioId: usuario.id, usedAt: null },
-    });
-
+    await prisma.passwordReset.deleteMany({ where: { usuarioId: usuario.id, usedAt: null } });
     await prisma.passwordReset.create({
       data: {
         usuarioId: usuario.id,
         tokenHash,
-        expiresAt: new Date(Date.now() + RESET_TTL_MS),
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
       },
     });
 
-    const appUrl = process.env.APP_URL ?? `${API.BASE_URL}`;
-    const link = `${appUrl}/resetar-senha?uid=${usuario.id}&token=${token}`;
+    const link = `${APP.FRONTEND_URL.replace(/\/$/, "")}/resetar-senha?uid=${usuario.id}&token=${token}`;
 
     if (process.env.NODE_ENV !== "production") {
       console.log("[password-reset] link:", link);
     }
 
-    try {
-      await sendPasswordResetEmail(email, link);
-    } catch (err) {
-      console.error("sendPasswordResetEmail error:", err);
-    }
+    await sendPasswordResetEmail(email, link);
 
     return res.status(200).json(okMessage);
   } catch (e) {
     console.error("forgotPassword error:", e);
-    return res.status(200).json(okMessage); 
+    return res.status(200).json(okMessage);
   }
 }
+
 
 export async function resetPassword(req: Request, res: Response) {
   const { uid, token, senha } = req.body as { uid?: string; token?: string; senha?: string };
@@ -80,7 +72,7 @@ export async function resetPassword(req: Request, res: Response) {
     await prisma.$transaction([
       prisma.usuario.update({ where: { id: uid }, data: { senhaHash } }),
       prisma.passwordReset.update({ where: { id: pr.id }, data: { usedAt: new Date() } }),
-      prisma.passwordReset.deleteMany({ where: { usuarioId: uid, usedAt: null } }), 
+      prisma.passwordReset.deleteMany({ where: { usuarioId: uid, usedAt: null } }),
     ]);
 
     return res.json({ message: "Senha alterada com sucesso." });

@@ -26,6 +26,12 @@ export default function SubmissaoDesafioEmGrupo() {
       return;
     }
 
+     const MAX_MB = 200;
+      if (videoFile.size > MAX_MB * 1024 * 1024) {
+        setErrorMsg(`O vídeo excede ${MAX_MB} MB.`);
+        return;
+     }
+
     try {
       setLoading(true);
       setErrorMsg("");
@@ -37,7 +43,6 @@ export default function SubmissaoDesafioEmGrupo() {
       const uploadRes = await fetch(`${API.BASE_URL}/api/desafios/upload/file`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${ Storage.token || ""}`,
         },
         body: formData,
@@ -52,7 +57,7 @@ export default function SubmissaoDesafioEmGrupo() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+          Authorization: `Bearer ${ Storage.token || ""}`,
         },
         body: JSON.stringify({
           desafioId,        

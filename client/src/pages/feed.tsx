@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { FaHeart, FaRegHeart, FaRegCommentDots, FaShare, FaPaperPlane, FaTrash, FaLink } from "react-icons/fa";
 import { Volleyball, User, CirclePlus, Search, House, CircleX, Send, CircleCheck } from "lucide-react";
-import { getFeedPosts, likePost, comentarPost, compartilharPost, PostagemComUsuario, } from "../services/feedService.js";
+import { getFeedPosts, likePost, comentarPost, compartilharPost, PostagemComUsuario, deletarPost} from "../services/feedService.js";
 import { format } from "date-fns";
 import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
@@ -104,6 +104,16 @@ function PaginaFeed(): JSX.Element {
     }
   };
 
+  const handleApagar = async (postId: string) => {
+    if (!window.confirm("Apagar esta postagem? Essa ação não pode ser desfeita.")) return;
+    try {
+      await deletarPost(postId);
+      setPosts(prev => prev.filter(p => p.id !== postId));
+    } catch (e: any) {
+      alert(e?.message || "Não foi possível apagar a postagem.");
+    }
+  };
+
   const abrirModalComentarios = (post: PostagemComUsuario) => {
   setPostSelecionado(post);
   setComentariosModalAberto(true);
@@ -163,6 +173,7 @@ function PaginaFeed(): JSX.Element {
 
         return (
           <div key={post.id} className="max-w-xl mx-auto bg-white rounded-2xl shadow-md p-4 space-y-3">
+           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <img
                 src={
@@ -180,6 +191,16 @@ function PaginaFeed(): JSX.Element {
                 </p>
               </div>
             </div>
+            {((post as any).usuarioId === userId || post?.usuario?.id === userId) && (
+             <button
+               onClick={() => handleApagar(post.id)}
+               title="Apagar postagem"
+               className="text-red-600 hover:text-red-800 p-2"
+             >
+               <FaTrash />
+             </button>
+            )}
+           </div>
 
             <div>
               <p className="text-gray-800 font-medium">{post.conteudo}</p>

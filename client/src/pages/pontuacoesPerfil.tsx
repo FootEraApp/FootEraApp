@@ -76,7 +76,7 @@ export default function PontuacaoDetalhada() {
               <div>
                 <div className="font-semibold">{item.titulo} - {item.tipo} {item.status}</div>
                 <div className="text-sm text-gray-600">
-                  {item.data}{item.duracao ? ` • ${item.duracao}` : ""} {typeof item.pontos==='number' ? `• +${item.pontos} pts` : ""}
+                  {item.data}{item.duracao ? ` • ${item.duracao}` : ""} {typeof item.pontuacao==='number' ? `• +${item.pontuacao} pts` : ""}
                 </div>
               </div>
             </div>

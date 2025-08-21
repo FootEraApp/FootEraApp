@@ -3,12 +3,12 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
-import bodyParser from "body-parser";
 import dotenv from "dotenv";
 import cron from "node-cron";
 import http from "http";
 import { setupSocket } from "./socket.js";
 import qrcode from "qrcode-terminal";
+import { APP } from "./config.js";
 
 import adminRoutes from "./routes/admin.js";
 import atletaRoutes from "./routes/atleta.js";
@@ -61,8 +61,8 @@ dotenv.config();
 startExpiredTrainingsJob();
 
 app.use(cors());
-app.use(express.json());
-app.use(bodyParser.json());
+app.use(express.json({limit: "10mb"}));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use("/api/admin", adminRoutes);
 app.use("/api/atletas", atletaRoutes);
@@ -101,11 +101,16 @@ app.use("/api/treinosprogramados", treinoProgramadoRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
 
-app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
+app.use("/uploads", express.static(path.join(__dirname, "public", "uploads")));
 app.use("/assets", express.static("client/public/assets/")); 
 
 app.get("/", (req, res) => {
   res.send("FootEra API está ativa!");
+});
+
+app.get("/resetar-senha", (req, res) => {
+  const qs = req.originalUrl.split("?")[1] || "";
+  res.redirect(302, `${APP.FRONTEND_URL}/resetar-senha${qs ? "?" + qs : ""}`);
 });
 
 const PORT = process.env.PORT || 3001;

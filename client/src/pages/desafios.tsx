@@ -27,7 +27,7 @@ interface Desafio {
   id: string;
   titulo: string;
   nivel: string;
-  pontos: number;
+  pontuacao: number;
   categoria: string[];
   imagemUrl?: string;
 }
@@ -192,7 +192,7 @@ const DesafiosPage: React.FC = () => {
               <div className="flex flex-wrap gap-2 text-sm my-2">
                 <span className="bg-gray-200 px-2 py-1 rounded">Nível: {sub.desafio.nivel}</span>
                 <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                  {sub.desafio.pontos} pontos
+                  {sub.desafio.pontuacao} pontos
                 </span>
                 {sub.desafio.categoria.map((cat, idx) => (
                   <span key={idx} className="bg-green-100 text-green-800 px-2 py-1 rounded">

@@ -29,6 +29,17 @@ export interface PostagemComUsuario {
   compartilhamentos: number;
 }
 
+/** <- tipos novos */
+export type PostId = string;
+
+export interface CriarPostInput {
+  descricao?: string;
+  imagemUrl?: string;
+  videoUrl?: string;
+  arquivo?: File | null;
+}
+/** ---------------- */
+
 export async function getFeedPosts(
   onUnauthorized?: () => void
 ): Promise<PostagemComUsuario[]> {
@@ -104,4 +115,61 @@ export async function getPostById(id: string): Promise<PostagemComUsuario> {
     curtidas: Array.isArray(raw.curtidas) ? raw.curtidas : [],
     comentarios: Array.isArray(raw.comentarios) ? raw.comentarios : [],
   } as PostagemComUsuario;
+}
+
+/** <- agora tipado */
+export async function deletarPost(postId: PostId): Promise<boolean> {
+  const token = Storage.token;
+  const res = await fetch(`${API.BASE_URL}/api/post/${postId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.message || "Falha ao apagar post");
+  }
+  return true;
+}
+
+/** <- agora tipado */
+export async function criarPost({
+  descricao = "",
+  imagemUrl,
+  videoUrl,
+  arquivo,
+}: CriarPostInput) {
+  const token = Storage.token;
+
+  const POST_URL = `${API.BASE_URL}/api/post`;
+
+  if ((imagemUrl && imagemUrl.trim()) || (videoUrl && videoUrl.trim())) {
+    const res = await fetch(POST_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ descricao, imagemUrl, videoUrl }),
+    });
+    if (!res.ok) throw new Error("Falha ao criar postagem");
+    return res.json();
+  }
+
+  if (arquivo instanceof File) {
+    const fd = new FormData();
+    if (descricao) fd.append("descricao", descricao);
+    fd.append("arquivo", arquivo);
+    const res = await fetch(POST_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` }, 
+      body: fd,
+    });
+    if (!res.ok) {
+      const msg = await res.text().catch(() => "");
+      throw new Error(msg || "Falha ao enviar arquivo");
+    }
+    return res.json();
+  }
+
+  throw new Error("Informe uma URL de mídia ou selecione um arquivo.");
 }

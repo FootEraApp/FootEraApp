@@ -59,11 +59,6 @@ export default function ScorePanel({
           <div className="footera-text-green font-bold">{responsabilidade} pts</div>
         </div>
       </div>
-      
-      <div className="footera-bg-cream border border-gray-200 rounded-lg p-4 flex justify-between items-center mt-6">
-        <h2 className="font-bold footera-text-green">Meu Grupo</h2>
-        <ChevronRight className="footera-text-green h-5 w-5" />
-      </div>
     </section>
   );
 }
