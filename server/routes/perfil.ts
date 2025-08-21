@@ -27,10 +27,10 @@ router.get("/me/pontuacao", authenticateToken, getPontuacaoMe);
 router.get("/me/atividades", authenticateToken, getAtividadesRecentesMe);
 router.get("/me/badges", authenticateToken, getBadgesMe);
 
+router.get("/pontuacao/:usuarioId", authenticateToken, getPontuacaoPerfil);
 router.get("/:id/atividades", authenticateToken, getAtividadesRecentes);
 router.get("/:id/badges", authenticateToken, getBadges);
 router.get("/:id/pontuacao", authenticateToken, getPontuacao);
-router.get("/pontuacao/:usuarioId", authenticateToken, getPontuacaoPerfil);
 router.get("/:id/treinos", authenticateToken, getTreinosResumo);
 router.get("/:id/progresso", authenticateToken, getProgressoTreinos);
 router.get("/:id", authenticateToken, getPerfilUsuario);

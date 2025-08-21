@@ -201,7 +201,7 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
       }, 0);
 
     const pontosDesafios = (submissoesDesafio || []).reduce((acc, s: any) => {
-      const p = s?.desafio?.pontos ?? s?.desafio?.pontuacao ?? 0;
+      const p = s?.desafio?.pontuacao ?? s?.desafio?.pontuacao ?? 0;
       return acc + (Number(p) || 0);
     }, 0);
 

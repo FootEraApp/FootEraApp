@@ -55,7 +55,7 @@ interface Desafio {
   titulo: string;
   descricao: string;
   nivel: string;
-  pontos: number;
+  pontuacao: number;
   imagemUrl?: string;
 }
 
@@ -181,7 +181,7 @@ const renderDesafioCard = (desafio: Desafio) => (
     </h4>
     <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
     <p className="text-sm text-gray-500">Nível: {desafio.nivel}</p>
-    <p className="text-sm text-gray-500">Pontos: {desafio.pontos}</p>
+    <p className="text-sm text-gray-500">Pontos: {desafio.pontuacao}</p>
     <div className="mt-3 flex justify-between">
       <button
         onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}

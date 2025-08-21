@@ -1,44 +1,66 @@
 import { Request, Response } from "express";
+import { prisma } from "../lib/prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
-import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient;
+function isAllowedUrl(u?: string | null) {
+  if (!u) return false;
+  return /^https?:\/\//i.test(u) || u.startsWith("/assets/");
+}
+function normalizeAssetUrl(u: string) {
+  return u.startsWith("assets/") ? "/" + u : u;
+}
 
 export const postarConteudo = async (req: AuthenticatedRequest, res: Response) => {
-   try {
-    if (!req.userId) {
-      return res.status(401).json({ message: "Usuário não autenticado." });
-    }
-    const userId = req.userId;
-    const { descricao, tipoMidia } = req.body;
-    const arquivo = req.file;
+  try {
+    if (!req.userId) return res.status(401).json({ message: "Usuário não autenticado." });
+    console.log("CREATE", req.headers["content-type"], req.body, "file?", !!(req as any).file);
 
-    if (!descricao && !arquivo) {
+    const { descricao, imagemUrl, videoUrl } = req.body as {
+      descricao?: string;
+      imagemUrl?: string;
+      videoUrl?: string;
+    };
+    const file = (req as any).file as Express.Multer.File | undefined;
+
+    let finalImagemUrl: string | null = null;
+    let finalVideoUrl: string | null = null;
+
+    // 1) Preferir URL
+    if (isAllowedUrl(imagemUrl)) finalImagemUrl = normalizeAssetUrl(imagemUrl!);
+    if (isAllowedUrl(videoUrl)) finalVideoUrl = normalizeAssetUrl(videoUrl!);
+
+    // 2) Se não veio URL mas veio arquivo -> uploads
+    if (!finalImagemUrl && !finalVideoUrl && file) {
+      if (file.mimetype.startsWith("image/")) finalImagemUrl = `/uploads/${file.filename}`;
+      else if (file.mimetype.startsWith("video/")) finalVideoUrl = `/uploads/${file.filename}`;
+    }
+
+    if (!descricao && !finalImagemUrl && !finalVideoUrl) {
       return res.status(400).json({ message: "Descrição ou mídia obrigatória." });
     }
 
-    let imagemUrl: string | null = null;
-    let videoUrl: string | null = null;
+    const tipoDetectado = finalVideoUrl ? "Video" : finalImagemUrl ? "Imagem" : "Documento";
 
-    if (arquivo) {
-      const caminho = `/uploads/${arquivo.filename}`;
-      if (tipoMidia === "Imagem") imagemUrl = caminho;
-      else if (tipoMidia === "Video") videoUrl = caminho;
-    }
-
-    const novaPostagem = await prisma.postagem.create({
+    const post = await prisma.postagem.create({
       data: {
-        conteudo: descricao,
-        tipoMidia,
-        imagemUrl,
-        videoUrl,
-        usuarioId: userId,
+        usuarioId: req.userId,
+        conteudo: descricao || "",
+        tipoMidia: tipoDetectado,
+        imagemUrl: finalImagemUrl,
+        videoUrl: finalVideoUrl,
+      },
+      include: {
+        usuario: { select: { id: true, nome: true, foto: true } },
+        curtidas: true,
+        comentarios: {
+          include: { usuario: { select: { id: true, nome: true, foto: true } } },
+        },
       },
     });
 
-    return res.status(201).json({ message: "Postagem criada com sucesso.", post: novaPostagem });
-  } catch (error) {
-    console.error(error);
+    return res.status(201).json(post);
+  } catch (err) {
+    console.error("postarConteudo error:", err);
     return res.status(500).json({ message: "Erro ao criar postagem." });
   }
 };
@@ -128,6 +150,32 @@ export const deletarPostagem = async (req: AuthenticatedRequest, res: Response) 
     return res.json({ message: "Postagem deletada com sucesso." });
   } catch (err) {
     return res.status(500).json({ message: "Erro ao deletar postagem." });
+  }
+};
+
+export const deletarPost = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.userId) return res.status(401).json({ message: "Não autenticado." });
+
+    const { id } = req.params;
+
+    const post = await prisma.postagem.findUnique({ where: { id } });
+    if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
+
+    if (post.usuarioId !== req.userId) {
+      return res.status(403).json({ message: "Você não pode apagar esta postagem." });
+    }
+
+    await prisma.$transaction([
+      prisma.comentario.deleteMany({ where: { postagemId: id } }),
+      prisma.curtida.deleteMany({ where: { postagemId: id } }),
+      prisma.postagem.delete({ where: { id } }),
+    ]);
+
+    return res.status(204).send();
+  } catch (e) {
+    console.error("Erro ao deletar post:", e);
+    return res.status(500).json({ message: "Erro ao apagar postagem." });
   }
 };
 

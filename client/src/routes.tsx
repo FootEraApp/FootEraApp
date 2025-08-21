@@ -5,7 +5,6 @@ import PaginaCadastro from "./pages/cadastro.js";
 import PaginaFeed from "./pages/feed.js";
 import PaginaTreinos from "./pages/treinos.js";
 import PaginaCreatePost from "./pages/post/create.js";
-import PaginaMostrarPost from "./pages/post/showPost.js";
 import PaginaExplorar from "./pages/explorar.js";
 import PaginaAdmin from "./pages/admin-page.js";
 import PaginaCreateDesafios from "./pages/admin/desafios/create.js";
@@ -44,9 +43,6 @@ export function AppRoutes() {
       </Route>
       <Route path="/trainings">
         <PaginaTraining />
-      </Route>
-      <Route path="/posts">
-        <PaginaMostrarPost />
       </Route>
       <Route path="/admin">
         <PaginaAdmin />
@@ -110,7 +106,7 @@ export function AppRoutes() {
         <Private><PaginaPerfil /></Private>
       </Route>
       <Route path="/perfil/:id">
-        <Private><PaginaPerfilUnico /></Private>
+        <Private><PaginaPerfil /></Private>
       </Route>
       <Route path="/post">
         <Private><PaginaCreatePost /></Private>

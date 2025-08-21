@@ -14,7 +14,7 @@ interface DesafioOficial {
   descricao: string;
   imagemUrl?: string | null;
   nivel?: string | null;
-  pontos?: number | null;
+  pontuacao?: number | null;
   categoria?: string[];
   createdAt: string;
 }
@@ -116,7 +116,7 @@ export function ModalDesafiosGrupo({ aberto, onFechar, grupoId, token }: ModalPr
               <p className="text-sm text-gray-600 mb-2">{d.descricao}</p>
               <div className="flex justify-between text-xs text-gray-500">
                 <span>Nível: {d.nivel ?? "—"}</span>
-                <span>Pontos: {d.pontos ?? "—"}</span>
+                <span>Pontos: {d.pontuacao ?? "—"}</span>
                 <span>{new Date(d.createdAt).toLocaleDateString("pt-BR")}</span>
               </div>
             </div>

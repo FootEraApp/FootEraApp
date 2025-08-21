@@ -64,6 +64,7 @@ export default function TrainingsPage() {
 
   const [loading, setLoading] = useState(true);
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
+  const SEM_PROF_LABEL = "Sem professor";
 
   useEffect(() => {
     const token = Storage.token;
@@ -90,14 +91,18 @@ export default function TrainingsPage() {
     () => sorted(uniq(treinos.flatMap(t => (t.exercicios ?? []).map(e => e.exercicio?.nome ?? "")).filter(Boolean))),
     [treinos]
   );
-  const allProfessores = useMemo(
-    () => sorted(uniq(treinos.map(t => t.professor?.nome ?? "").filter(Boolean))),
-    [treinos]
-  );
-  const allDuracoes = useMemo(
-    () => sortedNum(uniq(treinos.map(t => t.duracao ?? 0).filter((n) => typeof n === "number" && n > 0))),
-    [treinos]
-  );
+  const allProfessores = useMemo(() => {
+    const names = sorted(
+      uniq(treinos.map(t => t.professor?.nome ?? "").filter(Boolean))
+    );
+    const hasSemProf = treinos.some(t => !t.professor?.nome);
+    return hasSemProf ? [SEM_PROF_LABEL, ...names] : names;
+  }, [treinos]);
+
+    const allDuracoes = useMemo(
+      () => sortedNum(uniq(treinos.map(t => t.duracao ?? 0).filter((n) => typeof n === "number" && n > 0))),
+      [treinos]
+    );
 
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -109,7 +114,12 @@ export default function TrainingsPage() {
         const nomes = (t.exercicios ?? []).map(e => e.exercicio?.nome ?? "");
         if (!nomes.some(n => selExs.includes(n))) return false;
       }
-      if (selProfs.length && !selProfs.includes(t.professor?.nome ?? "")) return false;
+      if (selProfs.length) {
+        const nome = t.professor?.nome ?? "";
+        const matchSemProf = !nome && selProfs.includes(SEM_PROF_LABEL);
+        const matchByName  =  !!nome && selProfs.includes(nome);
+        if (!matchSemProf && !matchByName) return false;
+      }
       if (selDur.length && !selDur.includes(Number(t.duracao ?? 0))) return false;
 
       if (selPontuacao.length) {
@@ -405,7 +415,6 @@ export default function TrainingsPage() {
                       )}
 
                       <div className="flex items-center justify-end gap-2 pt-1">
-
                         <Button
                           onClick={() => (window.location.href = `/treinos/novo`)}
                         >

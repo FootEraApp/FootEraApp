@@ -51,7 +51,7 @@ interface Desafio {
   descricao: string;
   imagemUrl?: string | null;
   nivel?: string | null;
-  pontos?: number | null;
+  pontuacao?: number | null;
   categoria?: string[];
   createdAt: string;
 }
@@ -480,7 +480,7 @@ export default function PaginaMensagens() {
 
           <div className="flex items-center justify-between text-xs text-gray-500">
             <div className="flex items-center gap-3">
-              <span className="font-medium text-gray-700">Pts: {d.pontos ?? "-"}</span>
+              <span className="font-medium text-gray-700">Pontos: {d.pontuacao ?? "-"}</span>
               {d.categoria && d.categoria.length > 0 && (
                 <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{d.categoria.join(", ")}</span>
               )}

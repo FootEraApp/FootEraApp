@@ -10,7 +10,7 @@ interface Desafio {
   descricao: string;
   imagemUrl?: string | null;
   nivel?: string | null;
-  pontos?: number | null;
+  pontuacao?: number | null;
   categoria?: string[];
   createdAt: string;
 }
@@ -112,7 +112,7 @@ export default function DesafioUnico() {
 
       <div className="flex flex-wrap gap-4 text-gray-600 text-sm mb-6">
         <div>
-          <strong>Pontos:</strong> {desafio.pontos ?? "-"}
+          <strong>Pontos:</strong> {desafio.pontuacao ?? "-"}
         </div>
         {desafio.categoria && desafio.categoria.length > 0 && (
           <div>

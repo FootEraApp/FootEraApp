@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import { useParams, Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import axios from "axios";
 import Storage from "../../../server/utils/storage.js";
@@ -13,112 +13,87 @@ import TrainingProgress from "../components/profile/TrainingProgress.js";
 
 interface Perfil {
   tipo: string;
-  usuario: {
-    nome: string;
-    email: string;
-    foto?: string;
-  };
+  usuario: { id: string; nome: string; email: string; foto?: string };
   dadosEspecificos: {
-    nome?: string;
-    idade?: number;
-    posicao?: string;
-    escola?: string;
-    clube?: string;
-    foto?: string;
-    seloQualidade?: boolean;
+    id?: string; 
+    nome?: string; idade?: number; posicao?: string;
+    escola?: string; clube?: string; foto?: string; seloQualidade?: boolean;
   };
+  atleta?: { id: string };
+  tipoUsuarioId?: string;     
 }
 
-interface Badge {
-  id: string;
-  nome: string;
-  icon: string;
-}
-
-interface Activity {
-  id: string;
-  tipo: "Desafio" | "Treino" | "Vídeo";
-  imagemUrl: string;
-  nome: string;
-}
-
-interface Pontuacao {
-  pontuacaoTotal: number;
-  pontuacaoPerformance: number;
-  pontuacaoDisciplina: number;
-  pontuacaoResponsabilidade: number;
-}
+interface Badge { id: string; nome: string; icon: string; }
+interface Activity { id: string; tipo: "Desafio" | "Treino" | "Vídeo"; imagemUrl: string; nome: string; }
+interface Pontuacao { pontuacaoTotal: number; pontuacaoPerformance: number; pontuacaoDisciplina: number; pontuacaoResponsabilidade: number; }
 
 export default function ProfilePage() {
-  const [usuarioId, setUsuarioId] = useState<string | null>(null);
+  const { id: idDaUrl } = useParams<{ id?: string }>();
   const [perfil, setPerfil] = useState<Perfil | null>(null);
+  const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [badges, setBadges] = useState<Badge[]>([]);
   const [pontuacao, setPontuacao] = useState<Pontuacao | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
   const token = Storage.token;
-  if (!token) return;
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-  const headers = { Authorization: `Bearer ${token}` };
+  const isOwnProfile = !idDaUrl || idDaUrl === Storage.usuarioId;
+  const basePerfil = isOwnProfile ? "me" : idDaUrl!;
+  const alvoUsuarioId = isOwnProfile ? (Storage.usuarioId as string) : (idDaUrl as string);
 
-  (async () => {
-    try {
-      const [{ data: me }, { data: atividades }, { data: badgesData }] =
-        await Promise.all([
-          axios.get(`${API.BASE_URL}/api/perfil/me`, { headers }),
-          axios.get(`${API.BASE_URL}/api/perfil/me/atividades`, { headers }),
-          axios.get(`${API.BASE_URL}/api/perfil/me/badges`, { headers }),
+  useEffect(() => {
+    if (!token) return;
+
+    (async () => {
+      setLoading(true);
+      try {
+        const [{ data: meOuOutro }, { data: atividades }, { data: badgesData }] = await Promise.all([
+          axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}`, { headers }),
+          axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}/atividades`, { headers }),
+          axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}/badges`, { headers }),
         ]);
 
-      setPerfil(me);
-      const usuarioId = me?.usuario?.id || Storage.usuarioId || null;
-      setUsuarioId(usuarioId);
+        setPerfil(meOuOutro);
+        const uid = (meOuOutro?.usuario?.id as string) || alvoUsuarioId || null;
+        setUsuarioId(uid);
 
-      setActivities((atividades || []).map((a: any) => ({
-        id: a.id,
-        tipo: a.tipo,
-        imagemUrl: a.imagemUrl || "",
-        nome: a.nome || a.tipo,
-      })));
-      setBadges(badgesData || []);
+        setActivities((atividades || []).map((a: any) => ({
+          id: a.id, tipo: a.tipo, imagemUrl: a.imagemUrl || "", nome: a.nome || a.tipo,
+        })));
+        setBadges(badgesData || []);
 
-      if (usuarioId) {
-        const { data: p } = await axios.get(
-          `${API.BASE_URL}/api/perfil/pontuacao/${usuarioId}`,
-          { headers }
-        );
+        if (uid) {
+          const { data: p } = await axios.get(
+            `${API.BASE_URL}/api/perfil/${uid}/pontuacao`,
+            { headers }
+          );
+          const performance = p?.performance ?? 0;
+          const disciplina = p?.disciplina ?? 0;
+          const responsabilidade = p?.responsabilidade ?? 0;
 
-        const performance = p?.performance ?? 0;
-        const disciplina = p?.disciplina ?? 0;
-        const responsabilidade = p?.responsabilidade ?? 0;
-
-        setPontuacao({
-          pontuacaoTotal: performance + disciplina + responsabilidade,
-          pontuacaoPerformance: performance,
-          pontuacaoDisciplina: disciplina,
-          pontuacaoResponsabilidade: responsabilidade,
-        });
-      } else {
-        setPontuacao(null);
+          setPontuacao({
+            pontuacaoTotal: performance + disciplina + responsabilidade,
+            pontuacaoPerformance: performance,
+            pontuacaoDisciplina: disciplina,
+            pontuacaoResponsabilidade: responsabilidade,
+          });
+        } else {
+          setPontuacao(null);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar dados do perfil:", err);
+        setPerfil(null);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Erro ao carregar dados do perfil:", err);
-      setPerfil(null);
-    } finally {
-      setLoading(false);
-    }
-  })();
-}, []);
+    })();
 
-  if (loading) {
-    return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
-  }
+  }, [idDaUrl, token]);
 
-  if (!perfil) {
-    return <div className="text-center p-10 text-red-600">Erro ao carregar perfil.</div>;
-  }
+  if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
+  if (!perfil)   return <div className="text-center p-10 text-red-600">Erro ao carregar perfil.</div>;
 
   const isIndependente =
     perfil.tipo === "Atleta" &&
@@ -127,6 +102,32 @@ export default function ProfilePage() {
 
   const total = pontuacao?.pontuacaoTotal || 0;
 
+  const handleSeguir = async () => {
+  try {
+    await fetch(`${API.BASE_URL}/api/seguidores/seguir/${perfil!.usuario.id}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${Storage.token}` },
+    });
+    alert("Você passou a seguir este atleta!");
+  } catch {
+    alert("Não foi possível seguir agora.");
+  }
+};
+
+const handleTreinarJuntos = () => {
+  window.location.href = `/treinar-juntos/${perfil!.usuario.id}`;
+};
+
+const handleCompartilhar = async () => {
+  const url = `${window.location.origin}/perfil/${perfil!.usuario.id}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    alert("Link do perfil copiado!");
+  } catch {
+    alert(url);
+  }
+};
+
   return (
     <div className="min-h-screen bg-transparent pb-20">
       <div className="max-w-3xl mx-auto px-4 py-6">
@@ -134,16 +135,11 @@ export default function ProfilePage() {
           nome={perfil.usuario.nome}
           idade={perfil.dadosEspecificos.idade}
           posicao={perfil.dadosEspecificos.posicao}
-          time={
-            perfil.tipo === "Atleta"
-              ? perfil.dadosEspecificos.escola ||
-                perfil.dadosEspecificos.clube ||
-                "Independente"
-              : undefined
-          }
+          time={perfil.tipo === "Atleta" ? (perfil.dadosEspecificos.escola || perfil.dadosEspecificos.clube || "Independente") : undefined}
           ponto={total}
-          isOwnProfile
+          isOwnProfile={isOwnProfile}
           foto={perfil.usuario.foto || perfil.dadosEspecificos.foto}
+          perfilId={idDaUrl || perfil.usuario.id}
         />
 
         {isIndependente && (
@@ -153,9 +149,18 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <TrainingProgress userId={usuarioId} />
+        <TrainingProgress
+          userId={perfil.usuario.id}
+          tipoUsuarioId={
+            perfil.tipoUsuarioId ??
+            perfil.atleta?.id ??
+            perfil.dadosEspecificos?.id ??
+            null
+          }
+        />
         <ActivityGrid activities={activities} />
-        <BadgesList userId={usuarioId ?? undefined } badges={badges} />
+        <BadgesList userId={usuarioId ?? undefined} badges={badges} />
+
         {pontuacao && (
           <ScorePanel
             performance={pontuacao.pontuacaoPerformance}

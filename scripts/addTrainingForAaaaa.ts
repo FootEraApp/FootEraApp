@@ -1,3 +1,6 @@
+/// <reference types="node" />
+
+import process from 'node:process'
 import { PrismaClient, TipoTreino } from "@prisma/client";
 const prisma = new PrismaClient();
 

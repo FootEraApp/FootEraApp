@@ -12,16 +12,20 @@ const __dirname = dirname(__filename);
 const router = express.Router();
 
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, "../../public/uploads"));
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + "-" + file.originalname);
-  },
+  destination: (req, file, cb) =>
+    cb(null, path.join(__dirname, "../../public/uploads")),
+  filename: (req, file, cb) =>
+    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}-${file.originalname}`),
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 200 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith("video/")) return cb(null, true);
+    return cb(new Error("Apenas vídeos são permitidos"));
+  },
+});
 
 router.get("/", authenticateToken, async (req, res) => {
   const { tipoUsuarioId } = req.query;
@@ -172,24 +176,27 @@ router.post("/submissoes-grupo", authenticateToken, async (req, res) => {
   }
 });
 
-router.post("/upload/file", authenticateToken, upload.single("arquivo"), async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ error: "Nenhum arquivo enviado" });
-      }
-      
-      const fileUrl = `/uploads/${req.file.filename}`;
-
-      res.json({
-        message: "Upload realizado com sucesso",
-        url: fileUrl,
-      });
-    } catch (err) {
-      console.error("Erro no upload:", err);
-      res.status(500).json({ error: "Erro interno no upload" });
+router.post("/upload/file", authenticateToken, (req, res) => {
+  upload.single("arquivo")(req, res, (err: any) => {
+    if (err && err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({ error: "Arquivo excede 200MB." });
     }
-  }
-);
+    if (err) {
+      return res.status(400).json({ error: err.message || "Falha no upload." });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: "Nenhum arquivo enviado." });
+    }
+
+    const fileUrl = `/uploads/${req.file.filename}`;
+
+    return res.status(201).json({
+      message: "Upload realizado com sucesso",
+      url: fileUrl,
+    });
+  });
+});
+
 
 router.get("/em-grupo/:grupoId/ativo", authenticateToken, async (req, res) => {
   const { grupoId } = req.params;
