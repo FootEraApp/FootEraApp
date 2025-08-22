@@ -9,6 +9,8 @@ import {
   deletarPost,
   editarPostagemGet,
   editarPostagemPost,
+  compartilharPostPorMensagem, 
+  repostarPost,                  
 } from "../controllers/postController.js";
 import { curtirPostagem } from "server/controllers/feedController.js";
 
@@ -20,8 +22,9 @@ router.get("/visualizar/:id", authenticateToken, buscarPostagemPorId);
 router.post("/:postId/comentario", authenticateToken, adicionarComentario);
 router.post("/:postId/like", authenticateToken, curtirPostagem);
 router.post("/:postId/compartilhar", authenticateToken, registrarCompartilhamento);
+router.post("/:postId/compartilhar/mensagem", authenticateToken, compartilharPostPorMensagem); 
+router.post("/:postId/repost", authenticateToken, repostarPost); 
 router.delete("/:id", authenticateToken, deletarPost);
-
 router.get("/editar/:id", authenticateToken, editarPostagemGet);
 router.post("/editar/:id", authenticateToken, editarPostagemPost);
 

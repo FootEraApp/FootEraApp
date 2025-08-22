@@ -217,6 +217,7 @@ export default function PerfilUnico() {
         ponto={scores.performance + scores.disciplina + scores.responsabilidade}
         isOwnProfile={isOwnProfile}
         foto={usuario.usuario.foto}
+        perfilId={id}         
       />
 
       {!isOwnProfile && (

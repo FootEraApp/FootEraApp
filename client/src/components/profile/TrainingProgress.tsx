@@ -36,15 +36,47 @@ const timeKey = (t: Training) =>
     toDate(t.dataTreino)?.getTime() ??
     Number.MAX_SAFE_INTEGER);
 
-export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProgressProps) {
+ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProgressProps) {
   const qc = useQueryClient();
   const token = Storage.token || '';
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   const targetUserId = userId ?? (Storage.usuarioId as string) ?? "";
-  const targetTipoUsuarioId = tipoUsuarioId ?? (Storage.tipoUsuarioId as string) ?? "";
-  
-  const { data: atividades = [] } = useQuery<any[]>({
+
+  const { data: perfil } = useQuery<any>({
+    queryKey: ["perfil-basico", targetUserId],
+    enabled: Boolean(token && targetUserId && !tipoUsuarioId),
+    queryFn: async () => {
+      const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(targetUserId)}`, { headers });
+      if (!r.ok) throw new Error("Erro ao buscar perfil");
+      return r.json();
+    },
+  });
+
+  const resolvedTipoUsuarioId =
+    tipoUsuarioId ||
+    perfil?.atleta?.id ||
+    perfil?.professor?.id ||
+    perfil?.clube?.id ||
+    perfil?.escolinha?.id ||
+    null;
+
+  const normalizeTipoTreino = (v?: string | null) => {
+    if (!v) return null;
+    const s = String(v)
+      .normalize("NFD").replace(/\p{Diacritic}/gu, "") // remove acentos
+      .toLowerCase();
+    if (s.includes("fis")) return "Físico";
+    if (s.includes("tec")) return "Técnico";
+    if (s.includes("tat")) return "Tático";
+    if (s.includes("men")) return "Mental";
+    return v;
+  };
+
+   const effectiveTipoUsuarioId =
+    resolvedTipoUsuarioId || (Storage.tipoUsuarioId as string) || "";
+
+   const { data: atividades = [] } = useQuery<any[]>({
     queryKey: ["perfilAtividades", targetUserId],
     enabled: Boolean(token && targetUserId),
     queryFn: async () => {
@@ -55,61 +87,40 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
     },
   });
 
-  const isDesafio = (a: any) =>
-    /desafi/i.test(String(a?.tipo ?? '')) ||
-    /desafi/i.test(`${a?.nome ?? ''} ${a?.descricao ?? ''}`);
-
-  const getPts = (a: any): number => {
-    const candidates = [
-      a.pontos, a.pontuacao, a.pontosGanhos, a.pontosGanho,
-      a?.pontuacao?.total, a?.detalhes?.pontos, a?.meta?.pontos,
-    ];
-    for (const c of candidates) {
-      if (typeof c === 'number' && Number.isFinite(c)) return c;
-      if (typeof c === 'string') {
-        const n = parseInt(c.replace(/[^\d-]/g, ''), 10);
-        if (!Number.isNaN(n)) return n;
+  const { data: treinosAgendados = [], isLoading: isLoadingTreinos } = useQuery<Training[]>({
+    queryKey: ["treinosAgendados", targetUserId], 
+    enabled: Boolean(token && targetUserId),
+    queryFn: async () => {
+      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados?usuarioId=${encodeURIComponent(targetUserId)}`, { headers });
+      if (!r.ok) {
+        const msg = await r.text();
+        throw new Error(msg || "Erro ao buscar treinos agendados");
       }
-    }
-    const txt = `${a.nome ?? ''} ${a.descricao ?? ''}`;
-    const m = txt.match(/([+-]?\d+)\s*pt/i);
-    return m ? parseInt(m[1], 10) : 0;
-  };
+      const raw = await r.json();
 
-  const pontosDesafios = useMemo(
-    () => (atividades || []).filter(isDesafio).reduce((acc, a) => acc + getPts(a), 0),
-    [atividades]
-  );
-
- const { data: treinosAgendados = [], isLoading: isLoadingTreinos,} = useQuery<Training[]>({
-  queryKey: ["treinosAgendados", targetTipoUsuarioId],
-  enabled: Boolean(token && targetTipoUsuarioId),
-  queryFn: async () => {
-    const r = await fetch(
-      `${API.BASE_URL}/api/treinos/agendados?tipoUsuarioId=${encodeURIComponent(targetTipoUsuarioId)}`,
-      { headers }
-    );
-    if (!r.ok) throw new Error("Erro ao buscar treinos agendados");
-    const raw = await r.json();
-
-    return (Array.isArray(raw) ? raw : []).map((t: any): Training => ({
-      id: t.id,
-      titulo: t.titulo ?? t?.treinoProgramado?.nome ?? "Treino",
-      dataTreino: t.dataTreino ?? null,
-      prazoEnvio:
-        t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t?.treinoProgramado?.dataAgendada ?? null,
-      duracaoMinutos: t?.treinoProgramado?.duracao ?? t.duracaoMinutos ?? null,
-      tipo: t?.treinoProgramado?.tipo ?? t?.categoria ?? null,              // NEW
-      imagemUrl: t?.treinoProgramado?.imagemUrl ?? t?.imagemUrl ?? null,    // NEW
-    }));
-  },
-});
+      return (Array.isArray(raw) ? raw : []).map((t: any) => ({
+        id: t.id,
+        titulo: t.titulo ?? t?.treinoProgramado?.nome ?? "Treino",
+        dataTreino: t.dataTreino ?? null,
+        prazoEnvio: t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t?.treinoProgramado?.dataAgendada ?? null,
+        duracaoMinutos: t?.treinoProgramado?.duracao ?? t.duracaoMinutos ?? null,
+        tipo: normalizeTipoTreino(
+          t?.treinoProgramado?.tipoTreino ??
+          t?.tipo ??                 
+          (Array.isArray(t?.categoria) ? t.categoria[0] : t?.categoria) ?? 
+          null
+        ),
+        imagemUrl: t?.treinoProgramado?.imagemUrl ?? t?.imagemUrl ?? null,
+      }));
+    },
+  });
 
   useEffect(() => {
-    const onAgendado = () => qc.invalidateQueries({ queryKey: ["treinosAgendados", targetTipoUsuarioId] });
+    const onAgendado = () =>
+      qc.invalidateQueries({ queryKey: ["treinosAgendados", targetUserId] });
     window.addEventListener("treino:agendado", onAgendado);
     return () => window.removeEventListener("treino:agendado", onAgendado);
-  }, [qc, targetTipoUsuarioId]);
+  }, [qc, targetUserId]);
 
   const { data: resumo, isLoading: isLoadingResumo } = useQuery({
     queryKey: ["perfilResumoTreinos", targetUserId],
@@ -121,11 +132,10 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
     },
   });
 
-  const  { data: pontuacao, isLoading: isLoadingPontuacao } = useQuery({
+  const { data: pontuacao, isLoading: isLoadingPontuacao } = useQuery({
     queryKey: ["pontuacaoPerfil", targetUserId],
     enabled: Boolean(token && targetUserId),
     queryFn: async () => {
-      
       const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(targetUserId)}/pontuacao`, { headers });
       if (!r.ok) throw new Error("Erro ao buscar pontuação do perfil");
       return r.json();
@@ -163,14 +173,13 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
       .sort((a, b) => timeKey(a) - timeKey(b));
   }, [treinosAgendados]);
 
-  const hasTodayActivities = useMemo(() => {
-    if (!upcomingTrainings.length) return false;
-    const hoje = new Date();
-    return upcomingTrainings.some((t) => {
-      const d = toDate(t.dataTreino);
-      return d ? isSameDay(hoje, d) : false;
-    });
-  }, [upcomingTrainings]);
+    useEffect(() => {
+      const tipoAtual = upcomingTrainings?.[0]?.tipo;
+      if (tipoAtual) {
+        localStorage.setItem("ultimoTipoTreino", tipoAtual);
+        window.dispatchEvent(new CustomEvent("perfil:ultimoTipoTreino", { detail: tipoAtual }));
+      }
+    }, [upcomingTrainings]);
 
   const isLoading = isLoadingTreinos || isLoadingResumo || isLoadingPontuacao;
 
@@ -209,7 +218,6 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
           <TabsTrigger value="challenges" className="flex-1">Desafios</TabsTrigger>
         </TabsList>
 
-        {/* Resumo */}
         <TabsContent value="overview">
           <Card className="bg-white">
             <CardContent className="p-4">
@@ -274,7 +282,6 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
           </Card>
         </TabsContent>
 
-        {/* Próximos */}
         <TabsContent value="upcoming">
           <Card className="bg-white">
             <CardContent className="p-4">
@@ -343,7 +350,6 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
           </Card>
         </TabsContent>
 
-        {/* Desafios */}
         <TabsContent value="challenges">
           <Card className="bg-white">
             <CardContent className="p-2">
