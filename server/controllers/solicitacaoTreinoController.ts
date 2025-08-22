@@ -1,64 +1,57 @@
-import { Response } from "express";
-import { PrismaClient, Prisma } from "@prisma/client";
-import { AuthenticatedRequest } from "server/middlewares/auth.js";
-import { API } from "@/config.js"; 
+import { Response, Request } from "express";
+import { PrismaClient } from "@prisma/client";
+import { authenticateToken } from "../middlewares/auth.js"; 
 
 const prisma = new PrismaClient();
 
-type SolicitacaoComRemetente = Prisma.SolicitacaoTreinoGetPayload<{
-  include: { remetente: { select: { id: true; nomeDeUsuario: true; foto: true } } }
-}>;
-
-export const criarSolicitacao = async (req: AuthenticatedRequest, res: Response) => {
-  const { destinatarioId } = req.body;
+export async function criarSolicitacao(req: Request, res: Response) {
   const remetenteId = req.userId;
+  const { destinatarioId } = (req.body ?? {}) as { destinatarioId?: string };
 
-  if (!remetenteId) {
-    return res.status(401).json({ error: "Usuário não autenticado." });
+  if (!remetenteId) return res.status(401).json({ message: "Não autenticado." });
+  if (!destinatarioId) return res.status(400).json({ message: "destinatarioId é obrigatório" });
+  if (remetenteId === destinatarioId) {
+    return res.status(400).json({ message: "Não é permitido enviar para si mesmo." });
   }
 
-  try {
-    const solicitacaoExistente = await prisma.solicitacaoTreino.findFirst({
-      where: {
-        remetenteId,
-        destinatarioId,
-      },
-    });
+  const existe = await prisma.solicitacaoTreino.findFirst({
+    where: { remetenteId, destinatarioId, status: { in: ["pendente", "ativa"] } },
+  });
+  if (existe) return res.status(409).json({ message: "Já existe uma solicitação." });
 
-    if (solicitacaoExistente) {
-      return res.status(400).json({ error: "Solicitação já enviada." });
-    }
+  const nova = await prisma.solicitacaoTreino.create({
+    data: { remetenteId, destinatarioId, status: "pendente" },
+  });
+  return res.status(201).json(nova);
+}
 
-    const solicitacao = await prisma.solicitacaoTreino.create({
-      data: {
-        remetenteId,
-        destinatarioId,
-        status: "PENDENTE", 
-      },
-    });
+export async function cancelarSolicitacao(req: Request, res: Response) {
+  const remetenteId = req.userId;
+  const destinatarioId = (req.params as any).destinatarioId || (req.body ?? {}).destinatarioId;
 
-    return res.status(201).json(solicitacao);
-  } catch (error) {
-    console.error("Erro ao criar solicitação:", error);
-    return res.status(500).json({ error: "Erro interno do servidor." });
-  }
-};
+  if (!remetenteId) return res.status(401).json({ message: "Não autenticado." });
+  if (!destinatarioId) return res.status(400).json({ message: "destinatarioId é obrigatório" });
 
-export const listarSolicitacoesRecebidas = async (req: AuthenticatedRequest, res: Response) => {
+  const del = await prisma.solicitacaoTreino.deleteMany({
+    where: { remetenteId, destinatarioId, status: "pendente" },
+  });
+  if (del.count === 0) return res.status(404).json({ message: "Não há solicitação pendente" });
+  return res.sendStatus(204);
+}
+
+export async function listarSolicitacoesRecebidas(req: Request, res: Response) {
   const usuarioId = req.userId;
   if (!usuarioId) return res.status(401).json({ error: "Usuário não autenticado." });
 
   try {
     const solicitacoes = await prisma.solicitacaoTreino.findMany({
-      where: { destinatarioId: usuarioId, status: null },
+      where: { destinatarioId: usuarioId, status: "pendente" },
       include: {
-        remetente: {       
-          select: { id: true, nomeDeUsuario: true, foto: true }
-        }
-      }
+        remetente: { select: { id: true, nomeDeUsuario: true, foto: true, nome: true } },
+      },
     });
 
-    const BASE_URL = process.env.BASE_URL ?? `${API.BASE_URL}`;
+    const BASE_URL = process.env.BASE_URL || process.env.APP_BASE_URL || "";
 
     const payload = solicitacoes.map((s) => ({
       id: s.id,
@@ -66,6 +59,7 @@ export const listarSolicitacoesRecebidas = async (req: AuthenticatedRequest, res
       remetente: {
         id: s.remetente.id,
         nomeDeUsuario: s.remetente.nomeDeUsuario,
+        nome: s.remetente.nome,
         fotoUrl: s.remetente.foto ? `${BASE_URL}${s.remetente.foto}` : null,
       },
     }));
@@ -75,17 +69,15 @@ export const listarSolicitacoesRecebidas = async (req: AuthenticatedRequest, res
     console.error("Erro ao listar solicitações recebidas:", error);
     return res.status(500).json({ error: "Erro interno do servidor" });
   }
-};
+}
 
-export const aceitarSolicitacao = async (req: AuthenticatedRequest, res: Response) => {
-  const { id } = req.params;
+export async function aceitarSolicitacao(req: Request, res: Response) {
+  const { id } = req.params as { id: string };
   const destinatarioId = req.userId;
+  if (!destinatarioId) return res.status(401).json({ error: "Não autenticado." });
 
   try {
-    const solicitacao = await prisma.solicitacaoTreino.findUnique({
-      where: { id },
-    });
-
+    const solicitacao = await prisma.solicitacaoTreino.findUnique({ where: { id } });
     if (!solicitacao || solicitacao.destinatarioId !== destinatarioId) {
       return res.status(404).json({ error: "Solicitação não encontrada" });
     }
@@ -94,7 +86,6 @@ export const aceitarSolicitacao = async (req: AuthenticatedRequest, res: Respons
       where: { id: solicitacao.remetenteId },
       select: { tipo: true },
     });
-
     const destinatario = await prisma.usuario.findUnique({
       where: { id: solicitacao.destinatarioId },
       select: { tipo: true },
@@ -104,80 +95,44 @@ export const aceitarSolicitacao = async (req: AuthenticatedRequest, res: Respons
     let atletaId: string | undefined;
 
     if (remetente?.tipo === "Professor" && destinatario?.tipo === "Atleta") {
-      const professor = await prisma.professor.findUnique({
-        where: { usuarioId: solicitacao.remetenteId },
-      });
-
-      const atleta = await prisma.atleta.findUnique({
-        where: { usuarioId: solicitacao.destinatarioId },
-      });
-
-      if (!professor || !atleta) {
-        return res.status(400).json({ error: "Professor ou atleta não encontrado." });
-      }
-
-      professorId = professor.id;
-      atletaId = atleta.id;
-
+      const professor = await prisma.professor.findUnique({ where: { usuarioId: solicitacao.remetenteId } });
+      const atleta = await prisma.atleta.findUnique({ where: { usuarioId: solicitacao.destinatarioId } });
+      if (!professor || !atleta) return res.status(400).json({ error: "Professor ou atleta não encontrado." });
+      professorId = professor.id; atletaId = atleta.id;
     } else if (remetente?.tipo === "Atleta" && destinatario?.tipo === "Professor") {
-      const atleta = await prisma.atleta.findUnique({
-        where: { usuarioId: solicitacao.remetenteId },
-      });
-
-      const professor = await prisma.professor.findUnique({
-        where: { usuarioId: solicitacao.destinatarioId },
-      });
-
-      if (!professor || !atleta) {
-        return res.status(400).json({ error: "Professor ou atleta não encontrado." });
-      }
-
-      professorId = professor.id;
-      atletaId = atleta.id;
-
+      const atleta = await prisma.atleta.findUnique({ where: { usuarioId: solicitacao.remetenteId } });
+      const professor = await prisma.professor.findUnique({ where: { usuarioId: solicitacao.destinatarioId } });
+      if (!professor || !atleta) return res.status(400).json({ error: "Professor ou atleta não encontrado." });
+      professorId = professor.id; atletaId = atleta.id;
     } else {
       return res.status(400).json({ error: "Tipos de usuário inválidos para relação." });
     }
 
-    await prisma.relacaoTreinamento.create({
-      data: {
-        professorId,
-        atletaId,
-      },
-    });
-
-    await prisma.solicitacaoTreino.delete({
-      where: { id },
-    });
+    await prisma.relacaoTreinamento.create({ data: { professorId, atletaId } });
+    await prisma.solicitacaoTreino.delete({ where: { id } });
 
     return res.json({ message: "Solicitação aceita com sucesso." });
   } catch (error) {
     console.error("Erro ao aceitar solicitação:", error);
     return res.status(500).json({ error: "Erro interno do servidor" });
   }
-};
+}
 
-export const recusarSolicitacao = async (req: AuthenticatedRequest, res: Response) => {
-  const { id } = req.params;
-  const usuarioId = req.userId; 
+export async function recusarSolicitacao(req: Request, res: Response) {
+  const { id } = req.params as { id: string };
+  const usuarioId = req.userId;
+  if (!usuarioId) return res.status(401).json({ error: "Não autenticado." });
 
   try {
-    const solicitacao = await prisma.solicitacaoTreino.findUnique({
-      where: { id },
-    });
-
+    const solicitacao = await prisma.solicitacaoTreino.findUnique({ where: { id } });
     if (!solicitacao || solicitacao.destinatarioId !== usuarioId) {
-      console.warn("❌ Não é o destinatário ou solicitação inexistente");
       return res.status(404).json({ error: "Solicitação não encontrada" });
     }
 
-    await prisma.solicitacaoTreino.delete({
-      where: { id },
-    });
-
+    await prisma.solicitacaoTreino.delete({ where: { id } });
     return res.json({ message: "Solicitação recusada com sucesso." });
   } catch (error) {
     console.error("Erro ao recusar solicitação:", error);
     return res.status(500).json({ error: "Erro interno do servidor" });
   }
-};
+}

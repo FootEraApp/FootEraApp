@@ -301,7 +301,6 @@ function PaginaFeed(): JSX.Element {
         );
       })}
 
-            {/* Navegação inferior */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
           <House /> 
@@ -325,7 +324,6 @@ function PaginaFeed(): JSX.Element {
           <div className="bg-white p-6 rounded-xl w-96 shadow-lg relative">
             <h2 className="text-lg font-bold mb-4 text-center">Compartilhar Postagem</h2>
 
-            {/* FAIXA HORIZONTAL DE CONTATOS */}
             <div className="mb-4">
               <p className="text-sm text-gray-700 mb-2">Enviar por mensagem:</p>
 
@@ -378,10 +376,8 @@ function PaginaFeed(): JSX.Element {
               </button>
             </div>
 
-            {/* LINHA SEPARADORA */}
             <div className="border-t my-3" />
 
-            {/* COMPARTILHAR VIA LINK (o que você já tinha) */}
             <input
               type="text"
               value={linkCompartilhado}
@@ -425,7 +421,6 @@ function PaginaFeed(): JSX.Element {
               </button>
             </div>
 
-            {/* BOTÃO FECHAR (mantém o seu) */}
             <button
               onClick={() => setModalAberto(false)}
               className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl"

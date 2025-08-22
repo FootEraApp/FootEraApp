@@ -1,7 +1,6 @@
-import { Response } from "express";
+import { Response, RequestHandler } from "express";
 import { Request } from "express";
 import { TipoMidia, Prisma } from "@prisma/client";
-import { AuthenticatedRequest } from "server/middlewares/auth.js";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient;
@@ -73,7 +72,7 @@ export async function getPostById(req: Request, res: Response) {
   }
 }
 
-export const curtirPostagem = async (req: AuthenticatedRequest, res: Response) => {
+export const curtirPostagem: RequestHandler = async (req, res) => {
   const { postId } = req.params;
   const usuarioId = req.userId;
 
@@ -109,34 +108,25 @@ export const curtirPostagem = async (req: AuthenticatedRequest, res: Response) =
   }
 };
 
-export const seguirUsuario = async (req: AuthenticatedRequest, res: Response) => {
-  const seguidorUsuarioId = req.userId;
-  const { seguidoUsuarioId } = req.body;
-  if (!seguidorUsuarioId) return res.status(401).json({ message: "Usuário não autenticado." });
+export const seguirUsuario: RequestHandler = async (req, res) => {
+  const seguidorUsuarioId = req.userId!;
+  const { seguidoUsuarioId } = req.body as { seguidoUsuarioId?: string };
 
-  try {
-    const existente = await prisma.seguidor.findFirst({
-      where: { seguidorUsuarioId, seguidoUsuarioId },
-    });
+  if (!seguidoUsuarioId)
+    return res.status(400).json({ message: "seguidoUsuarioId é obrigatório" });
+  if (seguidoUsuarioId === seguidorUsuarioId)
+    return res.status(400).json({ message: "Não é permitido seguir a si mesmo." });
 
-    if (existente) {
-      await prisma.seguidor.delete({ where: { id: existente.id } });
-    } else {
-      await prisma.seguidor.create({ data: { seguidorUsuarioId, seguidoUsuarioId } });
-    }
+  const jaSegue = await prisma.seguidor.findFirst({
+    where: { seguidorUsuarioId, seguidoUsuarioId },
+  });
+  if (jaSegue) return res.status(409).json({ message: "Você já segue este usuário." });
 
-    const isFollowing = await prisma.seguidor.findFirst({
-      where: { seguidorUsuarioId, seguidoUsuarioId },
-    });
-
-    res.json({ success: true, isFollowing: !!isFollowing });
-  } catch (error) {
-    console.error("Erro ao seguir:", error);
-    res.status(500).json({ message: "Erro interno." });
-  }
+  await prisma.seguidor.create({ data: { seguidorUsuarioId, seguidoUsuarioId } });
+  res.sendStatus(201);
 };
 
-export const postar = async (req: AuthenticatedRequest, res: Response) => {
+export const postar: RequestHandler = async (req, res) => {
   const usuarioId = req.userId;
   if (!usuarioId) return res.status(401).json({ message: "Usuário não autenticado." });
 
@@ -161,7 +151,7 @@ export const postar = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-export const deletarPostagem = async (req: AuthenticatedRequest, res: Response) => {
+export const deletarPostagem: RequestHandler = async (req, res) => {
   const { id } = req.params;
   const usuarioId = req.userId;
 
@@ -188,7 +178,7 @@ export const deletarPostagem = async (req: AuthenticatedRequest, res: Response) 
   }
 };
 
-export const getPerfil = async (req: AuthenticatedRequest, res: Response) => {
+export const getPerfil: RequestHandler = async (req, res) => {
   const usuarioId = req.userId;
 
   if (!usuarioId) {
@@ -225,7 +215,7 @@ export const getPerfil = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-export const deletarUsuario = async (req: AuthenticatedRequest, res: Response) => {
+export const deletarUsuario: RequestHandler = async (req, res) => {
   const { id } = req.params;
 
   try {

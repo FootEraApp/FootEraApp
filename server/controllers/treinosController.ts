@@ -1,10 +1,9 @@
-import { Request, Response } from "express";
+import { Request, RequestHandler, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import { AuthenticatedRequest } from "server/middlewares/auth.js";
 
 const prisma = new PrismaClient();
 
-export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
+export async function agendarTreino(req: Request, res: Response) {
   try {
     const {
       treinoProgramadoId,
@@ -47,57 +46,52 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
   }
 }
 
-export async function getTreinosAgendados(req: Request, res: Response) {
-  const atletaId = String(req.query.tipoUsuarioId ?? "");
-  if (!atletaId) return res.status(400).json({ error: "tipoUsuarioId obrigatório" });
+export const getTreinosAgendados: RequestHandler = async (req, res) => {
+  try {
+    const q = req.query as Record<string, string | undefined>;
+    const authUserId = (req as any).userId as string | undefined;
 
-  const rows = await prisma.treinoAgendado.findMany({
-    where: {
-      atletaId,
-      submissaoTreinos: { none: {} },
-    },
-    include: {
-      treinoProgramado: {
-        include: {
-          exercicios: { include: { exercicio: true } },
-        },
-      },
-    },
-    orderBy: { id: "asc" }
-  });
+    const atletaIdParam = q.atletaId;
+    const usuarioIdParam = q.usuarioId || authUserId || null;
 
-  const list = rows.map((r) => {
-    const prazo = r.dataExpiracao ?? r.treinoProgramado?.dataAgendada ?? null;
+    let where: any = {};
+    if (atletaIdParam) {
+      where.atletaId = String(atletaIdParam);
+    } else if (usuarioIdParam) {
+      const usuario = await prisma.usuario.findUnique({
+        where: { id: String(usuarioIdParam) },
+        include: { atleta: true, professor: true, clube: true, escolinha: true },
+      });
 
-    return {
-      id: r.id,
-      titulo: r.titulo ?? r.treinoProgramado?.nome ?? "Treino",
-      dataTreino: r.dataTreino ? r.dataTreino.toISOString() : null,
-      prazoEnvio: prazo ? new Date(prazo).toISOString() : null,
+      if (!usuario) return res.json([]); 
 
-      duracaoMinutos: r.treinoProgramado?.duracao ?? null,
-      nivel: r.treinoProgramado?.nivel ?? null,
+      if (usuario.atleta) {
+        where.atletaId = usuario.atleta.id;
+      } else if (usuario.professor) {
+        where.treinoProgramado = { professorId: usuario.professor.id };
+      } else if (usuario.clube) {
+        where.treinoProgramado = { clubeId: usuario.clube.id };
+      } else if (usuario.escolinha) {
+        where.treinoProgramado = { escolinhaId: usuario.escolinha.id };
+      } else {
+        return res.json([]);
+      }
+    } else {
+      return res.json([]);
+    }
 
-      treinoProgramado: r.treinoProgramado
-        ? {
-            descricao: r.treinoProgramado.descricao ?? null,
-            objetivo: r.treinoProgramado.objetivo ?? null,
-            dicas: r.treinoProgramado.dicas ?? [],
-            exercicios: r.treinoProgramado.exercicios.map((x) => ({
-              exercicio: {
-                id: x.exercicio?.id ?? "",
-                nome: x.exercicio?.nome ?? "",
-              },
-              repeticoes: x.repeticoes ?? "",
-            })),
-          }
-        : null,
-    };
-  });
+    const itens = await prisma.treinoAgendado.findMany({
+      where,
+      include: { treinoProgramado: true },
+      orderBy: { dataTreino: "desc" },
+    });
 
-  return res.json(list);
-}
-
+    return res.json(itens);
+  } catch (err) {
+    console.error("Erro em getTreinosAgendados:", err);
+    return res.status(500).json({ message: "Erro ao buscar treinos agendados" });
+  }
+};
 
 export async function listarTodosTreinosProgramados(req: Request, res: Response) {
   try {
@@ -153,7 +147,7 @@ export const excluirTreinoAgendado = async (req: Request, res: Response) => {
 };
 
 export const treinosController = {
- async disponiveis(req: AuthenticatedRequest, res: Response) {
+ async disponiveis(req: Request, res: Response) {
   try {
     const treinos = await prisma.treinoProgramado.findMany({
       include: {

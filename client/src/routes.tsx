@@ -28,6 +28,7 @@ import PaginaSubmissaoDesafioEmGrupo from "./pages/submissaoDesafioEmGrupo.js"
 import PaginaEsqueciSenha from "./pages/esqueciSenha.js";
 import PaginaResetarSenha from "./pages/resetarSenha.js";
 import PaginaTraining from "./pages/trainings.js";
+import PaginaMinhaRede from "./pages/minhaRede.js";
 
 export function AppRoutes() {
   return (
@@ -116,6 +117,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/post/:id">
         <Private><PaginaPostUnico /></Private>
+      </Route>
+      <Route path="/minha-rede">
+        <Private><PaginaMinhaRede /></Private>
       </Route>
 
       <Route path="/">

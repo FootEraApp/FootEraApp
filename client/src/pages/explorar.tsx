@@ -4,23 +4,74 @@ import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { API } from "../config.js";
 
- function Explorar() {
+type UsuarioBasic = { id: string; nome: string; foto?: string | null };
+
+type AtletaItem = { id: string; usuario: UsuarioBasic; foto?: string | null };
+type ProfessorItem = { id: string; usuario: UsuarioBasic; foto?: string | null };
+type ClubeItem = { id: string; nome: string; cidade?: string | null; estado?: string | null; logo?: string | null };
+type EscolaItem = { id: string; nome: string; cidade?: string | null; estado?: string | null; logo?: string | null; siteOficial?: string | null };
+type DesafioItem = { id: string; titulo: string; imagemUrl?: string | null };
+
+type DadosExplorar = {
+  atletas: AtletaItem[];
+  professores: ProfessorItem[];
+  clubes: ClubeItem[];
+  escolas: EscolaItem[];
+  desafios: DesafioItem[];
+};
+
+function Explorar() {
   const [busca, setBusca] = useState("");
-  const [aba, setAba] = useState("atletas");
-  const [dados, setDados] = useState({
+  const [aba, setAba] = useState<"atletas" | "escolas" | "clubes" | "desafios" | "professores">("atletas");
+  const [dados, setDados] = useState<DadosExplorar>({
     atletas: [],
+    professores: [],
     clubes: [],
     escolas: [],
     desafios: [],
-    professores: []
   });
 
+  const usuarioLogadoId =
+    (localStorage.getItem("usuarioId") ||
+      (typeof window !== "undefined" && (window as any)?.Storage?.usuarioId) ||
+      ""
+    ).toString();
+
+  function filtrarEu<T extends { usuario?: { id?: string }; id?: string }>(arr: T[]): T[] {
+    return arr.filter((x) => {
+      const uid = (x as any)?.usuario?.id ?? (x as any)?.id ?? "";
+      return uid !== usuarioLogadoId;
+    });
+  }
+
   useEffect(() => {
-    fetch(`${API.BASE_URL}/api/explorar?q=${busca}`)
-      .then((res) => res.json())
-      .then(setDados)
-      .catch(console.error);
-  }, [busca]);
+    (async () => {
+      try {
+        const res = await fetch(`${API.BASE_URL}/api/explorar?q=${encodeURIComponent(busca)}`);
+        if (!res.ok) throw new Error("Falha ao carregar /api/explorar");
+        const resp = await res.json();
+
+        setDados({
+          atletas: filtrarEu<AtletaItem>(resp.atletas || []),
+          professores: filtrarEu<ProfessorItem>(resp.professores || []),
+          clubes: (resp.clubes || []) as ClubeItem[],
+          escolas: (resp.escolas || []) as EscolaItem[],
+          desafios: (resp.desafios || []) as DesafioItem[],
+        });
+      } catch (e) {
+        console.error(e);
+        setDados({ atletas: [], professores: [], clubes: [], escolas: [], desafios: [] });
+      }
+    })();
+  }, [busca, usuarioLogadoId]);
+
+  const abas: DadosExplorar extends never ? never : Array<["atletas" | "escolas" | "clubes" | "desafios" | "professores", string]> = [
+    ["atletas", "Atletas"],
+    ["escolas", "Escolas"],
+    ["clubes", "Clubes"],
+    ["desafios", "Desafios"],
+    ["professores", "Profissionais"],
+  ];
 
   return (
     <div className="min-h-screen bg-cream text-green-900">
@@ -37,7 +88,7 @@ import { API } from "../config.js";
       </div>
 
       <div className="flex justify-around mb-2 px-2">
-        {["atletas", "escolas", "clubes", "desafios", "profilers"].map((tab) => (
+        {abas.map(([tab, label]) => (
           <button
             key={tab}
             className={`flex-1 py-2 text-center rounded-t-lg text-sm ${
@@ -45,7 +96,7 @@ import { API } from "../config.js";
             }`}
             onClick={() => setAba(tab)}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {label}
           </button>
         ))}
       </div>
@@ -55,18 +106,17 @@ import { API } from "../config.js";
           <>
             <h2 className="text-xl font-bold my-2">Atletas em Destaque</h2>
             <div className="grid grid-cols-2 gap-3">
-              {dados.atletas.map((a: any) => (
-                <Link href={`/perfil/${a.usuario.id}`} key={a.id}>
-                  <div key={a.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
-                    <img
-                      src={formatarUrlFoto(a.foto) || "/placeholder.png"}
-                      alt={`${a.usuario.nome} profile`}
-                      className="w-24 h-24 rounded-full object-cover"
-                    />
-                    <p className="mt-2 font-medium">{a.usuario.nome}</p>
-                  </div>
-                </Link>
-              ))}
+              {dados.atletas.map((a) => {
+                const foto = formatarUrlFoto(a.foto ?? a.usuario?.foto) || "/placeholder.png";
+                return (
+                  <Link href={`/perfil/${a.usuario.id}`} key={a.id}>
+                    <div className="bg-white rounded shadow p-2 flex flex-col items-center">
+                      <img src={foto} alt={`${a.usuario.nome} profile`} className="w-24 h-24 rounded-full object-cover" />
+                      <p className="mt-2 font-medium">{a.usuario.nome}</p>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </>
         )}
@@ -75,20 +125,21 @@ import { API } from "../config.js";
           <>
             <h2 className="text-xl font-bold my-4">Escolas de Futebol</h2>
             <div className="space-y-3">
-              {dados.escolas.map((e: any) => (
-                <div key={e.id} className="bg-white rounded shadow p-3 flex items-center gap-3">
-                  <img
-                    src={formatarUrlFoto(e.logo) || "/placeholder.png"}
-                    alt="Logo da escola"
-                    className="w-16 h-16 rounded-full object-cover"
-                  />
-                  <div>
-                    <h3 className="font-bold">{e.nome}</h3>
-                    <p className="text-sm text-gray-600">{e.cidade}, {e.estado}</p>
-                    <p className="text-sm">{e.siteOficial || "Site indisponível"}</p>
+              {dados.escolas.map((e) => {
+                const logo = formatarUrlFoto(e.logo) || "/placeholder.png";
+                return (
+                  <div key={e.id} className="bg-white rounded shadow p-3 flex items-center gap-3">
+                    <img src={logo} alt="Logo da escola" className="w-16 h-16 rounded-full object-cover" />
+                    <div>
+                      <h3 className="font-bold">{e.nome}</h3>
+                      <p className="text-sm text-gray-600">
+                        {e.cidade ?? "Cidade"}{e.estado ? `, ${e.estado}` : ""}
+                      </p>
+                      <p className="text-sm">{e.siteOficial || "Site indisponível"}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -97,20 +148,21 @@ import { API } from "../config.js";
           <>
             <h2 className="text-xl font-bold my-4">Clubes</h2>
             <div className="space-y-3">
-              {dados.clubes.map((c: any) => (
-                <div key={c.id} className="bg-white rounded shadow p-3 flex items-center gap-3">
-                  <img
-                    src={formatarUrlFoto(c.logo) || "/placeholder.png"}
-                    alt="Logo do clube"
-                    className="w-16 h-16 rounded-full object-cover"
-                  />
-                  <div>
-                    <h3 className="font-bold">{c.nome}</h3>
-                    <p className="text-sm text-gray-600">{c.cidade}, {c.estado}</p>
-                    <p className="text-sm">Clube Profissional</p>
+              {dados.clubes.map((c) => {
+                const logo = formatarUrlFoto(c.logo) || "/placeholder.png";
+                return (
+                  <div key={c.id} className="bg-white rounded shadow p-3 flex items-center gap-3">
+                    <img src={logo} alt="Logo do clube" className="w-16 h-16 rounded-full object-cover" />
+                    <div>
+                      <h3 className="font-bold">{c.nome}</h3>
+                      <p className="text-sm text-gray-600">
+                        {c.cidade ?? "Cidade"}{c.estado ? `, ${c.estado}` : ""}
+                      </p>
+                      <p className="text-sm">Clube Profissional</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -119,40 +171,36 @@ import { API } from "../config.js";
           <>
             <h2 className="text-xl font-bold my-4">Desafios</h2>
             <div className="grid grid-cols-2 gap-3">
-              {dados.desafios.map((d: any) => (
-                <div key={d.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
-                  <img
-                    src={formatarUrlFoto(d.imagemUrl) || "/placeholder.png"}
-                    alt={d.titulo}
-                    className="w-24 h-24 object-cover rounded-full"
-                  />
-                  <p className="mt-2 text-center text-sm">{d.titulo}</p>
-                </div>
-              ))}
+              {dados.desafios.map((d) => {
+                const img = formatarUrlFoto(d.imagemUrl) || "/placeholder.png";
+                return (
+                  <div key={d.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
+                    <img src={img} alt={d.titulo} className="w-24 h-24 object-cover rounded-full" />
+                    <p className="mt-2 text-center text-sm">{d.titulo}</p>
+                  </div>
+                );
+              })}
             </div>
           </>
         )}
 
-        {aba === "profilers" && (
+        {aba === "professores" && (
           <>
             <h2 className="text-xl font-bold my-4">Profissionais</h2>
             {dados.professores.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3">
-              {dados.professores.map((p: any) => (
-                <Link href={`/perfil/${p.usuario.id}`} key={p.id}>
-                  <div key={p.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
-                    <img
-                      src={
-                        formatarUrlFoto(p.usuario.foto)}
-                      alt="Foto do usuário"
-                      className="w-24 h-24 rounded-full object-cover"
-                    />
-
-                    <p className="mt-2 font-medium">{p.usuario.nome}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
+              <div className="grid grid-cols-2 gap-3">
+                {dados.professores.map((p) => {
+                  const foto = formatarUrlFoto(p.usuario?.foto) || "/placeholder.png";
+                  return (
+                    <Link href={`/perfil/${p.usuario.id}`} key={p.id}>
+                      <div className="bg-white rounded shadow p-2 flex flex-col items-center">
+                        <img src={foto} alt="Foto do usuário" className="w-24 h-24 rounded-full object-cover" />
+                        <p className="mt-2 font-medium">{p.usuario.nome}</p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
             ) : (
               <p className="text-center text-gray-600">Nenhum profissional encontrado</p>
             )}
@@ -161,21 +209,11 @@ import { API } from "../config.js";
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed" className="hover:underline">
-          <House /> 
-        </Link>
-        <Link href="/explorar" className="hover:underline">
-          <Search /> 
-        </Link>
-        <Link href="/post" className="hover:underline">
-          <CirclePlus /> 
-        </Link>
-        <Link href="/treinos" className="hover:underline">
-          <Volleyball /> 
-        </Link>
-        <Link href="/perfil" className="hover:underline">
-          <User /> 
-        </Link>
+        <Link href="/feed" className="hover:underline"><House /></Link>
+        <Link href="/explorar" className="hover:underline"><Search /></Link>
+        <Link href="/post" className="hover:underline"><CirclePlus /></Link>
+        <Link href="/treinos" className="hover:underline"><Volleyball /></Link>
+        <Link href="/perfil" className="hover:underline"><User /></Link>
       </nav>
     </div>
   );

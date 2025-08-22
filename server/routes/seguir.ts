@@ -1,12 +1,19 @@
 import { Router } from "express";
-import { seguirUsuario, deixarDeSeguir, listarSeguindo } from "../controllers/seguirController.js";
 import { authenticateToken } from "../middlewares/auth.js";
+import {
+  seguirUsuario,
+  deixarDeSeguir,
+  listarSeguindo,
+  minhaRede,
+} from "../controllers/seguirController.js";
 
 const router = Router();
 
-router.post("/", seguirUsuario);
-router.delete("/", deixarDeSeguir);
+router.use(authenticateToken);
 
-router.get("/meus-seguidos", authenticateToken, listarSeguindo);
+router.get("/minha-rede", authenticateToken, minhaRede);
+router.get("/meus-seguidos", listarSeguindo);
+router.post("/", seguirUsuario);
+router.delete(["/:seguidoUsuarioId", "/"], deixarDeSeguir);
 
 export default router;

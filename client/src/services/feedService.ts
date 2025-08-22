@@ -29,7 +29,6 @@ export interface PostagemComUsuario {
   compartilhamentos: number;
 }
 
-/** <- tipos novos */
 export type PostId = string;
 
 export interface CriarPostInput {
@@ -38,7 +37,6 @@ export interface CriarPostInput {
   videoUrl?: string;
   arquivo?: File | null;
 }
-/** ---------------- */
 
 export async function getFeedPosts(
   onUnauthorized?: () => void
@@ -117,7 +115,6 @@ export async function getPostById(id: string): Promise<PostagemComUsuario> {
   } as PostagemComUsuario;
 }
 
-/** <- agora tipado */
 export async function deletarPost(postId: PostId): Promise<boolean> {
   const token = Storage.token;
   const res = await fetch(`${API.BASE_URL}/api/post/${postId}`, {
@@ -131,7 +128,6 @@ export async function deletarPost(postId: PostId): Promise<boolean> {
   return true;
 }
 
-/** <- agora tipado */
 export async function criarPost({
   descricao = "",
   imagemUrl,

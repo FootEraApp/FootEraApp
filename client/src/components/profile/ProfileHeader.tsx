@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
-import { Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send } from "lucide-react";
+import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send } from "lucide-react";
 import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
@@ -13,9 +13,8 @@ interface ProfileHeaderProps {
   ponto?: number;
   avatar?: string | null;
   foto?: string | null;
-
   isOwnProfile?: boolean;
-  perfilId: string; 
+  perfilId: string;  
 }
 
 export default function ProfileHeader({
@@ -27,7 +26,7 @@ export default function ProfileHeader({
   avatar,
   foto,
   isOwnProfile = false,
-  perfilId,         
+  perfilId,
 }: ProfileHeaderProps) {
   const [modalAberto, setModalAberto] = useState(false);
   const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
@@ -35,34 +34,66 @@ export default function ProfileHeader({
   const [enviandoDM, setEnviandoDM] = useState(false);
   const [carregandoMutuos, setCarregandoMutuos] = useState(false);
 
-  const seguirUsuario = async () => {
-    const token = Storage.token;
-    const seguidorUsuarioId = Storage.usuarioId; 
+  const [confirmBox, setConfirmBox] = useState<{
+    open: boolean;
+    text: string;
+    onYes: () => Promise<void> | void;
+  } | null>(null);
 
+  function pedirConfirmacao(text: string, onYes: () => Promise<void> | void) {
+    setConfirmBox({ open: true, text, onYes });
+  }
+
+  async function readBodySafe(r: Response) {
+    try { return await r.json(); } catch { return null; }
+  }
+  function isDuplicado(resp: Response, body: any) {
+    if (resp.status === 400 || resp.status === 409) return true;
+    const msg = (body?.error || body?.message || "").toString().toLowerCase();
+    return msg.includes("já segue") || msg.includes("ja segue") || msg.includes("já existe") || msg.includes("pendente");
+  }
+
+   const seguirUsuario = async () => {
+    const token = Storage.token;
+    const seguidorUsuarioId = Storage.usuarioId;
     if (!token || !seguidorUsuarioId) {
       alert("Faça login para seguir.");
       return;
     }
 
-    try {
-      const resp = await fetch(`${API.BASE_URL}/api/seguidores`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          seguidoUsuarioId: perfilId, 
-          seguidorUsuarioId,
-        }),
-      });
-      if (!resp.ok) throw new Error("Erro ao seguir");
+    const resp = await fetch(`${API.BASE_URL}/api/seguidores`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ seguidoUsuarioId: perfilId }),
+    });
+
+    if (resp.ok) {
       alert("Agora você está seguindo este usuário!");
-    } catch (e) {
-      console.error(e);
-      alert("Falha ao seguir usuário.");
+      return;
     }
+
+    const body = await readBodySafe(resp);
+    if (isDuplicado(resp, body)) {
+      pedirConfirmacao("Você já segue esse usuário. Deseja parar de seguir?", async () => {
+        const ok = await deixarDeSeguir(perfilId);
+        alert(ok ? "Você deixou de seguir este usuário." : "Não foi possível deixar de seguir agora.");
+      });
+      return;  
+    }
+
+    console.error("Falha ao seguir:", resp.status, body);
+    alert("Falha ao seguir usuário.");
   };
+
+  async function deixarDeSeguir(alvoId: string) {
+    const token = Storage.token;
+    const r = await fetch(`${API.BASE_URL}/api/seguidores/`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ seguidoUsuarioId: alvoId }),
+    });
+    return r.ok;
+  }
 
   const solicitarTreino = async () => {
     const token = Storage.token;
@@ -71,24 +102,49 @@ export default function ProfileHeader({
       return;
     }
 
-    try {
-      const resp = await fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ destinatarioId: perfilId }),
-      });
-      if (!resp.ok) throw new Error("Erro ao solicitar treino");
+    const resp = await fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ destinatarioId: perfilId }),
+    });
+
+    if (resp.ok) {
       alert("Solicitação enviada!");
-    } catch (e) {
-      console.error(e);
-      alert("Falha ao solicitar treino.");
+      return;
     }
+
+    const body = await readBodySafe(resp);
+    if (isDuplicado(resp, body)) {
+      pedirConfirmacao("Você já tem uma solicitação com este usuário. Deseja cancelar?", async () => {
+        const ok = await cancelarSolicitacaoTreino(perfilId);
+        alert(ok ? "Solicitação cancelada." : "Não foi possível cancelar agora.");
+      });
+      return;
+    }
+
+    console.error("Falha ao solicitar treino:", resp.status, body);
+    alert("Falha ao solicitar treino.");
   };
 
-  const carregarUsuariosMutuos = async () => {
+  async function cancelarSolicitacaoTreino(destinatarioId: string) {
+    const token = Storage.token;
+
+    const del = await fetch(`${API.BASE_URL}/api/solicitacoes-treino/${destinatarioId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (del.ok) return true;
+    if (del.status !== 404) return false;
+
+    const post = await fetch(`${API.BASE_URL}/api/solicitacoes-treino/cancelar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ destinatarioId }),
+    });
+    return post.ok;
+  }
+
+   const carregarUsuariosMutuos = async () => {
     const token = Storage.token;
     setCarregandoMutuos(true);
     try {
@@ -112,7 +168,7 @@ export default function ProfileHeader({
   };
 
   const toggleSelecionado = (idUsuario: string) => {
-    setSelecionados((prev) => {
+    setSelecionados(prev => {
       const novo = new Set(prev);
       novo.has(idUsuario) ? novo.delete(idUsuario) : novo.add(idUsuario);
       return novo;
@@ -133,15 +189,11 @@ export default function ProfileHeader({
     try {
       setEnviandoDM(true);
       await Promise.all(
-        Array.from(selecionados).map((paraId) =>
+        Array.from(selecionados).map(paraId =>
           fetch(`${API.BASE_URL}/api/mensagem`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-              paraId,
-              conteudo: perfilId, 
-              tipo: "USUARIO",
-            }),
+            body: JSON.stringify({ paraId, conteudo: perfilId, tipo: "USUARIO" }),
           })
         )
       );
@@ -225,7 +277,14 @@ export default function ProfileHeader({
       )}
 
       {isOwnProfile && (
-        <div className="mt-4 w-full">
+        <div className="mt-4 w-full grid grid-cols-2 gap-2">
+          <Link href="/minha-rede">
+            <Button className="w-full bg-white/10 hover:bg-white/20 text-white border-white/30">
+              <Users size={16} className="mr-2" />
+              Minha rede
+            </Button>
+          </Link>
+
           <Link href="/configuracoes">
             <Button variant="outline" className="w-full bg-white/10 hover:bg-white/20 text-white border-white/30">
               <Settings size={16} className="mr-2" />
@@ -234,21 +293,17 @@ export default function ProfileHeader({
           </Link>
         </div>
       )}
-
       {modalAberto && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
           <div className="bg-white p-6 rounded-xl w-96 shadow-lg relative">
             <h2 className="text-lg font-bold mb-4 text-center">Compartilhar Perfil</h2>
-
             <div className="mb-4">
               <p className="text-sm text-gray-700 mb-2">Enviar por mensagem:</p>
-
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {carregandoMutuos && <span className="text-sm text-gray-500">Carregando contatos...</span>}
                 {!carregandoMutuos && usuariosMutuos.length === 0 && (
                   <span className="text-sm text-gray-500">Você ainda não tem contatos mútuos.</span>
                 )}
-
                 {usuariosMutuos.map((u) => {
                   const selecionado = selecionados.has(u.id);
                   const fotoSrc = u.foto?.startsWith("http") ? u.foto : `${API.BASE_URL}${u.foto || "default-user.png"}`;
@@ -269,7 +324,6 @@ export default function ProfileHeader({
                   );
                 })}
               </div>
-
               <button
                 disabled={selecionados.size === 0 || enviandoDM}
                 onClick={enviarCompartilhamentoPorDM}
@@ -280,10 +334,31 @@ export default function ProfileHeader({
                 {enviandoDM ? "Enviando..." : `Enviar para ${selecionados.size} contato(s)`}
               </button>
             </div>
-
             <button onClick={() => setModalAberto(false)} className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl" aria-label="Fechar modal">
               <CircleX />
             </button>
+          </div>
+        </div>
+      )}
+
+      {confirmBox?.open && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
+          <div className="bg-white p-5 rounded-xl w-96 shadow-xl">
+            <p className="text-sm text-gray-800">{confirmBox.text}</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button className="px-4 py-2 rounded bg-gray-200" onClick={() => setConfirmBox(null)}>
+                Cancelar
+              </button>
+              <button
+                className="px-4 py-2 rounded bg-green-700 text-white"
+                onClick={async () => {
+                  try { await confirmBox.onYes(); }
+                  finally { setConfirmBox(null); }
+                }}
+              >
+                Sim
+              </button>
+            </div>
           </div>
         </div>
       )}

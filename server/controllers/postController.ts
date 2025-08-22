@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
-import { AuthenticatedRequest } from "../middlewares/auth.js";
+
+type AuthedReq = Request & { userId?: string };
 
 function isAllowedUrl(u?: string | null) {
   if (!u) return false;
@@ -10,10 +11,9 @@ function normalizeAssetUrl(u: string) {
   return u.startsWith("assets/") ? "/" + u : u;
 }
 
-export const postarConteudo = async (req: AuthenticatedRequest, res: Response) => {
+export const postarConteudo = async (req: AuthedReq, res: Response) => {
   try {
     if (!req.userId) return res.status(401).json({ message: "Usuário não autenticado." });
-    console.log("CREATE", req.headers["content-type"], req.body, "file?", !!(req as any).file);
 
     const { descricao, imagemUrl, videoUrl } = req.body as {
       descricao?: string;
@@ -25,11 +25,9 @@ export const postarConteudo = async (req: AuthenticatedRequest, res: Response) =
     let finalImagemUrl: string | null = null;
     let finalVideoUrl: string | null = null;
 
-    // 1) Preferir URL
     if (isAllowedUrl(imagemUrl)) finalImagemUrl = normalizeAssetUrl(imagemUrl!);
     if (isAllowedUrl(videoUrl)) finalVideoUrl = normalizeAssetUrl(videoUrl!);
 
-    // 2) Se não veio URL mas veio arquivo -> uploads
     if (!finalImagemUrl && !finalVideoUrl && file) {
       if (file.mimetype.startsWith("image/")) finalImagemUrl = `/uploads/${file.filename}`;
       else if (file.mimetype.startsWith("video/")) finalVideoUrl = `/uploads/${file.filename}`;
@@ -48,6 +46,7 @@ export const postarConteudo = async (req: AuthenticatedRequest, res: Response) =
         tipoMidia: tipoDetectado,
         imagemUrl: finalImagemUrl,
         videoUrl: finalVideoUrl,
+        compartilhamentos: 0,
       },
       include: {
         usuario: { select: { id: true, nome: true, foto: true } },
@@ -65,24 +64,19 @@ export const postarConteudo = async (req: AuthenticatedRequest, res: Response) =
   }
 };
 
-export async function adicionarComentario(req: Request, res: Response) {
+export async function adicionarComentario(req: AuthedReq, res: Response) {
   const { postId } = req.params;
   const { conteudo } = req.body;
-  const userId = (req as any).userId;
+  const userId = req.userId;
 
   if (!userId) return res.status(401).json({ message: "Usuário não autenticado" });
-
   if (!conteudo || conteudo.trim() === "") {
     return res.status(400).json({ message: "Conteúdo do comentário é obrigatório" });
   }
 
   try {
     const novoComentario = await prisma.comentario.create({
-      data: {
-        conteudo,
-        postagemId: postId,
-        usuarioId: userId,
-      },
+      data: { conteudo, postagemId: postId, usuarioId: userId },
     });
     return res.status(201).json(novoComentario);
   } catch (error) {
@@ -91,77 +85,44 @@ export async function adicionarComentario(req: Request, res: Response) {
   }
 }
 
-
-export const editarPostagemGet = async (req: AuthenticatedRequest, res: Response) => {
+export const editarPostagemGet = async (req: AuthedReq, res: Response) => {
   const { id } = req.params;
-  const userId = req.userId;
-
   try {
     const postagem = await prisma.postagem.findUnique({ where: { id } });
-    if (!postagem || postagem.usuarioId !== userId) {
+    if (!postagem || postagem.usuarioId !== req.userId) {
       return res.status(401).json({ message: "Você não tem permissão para editar esta postagem." });
     }
     return res.json(postagem);
-  } catch (err) {
+  } catch {
     return res.status(500).json({ message: "Erro ao buscar postagem." });
   }
 };
 
-export const editarPostagemPost = async (req: AuthenticatedRequest, res: Response) => {
+export const editarPostagemPost = async (req: AuthedReq, res: Response) => {
   const { id } = req.params;
   const { conteudo } = req.body;
-  const userId = req.userId;
 
   try {
     const postagem = await prisma.postagem.findUnique({ where: { id } });
-    if (!postagem || postagem.usuarioId !== userId) {
+    if (!postagem || postagem.usuarioId !== req.userId) {
       return res.status(401).json({ message: "Você não tem permissão para editar esta postagem." });
     }
+    if (!conteudo) return res.status(400).json({ message: "O conteúdo não pode estar vazio." });
 
-    if (!conteudo) {
-      return res.status(400).json({ message: "O conteúdo não pode estar vazio." });
-    }
-
-    await prisma.postagem.update({
-      where: { id },
-      data: { conteudo }
-    });
-
+    await prisma.postagem.update({ where: { id }, data: { conteudo } });
     return res.json({ message: "Postagem atualizada com sucesso." });
-  } catch (err) {
+  } catch {
     return res.status(500).json({ message: "Erro ao editar postagem." });
   }
 };
 
-export const deletarPostagem = async (req: AuthenticatedRequest, res: Response) => {
-  const { postagemId } = req.params;
-  const userId = req.userId;
-
-  try {
-    const postagem = await prisma.postagem.findUnique({
-      where: { id: postagemId },
-      include: { usuario: true }
-    });
-
-    if (!postagem) return res.status(404).json({ message: "Postagem não encontrada." });
-    if (postagem.usuarioId !== userId) return res.status(401).json({ message: "Não autorizado." });
-
-    await prisma.postagem.delete({ where: { id: postagemId } });
-    return res.json({ message: "Postagem deletada com sucesso." });
-  } catch (err) {
-    return res.status(500).json({ message: "Erro ao deletar postagem." });
-  }
-};
-
-export const deletarPost = async (req: AuthenticatedRequest, res: Response) => {
+export const deletarPost = async (req: AuthedReq, res: Response) => {
   try {
     if (!req.userId) return res.status(401).json({ message: "Não autenticado." });
-
     const { id } = req.params;
 
     const post = await prisma.postagem.findUnique({ where: { id } });
     if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
-
     if (post.usuarioId !== req.userId) {
       return res.status(403).json({ message: "Você não pode apagar esta postagem." });
     }
@@ -179,43 +140,21 @@ export const deletarPost = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-export const buscarPostagemPorId = async (req: AuthenticatedRequest, res: Response) => {
+export const buscarPostagemPorId = async (req: AuthedReq, res: Response) => {
   const { id } = req.params;
-
   try {
     const post = await prisma.postagem.findUnique({
       where: { id },
       include: {
-        usuario: {
-          select: {
-            id: true,
-            nome: true,
-            foto: true,
-            tipo: true
-          }
-        },
+        usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
         comentarios: {
           orderBy: { dataCriacao: "asc" },
-          include: {
-            usuario: {
-              select: {
-                id: true,
-                nome: true,
-                foto: true
-              }
-            }
-          }
+          include: { usuario: { select: { id: true, nome: true, foto: true } } },
         },
-        curtidas: {
-          select: { usuarioId: true }
-        }
-      }
+        curtidas: { select: { usuarioId: true } },
+      },
     });
-
-    if (!post) {
-      return res.status(404).json({ message: "Postagem não encontrada." });
-    }
-
+    if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
     return res.json(post);
   } catch (error) {
     console.error("Erro ao buscar postagem:", error);
@@ -223,21 +162,15 @@ export const buscarPostagemPorId = async (req: AuthenticatedRequest, res: Respon
   }
 };
 
-export const registrarCompartilhamento = async (req: AuthenticatedRequest, res: Response) => {
+export const registrarCompartilhamento = async (req: AuthedReq, res: Response) => {
   const { postId } = req.params;
-
   try {
     const post = await prisma.postagem.findUnique({ where: { id: postId } });
-
-    if (!post) {
-      return res.status(404).json({ message: "Postagem não encontrada." });
-    }
+    if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
 
     await prisma.postagem.update({
       where: { id: postId },
-      data: {
-        compartilhamentos: { increment: 1 }
-      }
+      data: { compartilhamentos: { increment: 1 } },
     });
 
     return res.status(200).json({ message: "Compartilhamento registrado." });
@@ -247,3 +180,74 @@ export const registrarCompartilhamento = async (req: AuthenticatedRequest, res: 
   }
 };
 
+export const compartilharPostPorMensagem = async (req: AuthedReq, res: Response) => {
+  try {
+    if (!req.userId) return res.status(401).json({ message: "Não autenticado." });
+    const { postId } = req.params;
+    const { paraIds, texto } = req.body as { paraIds?: string[]; texto?: string };
+
+    if (!Array.isArray(paraIds) || paraIds.length === 0) {
+      return res.status(400).json({ message: "Informe ao menos um destinatário em paraIds." });
+    }
+
+    const post = await prisma.postagem.findUnique({ where: { id: postId }, select: { id: true } });
+    if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
+
+    const ops = paraIds
+      .filter((id) => id && id !== req.userId)
+      .map((paraId) =>
+        prisma.mensagem.create({
+          data: {
+            deUsuarioId: req.userId!,   
+            paraUsuarioId: paraId,
+            tipo: "POST",               
+            conteudo: postId,            
+            texto: texto ?? null,       
+          } as any,
+        })
+      );
+
+    await prisma.$transaction(ops);
+
+    await prisma.postagem.update({
+      where: { id: postId },
+      data: { compartilhamentos: { increment: ops.length } },
+    });
+
+    return res.json({ ok: true, enviados: ops.length });
+  } catch (e) {
+    console.error("compartilharPostPorMensagem:", e);
+    return res.status(500).json({ message: "Erro ao compartilhar por mensagem." });
+  }
+};
+
+export const repostarPost = async (req: AuthedReq, res: Response) => {
+  try {
+    if (!req.userId) return res.status(401).json({ message: "Não autenticado." });
+    const { postId } = req.params;
+    const { comentario } = req.body as { comentario?: string };
+
+    const original = await prisma.postagem.findUnique({ where: { id: postId } });
+    if (!original) return res.status(404).json({ message: "Postagem original não encontrada." });
+
+    const repost = await prisma.postagem.create({
+      data: {
+        usuarioId: req.userId,
+        conteudo: comentario || "",
+        tipoMidia: "Repost",
+        imagemUrl: null,
+        videoUrl: null,
+      } as any,
+    });
+
+    await prisma.postagem.update({
+      where: { id: original.id },
+      data: { compartilhamentos: { increment: 1 } },
+    });
+
+    return res.status(201).json(repost);
+  } catch (e) {
+    console.error("repostarPost:", e);
+    return res.status(500).json({ message: "Erro ao repostar." });
+  }
+};
