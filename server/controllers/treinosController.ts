@@ -181,8 +181,6 @@ export const treinosController = {
   }
 },
 
-
-
   async dashboard(req: Request, res: Response) {
     try {
       const treinos = await prisma.treinoProgramado.findMany({
@@ -225,5 +223,45 @@ export async function obterTreinoProgramadoPorId(req: Request, res: Response) {
   } catch (e) {
     console.error(e);
     res.status(500).json({ message: "Erro ao buscar treino programado" });
+  }
+}
+
+export async function concluirTreino(req: Request, res: Response) {
+  try {
+    const { treinoAgendadoId, atletaId, pontos } = req.body as {
+      treinoAgendadoId: string; atletaId: string; pontos?: number;
+    };
+
+    const agendado = await prisma.treinoAgendado.findUnique({
+      where: { id: treinoAgendadoId },
+      include: { treinoProgramado: { select: { pontuacao: true, duracao: true, tipoTreino: true, nome: true } } },
+    });
+    if (!agendado) return res.status(404).json({ error: "Treino agendado não encontrado" });
+
+    const pontosFinais = (typeof pontos === "number" && pontos >= 0)
+      ? pontos
+      : (agendado.treinoProgramado?.pontuacao ?? 0);
+
+    const existente = await prisma.submissaoTreino.findFirst({
+      where: { treinoAgendadoId, atletaId },
+    });
+
+    const dataCommon = {
+      aprovado: true as any,
+      pontuacaoSnapshot: pontosFinais > 0 ? pontosFinais : undefined,
+      pontosCreditados:  pontosFinais > 0 ? pontosFinais : undefined,
+      duracaoMinutos: agendado.treinoProgramado?.duracao ?? undefined,
+      treinoTituloSnapshot: agendado.treinoProgramado?.nome ?? agendado.titulo ?? undefined,
+      tipoTreinoSnapshot: agendado.treinoProgramado?.tipoTreino ?? undefined,
+    };
+
+    const sub = existente
+      ? await prisma.submissaoTreino.update({ where: { id: existente.id }, data: dataCommon })
+      : await prisma.submissaoTreino.create({ data: { atletaId, treinoAgendadoId, ...dataCommon } });
+
+    res.json({ ok: true, pontos: pontosFinais, submissao: sub });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erro ao concluir treino" });
   }
 }

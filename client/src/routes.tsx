@@ -29,6 +29,7 @@ import PaginaEsqueciSenha from "./pages/esqueciSenha.js";
 import PaginaResetarSenha from "./pages/resetarSenha.js";
 import PaginaTraining from "./pages/trainings.js";
 import PaginaMinhaRede from "./pages/minhaRede.js";
+import PaginaPontuacaoDePerfil from "./pages/perfilPontuacaoExplorar.js";
 
 export function AppRoutes() {
   return (
@@ -71,6 +72,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/perfil/pontuacao">
         <PaginaPontuacaoPerfil />
+      </Route>
+      <Route path="/perfil/:id/pontuacao">
+        <PaginaPontuacaoDePerfil />
       </Route>
       <Route path="/notificacoes">
         <PaginaNotificacoes />

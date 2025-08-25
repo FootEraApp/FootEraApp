@@ -65,23 +65,40 @@ export default function PontuacaoDetalhada() {
 
       <section className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <h3 className="text-green-900 font-bold mb-2">Histórico Completo</h3>
-        {historico.map((item, index) => (
-          <div key={index} className="flex items-center justify-between py-2 border-b">
-            <div className="flex items-center gap-2">
-              {item.tipo === "Desafio" ? (
-                <CheckCircle className="text-green-600" />
-              ) : (
-                <Play className="text-green-600" />
-              )}
-              <div>
-                <div className="font-semibold">{item.titulo} - {item.tipo} {item.status}</div>
-                <div className="text-sm text-gray-600">
-                  {item.data}{item.duracao ? ` • ${item.duracao}` : ""} {typeof item.pontuacao==='number' ? `• +${item.pontuacao} pts` : ""}
+        {historico.map((item, index) => {
+          const pts =
+            typeof item.pontuacao === "number"
+              ? item.pontuacao
+              : typeof item.pontos === "number"
+              ? item.pontos
+              : null;
+
+          const dur =
+            item.duracao ??
+            (typeof item.duracaoMin === "number" ? `${item.duracaoMin} min` : undefined);
+
+          return (
+            <div key={index} className="flex items-center justify-between py-2 border-b last:border-b-0">
+              <div className="flex items-center gap-2">
+                {item.tipo === "Desafio" ? (
+                  <CheckCircle className="text-green-600" />
+                ) : (
+                  <Play className="text-green-600" />
+                )}
+                <div>
+                  <div className="font-semibold">
+                    {item.titulo} - {item.tipo} {item.status ?? ""}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {item.data ?? ""}
+                    {dur ? ` • ${dur}` : ""}
+                    {typeof pts === "number" ? ` • +${pts} pts` : ""}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </section>
 
       <section className="bg-white mx-4 p-4 rounded-xl shadow mb-4">

@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import { Link } from "wouter";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { API } from "../config.js";
+import Storage from "../../../server/utils/storage.js";
 
 type UsuarioBasic = { id: string; nome: string; foto?: string | null };
-
-type AtletaItem = { id: string; usuario: UsuarioBasic; foto?: string | null };
+type AtletaItem = { id: string; usuario: UsuarioBasic; usuarioId?: string; foto?: string | null; tipoTreino?: string | null };
 type ProfessorItem = { id: string; usuario: UsuarioBasic; foto?: string | null };
 type ClubeItem = { id: string; nome: string; cidade?: string | null; estado?: string | null; logo?: string | null };
 type EscolaItem = { id: string; nome: string; cidade?: string | null; estado?: string | null; logo?: string | null; siteOficial?: string | null };
@@ -23,49 +24,50 @@ type DadosExplorar = {
 function Explorar() {
   const [busca, setBusca] = useState("");
   const [aba, setAba] = useState<"atletas" | "escolas" | "clubes" | "desafios" | "professores">("atletas");
-  const [dados, setDados] = useState<DadosExplorar>({
-    atletas: [],
-    professores: [],
-    clubes: [],
-    escolas: [],
-    desafios: [],
-  });
+  const [dados, setDados] = useState<DadosExplorar>({ atletas: [], professores: [], clubes: [], escolas: [], desafios: [] });
 
-  const usuarioLogadoId =
-    (localStorage.getItem("usuarioId") ||
-      (typeof window !== "undefined" && (window as any)?.Storage?.usuarioId) ||
-      ""
-    ).toString();
+  const loggedUserId = useMemo(
+    () =>
+      (Storage?.usuarioId ??
+        (typeof window !== "undefined" ? localStorage.getItem("usuarioId") : "") ??
+        "") as string,
+    []
+  );
 
-  function filtrarEu<T extends { usuario?: { id?: string }; id?: string }>(arr: T[]): T[] {
-    return arr.filter((x) => {
-      const uid = (x as any)?.usuario?.id ?? (x as any)?.id ?? "";
-      return uid !== usuarioLogadoId;
-    });
-  }
+  const filtrarEu = useMemo(
+    () => <T extends { usuario?: { id?: string }; usuarioId?: string; id?: string }>(arr: T[]) =>
+      arr.filter((x) => {
+        const uid = (x.usuario?.id ?? x.usuarioId ?? x.id ?? "") as string;
+        return uid !== loggedUserId;
+      }),
+    [loggedUserId]
+  );
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${API.BASE_URL}/api/explorar?q=${encodeURIComponent(busca)}`);
-        if (!res.ok) throw new Error("Falha ao carregar /api/explorar");
-        const resp = await res.json();
+    const token =
+      Storage?.token ?? (typeof window !== "undefined" ? localStorage.getItem("token") : "");
 
+    axios
+      .get(`${API.BASE_URL}/api/explorar`, {
+        params: { q: busca, excludeUsuarioId: loggedUserId },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+      .then(({ data }) => {
         setDados({
-          atletas: filtrarEu<AtletaItem>(resp.atletas || []),
-          professores: filtrarEu<ProfessorItem>(resp.professores || []),
-          clubes: (resp.clubes || []) as ClubeItem[],
-          escolas: (resp.escolas || []) as EscolaItem[],
-          desafios: (resp.desafios || []) as DesafioItem[],
+          atletas: filtrarEu<AtletaItem>(data.atletas || []),
+          professores: filtrarEu<ProfessorItem>(data.professores || []),
+          clubes: (data.clubes || []) as ClubeItem[],
+          escolas: (data.escolas || []) as EscolaItem[],
+          desafios: (data.desafios || []) as DesafioItem[],
         });
-      } catch (e) {
+      })
+      .catch((e) => {
         console.error(e);
         setDados({ atletas: [], professores: [], clubes: [], escolas: [], desafios: [] });
-      }
-    })();
-  }, [busca, usuarioLogadoId]);
+      });
+  }, [busca, loggedUserId, filtrarEu]);
 
-  const abas: DadosExplorar extends never ? never : Array<["atletas" | "escolas" | "clubes" | "desafios" | "professores", string]> = [
+  const abas: Array<["atletas" | "escolas" | "clubes" | "desafios" | "professores", string]> = [
     ["atletas", "Atletas"],
     ["escolas", "Escolas"],
     ["clubes", "Clubes"],
@@ -113,6 +115,11 @@ function Explorar() {
                     <div className="bg-white rounded shadow p-2 flex flex-col items-center">
                       <img src={foto} alt={`${a.usuario.nome} profile`} className="w-24 h-24 rounded-full object-cover" />
                       <p className="mt-2 font-medium">{a.usuario.nome}</p>
+                      {a.tipoTreino && (
+                        <span className="mt-1 text-[10px] px-2 py-0.5 rounded bg-green-100 text-green-800">
+                          {a.tipoTreino}
+                        </span>
+                      )}
                     </div>
                   </Link>
                 );

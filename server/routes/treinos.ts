@@ -2,7 +2,7 @@ import { Router } from "express";
 import { Nivel, Categoria, TipoTreino } from "@prisma/client";
 import { PrismaClient } from "@prisma/client";
 import { authenticateToken } from "server/middlewares/auth.js";
-import { getTreinosAgendados, treinosController, excluirTreinoAgendado, listarTodosTreinosProgramados, obterTreinoProgramadoPorId, agendarTreino } from "server/controllers/treinosController.js";
+import { concluirTreino, getTreinosAgendados, treinosController, excluirTreinoAgendado, listarTodosTreinosProgramados, obterTreinoProgramadoPorId, agendarTreino } from "server/controllers/treinosController.js";
 
 const router = Router();
 const prisma = new PrismaClient;
@@ -27,6 +27,7 @@ interface CriarTreinoInput {
   tipoUsuarioId: string; 
 }
 
+router.post("/concluir", authenticateToken, concluirTreino);
 router.post("/agendados", authenticateToken, agendarTreino);
 router.delete('/agendados/:id', authenticateToken, excluirTreinoAgendado);
 router.get("/agendados", authenticateToken, getTreinosAgendados);
