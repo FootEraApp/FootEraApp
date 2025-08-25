@@ -1,11 +1,12 @@
 import { Router } from "express";
 import {
-  getPerfilUsuario, getPontuacao, getAtividadesRecentes, getBadges,
+  getPontuacaoDetalhada, getPerfilUsuario, getAtividadesRecentes, getBadges,
   getTreinosResumo, getProgressoTreinos, getPontuacaoPerfil,
   getPerfilUsuarioMe, getPontuacaoMe, getAtividadesRecentesMe, getBadgesMe, atualizarPerfil
 } from "../controllers/perfilController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 import { PrismaClient, TipoUsuario } from "@prisma/client";
+import { pontuacaoDoPerfil } from "server/controllers/pontuacoesController.js";
 import multer from "multer";
 
 const prisma = new PrismaClient();
@@ -27,10 +28,11 @@ router.get("/me/pontuacao", authenticateToken, getPontuacaoMe);
 router.get("/me/atividades", authenticateToken, getAtividadesRecentesMe);
 router.get("/me/badges", authenticateToken, getBadgesMe);
 
+router.get("/:usuarioId/pontuacao", authenticateToken, pontuacaoDoPerfil);
 router.get("/pontuacao/:usuarioId", authenticateToken, getPontuacaoPerfil);
 router.get("/:id/atividades", authenticateToken, getAtividadesRecentes);
 router.get("/:id/badges", authenticateToken, getBadges);
-router.get("/:id/pontuacao", authenticateToken, getPontuacao);
+router.get("/:id/pontuacao", authenticateToken, getPontuacaoDetalhada);
 router.get("/:id/treinos", authenticateToken, getTreinosResumo);
 router.get("/:id/progresso", authenticateToken, getProgressoTreinos);
 router.get("/:id", authenticateToken, getPerfilUsuario);

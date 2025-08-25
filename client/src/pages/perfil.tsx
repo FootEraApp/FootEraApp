@@ -136,7 +136,7 @@ const handleCompartilhar = async () => {
           idade={perfil.dadosEspecificos.idade}
           posicao={perfil.dadosEspecificos.posicao}
           time={perfil.tipo === "Atleta" ? (perfil.dadosEspecificos.escola || perfil.dadosEspecificos.clube || "Independente") : undefined}
-          ponto={total}
+          pontuacao={total}
           isOwnProfile={isOwnProfile}
           foto={perfil.usuario.foto || perfil.dadosEspecificos.foto}
           perfilId={idDaUrl || perfil.usuario.id}

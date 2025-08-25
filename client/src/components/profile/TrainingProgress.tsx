@@ -64,7 +64,7 @@ const timeKey = (t: Training) =>
   const normalizeTipoTreino = (v?: string | null) => {
     if (!v) return null;
     const s = String(v)
-      .normalize("NFD").replace(/\p{Diacritic}/gu, "") // remove acentos
+      .normalize("NFD").replace(/\p{Diacritic}/gu, "")
       .toLowerCase();
     if (s.includes("fis")) return "Físico";
     if (s.includes("tec")) return "Técnico";
@@ -86,12 +86,14 @@ const timeKey = (t: Training) =>
       return r.json();
     },
   });
+  const atletaId = resolvedTipoUsuarioId || (Storage.tipoUsuarioId as string) || "";
 
   const { data: treinosAgendados = [], isLoading: isLoadingTreinos } = useQuery<Training[]>({
-    queryKey: ["treinosAgendados", targetUserId], 
-    enabled: Boolean(token && targetUserId),
+    queryKey: ["treinosAgendados", atletaId], 
+    enabled: Boolean(token && atletaId),
     queryFn: async () => {
-      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados?usuarioId=${encodeURIComponent(targetUserId)}`, { headers });
+      const r = await fetch(
+        `${API.BASE_URL}/api/treinos/agendados?usuarioId=${encodeURIComponent(targetUserId)}`, { headers });
       if (!r.ok) {
         const msg = await r.text();
         throw new Error(msg || "Erro ao buscar treinos agendados");
@@ -136,7 +138,8 @@ const timeKey = (t: Training) =>
     queryKey: ["pontuacaoPerfil", targetUserId],
     enabled: Boolean(token && targetUserId),
     queryFn: async () => {
-      const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(targetUserId)}/pontuacao`, { headers });
+      const r = await fetch(
+        `${API.BASE_URL}/api/perfil/pontuacao/${encodeURIComponent(targetUserId)}`, { headers });
       if (!r.ok) throw new Error("Erro ao buscar pontuação do perfil");
       return r.json();
     },

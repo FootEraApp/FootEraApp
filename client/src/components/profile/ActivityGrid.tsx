@@ -41,14 +41,16 @@ export default function ActivityGrid({ activities }: { activities: Activity[] })
 
           return (
             <div key={activity.id} className="rounded-lg overflow-hidden shadow">
-              <img
-                src={src}
-                alt={activity.nome || activity.tipo}
-                className="w-full h-24 object-cover"
-              />
+              <img src={src} alt={activity.nome || activity.tipo} className="w-full h-24 object-cover" />
               <div className="text-sm text-center font-semibold text-green-900 py-1">
                 {activity.nome || activity.tipo}
               </div>
+              {"duracao" in activity || "pontos" in activity ? (
+                <div className="text-xs text-center text-gray-600 pb-2">
+                  {"duracao" in activity && activity.duracao && "pontos" in activity && typeof activity.pontos === "number" ? " • " : ""}
+                  {"pontos" in activity && typeof activity.pontos === "number" ? `+${activity.pontos} pts` : ""}
+                </div>
+              ) : null}
             </div>
           );
         })}

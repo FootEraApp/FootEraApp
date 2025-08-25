@@ -1,8 +1,86 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
-
+import { calcularPontuacaoPorUsuarioId, atualizarCachePontuacao } from "server/services/pontuacao.service.js";
+import { AnyArn } from "aws-sdk/clients/groundstation.js";
 const prisma = new PrismaClient();
+
+
+export async function getPontuacaoDetalhada(req: Request, res: Response) {
+  try {
+    const id = req.params.id;
+
+    const atleta = await prisma.atleta.findFirst({
+      where: { OR: [{ usuarioId: id }, { id }] },
+      select: { id: true },
+    });
+    if (!atleta) return res.status(404).json({ error: "Atleta não encontrado" });
+
+    const subsTreino = await prisma.submissaoTreino.findMany({
+      where: { atletaId: atleta.id, aprovado: true as any },
+      include: { treinoAgendado: { include: { treinoProgramado: { include: { exercicios: true } } } } },
+      orderBy: { criadoEm: "desc" },
+    });
+
+    const historicoTreinos = subsTreino.map((s) => {
+      const dur = s.duracaoMinutos ?? s.treinoAgendado?.treinoProgramado?.duracao ?? null;
+      const pts =
+        s.pontosCreditados ??
+        s.pontuacaoSnapshot ??
+        s.treinoAgendado?.treinoProgramado?.pontuacao ??
+        s.treinoAgendado?.treinoProgramado?.exercicios?.length ??
+        0;
+
+      return {
+        tipo: "Treino" as const,
+        titulo: s.treinoAgendado?.treinoProgramado?.nome ?? s.treinoAgendado?.titulo ?? "Treino",
+        status: "Treino Concluído",
+        data: new Date(s.criadoEm).toLocaleDateString("pt-BR"),
+        ts: +new Date(s.criadoEm),
+        duracao: typeof dur === "number" && dur > 0 ? `${dur} min` : undefined,
+        pontuacao: Number(pts) || 0,
+      };
+    });
+
+    const subsDesafio = await prisma.submissaoDesafio.findMany({
+      where: { atletaId: atleta.id, aprovado: true as any },
+      include: { desafio: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const historicoDesafios = subsDesafio.map((s) => ({
+      tipo: "Desafio" as const,
+      status: "Desafio Concluído",
+      data: new Date(s.createdAt).toLocaleDateString("pt-BR"),
+      ts: +new Date(s.createdAt),
+      titulo: s.desafio?.titulo ?? "Desafio",
+      pontuacao: Number(s.desafio?.pontuacao ?? 0),
+    }));
+
+    const historico = [...historicoTreinos, ...historicoDesafios]
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 20)
+      .map(({ ts, ...rest }) => rest);
+
+    const performanceFromHistorico = historico.reduce(
+      (acc, h) => acc + (Number((h as any).pontuacao) || 0),
+      0
+    );
+    const disciplinaFromHistorico = historicoTreinos.length * 2;
+    const responsabilidadeFromHistorico = historicoDesafios.length * 2;
+
+    return res.json({
+      performance: performanceFromHistorico,
+      disciplina: disciplinaFromHistorico,
+      responsabilidade: responsabilidadeFromHistorico,
+      historico,
+      videos: [],
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao montar pontuação" });
+  }
+}
 
 export const getPerfilUsuarioMe = async (req: AuthenticatedRequest, res: Response) => {
   const id = req.userId;
@@ -15,7 +93,7 @@ export const getPontuacaoMe = async (req: AuthenticatedRequest, res: Response) =
   const id = req.userId;
   if (!id) return res.status(401).json({ error: "Sem autenticação" });
   (req as any).params = { id };
-  return getPontuacao(req as any, res);
+  return getPontuacaoDetalhada(req as any, res);
 };
 
 export const getAtividadesRecentesMe = async (req: AuthenticatedRequest, res: Response) => {
@@ -64,35 +142,63 @@ export const getTreinosPorUsuario = async (req: Request, res: Response) => {
 export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.params.id;
 
-  const atividades = await prisma.atividadeRecente.findMany({
+  const atleta = await prisma.atleta.findUnique({
     where: { usuarioId: userId },
-    orderBy: { createdAt: 'desc' },
-    take: 10
+    select: { id: true },
   });
+  if (!atleta) return res.json([]);
 
-  const enriched = await Promise.all(atividades.map(async (a) => {
-    let nome = "";
-    if (a.tipo === "Treino") {
-      const treino = await prisma.treinoProgramado.findFirst({
-        where: { treinoAgendado: { some: { atleta: { usuarioId: userId } } } }
-      });
-      nome = treino?.nome || "Treino";
-    } else if (a.tipo === "Desafio") {
-      const desafio = await prisma.desafioOficial.findFirst({
-        where: { imagemUrl: a.imagemUrl }
-      });
-      nome = desafio?.titulo || "Desafio";
-    }
+  const [subsTreino, subsDesafio] = await Promise.all([
+    prisma.submissaoTreino.findMany({
+      where: { atletaId: atleta.id, aprovado: true },
+      include: { treinoAgendado: { include: { treinoProgramado: { include: { exercicios: true } } } } },
+      orderBy: { criadoEm: "desc" },
+      take: 10,
+    }),
+    prisma.submissaoDesafio.findMany({
+      where: { atletaId: atleta.id, aprovado: true },
+      include: { desafio: true },
+      orderBy: { createdAt: "desc" }, 
+      take: 10,
+    }),
+  ]);
 
-    return {
-      id: a.id,
-      tipo: a.tipo,
-      imagemUrl: a.imagemUrl || "",
-      nome
-    };
-  }));
+  const itens = [
+    ...subsTreino.map((s: any) => {
+      const dur = s.duracaoMinutos ?? s.treinoAgendado?.treinoProgramado?.duracao ?? null;
+      const pts =
+        s.pontosCreditados ??
+        s.pontuacaoSnapshot ??
+        s.treinoAgendado?.treinoProgramado?.pontuacao ??
+        s.treinoAgendado?.treinoProgramado?.exercicios?.length ??
+        0;
 
-  return res.json(enriched);
+      return {
+        id: `t-${s.id}`,
+        tipo: "Treino" as const,
+        imagemUrl: s.treinoAgendado?.treinoProgramado?.imagemUrl ?? null,
+        nome: s.treinoAgendado?.treinoProgramado?.nome ?? s.treinoAgendado?.titulo ?? "Treino",
+        data: s.criadoEm,
+        duracao: typeof dur === "number" && dur > 0 ? `${dur} min` : undefined,
+        pontuacao: Number(pts) || 0,                   
+        categoria: s.tipoTreinoSnapshot ??
+                   s.treinoAgendado?.treinoProgramado?.tipoTreino ?? null,
+      };
+    }),
+    ...subsDesafio.map((s: any) => ({
+      id: `d-${s.id}`,
+      tipo: "Desafio" as const,
+      imagemUrl: s.desafio?.imagemUrl ?? s.videoUrl ?? null,
+      nome: s.desafio?.titulo ?? "Desafio",
+      data: s.createdAt,
+      duracao: undefined,
+      pontuacao: Number(s.desafio?.pontuacao ?? 0),   
+    })),
+  ]
+    .sort((a, b) => +new Date(b.data as any) - +new Date(a.data as any))
+    .slice(0, 10);
+
+  return res.json(itens);
 };
 
 export const getBadges = async (req: Request, res: Response) => {
@@ -112,50 +218,44 @@ export const getBadges = async (req: Request, res: Response) => {
   }
 };
 
-export const getPontuacao = async (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  try {
-    const usuario = await prisma.usuario.findUnique({
-      where: { id },
-      select: { tipo: true }
-    });
-
-    if (!usuario) {
-      return res.status(404).json({ message: "Usuário não encontrado." });
-    }
-
-    if (usuario.tipo !== "Atleta") {
-      return res.json({
-        performance: 0,
-        disciplina: 0,
-        responsabilidade: 0,
-      }); 
-    }
-
-    const atleta = await prisma.atleta.findUnique({
-      where: { usuarioId: id },
-      include: { pontuacao: true }
-    });
-
-     if (!atleta || !atleta.pontuacao) {
-      return res.json({
-        performance: 0,
-        disciplina: 0,
-        responsabilidade: 0,
-      });
-    }
-
-    return res.json({
-      performance: atleta.pontuacao.pontuacaoPerformance,
-      disciplina: atleta.pontuacao.pontuacaoDisciplina,
-      responsabilidade: atleta.pontuacao.pontuacaoResponsabilidade,
-    });
-  } catch (err) {
-    console.error("Erro ao buscar pontuação:", err);
-    return res.status(500).json({ message: "Erro interno no servidor." });
+async function calcularPontuacaoBase(usuarioId: string) {
+  const atleta = await prisma.atleta.findFirst({
+    where: { usuarioId },
+    select: { id: true },
+  });
+  if (!atleta) {
+    return { performance: 0, disciplina: 0, responsabilidade: 0, subsTreino: [], subsDesafio: [] as any[] };
   }
-};
+
+  const [subsTreino, subsDesafio] = await Promise.all([
+    prisma.submissaoTreino.findMany({
+      where: { atletaId: atleta.id, aprovado: true as any },
+      include: { treinoAgendado: { include: { treinoProgramado: true } } },
+      orderBy: { criadoEm: "desc" },
+    }),
+    prisma.submissaoDesafio.findMany({
+      where: { atletaId: atleta.id, aprovado: true as any },
+      include: { desafio: true },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  const pontosTreinos = subsTreino.reduce((acc, s: any) => {
+    const p = s?.pontosCreditados ?? s?.pontuacaoSnapshot ?? s?.treinoAgendado?.treinoProgramado?.pontuacao ?? 0;
+    return acc + (Number(p) || 0);
+  }, 0);
+
+  const pontosDesafios = subsDesafio.reduce((acc, s: any) => {
+    const p = s?.desafio?.pontuacao ?? 0;
+    return acc + (Number(p) || 0);
+  }, 0);
+
+  const performance = pontosTreinos + pontosDesafios;
+  const disciplina = subsTreino.length * 2;
+  const responsabilidade = subsDesafio.length * 2;
+
+  return { performance, disciplina, responsabilidade, subsTreino, subsDesafio };
+}
 
 export async function getPontuacaoPerfil(req: Request, res: Response) {
   const { usuarioId } = req.params as { usuarioId: string };
@@ -163,108 +263,106 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
   try {
     const atleta = await prisma.atleta.findFirst({
       where: { usuarioId },
-      select: { id: true, usuarioId: true },
+      select: { id: true },
     });
-
     if (!atleta) {
-      return res.status(404).json({ message: "Atleta não encontrado." });
+      return res.json({
+        performance: 0,
+        disciplina: 0,
+        responsabilidade: 0,
+        historico: [],
+        videos: [],
+      });
     }
 
-    const atletaId = atleta.id;
-
-    const submissoesTreino = await prisma.submissaoTreino?.findMany({
-      where: { atletaId, aprovado: true as any }, 
+    const subsTreino = await prisma.submissaoTreino.findMany({
+      where: { atletaId: atleta.id, aprovado: true as any },
       include: {
         treinoAgendado: {
           include: {
-            treinoProgramado: true,
+            treinoProgramado: { include: { exercicios: true } },
           },
         },
       },
       orderBy: { criadoEm: "desc" },
-    }).catch(() => [] as any[]);
-
-    const submissoesDesafio = await prisma.submissaoDesafio?.findMany({
-      where: { atletaId, aprovado: true as any },
-      include: {
-        desafio: true,
-      },
-    }).catch(() => [] as any[]);
-
-      const pontosTreinos = (submissoesTreino || []).reduce((acc, s: any) => {
-        const p =
-          s?.pontosCreditados ??
-          s?.pontuacaoSnapshot ??
-          s?.treinoAgendado?.treinoProgramado?.pontuacao ??
-          0;
-        return acc + (Number(p) || 0);
-      }, 0);
-
-    const pontosDesafios = (submissoesDesafio || []).reduce((acc, s: any) => {
-      const p = s?.desafio?.pontuacao ?? s?.desafio?.pontuacao ?? 0;
-      return acc + (Number(p) || 0);
-    }, 0);
-
-    const performance = pontosTreinos + pontosDesafios;
-    const disciplina = (submissoesTreino?.length || 0) * 2;
-    const responsabilidade = (submissoesDesafio?.length || 0) * 2; 
-
-    const historicoTreinos = (submissoesTreino || []).map((s: any) => {
-      const dur =
-        s?.duracaoMinutos ??
-        s?.treinoAgendado?.treinoProgramado?.duracao ??
-        0;
-      const pts =
-        s?.pontosCreditados ??
-        s?.pontuacaoSnapshot ??
-        s?.treinoAgendado?.treinoProgramado?.pontuacao ??
-        0;
-
-      return {
-        tipo: "Treino",
-        status: s.aprovado ? "Concluído" : "Pendente",
-        data: new Date(s.criadoEm ?? s.dataCriacao ?? Date.now()).toLocaleDateString("pt-BR"),
-        duracao: dur ? `${dur} min` : undefined,
-        titulo: s?.treinoAgendado?.treinoProgramado?.nome ?? s?.treinoAgendado?.titulo ?? "Treino",
-        pontos: Number(pts) || 0,
-      };
     });
 
-    const historicoDesafios = (submissoesDesafio || []).map((s: any) => ({
-      tipo: "Desafio",
+    const agIds = Array.from(new Set(subsTreino.map((s) => s.treinoAgendadoId).filter(Boolean)));
+    const agRows = agIds.length
+      ? await prisma.treinoAgendado.findMany({
+          where: { id: { in: agIds } },
+          select: { id: true, treinoProgramado: { select: { pontuacao: true, exercicios: true, duracao: true, nome: true } } },
+        })
+      : [];
+    const progPontuacaoMap = new Map<string, { pontuacao: number; exerciciosCount: number }>(
+      agRows.map((r) => [r.id, { pontuacao: r.treinoProgramado?.pontuacao ?? 0, exerciciosCount: r.treinoProgramado?.exercicios?.length ?? 0 }])
+    );
+
+    const historicoTreinos = subsTreino.map((s: any) => {
+      const fromCredit = Number(s.pontosCreditados ?? 0);
+      const fromSnap = Number(s.pontuacaoSnapshot ?? 0);
+      const fromIncludeProg = Number(s.treinoAgendado?.treinoProgramado?.pontuacao ?? 0);
+      const fromIncludeExLen = Number(s.treinoAgendado?.treinoProgramado?.exercicios?.length ?? 0);
+      const fromMap = s.treinoAgendadoId && progPontuacaoMap.has(s.treinoAgendadoId) ? progPontuacaoMap.get(s.treinoAgendadoId)!.pontuacao : 0;
+      const fromMapEx = s.treinoAgendadoId && progPontuacaoMap.has(s.treinoAgendadoId) ? progPontuacaoMap.get(s.treinoAgendadoId)!.exerciciosCount : 0;
+
+      const pontos =
+        fromCredit > 0 ? fromCredit :
+        fromSnap > 0 ? fromSnap :
+        fromIncludeProg > 0 ? fromIncludeProg :
+        fromMap > 0 ? fromMap :
+        fromIncludeExLen > 0 ? fromIncludeExLen :
+        fromMapEx > 0 ? fromMapEx : 0;
+
+      const dur = s.duracaoMinutos ?? s.treinoAgendado?.treinoProgramado?.duracao ?? null;
+      const titulo = s.treinoAgendado?.treinoProgramado?.nome ?? s.treinoAgendado?.titulo ?? "Treino";
+
+      return {
+        tipo: "Treino" as const,
+        status: "Concluído",
+        data: new Date(s.criadoEm ?? Date.now()).toLocaleDateString("pt-BR"),
+        ts: +new Date(s.criadoEm ?? Date.now()),
+        duracao: typeof dur === "number" && dur > 0 ? `${dur} min` : undefined,
+        titulo,
+        pontuacao: Number(pontos) || 0,
+        };
+    });
+
+    const subsDesafio = await prisma.submissaoDesafio.findMany({
+      where: { atletaId: atleta.id, aprovado: true as any },
+      include: { desafio: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const historicoDesafios = subsDesafio.map((s: any) => ({
+      tipo: "Desafio" as const,
       status: "Concluído",
-      data: new Date(s.criadoEm ?? s.dataCriacao ?? Date.now()).toLocaleDateString("pt-BR"),
-      duracao: s.duracaoMinutos ? `${s.duracaoMinutos} min` : undefined,
-      titulo: s?.desafio?.titulo ?? "Desafio",
-      pontos: s?.desafio?.pontos ?? s?.desafio?.pontuacao ?? 0,
+      data: new Date(s.createdAt ?? Date.now()).toLocaleDateString("pt-BR"),
+      ts: +new Date(s.createdAt ?? Date.now()),
+      titulo: s.desafio?.titulo ?? "Desafio",
+      pontuacao: Number(s.desafio?.pontuacao ?? 0),
     }));
 
     const historico = [...historicoTreinos, ...historicoDesafios]
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 20)
+      .map(({ ts, ...rest }) => rest);
 
-      .sort((a, b) => (a.data > b.data ? -1 : 1))
-      .slice(0, 20);
-    const postagensVideo = await prisma.postagem?.findMany({
-      where: {
-        usuarioId,
-        OR: [
-          { videoUrl: { not: null } },
-          ],
-      },
+    const performanceFromHistorico = historico.reduce((acc, h) => acc + (Number((h as any).pontuacao) || 0), 0);
+    const disciplinaFromHistorico = historicoTreinos.length * 2;
+    const responsabilidadeFromHistorico = historicoDesafios.length * 2;
+    const postagensVideo = await prisma.postagem.findMany({
+      where: { usuarioId, OR: [{ videoUrl: { not: null } }] },
       select: { videoUrl: true },
       orderBy: { dataCriacao: "desc" },
       take: 30,
-    }).catch(() => [] as any[]);
-
-    const videos = (postagensVideo || []).flatMap((p: any) => {
-      const list: string[] = [];
-      if (p.videoUrl) list.push(p.videoUrl);
-      return list;
     });
+    const videos = postagensVideo.flatMap((p) => (p.videoUrl ? [p.videoUrl] : []));
 
     return res.json({
-      performance,
-      disciplina,
-      responsabilidade,
+      performance: performanceFromHistorico,
+      disciplina: disciplinaFromHistorico,
+      responsabilidade: responsabilidadeFromHistorico,
       historico,
       videos,
     });
@@ -584,47 +682,43 @@ export const getTreinosResumo = async (req: AuthenticatedRequest, res: Response)
   });
   if (!atleta) return res.status(404).json({ error: "Atleta não encontrado" });
 
-  const [estat, desafiosAprovados] = await Promise.all([
-    prisma.estatisticaAtleta.findUnique({ where: { atletaId: atleta.id } }),
-    prisma.submissaoDesafio.count({ where: { atletaId: atleta.id, aprovado: true } })
+  const [subsTreino, desafios] = await Promise.all([
+    prisma.submissaoTreino.findMany({
+      where: { atletaId: atleta.id, aprovado: true },
+      include: { treinoAgendado: { include: { treinoProgramado: true } } },
+      orderBy: { criadoEm: "desc" },
+    }),
+    prisma.submissaoDesafio.count({
+      where: { atletaId: atleta.id, aprovado: true },
+    }),
   ]);
 
-  if (estat) {
-    const categorias = {
-      Fisico: estat.fisico,
-      Tecnico: estat.tecnico,
-      Tatico: estat.tatico,
-      Mental: estat.mental,
-    };
-    return res.json({
-      completos: estat.totalTreinos,
-      horas: estat.horasTreinadas,
-      desafios: desafiosAprovados,       
-      categorias,
-    });
-  }
+  const completos = subsTreino.length;
 
-  const subs = await prisma.submissaoTreino.findMany({
-    where: { atletaId: atleta.id, aprovado: true },
-    select: {
-      tipoTreinoSnapshot: true,
-      duracaoMinutos: true,
-      pontosCreditados: true,
-    },
-  });
-
-  const completos = subs.length;
-  const horas = +(subs.reduce((acc, s) => acc + (s.duracaoMinutos || 0), 0) / 60).toFixed(1);
-  const pontos = subs.reduce((acc, s) => acc + (s.pontosCreditados || 0), 0);
-
+  let minutos = 0;
   const categorias = { Fisico: 0, Tecnico: 0, Tatico: 0, Mental: 0 };
-  for (const s of subs) {
-    if (s.tipoTreinoSnapshot === 'Físico') categorias.Fisico++;
-    else if (s.tipoTreinoSnapshot === 'Tecnico') categorias.Tecnico++;
-    else if (s.tipoTreinoSnapshot === 'Tatico') categorias.Tatico++;
-    else if (s.tipoTreinoSnapshot === 'Mental') categorias.Mental++;
+
+  for (const s of subsTreino as any[]) {
+    minutos += Number(s.duracaoMinutos ?? s.treinoAgendado?.treinoProgramado?.duracao ?? 0) || 0;
+
+    const raw =
+      s.tipoTreinoSnapshot ??
+      s.treinoAgendado?.treinoProgramado?.tipoTreino ??
+      "";
+
+    const norm = String(raw).normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+    if (norm.startsWith("fis")) categorias.Fisico++;
+    else if (norm.startsWith("tec")) categorias.Tecnico++;
+    else if (norm.startsWith("tat")) categorias.Tatico++;
+    else if (norm.startsWith("men")) categorias.Mental++;
   }
 
-  return res.json({ completos, horas, desafios: desafiosAprovados, pontos, categorias });
-};
+  const horas = +(minutos / 60).toFixed(1);
 
+  return res.json({
+    completos,
+    horas,
+    desafios,
+    categorias,
+  });
+};

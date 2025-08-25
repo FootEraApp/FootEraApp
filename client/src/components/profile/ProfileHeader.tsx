@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send } from "lucide-react";
 import { Button } from "../ui/button.js";
@@ -10,29 +10,30 @@ interface ProfileHeaderProps {
   idade?: number;
   posicao?: string;
   time?: string;
-  ponto?: number;
+  pontuacao?: number;
   avatar?: string | null;
   foto?: string | null;
   isOwnProfile?: boolean;
-  perfilId: string;  
+  perfilId: string;
 }
 
 export default function ProfileHeader({
+  perfilId,
   nome,
   idade,
   posicao,
   time,
-  ponto = 0,
+  pontuacao = 0,
   avatar,
   foto,
   isOwnProfile = false,
-  perfilId,
 }: ProfileHeaderProps) {
   const [modalAberto, setModalAberto] = useState(false);
   const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [enviandoDM, setEnviandoDM] = useState(false);
   const [carregandoMutuos, setCarregandoMutuos] = useState(false);
+  const [pontosTotal, setPontosTotal] = useState<number>(pontuacao ?? 0);
 
   const [confirmBox, setConfirmBox] = useState<{
     open: boolean;
@@ -40,12 +41,39 @@ export default function ProfileHeader({
     onYes: () => Promise<void> | void;
   } | null>(null);
 
+  useEffect(() => {
+    setPontosTotal(pontuacao ?? 0);
+  }, [pontuacao]);
+
+  useEffect(() => {
+    const token = Storage.token;
+    if (!perfilId || !token) return;
+
+    fetch(`${API.BASE_URL}/api/perfil/pontuacao/${encodeURIComponent(perfilId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const total =
+          (Number(data.performance) || 0) +
+          (Number(data.disciplina) || 0) +
+          (Number(data.responsabilidade) || 0);
+        setPontosTotal(total);
+      })
+      .catch(() => {});
+  }, [perfilId]);
+
   function pedirConfirmacao(text: string, onYes: () => Promise<void> | void) {
     setConfirmBox({ open: true, text, onYes });
   }
 
   async function readBodySafe(r: Response) {
-    try { return await r.json(); } catch { return null; }
+    try {
+      return await r.json();
+    } catch {
+      return null;
+    }
   }
   function isDuplicado(resp: Response, body: any) {
     if (resp.status === 400 || resp.status === 409) return true;
@@ -53,7 +81,7 @@ export default function ProfileHeader({
     return msg.includes("já segue") || msg.includes("ja segue") || msg.includes("já existe") || msg.includes("pendente");
   }
 
-   const seguirUsuario = async () => {
+  const seguirUsuario = async () => {
     const token = Storage.token;
     const seguidorUsuarioId = Storage.usuarioId;
     if (!token || !seguidorUsuarioId) {
@@ -78,7 +106,7 @@ export default function ProfileHeader({
         const ok = await deixarDeSeguir(perfilId);
         alert(ok ? "Você deixou de seguir este usuário." : "Não foi possível deixar de seguir agora.");
       });
-      return;  
+      return;
     }
 
     console.error("Falha ao seguir:", resp.status, body);
@@ -144,7 +172,7 @@ export default function ProfileHeader({
     return post.ok;
   }
 
-   const carregarUsuariosMutuos = async () => {
+  const carregarUsuariosMutuos = async () => {
     const token = Storage.token;
     setCarregandoMutuos(true);
     try {
@@ -168,7 +196,7 @@ export default function ProfileHeader({
   };
 
   const toggleSelecionado = (idUsuario: string) => {
-    setSelecionados(prev => {
+    setSelecionados((prev) => {
       const novo = new Set(prev);
       novo.has(idUsuario) ? novo.delete(idUsuario) : novo.add(idUsuario);
       return novo;
@@ -189,7 +217,7 @@ export default function ProfileHeader({
     try {
       setEnviandoDM(true);
       await Promise.all(
-        Array.from(selecionados).map(paraId =>
+        Array.from(selecionados).map((paraId) =>
           fetch(`${API.BASE_URL}/api/mensagem`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -249,8 +277,10 @@ export default function ProfileHeader({
 
       {(idade || posicao || time) && (
         <p className="footera-text-cream text-sm mb-1 text-center">
-          {idade && `${idade} anos`}{(idade && posicao) && " • "}
-          {posicao}{(posicao && time) && " • "}
+          {idade && `${idade} anos`}
+          {idade && posicao ? " • " : ""}
+          {posicao}
+          {posicao && time ? " • " : ""}
           {time}
         </p>
       )}
@@ -258,7 +288,7 @@ export default function ProfileHeader({
       <div className="w-full mt-4">
         <h2 className="footera-text-cream text-center mb-2">Pontuação FootEra</h2>
         <div className="footera-bg-green border border-footera-cream rounded-lg p-3 flex justify-center">
-          <span className="footera-text-cream text-3xl font-bold">{ponto} pts</span>
+          <span className="footera-text-cream text-3xl font-bold">{pontosTotal} pts</span>
         </div>
       </div>
 

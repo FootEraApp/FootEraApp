@@ -113,34 +113,36 @@ model Mensagem {
 }
 
 model Atleta {
-  id                    String           @id @default(uuid())
-  usuarioId             String           @unique
-  usuario               Usuario          @relation(fields: [usuarioId], references: [id])
-  nome                  String?
-  sobrenome             String?
-  email                 String?          @unique
-  senhaHash             String?
-  idade                 Int
-  cpf                   String?
-  telefone1             String?
-  telefone2             String?
-  nacionalidade         String?
-  naturalidade          String?
-  posicao               String?
-  altura                Decimal?
-  peso                  Decimal?
-  seloQualidade         String?
-  foto                  String?
-  categoria             Categoria[]
-  consentimento         Boolean          @default(false)
-  clubeId               String?
-  clube                 Clube?           @relation(fields: [clubeId], references: [id])
-  escolinhaId           String?
-  escolinha             Escolinha?       @relation(fields: [escolinhaId], references: [id])
-  statusConexao         StatusConexao    @default(Pendente)
-  dataCriacao           DateTime         @default(now())
-  dataUltimaModificacao DateTime?
-  pontuacao             PontuacaoAtleta?
+  id                           String           @id @default(uuid())
+  usuarioId                    String           @unique
+  usuario                      Usuario          @relation(fields: [usuarioId], references: [id])
+  nome                         String?
+  sobrenome                    String?
+  email                        String?          @unique
+  senhaHash                    String?
+  idade                        Int
+  cpf                          String?
+  telefone1                    String?
+  telefone2                    String?
+  nacionalidade                String?
+  naturalidade                 String?
+  posicao                      String?
+  altura                       Decimal?
+  peso                         Decimal?
+  seloQualidade                String?
+  foto                         String?
+  categoria                    Categoria[]
+  consentimento                Boolean          @default(false)
+  clubeId                      String?
+  clube                        Clube?           @relation(fields: [clubeId], references: [id])
+  escolinhaId                  String?
+  escolinha                    Escolinha?       @relation(fields: [escolinhaId], references: [id])
+  statusConexao                StatusConexao    @default(Pendente)
+  dataCriacao                  DateTime         @default(now())
+  dataUltimaModificacao        DateTime?
+  pontuacao                    PontuacaoAtleta?
+  perfilTipoTreino             String?
+  perfilTipoTreinoAtualizadoEm DateTime?
 
   postagens           Postagem[]
   midias              Midia[]
@@ -448,7 +450,7 @@ model Grupo {
   id        String  @id @default(uuid())
   nome      String
   descricao String?
-  foto      String? 
+  foto      String?
 
   ownerId String
   owner   Usuario @relation("GruposQuePossuo", fields: [ownerId], references: [id])

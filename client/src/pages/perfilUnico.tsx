@@ -214,7 +214,7 @@ export default function PerfilUnico() {
             ? `${usuario.dadosEspecificos.nome} ${usuario.dadosEspecificos.sobrenome}`
             : usuario.dadosEspecificos?.nome || usuario.usuario.nome || "Usuário"
         }
-        ponto={scores.performance + scores.disciplina + scores.responsabilidade}
+        pontuacao={scores.performance + scores.disciplina + scores.responsabilidade}
         isOwnProfile={isOwnProfile}
         foto={usuario.usuario.foto}
         perfilId={id}         
