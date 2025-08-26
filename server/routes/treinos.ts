@@ -218,7 +218,7 @@ router.post("/restaurar", authenticateToken, async (req, res) => {
         nome,
         codigo: `${nome}-${Date.now()}`,
         nivel: "Base",
-        tipoTreino: "Físico",
+        tipoTreino: "Fisico",
         categoria: [],
         duracao: 60,
         pontuacao: 15,

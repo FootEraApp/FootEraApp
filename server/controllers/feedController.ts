@@ -4,38 +4,62 @@ import { TipoMidia, Prisma } from "@prisma/client";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient;
-export const getFeedPosts = async (req: Request, res: Response) => {
+
+export const getFeedPosts: RequestHandler = async (req, res) => {
   try {
+    const userId: string | undefined = (req as any).userId;
+    const raw = String(req.query.filtro ?? req.query.filter ?? "todos").toLowerCase();
+    const filtro: "todos" | "seguindo" | "favoritos" | "meus" =
+      raw === "seguindo" || raw === "favoritos" || raw === "meus" ? raw : "todos";
+
+    const where: Prisma.PostagemWhereInput = {};
+
+    if (filtro === "meus") {
+      if (!userId) return res.status(401).json({ message: "Requer login." });
+      where.usuarioId = userId;
+    }
+
+    if (filtro === "seguindo") {
+      if (!userId) return res.status(401).json({ message: "Requer login." });
+      const seg = await prisma.seguidor.findMany({
+        where: { seguidorUsuarioId: userId },
+        select: { seguidoUsuarioId: true },
+      });
+      const ids = seg.map(s => s.seguidoUsuarioId);
+      if (ids.length === 0) {
+        return res.json([]); 
+      }
+      where.AND = [{ usuarioId: { in: ids } }, { usuarioId: { not: userId } }];
+    }
+
+    if (filtro === "favoritos") {
+      if (!userId) return res.status(401).json({ message: "Requer login." });
+      const favs = await prisma.favoritoUsuario.findMany({
+        where: { usuarioId: userId },
+        select: { favoritoUsuarioId: true },
+      });
+      const ids = favs.map(f => f.favoritoUsuarioId);
+      if (ids.length === 0) {
+        return res.json([]); 
+      }
+      where.AND = [{ usuarioId: { in: ids } }, { usuarioId: { not: userId } }];
+    }
+
+    if (filtro === "todos") {
+      if (userId) where.usuarioId = { not: userId };
+    }
+
     const postagens = await prisma.postagem.findMany({
+      where,
       include: {
-        usuario: {
-          select: {
-            id: true,
-            nome: true,
-            foto: true,
-            tipo: true,
-          },
-        },
-        curtidas: {
-          select: {
-            usuarioId: true,
-          },
-        },
+        usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
+        curtidas: { select: { usuarioId: true } },
         comentarios: {
           orderBy: { dataCriacao: "asc" },
-          include: {
-            usuario: {
-              select: {
-                nome: true,
-                foto: true,
-              },
-            },
-          },
+          include: { usuario: { select: { nome: true, foto: true } } },
         },
       },
-      orderBy: {
-        dataCriacao: "desc",
-      },
+      orderBy: { dataCriacao: "desc" },
     });
 
     return res.json(postagens);
@@ -44,7 +68,6 @@ export const getFeedPosts = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Erro ao buscar postagens." });
   }
 };
-
 
 export async function getPostById(req: Request, res: Response) {
   const { id } = req.params;
