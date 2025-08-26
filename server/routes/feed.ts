@@ -1,7 +1,8 @@
-import express, { Router} from "express";
+import { Router, Request, Response, NextFunction } from "express";
+import jwt, { JwtPayload } from "jsonwebtoken";
+import multer from "multer";
 import { authenticateToken } from "../middlewares/auth.js";
 import { adminAuth } from "../middlewares/admin-auth.js";
-import { PrismaClient } from "@prisma/client";
 
 import {
   getFeedPosts,
@@ -9,45 +10,37 @@ import {
   postar,
   deletarPostagem,
   getPerfil,
-  deletarUsuario
+  deletarUsuario,
 } from "../controllers/feedController.js";
 
-import multer from "multer";
+const router = Router();
 const upload = multer({ dest: "public/uploads/posts" });
 
-const router = Router();
-const prisma = new PrismaClient();
+interface AuthedRequest extends Request {
+  userId?: string;
+}
 
-router.use(authenticateToken);
+function optionalAuth(req: AuthedRequest, _res: Response, next: NextFunction) {
+  const h = req.headers?.authorization;
+  if (h?.startsWith("Bearer ")) {
+    try {
+      const token = h.slice(7);
+      const payload = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload | string;
+      if (typeof payload === "object" && payload) {
+        req.userId = (payload as any).id ?? (payload as any).userId ?? undefined;
+      }
+    } catch {
+    }
+  }
+  next();
+}
 
-router.get("/feed", authenticateToken, getFeedPosts);
+router.get("/", optionalAuth, getFeedPosts); 
 router.get("/perfil/:id", authenticateToken, getPerfil);
 router.delete("/usuario/:id", adminAuth, deletarUsuario);
-router.post("/seguir", seguirUsuario);
-router.post("/postar", upload.single("arquivo"), postar);
 
+router.post("/seguir", authenticateToken, seguirUsuario);
+router.post("/postar", authenticateToken, upload.single("arquivo"), postar);
 router.delete("/posts/:id", authenticateToken, deletarPostagem);
-
-router.get("/", authenticateToken, async (req, res) => {
-  try {
-    const posts = await prisma.postagem.findMany({
-      orderBy: { dataCriacao: "desc" },
-      include: {
-        usuario: true,
-        curtidas: true,
-        comentarios: {
-          include: {
-            usuario: true, 
-          },
-        },
-      },
-    });
-
-    res.json(posts);
-  } catch (err) {
-    console.error("Erro ao carregar feed:", err);
-    res.status(500).json({ message: "Erro ao carregar o feed" });
-  }
-});
 
 export default router;

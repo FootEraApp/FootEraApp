@@ -2,10 +2,9 @@ import express from "express";
 import { authenticateToken } from "server/middlewares/auth.js";
 import { prisma } from "server/lib/prisma.js";
 import multer from "multer";
-import path from "path";
 import { fileURLToPath } from "url";
-import { dirname } from "path";
-
+import path, { dirname } from "path";
+import { Prisma, StatusDesafioGrupo, TipoMensagem } from "@prisma/client";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -98,6 +97,7 @@ router.get("/submissoes", authenticateToken, async (req, res) => {
 
 router.post("/em-grupo", authenticateToken, async (req, res) => {
   const { grupoId, desafioOficialId } = req.body;
+  const userId = (req as any).userId;
 
   if (!grupoId || !desafioOficialId) {
     return res.status(400).json({ error: "grupoId e desafioOficialId são obrigatórios" });
@@ -111,18 +111,57 @@ router.post("/em-grupo", authenticateToken, async (req, res) => {
 
     const usuariosParaConectar = membrosDoGrupo.map((m) => ({ id: m.usuarioId }));
 
+    const desafio = await prisma.desafioOficial.findUnique({
+      where: { id: desafioOficialId },
+      select: { titulo: true, pontuacao: true, prazoSubmissao: true },
+    });
+
+    const expiraEm = desafio?.prazoSubmissao ?? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+
     const desafioEmGrupo = await prisma.desafioEmGrupo.create({
       data: {
-        grupoId,
-        desafioOficialId,
-        status: "ativo",
-        dataExpiracao: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-                membros: {
-          connect: usuariosParaConectar,
-        },
+        grupo: { connect: { id: grupoId } },
+        desafioOficial: { connect: { id: desafioOficialId } },
+        criadoPor: { connect: { id: userId } },
+
+        status: StatusDesafioGrupo.ativo,
+        dataExpiracao: expiraEm,
+
+        membros: { connect: usuariosParaConectar },
+        pontosSnapshot: desafio?.pontuacao ?? null,
+        bonus: (desafio?.pontuacao ?? 0) * 2,
       },
       include: {
-        membros: true, 
+        membros: true,
+        desafioOficial: true,
+      },
+    });
+
+     const payload: Prisma.JsonObject = {
+      desafioEmGrupoId: desafioEmGrupo.id,
+      desafioOficialId,
+      titulo: desafioEmGrupo.desafioOficial.titulo,
+      prazo: expiraEm.toISOString(),
+      pontuacao:
+        desafioEmGrupo.pontosSnapshot ??
+        desafioEmGrupo.desafioOficial.pontuacao ??
+        0,
+      linkSubmissao: `/desafios/grupo/${grupoId}/${desafioOficialId}/submeter`,
+    };
+
+    await prisma.mensagemGrupo.create({
+      data: {
+        grupo: { connect: { id: grupoId } },
+        usuario: { connect: { id: userId } },
+        desafioEmGrupo: { connect: { id: desafioEmGrupo.id } },
+
+        tipo: TipoMensagem.GRUPO_DESAFIO,
+        conteudo: `Desafio "${desafioEmGrupo.desafioOficial.titulo}" confirmado! Prazo: ${new Date(expiraEm).toLocaleDateString()}. Pontuação: ${
+          desafioEmGrupo.pontosSnapshot ??
+          desafioEmGrupo.desafioOficial.pontuacao ??
+          0
+        }`,
+        conteudoJson: payload,
       },
     });
 

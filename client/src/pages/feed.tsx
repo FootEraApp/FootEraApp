@@ -39,16 +39,16 @@ function PaginaFeed(): JSX.Element {
   const [enviandoDM, setEnviandoDM] = useState(false);
 
   const [idCompartilhado, setIdCompartilhado] = useState<string | null>(null);
-
+  const [filtro, setFiltro] = useState<"todos"|"seguindo"|"favoritos"| "meus">("todos");
 
   useEffect(() => {
-    async function carregarFeed() {
-      const dados = await getFeedPosts();
+    async function carregar() {
+      const dados = await getFeedPosts(filtro);
       if (!dados) return;
       setPosts(dados);
     }
-    carregarFeed();
-  }, []);
+    carregar();
+  }, [filtro]);
 
   const handleLike = async (postId: string) => {
       if(!userId) {
@@ -78,7 +78,7 @@ function PaginaFeed(): JSX.Element {
   const handleComentario = async (postId: string, texto: string) => {
     if (texto.trim()) {
       await comentarPost(postId, texto);
-      const dados = await getFeedPosts();
+      const dados = await getFeedPosts(filtro);
       setPosts(dados);
       setComentarioTextoPorPost((prev) => ({ ...prev, [postId]: "" }));
     }
@@ -93,7 +93,7 @@ function PaginaFeed(): JSX.Element {
     try {
       setCarregandoMutuos(true);
       setSelecionados(new Set()); 
-      const token = localStorage.getItem("token") || "";
+      const token = Storage.token || "";
       const lista = await getUsuariosMutuos(token);
       setUsuariosMutuos(lista);
     } catch (e) {
@@ -163,7 +163,46 @@ function PaginaFeed(): JSX.Element {
 
   return (
     <div className="px-4 py-6 space-y-6 pb-24">
-      <h1 className="text-2xl font-bold mb-4 text-center">Feed de Postagens</h1>
+      <h1 className="text-2xl font-bold mb-4 text-center text-green-800">Feed de Postagens</h1>
+       <div className="flex gap-2 justify-center mb-4">
+        {(["todos","seguindo","favoritos", "meus"] as const).map(f => (
+          <button
+            key={f}
+            onClick={() => setFiltro(f)}
+            className={`px-3 py-1 rounded-full text-sm border ${
+              filtro === f ? "bg-green-700 text-white border-green-700"
+                          : "bg-white text-green-700 border-green-700"
+            }`}
+          >
+            {f === "todos" ? "Todos" :
+             f === "seguindo" ? "Seguindo" :
+             f === "favoritos" ? "Favoritos" : "Meus"}
+          </button>
+        ))}
+      </div>
+
+      {posts.length === 0 && (
+      <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">
+        <p>
+          {{
+            todos: "Nenhuma postagem encontrada.",
+            seguindo: "Você ainda não segue ninguém — ou ninguém que você segue postou ainda.",
+            favoritos: "Você não tem nenhum usuário favoritado.",
+            meus: "Você ainda não postou nada.",
+          }[filtro]}
+        </p>
+
+        {filtro === "seguindo" || filtro === "favoritos" ? (
+          <Link href="/explorar" className="text-green-700 underline mt-2 inline-block">
+            Explorar perfis
+          </Link>
+        ) : filtro === "meus" ? (
+          <Link href="/post" className="text-green-700 underline mt-2 inline-block">
+            Criar minha primeira postagem
+          </Link>
+        ) : null}
+      </div>
+    )}
 
       {posts.map((post) => {
         const curtidas = post.curtidas || [];

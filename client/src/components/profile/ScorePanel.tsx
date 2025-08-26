@@ -18,7 +18,7 @@ export default function ScorePanel({
   const [matched, params] = useRoute<{ id?: string }>("/perfil/:id");
   const me =
     (Storage?.usuarioId as string | undefined) ??
-    (typeof window !== "undefined" ? localStorage.getItem("usuarioId") ?? "" : "");
+    (typeof window !== "undefined" ? Storage.token ?? "" : "");
   const targetId = (matched && params?.id) ? params.id! : me;
   const isOwn = !matched || (params?.id === me);
 

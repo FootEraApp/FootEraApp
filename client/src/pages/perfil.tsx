@@ -35,7 +35,7 @@ export default function ProfilePage() {
   const [badges, setBadges] = useState<Badge[]>([]);
   const [pontuacao, setPontuacao] = useState<Pontuacao | null>(null);
   const [loading, setLoading] = useState(true);
-
+  
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
@@ -66,12 +66,12 @@ export default function ProfilePage() {
 
         if (uid) {
           const { data: p } = await axios.get(
-            `${API.BASE_URL}/api/perfil/${uid}/pontuacao`,
+            `${API.BASE_URL}/api/perfil/pontuacao/${uid}`,
             { headers }
           );
-          const performance = p?.performance ?? 0;
-          const disciplina = p?.disciplina ?? 0;
-          const responsabilidade = p?.responsabilidade ?? 0;
+          const performance = Number(p?.performance) || 0;
+          const disciplina = Number(p?.disciplina) || 0;
+          const responsabilidade = Number(p?.responsabilidade) || 0;
 
           setPontuacao({
             pontuacaoTotal: performance + disciplina + responsabilidade,

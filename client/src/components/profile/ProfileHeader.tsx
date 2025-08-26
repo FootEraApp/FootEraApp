@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useParams } from "wouter";
 import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send } from "lucide-react";
 import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
@@ -34,7 +34,9 @@ export default function ProfileHeader({
   const [enviandoDM, setEnviandoDM] = useState(false);
   const [carregandoMutuos, setCarregandoMutuos] = useState(false);
   const [pontosTotal, setPontosTotal] = useState<number>(pontuacao ?? 0);
-
+  const [ehFavorito, setEhFavorito] = useState(false);
+  const { id: idDaUrl } = useParams<{ id?: string }>();
+    
   const [confirmBox, setConfirmBox] = useState<{
     open: boolean;
     text: string;
@@ -46,23 +48,22 @@ export default function ProfileHeader({
   }, [pontuacao]);
 
   useEffect(() => {
-    const token = Storage.token;
-    if (!perfilId || !token) return;
+  const token = Storage.token;
+  if (!perfilId || !token) return;
 
-    fetch(`${API.BASE_URL}/api/perfil/pontuacao/${encodeURIComponent(perfilId)}`, {
-      headers: { Authorization: `Bearer ${token}` },
+  fetch(`${API.BASE_URL}/api/perfil/pontuacao/${encodeURIComponent(perfilId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(r => (r.ok ? r.json() : null))
+    .then((data) => {
+      if (!data) return;
+      const performance = Number(data.performance) || 0;
+      const disciplina  = Number(data.disciplina)  || 0;
+      const responsab   = Number(data.responsabilidade) || 0;
+      setPontosTotal(performance + disciplina + responsab);
     })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!data) return;
-        const total =
-          (Number(data.performance) || 0) +
-          (Number(data.disciplina) || 0) +
-          (Number(data.responsabilidade) || 0);
-        setPontosTotal(total);
-      })
-      .catch(() => {});
-  }, [perfilId]);
+    .catch(() => {});
+}, [perfilId]);
 
   function pedirConfirmacao(text: string, onYes: () => Promise<void> | void) {
     setConfirmBox({ open: true, text, onYes });
@@ -243,6 +244,37 @@ export default function ProfileHeader({
   };
   const imageSrc = resolveImageSrc();
 
+  const alvoUsuarioId = isOwnProfile
+  ? (Storage.usuarioId as string)
+  : (idDaUrl as string);
+
+  useEffect(() => {
+    if (!alvoUsuarioId) return;
+    const token = Storage.token;
+    if (!token) return;
+
+    fetch(`${API.BASE_URL}/api/favoritos`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then((ids: string[]) => setEhFavorito(ids.includes(alvoUsuarioId)))
+      .catch(() => {});
+  }, [alvoUsuarioId]);
+
+  async function toggleFavorito() {
+    if (!alvoUsuarioId) return;
+    const token = Storage.token;
+    if (!token) {
+      alert("Faça login para favoritar.");
+      return;
+    }
+    await fetch(`${API.BASE_URL}/api/favoritos/${alvoUsuarioId}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setEhFavorito(v => !v);
+  }
+
   return (
     <div className="footera-bg-green p-6 flex flex-col items-center relative">
       {isOwnProfile && (
@@ -294,6 +326,15 @@ export default function ProfileHeader({
 
       {!isOwnProfile && (
         <div className="flex justify-center gap-4 mt-4 mb-2">
+          <div className="flex justify-center mt-2">
+          <button
+            onClick={toggleFavorito}
+            className={`text-2xl ${ehFavorito ? "text-yellow-500" : "text-gray-400"}`}
+            title={ehFavorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+          >
+            ★
+          </button>
+        </div>
           <button onClick={seguirUsuario} className="px-4 py-2 bg-green-600 text-white rounded-full">
             Seguir
           </button>
@@ -304,6 +345,7 @@ export default function ProfileHeader({
             Compartilhar
           </button>
         </div>
+        
       )}
 
       {isOwnProfile && (
