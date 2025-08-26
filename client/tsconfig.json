@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["*"],
+      "@pages/*": ["pages/*"]
+    },
+    "module": "esnext",
+    "target": "ES2020",
+    "jsx": "react-jsx",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "lib": ["DOM", "ES2020", "dom.iterable", "esnext"],
+    "types": ["next", "next/types/global", "vite/client", "react", "node"]
+  },
+  "include": ["src/**/*", "../api", "vite-env.d.ts"],
+  "exclude": ["node_modules", "dist"]
+}

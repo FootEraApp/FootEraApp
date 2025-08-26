@@ -1,0 +1,43 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["esnext", "dom"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "incremental": true,
+    "noEmit": true,
+    "tsBuildInfoFile": "./node_modules/.tsbuildinfo",
+    "baseUrl": ".",
+    "moduleDetection": "force",
+    "types": ["react", "react-dom", "node"],
+    "paths": {
+      "@/*": ["client/src/*"],
+      "@shared/*": ["shared/*"],
+      "@pages/*": ["client/src/pages/*"]
+    }
+  },
+  "ts-node": {
+    "esm": true,
+    "transpileOnly": true,
+  },
+  "include": [
+    "client/src/**/*",
+    "shared/**/*",
+    "server/**/*",
+    "types",
+    "client/vite-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist",
+    "**/*.test.ts"
+  ]
+}
