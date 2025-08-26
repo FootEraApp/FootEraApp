@@ -1,0 +1,66 @@
+👤 Perfis da Plataforma FootEra – Estrutura de Visibilidade
+🟦 1. Perfil de Atleta
+Cadastro obrigatório: Nome, idade, posição, foto, tipo de futebol (masculino/feminino), localização, vídeos e treinos.
+
+Usuário logado (dono do perfil):
+
+Pode editar todas as informações.
+
+Visualiza seu progresso: pontuação FootEra, desafios ativos, desempenho por treino.
+
+Vê solicitações de clubes ou escolinhas (caso receba convite ou análise).
+
+Acompanha quem curtiu ou comentou seus vídeos.
+
+Visualiza todos os dados privados como e-mail, telefone (opcional), e treinos ainda não publicados.
+
+Visitante (clube, escolinha ou atleta logado):
+
+Vê: foto, nome, posição, idade, cidade/estado, vídeos públicos, treinos validados, pontuação FootEra, ranking geral/regional.
+
+Não vê: dados pessoais, treinos ainda não validados, mensagens diretas (só via botão de contato com mediação).
+
+Se for "Atleta Independente": é exibido com um selo específico e não aparece nos rankings de clubes/escolinhas (exceto desafios públicos).
+
+🟫 2. Perfil de Escolinha
+Cadastro obrigatório: Nome, CNPJ (ou CPF), localização, categorias atendidas, redes sociais, estrutura (fotos e vídeo), agenda de eventos.
+
+Usuário logado (admin da escolinha):
+
+Edita dados da escolinha.
+
+Gerencia atletas vinculados (aceitar ou recusar solicitação).
+
+Visualiza performance dos seus atletas.
+
+Pode postar vídeos, agenda, registrar participação em campeonatos.
+
+Acompanha ranking interno da escolinha.
+
+Visitante (atleta, clube, público geral):
+
+Vê: nome, cidade/estado, categorias, vídeos e fotos da estrutura, atletas em destaque (validados), redes sociais, agenda pública.
+
+Não vê: dados internos como e-mail de gestão, histórico completo de atletas.
+
+🟧 3. Perfil de Clube
+Cadastro obrigatório: Nome, localização, divisão, categorias, redes sociais, escudo, vídeos da estrutura.
+
+Usuário logado (gestor do clube):
+
+Pode procurar atletas por filtros (posição, idade, ranking, região).
+
+Enviar interesse por atleta.
+
+Marcar eventos como peneiras.
+
+Ver histórico de performance dos atletas com vínculo validado por escolinhas.
+
+Criar rankings internos ou campanhas específicas.
+
+Visitante (atleta ou escolinha):
+
+Vê: informações públicas do clube, escudo, categorias, peneiras abertas, ranking de atletas mais selecionados.
+
+Não vê: buscas realizadas, interesses ainda não enviados, filtros salvos ou dados privados.
+

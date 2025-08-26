@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 54 47% 95%;
+  --foreground: 158 43% 17%;
+  --card: 54 47% 95%;
+  --card-foreground: 158 43% 17%;
+  --popover: 54 47% 95%;
+  --popover-foreground: 158 43% 17%;
+  --primary: 158 43% 17%;
+  --primary-foreground: 54 47% 95%;
+  --secondary: 54 47% 95%;
+  --secondary-foreground: 158 43% 17%;
+  --muted: 158 5% 90%;
+  --muted-foreground: 158 43% 40%;
+  --accent: 54 47% 95%;
+  --accent-foreground: 158 43% 17%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 54 47% 95%;
+  --border: 158 10% 80%;
+  --input: 158 10% 80%;
+  --ring: 158 43% 17%;
+  --radius: 0.5rem;
+
+  /* Custom colors for FootEra */
+  --footera-green: 158 43% 17%;
+  --footera-cream: 54 47% 95%;
+  --footera-gold: 45 100% 50%;
+  --footera-success: 120 43% 34%;
+  --footera-warning: 35 100% 50%;
+  --footera-error: 0 65% 47%;
+}
+
+.dark {
+  --background: 158 43% 10%;
+  --foreground: 54 47% 95%;
+  --card: 158 43% 15%;
+  --card-foreground: 54 47% 95%;
+  --popover: 158 43% 15%;
+  --popover-foreground: 54 47% 95%;
+  --primary: 54 47% 95%;
+  --primary-foreground: 158 43% 17%;
+  --secondary: 158 43% 20%;
+  --secondary-foreground: 54 47% 95%;
+  --muted: 158 43% 30%;
+  --muted-foreground: 158 5% 80%;
+  --accent: 158 43% 25%;
+  --accent-foreground: 54 47% 95%;
+  --destructive: 0 62% 30%;
+  --destructive-foreground: 54 47% 95%;
+  --border: 158 43% 30%;
+  --input: 158 43% 30%;
+  --ring: 54 47% 95%;
+
+  /* Custom colors for FootEra dark mode */
+  --footera-green: 158 43% 17%;
+  --footera-cream: 54 47% 95%;
+  --footera-gold: 45 100% 50%;
+  --footera-success: 120 43% 34%;
+  --footera-warning: 35 100% 50%;
+  --footera-error: 0 65% 47%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold;
+  }
+}
+
+@layer components {
+  .footera-bg-green {
+    @apply bg-[#0A4B3A];
+  }
+  
+  .footera-text-green {
+    @apply text-[#0A4B3A];
+  }
+  
+  .footera-bg-cream {
+    @apply bg-[#F8F3E0];
+  }
+  
+  .footera-text-cream {
+    @apply text-[#F8F3E0];
+  }
+  
+  .footera-bg-gold {
+    @apply bg-[#FFD700];
+  }
+  
+  .footera-text-gold {
+    @apply text-[#FFD700];
+  }
+  
+  .footera-bg-success {
+    @apply bg-[#2E7D32];
+  }
+  
+  .footera-bg-warning {
+    @apply bg-[#FF8F00];
+  }
+  
+  .footera-bg-error {
+    @apply bg-[#C62828];
+  }
+  
+  .training-item {
+    @apply rounded-lg overflow-hidden shadow mb-4 bg-white;
+  }
+  
+  .video-thumbnail {
+    @apply relative rounded-lg overflow-hidden;
+  }
+  
+  .video-thumbnail::after {
+    content: '';
+    @apply absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-black/60 rounded-full;
+  }
+  
+  .video-thumbnail::before {
+    content: '';
+    @apply absolute top-1/2 left-[52%] transform -translate-x-1/2 -translate-y-1/2 z-10 border-t-8 border-b-8 border-t-transparent border-b-transparent border-l-[14px] border-l-white;
+  }
+}
