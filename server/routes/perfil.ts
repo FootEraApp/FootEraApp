@@ -2,7 +2,7 @@ import { Router } from "express";
 import {
   getPontuacaoDetalhada, getPerfilUsuario, getAtividadesRecentes, getBadges,
   getTreinosResumo, getProgressoTreinos, getPontuacaoPerfil,
-  getPerfilUsuarioMe, getPontuacaoMe, getAtividadesRecentesMe, getBadgesMe, atualizarPerfil
+  getPerfilUsuarioMe, getPontuacaoMe, getAtividadesRecentesMe, getBadgesMe, atualizarPerfil, getPosicaoAtualAtleta
 } from "../controllers/perfilController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 import { PrismaClient, TipoUsuario } from "@prisma/client";
@@ -37,5 +37,12 @@ router.get("/:id/treinos", authenticateToken, getTreinosResumo);
 router.get("/:id/progresso", authenticateToken, getProgressoTreinos);
 router.get("/:id", authenticateToken, getPerfilUsuario);
 router.put("/:id", authenticateToken, upload.single("foto"), atualizarPerfil);
+
+router.get("/me/posicao-atual", authenticateToken, (req, res) => {
+  getPosicaoAtualAtleta(req, res);
+});
+router.get("/:id/posicao-atual", authenticateToken, (req, res) => {
+  getPosicaoAtualAtleta(req, res);
+});
 
 export default router;

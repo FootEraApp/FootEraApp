@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
 import { calcularPontuacaoPorUsuarioId, atualizarCachePontuacao } from "server/services/pontuacao.service.js";
 import { AnyArn } from "aws-sdk/clients/groundstation.js";
-const prisma = new PrismaClient();
 
+const prisma = new PrismaClient();
 
 export async function getPontuacaoDetalhada(req: Request, res: Response) {
   try {
@@ -721,4 +721,62 @@ export const getTreinosResumo = async (req: AuthenticatedRequest, res: Response)
     desafios,
     categorias,
   });
+};
+
+export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Response) => {
+  const usuarioId = req.params?.id || req.userId;
+
+  if (!usuarioId) {
+    return res.status(401).json({ error: "Não autenticado." });
+  }
+
+  try {
+    const atleta = await prisma.atleta.findUnique({
+      where: { usuarioId },
+      select: { id: true, posicao: true },
+    });
+
+    if (!atleta) {
+      return res.status(404).json({ error: "Atleta não encontrado para este usuário." });
+    }
+
+    const vinculoMaisRecente = await prisma.atletaElenco.findFirst({
+      where: { atletaId: atleta.id, elenco: { ativo: true } },
+      include: {
+        elenco: { select: { id: true, nome: true, ativo: true, dataCriacao: true } },
+      },
+      orderBy: [
+        { elenco: { dataCriacao: "desc" } },
+        { updatedAt: "desc" }, 
+      ],           
+    });
+
+    if (vinculoMaisRecente && vinculoMaisRecente.posicao) {
+      return res.json({
+        origem: "elenco" as const,
+        posicao: vinculoMaisRecente.posicao,
+        atletaId: atleta.id,
+        usuarioId,
+        elenco: vinculoMaisRecente.elenco
+          ? {
+              id: vinculoMaisRecente.elenco.id,
+              nome: vinculoMaisRecente.elenco.nome,
+              ativo: vinculoMaisRecente.elenco.ativo,
+            }
+          : undefined,
+        numeroCamisa: vinculoMaisRecente.numeroCamisa ?? null,
+        updatedAt: vinculoMaisRecente.updatedAt?.toISOString?.() ?? null,
+      });
+    }
+
+    return res.json({
+      origem: "atleta" as const,
+      posicao: (atleta.posicao as PosicaoCampo) ?? null,
+      atletaId: atleta.id,
+      usuarioId,
+    });
+  } catch (error) {
+    console.error("Erro ao obter posição atual do atleta:", error);
+    return res.status(500).json({ error: "Erro interno do servidor" });
+  }
 };

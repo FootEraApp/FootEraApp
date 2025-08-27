@@ -27,47 +27,27 @@ const upload = multer({
 });
 
 router.get("/", authenticateToken, async (req, res) => {
-  const { tipoUsuarioId } = req.query;
-
-  if (!tipoUsuarioId || typeof tipoUsuarioId !== "string") {
-    return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
-  }
+  const atletaId =
+    typeof req.query.atletaId === "string"
+      ? (req.query.atletaId as string)
+      : typeof req.query.tipoUsuarioId === "string"
+      ? (req.query.tipoUsuarioId as string)
+      : undefined;
 
   try {
+    const where = atletaId
+      ? { submissoes: { none: { atletaId } } }
+      : undefined;
+
     const desafios = await prisma.desafioOficial.findMany({
-      where: {
-        submissoes: {
-          none: {
-            atletaId: tipoUsuarioId
-          }
-        }
-      },
-      orderBy: { createdAt: "desc" }
+      where,
+      orderBy: { createdAt: "desc" },
     });
 
     return res.json(desafios);
   } catch (err) {
     console.error("Erro ao buscar desafios:", err);
     return res.status(500).json({ error: "Erro interno ao buscar desafios" });
-  }
-});
-
-router.get("/:id", authenticateToken, async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const desafio = await prisma.desafioOficial.findUnique({
-      where: { id },
-    });
-
-    if (!desafio) {
-      return res.status(404).json({ error: "Desafio não encontrado" });
-    }
-
-    return res.json(desafio);
-  } catch (err) {
-    console.error("Erro ao buscar desafio por id:", err);
-    return res.status(500).json({ error: "Erro interno ao buscar desafio" });
   }
 });
 
@@ -236,7 +216,6 @@ router.post("/upload/file", authenticateToken, (req, res) => {
   });
 });
 
-
 router.get("/em-grupo/:grupoId/ativo", authenticateToken, async (req, res) => {
   const { grupoId } = req.params;
 
@@ -291,6 +270,37 @@ router.get("/em-grupo/:grupoId/ativo", authenticateToken, async (req, res) => {
     return res
       .status(500)
       .json({ error: "Erro interno ao buscar desafio em grupo ativo" });
+  }
+});
+
+router.get("/oficiais", authenticateToken, async (_req, res) => {
+  try {
+    const desafios = await prisma.desafioOficial.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+    res.json(desafios);
+  } catch (e) {
+    console.error("Erro ao listar desafios oficiais:", e);
+    res.status(500).json({ error: "Erro interno" });
+  }
+});
+
+router.get("/:id", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const desafio = await prisma.desafioOficial.findUnique({
+      where: { id },
+    });
+
+    if (!desafio) {
+      return res.status(404).json({ error: "Desafio não encontrado" });
+    }
+
+    return res.json(desafio);
+  } catch (err) {
+    console.error("Erro ao buscar desafio por id:", err);
+    return res.status(500).json({ error: "Erro interno ao buscar desafio" });
   }
 });
 

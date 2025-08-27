@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import { PrismaClient, TipoMensagem } from "@prisma/client";
+import { AuthenticatedRequest } from "server/middlewares/auth.js";
 
 const prisma = new PrismaClient();
+
 type AuthedRequest = Request & { userId?: string };
 
 async function creditarPontosPerformance(atletaId: string, pontos: number) {
@@ -30,10 +32,18 @@ async function creditarPontosPerformance(atletaId: string, pontos: number) {
 
 export async function assignDesafioAoGrupo(req: AuthedRequest, res: Response) {
   try {
-    const { grupoId } = req.params;
-    const { desafioOficialId, prazo } = req.body;
+    const grupoId: string =
+      (req.params as any)?.grupoId ?? (req.body as any)?.grupoId;
+    const { desafioOficialId, prazo } = req.body as {
+      desafioOficialId: string;
+      prazo?: string;
+    };
+
     const userId = req.userId;
     if (!userId) return res.status(401).json({ message: "unauthorized" });
+    if (!grupoId || !desafioOficialId) {
+      return res.status(400).json({ message: "grupoId e desafioOficialId são obrigatórios" });
+    }
 
     const membro = await prisma.membroGrupo.findUnique({
       where: { grupoId_usuarioId: { grupoId, usuarioId: userId } },
@@ -78,7 +88,8 @@ export async function assignDesafioAoGrupo(req: AuthedRequest, res: Response) {
           pontos: pontosSnapshot,
           enviados: 0,
           total: totalMembros,
-          linkSubmissao: `/desafio-grupo/${assignment.id}/submeter`,
+          linkSubmissao: `/submissao/grupo/${assignment.id}/${assignment.desafioOficialId}`,
+          desafioId: assignment.desafioOficialId,
         } as any,
       },
     });
@@ -138,7 +149,9 @@ export async function submeterDesafioGrupo(req: AuthedRequest, res: Response) {
       ? new Date() <= assignment.dataExpiracao
       : true;
 
-    const pontos = assignment.pontosSnapshot ?? assignment.desafioOficial.pontuacao ?? 0;
+    const pontos =
+      assignment.pontosSnapshot ?? assignment.desafioOficial.pontuacao ?? 0;
+
     const subGrupo = await prisma.submissaoDesafioEmGrupo.create({
       data: {
         submissaoDesafioId: sub.id,
@@ -169,7 +182,8 @@ export async function submeterDesafioGrupo(req: AuthedRequest, res: Response) {
           titulo: assignment.desafioOficial.titulo,
           enviados: enviadosNoPrazo,
           total: totalMembros,
-          linkSubmissao: `/desafio-grupo/${assignment.id}/submeter`,
+          linkSubmissao: `/submissao/grupo/${desafioEmGrupoId}/${assignment.desafioOficialId}`,
+          desafioId: assignment.desafioOficialId,
         } as any,
       },
     });
@@ -237,3 +251,28 @@ export async function getDesafioEmGrupo(req: Request, res: Response) {
     res.status(500).json({ message: "erro" });
   }
 }
+
+export const progressoDesafioEmGrupo = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { desafioEmGrupoId } = req.params as { desafioEmGrupoId: string };
+
+    const deg = await prisma.desafioEmGrupo.findUnique({
+      where: { id: desafioEmGrupoId },
+      select: { grupoId: true },
+    });
+    if (!deg) return res.status(404).json({ error: "Desafio em grupo não encontrado" });
+
+    const total = await prisma.membroGrupo.count({
+      where: { grupoId: deg.grupoId },
+    });
+
+    const enviados = await prisma.submissaoDesafioEmGrupo.count({
+      where: { desafioEmGrupoId },
+    });
+
+    res.json({ enviados, total });
+  } catch (e) {
+    console.error("Erro ao buscar progresso:", e);
+    res.status(500).json({ error: "Erro ao buscar progresso" });
+  }
+};
