@@ -162,6 +162,7 @@ model Atleta {
   treinosRecebidos    TreinoProgramadoRecebido[]
   mensagens           Mensagem[]                 @relation("AtletaMensagens")
   EstatisticaAtleta   EstatisticaAtleta[]
+  AtletaElenco        AtletaElenco[]
 }
 
 model TreinoProgramado {
@@ -695,7 +696,7 @@ model SubmissaoDesafioEmGrupo {
   pontosGanhos  Int?
   dentroDoPrazo Boolean  @default(false)
 
-  @@unique([desafioEmGrupoId, usuarioId]) // <— NOVO: 1 submissão por usuário
+  @@unique([desafioEmGrupoId, usuarioId])
   @@index([desafioEmGrupoId])
   @@index([usuarioId])
 }
@@ -739,6 +740,52 @@ model FavoritoUsuario {
   @@unique([usuarioId, favoritoUsuarioId], name: "usuarioId_favoritoUsuarioId")
   @@index([usuarioId])
   @@index([favoritoUsuarioId])
+}
+
+model Elenco {
+  id           String   @id @default(uuid())
+  nome         String
+  professorId  String?
+  clubeId      String?
+  escolinhaId  String?
+  atletasIds   String[]
+  maxJogadores Int      @default(11)
+  ativo        Boolean  @default(true)
+  dataCriacao  DateTime @default(now())
+
+  atletasElenco AtletaElenco[]
+}
+
+model AtletaElenco {
+  id       String       @id @default(uuid())
+  elencoId String
+  atletaId String
+  posicao  PosicaoCampo
+
+  numeroCamisa Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  elenco Elenco @relation(fields: [elencoId], references: [id], onDelete: Cascade)
+  atleta Atleta @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+
+  @@unique([elencoId, posicao])
+  @@unique([elencoId, atletaId])
+  @@index([atletaId])
+}
+
+enum PosicaoCampo {
+  GOL
+  LD
+  ZD
+  ZE
+  LE
+  VOL1
+  VOL2
+  MEI
+  PD
+  CA
+  PE
 }
 
 enum StatusDesafioGrupo {

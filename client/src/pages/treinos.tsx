@@ -65,7 +65,6 @@ interface UsuarioLogado {
   tipoUsuarioId: string;
 }
 
-
 export default function PaginaTreinos() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
@@ -138,7 +137,6 @@ export default function PaginaTreinos() {
       }
     };
 
-
     const carregarUsuario = () => {
       const tipoSalvo = Storage.tipoSalvo;
       const usuarioId = Storage.usuarioId;
@@ -157,11 +155,9 @@ export default function PaginaTreinos() {
         console.warn("Tipo de usuário, tipoUsuarioId ou ID inválido ou não encontrado.");
       }
     };
-
     carregar();
     carregarUsuario();
   }, []);
-
 
   const formatarDataHora = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
@@ -308,6 +304,7 @@ const renderDesafioCard = (desafio: Desafio) => (
       </div>
     );
   };
+
 async function removerTreinoAgendado(id: string) {
   const token = Storage.token;
   if (!token) return alert("Sessão expirada.");
@@ -403,7 +400,6 @@ async function enviarCompartilhamentoPorDM() {
   }
 }
 
-
   return (
     <div className="min-h-screen bg-yellow-50 pb-20">
       <div className="p-4 max-w-2xl mx-auto">
@@ -416,7 +412,6 @@ async function enviarCompartilhamentoPorDM() {
           <>
             {usuario.tipo === 'atleta' && (
               <div className="space-y-6">
-
                  <div className="bg-white rounded shadow p-4">
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="text-lg font-semibold">Meus Treinos</h3>
@@ -445,7 +440,6 @@ async function enviarCompartilhamentoPorDM() {
                 </div>
               </div>
             )}
-
 
             {usuario.tipo === 'professor' && (
               <div className="space-y-6">
