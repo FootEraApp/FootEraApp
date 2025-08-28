@@ -13,6 +13,42 @@ services:
       - "5555:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "footera"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./server
+    container_name: footera-backend
+    restart: always
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./server:/app
+      - uploads_data:/app/public/uploads   # persistência p/ fotos
+    environment:
+      DATABASE_URL: postgres://postgres:admin@postgres:5432/footera
+      APP_URL: http://localhost:3001       # se acessar por IP da rede, mude p/ http://192.168.18.8:3001
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: ./client
+    container_name: footera-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./client:/app
+    environment:
+      VITE_API_URL: http://localhost:3001   # se abrir no celular via IP, mude p/ http://192.168.18.8:3001
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:
+  uploads_data:

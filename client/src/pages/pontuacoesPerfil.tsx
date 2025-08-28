@@ -7,6 +7,7 @@ import { BarChart2, Timer, KeyRound, CheckCircle, Play, AlertCircle } from "luci
 import Storage from "../../../server/utils/storage";
 import { API } from "../config";
 import CardAtletaShield from "../components/cards/CardAtletaShield";
+import { formatarUrlFoto } from "@/utils/formatarFoto";
 
 type PerfilResp = {
   tipo: "Atleta" | "Professor" | "Escolinha" | "Clube" | null;
@@ -303,7 +304,7 @@ export default function PontuacaoDetalhada() {
                   atleta={{
                     atletaId: perfil.atletaId,
                     nome: perfil.nome,
-                    foto: perfil.foto,
+                    foto: formatarUrlFoto(perfil.foto),
                     posicao: perfil.posicao,
                     idade: null,
                   }}
