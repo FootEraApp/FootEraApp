@@ -851,6 +851,7 @@ enum TipoMensagem {
   CONQUISTA
   GRUPO_DESAFIO
   GRUPO_DESAFIO_BONUS
+  CARD
 }
 
 enum TipoMembro {

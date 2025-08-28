@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import axios from "axios";
 import { Link, useLocation, useRoute } from "wouter";
 import { BarChart2, Timer, KeyRound, Play, CheckCircle, AlertCircle, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import CardAtletaShield from "../components/cards/CardAtletaShield.js";
+import * as htmlToImage from "html-to-image";
 
 type PerfilResp = {
   tipo: "Atleta" | "Professor" | "Escolinha" | "Clube" | null;
@@ -90,9 +91,24 @@ async function safeGet<T>(url: string, signal?: AbortSignal): Promise<T | null> 
   return null;
 }
 
+function fixFotoPath(f?: string | null) {
+  if (!f) return null;
+  if (/^https?:\/\//i.test(f)) return f;
+
+  let rel = f.startsWith("/assets/") ? f : `/assets/usuarios/${f}`;
+  rel = rel.replace(/\/\d+-([^/]+\.(?:png|jpe?g|webp|gif))$/i, "/$1");
+
+  return `${API.BASE_URL}${rel}`;
+}
+
 export default function PontuacaoDetalhada() {
   const [, setLocation] = useLocation();
   const [matchedWithId, params] = useRoute<{ id: string }>("/perfil/:id/pontuacao");
+
+  const [postando, setPostando] = useState(false);
+  const IMG_PLACEHOLDER =
+    'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="420"><rect width="100%" height="100%" fill="%23eee"/></svg>';
+  const cardShotRef = useRef<HTMLDivElement | null>(null);
 
   const targetUserId: string =
     (matchedWithId && params?.id) ? params.id :
@@ -121,6 +137,23 @@ export default function PontuacaoDetalhada() {
     }
     return { w: 300, h: 420 };
   }, [isMobile]);
+
+  async function preloadImgs(node: HTMLElement) {
+  const imgs = Array.from(node.querySelectorAll("img, image")) as (HTMLImageElement | SVGImageElement)[];
+  await Promise.all(
+    imgs.map((el) => new Promise<void>((resolve) => {
+      const url = (el as any).src || (el as any).href?.baseVal || (el as any).href;
+      if (!url) return resolve();
+      const im = new Image();
+      im.crossOrigin = "anonymous";
+      im.onload = () => resolve();
+      im.onerror = () => resolve();
+      im.src = url;
+      if ((el as any).crossOrigin !== undefined) (el as any).crossOrigin = "anonymous";
+      if (el instanceof HTMLImageElement && el.complete && el.naturalWidth) resolve();
+    }))
+  );
+}
 
   useEffect(() => {
     const token = readToken();
@@ -173,10 +206,12 @@ export default function PontuacaoDetalhada() {
           }
         }
 
+        const fotoAbs = fixFotoPath(foto);
+
         setPerfil({
           atletaId,
           nome: nomeBase,
-          foto,
+          foto: fotoAbs,
           posicao: posicaoVigente ?? posicaoPerfil ?? undefined,
         });
 
@@ -228,10 +263,89 @@ export default function PontuacaoDetalhada() {
     }
   }, [loading]);
 
-  const perf = pontos?.performance ?? 0;
-  const disc = pontos?.disciplina ?? 0;
-  const resp = pontos?.responsabilidade ?? 0;
-  const ovr = pontos?.mediaGeral ?? Math.round((perf + disc + resp) / 3) ?? 0;
+  function buildForm(conteudo: string, blob: Blob) {
+    const form = new FormData();
+    form.append("conteudo", conteudo);
+    form.append("imagem", new File([blob], "card.png", { type: "image/png" }));
+    return form;
+  }
+
+ async function postarMeuCard() {
+  if (postando) return;
+  setPostando(true);
+  try {
+    const token = readToken();
+    if (!token) { setLocation("/login"); return; }
+
+    const perf = pontos?.performance ?? 0;
+    const disc = pontos?.disciplina ?? 0;
+    const resp = pontos?.responsabilidade ?? 0;
+    const ovr  = pontos?.mediaGeral ?? Math.round((perf + disc + resp) / 3);
+
+    const descricao =
+      `Meu Card FOOTERA\n` +
+      `OVR: ${ovr}\n` +
+      `Performance: ${perf} pts\n` +
+      `Disciplina: ${disc} pts\n` +
+      `Responsabilidade: ${resp} pts`;
+
+    const node = cardShotRef.current;
+    if (!node) { alert("Não consegui capturar o card."); return; }
+
+    await preloadImgs(node);
+    await new Promise(r => requestAnimationFrame(r as any));
+
+    const dataUrl = await htmlToImage.toPng(node, {
+      pixelRatio: 2,
+      cacheBust: true,
+      imagePlaceholder: IMG_PLACEHOLDER,
+    });
+
+    // 1) JSON com midiaBase64
+    let res = await api.post("/api/post",
+      { descricao, midiaBase64: dataUrl },
+      { validateStatus: () => true }
+    );
+
+    // 2) Tenta com imagemBase64
+    if (res.status === 400) {
+      res = await api.post("/api/post",
+        { descricao, imagemBase64: dataUrl },
+        { validateStatus: () => true }
+      );
+    }
+
+    // 3) Fallback multipart: campo "midia" (e depois "imagem")
+    if (res.status === 400) {
+      const blob = await (await fetch(dataUrl)).blob();
+
+      const fdA = new FormData();
+      fdA.append("descricao", descricao);
+      fdA.append("midia", new File([blob], "card.png", { type: "image/png" }));
+      res = await api.post("/api/post", fdA, { validateStatus: () => true });
+
+      if (res.status === 400) {
+        const fdB = new FormData();
+        fdB.append("descricao", descricao);
+        fdB.append("imagem", new File([blob], "card.png", { type: "image/png" }));
+        res = await api.post("/api/post", fdB, { validateStatus: () => true });
+      }
+    }
+
+    if (res.status >= 200 && res.status < 300) {
+      const postId = res.data?.id || res.data?.post?.id || res.data?.postagem?.id || res.data?.data?.id;
+      if (postId) setLocation(`/post/${postId}`); else alert("Post criado, mas sem ID para redirecionar.");
+    } else {
+      console.error("Falha ao criar post:", res.status, res.data);
+      alert(res.data?.message || res.data?.error || "Não foi possível criar o post agora.");
+    }
+  } catch (e) {
+    console.error(e);
+    alert("Falha ao publicar seu card.");
+  } finally {
+    setPostando(false);
+  }
+}
 
   return (
     <div className="min-h-screen bg-transparent pb-28">
@@ -258,22 +372,40 @@ export default function PontuacaoDetalhada() {
         <>
           <section className="mx-4 mt-4">
             {perfil.atletaId ? (
-              <div className="flex flex-col items-center">
-                <CardAtletaShield
-                  atleta={{
-                    atletaId: perfil.atletaId,
-                    nome: perfil.nome,
-                    foto: perfil.foto,
-                    posicao: perfil.posicao,
-                    idade: null,
-                  }}
-                  ovr={ovr}
-                  perf={perf}
-                  disc={disc}
-                  resp={resp}
-                  size={{ w: CARD_SIZE.w, h: CARD_SIZE.h }}
-                  goldenMinOVR={88}
-                />
+              <div className="flex flex-col items-center gap-3">
+                <div ref={cardShotRef}>
+                  <CardAtletaShield
+                    atleta={{
+                      atletaId: perfil.atletaId,
+                      nome: perfil.nome,
+                      foto: perfil.foto,
+                      posicao: perfil.posicao,
+                      idade: null,
+                    }}
+                    ovr={pontos?.mediaGeral ?? 0}
+                    perf={pontos?.performance ?? 0}
+                    disc={pontos?.disciplina ?? 0}
+                    resp={pontos?.responsabilidade ?? 0}
+                    size={{ w: CARD_SIZE.w, h: CARD_SIZE.h }}
+                    goldenMinOVR={88}
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={postarMeuCard}
+                    disabled={postando}
+                    className="px-3 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-60"
+                  >
+                    {postando ? "Publicando..." : "Postar meu card"}
+                  </button>
+                  <button
+                    onClick={() => setLocation("/mensagens")}
+                    className="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    Enviar em mensagens
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="rounded-md bg-white shadow p-4 text-sm text-gray-700">
@@ -293,19 +425,19 @@ export default function PontuacaoDetalhada() {
                 <div className="flex items-center gap-2 font-semibold">
                   <BarChart2 /> PERFORMANCE
                 </div>
-                <div>{perf} pts</div>
+                <div>{pontos?.performance ?? 0} pts</div>
               </div>
               <div className="flex justify-between items-center px-2">
                 <div className="flex items-center gap-2 font-semibold">
                   <Timer /> DISCIPLINA
                 </div>
-                <div>{disc} pts</div>
+                <div>{pontos?.disciplina} pts</div>
               </div>
               <div className="flex justify-between items-center px-2">
                 <div className="flex items-center gap-2 font-semibold">
                   <KeyRound /> RESPONSABILIDADE
                 </div>
-                <div>{resp} pts</div>
+                <div>{pontos?.responsabilidade} pts</div>
               </div>
             </div>
             {pontos?.ultimaAtualizacao && (
