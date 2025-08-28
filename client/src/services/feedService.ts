@@ -39,10 +39,11 @@ export interface CriarPostInput {
 }
 
 export async function getFeedPosts(
+  filtro: "todos" | "seguindo" | "favoritos" | "meus" = "todos",
   onUnauthorized?: () => void
 ): Promise<PostagemComUsuario[]> {
   try {
-    const res = await apiGet("/api/feed/", onUnauthorized);
+    const res = await apiGet(`/api/feed?filtro=${filtro}`, onUnauthorized);
     const data = await res.json();
 
     return data.map((post: any) => ({

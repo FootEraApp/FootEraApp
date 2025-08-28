@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model Usuario {
@@ -50,11 +51,14 @@ model Usuario {
   administrador Administrador?
   PasswordReset PasswordReset[]
 
+  favoritos        FavoritoUsuario[]         @relation("UsuarioFavoritador")
+  favoritadoPor    FavoritoUsuario[]         @relation("UsuarioFavorito")
   MembroGrupo      MembroGrupo[]
   MensagemGrupo    MensagemGrupo[]
   gruposDono       Grupo[]                   @relation("GruposQuePossuo")
   desafiosEmGrupo  DesafioEmGrupo[]          @relation("MembrosDesafioEmGrupo")
   submissaoEmGrupo SubmissaoDesafioEmGrupo[]
+  desafiosCriados  DesafioEmGrupo[]          @relation("CriadorDesafioEmGrupo")
 }
 
 model Professor {
@@ -127,7 +131,6 @@ model Atleta {
   nacionalidade                String?
   naturalidade                 String?
   posicao                      String?
-  elencos                      AtletaElenco[]
   altura                       Decimal?
   peso                         Decimal?
   seloQualidade                String?
@@ -159,6 +162,7 @@ model Atleta {
   treinosRecebidos    TreinoProgramadoRecebido[]
   mensagens           Mensagem[]                 @relation("AtletaMensagens")
   EstatisticaAtleta   EstatisticaAtleta[]
+  AtletaElenco        AtletaElenco[]
 }
 
 model TreinoProgramado {
@@ -458,6 +462,7 @@ model Grupo {
 
   membros   MembroGrupo[]
   mensagens MensagemGrupo[]
+  desafios  DesafioEmGrupo[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -494,12 +499,18 @@ model MensagemGrupo {
   excluidaEm  DateTime?
   excluidaPor String?
 
+  conteudoJson Json?
+
+  desafioEmGrupoId String?
+  desafioEmGrupo   DesafioEmGrupo? @relation(fields: [desafioEmGrupoId], references: [id])
+
   grupo   Grupo   @relation(fields: [grupoId], references: [id])
   usuario Usuario @relation(fields: [usuarioId], references: [id])
 
   @@index([grupoId])
   @@index([usuarioId])
   @@index([criadaEm])
+  @@index([desafioEmGrupoId])
 }
 
 model Administrador {
@@ -639,19 +650,34 @@ model TreinoProgramadoRecebido {
 
 model DesafioEmGrupo {
   id               String         @id @default(uuid())
-  desafioOficial   DesafioOficial @relation(fields: [desafioOficialId], references: [id], name: "DesafioOficial_EmGrupo")
   desafioOficialId String
+  desafioOficial   DesafioOficial @relation(fields: [desafioOficialId], references: [id], name: "DesafioOficial_EmGrupo")
 
   grupoId String
+  grupo   Grupo  @relation(fields: [grupoId], references: [id])
+
+  criadoPorId String
+  criadoPor   Usuario @relation("CriadorDesafioEmGrupo", fields: [criadoPorId], references: [id])
+
   membros Usuario[] @relation("MembrosDesafioEmGrupo")
 
   status        StatusDesafioGrupo @default(ativo)
   dataCriacao   DateTime           @default(now())
   dataExpiracao DateTime?
 
-  submissaoEmGrupo SubmissaoDesafioEmGrupo[]
+  pontosSnapshot Int?
+
+  bonus     Int     @default(0)
+  bonusDado Boolean @default(false)
 
   pontosAcumulados Int? @default(0)
+
+  submissaoEmGrupo SubmissaoDesafioEmGrupo[]
+  MensagemGrupo    MensagemGrupo[]
+
+  @@index([grupoId])
+  @@index([desafioOficialId])
+  @@index([criadoPorId])
 }
 
 model SubmissaoDesafioEmGrupo {
@@ -665,10 +691,12 @@ model SubmissaoDesafioEmGrupo {
   usuarioId String
   usuario   Usuario @relation(fields: [usuarioId], references: [id])
 
-  dataEnvio    DateTime @default(now())
-  aprovado     Boolean?
-  pontosGanhos Int?
+  dataEnvio     DateTime @default(now())
+  aprovado      Boolean?
+  pontosGanhos  Int?
+  dentroDoPrazo Boolean  @default(false)
 
+  @@unique([desafioEmGrupoId, usuarioId])
   @@index([desafioEmGrupoId])
   @@index([usuarioId])
 }
@@ -700,37 +728,49 @@ model EstatisticaAtleta {
   atleta Atleta @relation(fields: [atletaId], references: [id])
 }
 
+model FavoritoUsuario {
+  id                String   @id @default(uuid())
+  usuarioId         String
+  favoritoUsuarioId String
+  createdAt         DateTime @default(now())
+
+  usuario  Usuario @relation("UsuarioFavoritador", fields: [usuarioId], references: [id])
+  favorito Usuario @relation("UsuarioFavorito", fields: [favoritoUsuarioId], references: [id])
+
+  @@unique([usuarioId, favoritoUsuarioId], name: "usuarioId_favoritoUsuarioId")
+  @@index([usuarioId])
+  @@index([favoritoUsuarioId])
+}
+
 model Elenco {
-  id          String   @id @default(uuid())
-  nome        String
-  professorId String?  
-  clubeId     String?  
-  escolinhaId String?  
-  atletasIds  String[]  // (LEGADO) pode remover depois que migrar para AtletaElenco
+  id           String   @id @default(uuid())
+  nome         String
+  professorId  String?
+  clubeId      String?
+  escolinhaId  String?
+  atletasIds   String[]
   maxJogadores Int      @default(11)
-  ativo       Boolean   @default(true)
-  dataCriacao DateTime  @default(now())
+  ativo        Boolean  @default(true)
+  dataCriacao  DateTime @default(now())
 
   atletasElenco AtletaElenco[]
 }
 
 model AtletaElenco {
-  id         String        @id @default(uuid())
-  elencoId   String
-  atletaId   String
-  posicao    PosicaoCampo
+  id       String       @id @default(uuid())
+  elencoId String
+  atletaId String
+  posicao  PosicaoCampo
 
-  numeroCamisa Int?        // se quiser
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
+  numeroCamisa Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  // Relações
-  elenco     Elenco        @relation(fields: [elencoId], references: [id], onDelete: Cascade)
-  atleta     Atleta        @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  elenco Elenco @relation(fields: [elencoId], references: [id], onDelete: Cascade)
+  atleta Atleta @relation(fields: [atletaId], references: [id], onDelete: Cascade)
 
-  // Regras de unicidade:
-  @@unique([elencoId, posicao])   // uma POSIÇÃO única por elenco
-  @@unique([elencoId, atletaId])  // um ATLETA só pode aparecer 1x nesse elenco
+  @@unique([elencoId, posicao])
+  @@unique([elencoId, atletaId])
   @@index([atletaId])
 }
 
@@ -798,7 +838,7 @@ enum StatusCref {
 
 enum TipoTreino {
   Tecnico
-  Físico
+  Fisico  @map("Físico")
   Tatico
   Mental
 }
@@ -809,6 +849,9 @@ enum TipoMensagem {
   POST
   USUARIO
   CONQUISTA
+  GRUPO_DESAFIO
+  GRUPO_DESAFIO_BONUS
+  CARD
 }
 
 enum TipoMembro {

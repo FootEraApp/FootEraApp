@@ -1,6 +1,6 @@
 // client/src/pages/feed.tsx
 import React, { useEffect, useState, useMemo } from "react";
-import { FaHeart, FaRegHeart, FaRegCommentDots, FaShare, FaPaperPlane, FaTrash } from "react-icons/fa";
+import { FaHeart, FaRegHeart, FaRegCommentDots, FaShare, FaPaperPlane, FaTrash, FaLink } from "react-icons/fa";
 import { Volleyball, User, CirclePlus, Search, House, CircleX, Send, CircleCheck } from "lucide-react";
 import { getFeedPosts, likePost, comentarPost, compartilharPost, PostagemComUsuario, deletarPost } from "../services/feedService.js";
 import { format } from "date-fns";
@@ -127,25 +127,26 @@ function PaginaFeed(): JSX.Element {
   const [enviandoDM, setEnviandoDM] = useState(false);
 
   const [idCompartilhado, setIdCompartilhado] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState<"todos"|"seguindo"|"favoritos"| "meus">("todos");
 
   useEffect(() => {
-    async function carregarFeed() {
-      const dados = await getFeedPosts();
+    async function carregar() {
+      const dados = await getFeedPosts(filtro);
       if (!dados) return;
       setPosts(dados);
     }
-    carregarFeed();
-  }, []);
+    carregar();
+  }, [filtro]);
 
   const handleLike = async (postId: string) => {
-    if (!userId) {
-      alert("Sessão expirada. Faça login novamente.");
-      return;
-    }
-    try {
-      await likePost(postId);
-      setPosts((prev) =>
-        prev.map((p) =>
+      if(!userId) {
+        alert("Sessão expirada. Faça login novamente.");
+        return;
+      }
+      try {
+        await likePost(postId);
+        setPosts((prev) =>
+         prev.map((p) =>
           p.id === postId
             ? {
                 ...p,
@@ -164,7 +165,7 @@ function PaginaFeed(): JSX.Element {
   const handleComentario = async (postId: string, texto: string) => {
     if (texto.trim()) {
       await comentarPost(postId, texto);
-      const dados = await getFeedPosts();
+      const dados = await getFeedPosts(filtro);
       setPosts(dados);
       setComentarioTextoPorPost((prev) => ({ ...prev, [postId]: "" }));
     }
@@ -249,7 +250,46 @@ function PaginaFeed(): JSX.Element {
 
   return (
     <div className="px-4 py-6 space-y-6 pb-24">
-      <h1 className="text-2xl font-bold mb-4 text-center">Feed de Postagens</h1>
+      <h1 className="text-2xl font-bold mb-4 text-center text-green-800">Feed de Postagens</h1>
+       <div className="flex gap-2 justify-center mb-4">
+        {(["todos","seguindo","favoritos", "meus"] as const).map(f => (
+          <button
+            key={f}
+            onClick={() => setFiltro(f)}
+            className={`px-3 py-1 rounded-full text-sm border ${
+              filtro === f ? "bg-green-700 text-white border-green-700"
+                          : "bg-white text-green-700 border-green-700"
+            }`}
+          >
+            {f === "todos" ? "Todos" :
+             f === "seguindo" ? "Seguindo" :
+             f === "favoritos" ? "Favoritos" : "Meus"}
+          </button>
+        ))}
+      </div>
+
+      {posts.length === 0 && (
+      <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">
+        <p>
+          {{
+            todos: "Nenhuma postagem encontrada.",
+            seguindo: "Você ainda não segue ninguém — ou ninguém que você segue postou ainda.",
+            favoritos: "Você não tem nenhum usuário favoritado.",
+            meus: "Você ainda não postou nada.",
+          }[filtro]}
+        </p>
+
+        {filtro === "seguindo" || filtro === "favoritos" ? (
+          <Link href="/explorar" className="text-green-700 underline mt-2 inline-block">
+            Explorar perfis
+          </Link>
+        ) : filtro === "meus" ? (
+          <Link href="/post" className="text-green-700 underline mt-2 inline-block">
+            Criar minha primeira postagem
+          </Link>
+        ) : null}
+      </div>
+    )}
 
       {posts.map((post) => {
         const curtidas = post.curtidas || [];
@@ -257,51 +297,62 @@ function PaginaFeed(): JSX.Element {
         const mostrarInput = mostrarInputPorPost[post.id] || false;
         const comentarioTexto = comentarioTextoPorPost[post.id] || "";
 
-        const avatarAutor = formatarUrlFoto(post.usuario.foto);
-        const srcImagem = post.tipoMidia === "Imagem" ? normalizeMediaUrl(post.imagemUrl) : "";
-        const srcVideo = post.tipoMidia === "Video" ? normalizeMediaUrl(post.videoUrl) : "";
-
         return (
           <div key={post.id} className="max-w-xl mx-auto bg-white rounded-2xl shadow-md p-4 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <img
-                  src={avatarAutor}
-                  alt="avatar"
-                  className="w-10 h-10 rounded-full object-cover"
-                />
-                <div>
-                  <p className="font-semibold">{post.usuario.nome}</p>
-                  <p className="text-xs text-gray-500">
-                    {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
-                  </p>
-                </div>
+           <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <img
+                src={
+                  post.usuario.foto?.startsWith("http")
+                    ? post.usuario.foto
+                    : `${API.BASE_URL}${post.usuario.foto || "default-user.png"}`
+                }
+                alt="avatar"
+                className="w-10 h-10 rounded-full object-cover"
+              />
+              <div>
+                <p className="font-semibold">{post.usuario.nome}</p>
+                <p className="text-xs text-gray-500">
+                  {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
+                </p>
               </div>
-              {((post as any).usuarioId === userId || post?.usuario?.id === userId) && (
-                <button
-                  onClick={() => handleApagar(post.id)}
-                  title="Apagar postagem"
-                  className="text-red-600 hover:text-red-800 p-2"
-                >
-                  <FaTrash />
-                </button>
-              )}
             </div>
+            {((post as any).usuarioId === userId || post?.usuario?.id === userId) && (
+             <button
+               onClick={() => handleApagar(post.id)}
+               title="Apagar postagem"
+               className="text-red-600 hover:text-red-800 p-2"
+             >
+               <FaTrash />
+             </button>
+            )}
+           </div>
 
             <div>
               <p className="text-gray-800 font-medium">{post.conteudo}</p>
 
-              {post.tipoMidia === "Imagem" && srcImagem && (
+              {post.tipoMidia === "Imagem" && post.imagemUrl && (
                 <img
-                  src={srcImagem}
+                  src={
+                    post.imagemUrl?.startsWith("http")
+                      ? post.imagemUrl
+                      : `${API.BASE_URL}${post.imagemUrl}`
+                  }
                   alt="Post"
-                  className="mt-2 rounded-lg max-h-72 w-auto mx-auto object-contain"
+                  className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
                 />
               )}
 
-              {post.tipoMidia === "Video" && srcVideo && (
+              {post.tipoMidia === "Video" && post.videoUrl && (
                 <video controls className="w-full mt-2 rounded-lg">
-                  <source src={srcVideo} type="video/mp4" />
+                  <source
+                    src={
+                      post.videoUrl.startsWith("http")
+                        ? post.videoUrl
+                        : `${API.BASE_URL}${post.videoUrl}`
+                    }
+                    type="video/mp4"
+                  />
                   Seu navegador não suporta vídeo.
                 </video>
               )}
@@ -350,7 +401,11 @@ function PaginaFeed(): JSX.Element {
                     {post.comentarios.map((comentario) => (
                       <div key={comentario.id} className="flex gap-2 items-start">
                         <img
-                          src={formatarUrlFoto(comentario.usuario?.foto)}
+                          src={
+                            comentario.usuario?.foto?.startsWith("http")
+                              ? comentario.usuario.foto
+                              : `${API.BASE_URL}${comentario.usuario?.foto || "default-user.png"}`
+                          }
                           alt="avatar"
                           className="w-8 h-8 rounded-full object-cover"
                         />

@@ -263,7 +263,7 @@ const CardAtleta: React.FC<{ atleta: Atleta }> = ({ atleta }) => (
 );
 
 // ----------------- PÁGINA -----------------
-export default function Elenco() {
+export default function PaginaElenco() {
   const isMobile = useIsMobile();
 
   const [atletas, setAtletas] = useState<Atleta[]>([]);

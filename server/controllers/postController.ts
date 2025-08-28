@@ -1,4 +1,3 @@
-// server/controllers/postController
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 
@@ -100,7 +99,6 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
     return res.status(500).json({ message: "Erro ao criar postagem." });
   }
 };
-
 
 export async function adicionarComentario(req: AuthedReq, res: Response) {
   const { postId } = req.params;

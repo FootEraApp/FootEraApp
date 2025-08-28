@@ -1,5 +1,3 @@
-// server/routes/perfil
-
 import { Router } from "express";
 import {
   getPontuacaoDetalhada, getPerfilUsuario, getAtividadesRecentes, getBadges,
@@ -40,12 +38,9 @@ router.get("/:id/progresso", authenticateToken, getProgressoTreinos);
 router.get("/:id", authenticateToken, getPerfilUsuario);
 router.put("/:id", authenticateToken, upload.single("foto"), atualizarPerfil);
 
-// 🔽 NOVAS ROTAS PARA POSIÇÃO
-// usa id do token
 router.get("/me/posicao-atual", authenticateToken, (req, res) => {
   getPosicaoAtualAtleta(req, res);
 });
-// usa id do path (perfil de outro usuário)
 router.get("/:id/posicao-atual", authenticateToken, (req, res) => {
   getPosicaoAtualAtleta(req, res);
 });

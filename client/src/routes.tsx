@@ -30,8 +30,7 @@ import PaginaResetarSenha from "./pages/resetarSenha.js";
 import PaginaTraining from "./pages/trainings.js";
 import PaginaMinhaRede from "./pages/minhaRede.js";
 import PaginaPontuacaoDePerfil from "./pages/perfilPontuacaoExplorar.js";
-import Elenco from "./pages/elenco";
-
+import PaginaElenco from "./pages/elenco.js";
 
 export function AppRoutes() {
   return (
@@ -109,10 +108,9 @@ export function AppRoutes() {
       <Route path="/treinos">
         <Private><PaginaTreinos /></Private>
       </Route>
-            <Route path="/treinos/elenco">
-        <Elenco />
+      <Route path="/treinos/elenco">
+        <Private><PaginaElenco /></Private>
       </Route>
-
       <Route path="/perfil">
         <Private><PaginaPerfil /></Private>
       </Route>

@@ -1,5 +1,3 @@
-// client/src/pages/editarPerfil
-
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { formatarUrlFoto } from '@/utils/formatarFoto.js';

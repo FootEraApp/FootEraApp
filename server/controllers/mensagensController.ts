@@ -101,7 +101,7 @@ export const enviarMensagemGrupo = async (req: AuthenticatedRequest, res: Respon
     if (!ehMembro) return res.status(403).json({ error: "Você não participa deste grupo." });
 
     const nova = await prisma.mensagemGrupo.create({
-      data: { grupoId, usuarioId, conteudo }, 
+      data: { grupoId, usuarioId, conteudo, tipo: "NORMAL" }, 
       include: {
         usuario: { select: { id: true, nome: true, foto: true } },
       },
