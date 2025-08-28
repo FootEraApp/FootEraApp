@@ -1,3 +1,5 @@
+// server/routes/upload
+
 import { Router } from "express";
 import { uploadFotoPerfil } from "../controllers/uploadController.js";
 

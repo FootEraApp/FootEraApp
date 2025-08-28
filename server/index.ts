@@ -1,3 +1,5 @@
+// server/index
+
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -101,8 +103,7 @@ app.use("/api/treinosprogramados", treinoProgramadoRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
 
-app.use("/uploads", express.static(path.join(__dirname, "public", "uploads")));
-app.use("/assets", express.static("client/public/assets/")); 
+app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 
 app.get("/", (req, res) => {
   res.send("FootEra API está ativa!");

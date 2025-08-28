@@ -1,3 +1,5 @@
+// client/src/pages/editarPerfil
+
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { formatarUrlFoto } from '@/utils/formatarFoto.js';
@@ -207,11 +209,10 @@ const EditarPerfil = () => {
               formData.append("usuarioId", usuarioId!);
               formData.append("tipo", tipoUsuario!);
 
-              const uploadRes = await axios.post(
-                `${API.BASE_URL}/api/upload/perfil`,
-                formData
-              );
-              fotoUrl = uploadRes.data.caminho;
+              const uploadRes = await axios.post(`${API.BASE_URL}/api/upload/perfil`, formData, {
+                headers: {Authorization: `Bearer ${token}` }
+              });
+              fotoUrl = uploadRes.data.url;
             }
 
           const tipo = { ...dadosTipo };

@@ -1,7 +1,32 @@
-import { useState } from "react";
+// client/src/pages/post/create.tsx
+import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { criarPost } from "@/services/feedService.js";
+import { API } from "../../config";
+import { formatarUrlFoto } from "@/utils/formatarFoto";
+
+// Normaliza caminhos legados e relativos para a API
+function normalizeMediaUrl(raw: string): string {
+  let s = (raw || "").trim();
+  if (!s) return "";
+
+  // Absoluto (http/https), data, blob -> só corrige /assets -> /uploads
+  if (/^(https?:)?\/\//i.test(s) || s.startsWith("data:") || s.startsWith("blob:")) {
+    return s.replace(/\/assets\/usuarios\//, "/uploads/").replace(/\/assets\//, "/uploads/");
+  }
+
+  // Relativo legado /assets/... -> /uploads/...
+  s = s.replace(/^\/?assets\/usuarios\//, "/uploads/").replace(/^\/?assets\//, "/uploads/");
+
+  // Prefixa a API quando for /uploads ou uploads
+  if (s.startsWith("/uploads/")) return `${API.BASE_URL}${s}`;
+  if (s.startsWith("uploads/")) return `${API.BASE_URL}/${s}`;
+
+  // Caso tenha vindo só um nome de arquivo, coloque em /uploads/
+  if (!s.startsWith("/")) s = `/${s}`;
+  return `${API.BASE_URL}/uploads${s}`;
+}
 
 export default function PaginaPostagem() {
   const [, navigate] = useLocation();
@@ -14,6 +39,8 @@ export default function PaginaPostagem() {
   const [carregando, setCarregando] = useState(false);
   const [mensagem, setMensagem] = useState("");
 
+  const temUrl = useMemo(() => !!(imagemUrl.trim() || videoUrl.trim()), [imagemUrl, videoUrl]);
+
   async function handleEnviar() {
     setMensagem("");
 
@@ -22,7 +49,6 @@ export default function PaginaPostagem() {
       return;
     }
 
-   const temUrl = !!(imagemUrl.trim() || videoUrl.trim());
     if (temUrl && arquivo) {
       setMensagem("Use URL ou arquivo, não os dois ao mesmo tempo.");
       return;
@@ -30,11 +56,14 @@ export default function PaginaPostagem() {
 
     setCarregando(true);
     try {
+      const img = imagemUrl.trim() ? normalizeMediaUrl(imagemUrl) : undefined;
+      const vid = videoUrl.trim() ? normalizeMediaUrl(videoUrl) : undefined;
+
       await criarPost({
         descricao: descricao.trim(),
-        imagemUrl: imagemUrl.trim() || undefined,
-        videoUrl: videoUrl.trim() || undefined,
-        arquivo: arquivo || undefined,
+        imagemUrl: img,
+        videoUrl: vid,
+        arquivo: arquivo || undefined, // se houver arquivo, o service faz o upload
       });
 
       setMensagem("Postagem enviada com sucesso!");
@@ -52,6 +81,26 @@ export default function PaginaPostagem() {
     }
   }
 
+  // Pré-visualização
+  const preview = (() => {
+    if (arquivo) {
+      const isVideo = arquivo.type?.startsWith("video/");
+      const url = URL.createObjectURL(arquivo);
+      return isVideo ? (
+        <video src={url} controls className="w-full rounded-lg shadow mb-3" />
+      ) : (
+        <img src={url} className="w-full rounded-lg shadow mb-3 object-cover" />
+      );
+    }
+    if (imagemUrl.trim()) {
+      return <img src={formatarUrlFoto(imagemUrl)} className="w-full rounded-lg shadow mb-3 object-cover" />;
+    }
+    if (videoUrl.trim()) {
+      return <video src={normalizeMediaUrl(videoUrl)} controls className="w-full rounded-lg shadow mb-3" />;
+    }
+    return null;
+  })();
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="p-6 max-w-xl mx-auto">
@@ -68,9 +117,10 @@ export default function PaginaPostagem() {
         <input
           type="text"
           className="w-full border rounded p-3 mb-2"
-          placeholder="URL da imagem (ex.: https://... ou /assets/minha-imagem.jpg)"
+          placeholder="URL da imagem (ex.: https://... ou /uploads/minha-imagem.jpg)"
           value={imagemUrl}
           onChange={(e) => setImagemUrl(e.target.value)}
+          disabled={!!arquivo}
         />
 
         <input
@@ -79,16 +129,30 @@ export default function PaginaPostagem() {
           placeholder="URL do vídeo (opcional)"
           value={videoUrl}
           onChange={(e) => setVideoUrl(e.target.value)}
+          disabled={!!arquivo}
         />
 
         <div className="text-sm text-gray-600 mb-2">— ou —</div>
 
-        <input
-          type="file"
-          accept="image/*,video/*"
-          onChange={(e) => setArquivo(e.target.files?.[0] || null)}
-          className="mb-4"
-        />
+        <div className="flex items-center gap-3 mb-4">
+          <input
+            type="file"
+            accept="image/*,video/*"
+            onChange={(e) => setArquivo(e.target.files?.[0] || null)}
+            disabled={temUrl}
+          />
+          {arquivo && (
+            <button
+              type="button"
+              onClick={() => setArquivo(null)}
+              className="text-xs text-red-600 underline"
+            >
+              Remover arquivo
+            </button>
+          )}
+        </div>
+
+        {preview}
 
         {mensagem && (
           <p className={`mb-4 text-sm text-center ${mensagem.includes("sucesso") ? "text-green-700" : "text-red-600"}`}>
