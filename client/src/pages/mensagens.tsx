@@ -602,7 +602,7 @@ export default function PaginaMensagens() {
                 onClick={() => setAlvo({ tipo: "usuario", usuario: u })}
               >
                 <img
-                  src={u.foto ? `${API.BASE_URL}${u.foto}` : "https://via.placeholder.com/40"}
+                  src={u.foto ? `${u.foto}` : "https://via.placeholder.com/40"}
                   alt={`Foto de ${u.nome}`}
                   className="w-12 h-12 rounded-full object-cover border"
                 />
