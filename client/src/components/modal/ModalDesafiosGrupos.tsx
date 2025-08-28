@@ -6,6 +6,7 @@ interface ModalProps {
   onFechar: () => void;
   grupoId: string;
   token: string;
+  onCriado?: () => void | Promise<void>;
 }
 
 interface DesafioOficial {
@@ -19,9 +20,16 @@ interface DesafioOficial {
   createdAt: string;
 }
 
-export function ModalDesafiosGrupo({ aberto, onFechar, grupoId, token }: ModalProps) {
+export function ModalDesafiosGrupo({
+  aberto,
+  onFechar,
+  grupoId,
+  token,
+  onCriado,
+}: ModalProps) {
   const [desafios, setDesafios] = useState<DesafioOficial[]>([]);
   const [loading, setLoading] = useState(false);
+  const [salvando, setSalvando] = useState(false);
   const [desafioSelecionado, setDesafioSelecionado] = useState<string | null>(null);
 
   useEffect(() => {
@@ -30,7 +38,7 @@ export function ModalDesafiosGrupo({ aberto, onFechar, grupoId, token }: ModalPr
     const fetchDesafios = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${grupoId}`, {
+        const res = await fetch(`${API.BASE_URL}/api/desafios/oficiais`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error("Erro ao carregar desafios oficiais");
@@ -47,36 +55,39 @@ export function ModalDesafiosGrupo({ aberto, onFechar, grupoId, token }: ModalPr
   }, [aberto, grupoId, token]);
 
   const handleSelecionar = (id: string) => {
-    setDesafioSelecionado(prev => (prev === id ? null : id));
+    setDesafioSelecionado((prev) => (prev === id ? null : id));
   };
 
   const handleConfirmar = async () => {
-  if (!desafioSelecionado) return;
+    if (!desafioSelecionado || salvando) return;
 
-  try {
-    const res = await fetch(`${API.BASE_URL}/api/desafios/em-grupo`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        grupoId,
-        desafioOficialId: desafioSelecionado
-      }),
-    });
+    try {
+      setSalvando(true);
+      const res = await fetch(`${API.BASE_URL}/api/desafios/em-grupo`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          grupoId,
+          desafioOficialId: desafioSelecionado,
+        }),
+      });
 
-    if (!res.ok) throw new Error("Erro ao criar desafio em grupo");
+      if (!res.ok) throw new Error("Erro ao criar desafio em grupo");
 
-    const data = await res.json();
-    console.log("Desafio em grupo criado:", data);
-    onFechar(); 
-  } catch (err) {
-    console.error(err);
-    alert("Erro ao criar desafio em grupo.");
-  }
-};
+      await res.json();
+      await onCriado?.();
 
+      onFechar();
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao criar desafio em grupo.");
+    } finally {
+      setSalvando(false);
+    }
+  };
 
   if (!aberto) return null;
 
@@ -91,7 +102,6 @@ export function ModalDesafiosGrupo({ aberto, onFechar, grupoId, token }: ModalPr
         </div>
 
         {loading && <p className="text-center text-gray-500">Carregando...</p>}
-
         {!loading && desafios.length === 0 && (
           <p className="text-center text-gray-500">Nenhum desafio oficial encontrado.</p>
         )}
@@ -127,9 +137,10 @@ export function ModalDesafiosGrupo({ aberto, onFechar, grupoId, token }: ModalPr
           <div className="mt-4 flex justify-end">
             <button
               onClick={handleConfirmar}
-              className="bg-yellow-500 text-white px-4 py-2 rounded-lg shadow hover:bg-yellow-600 transition"
+              disabled={salvando}
+              className="bg-yellow-500 text-white px-4 py-2 rounded-lg shadow hover:bg-yellow-600 transition disabled:opacity-60"
             >
-              Confirmar Seleção
+              {salvando ? "Confirmando..." : "Confirmar Seleção"}
             </button>
           </div>
         )}

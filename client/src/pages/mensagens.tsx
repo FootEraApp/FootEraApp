@@ -6,6 +6,7 @@ import { API } from "../config.js";
 import socket from "../services/socket.js";
 import { ModalGrupos } from "@/components/modal/ModalGrupos.js";
 import { ModalDesafiosGrupo } from "@/components/modal/ModalDesafiosGrupos.js";
+import { MensagemItemGrupo } from "@/components/chat/GroupDesafioCards.js";
 
 interface Usuario {
   id: string;
@@ -35,6 +36,17 @@ interface MensagemGrupo {
   conteudo: string;
   criadaEm: string;
   usuario?: Usuario;
+
+  tipo:
+    | "NORMAL"
+    | "DESAFIO"
+    | "POST"
+    | "USUARIO"
+    | "CONQUISTA"
+    | "GRUPO_DESAFIO"
+    | "GRUPO_DESAFIO_BONUS";
+  conteudoJson?: any;
+  desafioEmGrupoId?: string | null;
 }
 
 interface Postagem {
@@ -66,7 +78,6 @@ export default function PaginaMensagens() {
 
   const [usuariosMutuos, setUsuariosMutuos] = useState<Usuario[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
-
   const [alvo, setAlvo] = useState<ChatTarget | null>(null);
 
   const [mensagensPrivadas, setMensagensPrivadas] = useState<Mensagem[]>([]);
@@ -91,12 +102,17 @@ export default function PaginaMensagens() {
   const abrirModalDesafios = () => setModalDesafiosAberto(true);
   const fecharModalDesafios = () => setModalDesafiosAberto(false);
 
-  const [progressoGrupos, setProgressoGrupos] = useState<Record<string, { desafioEmGrupoId: string; desafioId: string, porcentagem: number }>>({});
-
   const alvoRef = useRef<ChatTarget | null>(null);
   useEffect(() => {
     alvoRef.current = alvo;
   }, [alvo]);
+
+  const recarregarMensagensDoGrupoAtual = async () => {
+    const current = alvoRef.current;
+    if (current?.tipo === "grupo") {
+      await carregarMensagensDoGrupo(current.grupo.id, false);
+     }
+  };
 
   useEffect(() => {
     socket.connect();
@@ -133,20 +149,20 @@ export default function PaginaMensagens() {
     (async () => {
       try {
         const gruposRes = await fetch(`${API.BASE_URL}/api/grupos/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!gruposRes.ok) {
-           console.error('Falha /api/grupos/me:', gruposRes.status, await gruposRes.text());
-           return;
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!gruposRes.ok) {
+          console.error("Falha /api/grupos/me:", gruposRes.status, await gruposRes.text());
+          return;
         }
         const meusGrupos: Grupo[] = await gruposRes.json();
 
         const mutuosRes = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
-         headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
-         if (!mutuosRes.ok) {
-           console.error('Falha /api/seguidores/mutuos:', mutuosRes.status, await mutuosRes.text());
-           return;
+        if (!mutuosRes.ok) {
+          console.error("Falha /api/seguidores/mutuos:", mutuosRes.status, await mutuosRes.text());
+          return;
         }
         const mutuos: Usuario[] = await mutuosRes.json();
         setUsuariosMutuos(mutuos);
@@ -172,7 +188,6 @@ export default function PaginaMensagens() {
       setMensagensGrupo(cache);
       setTemMaisGrupo(true);
       carregarMensagensDoGrupo(alvo.grupo.id, false).catch(() => {});
-
       socket.emit("joinGroup", alvo.grupo.id);
     }
     setNovaMensagem("");
@@ -226,31 +241,26 @@ export default function PaginaMensagens() {
       if (m.tipo === "USUARIO") carregarUsuarioPorId(m.conteudo);
       if (m.tipo === "DESAFIO") carregarDesafioPorId(m.conteudo);
     });
-    
   }, [mensagensPrivadas]);
 
   const limite = 20;
 
   async function carregarMensagensPrivadas(usuarioIdAlvo: string, append: boolean) {
-   try {
-    const base = append ? mensagensPrivadas : [];
-    const ultimoId = append && base.length > 0 ? base[0].id : undefined;
+    try {
+      const base = append ? mensagensPrivadas : [];
+      const ultimoId = append && base.length > 0 ? base[0].id : undefined;
 
-    const params: Record<string, string> = {
-      paraId: usuarioIdAlvo,
-      limit: String(limite),
-    };
+      const params: Record<string, string> = { paraId: usuarioIdAlvo, limit: String(limite) };
+      if (usuarioId) params.deId = usuarioId;
+      if (ultimoId) params.cursor = ultimoId;
 
-    if (usuarioId) params.deId = usuarioId;  
-    if (ultimoId) params.cursor = ultimoId;   
+      const query = new URLSearchParams(params);
 
-    const query = new URLSearchParams(params);
-
-    const res = await fetch(`${API.BASE_URL}/api/mensagem?${query.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const novas: Mensagem[] = await res.json();
-    if (novas.length < limite) setTemMaisPriv(false);
+      const res = await fetch(`${API.BASE_URL}/api/mensagem?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const novas: Mensagem[] = await res.json();
+      if (novas.length < limite) setTemMaisPriv(false);
 
       const novasOrdenadas = [...novas].reverse();
 
@@ -259,9 +269,7 @@ export default function PaginaMensagens() {
           const combined = [...novasOrdenadas, ...prev];
           const map = new Map<string, Mensagem>();
           combined.forEach((m) => map.set(m.id, m));
-          return Array.from(map.values()).sort(
-            (a, b) => new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime()
-          );
+          return Array.from(map.values()).sort((a, b) => new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime());
         });
       } else {
         setMensagensPrivadas(novasOrdenadas);
@@ -284,7 +292,7 @@ export default function PaginaMensagens() {
         ...(ultimoId ? { cursor: ultimoId } : {}),
       });
 
-      const res = await fetch(`${API.BASE_URL}/api/grupos/${grupoId}/mensagens?${query.toString()}`, {
+      const res = await fetch(`${API.BASE_URL}/api/mensagem/grupos/${grupoId}?${query.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const novas: MensagemGrupo[] = await res.json();
@@ -297,9 +305,7 @@ export default function PaginaMensagens() {
           const combined = [...novasOrdenadas, ...prev];
           const map = new Map<string, MensagemGrupo>();
           combined.forEach((m) => map.set(m.id, m));
-          return Array.from(map.values()).sort(
-            (a, b) => new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime()
-          );
+          return Array.from(map.values()).sort((a, b) => new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime());
         });
       } else {
         setMensagensGrupo(novasOrdenadas);
@@ -355,7 +361,7 @@ export default function PaginaMensagens() {
       socket.emit("sendMessage", novaMsg);
     } else {
       const payload = { conteudo: novaMensagem };
-      await fetch(`${API.BASE_URL}/api/grupos/${alvo.grupo.id}/mensagens`, {
+      await fetch(`${API.BASE_URL}/api/mensagem/grupos/${alvo.grupo.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
@@ -366,10 +372,12 @@ export default function PaginaMensagens() {
         criadaEm: new Date().toISOString(),
         conteudo: novaMensagem,
         grupoId: alvo.grupo.id,
-        usuarioId,
+        usuarioId: usuarioId!,
+        tipo: "NORMAL",
       };
-      
-      socket.emit("sendGroupMessage", novaMsg); 
+
+      setMensagensGrupo((prev) => [...prev, novaMsg]);
+      socket.emit("sendGroupMessage", novaMsg);
     }
 
     setNovaMensagem("");
@@ -401,9 +409,7 @@ export default function PaginaMensagens() {
             <span className="font-semibold">{post.usuario.nome}</span>
           </div>
 
-          {post.imagemUrl && (
-            <img src={`${API.BASE_URL}${post.imagemUrl}`} alt="Imagem do post" className="w-full max-h-48 object-cover rounded mb-2" />
-          )}
+          {post.imagemUrl && <img src={`${API.BASE_URL}${post.imagemUrl}`} alt="Imagem do post" className="w-full max-h-48 object-cover rounded mb-2" />}
           {!post.imagemUrl && post.videoUrl && (
             <video controls className="w-full max-h-48 rounded mb-2">
               <source src={`${API.BASE_URL}${post.videoUrl}`} />
@@ -434,11 +440,7 @@ export default function PaginaMensagens() {
           }`}
           title="Clique para ver o perfil"
         >
-          <img
-            src={u.foto ? `${API.BASE_URL}${u.foto}` : "https://via.placeholder.com/40"}
-            alt={`Foto de ${u.nome}`}
-            className="w-12 h-12 rounded-full object-cover border"
-          />
+          <img src={u.foto ? `${API.BASE_URL}${u.foto}` : "https://via.placeholder.com/40"} alt={`Foto de ${u.nome}`} className="w-12 h-12 rounded-full object-cover border" />
           <div>
             <p className="font-semibold">{u.nome}</p>
             <p className="text-sm text-gray-500">Ver perfil</p>
@@ -457,16 +459,13 @@ export default function PaginaMensagens() {
         );
       }
       const isMine = msg.deId === usuarioId;
-      const imagemSrc =
-        d.imagemUrl && d.imagemUrl.startsWith("http") ? d.imagemUrl : d.imagemUrl ? `${API.BASE_URL}${d.imagemUrl}` : null;
+      const imagemSrc = d.imagemUrl && d.imagemUrl.startsWith("http") ? d.imagemUrl : d.imagemUrl ? `${API.BASE_URL}${d.imagemUrl}` : null;
 
       return (
         <div
           key={msg.id}
           onClick={() => navigate(`/desafios/${d.id}`)}
-          className={`p-3 rounded-lg max-w-sm border shadow-md cursor-pointer transition-all hover:shadow-lg ${
-            isMine ? "bg-blue-50 self-end ml-auto" : "bg-white"
-          }`}
+          className={`p-3 rounded-lg max-w-sm border shadow-md cursor-pointer transition-all hover:shadow-lg ${isMine ? "bg-blue-50 self-end ml-auto" : "bg-white"}`}
           title="Clique para ver o desafio"
         >
           <div className="flex items-center justify-between mb-2 gap-3">
@@ -481,9 +480,7 @@ export default function PaginaMensagens() {
           <div className="flex items-center justify-between text-xs text-gray-500">
             <div className="flex items-center gap-3">
               <span className="font-medium text-gray-700">Pontos: {d.pontuacao ?? "-"}</span>
-              {d.categoria && d.categoria.length > 0 && (
-                <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{d.categoria.join(", ")}</span>
-              )}
+              {d.categoria && d.categoria.length > 0 && <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{d.categoria.join(", ")}</span>}
             </div>
             <div>
               <span>{new Date(d.createdAt).toLocaleDateString("pt-BR")}</span>
@@ -494,46 +491,17 @@ export default function PaginaMensagens() {
     }
 
     return (
-      <div
-        key={msg.id}
-        className={`p-2 rounded max-w-sm ${msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-gray-200"}`}
-      >
+      <div key={msg.id} className={`p-2 rounded max-w-sm ${msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-gray-200"}`}>
         {msg.conteudo}
       </div>
     );
   };
 
-  async function carregarProgressoGrupo(grupoId: string) {
-    try {
-      const res = await fetch(`${API.BASE_URL}/api/desafios/em-grupo/${grupoId}/ativo`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return;
+  const tituloChat =
+    alvo?.tipo === "usuario" ? alvo.usuario.nome : alvo?.tipo === "grupo" ? `${alvo.grupo.nome} (grupo)` : "Selecione uma conversa";
 
-      const desafioEmGrupo = await res.json();
-
-      setProgressoGrupos((prev) => ({
-        ...prev,
-        [grupoId]: { 
-          desafioEmGrupoId: desafioEmGrupo.id,
-          desafioId: desafioEmGrupo.desafioOficialId, 
-          porcentagem: desafioEmGrupo.meta.progresso 
-        }
-      }));
-    } catch (err) {
-      console.error("Erro ao carregar progresso do grupo:", err);
-    }
-  }
-
-    useEffect(() => {
-    grupos.forEach((g) => carregarProgressoGrupo(g.id));
-  }, [grupos]);
-
-  const tituloChat = alvo?.tipo === "usuario" ? alvo.usuario.nome : alvo?.tipo === "grupo" ? `${alvo.grupo.nome} (grupo)` : "Selecione uma conversa";
-  
   return (
     <div className="flex h-screen">
-      
       <aside className="w-1/4 border-r p-4 overflow-y-auto">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-semibold">Conversas</h2>
@@ -549,39 +517,18 @@ export default function PaginaMensagens() {
           {grupos.length === 0 && <p className="text-xs text-gray-500">Você ainda não participa de grupos.</p>}
           {grupos.map((g) => {
             const selecionado = alvo?.tipo === "grupo" && alvo.grupo.id === g.id;
-            const progresso = progressoGrupos[g.id];
 
             return (
               <div
                 key={g.id}
-                className={`p-3 mb-2 rounded-lg cursor-pointer border shadow-sm transition-all ${
-                  selecionado ? "bg-blue-100 border-blue-400" : "hover:bg-gray-100 bg-white"
-                }`}
+                className={`p-3 mb-2 rounded-lg cursor-pointer border shadow-sm transition-all ${selecionado ? "bg-blue-100 border-blue-400" : "hover:bg-gray-100 bg-white"}`}
                 onClick={() => setAlvo({ tipo: "grupo", grupo: g })}
               >
                 <div className="flex items-center justify-between">
                   <div className="font-medium text-sm">{g.nome}</div>
-
-                  {progresso && (
-                    <div
-                      onClick={(e) => { 
-                        navigate(`/submissao/grupo/${progresso.desafioEmGrupoId}/${progresso.desafioId}`);
-                      }}
-                      className="w-24 h-3 bg-gray-200 rounded-full cursor-pointer relative"
-                      title="Clique para enviar submissão"
-                    >
-                      <div
-                        className="h-3 bg-green-500 rounded-full"
-                        style={{ width: `${progresso.porcentagem}%` }}
-                      />
-                    </div>
-                  )}
-
                 </div>
 
-                {g.descricao && (
-                  <div className="text-xs text-gray-500 line-clamp-1">{g.descricao}</div>
-                )}
+                {g.descricao && <div className="text-xs text-gray-500 line-clamp-1">{g.descricao}</div>}
               </div>
             );
           })}
@@ -601,11 +548,7 @@ export default function PaginaMensagens() {
                 }`}
                 onClick={() => setAlvo({ tipo: "usuario", usuario: u })}
               >
-                <img
-                  src={u.foto ? `${u.foto}` : "https://via.placeholder.com/40"}
-                  alt={`Foto de ${u.nome}`}
-                  className="w-12 h-12 rounded-full object-cover border"
-                />
+                <img src={u.foto ? `${API.BASE_URL}${u.foto}` : "https://via.placeholder.com/40"} alt={`Foto de ${u.nome}`} className="w-12 h-12 rounded-full object-cover border" />
                 <div className="flex flex-col">
                   <span className="font-medium text-sm">{u.nome}</span>
                   <span className="text-xs text-gray-500">Clique para conversar</span>
@@ -630,67 +573,23 @@ export default function PaginaMensagens() {
               )}
 
               {alvo.tipo === "grupo" && (
-                <button
-                  onClick={() => setModalDesafiosAberto(true)}
-                  className="flex items-center gap-2 px-3 py-1 text-sm rounded bg-purple-600 text-white hover:bg-purple-700"
-                >
+                <button onClick={() => setModalDesafiosAberto(true)} className="flex items-center gap-2 px-3 py-1 text-sm rounded bg-purple-600 text-white hover:bg-purple-700">
                   Desafio em grupo
                 </button>
               )}
             </div>
 
-            <div
-              className="flex-1 overflow-y-auto space-y-2 border rounded p-2 mb-4 bg-gray-50"
-              onScroll={handleScroll}
-            >
-              {alvo.tipo === "usuario" &&
-                mensagensPrivadas.map((m) => renderizarMensagemPrivada(m))}
+            <div className="flex-1 overflow-y-auto space-y-2 border rounded p-2 mb-4 bg-gray-50" onScroll={handleScroll}>
+              {alvo.tipo === "usuario" && mensagensPrivadas.map((m) => renderizarMensagemPrivada(m))}
               {alvo.tipo === "grupo" &&
-                mensagensGrupo.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`p-2 rounded max-w-sm ${
-                      m.usuarioId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-gray-200"
-                    }`}
-                    title={m.usuario ? m.usuario.nome : undefined}
-                  >
-                    {m.usuario && (
-                      <div className="text-xs text-gray-600 mb-1 flex items-center gap-2">
-                        <img
-                          src={
-                            m.usuario.foto
-                              ? `${API.BASE_URL}${m.usuario.foto}`
-                              : "https://via.placeholder.com/24"
-                          }
-                          alt={m.usuario.nome}
-                          className="w-6 h-6 rounded-full object-cover border"
-                        />
-                        <span className="font-medium">{m.usuario.nome}</span>
-                      </div>
-                    )}
-                    <div className="whitespace-pre-wrap">{m.conteudo}</div>
-                    <div className="text-[10px] text-gray-500 mt-1">
-                      {new Date(m.criadaEm).toLocaleString("pt-BR")}
-                    </div>
-                  </div>
-                ))}
+                mensagensGrupo.map((m) => <MensagemItemGrupo key={m.id} msg={m} meId={usuarioId} baseUrl={API.BASE_URL} />)}
 
-              {(carregandoMaisPriv || carregandoMaisGrupo) && (
-                <p className="text-center text-sm text-gray-400">Carregando mais...</p>
-              )}
+              {(carregandoMaisPriv || carregandoMaisGrupo) && <p className="text-center text-sm text-gray-400">Carregando mais...</p>}
             </div>
 
             <div className="flex gap-2">
-              <input
-                className="flex-1 border p-2 rounded"
-                value={novaMensagem}
-                onChange={(e) => setNovaMensagem(e.target.value)}
-                placeholder="Digite sua mensagem..."
-              />
-              <button
-                onClick={enviarMensagem}
-                className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-              >
+              <input className="flex-1 border p-2 rounded" value={novaMensagem} onChange={(e) => setNovaMensagem(e.target.value)} placeholder="Digite sua mensagem..." />
+              <button onClick={enviarMensagem} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
                 <Send size={18} />
               </button>
             </div>
@@ -718,22 +617,11 @@ export default function PaginaMensagens() {
         </Link>
       </nav>
 
-      <ModalGrupos 
-        aberto={modalAberto} 
-        onFechar={fecharModal} 
-        usuarioId={usuarioId ?? ""} 
-        token={token} 
-      />
+      <ModalGrupos aberto={modalAberto} onFechar={fecharModal} usuarioId={usuarioId ?? ""} token={token} />
 
       {alvo?.tipo === "grupo" && (
-        <ModalDesafiosGrupo
-          aberto={modalDesafiosAberto}
-          onFechar={fecharModalDesafios}
-          grupoId={alvo.grupo.id}
-          token={token}
-        />
+        <ModalDesafiosGrupo aberto={modalDesafiosAberto} onFechar={fecharModalDesafios} grupoId={alvo.grupo.id} token={token} onCriado={recarregarMensagensDoGrupoAtual} />
       )}
-      
     </div>
   );
 }

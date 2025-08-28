@@ -1,5 +1,3 @@
-// server/routes/treinos
-
 import { Router } from "express";
 import { Nivel, Categoria, TipoTreino, PrismaClient, PosicaoCampo } from "@prisma/client";
 import { authenticateToken } from "server/middlewares/auth.js";
@@ -63,22 +61,17 @@ router.get("/atletas-vinculados", async (req, res) => {
         atleta: {
           include: {
             usuario: true,
-            // aqui você pode incluir os campos da tabela atleta
-            // se tiver campos relacionados, inclua diretamente
           }
         }
       }
     });
 
-    // agora mapeamos para trazer tanto usuário quanto dados de atleta
 const atletas = relacoes
   .map((rel) => {
     const a = rel.atleta;
     if (!a) return null;
     return {
-      // <- id do USUÁRIO (continua útil pra nome/foto)
       id: a.usuario.id,
-      // <- id da TABELA ATLETA (este é o que vai no FK AtletaElenco.atletaId)
       atletaId: a.id,
       nome: a.usuario.nome,
       foto: a.usuario.foto,
@@ -132,19 +125,15 @@ router.get("/", async (req, res) => {
   }
 });
 
-
-
-// --- ELENCOS --- //
-// POST /elencos  -> cria um elenco com vínculos de atletas
 router.post("/elencos", authenticateToken, async (req, res) => {
   try {
     const {
       nome,
       maxJogadores = 11,
-      tipoUsuario,     // "professor" | "escolinha" | "clube"
-      tipoUsuarioId,   // id do dono
-      atletas,         // opcional: [{ atletaId: string, posicao: PosicaoCampo }]
-      escala,          // opcional: Record<PosicaoCampo, string | null>  (mapa pos->atletaId)
+      tipoUsuario,   
+      tipoUsuarioId, 
+      atletas,     
+      escala,     
       ativo = true,
     } = req.body as {
       nome?: string;
@@ -162,7 +151,6 @@ router.post("/elencos", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "tipoUsuario inválido" });
     }
 
-    // monta objeto de criação de Elenco sem generics
     const dataCreate: any = {
       nome,
       maxJogadores,
@@ -174,7 +162,6 @@ router.post("/elencos", authenticateToken, async (req, res) => {
 
     const elenco = await prisma.elenco.create({ data: dataCreate });
 
-    // normaliza a origem dos vínculos (aceita 'atletas' OU 'escala')
     let vinculos: { atletaId: string; posicao: PosicaoCampo }[] = [];
 
     if (Array.isArray(atletas) && atletas.length) {
@@ -205,7 +192,6 @@ router.post("/elencos", authenticateToken, async (req, res) => {
     return res.status(500).json({ error: "Erro ao criar elenco" });
   }
 });
-// GET /elencos?tipoUsuarioId=... -> lista elencos do dono + jogadores
 router.get("/elencos", authenticateToken, async (req, res) => {
   try {
     const { tipoUsuarioId } = req.query;
@@ -214,7 +200,6 @@ router.get("/elencos", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
     }
 
-    // busca elencos de qualquer tipo de dono
     const elencos = await prisma.elenco.findMany({
       where: {
         OR: [
@@ -231,22 +216,16 @@ router.get("/elencos", authenticateToken, async (req, res) => {
 
     const elencoIds = elencos.map((e) => e.id);
 
-    // busca vínculos em tabela pivot
     const vinculos = await prisma.atletaElenco.findMany({
       where: { elencoId: { in: elencoIds } },
     });
 
-    // agrupa vínculos por elencoId
     const porElenco = new Map<string, { atletaId: string; posicao: PosicaoCampo }[]>();
     for (const v of vinculos) {
       const arr = porElenco.get(v.elencoId) ?? [];
       arr.push({ atletaId: v.atletaId, posicao: v.posicao });
       porElenco.set(v.elencoId, arr);
     }
-
-    // opcional: busca dados dos atletas (nome/foto) se quiser enriquecer
-    // const atletaIds = Array.from(new Set(vinculos.map(v => v.atletaId)));
-    // const usuarios = await prisma.usuario.findMany({ where: { id: { in: atletaIds } }, select: { id: true, nome: true, foto: true } });
 
     const resposta = elencos.map((e) => ({
       ...e,
@@ -259,7 +238,6 @@ router.get("/elencos", authenticateToken, async (req, res) => {
     return res.status(500).json({ error: "Erro ao listar elencos" });
   }
 });
-// PUT /elencos/:id -> atualiza dados e substitui vínculos
 router.put("/elencos/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -268,8 +246,8 @@ router.put("/elencos/:id", authenticateToken, async (req, res) => {
       nome,
       maxJogadores,
       ativo,
-      atletas, // opcional: [{ atletaId, posicao }]
-      escala,  // opcional: Record<PosicaoCampo, string | null>
+      atletas, 
+      escala, 
     } = req.body as {
       nome?: string;
       maxJogadores?: number;
@@ -291,7 +269,6 @@ router.put("/elencos/:id", authenticateToken, async (req, res) => {
       data: dataUpdate,
     });
 
-    // normaliza vínculos
     let vinculos: { atletaId: string; posicao: PosicaoCampo }[] = [];
     if (Array.isArray(atletas) && atletas.length) {
       vinculos = atletas;
@@ -304,7 +281,6 @@ router.put("/elencos/:id", authenticateToken, async (req, res) => {
         }));
     }
 
-    // substitui vínculos (apaga e recria)
     await prisma.atletaElenco.deleteMany({ where: { elencoId: id } });
 
     if (vinculos.length) {
@@ -324,17 +300,13 @@ router.put("/elencos/:id", authenticateToken, async (req, res) => {
     return res.status(500).json({ error: "Erro ao atualizar elenco" });
   }
 });
-// ==== GET: escala por ELENCO (posições preenchidas com dados do atleta) ====
-// GET /api/treinos/elencos/:id/escala
 router.get("/elencos/:id/escala", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // existe?
     const elenco = await prisma.elenco.findUnique({ where: { id } });
     if (!elenco) return res.status(404).json({ error: "Elenco não encontrado" });
 
-    // vínculos + dados do atleta (com usuario)
     const vinculos = await prisma.atletaElenco.findMany({
       where: { elencoId: id },
       include: {
@@ -344,7 +316,6 @@ router.get("/elencos/:id/escala", authenticateToken, async (req, res) => {
       },
     });
 
-    // monta escala PosicaoCampo -> atleta enriquecido
     const posicoes: PosicaoCampo[] = [
       "GOL","LD","ZD","ZE","LE","VOL1","VOL2","MEI","PD","CA","PE"
     ];
@@ -366,8 +337,8 @@ router.get("/elencos/:id/escala", authenticateToken, async (req, res) => {
       const u = a?.usuario;
       if (!u) continue;
       escala[v.posicao] = {
-        atletaId: a.id,       // <- id da tabela Atleta (FK)
-        usuarioId: u.id,      // <- id do usuário (para exibição/foto)
+        atletaId: a.id, 
+        usuarioId: u.id,  
         nome: u.nome,
         foto: u.foto,
         idade: a.idade ?? null,
@@ -379,7 +350,7 @@ router.get("/elencos/:id/escala", authenticateToken, async (req, res) => {
       id: elenco.id,
       nome: elenco.nome,
       maxJogadores: elenco.maxJogadores,
-      escala,                // <- pronto pra popular o front
+      escala,             
       atletasCount: vinculos.length,
     });
   } catch (err) {
@@ -387,8 +358,6 @@ router.get("/elencos/:id/escala", authenticateToken, async (req, res) => {
     return res.status(500).json({ error: "Erro ao buscar escala do elenco" });
   }
 });
-// ==== GET: escala pelo DONO (pega elenco ativo mais recente) ====
-// GET /api/treinos/elencos/escala-por-dono?tipoUsuarioId=...
 router.get("/elencos/escala-por-dono", authenticateToken, async (req, res) => {
   try {
     const { tipoUsuarioId } = req.query;
@@ -397,7 +366,6 @@ router.get("/elencos/escala-por-dono", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
     }
 
-    // busca elenco(s) do dono, mais recente
     const elenco = await prisma.elenco.findFirst({
       where: {
         ativo: true,
@@ -411,11 +379,9 @@ router.get("/elencos/escala-por-dono", authenticateToken, async (req, res) => {
     });
 
     if (!elenco) {
-      // nenhum elenco ainda
       return res.json(null);
     }
 
-    // vínculos + dados do atleta (com usuario)
     const vinculos = await prisma.atletaElenco.findMany({
       where: { elencoId: elenco.id },
       include: {
@@ -425,7 +391,6 @@ router.get("/elencos/escala-por-dono", authenticateToken, async (req, res) => {
       },
     });
 
-    // monta escala PosicaoCampo -> atleta enriquecido
     const posicoes: PosicaoCampo[] = [
       "GOL","LD","ZD","ZE","LE","VOL1","VOL2","MEI","PD","CA","PE"
     ];
@@ -468,8 +433,6 @@ router.get("/elencos/escala-por-dono", authenticateToken, async (req, res) => {
     return res.status(500).json({ error: "Erro ao buscar escala por dono" });
   }
 });
-// ==== GET: pontuações por atleta ====
-// GET /api/treinos/pontuacoes?atletaIds=a,b,c
 router.get("/pontuacoes", authenticateToken, async (req, res) => {
   try {
     const raw = (req.query.atletaIds as string) || "";
@@ -504,7 +467,7 @@ router.get("/pontuacoes", authenticateToken, async (req, res) => {
         performance: r.pontuacaoPerformance,
         disciplina: r.pontuacaoDisciplina,
         responsabilidade: r.pontuacaoResponsabilidade,
-        mediaGeral,                 // <- usamos no card como OVR
+        mediaGeral,       
         ultimaAtualizacao: r.ultimaAtualizacao,
       };
     });
@@ -621,7 +584,7 @@ router.post("/restaurar", authenticateToken, async (req, res) => {
         nome,
         codigo: `${nome}-${Date.now()}`,
         nivel: "Base",
-        tipoTreino: "Físico",
+        tipoTreino: "Fisico",
         categoria: [],
         duracao: 60,
         pontuacao: 15,

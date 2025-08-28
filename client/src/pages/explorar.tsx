@@ -29,7 +29,7 @@ function Explorar() {
   const loggedUserId = useMemo(
     () =>
       (Storage?.usuarioId ??
-        (typeof window !== "undefined" ? localStorage.getItem("usuarioId") : "") ??
+        (typeof window !== "undefined" ? Storage.usuarioId : "") ??
         "") as string,
     []
   );
@@ -45,7 +45,7 @@ function Explorar() {
 
   useEffect(() => {
     const token =
-      Storage?.token ?? (typeof window !== "undefined" ? localStorage.getItem("token") : "");
+      Storage?.token ?? (typeof window !== "undefined" ? Storage.token : "");
 
     axios
       .get(`${API.BASE_URL}/api/explorar`, {

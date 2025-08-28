@@ -27,7 +27,7 @@ export default function PontuacaoDePerfil() {
   const targetId = matched ? params!.id : "";
 
   const token =
-    Storage?.token || (typeof window !== "undefined" ? localStorage.getItem("token") : "");
+    Storage?.token || (typeof window !== "undefined" ? Storage.token : "");
 
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);

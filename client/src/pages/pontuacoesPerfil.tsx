@@ -1,7 +1,7 @@
 // client/src/pages/pontuacoesPerfil.tsx
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useRoute } from "wouter";
 import { CalendarClock, Volleyball, User, CirclePlus, Search, House, CircleX, CircleCheck, Send, Share2, Trash2} from "lucide-react";
 import { BarChart2, Timer, KeyRound, CheckCircle, Play, AlertCircle } from "lucide-react";
 import Storage from "../../../server/utils/storage";
@@ -15,8 +15,17 @@ type PerfilResp = {
   dadosEspecificos: any;
 };
 
+type PontuacaoWire = {
+  performance?: number;
+  disciplina?: number;
+  responsabilidade?: number;
+  ultimaAtualizacao?: string;
+  historico?: any[];
+  videos?: string[];
+};
+
 type PontuacaoDTO = {
-  atletaId: string;
+  atletaId: string | null;
   total: number;
   performance: number;
   disciplina: number;
@@ -86,24 +95,13 @@ async function safeGet<T>(url: string, signal?: AbortSignal): Promise<T | null> 
   return null;
 }
 
-// tenta /me/* e cai pra /:id/* (id = userIdForRoutes)
-async function getWithFallback<T>(
-  meUrl: string,
-  idUrl: string,
-  signal?: AbortSignal
-): Promise<T | null> {
-  const me = await safeGet<T>(meUrl, signal);
-  if (me !== null) return me;
-  return await safeGet<T>(idUrl, signal);
-}
-
-// -------------------- Componente --------------------
 export default function PontuacaoDetalhada() {
   const [, setLocation] = useLocation();
+  const [matchedWithId, params] = useRoute<{ id: string }>("/perfil/:id/pontuacao");
 
-  // ⚠️ use sempre o id certo para rotas /:id/*:
-  const userIdForRoutes: string | null =
-    ((Storage as any)?.tipoUsuarioId as string) || ((Storage as any)?.usuarioId as string) || null;
+  const targetUserId: string =
+    (matchedWithId && params?.id) ? params.id :
+    ((Storage as any)?.usuarioId as string);
 
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -138,9 +136,9 @@ export default function PontuacaoDetalhada() {
       return;
     }
 
-    if (!userIdForRoutes) {
+    if (!targetUserId) {
       setLoading(false);
-      setErro("Não foi possível identificar seu usuário.");
+      setErro("Não foi possível identificar o usuário.");
       return;
     }
 
@@ -150,8 +148,7 @@ export default function PontuacaoDetalhada() {
 
     (async () => {
       try {
-        // 1) Perfil base (sempre por /:id)
-        const perfilResp = await safeGet<PerfilResp>(`/api/perfil/${Storage.usuarioId}`, controller.signal);
+        const perfilResp = await safeGet<PerfilResp>(`/api/perfil/${encodeURIComponent(targetUserId)}`, controller.signal);
         const nomeBase = perfilResp?.usuario?.nome ?? "";
         const fotoBase = perfilResp?.usuario?.foto ?? null;
         const tipo = perfilResp?.tipo ?? null;
@@ -165,13 +162,12 @@ export default function PontuacaoDetalhada() {
           if (perfilResp.dadosEspecificos.foto) {
             foto = perfilResp.dadosEspecificos.foto;
           }
-          // geralmente o backend não retorna atletaId aqui
         }
 
-        // 2) Posição vigente: tenta /me, cai para /:id (com userIdForRoutes)
-        const posAtual = await getWithFallback<PosicaoAtualResp>(
-          `/api/perfil/me/posicao-atual`,
-          `/api/perfil/${userIdForRoutes}/posicao-atual`,
+        const posAtual = await safeGet<PosicaoAtualResp>(
+          targetUserId === Storage.usuarioId
+            ? `/api/perfil/me/posicao-atual`
+            : `/api/perfil/${encodeURIComponent(targetUserId)}/posicao-atual`,
           controller.signal
         );
         let posicaoVigente: string | null | undefined = undefined;
@@ -189,61 +185,29 @@ export default function PontuacaoDetalhada() {
           posicao: posicaoVigente ?? posicaoPerfil ?? undefined,
         });
 
-        // 3) Pontuação/me: tenta /me, cai para /:id (com userIdForRoutes)
-        const pontuacaoPerfil = await getWithFallback<any>(
-          `/api/perfil/me/pontuacao`,
-          `/api/perfil/${userIdForRoutes}/pontuacao`,
+        const wire = await safeGet<PontuacaoWire>(
+          `/api/perfil/pontuacao/${encodeURIComponent(targetUserId)}`,
           controller.signal
         );
 
-        // 4) Pontos agregados via /treinos (para OVR)
-        if (atletaId) {
-          const resPts = await api.get<PontuacaoDTO[]>(`/api/treinos/pontuacoes`, {
-            params: { atletaIds: atletaId },
-            signal: controller.signal as any,
-            validateStatus: () => true,
-          });
+        const perf = Number(wire?.performance ?? 0);
+        const disc = Number(wire?.disciplina ?? 0);
+        const resp = Number(wire?.responsabilidade ?? 0);
+        const total = perf + disc + resp;
+        const mediaGeral = Math.round(total / 3);
 
-          if (resPts.status === 200 && Array.isArray(resPts.data) && resPts.data[0]) {
-            setPontos(resPts.data[0]);
-          } else if (pontuacaoPerfil) {
-            const perf = Number(pontuacaoPerfil.performance || 0);
-            const disc = Number(pontuacaoPerfil.disciplina || 0);
-            const resp = Number(pontuacaoPerfil.responsabilidade || 0);
-            const mediaGeral = Math.round((perf + disc + resp) / 3);
-            setPontos({
-              atletaId,
-              total: perf + disc + resp,
-              performance: perf,
-              disciplina: disc,
-              responsabilidade: resp,
-              mediaGeral,
-              ultimaAtualizacao: new Date().toISOString(),
-            });
-          } else {
-            setPontos(null);
-          }
-        } else if (pontuacaoPerfil) {
-          const perf = Number(pontuacaoPerfil.performance || 0);
-          const disc = Number(pontuacaoPerfil.disciplina || 0);
-          const resp = Number(pontuacaoPerfil.responsabilidade || 0);
-          const mediaGeral = Math.round((perf + disc + resp) / 3);
-          setPontos({
-            atletaId: "",
-            total: perf + disc + resp,
-            performance: perf,
-            disciplina: disc,
-            responsabilidade: resp,
-            mediaGeral,
-            ultimaAtualizacao: new Date().toISOString(),
-          });
-        } else {
-          setPontos(null);
-        }
+        setPontos({
+          atletaId,
+          total,
+          performance: perf,
+          disciplina: disc,
+          responsabilidade: resp,
+          mediaGeral,
+          ultimaAtualizacao: wire?.ultimaAtualizacao || new Date().toISOString(),
+        });
 
-        // 5) Histórico/Vídeos
-        setHistorico(Array.isArray(pontuacaoPerfil?.historico) ? pontuacaoPerfil!.historico : []);
-        setVideos(Array.isArray(pontuacaoPerfil?.videos) ? pontuacaoPerfil!.videos : []);
+        setHistorico(Array.isArray(wire?.historico) ? wire!.historico! : []);
+        setVideos(Array.isArray(wire?.videos) ? wire!.videos! : []);
       } catch (err: any) {
         if (!axios.isCancel(err)) {
           console.error("Erro ao carregar perfil/pontuação:", err);
@@ -260,7 +224,7 @@ export default function PontuacaoDetalhada() {
     })();
 
     return () => controller.abort();
-  }, [userIdForRoutes, setLocation]);
+  }, [targetUserId, setLocation]);
 
   useEffect(() => {
     if (!loading && typeof window !== "undefined" && window.location.hash === "#detalhes") {
@@ -272,7 +236,7 @@ export default function PontuacaoDetalhada() {
   const perf = pontos?.performance ?? 0;
   const disc = pontos?.disciplina ?? 0;
   const resp = pontos?.responsabilidade ?? 0;
-  const ovr = (pontos?.mediaGeral ?? Math.round((perf + disc + resp) / 3)) ?? 0;
+  const ovr = pontos?.mediaGeral ?? Math.round((perf + disc + resp) / 3) ?? 0;
 
   return (
     <div className="min-h-screen bg-transparent pb-28">

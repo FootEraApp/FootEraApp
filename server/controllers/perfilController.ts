@@ -1,5 +1,3 @@
-//server/controllers/perfilController
-
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
@@ -738,7 +736,6 @@ export const getTreinosResumo = async (req: AuthenticatedRequest, res: Response)
 };
 
 export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Response) => {
-  // Prioridade: params.id -> token
   const usuarioId = req.params?.id || req.userId;
 
   if (!usuarioId) {
@@ -746,7 +743,6 @@ export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Resp
   }
 
   try {
-    // 1) resolve atleta a partir do usuarioId
     const atleta = await prisma.atleta.findUnique({
       where: { usuarioId },
       select: { id: true, posicao: true },
@@ -756,17 +752,15 @@ export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Resp
       return res.status(404).json({ error: "Atleta não encontrado para este usuário." });
     }
 
-    // 2) procurar vínculos em elencos ATIVOS e pegar o mais recente (pela dataCriacao do elenco)
-    // se preferir considerar todos elencos (ativos e inativos), remova "ativo: true"
     const vinculoMaisRecente = await prisma.atletaElenco.findFirst({
       where: { atletaId: atleta.id, elenco: { ativo: true } },
       include: {
         elenco: { select: { id: true, nome: true, ativo: true, dataCriacao: true } },
       },
       orderBy: [
-        { elenco: { dataCriacao: "desc" } }, // mais novo primeiro
-        { updatedAt: "desc" },                // e, em caso de empate, o vínculo mais recente
-      ],
+        { elenco: { dataCriacao: "desc" } },
+        { updatedAt: "desc" }, 
+      ],           
     });
 
     if (vinculoMaisRecente && vinculoMaisRecente.posicao) {
@@ -787,7 +781,6 @@ export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Resp
       });
     }
 
-    // 3) fallback: posição da tabela Atleta
     return res.json({
       origem: "atleta" as const,
       posicao: (atleta.posicao as PosicaoCampo) ?? null,

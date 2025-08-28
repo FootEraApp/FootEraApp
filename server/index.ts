@@ -1,5 +1,3 @@
-// server/index
-
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -22,9 +20,11 @@ import configuracoesRoutes from "./routes/configuracoes.js";
 import conquistaRoutes from "./routes/conquista.js";
 import categoriasRoutes from "./routes/categorias.js"
 import desafiosRoutes from "./routes/desafios.js";
+    import desafiosEmGrupoRoutes from "./routes/desafiosEmGrupo.js";
 import escolinhaRoutes from "./routes/escolinha.js";
 import exerciciosRoutes from "./routes/exercicios.js";
 import explorarRoutes from "./routes/explorar.js";
+    import favoritosRoutes from "./routes/favorito.js";
 import feedRoutes from "./routes/feed.js";
 import gruposRoutes from "./routes/grupos.js";
 import homeRoutes from "./routes/home.js";
@@ -76,9 +76,11 @@ app.use("/api/clubes", clubeRoutes);
 app.use("/api/configuracoes", configuracoesRoutes);
 app.use("/api/conquistas", conquistaRoutes);
 app.use("/api/desafios", desafiosRoutes);
+    app.use("/api/desafios/em-grupo", desafiosEmGrupoRoutes);
 app.use("/api/escolinhas", escolinhaRoutes);
 app.use("/api/explorar", explorarRoutes);
 app.use("/api/exercicios", exerciciosRoutes);
+    app.use("/api/favoritos", favoritosRoutes);
 app.use("/api/feed", feedRoutes);
 app.use("/api/grupos", gruposRoutes);
 app.use("/api/home", homeRoutes);
