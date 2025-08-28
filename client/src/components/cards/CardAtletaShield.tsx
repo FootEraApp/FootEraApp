@@ -9,7 +9,7 @@ const SHIELD_PATH =
 export type CardAtletaShieldProps = {
   atleta: {
     id?: string;
-    atletaId: string;
+    atletaId?: string | null;
     nome: string;
     foto?: string | null;
     posicao?: string | null;
@@ -39,7 +39,7 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
   const W = size?.w ?? SHIELD_W_DESK;
   const H = size?.h ?? SHIELD_H_DESK;
   const clipId = `shieldClip-${atleta.atletaId}`;
-  const fotoUrl = atleta.foto ? `${API.BASE_URL}${atleta.foto}` : "/default-avatar.png";
+  const fotoUrl = atleta.foto || "/default-avatar.png";
 
   const ovrShow = Number.isFinite(ovr) ? Math.round(Number(ovr)) : 0;
   const perfShow = Number.isFinite(perf) ? Math.round(Number(perf)) : 0;
@@ -86,18 +86,6 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
     };
   }, [isDragging, lastPos]);
 
-  useEffect(() => {
-  const handleGlobalTouchMove = (e: TouchEvent) => {
-      if (isDragging) {
-        e.preventDefault();
-      }
-    };
-    document.addEventListener("touchmove", handleGlobalTouchMove, { passive: false });
-    return () => {
-      document.removeEventListener("touchmove", handleGlobalTouchMove);
-    };
-  }, [isDragging]);
-
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
     setIsDragging(true);
@@ -106,14 +94,10 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!isDragging) return;
-    e.preventDefault();
     const touch = e.touches[0];
     const deltaX = touch.clientX - lastPos.x;
     const deltaY = touch.clientY - lastPos.y;
-    setRotation((prev) => ({
-      x: prev.x - deltaY / 5,
-      y: prev.y + deltaX / 5,
-    }));
+    setRotation(prev => ({ x: prev.x - deltaY / 5, y: prev.y + deltaX / 5 }));
     setLastPos({ x: touch.clientX, y: touch.clientY });
   };
 
@@ -126,6 +110,7 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
     <div
       className={`cursor-grab select-none ${!isDragging ? "transition-transform duration-500 ease-out" : ""}`}
       style={{
+        touchAction: "none",              
         transform: `perspective(1000px) rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
         width: W,
         height: H,
@@ -169,7 +154,7 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
         </defs>
 
         <g clipPath={`url(#${clipId})`}>
-          <image href={fotoUrl} x="0" y="-10" width="184" height="280" preserveAspectRatio="xMidYMid slice" />
+          <image crossOrigin="anonymous" href={fotoUrl} x="0" y="-10" width="184" height="280" preserveAspectRatio="xMidYMid slice" />
           <rect x="0" y="0" width="184" height="260" fill="url(#cardGrad)" />
           {golden && (
             <>

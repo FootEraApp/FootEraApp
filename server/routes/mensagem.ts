@@ -5,6 +5,7 @@ import {
   buscarMensagens,
   listarMensagensGrupo,
   enviarMensagemGrupo,
+  deletarMensagem
 } from "../controllers/mensagensController.js";
 
 const router = Router();
@@ -14,5 +15,5 @@ router.get("/", authenticateToken, buscarMensagens);
 
 router.get("/grupos/:grupoId", authenticateToken, listarMensagensGrupo);
 router.post("/grupos/:grupoId", authenticateToken, enviarMensagemGrupo);
-
+router.delete("/:id", authenticateToken, deletarMensagem);
 export default router;

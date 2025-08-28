@@ -1,12 +1,14 @@
 import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
-import { Send, Share2, Volleyball, User, UserPlus, CirclePlus, Search, House, Users } from "lucide-react";
+import { Send, Share2, Volleyball, User, UserPlus, CirclePlus, Search, House, Users, Trash } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import socket from "../services/socket.js";
 import { ModalGrupos } from "@/components/modal/ModalGrupos.js";
 import { ModalDesafiosGrupo } from "@/components/modal/ModalDesafiosGrupos.js";
 import { MensagemItemGrupo } from "@/components/chat/GroupDesafioCards.js";
+import CardAtletaShield from "@/components/cards/CardAtletaShield.js";
+import * as htmlToImage from "html-to-image";
 
 interface Usuario {
   id: string;
@@ -19,8 +21,10 @@ interface Mensagem {
   deId: string;
   paraId: string;
   conteudo: string;
-  tipo: "NORMAL" | "POST" | "DESAFIO" | "USUARIO";
+  tipo: "NORMAL" | "POST" | "DESAFIO" | "USUARIO" | "CARD";
   criadaEm: string;
+  clientMsgId?: string;
+  pending?: boolean;
 }
 
 interface Grupo {
@@ -36,7 +40,6 @@ interface MensagemGrupo {
   conteudo: string;
   criadaEm: string;
   usuario?: Usuario;
-
   tipo:
     | "NORMAL"
     | "DESAFIO"
@@ -47,6 +50,8 @@ interface MensagemGrupo {
     | "GRUPO_DESAFIO_BONUS";
   conteudoJson?: any;
   desafioEmGrupoId?: string | null;
+  clientMsgId?: string;
+  pending?: boolean;
 }
 
 interface Postagem {
@@ -102,6 +107,18 @@ export default function PaginaMensagens() {
   const abrirModalDesafios = () => setModalDesafiosAberto(true);
   const fecharModalDesafios = () => setModalDesafiosAberto(false);
 
+  const [meuCardDados, setMeuCardDados] = useState<{
+    atletaId: string | null;
+    nome: string;
+    foto?: string | null;
+    posicao?: string | null;
+    ovr: number;
+    perf: number;
+    disc: number;
+    resp: number;
+  } | null>(null);
+
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const alvoRef = useRef<ChatTarget | null>(null);
   useEffect(() => {
     alvoRef.current = alvo;
@@ -114,6 +131,72 @@ export default function PaginaMensagens() {
      }
   };
 
+   const compartilharPerfilNoChat = async () => {
+    if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
+
+    try {
+      const dados = (meuCardDados ?? await getMeuPerfilEBonus());
+      if (!dados) {
+        alert("Não consegui montar seu card agora.");
+        return;
+      }
+      setMeuCardDados(dados);
+
+      await new Promise((r) => setTimeout(r, 0));
+      const node = cardRef.current;
+      if (!node) {
+        alert("Falha ao preparar o card para captura.");
+        return;
+      }
+      const dataUrl = await htmlToImage.toPng(node, { cacheBust: true });
+
+      const clientMsgId = genClientId();
+
+      setMensagensPrivadas(prev => [
+        ...prev,
+        {
+          id: clientMsgId,
+          clientMsgId,
+          pending: true,
+          criadaEm: new Date().toISOString(),
+          conteudo: dataUrl,
+          deId: usuarioId!,
+          paraId: alvo.usuario.id,
+          tipo: "CARD",
+        }
+      ]);
+
+      const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ paraId: alvo.usuario.id, conteudo: dataUrl, tipo: "CARD", clientMsgId }),
+      });
+
+      if (resp.ok) {
+        const saved: Mensagem = await resp.json();
+        reconcilePrivadaByClientId(saved);
+      } else {
+        console.error("POST /api/mensagem (CARD) falhou:", resp.status, await resp.text());
+      }
+    
+    } catch (err) {
+      console.error("Falha ao compartilhar card no chat:", err);
+      alert("Não foi possível compartilhar seu card agora.");
+    }
+  };
+
+useEffect(() => {
+  if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
+  const key = `conversa_${usuarioId}_${alvo.usuario.id}`;
+  localStorage.setItem(key, JSON.stringify(mensagensPrivadas.slice(-100)));
+}, [mensagensPrivadas, alvo, usuarioId]);
+
+useEffect(() => {
+  if (!alvo || alvo.tipo !== "grupo") return;
+  const key = `conversa_grupo_${alvo.grupo.id}`;
+  localStorage.setItem(key, JSON.stringify(mensagensGrupo.slice(-100)));
+}, [mensagensGrupo, alvo]);
+
   useEffect(() => {
     socket.connect();
 
@@ -123,25 +206,53 @@ export default function PaginaMensagens() {
 
     socket.on("novaMensagem", (mensagem: Mensagem) => {
       const current = alvoRef.current;
-      if (current?.tipo === "usuario") {
-        const curId = current.usuario.id;
-        const relevante =
-          (mensagem.deId === curId && mensagem.paraId === usuarioId) ||
-          (mensagem.deId === usuarioId && mensagem.paraId === curId);
-        if (relevante) setMensagensPrivadas((prev) => [...prev, mensagem]);
+      if (current?.tipo !== "usuario") return;
+
+      const curId = current.usuario.id;
+      const relevante =
+        (mensagem.deId === curId && mensagem.paraId === usuarioId) ||
+        (mensagem.deId === usuarioId && mensagem.paraId === curId);
+      if (!relevante) return;
+
+      const replaced = reconcilePrivadaByClientId(mensagem);
+
+      if (!replaced) {
+        setMensagensPrivadas(prev => {
+          const exists =
+            prev.some(m => m.id === mensagem.id) ||
+            (!!mensagem.clientMsgId && prev.some(m => m.clientMsgId === mensagem.clientMsgId));
+          if (exists) return prev;
+          return [...prev, { ...mensagem, pending: false }];
+        });
       }
     });
 
     socket.on("novaMensagemGrupo", (mensagem: MensagemGrupo) => {
       const current = alvoRef.current;
-      if (current?.tipo === "grupo" && mensagem.grupoId === current.grupo.id) {
-        setMensagensGrupo((prev) => [...prev, mensagem]);
+      if (!(current?.tipo === "grupo" && mensagem.grupoId === current.grupo.id)) return;
+
+      const replaced = reconcileGrupoByClientId(mensagem);
+
+      if (!replaced) {
+        setMensagensGrupo(prev => {
+          const exists =
+            prev.some(m => m.id === mensagem.id) ||
+            (!!mensagem.clientMsgId && prev.some(m => m.clientMsgId === mensagem.clientMsgId));
+          if (exists) return prev;
+          return [...prev, { ...mensagem, pending: false }];
+        });
       }
     });
+
+  socket.on("mensagemDeletada", ({ id }: { id: string }) => {
+    setMensagensPrivadas(prev => prev.filter(m => m.id !== id));
+    setMensagensGrupo(prev => prev.filter(m => m.id !== id));
+  });
 
     return () => {
       socket.off("novaMensagem");
       socket.off("novaMensagemGrupo");
+      socket.off("mensagemDeletada");
     };
   }, [usuarioId]);
 
@@ -319,6 +430,78 @@ export default function PaginaMensagens() {
     }
   }
 
+  async function getMeuPerfilEBonus(): Promise<{
+    atletaId: string | null;
+    nome: string;
+    foto?: string | null;
+    posicao?: string | null;
+    ovr: number;
+    perf: number;
+    disc: number;
+    resp: number;
+  } | null> {
+    try {
+      const perfilRes = await fetch(`${API.BASE_URL}/api/perfil/${usuarioId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!perfilRes.ok) return null;
+      const perfilJson = await perfilRes.json();
+
+      const nome = perfilJson?.usuario?.nome ?? "";
+      const foto = perfilJson?.usuario?.foto ?? null;
+
+      const posRes = await fetch(`${API.BASE_URL}/api/perfil/me/posicao-atual`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const posJson = posRes.ok ? await posRes.json() : null;
+      const posicao = posJson?.posicao ?? null;
+      const atletaId = posJson?.atletaId ?? null;
+
+      const pontosRes = await fetch(`${API.BASE_URL}/api/perfil/pontuacao/${usuarioId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const w = pontosRes.ok ? await pontosRes.json() : null;
+
+      const perf = Number(w?.performance ?? 0);
+      const disc = Number(w?.disciplina ?? 0);
+      const resp = Number(w?.responsabilidade ?? 0);
+      const ovr = Math.round((perf + disc + resp) / 3);
+
+      return { atletaId, nome, foto, posicao, ovr, perf, disc, resp };
+    } catch {
+      return null;
+    }
+  }
+
+  const genClientId = () => `c_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+  function reconcilePrivadaByClientId(incoming: Mensagem) {
+  if (!incoming.clientMsgId) return false;
+  let replaced = false;
+  setMensagensPrivadas(prev => {
+    const idx = prev.findIndex(m => m.clientMsgId === incoming.clientMsgId);
+    if (idx === -1) return prev;         
+    const clone = [...prev];
+    clone[idx] = { ...incoming, pending: false };
+    replaced = true;
+    return clone;
+  });
+  return replaced;
+}
+
+function reconcileGrupoByClientId(incoming: MensagemGrupo) {
+  if (!incoming.clientMsgId) return false;
+  let replaced = false;
+  setMensagensGrupo(prev => {
+    const idx = prev.findIndex(m => m.clientMsgId === incoming.clientMsgId);
+    if (idx === -1) return prev;               
+    const clone = [...prev];
+    clone[idx] = { ...incoming, pending: false };
+    replaced = true;
+    return clone;
+  });
+  return replaced;
+}
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const top = e.currentTarget.scrollTop;
     if (top >= 50 || !alvo) return;
@@ -333,62 +516,120 @@ export default function PaginaMensagens() {
     }
   };
 
-  const enviarMensagem = async () => {
-    if (!novaMensagem.trim() || !alvo) return;
+ const enviarMensagem = async () => {
+  if (!novaMensagem.trim() || !alvo) return;
 
-    if (!usuarioId) {
-      alert("Sessão expirada. Faça login novamente.");
-      return;
-    }
+  if (!usuarioId) {
+    alert("Sessão expirada. Faça login novamente.");
+    return;
+  }
 
-    if (alvo.tipo === "usuario") {
-      const payload = { paraId: alvo.usuario.id, conteudo: novaMensagem, tipo: "NORMAL" as const };
-      await fetch(`${API.BASE_URL}/api/mensagem`, {
+  if (alvo.tipo === "usuario") {
+    const clientMsgId = genClientId();
+
+    const otm: Mensagem = {
+      id: clientMsgId,
+      clientMsgId,
+      pending: true,
+      criadaEm: new Date().toISOString(),
+      conteudo: novaMensagem,
+      deId: usuarioId!,
+      paraId: alvo.usuario.id,
+      tipo: "NORMAL",
+    };
+    setMensagensPrivadas(prev => [...prev, otm]);
+
+    try {
+      const payload = { paraId: alvo.usuario.id, conteudo: novaMensagem, tipo: "NORMAL" as const, clientMsgId };
+      const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
 
-      const novaMsg: Mensagem = {
-        id: `${Date.now()}`,
-        criadaEm: new Date().toISOString(),
-        conteudo: novaMensagem,
-        deId: usuarioId,
-        paraId: alvo.usuario.id,
-        tipo: "NORMAL",
-      };
-      setMensagensPrivadas((prev) => [...prev, novaMsg]);
-      socket.emit("sendMessage", novaMsg);
-    } else {
-      const payload = { conteudo: novaMensagem };
-      await fetch(`${API.BASE_URL}/api/mensagem/grupos/${alvo.grupo.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload),
-      });
-
-      const novaMsg: MensagemGrupo = {
-        id: `${Date.now()}`,
-        criadaEm: new Date().toISOString(),
-        conteudo: novaMensagem,
-        grupoId: alvo.grupo.id,
-        usuarioId: usuarioId!,
-        tipo: "NORMAL",
-      };
-
-      setMensagensGrupo((prev) => [...prev, novaMsg]);
-      socket.emit("sendGroupMessage", novaMsg);
+      if (resp.ok) {
+        const saved: Mensagem = await resp.json();
+        reconcilePrivadaByClientId(saved);
+      } 
+    } catch (e) {
+      console.error("POST /api/mensagem erro:", e);
     }
 
     setNovaMensagem("");
-  };
+  } else {
+    const clientMsgId = genClientId();
+
+    const otm: MensagemGrupo = {
+      id: clientMsgId,
+      clientMsgId,
+      pending: true,
+      criadaEm: new Date().toISOString(),
+      conteudo: novaMensagem,
+      grupoId: alvo.grupo.id,
+      usuarioId: usuarioId!,
+      tipo: "NORMAL",
+    };
+    setMensagensGrupo(prev => [...prev, otm]);
+
+    try {
+      const payload = { conteudo: novaMensagem, clientMsgId };
+      const resp = await fetch(`${API.BASE_URL}/api/mensagem/grupos/${alvo.grupo.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+
+      if (resp.ok) {
+        const saved: MensagemGrupo = await resp.json();
+        reconcileGrupoByClientId(saved);
+      } else {
+        console.error("POST /api/mensagem/grupos falhou:", resp.status, await resp.text());
+      }
+    } catch (e) {
+      console.error("POST /api/mensagem/grupos erro:", e);
+    }
+
+    setNovaMensagem("");
+  }
+};
+
+const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+
+const deletarMensagem = async (id: string) => {
+  try {
+    const msgPriv = mensagensPrivadas.find(m => m.id === id);
+    const msgGrp  = mensagensGrupo.find(m => m.id === id);
+    const pending = (msgPriv && msgPriv.pending) || (msgGrp && msgGrp.pending);
+
+    if (pending || id.startsWith("c_") || !isUuid(id)) {
+      setMensagensPrivadas(prev => prev.filter(m => m.id !== id));
+      setMensagensGrupo(prev => prev.filter(m => m.id !== id));
+      return;
+    }
+
+    const res = await fetch(`${API.BASE_URL}/api/mensagem/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) throw new Error("Falha no delete");
+
+    setMensagensPrivadas(prev => prev.filter(m => m.id !== id));
+    setMensagensGrupo(prev => prev.filter(m => m.id !== id));
+  } catch (err) {
+    console.error("Erro ao apagar mensagem:", err);
+    alert("Não foi possível apagar a mensagem.");
+  }
+};
 
   const renderizarMensagemPrivada = (msg: Mensagem) => {
+    const isMine = msg.deId === usuarioId;
+
     if (msg.tipo === "POST") {
       const post = postsCache[msg.conteudo];
       if (!post) {
         return (
-          <div key={msg.id} className={`p-2 rounded max-w-sm bg-gray-200 ${msg.deId === usuarioId ? "self-end ml-auto" : ""}`}>
+          <div key={msg.id} className={`p-4 rounded max-w-sm border shadow-sm cursor-pointer ${msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}>
             Carregando post...
           </div>
         );
@@ -397,7 +638,7 @@ export default function PaginaMensagens() {
         <div
           key={msg.id}
           onClick={() => navigate(`/post/${post.id}`)}
-          className={`p-4 rounded max-w-sm border shadow-sm cursor-pointer ${msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}
+          className={`relative p-4 rounded max-w-sm border shadow-sm cursor-pointer ${msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}
           title="Clique para abrir a postagem"
         >
           <div className="flex items-center mb-3 gap-3">
@@ -416,8 +657,17 @@ export default function PaginaMensagens() {
               Seu navegador não suporta vídeo.
             </video>
           )}
-
-          <p className="text-gray-800 text-sm line-clamp-2 whitespace-pre-wrap">{post.conteudo}</p>
+           <p className="text-gray-800 text-sm line-clamp-2 whitespace-pre-wrap">{post.conteudo}</p>
+        
+           {isMine && (
+              <button
+                onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}  
+                className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
+                title="Apagar mensagem"
+              >
+                <Trash size={16} />
+              </button>
+            )}
         </div>
       );
     }
@@ -426,7 +676,7 @@ export default function PaginaMensagens() {
       const u = usuariosCache[msg.conteudo];
       if (!u) {
         return (
-          <div key={msg.id} className={`p-2 rounded max-w-sm bg-gray-200 ${msg.deId === usuarioId ? "self-end ml-auto" : ""}`}>
+          <div key={msg.id} className={`p-4 rounded max-w-sm border shadow-sm cursor-pointer ${msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}>
             Carregando usuário...
           </div>
         );
@@ -435,7 +685,7 @@ export default function PaginaMensagens() {
         <div
           key={msg.id}
           onClick={() => navigate(`/perfil/${u.id}`)}
-          className={`p-4 rounded max-w-sm border shadow-sm cursor-pointer flex items-center gap-3 ${
+          className={`relative p-4 rounded max-w-sm border shadow-sm cursor-pointer flex items-center gap-3 ${
             msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-white"
           }`}
           title="Clique para ver o perfil"
@@ -445,6 +695,16 @@ export default function PaginaMensagens() {
             <p className="font-semibold">{u.nome}</p>
             <p className="text-sm text-gray-500">Ver perfil</p>
           </div>
+
+           {isMine && (
+              <button
+                onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}
+                className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
+                title="Apagar mensagem"
+              >
+                <Trash size={16} />
+              </button>
+            )}
         </div>
       );
     }
@@ -453,7 +713,7 @@ export default function PaginaMensagens() {
       const d = desafiosCache[msg.conteudo];
       if (!d) {
         return (
-          <div key={msg.id} className={`p-2 rounded max-w-sm bg-gray-200 ${msg.deId === usuarioId ? "self-end ml-auto" : ""}`}>
+          <div key={msg.id} className={`p-4 rounded max-w-sm border shadow-sm cursor-pointer ${msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-white"} `}>
             Carregando desafio...
           </div>
         );
@@ -465,7 +725,7 @@ export default function PaginaMensagens() {
         <div
           key={msg.id}
           onClick={() => navigate(`/desafios/${d.id}`)}
-          className={`p-3 rounded-lg max-w-sm border shadow-md cursor-pointer transition-all hover:shadow-lg ${isMine ? "bg-blue-50 self-end ml-auto" : "bg-white"}`}
+          className={`relative p-3 rounded-lg max-w-sm border shadow-md cursor-pointer transition-all hover:shadow-lg ${isMine ? "bg-blue-50 self-end ml-auto" : "bg-white"}`}
           title="Clique para ver o desafio"
         >
           <div className="flex items-center justify-between mb-2 gap-3">
@@ -486,16 +746,66 @@ export default function PaginaMensagens() {
               <span>{new Date(d.createdAt).toLocaleDateString("pt-BR")}</span>
             </div>
           </div>
+           {isMine && (
+              <button
+                onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}  
+                className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
+                title="Apagar mensagem"
+              >
+                <Trash size={16} />
+              </button>
+            )}
         </div>
       );
     }
 
-    return (
-      <div key={msg.id} className={`p-2 rounded max-w-sm ${msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-gray-200"}`}>
-        {msg.conteudo}
-      </div>
-    );
-  };
+    if (msg.tipo === "CARD") {
+      const isMine = msg.deId === usuarioId;
+      return (
+        <div
+          key={msg.id}
+          className={`relative p-2 rounded max-w-sm border shadow-sm ${
+            isMine ? "bg-blue-50 self-end ml-auto" : "bg-white"
+          } `}
+        >
+          <img
+            src={msg.conteudo}
+            alt="Card do atleta"
+            className="w-60 h-auto rounded"
+          />
+           {isMine && (
+              <button
+                onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}
+                className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
+                title="Apagar mensagem"
+              >
+                <Trash size={16} />
+              </button>
+            )}
+        </div>
+      );
+    }
+      return (
+    <div
+      key={msg.id}
+      className={`relative p-2 rounded max-w-sm ${
+        isMine ? "bg-blue-100 self-end ml-auto" : "bg-gray-200"
+      }`}
+    >
+      <p>{msg.conteudo}</p>
+
+      {isMine && (
+        <button
+          onClick={() => deletarMensagem(msg.id)}
+          className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
+          title="Apagar mensagem"
+        >
+          <Trash size={16} />
+        </button>
+      )}
+    </div>
+  );
+};
 
   const tituloChat =
     alvo?.tipo === "usuario" ? alvo.usuario.nome : alvo?.tipo === "grupo" ? `${alvo.grupo.nome} (grupo)` : "Selecione uma conversa";
@@ -559,6 +869,28 @@ export default function PaginaMensagens() {
         </div>
       </aside>
 
+        <div style={{ position: "absolute", left: -99999, top: -99999 }}>
+          <div ref={cardRef}>
+            {meuCardDados && (
+              <CardAtletaShield
+                atleta={{
+                  atletaId: meuCardDados.atletaId ?? "",
+                  nome: meuCardDados.nome,
+                  foto: meuCardDados.foto,
+                  posicao: meuCardDados.posicao ?? undefined,
+                  idade: null,
+                }}
+                ovr={meuCardDados.ovr}
+                perf={meuCardDados.perf}
+                disc={meuCardDados.disc}
+                resp={meuCardDados.resp}
+                size={{ w: 300, h: 420 }}
+                goldenMinOVR={88}
+              />
+            )}
+          </div>
+        </div>
+
       <main className="flex-1 flex flex-col justify-between p-4 pb-20">
         {alvo ? (
           <>
@@ -566,9 +898,13 @@ export default function PaginaMensagens() {
               <h2 className="text-lg font-semibold">{tituloChat}</h2>
 
               {alvo.tipo === "usuario" && (
-                <button className="flex items-center gap-2 text-blue-500 hover:underline">
+                <button
+                  onClick={compartilharPerfilNoChat}
+                  className="flex items-center gap-2 text-blue-600 hover:underline"
+                  title="Compartilhar meu card nesta conversa"
+                >
                   <Share2 size={18} />
-                  Compartilhar
+                  Compartilhar meu card
                 </button>
               )}
 
