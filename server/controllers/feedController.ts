@@ -1,3 +1,4 @@
+// server/controllers/feedController
 import { Response, RequestHandler } from "express";
 import { Request } from "express";
 import { TipoMidia, Prisma } from "@prisma/client";
@@ -34,14 +35,15 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
 
     if (filtro === "favoritos") {
       if (!userId) return res.status(401).json({ message: "Requer login." });
+
       const favs = await prisma.favoritoUsuario.findMany({
         where: { usuarioId: userId },
         select: { favoritoUsuarioId: true },
       });
-      const ids = favs.map(f => f.favoritoUsuarioId);
-      if (ids.length === 0) {
-        return res.json([]); 
-      }
+
+      const ids = favs.map(f => f.favoritoUsuarioId).filter(Boolean);
+      if (ids.length === 0) return res.json([]);
+
       where.AND = [{ usuarioId: { in: ids } }, { usuarioId: { not: userId } }];
     }
 

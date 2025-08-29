@@ -53,22 +53,27 @@ router.get("/", authenticateToken, async (req, res) => {
 
 router.get("/submissoes", authenticateToken, async (req, res) => {
   try {
+    const viewerId = (req as any).userId as string;
+
     const submissoes = await prisma.submissaoDesafio.findMany({
       include: {
         desafio: true,
         midias: true,
-        atleta: {
-          include: {
-            usuario: true
-          }
-        }
+        atleta: { include: { usuario: true } },
+        curtidas: { select: { usuarioId: true } },
+        _count: { select: { curtidas: true, comentarios: true } },
       },
-      orderBy: {
-        createdAt: "desc"
-      }
+      orderBy: { createdAt: "desc" },
     });
 
-    return res.json(submissoes);
+    const payload = submissoes.map((s) => ({
+      ...s,
+      curtidasCount: s._count.curtidas,
+      comentariosCount: s._count.comentarios,
+      viewerLiked: s.curtidas.some((c) => c.usuarioId === viewerId),
+    }));
+
+    return res.json(payload);
   } catch (err) {
     console.error("Erro ao buscar submissões:", err);
     return res.status(500).json({ error: "Erro interno ao buscar submissões" });
@@ -303,5 +308,81 @@ router.get("/:id", authenticateToken, async (req, res) => {
     return res.status(500).json({ error: "Erro interno ao buscar desafio" });
   }
 });
+{/* Pagina de desafios funções para curtir comentar e compartilhar */}
+
+// --- CURTIR/REMOVER CURTIDA numa submissão ---
+router.post("/submissoes/:id/like", authenticateToken, async (req, res) => {
+  try {
+    const usuarioId = (req as any).userId as string;
+    const submissaoId = req.params.id;
+
+    if (!usuarioId) return res.status(401).json({ error: "Não autenticado" });
+
+    const existente = await prisma.curtida.findFirst({
+      where: { usuarioId, submissaoId },
+    });
+
+    if (existente) {
+      await prisma.curtida.delete({ where: { id: existente.id } });
+    } else {
+      await prisma.curtida.create({ data: { usuarioId, submissaoId } });
+    }
+
+    const count = await prisma.curtida.count({ where: { submissaoId } });
+    return res.json({ liked: !existente, count });
+  } catch (e) {
+    console.error("Erro ao curtir submissão:", e);
+    return res.status(500).json({ error: "Erro ao curtir submissão" });
+  }
+});
+
+// --- COMENTAR numa submissão ---
+router.post("/submissoes/:id/comentarios", authenticateToken, async (req, res) => {
+  try {
+    const usuarioId = (req as any).userId as string;
+    const submissaoId = req.params.id;
+    const { conteudo } = req.body as { conteudo?: string };
+
+    if (!usuarioId) return res.status(401).json({ error: "Não autenticado" });
+    if (!conteudo || !conteudo.trim()) {
+      return res.status(400).json({ error: "conteudo é obrigatório" });
+    }
+
+    const comentario = await prisma.comentario.create({
+      data: { usuarioId, submissaoId, conteudo: conteudo.trim() },
+      include: { usuario: { select: { id: true, nome: true, foto: true } } },
+    });
+
+    const count = await prisma.comentario.count({ where: { submissaoId } });
+
+    return res.status(201).json({ comentario, count });
+  } catch (e) {
+    console.error("Erro ao comentar submissão:", e);
+    return res.status(500).json({ error: "Erro ao comentar submissão" });
+  }
+});
+
+// LISTAR comentários de uma submissão (usado pelo modal)
+router.get("/submissoes/:id/comentarios", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // opcional: validar existência
+    const exists = await prisma.submissaoDesafio.findUnique({ where: { id } });
+    if (!exists) return res.status(404).json({ error: "Submissão não encontrada" });
+
+    const comentarios = await prisma.comentario.findMany({
+      where: { submissaoId: id }, // <- requer schema com submissaoId
+      include: { usuario: { select: { id: true, nome: true, foto: true } } },
+      orderBy: { dataCriacao: "asc" },
+    });
+
+    return res.json(comentarios);
+  } catch (e) {
+    console.error("Erro ao buscar comentários da submissão:", e);
+    return res.status(500).json({ error: "Erro interno ao buscar comentários" });
+  }
+});
+
 
 export default router;
