@@ -1,3 +1,4 @@
+// server/routes/feed
 import express, { Router} from "express";
 import { authenticateToken } from "../middlewares/auth.js";
 import { adminAuth } from "../middlewares/admin-auth.js";
@@ -20,7 +21,7 @@ const prisma = new PrismaClient();
 
 router.use(authenticateToken);
 
-router.get("/feed", authenticateToken, getFeedPosts);
+router.get("/", authenticateToken, getFeedPosts);
 router.get("/perfil/:id", authenticateToken, getPerfil);
 router.delete("/usuario/:id", adminAuth, deletarUsuario);
 router.post("/seguir", seguirUsuario);
@@ -28,6 +29,7 @@ router.post("/postar", upload.single("arquivo"), postar);
 
 router.delete("/posts/:id", authenticateToken, deletarPostagem);
 
+/*
 router.get("/", authenticateToken, async (req, res) => {
   try {
     const posts = await prisma.postagem.findMany({
@@ -49,5 +51,6 @@ router.get("/", authenticateToken, async (req, res) => {
     res.status(500).json({ message: "Erro ao carregar o feed" });
   }
 });
+*/
 
 export default router;

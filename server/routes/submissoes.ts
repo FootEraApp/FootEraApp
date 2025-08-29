@@ -1,3 +1,4 @@
+// server/routes/submissoes
 import { Router } from "express";
 import multer from "multer";
 import { authenticateToken, AuthenticatedRequest } from "../middlewares/auth.js";
@@ -70,9 +71,12 @@ router.post(
         return res.status(400).json({ error: "Dados obrigatórios ausentes." });
       }
 
+      const assetUrl = `/uploads/${file.filename}`;
+      const isVideo = file.mimetype.startsWith("video");
+
       const midia = {
-        url: `/uploads/${file.filename}`,
-        tipo: file.mimetype.startsWith("video") ? "Video" : "Imagem",
+        url: assetUrl,
+        tipo: isVideo ? "Video" : "Imagem",
         dataEnvio: new Date(),
         descricao: "",
         titulo: ""
@@ -86,6 +90,8 @@ router.post(
           create: [midia],
         },
       };
+
+      if (isVideo) data.videoUrl = assetUrl;
 
       if (typeof req.userId === "string") {
         data.usuarioId = req.userId;

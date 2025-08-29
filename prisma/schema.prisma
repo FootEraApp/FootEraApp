@@ -354,9 +354,17 @@ model Comentario {
   conteudo    String
   dataCriacao DateTime @default(now())
   usuarioId   String
-  postagemId  String
-  postagem    Postagem @relation(fields: [postagemId], references: [id])
+
+  postagemId  String?
+  postagem    Postagem? @relation(fields: [postagemId], references: [id])
+
+  submissaoId String?
+  submissao   SubmissaoDesafio? @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
+
   usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+
+  @@index([postagemId])
+  @@index([submissaoId])
 }
 
 model Clube {
@@ -427,6 +435,9 @@ model SubmissaoDesafio {
   midias           Midia[]                   @relation("Midias_SubmissaoDesafio")
   Usuario          Usuario?                  @relation(fields: [usuarioId], references: [id])
   submissaoEmGrupo SubmissaoDesafioEmGrupo[]
+
+  comentarios      Comentario[]
+  curtidas         Curtida[]
 }
 
 model SubmissaoTreino {
@@ -538,10 +549,19 @@ model LogErro {
 model Curtida {
   id         String   @id @default(uuid())
   usuarioId  String
-  postagemId String
+
+  postagemId String?
+  postagem   Postagem? @relation(fields: [postagemId], references: [id], onDelete: Cascade)
+
+  submissaoId String?
+  submissao   SubmissaoDesafio? @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
+
   createdAt  DateTime @default(now())
-  postagem   Postagem @relation(fields: [postagemId], references: [id])
   usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, postagemId], name: "usuario_postagem_unique")
+  @@unique([usuarioId, submissaoId], name: "usuario_submissao_unique")
+  @@index([submissaoId])
 }
 
 model TreinoAgendado {

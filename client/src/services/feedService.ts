@@ -1,3 +1,4 @@
+//client/src/service/feedService
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { apiGet } from "./api.js";
@@ -118,7 +119,7 @@ export async function getPostById(id: string): Promise<PostagemComUsuario> {
 
 export async function deletarPost(postId: PostId): Promise<boolean> {
   const token = Storage.token;
-  const res = await fetch(`${API.BASE_URL}/api/post/${postId}`, {
+  const res = await fetch(`${API.BASE_URL}/api/posts/${postId}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
   });

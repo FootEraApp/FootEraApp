@@ -1,3 +1,4 @@
+// client/src/pages/submissao
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
