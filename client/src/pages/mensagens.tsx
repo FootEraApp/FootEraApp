@@ -742,7 +742,7 @@ const deletarMensagem = async (id: string) => {
         className={`relative p-4 rounded max-w-sm border shadow-sm cursor-pointer flex items-center gap-3 ${isMine ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}
         title="Clique para ver o perfil"
       >
-        <img src={publicImgUrl(u.foto)} alt={`Foto de ${u.nome}`} className="w-12 h-12 rounded-full object-cover border" />
+        <img src={publicImgUrl(u.foto) ?? "https://via.placeholder.com/40"} alt={`Foto de ${u.nome}`} className="w-12 h-12 rounded-full object-cover border" />
         <div>
           <p className="font-semibold">{u.nome}</p>
           <p className="text-sm text-gray-500">Ver perfil</p>
