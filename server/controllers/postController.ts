@@ -1,36 +1,68 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
+import fs from "fs/promises";
+import path from "path";
 
 type AuthedReq = Request & { userId?: string };
 
-function isAllowedUrl(u?: string | null) {
-  if (!u) return false;
-  return /^https?:\/\//i.test(u) || u.startsWith("/assets/");
+function isAllowedUrl(u: unknown): u is string {
+  return (
+    typeof u === "string" &&
+    (/^https?:\/\//i.test(u) || u.startsWith("/assets/") || u.startsWith("assets/"))
+  );
 }
-function normalizeAssetUrl(u: string) {
+
+function normalizeAssetUrl(u?: string): string {
+  if (!u) return "";
   return u.startsWith("assets/") ? "/" + u : u;
+}
+
+function dataUrlToBuffer(dataUrl: string) {
+  const m = /^data:(image|video)\/[a-z0-9+.-]+;base64,(.+)$/i.exec(dataUrl);
+  if (!m) return null;
+  return Buffer.from(m[2], "base64");
 }
 
 export const postarConteudo = async (req: AuthedReq, res: Response) => {
   try {
     if (!req.userId) return res.status(401).json({ message: "Usuário não autenticado." });
 
-    const { descricao, imagemUrl, videoUrl } = req.body as {
-      descricao?: string;
-      imagemUrl?: string;
-      videoUrl?: string;
-    };
+    const body = req.body as any;
     const file = (req as any).file as Express.Multer.File | undefined;
+
+    const descricao: string | undefined = body.descricao ?? body.conteudo;
+    const imagemUrl: string | undefined = body.imagemUrl;
+    const videoUrl: string | undefined = body.videoUrl;
 
     let finalImagemUrl: string | null = null;
     let finalVideoUrl: string | null = null;
 
-    if (isAllowedUrl(imagemUrl)) finalImagemUrl = normalizeAssetUrl(imagemUrl!);
-    if (isAllowedUrl(videoUrl)) finalVideoUrl = normalizeAssetUrl(videoUrl!);
+    if (isAllowedUrl(imagemUrl)) finalImagemUrl = normalizeAssetUrl(imagemUrl) || null;
+    if (isAllowedUrl(videoUrl)) finalVideoUrl = normalizeAssetUrl(videoUrl) || null;
 
-    if (!finalImagemUrl && !finalVideoUrl && file) {
-      if (file.mimetype.startsWith("image/")) finalImagemUrl = `/uploads/${file.filename}`;
-      else if (file.mimetype.startsWith("video/")) finalVideoUrl = `/uploads/${file.filename}`;
+    const base64 = body.midiaBase64 ?? body.imagemBase64 ?? null;
+    if (!finalImagemUrl && !finalVideoUrl && base64) {
+      const buf = dataUrlToBuffer(base64);
+      if (buf) {
+        const isVideo = /^data:video\//i.test(base64);
+        const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${isVideo ? "mp4" : "png"}`;
+        const uploadDir = path.join(process.cwd(), "uploads");
+        await fs.mkdir(uploadDir, { recursive: true });
+        await fs.writeFile(path.join(uploadDir, filename), buf);
+        if (isVideo) finalVideoUrl = `/uploads/${filename}`;
+        else finalImagemUrl = `/uploads/${filename}`;
+      }
+    }
+
+    const anyFile: Express.Multer.File | undefined =
+      file ??
+      (Array.isArray((req as any).files) ? (req as any).files[0] : undefined) ??
+      (req as any).files?.midia?.[0] ??
+      (req as any).files?.imagem?.[0];
+
+    if (!finalImagemUrl && !finalVideoUrl && anyFile) {
+      if (anyFile.mimetype.startsWith("image/")) finalImagemUrl = `/uploads/${anyFile.filename}`;
+      else if (anyFile.mimetype.startsWith("video/")) finalVideoUrl = `/uploads/${anyFile.filename}`;
     }
 
     if (!descricao && !finalImagemUrl && !finalVideoUrl) {
@@ -39,51 +71,70 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
 
     const tipoDetectado = finalVideoUrl ? "Video" : finalImagemUrl ? "Imagem" : "Documento";
 
-    const post = await prisma.postagem.create({
-      data: {
-        usuarioId: req.userId,
-        conteudo: descricao || "",
-        tipoMidia: tipoDetectado,
-        imagemUrl: finalImagemUrl,
-        videoUrl: finalVideoUrl,
-        compartilhamentos: 0,
-      },
-      include: {
-        usuario: { select: { id: true, nome: true, foto: true } },
-        curtidas: true,
-        comentarios: {
-          include: { usuario: { select: { id: true, nome: true, foto: true } } },
+    try {
+      const post = await prisma.postagem.create({
+        data: {
+          usuarioId: req.userId!,
+          conteudo: descricao || "",
+          tipoMidia: tipoDetectado as any,
+          imagemUrl: finalImagemUrl,
+          videoUrl: finalVideoUrl,
+          compartilhamentos: 0,
         },
-      },
-    });
-
-    return res.status(201).json(post);
+        include: {
+          usuario: { select: { id: true, nome: true, foto: true } },
+          curtidas: true,
+          comentarios: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
+        },
+      });
+      return res.status(201).json(post);
+    } catch (err: any) {
+      if (err?.code === "P2002") {
+        const existente = await prisma.postagem.findFirst({
+          where: { usuarioId: req.userId!, conteudo: descricao || "" },
+          include: {
+            usuario: { select: { id: true, nome: true, foto: true } },
+            curtidas: true,
+            comentarios: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
+          },
+        });
+        if (existente) return res.status(200).json(existente);
+        return res.status(409).json({ message: "Você já postou esse mesmo conteúdo." });
+      }
+      throw err;
+    }
   } catch (err) {
     console.error("postarConteudo error:", err);
     return res.status(500).json({ message: "Erro ao criar postagem." });
   }
 };
 
-export async function adicionarComentario(req: AuthedReq, res: Response) {
+export const adicionarComentario = async (req: AuthedReq, res: Response) => {
   const { postId } = req.params;
-  const { conteudo } = req.body;
-  const userId = req.userId;
+  const { conteudo } = req.body as { conteudo?: string };
 
-  if (!userId) return res.status(401).json({ message: "Usuário não autenticado" });
-  if (!conteudo || conteudo.trim() === "") {
+  if (!req.userId) return res.status(401).json({ message: "Usuário não autenticado" });
+  if (!conteudo || !conteudo.trim())
     return res.status(400).json({ message: "Conteúdo do comentário é obrigatório" });
-  }
 
   try {
+    const post = await prisma.postagem.findUnique({ where: { id: postId }, select: { id: true } });
+    if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
+
     const novoComentario = await prisma.comentario.create({
-      data: { conteudo, postagemId: postId, usuarioId: userId },
+      data: {
+        conteudo: conteudo.trim(),
+        postagemId: postId,
+        usuarioId: req.userId!,
+      },
     });
+
     return res.status(201).json(novoComentario);
   } catch (error) {
     console.error("Erro ao adicionar comentário:", error);
     return res.status(500).json({ message: "Erro interno ao adicionar comentário" });
   }
-}
+};
 
 export const editarPostagemGet = async (req: AuthedReq, res: Response) => {
   const { id } = req.params;
@@ -198,11 +249,11 @@ export const compartilharPostPorMensagem = async (req: AuthedReq, res: Response)
       .map((paraId) =>
         prisma.mensagem.create({
           data: {
-            deUsuarioId: req.userId!,   
+            deUsuarioId: req.userId!,
             paraUsuarioId: paraId,
-            tipo: "POST",               
-            conteudo: postId,            
-            texto: texto ?? null,       
+            tipo: "POST",
+            conteudo: postId,
+            texto: texto ?? null,
           } as any,
         })
       );

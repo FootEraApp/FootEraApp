@@ -105,8 +105,24 @@ app.use("/api/treinosprogramados", treinoProgramadoRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
 
-app.use("/uploads", express.static(path.join(__dirname, "public", "uploads")));
-app.use("/assets", express.static("client/public/assets/")); 
+const ROOT = process.cwd();
+
+app.use("/uploads", express.static(path.join(ROOT, "uploads"), {
+  maxAge: "30d", etag: true
+}));
+
+app.use("/assets", express.static(path.join(ROOT, "client", "public", "assets"), {
+  maxAge: "30d", etag: true
+}));
+
+app.use(express.static(path.join(ROOT, "client", "public")));
+
+app.use((req, res, next) => {
+  if (req.path.startsWith("/assets/") || req.path.startsWith("/uploads/")) {
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  }
+  next();
+});
 
 app.get("/", (req, res) => {
   res.send("FootEra API está ativa!");

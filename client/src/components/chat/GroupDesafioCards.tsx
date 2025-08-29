@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
+import { publicImgUrl } from "@/utils/publicUrl.js";
 
 export type MsgGrupo = {
   id: string;
@@ -127,7 +128,7 @@ function PostPreview({ postId, baseUrl }: { postId: string; baseUrl: string }) {
     >
       <div className="flex items-center mb-3 gap-3">
         <img
-          src={post.usuario.foto ? `${baseUrl}${post.usuario.foto}` : "https://via.placeholder.com/40"}
+          src={publicImgUrl(post.usuario.foto) || "https://via.placeholder.com/40"}
           alt={`Foto de ${post.usuario.nome}`}
           className="w-10 h-10 rounded-full object-cover border"
         />
@@ -175,7 +176,7 @@ function UsuarioPreview({ usuarioId, baseUrl }: { usuarioId: string; baseUrl: st
       title="Clique para ver o perfil"
     >
       <img
-        src={u.foto ? `${baseUrl}${u.foto}` : "https://via.placeholder.com/40"}
+        src={publicImgUrl(u.foto) || "https://via.placeholder.com/40"}
         alt={`Foto de ${u.nome}`}
         className="w-12 h-12 rounded-full object-cover border"
       />

@@ -9,6 +9,7 @@ import { ModalDesafiosGrupo } from "@/components/modal/ModalDesafiosGrupos.js";
 import { MensagemItemGrupo } from "@/components/chat/GroupDesafioCards.js";
 import CardAtletaShield from "@/components/cards/CardAtletaShield.js";
 import * as htmlToImage from "html-to-image";
+import { publicImgUrl } from "@/utils/publicUrl.js";
 
 interface Usuario {
   id: string;
@@ -118,6 +119,40 @@ export default function PaginaMensagens() {
     resp: number;
   } | null>(null);
 
+const compactMsgs = <T extends { tipo: string; conteudo: any }>(arr: T[]) =>
+  arr.slice(-60).map((m) => {
+    if (m.tipo === "CARD") return { ...m, conteudo: "__CARD__", pending: false, clientMsgId: undefined } as T;
+    const clone: any = { ...m };
+    if (typeof clone.conteudo === "string" && clone.conteudo.length > 2000) {
+      clone.conteudo = clone.conteudo.slice(0, 2000);
+    }
+    delete clone.pending;
+    delete clone.clientMsgId;
+    return clone as T;
+  });
+
+const safeSave = (key: string, value: any[]) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(compactMsgs(value)));
+  } catch (e) {
+    console.warn("LocalStorage quota:", e);
+    try {
+      localStorage.setItem(key, JSON.stringify(compactMsgs(value).slice(-30)));
+    } catch {}
+  }
+};
+
+  const safeLoad = <T = any>(key: string): T[] => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  };
+
   const cardRef = useRef<HTMLDivElement | null>(null);
   const alvoRef = useRef<ChatTarget | null>(null);
   useEffect(() => {
@@ -131,25 +166,31 @@ export default function PaginaMensagens() {
      }
   };
 
-   const compartilharPerfilNoChat = async () => {
+    async function publicarCardNoFeed(dataUrl: string, legenda = "Meu Card FOOTERA") {
+      const resp = await fetch(`${API.BASE_URL}/api/post`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ descricao: legenda, midiaBase64: dataUrl }),
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+    }
+
+  const compartilharPerfilNoChat = async () => {
     if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
 
     try {
       const dados = (meuCardDados ?? await getMeuPerfilEBonus());
-      if (!dados) {
-        alert("Não consegui montar seu card agora.");
-        return;
-      }
+      if (!dados) { alert("Não consegui montar seu card agora."); return; }
       setMeuCardDados(dados);
 
       await new Promise((r) => setTimeout(r, 0));
       const node = cardRef.current;
-      if (!node) {
-        alert("Falha ao preparar o card para captura.");
-        return;
-      }
-      const dataUrl = await htmlToImage.toPng(node, { cacheBust: true });
+      if (!node) { alert("Falha ao preparar o card para captura."); return; }
 
+      const dataUrl = await htmlToImage.toPng(node, { cacheBust: true });
       const clientMsgId = genClientId();
 
       setMensagensPrivadas(prev => [
@@ -171,31 +212,37 @@ export default function PaginaMensagens() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ paraId: alvo.usuario.id, conteudo: dataUrl, tipo: "CARD", clientMsgId }),
       });
-
       if (resp.ok) {
         const saved: Mensagem = await resp.json();
         reconcilePrivadaByClientId(saved);
       } else {
         console.error("POST /api/mensagem (CARD) falhou:", resp.status, await resp.text());
       }
-    
+
+      try {
+        const legenda = `Meu Card FOOTERA OVR: ${dados.ovr} Performance: ${dados.perf} pts Disciplina: ${dados.disc} pts Responsabilidade: ${dados.resp} pts`;
+        await publicarCardNoFeed(dataUrl, legenda);
+      } catch (e) {
+        console.warn("Falha ao publicar o card no feed (seguimos com a DM ok):", e);
+      }
+
     } catch (err) {
       console.error("Falha ao compartilhar card no chat:", err);
       alert("Não foi possível compartilhar seu card agora.");
     }
   };
 
-useEffect(() => {
-  if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
-  const key = `conversa_${usuarioId}_${alvo.usuario.id}`;
-  localStorage.setItem(key, JSON.stringify(mensagensPrivadas.slice(-100)));
-}, [mensagensPrivadas, alvo, usuarioId]);
+  useEffect(() => {
+    if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
+    const key = `conversa_${usuarioId}_${alvo.usuario.id}`;
+    safeSave(key, mensagensPrivadas);
+  }, [mensagensPrivadas, alvo, usuarioId]);
 
-useEffect(() => {
-  if (!alvo || alvo.tipo !== "grupo") return;
-  const key = `conversa_grupo_${alvo.grupo.id}`;
-  localStorage.setItem(key, JSON.stringify(mensagensGrupo.slice(-100)));
-}, [mensagensGrupo, alvo]);
+  useEffect(() => {
+    if (!alvo || alvo.tipo !== "grupo") return;
+    const key = `conversa_grupo_${alvo.grupo.id}`;
+    safeSave(key, mensagensGrupo);
+  }, [mensagensGrupo, alvo]);
 
   useEffect(() => {
     socket.connect();
@@ -289,13 +336,13 @@ useEffect(() => {
 
     if (alvo.tipo === "usuario") {
       const key = `conversa_${usuarioId}_${alvo.usuario.id}`;
-      const cache = JSON.parse(localStorage.getItem(key) || "[]");
+      const cache = safeLoad<Mensagem>(key);
       setMensagensPrivadas(cache);
       setTemMaisPriv(true);
       carregarMensagensPrivadas(alvo.usuario.id, false).catch(() => {});
     } else {
       const key = `conversa_grupo_${alvo.grupo.id}`;
-      const cache = JSON.parse(localStorage.getItem(key) || "[]");
+      const cache = safeLoad<MensagemGrupo>(key);
       setMensagensGrupo(cache);
       setTemMaisGrupo(true);
       carregarMensagensDoGrupo(alvo.grupo.id, false).catch(() => {});
@@ -388,7 +435,7 @@ useEffect(() => {
 
       const key = `conversa_${usuarioId}_${usuarioIdAlvo}`;
       const mensagensSalvas = append ? [...novasOrdenadas, ...mensagensPrivadas] : novasOrdenadas;
-      localStorage.setItem(key, JSON.stringify(mensagensSalvas.slice(-100)));
+      safeSave(key, mensagensSalvas);
     } catch (err) {
       console.error("Erro ao carregar mensagens privadas:", err);
     }
@@ -424,7 +471,7 @@ useEffect(() => {
 
       const key = `conversa_grupo_${grupoId}`;
       const mensagensSalvas = append ? [...novasOrdenadas, ...mensagensGrupo] : novasOrdenadas;
-      localStorage.setItem(key, JSON.stringify(mensagensSalvas.slice(-100)));
+      safeSave(key, mensagensSalvas);
     } catch (err) {
       console.error("Erro ao carregar mensagens do grupo:", err);
     }
@@ -448,8 +495,9 @@ useEffect(() => {
       const perfilJson = await perfilRes.json();
 
       const nome = perfilJson?.usuario?.nome ?? "";
-      const foto = perfilJson?.usuario?.foto ?? null;
-
+      const fotoRaw = perfilJson?.usuario?.foto ?? null;
+      const foto = publicImgUrl(perfilJson?.usuario?.foto ?? null);
+      
       const posRes = await fetch(`${API.BASE_URL}/api/perfil/me/posicao-atual`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -623,177 +671,170 @@ const deletarMensagem = async (id: string) => {
 };
 
   const renderizarMensagemPrivada = (msg: Mensagem) => {
-    const isMine = msg.deId === usuarioId;
+  const isMine = msg.deId === usuarioId;
 
-    if (msg.tipo === "POST") {
-      const post = postsCache[msg.conteudo];
-      if (!post) {
-        return (
-          <div key={msg.id} className={`p-4 rounded max-w-sm border shadow-sm cursor-pointer ${msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}>
-            Carregando post...
-          </div>
-        );
-      }
+  if (msg.tipo === "POST") {
+    const post = postsCache[msg.conteudo];
+    if (!post) {
       return (
-        <div
-          key={msg.id}
-          onClick={() => navigate(`/post/${post.id}`)}
-          className={`relative p-4 rounded max-w-sm border shadow-sm cursor-pointer ${msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}
-          title="Clique para abrir a postagem"
-        >
-          <div className="flex items-center mb-3 gap-3">
-            <img
-              src={post.usuario.foto ? `${API.BASE_URL}${post.usuario.foto}` : "https://via.placeholder.com/40"}
-              alt={`Foto de ${post.usuario.nome}`}
-              className="w-10 h-10 rounded-full object-cover border"
-            />
-            <span className="font-semibold">{post.usuario.nome}</span>
-          </div>
-
-          {post.imagemUrl && <img src={`${API.BASE_URL}${post.imagemUrl}`} alt="Imagem do post" className="w-full max-h-48 object-cover rounded mb-2" />}
-          {!post.imagemUrl && post.videoUrl && (
-            <video controls className="w-full max-h-48 rounded mb-2">
-              <source src={`${API.BASE_URL}${post.videoUrl}`} />
-              Seu navegador não suporta vídeo.
-            </video>
-          )}
-           <p className="text-gray-800 text-sm line-clamp-2 whitespace-pre-wrap">{post.conteudo}</p>
-        
-           {isMine && (
-              <button
-                onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}  
-                className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
-                title="Apagar mensagem"
-              >
-                <Trash size={16} />
-              </button>
-            )}
+        <div key={msg.id} className={`p-4 rounded max-w-sm border shadow-sm ${isMine ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}>
+          Carregando post...
         </div>
       );
     }
-
-    if (msg.tipo === "USUARIO") {
-      const u = usuariosCache[msg.conteudo];
-      if (!u) {
-        return (
-          <div key={msg.id} className={`p-4 rounded max-w-sm border shadow-sm cursor-pointer ${msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}>
-            Carregando usuário...
-          </div>
-        );
-      }
-      return (
-        <div
-          key={msg.id}
-          onClick={() => navigate(`/perfil/${u.id}`)}
-          className={`relative p-4 rounded max-w-sm border shadow-sm cursor-pointer flex items-center gap-3 ${
-            msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-white"
-          }`}
-          title="Clique para ver o perfil"
-        >
-          <img src={u.foto ? `${API.BASE_URL}${u.foto}` : "https://via.placeholder.com/40"} alt={`Foto de ${u.nome}`} className="w-12 h-12 rounded-full object-cover border" />
-          <div>
-            <p className="font-semibold">{u.nome}</p>
-            <p className="text-sm text-gray-500">Ver perfil</p>
-          </div>
-
-           {isMine && (
-              <button
-                onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}
-                className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
-                title="Apagar mensagem"
-              >
-                <Trash size={16} />
-              </button>
-            )}
-        </div>
-      );
-    }
-
-    if (msg.tipo === "DESAFIO") {
-      const d = desafiosCache[msg.conteudo];
-      if (!d) {
-        return (
-          <div key={msg.id} className={`p-4 rounded max-w-sm border shadow-sm cursor-pointer ${msg.deId === usuarioId ? "bg-blue-100 self-end ml-auto" : "bg-white"} `}>
-            Carregando desafio...
-          </div>
-        );
-      }
-      const isMine = msg.deId === usuarioId;
-      const imagemSrc = d.imagemUrl && d.imagemUrl.startsWith("http") ? d.imagemUrl : d.imagemUrl ? `${API.BASE_URL}${d.imagemUrl}` : null;
-
-      return (
-        <div
-          key={msg.id}
-          onClick={() => navigate(`/desafios/${d.id}`)}
-          className={`relative p-3 rounded-lg max-w-sm border shadow-md cursor-pointer transition-all hover:shadow-lg ${isMine ? "bg-blue-50 self-end ml-auto" : "bg-white"}`}
-          title="Clique para ver o desafio"
-        >
-          <div className="flex items-center justify-between mb-2 gap-3">
-            <h3 className="font-semibold text-sm text-gray-800 line-clamp-2">{d.titulo}</h3>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 font-medium">{d.nivel ?? "—"}</span>
-          </div>
-
-          {imagemSrc && <img src={imagemSrc} alt={d.titulo} className="w-full h-36 object-cover rounded mb-2" />}
-
-          <p className="text-gray-700 text-sm line-clamp-3 mb-2">{d.descricao}</p>
-
-          <div className="flex items-center justify-between text-xs text-gray-500">
-            <div className="flex items-center gap-3">
-              <span className="font-medium text-gray-700">Pontos: {d.pontuacao ?? "-"}</span>
-              {d.categoria && d.categoria.length > 0 && <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{d.categoria.join(", ")}</span>}
-            </div>
-            <div>
-              <span>{new Date(d.createdAt).toLocaleDateString("pt-BR")}</span>
-            </div>
-          </div>
-           {isMine && (
-              <button
-                onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}  
-                className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
-                title="Apagar mensagem"
-              >
-                <Trash size={16} />
-              </button>
-            )}
-        </div>
-      );
-    }
-
-    if (msg.tipo === "CARD") {
-      const isMine = msg.deId === usuarioId;
-      return (
-        <div
-          key={msg.id}
-          className={`relative p-2 rounded max-w-sm border shadow-sm ${
-            isMine ? "bg-blue-50 self-end ml-auto" : "bg-white"
-          } `}
-        >
+    return (
+      <div
+        key={msg.id}
+        onClick={() => navigate(`/post/${post.id}`)}
+        className={`relative p-4 rounded max-w-sm border shadow-sm cursor-pointer ${isMine ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}
+        title="Clique para abrir a postagem"
+      >
+        <div className="flex items-center mb-3 gap-3">
           <img
-            src={msg.conteudo}
-            alt="Card do atleta"
-            className="w-60 h-auto rounded"
+            src={publicImgUrl(post.usuario.foto) || "https://via.placeholder.com/40"}
+            alt={`Foto de ${post.usuario.nome}`}
+            className="w-10 h-10 rounded-full object-cover border"
           />
-           {isMine && (
-              <button
-                onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}
-                className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
-                title="Apagar mensagem"
-              >
-                <Trash size={16} />
-              </button>
-            )}
+          <span className="font-semibold">{post.usuario.nome}</span>
+        </div>
+
+        {post.imagemUrl && (
+          <img
+            src={post.imagemUrl.startsWith("http") ? post.imagemUrl : `${API.BASE_URL}${post.imagemUrl}`}
+            alt="Imagem do post"
+            className="w-full max-h-48 object-cover rounded mb-2"
+          />
+        )}
+        {!post.imagemUrl && post.videoUrl && (
+          <video controls className="w-full max-h-48 rounded mb-2">
+            <source src={post.videoUrl.startsWith("http") ? post.videoUrl : `${API.BASE_URL}${post.videoUrl}`} />
+            Seu navegador não suporta vídeo.
+          </video>
+        )}
+        <p className="text-gray-800 text-sm whitespace-pre-wrap">{post.conteudo}</p>
+
+        {isMine && (
+          <button
+            onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}
+            className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
+            title="Apagar mensagem"
+          >
+            <Trash size={16} />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (msg.tipo === "USUARIO") {
+    const u = usuariosCache[msg.conteudo];
+    if (!u) {
+      return (
+        <div key={msg.id} className={`p-4 rounded max-w-sm border shadow-sm ${isMine ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}>
+          Carregando usuário...
         </div>
       );
     }
+    return (
+      <div
+        key={msg.id}
+        onClick={() => navigate(`/perfil/${u.id}`)}
+        className={`relative p-4 rounded max-w-sm border shadow-sm cursor-pointer flex items-center gap-3 ${isMine ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}
+        title="Clique para ver o perfil"
+      >
+        <img src={publicImgUrl(u.foto)} alt={`Foto de ${u.nome}`} className="w-12 h-12 rounded-full object-cover border" />
+        <div>
+          <p className="font-semibold">{u.nome}</p>
+          <p className="text-sm text-gray-500">Ver perfil</p>
+        </div>
+        {isMine && (
+          <button
+            onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}
+            className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
+            title="Apagar mensagem"
+          >
+            <Trash size={16} />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (msg.tipo === "DESAFIO") {
+    const d = desafiosCache[msg.conteudo];
+    if (!d) {
       return (
+        <div key={msg.id} className={`p-4 rounded max-w-sm border shadow-sm ${isMine ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}>
+          Carregando desafio...
+        </div>
+      );
+    }
+    const imagemSrc = d.imagemUrl && d.imagemUrl.startsWith("http") ? d.imagemUrl : d.imagemUrl ? `${API.BASE_URL}${d.imagemUrl}` : null;
+
+    return (
+      <div
+        key={msg.id}
+        onClick={() => navigate(`/desafios/${d.id}`)}
+        className={`relative p-3 rounded-lg max-w-sm border shadow-md cursor-pointer hover:shadow-lg ${isMine ? "bg-blue-50 self-end ml-auto" : "bg-white"}`}
+        title="Clique para ver o desafio"
+      >
+        <div className="flex items-center justify-between mb-2 gap-3">
+          <h3 className="font-semibold text-sm text-gray-800 line-clamp-2">{d.titulo}</h3>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 font-medium">{d.nivel ?? "—"}</span>
+        </div>
+
+        {imagemSrc && <img src={imagemSrc} alt={d.titulo} className="w-full h-36 object-cover rounded mb-2" />}
+
+        <p className="text-gray-700 text-sm line-clamp-3 mb-2">{d.descricao}</p>
+
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <div className="flex items-center gap-3">
+            <span className="font-medium text-gray-700">Pontos: {d.pontuacao ?? "-"}</span>
+            {d.categoria && d.categoria.length > 0 && <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{d.categoria.join(", ")}</span>}
+          </div>
+          <div>
+            <span>{new Date(d.createdAt).toLocaleDateString("pt-BR")}</span>
+          </div>
+        </div>
+        {isMine && (
+          <button
+            onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}
+            className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
+            title="Apagar mensagem"
+          >
+            <Trash size={16} />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (msg.tipo === "CARD") {
+    if (msg.conteudo === "__CARD__") {
+      return (
+        <div key={msg.id} className={`p-2 rounded max-w-sm border shadow-sm ${isMine ? "bg-blue-50 self-end ml-auto" : "bg-white"}`}>
+          <span className="text-xs text-gray-500">[card enviado — vai carregar quando chegar do servidor]</span>
+        </div>
+      );
+    }
+    return (
+      <div key={msg.id} className={`relative p-2 rounded max-w-sm border shadow-sm ${isMine ? "bg-blue-50 self-end ml-auto" : "bg-white"}`}>
+        <img src={msg.conteudo} alt="Card do atleta" className="w-60 h-auto rounded" />
+        {isMine && (
+          <button onClick={() => deletarMensagem(msg.id)} className="absolute top-1 right-1 text-gray-500 hover:text-red-600" title="Apagar mensagem">
+            <Trash size={16} />
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
     <div
       key={msg.id}
-      className={`relative p-2 rounded max-w-sm ${
-        isMine ? "bg-blue-100 self-end ml-auto" : "bg-gray-200"
-      }`}
+      className={`relative p-2 rounded max-w-sm ${isMine ? "bg-blue-100 self-end ml-auto" : "bg-gray-200"}`}
     >
-      <p>{msg.conteudo}</p>
-
+      <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
       {isMine && (
         <button
           onClick={() => deletarMensagem(msg.id)}
@@ -858,7 +899,7 @@ const deletarMensagem = async (id: string) => {
                 }`}
                 onClick={() => setAlvo({ tipo: "usuario", usuario: u })}
               >
-                <img src={u.foto ? `${API.BASE_URL}${u.foto}` : "https://via.placeholder.com/40"} alt={`Foto de ${u.nome}`} className="w-12 h-12 rounded-full object-cover border" />
+                <img src={publicImgUrl(u.foto) || "https://via.placeholder.com/40"} alt={`Foto de ${u.nome}`} className="w-12 h-12 rounded-full object-cover border" />
                 <div className="flex flex-col">
                   <span className="font-medium text-sm">{u.nome}</span>
                   <span className="text-xs text-gray-500">Clique para conversar</span>
