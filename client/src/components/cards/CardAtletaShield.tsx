@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { API } from "../../config.js";
+import { publicImgUrl } from "@/utils/publicUrl.js";
+import { useMemo } from "react";
 
 const SHIELD_W_DESK = 150;
 const SHIELD_H_DESK = 210;
@@ -38,9 +39,15 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
 }) => {
   const W = size?.w ?? SHIELD_W_DESK;
   const H = size?.h ?? SHIELD_H_DESK;
-  const clipId = `shieldClip-${atleta.atletaId}`;
-  const fotoUrl = atleta.foto || "/default-avatar.png";
-
+  
+  const clipId = `shieldClip-${atleta.atletaId || atleta.id || atleta.nome || "x"}`;
+  const fotoUrl = useMemo(
+   () => publicImgUrl(atleta.foto) || "/default-avatar.png",
+   [atleta.foto]
+  );
+  const [imgOk, setImgOk] = useState(true);
+  const fotoResolved = imgOk ? fotoUrl : "/default-avatar.png";
+  
   const ovrShow = Number.isFinite(ovr) ? Math.round(Number(ovr)) : 0;
   const perfShow = Number.isFinite(perf) ? Math.round(Number(perf)) : 0;
   const discShow = Number.isFinite(disc) ? Math.round(Number(disc)) : 0;
@@ -106,6 +113,11 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
     setRotation({ x: 0, y: 0 });
   };
 
+  const isCrossOrigin =
+    typeof window !== "undefined" &&
+    !!fotoResolved &&
+    new URL(fotoResolved, window.location.href).origin !== window.location.origin;
+
   return (
     <div
       className={`cursor-grab select-none ${!isDragging ? "transition-transform duration-500 ease-out" : ""}`}
@@ -154,7 +166,13 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
         </defs>
 
         <g clipPath={`url(#${clipId})`}>
-          <image crossOrigin="anonymous" href={fotoUrl} x="0" y="-10" width="184" height="280" preserveAspectRatio="xMidYMid slice" />
+          <image
+            href={fotoResolved}
+            {...(isCrossOrigin ? { crossOrigin: "anonymous" } : {})}
+            onError={() => setImgOk(false)}
+            x="0" y="-10" width="184" height="280"
+            preserveAspectRatio="xMidYMid slice"
+          />
           <rect x="0" y="0" width="184" height="260" fill="url(#cardGrad)" />
           {golden && (
             <>

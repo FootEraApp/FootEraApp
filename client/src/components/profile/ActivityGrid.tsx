@@ -1,17 +1,12 @@
-import { API } from "../../config.js";
+import { APP } from "../../config.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import { publicImgUrl } from "@/utils/publicUrl.js";
 
 interface Activity {
   id: string;
   tipo: "Desafio" | "Treino" | "Vídeo";
   imagemUrl?: string | null;
   nome: string;
-}
-
-function resolveImg(url?: string | null) {
-  if (!url) return "";
-  if (url.startsWith("http") || url.startsWith("/assets/")) return url;
-  return `${API.BASE_URL}${url}`;
 }
 
 function guessTreinoImage(nome: string) {
@@ -30,27 +25,20 @@ export default function ActivityGrid({ activities }: { activities: Activity[] })
       </h2>
 
       <div className="grid grid-cols-3 gap-4">
-        {activities.map((activity) => {
+        {activities.map((a) => {
+          const candidate =
+            (a.imagemUrl && a.imagemUrl.trim()) ? a.imagemUrl : guessTreinoImage(a.nome);
+
           const src =
-            activity.imagemUrl?.startsWith("http")
-              ? activity.imagemUrl
-              : activity.imagemUrl
-              ? `${API.BASE_URL}${activity.imagemUrl}`
-              : "/assets/treinos/placeholder.png";
-          const resolved = formatarUrlFoto(activity.imagemUrl || "");
+            publicImgUrl(candidate) ??
+            `${APP.FRONTEND_BASE_URL}/assets/treinos/placeholder.png`;
 
           return (
-            <div key={activity.id} className="rounded-lg overflow-hidden shadow">
-              <img src={src} alt={activity.nome || activity.tipo} className="w-full h-24 object-cover" />
+            <div key={a.id} className="rounded-lg overflow-hidden shadow">
+              <img src={src} alt={a.nome || a.tipo} className="w-full h-24 object-cover" />
               <div className="text-sm text-center font-semibold text-green-900 py-1">
-                {activity.nome || activity.tipo}
+                {a.nome || a.tipo}
               </div>
-              {"duracao" in activity || "pontos" in activity ? (
-                <div className="text-xs text-center text-gray-600 pb-2">
-                  {"duracao" in activity && activity.duracao && "pontos" in activity && typeof activity.pontos === "number" ? " • " : ""}
-                  {"pontos" in activity && typeof activity.pontos === "number" ? `+${activity.pontos} pts` : ""}
-                </div>
-              ) : null}
             </div>
           );
         })}

@@ -6,6 +6,7 @@ import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import CardAtletaShield from "../components/cards/CardAtletaShield.js";
 import * as htmlToImage from "html-to-image";
+import { publicImgUrl } from "@/utils/publicUrl.js";
 
 type PerfilResp = {
   tipo: "Atleta" | "Professor" | "Escolinha" | "Clube" | null;
@@ -206,7 +207,7 @@ export default function PontuacaoDetalhada() {
           }
         }
 
-        const fotoAbs = fixFotoPath(foto);
+        const fotoAbs = publicImgUrl(foto);
 
         setPerfil({
           atletaId,
@@ -282,12 +283,14 @@ export default function PontuacaoDetalhada() {
     const resp = pontos?.responsabilidade ?? 0;
     const ovr  = pontos?.mediaGeral ?? Math.round((perf + disc + resp) / 3);
 
-    const descricao =
+    const descricaoBase =
       `Meu Card FOOTERA\n` +
       `OVR: ${ovr}\n` +
       `Performance: ${perf} pts\n` +
       `Disciplina: ${disc} pts\n` +
       `Responsabilidade: ${resp} pts`;
+
+    const descricao = `${descricaoBase}\u200D`;
 
     const node = cardShotRef.current;
     if (!node) { alert("Não consegui capturar o card."); return; }
@@ -301,13 +304,11 @@ export default function PontuacaoDetalhada() {
       imagePlaceholder: IMG_PLACEHOLDER,
     });
 
-    // 1) JSON com midiaBase64
     let res = await api.post("/api/post",
       { descricao, midiaBase64: dataUrl },
       { validateStatus: () => true }
     );
 
-    // 2) Tenta com imagemBase64
     if (res.status === 400) {
       res = await api.post("/api/post",
         { descricao, imagemBase64: dataUrl },
@@ -315,7 +316,6 @@ export default function PontuacaoDetalhada() {
       );
     }
 
-    // 3) Fallback multipart: campo "midia" (e depois "imagem")
     if (res.status === 400) {
       const blob = await (await fetch(dataUrl)).blob();
 
