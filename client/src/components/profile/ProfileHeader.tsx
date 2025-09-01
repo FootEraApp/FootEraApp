@@ -5,6 +5,12 @@ import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 
+interface Usuario {
+  id: string;
+  nome: string;
+  foto?: string | null;
+}
+
 interface ProfileHeaderProps {
   nome: string;
   idade?: number;
@@ -42,6 +48,23 @@ export default function ProfileHeader({
     text: string;
     onYes: () => Promise<void> | void;
   } | null>(null);
+
+  const iniciarChat = () => {
+    const me = Storage.usuarioId;
+    if (!me) { alert("Faça login para enviar mensagens."); return; }
+
+    localStorage.setItem("mensagens_open_target", JSON.stringify({ tipo: "usuario", id: perfilId }));
+
+    try {
+      const key = "mensagens_recent_usuarios";
+      const atual: Usuario[] = JSON.parse(localStorage.getItem(key) || "[]");
+      const novo: Usuario = { id: perfilId, nome, foto: foto ?? avatar ?? null };
+      const dedup = [novo, ...atual.filter(u => u.id !== novo.id)].slice(0, 50);
+      localStorage.setItem(key, JSON.stringify(dedup));
+    } catch {}
+
+    window.location.href = "/mensagens";
+  };
 
   useEffect(() => {
     setPontosTotal(pontuacao ?? 0);
@@ -329,23 +352,27 @@ export default function ProfileHeader({
           <div className="flex justify-center mt-2">
           <button
             onClick={toggleFavorito}
-            className={`text-2xl ${ehFavorito ? "text-yellow-500" : "text-gray-400"}`}
+            className={`text-2xl  ${ehFavorito ? "text-yellow-500" : "text-gray-400"}`}
             title={ehFavorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}
           >
             ★
           </button>
         </div>
-          <button onClick={seguirUsuario} className="px-4 py-2 bg-green-600 text-white rounded-full">
+          <button onClick={seguirUsuario} className="px-4 py-2 font-semibold bg-green-600 text-green-900  rounded-full">
             Seguir
           </button>
-          <button onClick={solicitarTreino} className="px-4 py-2 bg-green-100 text-green-800 rounded-full">
+          <button
+            onClick={iniciarChat} className="px-4 py-2 font-semibold bg-green-500 text-green-900 rounded-full"
+          >
+            Enviar mensagem
+          </button>
+          <button onClick={solicitarTreino} className="px-4 py-2 font-semibold bg-green-400 text-green-900 rounded-full">
             Treinar Juntos
           </button>
-          <button onClick={abrirModalCompartilhar} className="px-4 py-2 bg-blue-600 text-white rounded-full">
+          <button onClick={abrirModalCompartilhar} className="px-4 py-2 font-semibold bg-green-300 text-green-900 rounded-full">
             Compartilhar
           </button>
         </div>
-        
       )}
 
       {isOwnProfile && (

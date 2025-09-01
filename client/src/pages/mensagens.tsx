@@ -78,6 +78,7 @@ type ChatTarget = { tipo: "usuario"; usuario: Usuario } | { tipo: "grupo"; grupo
 
 export default function PaginaMensagens() {
   const [, navigate] = useLocation();
+  const [showSidebar, setShowSidebar] = useState(false);
 
   const usuarioId: string | null = Storage.usuarioId;
   const token: string = Storage.token || "";
@@ -108,6 +109,25 @@ export default function PaginaMensagens() {
   const abrirModalDesafios = () => setModalDesafiosAberto(true);
   const fecharModalDesafios = () => setModalDesafiosAberto(false);
 
+  const pendingOpenRef = useRef(false);
+
+  const RECENTS_KEY = "mensagens_recent_usuarios";
+  const loadRecentUsers = (): Usuario[] => {
+    try { return JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]"); } catch { return []; }
+  };
+  const saveRecentUser = (u: Usuario) => {
+    try {
+      const cur = loadRecentUsers();
+      const next = [u, ...cur.filter(x => x.id !== u.id)].slice(0, 50);
+      localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+    } catch {}
+  };
+  const mergeUnique = (a: Usuario[], b: Usuario[]) => {
+    const m = new Map<string, Usuario>();
+    [...a, ...b].forEach(u => m.set(u.id, u));
+    return Array.from(m.values());
+  };
+
   const [meuCardDados, setMeuCardDados] = useState<{
     atletaId: string | null;
     nome: string;
@@ -119,28 +139,28 @@ export default function PaginaMensagens() {
     resp: number;
   } | null>(null);
 
-const compactMsgs = <T extends { tipo: string; conteudo: any }>(arr: T[]) =>
-  arr.slice(-60).map((m) => {
-    if (m.tipo === "CARD") return { ...m, conteudo: "__CARD__", pending: false, clientMsgId: undefined } as T;
-    const clone: any = { ...m };
-    if (typeof clone.conteudo === "string" && clone.conteudo.length > 2000) {
-      clone.conteudo = clone.conteudo.slice(0, 2000);
-    }
-    delete clone.pending;
-    delete clone.clientMsgId;
-    return clone as T;
-  });
+  const compactMsgs = <T extends { tipo: string; conteudo: any }>(arr: T[]) =>
+    arr.slice(-60).map((m) => {
+      if (m.tipo === "CARD") return { ...m, conteudo: "__CARD__", pending: false, clientMsgId: undefined } as T;
+      const clone: any = { ...m };
+      if (typeof clone.conteudo === "string" && clone.conteudo.length > 2000) {
+        clone.conteudo = clone.conteudo.slice(0, 2000);
+      }
+      delete clone.pending;
+      delete clone.clientMsgId;
+      return clone as T;
+    });
 
-const safeSave = (key: string, value: any[]) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(compactMsgs(value)));
-  } catch (e) {
-    console.warn("LocalStorage quota:", e);
+  const safeSave = (key: string, value: any[]) => {
     try {
-      localStorage.setItem(key, JSON.stringify(compactMsgs(value).slice(-30)));
-    } catch {}
-  }
-};
+      localStorage.setItem(key, JSON.stringify(compactMsgs(value)));
+    } catch (e) {
+      console.warn("LocalStorage quota:", e);
+      try {
+        localStorage.setItem(key, JSON.stringify(compactMsgs(value).slice(-30)));
+      } catch {}
+    }
+  };
 
   const safeLoad = <T = any>(key: string): T[] => {
     try {
@@ -155,32 +175,82 @@ const safeSave = (key: string, value: any[]) => {
 
   const cardRef = useRef<HTMLDivElement | null>(null);
   const alvoRef = useRef<ChatTarget | null>(null);
-  useEffect(() => {
-    alvoRef.current = alvo;
-  }, [alvo]);
+  useEffect(() => { alvoRef.current = alvo; }, [alvo]);
 
   const recarregarMensagensDoGrupoAtual = async () => {
     const current = alvoRef.current;
     if (current?.tipo === "grupo") {
       await carregarMensagensDoGrupo(current.grupo.id, false);
-     }
+    }
   };
 
-    async function publicarCardNoFeed(dataUrl: string, legenda = "Meu Card FOOTERA") {
-      const resp = await fetch(`${API.BASE_URL}/api/post`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ descricao: legenda, midiaBase64: dataUrl }),
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-    }
+  async function publicarCardNoFeed(dataUrl: string, legenda = "Meu Card FOOTERA") {
+    const resp = await fetch(`${API.BASE_URL}/api/post`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ descricao: legenda, midiaBase64: dataUrl }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+  }
+
+  const SidebarContent = () => (
+    <div className="p-4 overflow-y-auto h-full">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-lg font-semibold">Conversas</h2>
+        <button onClick={abrirModal} title="Criar/gerenciar grupos" className="p-1 rounded hover:bg-gray-100">
+          <UserPlus size={20} />
+        </button>
+      </div>
+
+      <div className="mb-4">
+        <div className="flex items-center gap-2 text-gray-700 mb-2">
+          <Users size={16} /> <span className="text-sm font-semibold">Grupos</span>
+        </div>
+        {grupos.length === 0 && <p className="text-xs text-gray-500">Você ainda não participa de grupos.</p>}
+        {grupos.map((g) => {
+          const selecionado = alvo?.tipo === "grupo" && alvo.grupo.id === g.id;
+          return (
+            <div
+              key={g.id}
+              className={`p-3 mb-2 rounded-lg cursor-pointer border shadow-sm transition ${selecionado ? "bg-green-50 border-green-300" : "hover:bg-gray-50 bg-white"}`}
+              onClick={() => { setAlvo({ tipo: "grupo", grupo: g }); setShowSidebar(false); }}
+            >
+              <div className="font-medium text-sm">{g.nome}</div>
+              {g.descricao && <div className="text-xs text-gray-500 line-clamp-1">{g.descricao}</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      <div>
+        <div className="flex items-center gap-2 text-gray-700 mb-2">
+          <User size={16} /> <span className="text-sm font-semibold">Usuários</span>
+        </div>
+        {usuariosMutuos.map((u) => {
+          const selecionado = alvo?.tipo === "usuario" && alvo.usuario.id === u.id;
+          return (
+            <div
+              key={u.id}
+              className={`flex items-center gap-3 p-3 mb-3 rounded-lg cursor-pointer border shadow-sm transition ${selecionado ? "bg-green-50 border-green-300" : "hover:bg-gray-50 bg-white"}`}
+              onClick={() => { setAlvo({ tipo: "usuario", usuario: u }); setShowSidebar(false); }}
+            >
+              <img
+                src={publicImgUrl(u.foto) || `${API.BASE_URL}/assets/default-user.png`}
+                className="w-12 h-12 rounded-full object-cover border"
+              />
+              <div className="flex flex-col">
+                <span className="font-medium text-sm">{u.nome}</span>
+                <span className="text-xs text-gray-500">Clique para conversar</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 
   const compartilharPerfilNoChat = async () => {
     if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
-
     try {
       const dados = (meuCardDados ?? await getMeuPerfilEBonus());
       if (!dados) { alert("Não consegui montar seu card agora."); return; }
@@ -223,9 +293,8 @@ const safeSave = (key: string, value: any[]) => {
         const legenda = `Meu Card FOOTERA OVR: ${dados.ovr} Performance: ${dados.perf} pts Disciplina: ${dados.disc} pts Responsabilidade: ${dados.resp} pts`;
         await publicarCardNoFeed(dataUrl, legenda);
       } catch (e) {
-        console.warn("Falha ao publicar o card no feed (seguimos com a DM ok):", e);
+        console.warn("Falha ao publicar o card no feed:", e);
       }
-
     } catch (err) {
       console.error("Falha ao compartilhar card no chat:", err);
       alert("Não foi possível compartilhar seu card agora.");
@@ -246,10 +315,7 @@ const safeSave = (key: string, value: any[]) => {
 
   useEffect(() => {
     socket.connect();
-
-    socket.on("connect", () => {
-      if (usuarioId) socket.emit("join", usuarioId);
-    });
+    socket.on("connect", () => { if (usuarioId) socket.emit("join", usuarioId); });
 
     socket.on("novaMensagem", (mensagem: Mensagem) => {
       const current = alvoRef.current;
@@ -262,7 +328,6 @@ const safeSave = (key: string, value: any[]) => {
       if (!relevante) return;
 
       const replaced = reconcilePrivadaByClientId(mensagem);
-
       if (!replaced) {
         setMensagensPrivadas(prev => {
           const exists =
@@ -279,7 +344,6 @@ const safeSave = (key: string, value: any[]) => {
       if (!(current?.tipo === "grupo" && mensagem.grupoId === current.grupo.id)) return;
 
       const replaced = reconcileGrupoByClientId(mensagem);
-
       if (!replaced) {
         setMensagensGrupo(prev => {
           const exists =
@@ -291,10 +355,10 @@ const safeSave = (key: string, value: any[]) => {
       }
     });
 
-  socket.on("mensagemDeletada", ({ id }: { id: string }) => {
-    setMensagensPrivadas(prev => prev.filter(m => m.id !== id));
-    setMensagensGrupo(prev => prev.filter(m => m.id !== id));
-  });
+    socket.on("mensagemDeletada", ({ id }: { id: string }) => {
+      setMensagensPrivadas(prev => prev.filter(m => m.id !== id));
+      setMensagensGrupo(prev => prev.filter(m => m.id !== id));
+    });
 
     return () => {
       socket.off("novaMensagem");
@@ -306,24 +370,16 @@ const safeSave = (key: string, value: any[]) => {
   useEffect(() => {
     (async () => {
       try {
-        const gruposRes = await fetch(`${API.BASE_URL}/api/grupos/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!gruposRes.ok) {
-          console.error("Falha /api/grupos/me:", gruposRes.status, await gruposRes.text());
-          return;
-        }
+        const gruposRes = await fetch(`${API.BASE_URL}/api/grupos/me`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!gruposRes.ok) throw new Error(await gruposRes.text());
         const meusGrupos: Grupo[] = await gruposRes.json();
 
-        const mutuosRes = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!mutuosRes.ok) {
-          console.error("Falha /api/seguidores/mutuos:", mutuosRes.status, await mutuosRes.text());
-          return;
-        }
+        const mutuosRes = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!mutuosRes.ok) throw new Error(await mutuosRes.text());
         const mutuos: Usuario[] = await mutuosRes.json();
-        setUsuariosMutuos(mutuos);
+
+        const recentes = loadRecentUsers();
+        setUsuariosMutuos(mergeUnique(recentes, mutuos));
         setGrupos(meusGrupos);
       } catch (e) {
         console.error("Erro ao carregar sidebar:", e);
@@ -354,9 +410,7 @@ const safeSave = (key: string, value: any[]) => {
   const carregarPostPorId = async (postId: string) => {
     if (postsCache[postId]) return;
     try {
-      const res = await fetch(`${API.BASE_URL}/api/post/visualizar/${postId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${API.BASE_URL}/api/post/visualizar/${postId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error("Erro ao buscar post");
       const post: Postagem = await res.json();
       setPostsCache((prev) => ({ ...prev, [postId]: post }));
@@ -364,13 +418,10 @@ const safeSave = (key: string, value: any[]) => {
       console.error("Erro ao carregar post:", err);
     }
   };
-
   const carregarUsuarioPorId = async (id: string) => {
     if (usuariosCache[id]) return;
     try {
-      const res = await fetch(`${API.BASE_URL}/api/usuarios/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${API.BASE_URL}/api/usuarios/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error("Erro ao buscar usuário");
       const usuario: Usuario = await res.json();
       setUsuariosCache((prev) => ({ ...prev, [id]: usuario }));
@@ -378,13 +429,10 @@ const safeSave = (key: string, value: any[]) => {
       console.error("Erro ao carregar usuário:", err);
     }
   };
-
   const carregarDesafioPorId = async (desafioId: string) => {
     if (!desafioId || desafiosCache[desafioId]) return;
     try {
-      const res = await fetch(`${API.BASE_URL}/api/desafios/${desafioId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${API.BASE_URL}/api/desafios/${desafioId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error("Erro ao buscar desafio");
       const data: Desafio = await res.json();
       setDesafiosCache((prev) => ({ ...prev, [desafioId]: data }));
@@ -392,7 +440,6 @@ const safeSave = (key: string, value: any[]) => {
       console.error("Erro ao carregar desafio:", err);
     }
   };
-
   useEffect(() => {
     mensagensPrivadas.forEach((m) => {
       if (m.tipo === "POST") carregarPostPorId(m.conteudo);
@@ -402,6 +449,45 @@ const safeSave = (key: string, value: any[]) => {
   }, [mensagensPrivadas]);
 
   const limite = 20;
+
+  useEffect(() => {
+    if (pendingOpenRef.current) return;
+    try {
+      const raw = localStorage.getItem("mensagens_open_target");
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (!(data && data.tipo === "usuario" && typeof data.id === "string")) return;
+
+      const alvoId = data.id as string;
+
+      const u = usuariosMutuos.find((x) => x.id === alvoId);
+      if (u) {
+        saveRecentUser(u);
+        setAlvo({ tipo: "usuario", usuario: u });
+        pendingOpenRef.current = true;
+        localStorage.removeItem("mensagens_open_target");
+        return;
+      }
+
+      (async () => {
+        try {
+          const resp = await fetch(`${API.BASE_URL}/api/usuarios/${alvoId}`, { headers: { Authorization: `Bearer ${token}` } });
+          if (!resp.ok) throw new Error();
+          const usuario = (await resp.json()) as Usuario;
+
+          saveRecentUser(usuario);
+          setUsuariosMutuos((prev) => {
+            if (prev.some((p) => p.id === usuario.id)) return prev;
+            return [usuario, ...prev];
+          });
+          setAlvo({ tipo: "usuario", usuario });
+        } finally {
+          pendingOpenRef.current = true;
+          localStorage.removeItem("mensagens_open_target");
+        }
+      })();
+    } catch {}
+  }, [usuariosMutuos, token]);
 
   async function carregarMensagensPrivadas(usuarioIdAlvo: string, append: boolean) {
     try {
@@ -413,15 +499,11 @@ const safeSave = (key: string, value: any[]) => {
       if (ultimoId) params.cursor = ultimoId;
 
       const query = new URLSearchParams(params);
-
-      const res = await fetch(`${API.BASE_URL}/api/mensagem?${query.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${API.BASE_URL}/api/mensagem?${query.toString()}`, { headers: { Authorization: `Bearer ${token}` } });
       const novas: Mensagem[] = await res.json();
       if (novas.length < limite) setTemMaisPriv(false);
 
       const novasOrdenadas = [...novas].reverse();
-
       if (append) {
         setMensagensPrivadas((prev) => {
           const combined = [...novasOrdenadas, ...prev];
@@ -445,19 +527,13 @@ const safeSave = (key: string, value: any[]) => {
     try {
       const base = append ? mensagensGrupo : [];
       const ultimoId = append && base.length > 0 ? base[0].id : undefined;
-      const query = new URLSearchParams({
-        limit: String(limite),
-        ...(ultimoId ? { cursor: ultimoId } : {}),
-      });
+      const query = new URLSearchParams({ limit: String(limite), ...(ultimoId ? { cursor: ultimoId } : {}) });
 
-      const res = await fetch(`${API.BASE_URL}/api/mensagem/grupos/${grupoId}?${query.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${API.BASE_URL}/api/mensagem/grupos/${grupoId}?${query.toString()}`, { headers: { Authorization: `Bearer ${token}` } });
       const novas: MensagemGrupo[] = await res.json();
       if (novas.length < limite) setTemMaisGrupo(false);
 
       const novasOrdenadas = [...novas].reverse();
-
       if (append) {
         setMensagensGrupo((prev) => {
           const combined = [...novasOrdenadas, ...prev];
@@ -488,26 +564,19 @@ const safeSave = (key: string, value: any[]) => {
     resp: number;
   } | null> {
     try {
-      const perfilRes = await fetch(`${API.BASE_URL}/api/perfil/${usuarioId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const perfilRes = await fetch(`${API.BASE_URL}/api/perfil/${usuarioId}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!perfilRes.ok) return null;
       const perfilJson = await perfilRes.json();
 
       const nome = perfilJson?.usuario?.nome ?? "";
-      const fotoRaw = perfilJson?.usuario?.foto ?? null;
       const foto = publicImgUrl(perfilJson?.usuario?.foto ?? null);
-      
-      const posRes = await fetch(`${API.BASE_URL}/api/perfil/me/posicao-atual`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+
+      const posRes = await fetch(`${API.BASE_URL}/api/perfil/me/posicao-atual`, { headers: { Authorization: `Bearer ${token}` } });
       const posJson = posRes.ok ? await posRes.json() : null;
       const posicao = posJson?.posicao ?? null;
       const atletaId = posJson?.atletaId ?? null;
 
-      const pontosRes = await fetch(`${API.BASE_URL}/api/perfil/pontuacao/${usuarioId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const pontosRes = await fetch(`${API.BASE_URL}/api/perfil/pontuacao/${usuarioId}`, { headers: { Authorization: `Bearer ${token}` } });
       const w = pontosRes.ok ? await pontosRes.json() : null;
 
       const perf = Number(w?.performance ?? 0);
@@ -524,32 +593,33 @@ const safeSave = (key: string, value: any[]) => {
   const genClientId = () => `c_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
   function reconcilePrivadaByClientId(incoming: Mensagem) {
-  if (!incoming.clientMsgId) return false;
-  let replaced = false;
-  setMensagensPrivadas(prev => {
-    const idx = prev.findIndex(m => m.clientMsgId === incoming.clientMsgId);
-    if (idx === -1) return prev;         
-    const clone = [...prev];
-    clone[idx] = { ...incoming, pending: false };
-    replaced = true;
-    return clone;
-  });
-  return replaced;
-}
+    if (!incoming.clientMsgId) return false;
+    let replaced = false;
+    setMensagensPrivadas(prev => {
+      const idx = prev.findIndex(m => m.clientMsgId === incoming.clientMsgId);
+      if (idx === -1) return prev;
+      const clone = [...prev];
+      clone[idx] = { ...incoming, pending: false };
+      replaced = true;
+      return clone;
+    });
+    return replaced;
+  }
 
-function reconcileGrupoByClientId(incoming: MensagemGrupo) {
-  if (!incoming.clientMsgId) return false;
-  let replaced = false;
-  setMensagensGrupo(prev => {
-    const idx = prev.findIndex(m => m.clientMsgId === incoming.clientMsgId);
-    if (idx === -1) return prev;               
-    const clone = [...prev];
-    clone[idx] = { ...incoming, pending: false };
-    replaced = true;
-    return clone;
-  });
-  return replaced;
-}
+  function reconcileGrupoByClientId(incoming: MensagemGrupo) {
+    if (!incoming.clientMsgId) return false;
+    let replaced = false;
+    setMensagensGrupo(prev => {
+      const idx = prev.findIndex(m => m.clientMsgId === incoming.clientMsgId);
+      if (idx === -1) return prev;
+      const clone = [...prev];
+      clone[idx] = { ...incoming, pending: false };
+      replaced = true;
+      return clone;
+    });
+    return replaced;
+  }
+
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const top = e.currentTarget.scrollTop;
     if (top >= 50 || !alvo) return;
@@ -564,417 +634,356 @@ function reconcileGrupoByClientId(incoming: MensagemGrupo) {
     }
   };
 
- const enviarMensagem = async () => {
-  if (!novaMensagem.trim() || !alvo) return;
+  const enviarMensagem = async () => {
+    if (!novaMensagem.trim() || !alvo) return;
+    if (!usuarioId) { alert("Sessão expirada. Faça login novamente."); return; }
 
-  if (!usuarioId) {
-    alert("Sessão expirada. Faça login novamente.");
-    return;
-  }
+    if (alvo.tipo === "usuario") {
+      const clientMsgId = genClientId();
+      const otm: Mensagem = {
+        id: clientMsgId,
+        clientMsgId,
+        pending: true,
+        criadaEm: new Date().toISOString(),
+        conteudo: novaMensagem,
+        deId: usuarioId!,
+        paraId: alvo.usuario.id,
+        tipo: "NORMAL",
+      };
+      setMensagensPrivadas(prev => [...prev, otm]);
 
-  if (alvo.tipo === "usuario") {
-    const clientMsgId = genClientId();
-
-    const otm: Mensagem = {
-      id: clientMsgId,
-      clientMsgId,
-      pending: true,
-      criadaEm: new Date().toISOString(),
-      conteudo: novaMensagem,
-      deId: usuarioId!,
-      paraId: alvo.usuario.id,
-      tipo: "NORMAL",
-    };
-    setMensagensPrivadas(prev => [...prev, otm]);
-
-    try {
-      const payload = { paraId: alvo.usuario.id, conteudo: novaMensagem, tipo: "NORMAL" as const, clientMsgId };
-      const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload),
-      });
-
-      if (resp.ok) {
-        const saved: Mensagem = await resp.json();
-        reconcilePrivadaByClientId(saved);
-      } 
-    } catch (e) {
-      console.error("POST /api/mensagem erro:", e);
-    }
-
-    setNovaMensagem("");
-  } else {
-    const clientMsgId = genClientId();
-
-    const otm: MensagemGrupo = {
-      id: clientMsgId,
-      clientMsgId,
-      pending: true,
-      criadaEm: new Date().toISOString(),
-      conteudo: novaMensagem,
-      grupoId: alvo.grupo.id,
-      usuarioId: usuarioId!,
-      tipo: "NORMAL",
-    };
-    setMensagensGrupo(prev => [...prev, otm]);
-
-    try {
-      const payload = { conteudo: novaMensagem, clientMsgId };
-      const resp = await fetch(`${API.BASE_URL}/api/mensagem/grupos/${alvo.grupo.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload),
-      });
-
-      if (resp.ok) {
-        const saved: MensagemGrupo = await resp.json();
-        reconcileGrupoByClientId(saved);
-      } else {
-        console.error("POST /api/mensagem/grupos falhou:", resp.status, await resp.text());
+      try {
+        const payload = { paraId: alvo.usuario.id, conteudo: novaMensagem, tipo: "NORMAL" as const, clientMsgId };
+        const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+        if (resp.ok) {
+          const saved: Mensagem = await resp.json();
+          reconcilePrivadaByClientId(saved);
+        }
+      } catch (e) {
+        console.error("POST /api/mensagem erro:", e);
       }
-    } catch (e) {
-      console.error("POST /api/mensagem/grupos erro:", e);
+      setNovaMensagem("");
+    } else {
+      const clientMsgId = genClientId();
+      const otm: MensagemGrupo = {
+        id: clientMsgId,
+        clientMsgId,
+        pending: true,
+        criadaEm: new Date().toISOString(),
+        conteudo: novaMensagem,
+        grupoId: alvo.grupo.id,
+        usuarioId: usuarioId!,
+        tipo: "NORMAL",
+      };
+      setMensagensGrupo(prev => [...prev, otm]);
+
+      try {
+        const payload = { conteudo: novaMensagem, clientMsgId };
+        const resp = await fetch(`${API.BASE_URL}/api/mensagem/grupos/${alvo.grupo.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+        if (resp.ok) {
+          const saved: MensagemGrupo = await resp.json();
+          reconcileGrupoByClientId(saved);
+        } else {
+          console.error("POST /api/mensagem/grupos falhou:", resp.status, await resp.text());
+        }
+      } catch (e) {
+        console.error("POST /api/mensagem/grupos erro:", e);
+      }
+      setNovaMensagem("");
     }
+  };
 
-    setNovaMensagem("");
-  }
-};
+  const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
-const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+  const deletarMensagem = async (id: string) => {
+    try {
+      const msgPriv = mensagensPrivadas.find(m => m.id === id);
+      const msgGrp  = mensagensGrupo.find(m => m.id === id);
+      const pending = (msgPriv && msgPriv.pending) || (msgGrp && msgGrp.pending);
 
-const deletarMensagem = async (id: string) => {
-  try {
-    const msgPriv = mensagensPrivadas.find(m => m.id === id);
-    const msgGrp  = mensagensGrupo.find(m => m.id === id);
-    const pending = (msgPriv && msgPriv.pending) || (msgGrp && msgGrp.pending);
+      if (pending || id.startsWith("c_") || !isUuid(id)) {
+        setMensagensPrivadas(prev => prev.filter(m => m.id !== id));
+        setMensagensGrupo(prev => prev.filter(m => m.id !== id));
+        return;
+      }
 
-    if (pending || id.startsWith("c_") || !isUuid(id)) {
+      const res = await fetch(`${API.BASE_URL}/api/mensagem/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Falha no delete");
+
       setMensagensPrivadas(prev => prev.filter(m => m.id !== id));
       setMensagensGrupo(prev => prev.filter(m => m.id !== id));
-      return;
+    } catch (err) {
+      console.error("Erro ao apagar mensagem:", err);
+      alert("Não foi possível apagar a mensagem.");
     }
+  };
 
-    const res = await fetch(`${API.BASE_URL}/api/mensagem/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  const renderizarMensagemGrupoWhats = (msg: MensagemGrupo) => {
+    const isMine = msg.usuarioId === usuarioId;
+    const wrap = isMine ? "self-end items-end" : "self-start items-start";
+    const bubble = isMine ? "bg-green-900 text-white rounded-2xl rounded-tr-none" : "bg-[#E8ECF7] text-[#0F172A] rounded-2xl rounded-tl-none";
+    const ts = isMine ? "text-[11px] text-grey-500 text-right mt-1" : "text-[11px] text-gray-500 mt-1";
 
-    if (!res.ok) throw new Error("Falha no delete");
-
-    setMensagensPrivadas(prev => prev.filter(m => m.id !== id));
-    setMensagensGrupo(prev => prev.filter(m => m.id !== id));
-  } catch (err) {
-    console.error("Erro ao apagar mensagem:", err);
-    alert("Não foi possível apagar a mensagem.");
-  }
-};
-
-  const renderizarMensagemPrivada = (msg: Mensagem) => {
-  const isMine = msg.deId === usuarioId;
-
-  if (msg.tipo === "POST") {
-    const post = postsCache[msg.conteudo];
-    if (!post) {
-      return (
-        <div key={msg.id} className={`p-4 rounded max-w-sm border shadow-sm ${isMine ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}>
-          Carregando post...
+    const Shell = (children: React.ReactNode): JSX.Element => (
+      <div className={`max-w-[75%] flex flex-col ${wrap}`}>
+        <div className={`${bubble} px-3 py-2 shadow-sm relative`}>
+          {children}
+          {isMine && (
+            <button
+              onClick={() => deletarMensagem(msg.id)}
+              className="absolute -top-2 -right-2 bg-white/80 text-gray-700 hover:text-red-600 p-1 rounded-full shadow"
+              title="Apagar"
+            >
+              <Trash size={14} />
+            </button>
+          )}
         </div>
-      );
-    }
-    return (
-      <div
-        key={msg.id}
-        onClick={() => navigate(`/post/${post.id}`)}
-        className={`relative p-4 rounded max-w-sm border shadow-sm cursor-pointer ${isMine ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}
-        title="Clique para abrir a postagem"
-      >
-        <div className="flex items-center mb-3 gap-3">
-          <img
-            src={publicImgUrl(post.usuario.foto) || "https://via.placeholder.com/40"}
-            alt={`Foto de ${post.usuario.nome}`}
-            className="w-10 h-10 rounded-full object-cover border"
-          />
-          <span className="font-semibold">{post.usuario.nome}</span>
+        <div className={ts}>
+          {new Date(msg.criadaEm).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </div>
-
-        {post.imagemUrl && (
-          <img
-            src={post.imagemUrl.startsWith("http") ? post.imagemUrl : `${API.BASE_URL}${post.imagemUrl}`}
-            alt="Imagem do post"
-            className="w-full max-h-48 object-cover rounded mb-2"
-          />
-        )}
-        {!post.imagemUrl && post.videoUrl && (
-          <video controls className="w-full max-h-48 rounded mb-2">
-            <source src={post.videoUrl.startsWith("http") ? post.videoUrl : `${API.BASE_URL}${post.videoUrl}`} />
-            Seu navegador não suporta vídeo.
-          </video>
-        )}
-        <p className="text-gray-800 text-sm whitespace-pre-wrap">{post.conteudo}</p>
-
-        {isMine && (
-          <button
-            onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}
-            className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
-            title="Apagar mensagem"
-          >
-            <Trash size={16} />
-          </button>
-        )}
       </div>
     );
-  }
 
-  if (msg.tipo === "USUARIO") {
-    const u = usuariosCache[msg.conteudo];
-    if (!u) {
-      return (
-        <div key={msg.id} className={`p-4 rounded max-w-sm border shadow-sm ${isMine ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}>
-          Carregando usuário...
+    if (msg.tipo === "GRUPO_DESAFIO" || msg.tipo === "GRUPO_DESAFIO_BONUS" || msg.tipo === "DESAFIO" || msg.tipo === "POST" || msg.tipo === "USUARIO") {
+      return Shell(
+        <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
+          <MensagemItemGrupo msg={msg} meId={usuarioId} baseUrl={API.BASE_URL} />
         </div>
       );
     }
-    return (
-      <div
-        key={msg.id}
-        onClick={() => navigate(`/perfil/${u.id}`)}
-        className={`relative p-4 rounded max-w-sm border shadow-sm cursor-pointer flex items-center gap-3 ${isMine ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}
-        title="Clique para ver o perfil"
-      >
-        <img src={publicImgUrl(u.foto)} alt={`Foto de ${u.nome}`} className="w-12 h-12 rounded-full object-cover border" />
-        <div>
-          <p className="font-semibold">{u.nome}</p>
-          <p className="text-sm text-gray-500">Ver perfil</p>
+    return Shell(<p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.conteudo}</p>);
+  };
+
+  const renderizarMensagemPrivadaWhats = (msg: Mensagem) => {
+    const isMine = msg.deId === usuarioId;
+    const wrap = isMine ? "self-end items-end" : "self-start items-start";
+    const bubble = isMine ? "bg-green-900 text-white rounded-2xl rounded-tr-none" : "bg-[#E8ECF7] text-[#0F172A] rounded-2xl rounded-tl-none";
+    const ts = isMine ? "text-[11px] text-grey-500 text-right mt-1" : "text-[11px] text-gray-500 mt-1";
+
+    const Shell = (children: React.ReactNode): JSX.Element => (
+      <div className={`max-w-[75%] flex flex-col ${wrap}`}>
+        <div className={`${bubble} px-3 py-2 shadow-sm relative`}>
+          {children}
+          {isMine && (
+            <button
+              onClick={() => deletarMensagem(msg.id)}
+              className="absolute -top-2 -right-2 bg-white/80 text-gray-700 hover:text-red-600 p-1 rounded-full shadow"
+              title="Apagar"
+            >
+              <Trash size={14} />
+            </button>
+          )}
         </div>
-        {isMine && (
-          <button
-            onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}
-            className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
-            title="Apagar mensagem"
-          >
-            <Trash size={16} />
-          </button>
-        )}
+        <div className={ts}>
+          {new Date(msg.criadaEm).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        </div>
       </div>
     );
-  }
 
-  if (msg.tipo === "DESAFIO") {
-    const d = desafiosCache[msg.conteudo];
-    if (!d) {
-      return (
-        <div key={msg.id} className={`p-4 rounded max-w-sm border shadow-sm ${isMine ? "bg-blue-100 self-end ml-auto" : "bg-white"}`}>
-          Carregando desafio...
-        </div>
-      );
-    }
-    const imagemSrc = d.imagemUrl && d.imagemUrl.startsWith("http") ? d.imagemUrl : d.imagemUrl ? `${API.BASE_URL}${d.imagemUrl}` : null;
+    if (msg.tipo === "POST") {
+      const post = postsCache[msg.conteudo];
+      if (!post) return Shell(<div className="text-sm">Carregando post...</div>);
 
-    return (
-      <div
-        key={msg.id}
-        onClick={() => navigate(`/desafios/${d.id}`)}
-        className={`relative p-3 rounded-lg max-w-sm border shadow-md cursor-pointer hover:shadow-lg ${isMine ? "bg-blue-50 self-end ml-auto" : "bg-white"}`}
-        title="Clique para ver o desafio"
-      >
-        <div className="flex items-center justify-between mb-2 gap-3">
-          <h3 className="font-semibold text-sm text-gray-800 line-clamp-2">{d.titulo}</h3>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 font-medium">{d.nivel ?? "—"}</span>
-        </div>
+      const img = post.imagemUrl ? (post.imagemUrl.startsWith("http") ? post.imagemUrl : `${API.BASE_URL}${post.imagemUrl}`) : null;
+      const video = !img && post.videoUrl ? (post.videoUrl.startsWith("http") ? post.videoUrl : `${API.BASE_URL}${post.videoUrl}`) : null;
 
-        {imagemSrc && <img src={imagemSrc} alt={d.titulo} className="w-full h-36 object-cover rounded mb-2" />}
-
-        <p className="text-gray-700 text-sm line-clamp-3 mb-2">{d.descricao}</p>
-
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          <div className="flex items-center gap-3">
-            <span className="font-medium text-gray-700">Pontos: {d.pontuacao ?? "-"}</span>
-            {d.categoria && d.categoria.length > 0 && <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{d.categoria.join(", ")}</span>}
+      return Shell(
+        <div onClick={() => navigate(`/post/${post.id}`)} className="cursor-pointer">
+          <div className="flex items-center gap-2 mb-2">
+            <img src={publicImgUrl(post.usuario.foto) || `${API.BASE_URL}/assets/default-user.png`} className="w-8 h-8 rounded-full object-cover border" />
+            <span className="text-sm font-semibold">{post.usuario.nome}</span>
           </div>
+          {img && <img src={img} className="w-60 max-h-48 object-cover rounded mb-2" />}
+          {video && (
+            <video controls className="w-60 max-h-48 rounded mb-2">
+              <source src={video} />
+            </video>
+          )}
+          <p className="text-sm whitespace-pre-wrap">{post.conteudo}</p>
+        </div>
+      );
+    }
+
+    if (msg.tipo === "USUARIO") {
+      const u = usuariosCache[msg.conteudo];
+      if (!u) return Shell(<div className="text-sm">Carregando usuário...</div>);
+      return Shell(
+        <div onClick={() => navigate(`/perfil/${u.id}`)} className="flex items-center gap-2 cursor-pointer">
+          <img src={publicImgUrl(u.foto) || `${API.BASE_URL}/assets/default-user.png`} className="w-10 h-10 rounded-full object-cover border" />
           <div>
+            <p className="text-sm font-semibold">{u.nome}</p>
+            <p className="text-xs opacity-80">Ver perfil</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (msg.tipo === "DESAFIO") {
+      const d = desafiosCache[msg.conteudo];
+      if (!d) return Shell(<div className="text-sm">Carregando desafio...</div>);
+      const imagemSrc = d.imagemUrl && (d.imagemUrl.startsWith("http") ? d.imagemUrl : `${API.BASE_URL}${d.imagemUrl}`);
+      return Shell(
+        <div onClick={() => navigate(`/desafios/${d.id}`)} className="cursor-pointer">
+          <div className="flex items-center justify-between mb-2 gap-3">
+            <h3 className="font-semibold text-sm">{d.titulo}</h3>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 font-medium">
+              {d.nivel ?? "—"}
+            </span>
+          </div>
+          {imagemSrc && <img src={imagemSrc} className="w-60 h-36 object-cover rounded mb-2" />}
+          <p className="text-sm opacity-90 mb-2">{d.descricao}</p>
+          <div className="flex items-center justify-between text-[11px] opacity-75">
+            <span>Pontos: {d.pontuacao ?? "-"}</span>
             <span>{new Date(d.createdAt).toLocaleDateString("pt-BR")}</span>
           </div>
         </div>
-        {isMine && (
-          <button
-            onClick={(e) => { e.stopPropagation(); deletarMensagem(msg.id); }}
-            className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
-            title="Apagar mensagem"
-          >
-            <Trash size={16} />
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  if (msg.tipo === "CARD") {
-    if (msg.conteudo === "__CARD__") {
-      return (
-        <div key={msg.id} className={`p-2 rounded max-w-sm border shadow-sm ${isMine ? "bg-blue-50 self-end ml-auto" : "bg-white"}`}>
-          <span className="text-xs text-gray-500">[card enviado — vai carregar quando chegar do servidor]</span>
-        </div>
       );
     }
-    return (
-      <div key={msg.id} className={`relative p-2 rounded max-w-sm border shadow-sm ${isMine ? "bg-blue-50 self-end ml-auto" : "bg-white"}`}>
-        <img src={msg.conteudo} alt="Card do atleta" className="w-60 h-auto rounded" />
-        {isMine && (
-          <button onClick={() => deletarMensagem(msg.id)} className="absolute top-1 right-1 text-gray-500 hover:text-red-600" title="Apagar mensagem">
-            <Trash size={16} />
-          </button>
-        )}
-      </div>
-    );
-  }
+
+    if (msg.tipo === "CARD") {
+      if (msg.conteudo === "__CARD__") return Shell(<span className="text-xs opacity-80">[card sendo enviado...]</span>);
+      return Shell(<img src={msg.conteudo} alt="Card do atleta" className="w-56 h-auto rounded" />);
+    }
+
+    return Shell(<p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.conteudo}</p>);
+  };
 
   return (
-    <div
-      key={msg.id}
-      className={`relative p-2 rounded max-w-sm ${isMine ? "bg-blue-100 self-end ml-auto" : "bg-gray-200"}`}
-    >
-      <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>
-      {isMine && (
-        <button
-          onClick={() => deletarMensagem(msg.id)}
-          className="absolute top-1 right-1 text-gray-500 hover:text-red-600"
-          title="Apagar mensagem"
-        >
-          <Trash size={16} />
-        </button>
-      )}
-    </div>
-  );
-};
-
-  const tituloChat =
-    alvo?.tipo === "usuario" ? alvo.usuario.nome : alvo?.tipo === "grupo" ? `${alvo.grupo.nome} (grupo)` : "Selecione uma conversa";
-
-  return (
-    <div className="flex h-screen">
-      <aside className="w-1/4 border-r p-4 overflow-y-auto">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-semibold">Conversas</h2>
-          <button onClick={abrirModal} title="Criar/gerenciar grupos" className="p-1 rounded hover:bg-gray-200">
-            <UserPlus size={20} />
+    <div className="min-h-screen flex flex-col bg-transparent">
+      <header className="sticky top-0 z-10 bg-green-900 text-white">
+        <div className="relative h-14 flex items-center justify-center px-4">
+          <button
+            onClick={() => setShowSidebar(true)}
+            className="md:hidden absolute left-3 p-2 rounded-full hover:bg-white/10"
+            title="Conversas"
+          >
+            <Users size={18} />
           </button>
+          <h1 className="text-base font-semibold truncate">
+            {alvo?.tipo === "usuario" ? alvo.usuario.nome : alvo?.tipo === "grupo" ? alvo.grupo.nome : "Conversas"}
+          </h1>
+        </div>
+      </header>
+
+      <div className="flex flex-1">
+        <aside className="hidden md:block w-80 border-r bg-white">
+          <SidebarContent />
+        </aside>
+
+        <div className={`md:hidden fixed inset-0 z-40 ${showSidebar ? "" : "pointer-events-none"}`}>
+          <div
+            onClick={() => setShowSidebar(false)}
+            className={`absolute inset-0 bg-black/30 transition-opacity ${showSidebar ? "opacity-100" : "opacity-0"}`}
+          />
+          <aside
+            className={`absolute left-0 top-0 h-full w-72 bg-white border-r shadow-xl transform transition-transform ${
+              showSidebar ? "translate-x-0" : "-translate-x-full"
+            }`}
+          >
+            <SidebarContent />
+          </aside>
         </div>
 
-        <div className="mb-4">
-          <div className="flex items-center gap-2 text-gray-700 mb-2">
-            <Users size={16} /> <span className="text-sm font-semibold">Grupos</span>
-          </div>
-          {grupos.length === 0 && <p className="text-xs text-gray-500">Você ainda não participa de grupos.</p>}
-          {grupos.map((g) => {
-            const selecionado = alvo?.tipo === "grupo" && alvo.grupo.id === g.id;
+        <main className="flex-1 flex flex-col">
+          <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b bg-transparent">
+            <div className="text-sm text-green-900 font-medium">
+              {alvo ? (alvo.tipo === "usuario" ? "Mensagem direta" : "Grupo") : "Selecione uma conversa"}
+            </div>
 
-            return (
-              <div
-                key={g.id}
-                className={`p-3 mb-2 rounded-lg cursor-pointer border shadow-sm transition-all ${selecionado ? "bg-blue-100 border-blue-400" : "hover:bg-gray-100 bg-white"}`}
-                onClick={() => setAlvo({ tipo: "grupo", grupo: g })}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-sm">{g.nome}</div>
-                </div>
-
-                {g.descricao && <div className="text-xs text-gray-500 line-clamp-1">{g.descricao}</div>}
-              </div>
-            );
-          })}
-        </div>
-
-        <div>
-          <div className="flex items-center gap-2 text-gray-700 mb-2">
-            <User size={16} /> <span className="text-sm font-semibold">Usuários</span>
-          </div>
-          {usuariosMutuos.map((u) => {
-            const selecionado = alvo?.tipo === "usuario" && alvo.usuario.id === u.id;
-            return (
-              <div
-                key={u.id}
-                className={`flex items-center gap-3 p-3 mb-3 rounded-lg cursor-pointer border shadow-sm transition-all ${
-                  selecionado ? "bg-blue-100 border-blue-400" : "hover:bg-gray-100 bg-white"
-                }`}
-                onClick={() => setAlvo({ tipo: "usuario", usuario: u })}
-              >
-                <img src={publicImgUrl(u.foto) || "https://via.placeholder.com/40"} alt={`Foto de ${u.nome}`} className="w-12 h-12 rounded-full object-cover border" />
-                <div className="flex flex-col">
-                  <span className="font-medium text-sm">{u.nome}</span>
-                  <span className="text-xs text-gray-500">Clique para conversar</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </aside>
-
-        <div style={{ position: "absolute", left: -99999, top: -99999 }}>
-          <div ref={cardRef}>
-            {meuCardDados && (
-              <CardAtletaShield
-                atleta={{
-                  atletaId: meuCardDados.atletaId ?? "",
-                  nome: meuCardDados.nome,
-                  foto: meuCardDados.foto,
-                  posicao: meuCardDados.posicao ?? undefined,
-                  idade: null,
-                }}
-                ovr={meuCardDados.ovr}
-                perf={meuCardDados.perf}
-                disc={meuCardDados.disc}
-                resp={meuCardDados.resp}
-                size={{ w: 300, h: 420 }}
-                goldenMinOVR={88}
-              />
-            )}
-          </div>
-        </div>
-
-      <main className="flex-1 flex flex-col justify-between p-4 pb-20">
-        {alvo ? (
-          <>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">{tituloChat}</h2>
-
-              {alvo.tipo === "usuario" && (
+            <div className="flex items-center gap-2">
+              {alvo?.tipo === "usuario" && (
                 <button
                   onClick={compartilharPerfilNoChat}
-                  className="flex items-center gap-2 text-blue-600 hover:underline"
+                  className="flex items-center gap-1 text-green-800 hover:underline text-sm"
                   title="Compartilhar meu card nesta conversa"
                 >
-                  <Share2 size={18} />
-                  Compartilhar meu card
+                  <Share2 size={16} /> Compartilhar meu card
                 </button>
               )}
 
-              {alvo.tipo === "grupo" && (
-                <button onClick={() => setModalDesafiosAberto(true)} className="flex items-center gap-2 px-3 py-1 text-sm rounded bg-purple-600 text-white hover:bg-purple-700">
+              {alvo?.tipo === "grupo" && (
+                <button
+                  onClick={() => setModalDesafiosAberto(true)}
+                  className="px-3 py-2 text-xs rounded-lg bg-green-800 text-white hover:bg-green-700"
+                >
                   Desafio em grupo
                 </button>
               )}
             </div>
+          </div>
 
-            <div className="flex-1 overflow-y-auto space-y-2 border rounded p-2 mb-4 bg-gray-50" onScroll={handleScroll}>
-              {alvo.tipo === "usuario" && mensagensPrivadas.map((m) => renderizarMensagemPrivada(m))}
-              {alvo.tipo === "grupo" &&
-                mensagensGrupo.map((m) => <MensagemItemGrupo key={m.id} msg={m} meId={usuarioId} baseUrl={API.BASE_URL} />)}
-
-              {(carregandoMaisPriv || carregandoMaisGrupo) && <p className="text-center text-sm text-gray-400">Carregando mais...</p>}
+          <div
+            className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 pb-15"
+            onScroll={handleScroll}
+          >
+            <div className="mx-auto w-full sm:max-w-3xl space-y-3">
+              {alvo ? (
+                <>
+                  {alvo?.tipo === "usuario" &&
+                    mensagensPrivadas.map((m) => <div key={m.id}>{renderizarMensagemPrivadaWhats(m)}</div>)}
+                  {alvo?.tipo === "grupo" &&
+                    mensagensGrupo.map((m) => <div key={m.id}>{renderizarMensagemGrupoWhats(m)}</div>)}
+                  {(carregandoMaisPriv || carregandoMaisGrupo) && (
+                    <p className="text-center text-sm text-gray-400">Carregando mais...</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-center text-sm text-gray-500">Selecione uma conversa para começar</p>
+              )}
             </div>
+          </div>
 
-            <div className="flex gap-2">
-              <input className="flex-1 border p-2 rounded" value={novaMensagem} onChange={(e) => setNovaMensagem(e.target.value)} placeholder="Digite sua mensagem..." />
-              <button onClick={enviarMensagem} className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                <Send size={18} />
+          <div className="sticky bottom-[64px] md:bottom-0 bg-transparent border-green-100">
+            <div className="mx-auto w-full sm:max-w-3xl px-3 sm:px-4 py-3 flex items-center gap-2">
+              <input
+                className="flex-1 bg-white border border-green-700 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-700"
+                value={novaMensagem}
+                onChange={(e) => setNovaMensagem(e.target.value)}
+                placeholder="Digite sua mensagem..."
+              />
+              <button
+                onClick={enviarMensagem}
+                className="shrink-0 bg-green-900 text-white p-3 rounded-xl hover:opacity-95 active:opacity-90"
+                title="Enviar"
+              >
+                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
+                  <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
+                </svg>
               </button>
             </div>
-          </>
-        ) : (
-          <p className="text-gray-500">Selecione uma conversa para começar</p>
-        )}
-      </main>
+          </div>
+        </main>
+      </div>
+
+      <div style={{ position: "absolute", left: -99999, top: -99999 }}>
+        <div ref={cardRef}>
+          {meuCardDados && (
+            <CardAtletaShield
+              atleta={{
+                atletaId: meuCardDados.atletaId ?? "",
+                nome: meuCardDados.nome,
+                foto: meuCardDados.foto,
+                posicao: meuCardDados.posicao ?? undefined,
+                idade: null,
+              }}
+              ovr={meuCardDados.ovr}
+              perf={meuCardDados.perf}
+              disc={meuCardDados.disc}
+              resp={meuCardDados.resp}
+              size={{ w: 300, h: 420 }}
+              goldenMinOVR={88}
+            />
+          )}
+        </div>
+      </div>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
@@ -995,9 +1004,14 @@ const deletarMensagem = async (id: string) => {
       </nav>
 
       <ModalGrupos aberto={modalAberto} onFechar={fecharModal} usuarioId={usuarioId ?? ""} token={token} />
-
       {alvo?.tipo === "grupo" && (
-        <ModalDesafiosGrupo aberto={modalDesafiosAberto} onFechar={fecharModalDesafios} grupoId={alvo.grupo.id} token={token} onCriado={recarregarMensagensDoGrupoAtual} />
+        <ModalDesafiosGrupo
+          aberto={modalDesafiosAberto}
+          onFechar={fecharModalDesafios}
+          grupoId={alvo.grupo.id}
+          token={token}
+          onCriado={recarregarMensagensDoGrupoAtual}
+        />
       )}
     </div>
   );

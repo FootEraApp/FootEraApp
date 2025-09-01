@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { publicImgUrl } from "@/utils/publicUrl.js";
-import { useMemo } from "react";
+import { API } from "@/config.js";
 
 const SHIELD_W_DESK = 150;
 const SHIELD_H_DESK = 210;
@@ -42,12 +42,19 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
   
   const clipId = `shieldClip-${atleta.atletaId || atleta.id || atleta.nome || "x"}`;
   const fotoUrl = useMemo(
-   () => publicImgUrl(atleta.foto) || "/default-avatar.png",
+   () => publicImgUrl(atleta.foto) || `${API.BASE_URL}/assets/default-user.png`,
    [atleta.foto]
   );
   const [imgOk, setImgOk] = useState(true);
-  const fotoResolved = imgOk ? fotoUrl : "/default-avatar.png";
-  
+  const fotoResolved = imgOk ? fotoUrl : `${API.BASE_URL}/assets/default-user.png`;
+  const imgRef = useRef<SVGImageElement | null>(null);
+
+  useEffect(() => {
+    try {
+      imgRef.current?.setAttribute("referrerpolicy", "no-referrer");
+    } catch {}
+  }, []);
+
   const ovrShow = Number.isFinite(ovr) ? Math.round(Number(ovr)) : 0;
   const perfShow = Number.isFinite(perf) ? Math.round(Number(perf)) : 0;
   const discShow = Number.isFinite(disc) ? Math.round(Number(disc)) : 0;
@@ -167,10 +174,13 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
 
         <g clipPath={`url(#${clipId})`}>
           <image
+            ref={imgRef}
             href={fotoResolved}
-            {...(isCrossOrigin ? { crossOrigin: "anonymous" } : {})}
             onError={() => setImgOk(false)}
-            x="0" y="-10" width="184" height="280"
+            x="0"
+            y="-10"
+            width="184"
+            height="280"
             preserveAspectRatio="xMidYMid slice"
           />
           <rect x="0" y="0" width="184" height="260" fill="url(#cardGrad)" />
