@@ -377,29 +377,85 @@ const DesafiosPage: React.FC = () => {
           {rankingSemanal.length === 0 ? (
             <p className="text-gray-500">Sem submissões nesta semana.</p>
           ) : (
-            rankingSemanal.map((s, i) => (
-              <button
-                key={s.id}
-                onClick={() => abrirModal(s)}
-                className="w-full text-left bg-white shadow rounded-lg p-4 flex items-center gap-3 hover:ring-2 hover:ring-green-600 transition"
-              >
-                <div className="w-8 text-center font-bold">{i + 1}</div>
-                <img
-                  src={
-                    s.atleta.usuario.foto
-                      ? fullUrl(s.atleta.usuario.foto)
-                      : "/default-profile.png"
-                  }
-                  className="w-10 h-10 rounded-full object-cover"
-                  alt="Perfil"
-                />
-                <div className="flex-1">
-                  <div className="font-semibold">{s.atleta.usuario.nome}</div>
-                  <div className="text-sm text-gray-500 truncate">{s.desafio.titulo}</div>
-                </div>
-                <div className="text-sm">❤️ {s.curtidasCount}</div>
-              </button>
-            ))
+            <>
+              {/* Pódio Top 3 */}
+              <div className="grid grid-cols-3 gap-4 items-end mb-6 text-center">
+                {rankingSemanal.slice(0, 3).map((s, i) => {
+                  const borda =
+                    i === 0
+                      ? "border-yellow-400" // ouro
+                      : i === 1
+                      ? "border-gray-400"   // prata
+                      : "border-amber-700"; // bronze
+
+                  return (
+                    <div
+                      key={s.id}
+                      className={`flex flex-col items-center ${
+                        i === 0 ? "order-2" : i === 1 ? "order-1" : "order-3"
+                      }`}
+                    >
+                      <div
+                        onClick={() => abrirModal(s)}
+                        className={`cursor-pointer bg-white shadow-lg rounded-xl p-3 flex flex-col items-center transition 
+                          border-4 ${borda} hover:ring-2 hover:ring-green-600
+                          ${i === 0 ? "h-40" : i === 1 ? "h-32" : "h-28"} 
+                          w-full justify-end`}
+                      >
+                        <img
+                          src={
+                            s.atleta.usuario.foto
+                              ? fullUrl(s.atleta.usuario.foto)
+                              : "/default-profile.png"
+                          }
+                          className="w-16 h-16 rounded-full object-cover mb-2"
+                          alt="Perfil"
+                        />
+                        <div className="font-bold text-sm truncate">
+                          {s.atleta.usuario.nome}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">
+                          {s.desafio.titulo}
+                        </div>
+                        <div className="mt-1 text-sm">❤️ {s.curtidasCount}</div>
+                      </div>
+                      <div className="mt-2 font-bold text-lg">
+                        {i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Lista do restante */}
+              <div className="space-y-3">
+                {rankingSemanal.slice(3).map((s, i) => (
+                  <button
+                    key={s.id}
+                    onClick={() => abrirModal(s)}
+                    className="w-full text-left bg-white shadow rounded-lg p-4 flex items-center gap-3 hover:ring-2 hover:ring-green-600 transition"
+                  >
+                    <div className="w-8 text-center font-bold">{i + 4}</div>
+                    <img
+                      src={
+                        s.atleta.usuario.foto
+                          ? fullUrl(s.atleta.usuario.foto)
+                          : "/default-profile.png"
+                      }
+                      className="w-10 h-10 rounded-full object-cover"
+                      alt="Perfil"
+                    />
+                    <div className="flex-1">
+                      <div className="font-semibold">{s.atleta.usuario.nome}</div>
+                      <div className="text-sm text-gray-500 truncate">
+                        {s.desafio.titulo}
+                      </div>
+                    </div>
+                    <div className="text-sm">❤️ {s.curtidasCount}</div>
+                  </button>
+                ))}
+              </div>
+            </>
           )}
         </div>
       ) : submissoesFiltradas.length === 0 ? (
