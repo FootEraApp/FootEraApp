@@ -1,8 +1,11 @@
+// Server/routes/perfil
+
 import { Router } from "express";
 import {
   getPontuacaoDetalhada, getPerfilUsuario, getAtividadesRecentes, getBadges,
   getTreinosResumo, getProgressoTreinos, getPontuacaoPerfil,
-  getPerfilUsuarioMe, getPontuacaoMe, getAtividadesRecentesMe, getBadgesMe, atualizarPerfil, getPosicaoAtualAtleta
+  getPerfilUsuarioMe, getPontuacaoMe, getAtividadesRecentesMe, getBadgesMe, atualizarPerfil, getPosicaoAtualAtleta,
+  getPerfilProfessor, getPerfilClube, getPerfilEscola,
 } from "../controllers/perfilController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 import { PrismaClient, TipoUsuario } from "@prisma/client";
@@ -22,6 +25,25 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 const router = Router();
+
+// ROTAS ESPECÍFICAS POR TIPO (adicione ANTES do genérico "/:id")
+router.get("/professor/me", authenticateToken, (req, res) => {
+  (req as any).params = { id: req.userId };
+  getPerfilProfessor(req as any, res);
+});
+router.get("/professor/:id", authenticateToken, getPerfilProfessor);
+
+router.get("/clube/me", authenticateToken, (req, res) => {
+  (req as any).params = { id: req.userId };
+  getPerfilClube(req as any, res);
+});
+router.get("/clube/:id", authenticateToken, getPerfilClube);
+
+router.get("/escola/me", authenticateToken, (req, res) => {
+  (req as any).params = { id: req.userId };
+  getPerfilEscola(req as any, res);
+});
+router.get("/escola/:id", authenticateToken, getPerfilEscola);
 
 router.get("/me", authenticateToken, getPerfilUsuarioMe);
 router.get("/me/pontuacao", authenticateToken, getPontuacaoMe);

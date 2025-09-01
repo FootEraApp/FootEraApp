@@ -1,9 +1,63 @@
+// server/controllers/perfilcontroller
+
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
 import { calcularPontuacaoPorUsuarioId, atualizarCachePontuacao } from "server/services/pontuacao.service.js";
 import { AnyArn } from "aws-sdk/clients/groundstation.js";
 const prisma = new PrismaClient();
+
+/** util: aceita tanto id de Usuario quanto id da entidade específica */
+async function resolveByUsuarioOrEntity(opts: {
+  entity: "professor" | "clube" | "escolinha";
+  usuarioOrEntityId: string;
+  select: any;
+}) {
+  const { entity, usuarioOrEntityId, select } = opts;
+
+  if (entity === "professor") {
+    // 1) por usuarioId
+    let row = await prisma.professor.findFirst({
+      where: { usuarioId: usuarioOrEntityId },
+      select,
+    });
+    if (row) return row;
+
+    // 2) por id
+    row = await prisma.professor.findUnique({
+      where: { id: usuarioOrEntityId },
+      select,
+    });
+    return row;
+  }
+
+  if (entity === "clube") {
+    let row = await prisma.clube.findFirst({
+      where: { usuarioId: usuarioOrEntityId },
+      select,
+    });
+    if (row) return row;
+
+    row = await prisma.clube.findUnique({
+      where: { id: usuarioOrEntityId },
+      select,
+    });
+    return row;
+  }
+
+  // entity === "escolinha"
+  let row = await prisma.escolinha.findFirst({
+    where: { usuarioId: usuarioOrEntityId },
+    select,
+  });
+  if (row) return row;
+
+  row = await prisma.escolinha.findUnique({
+    where: { id: usuarioOrEntityId },
+    select,
+  });
+  return row;
+}
 
 
 export async function getPontuacaoDetalhada(req: Request, res: Response) {
@@ -378,6 +432,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
   try {
     const usuario = await prisma.usuario.findUnique({
       where: { id },
+      select: { id: true, nome: true, email: true, foto: true },
     });
 
     if (!usuario) {
@@ -792,3 +847,228 @@ export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Resp
     return res.status(500).json({ error: "Erro interno do servidor" });
   }
 };
+
+// PAGINA DE PERFIL TIPOS
+
+export async function getPerfilProfessor(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+
+    const prof = await resolveByUsuarioOrEntity({
+      entity: "professor",
+      usuarioOrEntityId: id,
+      select: {
+        id: true,
+        usuarioId: true,
+        nome: true,
+        codigo: true,
+        cref: true,
+        areaFormacao: true,
+        escola: true,
+        qualificacoes: true,
+        certificacoes: true,
+        fotoUrl: true,
+        statusCref: true,
+        usuario: { select: { id: true, nome: true, email: true, foto: true } },
+        treinosProgramados: { select: { id: true } },
+        relacoesTreinamento: { select: { id: true } },
+      },
+    });
+
+  if (!prof) return res.status(404).json({ error: "Professor não encontrado" });
+
+  // 🔒 Narrowing seguro para o usuário relacionado
+  const usuarioMin: { id: string; nome: string; email: string; foto?: string | null } | null =
+    (prof as any).usuario ?? null;
+
+  // Foto prioriza foto do tipo e cai para a foto do usuário
+  const fotoPerfil: string | null =
+    (prof as any).fotoUrl ?? (usuarioMin?.foto ?? null);
+
+  return res.json({
+    tipo: "Professor" as const,
+    usuario: usuarioMin,
+    professor: {
+      id: prof.id,
+      usuarioId: prof.usuarioId,
+      nome: prof.nome,
+      codigo: prof.codigo,
+      cref: prof.cref,
+      areaFormacao: prof.areaFormacao,
+      escola: prof.escola,
+      qualificacoes: prof.qualificacoes ?? [],
+      certificacoes: prof.certificacoes ?? [],
+      fotoUrl: fotoPerfil,
+      statusCref: prof.statusCref ?? null,
+    },
+    metrics: {
+      treinosProgramados: (prof as any).treinosProgramados?.length ?? 0,
+      alunosRelacionados: (prof as any).relacoesTreinamento?.length ?? 0,
+    },
+  });
+
+  } catch (e) {
+    console.error("getPerfilProfessor error:", e);
+    return res.status(500).json({ error: "Erro interno ao buscar professor" });
+  }
+}
+
+export async function getPerfilClube(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+
+    const clube = await resolveByUsuarioOrEntity({
+      entity: "clube",
+      usuarioOrEntityId: id,
+      select: {
+        id: true,
+        usuarioId: true,
+        usuario: { select: { id: true, nome: true, email: true, foto: true } },
+        nome: true,
+        cnpj: true,
+        telefone1: true,
+        telefone2: true,
+        email: true,
+        siteOficial: true,
+        sede: true,
+        estadio: true,
+        logradouro: true,
+        numero: true,
+        complemento: true,
+        bairro: true,
+        cidade: true,
+        estado: true,
+        pais: true,
+        cep: true,
+        logo: true,
+        dataCriacao: true,
+        atletas: { select: { id: true } },
+        treinoProgramado: { select: { id: true } },
+        postagens: { select: { id: true } },
+      },
+    });
+
+  if (!clube) return res.status(404).json({ error: "Clube não encontrado" });
+
+  const usuarioMin: { id: string; nome: string; email: string; foto?: string | null } | null =
+    (clube as any).usuario ?? null;
+
+  const logoOuFoto: string | null =
+    (clube as any).logo ?? (usuarioMin?.foto ?? null);
+
+  return res.json({
+    tipo: "Clube" as const,
+    usuario: usuarioMin,
+    clube: {
+      id: clube.id,
+      usuarioId: clube.usuarioId,
+      nome: clube.nome,
+      cnpj: clube.cnpj,
+      telefone1: clube.telefone1,
+      telefone2: clube.telefone2,
+      email: clube.email,
+      siteOficial: clube.siteOficial,
+      sede: clube.sede,
+      estadio: clube.estadio,
+      logradouro: clube.logradouro,
+      numero: clube.numero,
+      complemento: clube.complemento,
+      bairro: clube.bairro,
+      cidade: clube.cidade,
+      estado: clube.estado,
+      pais: clube.pais,
+      cep: clube.cep,
+      logo: logoOuFoto,
+      dataCriacao: clube.dataCriacao,
+    },
+    metrics: {
+      atletas: (clube as any).atletas?.length ?? 0,
+      treinosProgramados: (clube as any).treinoProgramado?.length ?? 0,
+      postagens: (clube as any).postagens?.length ?? 0,
+    },
+  });
+
+  } catch (e) {
+    console.error("getPerfilClube error:", e);
+    return res.status(500).json({ error: "Erro interno ao buscar clube" });
+  }
+}
+
+export async function getPerfilEscola(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+
+    const escola = await resolveByUsuarioOrEntity({
+      entity: "escolinha",
+      usuarioOrEntityId: id,
+      select: {
+        id: true,
+        usuarioId: true,
+        usuario: { select: { id: true, nome: true, email: true, foto: true } },
+        nome: true,
+        cnpj: true,
+        telefone1: true,
+        telefone2: true,
+        email: true,
+        siteOficial: true,
+        sede: true,
+        logradouro: true,
+        numero: true,
+        complemento: true,
+        bairro: true,
+        cidade: true,
+        estado: true,
+        pais: true,
+        cep: true,
+        logo: true,
+        dataCriacao: true,
+        atletas: { select: { id: true } },
+        treinoProgramado: { select: { id: true } },
+        postagens: { select: { id: true } },
+      },
+    });
+
+  if (!escola) return res.status(404).json({ error: "Escolinha não encontrada" });
+
+  const usuarioMin: { id: string; nome: string; email: string; foto?: string | null } | null =
+    (escola as any).usuario ?? null;
+
+  const logoOuFoto: string | null =
+    (escola as any).logo ?? (usuarioMin?.foto ?? null);
+
+  return res.json({
+    tipo: "Escolinha" as const,
+    usuario: usuarioMin,
+    escolinha: {
+      id: escola.id,
+      usuarioId: escola.usuarioId,
+      nome: escola.nome,
+      cnpj: escola.cnpj,
+      telefone1: escola.telefone1,
+      telefone2: escola.telefone2,
+      email: escola.email,
+      siteOficial: escola.siteOficial,
+      sede: escola.sede,
+      logradouro: escola.logradouro,
+      numero: escola.numero,
+      complemento: escola.complemento,
+      bairro: escola.bairro,
+      cidade: escola.cidade,
+      estado: escola.estado,
+      pais: escola.pais,
+      cep: escola.cep,
+      logo: logoOuFoto,
+      dataCriacao: escola.dataCriacao,
+    },
+    metrics: {
+      atletas: (escola as any).atletas?.length ?? 0,
+      treinosProgramados: (escola as any).treinoProgramado?.length ?? 0,
+      postagens: (escola as any).postagens?.length ?? 0,
+    },
+  });
+
+  } catch (e) {
+    console.error("getPerfilEscola error:", e);
+    return res.status(500).json({ error: "Erro interno ao buscar escolinha" });
+  }
+}

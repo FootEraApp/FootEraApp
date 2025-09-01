@@ -1,7 +1,7 @@
 // client/src/pages/feed.tsx
 import React, { useEffect, useState, useMemo } from "react";
 import { FaHeart, FaRegHeart, FaRegCommentDots, FaShare, FaPaperPlane, FaTrash, FaLink } from "react-icons/fa";
-import { Volleyball, User, CirclePlus, Search, House, CircleX, Send, CircleCheck } from "lucide-react";
+import { Volleyball, User, CirclePlus, Search, House, CircleX, Send, CircleCheck, Trophy } from "lucide-react";
 import { getFeedPosts, likePost, comentarPost, compartilharPost, PostagemComUsuario, deletarPost } from "../services/feedService.js";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -250,7 +250,17 @@ function PaginaFeed(): JSX.Element {
 
   return (
     <div className="px-4 py-6 space-y-6 pb-24">
-      <h1 className="text-2xl font-bold mb-4 text-center text-green-800">Feed de Postagens</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold text-green-800">Feed de Postagens</h1>
+        <Link href="/feed/desafios">
+          <button
+            className="p-2 rounded-full hover:bg-green-100 transition"
+            title="Ranking e Desafios"
+          >
+            <Trophy className="w-6 h-6 text-yellow-600" />
+          </button>
+        </Link>
+      </div>
        <div className="flex gap-2 justify-center mb-4">
         {(["todos","seguindo","favoritos", "meus"] as const).map(f => (
           <button
