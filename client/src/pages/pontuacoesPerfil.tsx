@@ -207,7 +207,7 @@ export default function PontuacaoDetalhada() {
           }
         }
 
-        const fotoAbs = publicImgUrl(foto);
+        const fotoAbs = fixFotoPath(foto) ?? publicImgUrl(foto);
 
         setPerfil({
           atletaId,

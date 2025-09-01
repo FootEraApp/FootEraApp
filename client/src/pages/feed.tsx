@@ -218,7 +218,7 @@ function PaginaFeed(): JSX.Element {
            <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <img
-                src={publicImgUrl(post.usuario.foto) ?? `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
+                src={publicImgUrl(post.usuario.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
                 alt="avatar"
                 className="w-10 h-10 rounded-full object-cover"
               />
@@ -303,7 +303,7 @@ function PaginaFeed(): JSX.Element {
                     {post.comentarios.map((comentario) => (
                       <div key={comentario.id} className="flex gap-2 items-start">
                         <img
-                          src={publicImgUrl(comentario.usuario?.foto) ?? `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
+                          src={publicImgUrl(comentario.usuario?.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
                           alt="avatar"
                           className="w-8 h-8 rounded-full object-cover"
                         />
@@ -361,9 +361,8 @@ function PaginaFeed(): JSX.Element {
 
                 {usuariosMutuos.map((u) => {
                   const selecionado = selecionados.has(u.id);
-                  const fotoSrc = publicImgUrl(u.foto) ?? `${APP.FRONTEND_BASE_URL}/assets/default-user.png`;
-                  <img src={fotoSrc} alt={u.nome} className="w-14 h-14 rounded-full object-cover" />
-                 
+                  const fotoSrc = publicImgUrl(u.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`;
+
                   return (
                     <button
                       key={u.id}
@@ -463,9 +462,7 @@ function PaginaFeed(): JSX.Element {
               {postSelecionado.comentarios.map((comentario) => (
                 <div key={comentario.id} className="flex gap-2 items-start">
                   <img
-                    src={
-                      publicImgUrl(comentario.usuario?.foto || null)
-                    }
+                    src={publicImgUrl(comentario.usuario?.foto) ?? "https://via.placeholder.com/40"}
                     alt="avatar"
                     className="w-8 h-8 rounded-full object-cover"
                   />

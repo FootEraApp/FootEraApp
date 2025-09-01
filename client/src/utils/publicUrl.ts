@@ -1,4 +1,4 @@
-import { API, APP } from "../config";
+import { API, APP } from "@/config.js";
 
 export function publicImgUrl(u?: string | null): string | null {
   if (!u) return null;
