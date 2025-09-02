@@ -1,4 +1,4 @@
-// client/src/pages/perfil/index.tsx
+// client/src/pages/perfil.tsx
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";

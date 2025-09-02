@@ -1,3 +1,4 @@
+// client/src/components/profile/ProfileHeader.tsx
 import { useState, useEffect } from "react";
 import { Link, useParams } from "wouter";
 import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send } from "lucide-react";
@@ -11,12 +12,19 @@ interface Usuario {
   foto?: string | null;
 }
 
+type Kpi = { label: string; value: number };
+
 interface ProfileHeaderProps {
   nome: string;
   idade?: number;
   posicao?: string;
   time?: string;
+  /** Se quiser manter pontuação para atleta/professor/clube */
   pontuacao?: number;
+  /** Título da pontuação quando usada (padrão: "Pontuação FootEra") */
+  scoreTitle?: string;
+  /** Para escola (ou qualquer tipo) mostrar cards no header */
+  kpis?: Kpi[]; // ex.: [{label:"Atletas", value:0}, {label:"Treinos", value:0}, {label:"Conquistas", value:0}]
   avatar?: string | null;
   foto?: string | null;
   isOwnProfile?: boolean;
@@ -30,6 +38,8 @@ export default function ProfileHeader({
   posicao,
   time,
   pontuacao = 0,
+  scoreTitle = "Pontuação FootEra",
+  kpis,
   avatar,
   foto,
   isOwnProfile = false,
@@ -42,7 +52,7 @@ export default function ProfileHeader({
   const [pontosTotal, setPontosTotal] = useState<number>(pontuacao ?? 0);
   const [ehFavorito, setEhFavorito] = useState(false);
   const { id: idDaUrl } = useParams<{ id?: string }>();
-    
+
   const [confirmBox, setConfirmBox] = useState<{
     open: boolean;
     text: string;
@@ -52,9 +62,7 @@ export default function ProfileHeader({
   const iniciarChat = () => {
     const me = Storage.usuarioId;
     if (!me) { alert("Faça login para enviar mensagens."); return; }
-
     localStorage.setItem("mensagens_open_target", JSON.stringify({ tipo: "usuario", id: perfilId }));
-
     try {
       const key = "mensagens_recent_usuarios";
       const atual: Usuario[] = JSON.parse(localStorage.getItem(key) || "[]");
@@ -62,42 +70,36 @@ export default function ProfileHeader({
       const dedup = [novo, ...atual.filter(u => u.id !== novo.id)].slice(0, 50);
       localStorage.setItem(key, JSON.stringify(dedup));
     } catch {}
-
     window.location.href = "/mensagens";
   };
 
-  useEffect(() => {
-    setPontosTotal(pontuacao ?? 0);
-  }, [pontuacao]);
+  useEffect(() => { setPontosTotal(pontuacao ?? 0); }, [pontuacao]);
 
+  // Só busca pontuação automática quando NÃO estamos mostrando KPIs
   useEffect(() => {
-  const token = Storage.token;
-  if (!perfilId || !token) return;
-
-  fetch(`${API.BASE_URL}/api/perfil/pontuacao/${encodeURIComponent(perfilId)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-    .then(r => (r.ok ? r.json() : null))
-    .then((data) => {
-      if (!data) return;
-      const performance = Number(data.performance) || 0;
-      const disciplina  = Number(data.disciplina)  || 0;
-      const responsab   = Number(data.responsabilidade) || 0;
-      setPontosTotal(performance + disciplina + responsab);
+    if (kpis && kpis.length) return;
+    const token = Storage.token;
+    if (!perfilId || !token) return;
+    fetch(`${API.BASE_URL}/api/perfil/pontuacao/${encodeURIComponent(perfilId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
     })
-    .catch(() => {});
-}, [perfilId]);
+      .then(r => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const performance = Number(data.performance) || 0;
+        const disciplina  = Number(data.disciplina)  || 0;
+        const responsab   = Number(data.responsabilidade) || 0;
+        setPontosTotal(performance + disciplina + responsab);
+      })
+      .catch(() => {});
+  }, [perfilId, kpis]);
 
   function pedirConfirmacao(text: string, onYes: () => Promise<void> | void) {
     setConfirmBox({ open: true, text, onYes });
   }
 
   async function readBodySafe(r: Response) {
-    try {
-      return await r.json();
-    } catch {
-      return null;
-    }
+    try { return await r.json(); } catch { return null; }
   }
   function isDuplicado(resp: Response, body: any) {
     if (resp.status === 400 || resp.status === 409) return true;
@@ -108,22 +110,13 @@ export default function ProfileHeader({
   const seguirUsuario = async () => {
     const token = Storage.token;
     const seguidorUsuarioId = Storage.usuarioId;
-    if (!token || !seguidorUsuarioId) {
-      alert("Faça login para seguir.");
-      return;
-    }
-
+    if (!token || !seguidorUsuarioId) { alert("Faça login para seguir."); return; }
     const resp = await fetch(`${API.BASE_URL}/api/seguidores`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ seguidoUsuarioId: perfilId }),
     });
-
-    if (resp.ok) {
-      alert("Agora você está seguindo este usuário!");
-      return;
-    }
-
+    if (resp.ok) { alert("Agora você está seguindo este usuário!"); return; }
     const body = await readBodySafe(resp);
     if (isDuplicado(resp, body)) {
       pedirConfirmacao("Você já segue esse usuário. Deseja parar de seguir?", async () => {
@@ -132,8 +125,6 @@ export default function ProfileHeader({
       });
       return;
     }
-
-    console.error("Falha ao seguir:", resp.status, body);
     alert("Falha ao seguir usuário.");
   };
 
@@ -149,22 +140,13 @@ export default function ProfileHeader({
 
   const solicitarTreino = async () => {
     const token = Storage.token;
-    if (!token) {
-      alert("Faça login para solicitar treino.");
-      return;
-    }
-
+    if (!token) { alert("Faça login para solicitar treino."); return; }
     const resp = await fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ destinatarioId: perfilId }),
     });
-
-    if (resp.ok) {
-      alert("Solicitação enviada!");
-      return;
-    }
-
+    if (resp.ok) { alert("Solicitação enviada!"); return; }
     const body = await readBodySafe(resp);
     if (isDuplicado(resp, body)) {
       pedirConfirmacao("Você já tem uma solicitação com este usuário. Deseja cancelar?", async () => {
@@ -173,21 +155,17 @@ export default function ProfileHeader({
       });
       return;
     }
-
-    console.error("Falha ao solicitar treino:", resp.status, body);
     alert("Falha ao solicitar treino.");
   };
 
   async function cancelarSolicitacaoTreino(destinatarioId: string) {
     const token = Storage.token;
-
     const del = await fetch(`${API.BASE_URL}/api/solicitacoes-treino/${destinatarioId}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
     if (del.ok) return true;
     if (del.status !== 404) return false;
-
     const post = await fetch(`${API.BASE_URL}/api/solicitacoes-treino/cancelar`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -205,8 +183,7 @@ export default function ProfileHeader({
       });
       const data = res.ok ? await res.json() : [];
       setUsuariosMutuos(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error(e);
+    } catch {
       setUsuariosMutuos([]);
     } finally {
       setCarregandoMutuos(false);
@@ -228,16 +205,9 @@ export default function ProfileHeader({
   };
 
   const enviarCompartilhamentoPorDM = async () => {
-    if (selecionados.size === 0) {
-      alert("Selecione ao menos uma pessoa.");
-      return;
-    }
+    if (selecionados.size === 0) { alert("Selecione ao menos uma pessoa."); return; }
     const token = Storage.token;
-    if (!token) {
-      alert("Faça login para compartilhar.");
-      return;
-    }
-
+    if (!token) { alert("Faça login para compartilhar."); return; }
     try {
       setEnviandoDM(true);
       await Promise.all(
@@ -251,9 +221,6 @@ export default function ProfileHeader({
       );
       alert("Perfil compartilhado por mensagem!");
       setModalAberto(false);
-    } catch (e) {
-      console.error(e);
-      alert("Falha ao enviar mensagens.");
     } finally {
       setEnviandoDM(false);
     }
@@ -267,18 +234,13 @@ export default function ProfileHeader({
   };
   const imageSrc = resolveImageSrc();
 
-  const alvoUsuarioId = isOwnProfile
-  ? (Storage.usuarioId as string)
-  : (idDaUrl as string);
+  const alvoUsuarioId = isOwnProfile ? (Storage.usuarioId as string) : (idDaUrl as string);
 
   useEffect(() => {
     if (!alvoUsuarioId) return;
     const token = Storage.token;
     if (!token) return;
-
-    fetch(`${API.BASE_URL}/api/favoritos`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    fetch(`${API.BASE_URL}/api/favoritos`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : [])
       .then((ids: string[]) => setEhFavorito(ids.includes(alvoUsuarioId)))
       .catch(() => {});
@@ -287,10 +249,7 @@ export default function ProfileHeader({
   async function toggleFavorito() {
     if (!alvoUsuarioId) return;
     const token = Storage.token;
-    if (!token) {
-      alert("Faça login para favoritar.");
-      return;
-    }
+    if (!token) { alert("Faça login para favoritar."); return; }
     await fetch(`${API.BASE_URL}/api/favoritos/${alvoUsuarioId}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
@@ -340,30 +299,42 @@ export default function ProfileHeader({
         </p>
       )}
 
+      {/* === ÁREA DINÂMICA: KPIs ou Pontuação === */}
       <div className="w-full mt-4">
-        <h2 className="footera-text-cream text-center mb-2">Pontuação FootEra</h2>
-        <div className="footera-bg-green border border-footera-cream rounded-lg p-3 flex justify-center">
-          <span className="footera-text-cream text-3xl font-bold">{pontosTotal} pts</span>
-        </div>
+        {kpis && kpis.length ? (
+          <div className="grid grid-cols-3 gap-3">
+            {kpis.map((k, i) => (
+              <div key={i} className="rounded-xl bg-white/15 border border-footera-cream/40 p-3 text-center">
+                <div className="footera-text-cream text-2xl font-bold">{k.value ?? 0}</div>
+                <div className="footera-text-cream/80 text-xs mt-1">{k.label}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <h2 className="footera-text-cream text-center mb-2">{scoreTitle}</h2>
+            <div className="footera-bg-green border border-footera-cream rounded-lg p-3 flex justify-center">
+              <span className="footera-text-cream text-3xl font-bold">{pontosTotal} pts</span>
+            </div>
+          </>
+        )}
       </div>
 
       {!isOwnProfile && (
         <div className="flex justify-center gap-4 mt-4 mb-2">
           <div className="flex justify-center mt-2">
-          <button
-            onClick={toggleFavorito}
-            className={`text-2xl  ${ehFavorito ? "text-yellow-500" : "text-gray-400"}`}
-            title={ehFavorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}
-          >
-            ★
-          </button>
-        </div>
+            <button
+              onClick={toggleFavorito}
+              className={`text-2xl  ${ehFavorito ? "text-yellow-500" : "text-gray-400"}`}
+              title={ehFavorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+            >
+              ★
+            </button>
+          </div>
           <button onClick={seguirUsuario} className="px-4 py-2 font-semibold bg-green-600 text-green-900  rounded-full">
             Seguir
           </button>
-          <button
-            onClick={iniciarChat} className="px-4 py-2 font-semibold bg-green-500 text-green-900 rounded-full"
-          >
+          <button onClick={iniciarChat} className="px-4 py-2 font-semibold bg-green-500 text-green-900 rounded-full">
             Enviar mensagem
           </button>
           <button onClick={solicitarTreino} className="px-4 py-2 font-semibold bg-green-400 text-green-900 rounded-full">
@@ -383,7 +354,6 @@ export default function ProfileHeader({
               Minha rede
             </Button>
           </Link>
-
           <Link href="/configuracoes">
             <Button variant="outline" className="w-full bg-white/10 hover:bg-white/20 text-white border-white/30">
               <Settings size={16} className="mr-2" />
@@ -392,6 +362,8 @@ export default function ProfileHeader({
           </Link>
         </div>
       )}
+
+      {/* Modal compartilhar */}
       {modalAberto && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
           <div className="bg-white p-6 rounded-xl w-96 shadow-lg relative">
@@ -450,10 +422,7 @@ export default function ProfileHeader({
               </button>
               <button
                 className="px-4 py-2 rounded bg-green-700 text-white"
-                onClick={async () => {
-                  try { await confirmBox.onYes(); }
-                  finally { setConfirmBox(null); }
-                }}
+                onClick={async () => { try { await confirmBox.onYes(); } finally { setConfirmBox(null); } }}
               >
                 Sim
               </button>
