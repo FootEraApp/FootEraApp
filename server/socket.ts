@@ -1,11 +1,11 @@
 import { Server } from "socket.io";
 import http from "http";
 
+let io: Server; 
+
 export function setupSocket(server: http.Server) {
-  const io = new Server(server, {
-    cors: {
-      origin: "*", 
-    },
+  io = new Server(server, {
+    cors: { origin: "*" },
   });
 
   io.on("connection", (socket) => {
@@ -35,5 +35,9 @@ export function setupSocket(server: http.Server) {
     });
   });
 
+  return io;
+}
+
+export function getIO() {
   return io;
 }

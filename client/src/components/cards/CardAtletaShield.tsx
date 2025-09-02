@@ -1,6 +1,6 @@
-// client/src/components/CardAtletaShield.tsx
-import React, { useState, useEffect } from "react";
-import { formatarUrlFoto } from "@/utils/formatarFoto";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { publicImgUrl } from "@/utils/publicUrl.js";
+import { API } from "@/config.js";
 
 const SHIELD_W_DESK = 150;
 const SHIELD_H_DESK = 210;
@@ -10,7 +10,7 @@ const SHIELD_PATH =
 export type CardAtletaShieldProps = {
   atleta: {
     id?: string;
-    atletaId: string;
+    atletaId?: string | null;
     nome: string;
     foto?: string | null;
     posicao?: string | null;
@@ -39,10 +39,21 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
 }) => {
   const W = size?.w ?? SHIELD_W_DESK;
   const H = size?.h ?? SHIELD_H_DESK;
-  const clipId = `shieldClip-${atleta.atletaId}`;
+  
+  const clipId = `shieldClip-${atleta.atletaId || atleta.id || atleta.nome || "x"}`;
+  const fotoUrl = useMemo(
+   () => publicImgUrl(atleta.foto) || `${API.BASE_URL}/assets/default-user.png`,
+   [atleta.foto]
+  );
+  const [imgOk, setImgOk] = useState(true);
+  const fotoResolved = imgOk ? fotoUrl : `${API.BASE_URL}/assets/default-user.png`;
+  const imgRef = useRef<SVGImageElement | null>(null);
 
-  // ✅ normaliza qualquer forma: /uploads, legado /assets/usuarios, url absoluta, blob, etc.
-  const fotoUrl = formatarUrlFoto(atleta.foto) || "/default-avatar.png";
+  useEffect(() => {
+    try {
+      imgRef.current?.setAttribute("referrerpolicy", "no-referrer");
+    } catch {}
+  }, []);
 
   const ovrShow = Number.isFinite(ovr) ? Math.round(Number(ovr)) : 0;
   const perfShow = Number.isFinite(perf) ? Math.round(Number(perf)) : 0;
@@ -110,14 +121,10 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!isDragging) return;
-    e.preventDefault();
     const touch = e.touches[0];
     const deltaX = touch.clientX - lastPos.x;
     const deltaY = touch.clientY - lastPos.y;
-    setRotation((prev) => ({
-      x: prev.x - deltaY / 5,
-      y: prev.y + deltaX / 5,
-    }));
+    setRotation(prev => ({ x: prev.x - deltaY / 5, y: prev.y + deltaX / 5 }));
     setLastPos({ x: touch.clientX, y: touch.clientY });
   };
 
@@ -126,10 +133,16 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
     setRotation({ x: 0, y: 0 });
   };
 
+  const isCrossOrigin =
+    typeof window !== "undefined" &&
+    !!fotoResolved &&
+    new URL(fotoResolved, window.location.href).origin !== window.location.origin;
+
   return (
     <div
       className={`cursor-grab select-none ${!isDragging ? "transition-transform duration-500 ease-out" : ""}`}
       style={{
+        touchAction: "none",              
         transform: `perspective(1000px) rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
         width: W,
         height: H,
@@ -174,7 +187,9 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
 
         <g clipPath={`url(#${clipId})`}>
           <image
-            href={fotoUrl}
+            ref={imgRef}
+            href={fotoResolved}
+            onError={() => setImgOk(false)}
             x="0"
             y="-10"
             width="184"
