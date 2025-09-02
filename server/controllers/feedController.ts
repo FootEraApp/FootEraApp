@@ -151,28 +151,60 @@ export const seguirUsuario: RequestHandler = async (req, res) => {
   res.sendStatus(201);
 };
 
+
 export const postar: RequestHandler = async (req, res) => {
   const usuarioId = req.userId;
   if (!usuarioId) return res.status(401).json({ message: "Usuário não autenticado." });
 
-  const { conteudo } = req.body;
-  const file = (req as any).file;
+  const { conteudo, descricao } = req.body as { conteudo?: string; descricao?: string };
+  const texto = (descricao && descricao.length ? descricao : conteudo) || "";
+  const file = (req as any).file as Express.Multer.File | undefined;
 
   try {
-    const postagem = await prisma.postagem.create({
-      data: {
-        conteudo,
-        usuarioId,
-        dataCriacao: new Date(),
-        tipoMidia: file ? (file.mimetype.startsWith("video") ? "Video" : "Imagem") as TipoMidia : undefined,
-        imagemUrl: file ? `/uploads/posts/${file.filename}` : undefined,
-      },
-    });
+    let tipoMidia: "Imagem" | "Video" | undefined = undefined;
+    let imagemUrl: string | undefined = undefined;
+    let videoUrl: string | undefined = undefined;
 
-    res.status(201).json(postagem);
+    if (file) {
+      if (file.mimetype.startsWith("video")) {
+        tipoMidia = "Video";
+        videoUrl = `/uploads/${file.filename}`;
+      } else {
+        tipoMidia = "Imagem";
+        imagemUrl = `/uploads/${file.filename}`;
+      }
+    }
+
+    if (!texto && !imagemUrl && !videoUrl) {
+      return res.status(400).json({ message: "Conteúdo ou mídia obrigatória." });
+    }
+
+    try {
+      const postagem = await prisma.postagem.create({
+        data: {
+          conteudo: texto,
+          usuarioId,
+          dataCriacao: new Date(),
+          tipoMidia,
+          imagemUrl,
+          videoUrl,
+        },
+      });
+
+      return res.status(201).json(postagem);
+    } catch (err: any) {
+      if (err?.code === "P2002") {
+        const existente = await prisma.postagem.findFirst({
+          where: { usuarioId, conteudo: texto },
+        });
+        if (existente) return res.status(200).json(existente);
+        return res.status(409).json({ message: "Você já postou esse mesmo conteúdo." });
+      }
+      throw err;
+    }
   } catch (error) {
     console.error("Erro ao postar:", error);
-    res.status(500).json({ message: "Erro interno." });
+    return res.status(500).json({ message: "Erro interno." });
   }
 };
 

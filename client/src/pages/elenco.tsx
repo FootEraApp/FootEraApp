@@ -176,14 +176,12 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
           <stop offset="100%" stopColor="#9fc5ff" />
         </linearGradient>
 
-        {/* overlay dourado por cima da foto */}
         <linearGradient id="goldOverlay" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%"  stopColor="#daa520" stopOpacity="0.45" />
           <stop offset="55%" stopColor="#daa520" stopOpacity="0.25" />
           <stop offset="100%" stopColor="#daa520" stopOpacity="0.10" />
         </linearGradient>
 
-        {/* shimmer que atravessa 100% da largura */}
         <linearGradient id="goldShimmer" gradientUnits="userSpaceOnUse" x1="-184" y1="0" x2="0" y2="0">
           <stop offset="0%"   stopColor="#ffffff" stopOpacity="0" />
           <stop offset="50%"  stopColor="#fff8dc" stopOpacity="0.35" />
@@ -201,7 +199,6 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
         </filter>
       </defs>
 
-      {/* Foto + overlays */}
       <g clipPath={`url(#${clipId})`}>
         <image href={fotoUrl} x="0" y="-10" width="184" height="280" preserveAspectRatio="xMidYMid slice" />
         <rect x="0" y="0" width="184" height="260" fill="url(#cardGrad)" />
@@ -213,16 +210,13 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
         )}
       </g>
 
-      {/* Molduras */}
       {golden && <path d={SHIELD_PATH} fill="none" stroke="#daa520" strokeWidth="3.5" filter="url(#goldGlow)" />}
       <path d={SHIELD_PATH} fill="none" stroke="url(#gold)" strokeWidth="3" />
       <path d={SHIELD_PATH} fill="none" stroke="#13244b" strokeWidth="1" />
 
-      {/* Topo: OVR e posição */}
       <text x="18" y="50" fontSize="28" fontWeight={800} fill="#F7D87C" style={{ textShadow: "0 1px 2px rgba(0,0,0,.35)" }}>{ovrShow}</text>
       <text x={184 - 18} y="50" textAnchor="end" fontSize="14" fontWeight={700} fill="#d8e6ff">{atleta.posicao ?? ""}</text>
 
-      {/* Subnotas */}
       <g>
         <rect x={24} y={160} rx="8" ry="8" width="44" height="28" fill="rgba(10,18,40,0.55)" stroke="#d7b46a" strokeWidth="0.6" />
         <text x={34} y={178} fontSize="12" fontWeight={800} fill="#F7D87C">P</text>
@@ -237,7 +231,6 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
         <text x={154} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{respShow}</text>
       </g>
 
-      {/* Nome */}
       <text x={92} y={204} textAnchor="middle" fontSize="13" fontWeight={700} fill="#ffffff">
         {atleta.nome?.toUpperCase()}
       </text>
@@ -691,7 +684,6 @@ export default function PaginaElenco() {
   return (
     <div className="flex flex-col md:flex-row h-screen bg-green-100">
       <DragDropContext onDragEnd={handleDragEnd}>
-        {/* Campo tático */}
         <div className="order-1 md:order-2 flex-1 flex flex-col items-center p-3 md:p-5">
           <div className="flex flex-wrap items-center gap-3 md:gap-4 mb-3 md:mb-5">
             <input
@@ -719,7 +711,6 @@ export default function PaginaElenco() {
             </button>
           </div>
 
-          {/* Área do campo com auto-fit */}
           <div
             ref={fieldBox.ref}
             className="w-full flex-1 rounded-2xl p-3 md:p-5 bg-gradient-to-b from-green-300 to-green-600 shadow-inner flex flex-col justify-between"
@@ -749,7 +740,6 @@ export default function PaginaElenco() {
           </div>
         </div>
 
-        {/* Lista de atletas (retangular) */}
         <div className={listaWrapperClasses}>
           <h2 className="text-base md:text-lg font-bold mb-2 md:mb-3">Atletas Vinculados</h2>
           <Droppable droppableId="atletas" type="ATLETA" direction={direction}>

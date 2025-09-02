@@ -8,6 +8,7 @@ import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto";
+import { publicImgUrl } from "@/utils/publicUrl.js";
 
 interface Usuario {
   id: string;
@@ -307,16 +308,14 @@ function PaginaFeed(): JSX.Element {
         const mostrarInput = mostrarInputPorPost[post.id] || false;
         const comentarioTexto = comentarioTextoPorPost[post.id] || "";
 
+        const imgSrc   = publicImgUrl(post.imagemUrl) ?? undefined;
+        const videoSrc = publicImgUrl(post.videoUrl)  ?? undefined;
         return (
           <div key={post.id} className="max-w-xl mx-auto bg-white rounded-2xl shadow-md p-4 space-y-3">
            <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <img
-                src={
-                  post.usuario.foto?.startsWith("http")
-                    ? post.usuario.foto
-                    : `${API.BASE_URL}${post.usuario.foto || "default-user.png"}`
-                }
+                src={publicImgUrl(post.usuario.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
                 alt="avatar"
                 className="w-10 h-10 rounded-full object-cover"
               />
@@ -341,33 +340,22 @@ function PaginaFeed(): JSX.Element {
             <div>
               <p className="text-gray-800 font-medium">{post.conteudo}</p>
 
-              {post.tipoMidia === "Imagem" && post.imagemUrl && (
+              {imgSrc && (
                 <img
-                  src={
-                    post.imagemUrl?.startsWith("http")
-                      ? post.imagemUrl
-                      : `${API.BASE_URL}${post.imagemUrl}`
-                  }
+                  src={imgSrc}
                   alt="Post"
                   className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
                 />
               )}
 
-              {post.tipoMidia === "Video" && post.videoUrl && (
+              {videoSrc && (
                 <video controls className="w-full mt-2 rounded-lg">
-                  <source
-                    src={
-                      post.videoUrl.startsWith("http")
-                        ? post.videoUrl
-                        : `${API.BASE_URL}${post.videoUrl}`
-                    }
-                    type="video/mp4"
-                  />
+                  <source src={videoSrc} type="video/mp4" />
                   Seu navegador não suporta vídeo.
                 </video>
               )}
-            </div>
 
+            </div>
             <div className="flex justify-between text-gray-600 mt-2 px-2">
               <button className="flex items-center gap-1" onClick={() => handleLike(post.id)}>
                 {jaCurtiu ? <FaHeart className="text-black" /> : <FaRegHeart />}{" "}
@@ -411,11 +399,7 @@ function PaginaFeed(): JSX.Element {
                     {post.comentarios.map((comentario) => (
                       <div key={comentario.id} className="flex gap-2 items-start">
                         <img
-                          src={
-                            comentario.usuario?.foto?.startsWith("http")
-                              ? comentario.usuario.foto
-                              : `${API.BASE_URL}${comentario.usuario?.foto || "default-user.png"}`
-                          }
+                          src={publicImgUrl(comentario.usuario?.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
                           alt="avatar"
                           className="w-8 h-8 rounded-full object-cover"
                         />
