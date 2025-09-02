@@ -115,6 +115,20 @@ function PaginaFeed(): JSX.Element {
     }
   };
 
+  const handleLogout = () => {
+    const keys = ["token", "usuarioId", "nomeUsuario", "tipoUsuario", "tipoUsuarioId"];
+    keys.forEach((k) => {
+      localStorage.removeItem(k);
+      sessionStorage.removeItem(k);
+    });
+
+    // Se seu helper Storage guardar algo, tente limpar (ignora se não existir)
+    try { (Storage as any)?.clear?.(); } catch {}
+
+    // redireciona para a página de login
+    window.location.href = "/login";
+  };
+
   const abrirModalComentarios = (post: PostagemComUsuario) => {
   setPostSelecionado(post);
   setComentariosModalAberto(true);
@@ -164,7 +178,17 @@ function PaginaFeed(): JSX.Element {
 
   return (
     <div className="px-4 py-6 space-y-6 pb-24">
-      <h1 className="text-2xl font-bold mb-4 text-center text-green-800">Feed de Postagens</h1>
+     <div className="relative mb-4">
+      <button
+        onClick={handleLogout}
+        className="absolute left-0 top-1 px-3 py-1 rounded border border-green-800 text-green-800 hover:bg-green-50"
+      >
+        Sair
+      </button>
+      <h1 className="text-2xl font-bold text-center text-green-800">
+        Feed de Postagens
+      </h1>
+    </div>
        <div className="flex gap-2 justify-center mb-4">
         {(["todos","seguindo","favoritos", "meus"] as const).map(f => (
           <button

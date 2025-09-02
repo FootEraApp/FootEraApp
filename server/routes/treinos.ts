@@ -90,8 +90,6 @@ return res.json(atletas);
   }
 });
 
-
-
 router.get("/", async (req, res) => {
   try {
     const treinosProgramados = await prisma.treinoProgramado.findMany({

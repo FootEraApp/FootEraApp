@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, TipoUsuario } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -8,6 +8,8 @@ export interface AuthenticatedRequest extends Request {
   userId?: string;
   tipoUsuarioId?: string;
   tipoUsuario?: string;
+  tipo?: TipoUsuario | string;
+  isAdmin?: boolean;
 }
 
 export const authenticateToken = async (
@@ -19,12 +21,13 @@ export const authenticateToken = async (
   if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ message: "Token não fornecido" });
   }
-  const token = authHeader.split(" ")[1];
+  const token = authHeader.slice(7);
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "defaultsecret") as {
-      id: string; tipo: string;
-    };
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "defaultsecret"
+    ) as { id: string; tipo?: string };
 
     const usuario = await prisma.usuario.findUnique({
       where: { id: decoded.id },
@@ -37,6 +40,9 @@ export const authenticateToken = async (
     else if (usuario.professor) { req.tipoUsuario = "professor"; req.tipoUsuarioId = usuario.professor.id; }
     else if (usuario.clube) { req.tipoUsuario = "clube"; req.tipoUsuarioId = usuario.clube.id; }
     else if (usuario.escolinha) { req.tipoUsuario = "escolinha"; req.tipoUsuarioId = usuario.escolinha.id; }
+
+    req.tipo = usuario.tipo;                   
+    req.isAdmin = usuario.tipo === "Admin";      
 
     next();
   } catch {
