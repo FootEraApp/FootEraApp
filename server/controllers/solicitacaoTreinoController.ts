@@ -1,3 +1,4 @@
+// server/controllers/solicitacaoTreinoController
 import { Response, Request } from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateToken } from "../middlewares/auth.js"; 
@@ -82,36 +83,74 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
       return res.status(404).json({ error: "Solicitação não encontrada" });
     }
 
-    const remetente = await prisma.usuario.findUnique({
-      where: { id: solicitacao.remetenteId },
-      select: { tipo: true },
-    });
-    const destinatario = await prisma.usuario.findUnique({
-      where: { id: solicitacao.destinatarioId },
-      select: { tipo: true },
-    });
+    const [remetente, destinatario] = await Promise.all([
+      prisma.usuario.findUnique({ where: { id: solicitacao.remetenteId }, select: { tipo: true } }),
+      prisma.usuario.findUnique({ where: { id: solicitacao.destinatarioId }, select: { tipo: true } }),
+    ]);
 
-    let professorId: string | undefined;
-    let atletaId: string | undefined;
+    // helpers para obter o id da tabela por tipo
+    async function getIdsByTipo(usuarioId: string, tipo?: string) {
+      switch (tipo) {
+        case "Professor": {
+          const r = await prisma.professor.findUnique({ where: { usuarioId } });
+          return { professorId: r?.id };
+        }
+        case "Atleta": {
+          const r = await prisma.atleta.findUnique({ where: { usuarioId } });
+          return { atletaId: r?.id };
+        }
+        case "Escolinha": {
+          // ajuste o nome do model se no seu schema for "escola" em vez de "escolinha"
+          const r = await prisma.escolinha.findUnique({ where: { usuarioId } });
+          return { escolinhaId: r?.id };
+        }
+        case "Clube": {
+          const r = await prisma.clube.findUnique({ where: { usuarioId } });
+          return { clubeId: r?.id };
+        }
+        default:
+          return {};
+      }
+    }
 
-    if (remetente?.tipo === "Professor" && destinatario?.tipo === "Atleta") {
-      const professor = await prisma.professor.findUnique({ where: { usuarioId: solicitacao.remetenteId } });
-      const atleta = await prisma.atleta.findUnique({ where: { usuarioId: solicitacao.destinatarioId } });
-      if (!professor || !atleta) return res.status(400).json({ error: "Professor ou atleta não encontrado." });
-      professorId = professor.id; atletaId = atleta.id;
-    } else if (remetente?.tipo === "Atleta" && destinatario?.tipo === "Professor") {
-      const atleta = await prisma.atleta.findUnique({ where: { usuarioId: solicitacao.remetenteId } });
-      const professor = await prisma.professor.findUnique({ where: { usuarioId: solicitacao.destinatarioId } });
-      if (!professor || !atleta) return res.status(400).json({ error: "Professor ou atleta não encontrado." });
-      professorId = professor.id; atletaId = atleta.id;
-    } else {
+    // combina remetente + destinatário
+    const idsRem = await getIdsByTipo(solicitacao.remetenteId, remetente?.tipo);
+    const idsDes = await getIdsByTipo(solicitacao.destinatarioId, destinatario?.tipo);
+    const ids = { ...idsRem, ...idsDes } as {
+      professorId?: string; escolinhaId?: string; clubeId?: string; atletaId?: string;
+    };
+
+    // validação: precisa ter 1 dono (professor/escolinha/clube) + 1 atleta
+    const donos = ["professorId", "escolinhaId", "clubeId"].filter(k => (ids as any)[k]);
+    if (!ids.atletaId || donos.length !== 1) {
       return res.status(400).json({ error: "Tipos de usuário inválidos para relação." });
     }
 
-    await prisma.relacaoTreinamento.create({ data: { professorId, atletaId } });
+    // evita duplicidade do vínculo
+    const existente = await prisma.relacaoTreinamento.findFirst({
+      where: {
+        atletaId: ids.atletaId!,
+        ...(ids.professorId ? { professorId: ids.professorId } : {}),
+        ...(ids.escolinhaId ? { escolinhaId: ids.escolinhaId } : {}),
+        ...(ids.clubeId ? { clubeId: ids.clubeId } : {}),
+      },
+    });
+
+    if (!existente) {
+      await prisma.relacaoTreinamento.create({
+        data: {
+          atletaId: ids.atletaId!,
+          professorId: ids.professorId ?? null,
+          escolinhaId: ids.escolinhaId ?? null,
+          clubeId: ids.clubeId ?? null,
+        },
+      });
+    }
+
+    // remove a solicitação (concluída)
     await prisma.solicitacaoTreino.delete({ where: { id } });
 
-    return res.json({ message: "Solicitação aceita com sucesso." });
+    return res.json({ message: existente ? "Relação já existia. Solicitação removida." : "Solicitação aceita com sucesso." });
   } catch (error) {
     console.error("Erro ao aceitar solicitação:", error);
     return res.status(500).json({ error: "Erro interno do servidor" });

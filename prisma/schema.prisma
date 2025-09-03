@@ -78,6 +78,7 @@ model Professor {
 
   treinosProgramados  TreinoProgramado[]
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoProfessor")
+  observacoes AtletaObservado[] @relation("ObservacaoProfessor")
 }
 
 model Amigo {
@@ -159,6 +160,7 @@ model Atleta {
   Ranking             Ranking?
   SubmissaoTreino     SubmissaoTreino[]
   relacoesTreinamento RelacaoTreinamento[]       @relation("RelacaoAtleta")
+  observadores AtletaObservado[] @relation("ObservacaoAtleta")
   treinosRecebidos    TreinoProgramadoRecebido[]
   mensagens           Mensagem[]                 @relation("AtletaMensagens")
   EstatisticaAtleta   EstatisticaAtleta[]
@@ -267,6 +269,30 @@ model RelacaoTreinamento {
   @@unique([professorId, atletaId, escolinhaId, clubeId])
 }
 
+model AtletaObservado {
+  id           String   @id @default(uuid())
+
+  professorId  String?
+  escolinhaId  String?
+  clubeId      String?
+  atletaId     String
+
+  professor    Professor? @relation("ObservacaoProfessor", fields: [professorId], references: [id])
+  escolinha    Escolinha? @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id])
+  clube        Clube?     @relation("ObservacaoClube", fields: [clubeId], references: [id])
+  atleta       Atleta     @relation("ObservacaoAtleta", fields: [atletaId], references: [id])
+
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  @@unique([professorId, escolinhaId, clubeId, atletaId])
+
+  @@index([atletaId])
+  @@index([professorId])
+  @@index([escolinhaId])
+  @@index([clubeId])
+}
+
 model Postagem {
   id          String     @id @default(uuid())
   conteudo    String     @unique
@@ -347,6 +373,7 @@ model Escolinha {
   postagens           Postagem[]
   treinoProgramado    TreinoProgramado[]
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoEscolinha")
+  observacoes AtletaObservado[] @relation("ObservacaoEscolinha")
 }
 
 model Comentario {
@@ -395,6 +422,7 @@ model Clube {
   midias              Midia[]
   postagens           Postagem[]
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoClube")
+  observacoes AtletaObservado[] @relation("ObservacaoClube")
   treinoProgramado    TreinoProgramado[]
 }
 
