@@ -268,12 +268,14 @@ model RelacaoTreinamento {
 }
 
 model Postagem {
-  id          String     @id @default(uuid())
-  conteudo    String     @unique
-  imagemUrl   String?
-  videoUrl    String?
-  tipoMidia   TipoMidia?
-  dataCriacao DateTime   @default(now())
+  id            String     @id @default(uuid())
+  conteudo      String     @unique
+  imagemUrl     String?
+  videoUrl      String?
+  tipoMidia     TipoMidia?
+  dataCriacao   DateTime   @default(now())
+  reportedCount Int        @default(0)
+  oculto        Boolean    @default(false)
 
   usuarioId String
   usuario   Usuario @relation(fields: [usuarioId], references: [id])
@@ -350,13 +352,15 @@ model Escolinha {
 }
 
 model Comentario {
-  id          String   @id @default(uuid())
-  conteudo    String
-  dataCriacao DateTime @default(now())
-  usuarioId   String
-  postagemId  String
-  postagem    Postagem @relation(fields: [postagemId], references: [id])
-  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+  id            String   @id @default(uuid())
+  conteudo      String
+  dataCriacao   DateTime @default(now())
+  reportedCount Int      @default(0)
+  oculto        Boolean  @default(false)
+  usuarioId     String
+  postagemId    String
+  postagem      Postagem @relation(fields: [postagemId], references: [id])
+  usuario       Usuario  @relation(fields: [usuarioId], references: [id])
 }
 
 model Clube {

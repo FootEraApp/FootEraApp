@@ -12,32 +12,68 @@ const EditarPerfil = () => {
   const [dadosUsuario, setDadosUsuario] = useState<any>(null);
   const [dadosTipo, setDadosTipo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchDados = async () => {
-      try {
-        const res = await axios.get(`${API.BASE_URL}/api/perfil/${usuarioId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+  console.log("[EditarPerfil] init", {
+    usuarioId,
+    tipoUsuario,
+    hasToken: !!token,
+    baseUrl: API.BASE_URL,
+  });
 
-        setDadosUsuario(res.data.usuario);
-        setDadosTipo(res.data.dadosEspecificos);
-        setLoading(false);
-      } catch (err) {
-        console.error('Erro ao buscar dados:', err);
-        setLoading(false);
-      }
-    };
-
-    if (usuarioId && token) {
-      fetchDados();
-    }
-  }, [usuarioId, token]);
-
-  if (loading) {
-    return <div className="text-center text-gray-600 mt-10">Carregando perfil...</div>;
+  if (!usuarioId || !token) {
+    console.error("[EditarPerfil] Sem usuarioId ou token — verifique login.");
+    setErro("Sessão expirada. Faça login novamente.");
+    setLoading(false);
+    return;
   }
 
+  const fetchDados = async () => {
+    try {
+      const res = await axios.get(`${API.BASE_URL}/api/perfil/${usuarioId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      console.log("[EditarPerfil] GET /api/perfil/:id resposta", {
+        status: res.status,
+        data: res.data,
+      });
+
+      // valida formato do payload esperado
+      if (!res?.data?.usuario || !res?.data?.dadosEspecificos) {
+        console.warn("[EditarPerfil] Payload inesperado", res?.data);
+        setErro("Perfil não encontrado ou resposta inválida do servidor.");
+        return;
+      }
+
+      setDadosUsuario(res.data.usuario);
+      setDadosTipo(res.data.dadosEspecificos);
+    } catch (err: any) {
+      console.error("[EditarPerfil] Erro ao buscar dados", {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      });
+      if (err?.response?.status === 401) {
+        setErro("Não autorizado. Faça login novamente.");
+      } else {
+        setErro("Erro ao buscar dados do perfil.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchDados();
+}, [usuarioId, token]);
+
+  if (loading) {
+   return <div className="text-center text-gray-600 mt-10">Carregando perfil...</div>;
+  }
+  if (erro) {
+    return <div className="text-center text-red-600 mt-10">{erro}</div>;
+  }
   if (!dadosUsuario || !dadosTipo) {
     return <div className="text-center text-red-600 mt-10">Erro ao carregar o perfil.</div>;
   }
@@ -223,6 +259,12 @@ const EditarPerfil = () => {
                 tipo.certificacoes = tipo.certificacoes.split(',').map((c: string) => c.trim());
               }
             }
+
+            console.log("[EditarPerfil] Enviando PUT /api/perfil/:id", {
+              usuarioId,
+              tipoUsuario,
+              bodyPreview: { usuario: { ...dadosUsuario, foto: typeof dadosUsuario.foto === "string" ? dadosUsuario.foto : "__ARQUIVO__" }, tipo: dadosTipo },
+            });
 
             await axios.put(
               `${API.BASE_URL}/api/perfil/${usuarioId}`,

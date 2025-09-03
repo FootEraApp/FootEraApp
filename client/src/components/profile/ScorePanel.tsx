@@ -16,11 +16,10 @@ export default function ScorePanel({
   responsabilidade,
 }: ScorePanelProps) {
   const [matched, params] = useRoute<{ id?: string }>("/perfil/:id");
-  const me =
-    (Storage?.usuarioId as string | undefined) ??
-    (typeof window !== "undefined" ? Storage.token ?? "" : "");
-  const targetId = (matched && params?.id) ? params.id! : me;
-  const isOwn = !matched || (params?.id === me);
+
+  const me = String(Storage?.usuarioId ?? "");
+  const targetId = matched && params?.id ? params.id! : me;
+  const isOwn = !matched || params?.id === me; // mantém só pra navegação da UI
 
   const [vals, setVals] = useState({
     performance: performance ?? 0,
@@ -28,6 +27,7 @@ export default function ScorePanel({
     responsabilidade: responsabilidade ?? 0,
   });
 
+  // props -> estado
   useEffect(() => {
     setVals({
       performance: performance ?? 0,
@@ -36,22 +36,26 @@ export default function ScorePanel({
     });
   }, [performance, disciplina, responsabilidade]);
 
+  // API -> estado (sempre /perfil/:id/pontuacao)
   useEffect(() => {
     if (!targetId) return;
     const token = Storage?.token || "";
-    fetch(`${API.BASE_URL}/api/perfil/pontuacao/${encodeURIComponent(targetId)}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!data) return;
-        setVals({
-          performance: Number(data.performance) || 0,
-          disciplina: Number(data.disciplina) || 0,
-          responsabilidade: Number(data.responsabilidade) || 0,
+    const url = `${API.BASE_URL}/api/perfil/${encodeURIComponent(targetId)}/pontuacao`;
+
+    (async () => {
+      try {
+        const r = await fetch(url, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
-      })
-      .catch(() => {});
+        if (!r.ok) return; // 404/401/etc -> mantém valores atuais
+        const data = await r.json();
+        setVals({
+          performance: Number(data?.performance) || 0,
+          disciplina: Number(data?.disciplina) || 0,
+          responsabilidade: Number(data?.responsabilidade) || 0,
+        });
+      } catch {}
+    })();
   }, [targetId]);
 
   const hrefPontuacao = isOwn ? "/perfil/pontuacao" : `/perfil/${targetId}/pontuacao`;

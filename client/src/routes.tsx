@@ -84,14 +84,14 @@ export function AppRoutes() {
       <Route path="/minha-rede"><Private><PaginaMinhaRede /></Private></Route>
       <Route path="/treinos/novo"><PaginaNovoTreino /></Route>
       <Route path="/trainings"><PaginaTraining /></Route>
-      <Route path="/perfil/editar"><PaginaEditarPerfil /></Route>
+      <Route path="/perfil/editar"><Private><PaginaEditarPerfil /></Private></Route>
       <Route path="/configuracoes"><PaginaConfiguracoesPerfil /></Route>
-      <Route path="/perfil/pontuacao"><PaginaPontuacaoPerfil /></Route>
-      <Route path="/perfil/:id/pontuacao"><PaginaPontuacaoDePerfil /></Route>
+      <Route path="/perfil/pontuacao"><Private><PaginaPontuacaoPerfil /></Private></Route>
+      <Route path="/perfil/:id/pontuacao"><Private><PaginaPontuacaoDePerfil /></Private></Route>
       <Route path="/notificacoes"><PaginaNotificacoes /></Route>
       <Route path="/submissao"><PaginaSubmissao /></Route>
       <Route path="/submissao/grupo/:grupoId/:desafioId"><PaginaSubmissaoDesafioEmGrupo /></Route>
-
+      <Route path="/mensagens"><PaginaMensagens /></Route>
       <Route path="/"><HomeRedirect /></Route>
       <Route><div style={{ padding: 16 }}>Página não encontrada</div></Route>
     </Switch>

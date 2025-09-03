@@ -11,6 +11,7 @@ import qrcode from "qrcode-terminal";
 import { APP } from "./config.js";
 
 import adminRoutes from "./routes/admin.js";
+import adminModeracaoRoutes from "./routes/adminModeracao.js";
 import atletaRoutes from "./routes/atleta.js";
 import authRoutes from "./routes/auth.js";
 import amigosRoutes from "./routes/amigos.js";
@@ -104,6 +105,7 @@ app.use("/api/treinoslivres", treinoLivreRoutes);
 app.use("/api/treinosprogramados", treinoProgramadoRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
+app.use(adminModeracaoRoutes);
 
 const ROOT = process.cwd();
 

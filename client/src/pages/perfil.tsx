@@ -47,38 +47,56 @@ export default function ProfilePage() {
     if (!token) return;
 
     (async () => {
-      setLoading(true);
+     setLoading(true);
       try {
-        const [{ data: meOuOutro }, { data: atividades }, { data: badgesData }] = await Promise.all([
-          axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}`, { headers }),
-          axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}/atividades`, { headers }),
-          axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}/badges`, { headers }),
-        ]);
+        // 1) Perfil + atividades + badges
+        const [{ data: meOuOutro }, { data: atividades }, { data: badgesData }] =
+          await Promise.all([
+            axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}`, { headers }),
+            axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}/atividades`, { headers }),
+            axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}/badges`, { headers }),
+          ]);
 
         setPerfil(meOuOutro);
+
         const uid = (meOuOutro?.usuario?.id as string) || alvoUsuarioId || null;
         setUsuarioId(uid);
 
         setActivities((atividades || []).map((a: any) => ({
-          id: a.id, tipo: a.tipo, imagemUrl: a.imagemUrl || "", nome: a.nome || a.tipo,
+          id: a.id,
+          tipo: a.tipo,
+          imagemUrl: a.imagemUrl || "",
+          nome: a.nome || a.tipo,
         })));
         setBadges(badgesData || []);
 
+        // 2) Pontuação — APENAS UMA CHAMADA, com rota correta e tratando 404
         if (uid) {
-          const { data: p } = await axios.get(
-            `${API.BASE_URL}/api/perfil/pontuacao/${uid}`,
-            { headers }
-          );
-          const performance = Number(p?.performance) || 0;
-          const disciplina = Number(p?.disciplina) || 0;
-          const responsabilidade = Number(p?.responsabilidade) || 0;
+          const relPont = `/api/perfil/${encodeURIComponent(uid)}/pontuacao`;
 
-          setPontuacao({
-            pontuacaoTotal: performance + disciplina + responsabilidade,
-            pontuacaoPerformance: performance,
-            pontuacaoDisciplina: disciplina,
-            pontuacaoResponsabilidade: responsabilidade,
+          const respPont = await axios.get(`${API.BASE_URL}${relPont}`, {
+            headers,
+            validateStatus: () => true, // não joga 404 no catch
           });
+
+          if (respPont.status === 200) {
+            const p = respPont.data;
+            const performance = Number(p?.performance) || 0;
+            const disciplina  = Number(p?.disciplina)  || 0;
+            const responsab   = Number(p?.responsabilidade) || 0;
+
+            setPontuacao({
+              pontuacaoTotal: performance + disciplina + responsab,
+              pontuacaoPerformance: performance,
+              pontuacaoDisciplina: disciplina,
+              pontuacaoResponsabilidade: responsab,
+            });
+          } else if (respPont.status === 404) {
+            setPontuacao(null); // sem pontos ainda; não quebra a tela
+          } else {
+            console.warn("Falha ao buscar pontuação:", respPont.status, respPont.data);
+            setPontuacao(null);
+          }
         } else {
           setPontuacao(null);
         }
@@ -88,6 +106,7 @@ export default function ProfilePage() {
       } finally {
         setLoading(false);
       }
+
     })();
 
   }, [idDaUrl, token]);
