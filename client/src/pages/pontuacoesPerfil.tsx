@@ -7,6 +7,7 @@ import { API } from "../config.js";
 import CardAtletaShield from "../components/cards/CardAtletaShield.js";
 import * as htmlToImage from "html-to-image";
 import { publicImgUrl } from "@/utils/publicUrl.js";
+import api from "@/lib/api.js";
 
 type PerfilResp = {
   tipo: "Atleta" | "Professor" | "Escolinha" | "Clube" | null;
@@ -42,8 +43,6 @@ type PosicaoAtualResp = {
   numeroCamisa?: number | null;
   updatedAt?: string | null;
 };
-
-const api = axios.create({ baseURL: API.BASE_URL || "http://localhost:3001" });
 
 const readToken = () => {
   const t1 = (Storage as any)?.token;
@@ -84,7 +83,7 @@ api.interceptors.response.use(
 );
 
 async function safeGet<T>(url: string, signal?: AbortSignal): Promise<T | null> {
-  const res = await api.get<T>(url, { signal: signal as any, validateStatus: () => true });
+  const res = await api.get<T>(url, { signal: signal as any, validateStatus: () => true, timeout: 10000, });
   if (res.status === 200) return res.data;
   if (res.status === 404) return null;
   if (res.status === 401) throw Object.assign(new Error("401"), { code: 401 });
@@ -157,105 +156,127 @@ export default function PontuacaoDetalhada() {
 }
 
   useEffect(() => {
-    const token = readToken();
+  const token = readToken();
 
-    if (!token) {
-      setLoading(false);
-      setLocation("/login");
-      return;
-    }
+  if (!token) {
+    setLoading(false);
+    setLocation("/login");
+    return;
+  }
 
-    if (!targetUserId) {
-      setLoading(false);
-      setErro("Não foi possível identificar o usuário.");
-      return;
-    }
+  const rawUid = (Storage as any)?.usuarioId;
+  const selfUid = !rawUid || rawUid === "null" || rawUid === "undefined" ? null : String(rawUid);
+  const targetUid: string | null = (matchedWithId && params?.id) ? params.id : selfUid;
 
-    setLoading(true);
-    setErro(null);
-    const controller = new AbortController();
+  if (!targetUid) {
+    setLoading(false);
+    setErro("Não foi possível identificar o usuário.");
+    return;
+  }
 
-    (async () => {
-      try {
-        const perfilResp = await safeGet<PerfilResp>(`/api/perfil/${encodeURIComponent(targetUserId)}`, controller.signal);
-        const nomeBase = perfilResp?.usuario?.nome ?? "";
-        const fotoBase = perfilResp?.usuario?.foto ?? null;
-        const tipo = perfilResp?.tipo ?? null;
+  setLoading(true);
+  setErro(null);
+  const controller = new AbortController();
 
-        let atletaId: string | null = null;
-        let posicaoPerfil: string | null = null;
-        let foto: string | null | undefined = fotoBase;
+  (async () => {
+    try {
+      const perfilResp = await safeGet<PerfilResp>(
+        `/api/perfil/${encodeURIComponent(targetUid)}`,
+        controller.signal
+      );
+      const nomeBase = perfilResp?.usuario?.nome ?? "";
+      const fotoBase = perfilResp?.usuario?.foto ?? null;
+      const tipo = perfilResp?.tipo ?? null;
 
-        if (tipo === "Atleta" && perfilResp?.dadosEspecificos) {
-          posicaoPerfil = perfilResp.dadosEspecificos.posicao ?? null;
-          if (perfilResp.dadosEspecificos.foto) {
-            foto = perfilResp.dadosEspecificos.foto;
-          }
+      let atletaId: string | null = null;
+      let posicaoPerfil: string | null = null;
+      let foto: string | null | undefined = fotoBase;
+
+      if (tipo === "Atleta" && perfilResp?.dadosEspecificos) {
+        posicaoPerfil = perfilResp.dadosEspecificos.posicao ?? null;
+        if (perfilResp.dadosEspecificos.foto) {
+          foto = perfilResp.dadosEspecificos.foto;
         }
-
-        const posAtual = await safeGet<PosicaoAtualResp>(
-          targetUserId === Storage.usuarioId
-            ? `/api/perfil/me/posicao-atual`
-            : `/api/perfil/${encodeURIComponent(targetUserId)}/posicao-atual`,
-          controller.signal
-        );
-        let posicaoVigente: string | null | undefined = undefined;
-        if (posAtual) {
-          posicaoVigente = posAtual.posicao ?? null;
-          if (!atletaId && posAtual.atletaId) {
-            atletaId = posAtual.atletaId;
-          }
-        }
-
-        const fotoAbs = fixFotoPath(foto) ?? publicImgUrl(foto);
-
-        setPerfil({
-          atletaId,
-          nome: nomeBase,
-          foto: fotoAbs,
-          posicao: posicaoVigente ?? posicaoPerfil ?? undefined,
-        });
-
-        const wire = await safeGet<PontuacaoWire>(
-          `/api/perfil/pontuacao/${encodeURIComponent(targetUserId)}`,
-          controller.signal
-        );
-
-        const perf = Number(wire?.performance ?? 0);
-        const disc = Number(wire?.disciplina ?? 0);
-        const resp = Number(wire?.responsabilidade ?? 0);
-        const total = perf + disc + resp;
-        const mediaGeral = Math.round(total / 3);
-
-        setPontos({
-          atletaId,
-          total,
-          performance: perf,
-          disciplina: disc,
-          responsabilidade: resp,
-          mediaGeral,
-          ultimaAtualizacao: wire?.ultimaAtualizacao || new Date().toISOString(),
-        });
-
-        setHistorico(Array.isArray(wire?.historico) ? wire!.historico! : []);
-        setVideos(Array.isArray(wire?.videos) ? wire!.videos! : []);
-      } catch (err: any) {
-        if (!axios.isCancel(err)) {
-          console.error("Erro ao carregar perfil/pontuação:", err);
-          if (err?.code === 401 || (axios.isAxiosError(err) && err.response?.status === 401)) {
-            setErro("Sua sessão expirou. Faça login novamente.");
-            setLocation("/login");
-          } else {
-            setErro("Não foi possível carregar seu perfil agora. Tente novamente mais tarde.");
-          }
-        }
-      } finally {
-        setLoading(false);
       }
-    })();
 
-    return () => controller.abort();
-  }, [targetUserId, setLocation]);
+      // defina uma flag: é o próprio usuário?
+      const isMe = String(targetUid) === String((Storage as any)?.usuarioId);
+
+      // POSIÇÃO ATUAL (mantém /me quando for você mesmo)
+      const posUrl = isMe
+        ? `/api/perfil/me/posicao-atual`
+        : `/api/perfil/${encodeURIComponent(targetUid)}/posicao-atual`;
+
+      console.log("[PosicaoAtual] GET:", posUrl);
+      const posAtual = await safeGet<PosicaoAtualResp>(posUrl, controller.signal);
+
+      // PONTUAÇÃO (use /me quando for você mesmo)
+      const pontuacaoUrl = isMe
+        ? `/api/perfil/me/pontuacao`
+        : `/api/perfil/${encodeURIComponent(targetUid)}/pontuacao`;
+
+      console.log("[Pontuacao] GET:", pontuacaoUrl);
+      const wire = await safeGet<PontuacaoWire>(pontuacaoUrl, controller.signal);
+      console.log("[Pontuacao] RES:", wire);
+
+
+      let posicaoVigente: string | null | undefined = undefined;
+      if (posAtual) {
+        posicaoVigente = posAtual.posicao ?? null;
+        if (!atletaId && posAtual.atletaId) {
+          atletaId = posAtual.atletaId;
+        }
+      }
+
+      const fotoAbs = publicImgUrl(foto) ?? fixFotoPath(foto);
+
+      setPerfil({
+        atletaId,
+        nome: nomeBase,
+        foto: fotoAbs,
+        posicao: posicaoVigente ?? posicaoPerfil ?? undefined,
+      });
+
+      const perf = Number(wire?.performance ?? 0);
+      const disc = Number(wire?.disciplina ?? 0);
+      const resp = Number(wire?.responsabilidade ?? 0);
+      const total = perf + disc + resp;
+      const mediaGeral = Math.round(total / 3);
+
+      setPontos({
+        atletaId,
+        total,
+        performance: perf,
+        disciplina: disc,
+        responsabilidade: resp,
+        mediaGeral,
+        ultimaAtualizacao: wire?.ultimaAtualizacao || new Date().toISOString(),
+      });
+
+      setHistorico(Array.isArray(wire?.historico) ? wire!.historico! : []);
+      setVideos(Array.isArray(wire?.videos) ? wire!.videos! : []);
+    } catch (err: any) {
+      console.error("[PontuacaoDetalhada] Falha geral", {
+        msg: err?.message,
+        code: err?.code,
+        status: err?.response?.status,
+        data: err?.response?.data,
+      });
+      if (!axios.isCancel(err)) {
+        if (err?.code === 401 || (axios.isAxiosError(err) && err.response?.status === 401)) {
+          setErro("Sua sessão expirou. Faça login novamente.");
+          setLocation("/login");
+        } else {
+          setErro("Não foi possível carregar seu perfil agora. Tente novamente mais tarde.");
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  })();
+
+  return () => controller.abort();
+}, [matchedWithId, params?.id, setLocation]);
 
   useEffect(() => {
     if (!loading && typeof window !== "undefined" && window.location.hash === "#detalhes") {

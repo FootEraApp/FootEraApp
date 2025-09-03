@@ -8,7 +8,8 @@ type Tab =
   | "treinos"
   | "professores"
   | "desafios"
-  | "configuracoes";
+  | "configuracoes"
+  | "moderacao";
 
 interface Treinos {
   id: string;
@@ -23,7 +24,7 @@ type UsuarioTipo = "" | "atleta" | "escola" | "clube" | "professor" | "admin";
 const tipoToServer: Record<UsuarioTipo, string> = {
   "": "",
   atleta: "Atleta",
-  escola: "Escolinha",  // << importante!
+  escola: "Escolinha", 
   clube: "Clube",
   professor: "Professor",
   admin: "Admin",
@@ -39,6 +40,8 @@ interface UsuarioAdmin {
   criadoEm?: string;      
   verificado?: boolean;
   destaque?: boolean;
+  ultimaAtividade?: string | null;
+  ultimaAtividadeNome?: string | null;
 }
 
 interface UsuarioDetalhe extends UsuarioAdmin {
@@ -47,16 +50,18 @@ interface UsuarioDetalhe extends UsuarioAdmin {
   dataNascimento?: string | null; 
   endereco?: string | null;
   ultimaAtividade?: string | null;  
+  ultimaAtividadeNome?: string | null;
   status?: "ativo" | "banido" | "pendente";
   contagens?: { posts?: number; comentarios?: number; seguidores?: number };
   camposCadastro?: Record<string, any>;
+  posicaoCampo?: string | null;
+  totalVinculados?: number | null;
 }
 
 const USERS_ENDPOINT = [
   `${API.BASE_URL}/api/admin/usuarios`,
   `${API.BASE_URL}/api/usuarios`, 
 ];
-
 
 function getToken() {
   return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
@@ -65,6 +70,15 @@ function authHeaders(extra: Record<string, string> = {}) {
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}`, ...extra } : { ...extra };
 }
+
+type ModeracaoItem = {
+  id: string;
+  criadoEm: string;
+  videoUrl?: string | null;
+  observacao?: string | null;
+  atleta: { id: string | null; nome: string; foto: string | null };
+  desafio: { id: string | null; titulo: string; pontuacao: number };
+};
 
 export default function AdminDashboard() {
   const [aba, setAba] = useState<Tab>("dashboard");
@@ -93,7 +107,16 @@ export default function AdminDashboard() {
   const [erroUsuarios, setErroUsuarios] = useState<string>("");
   const [usersBase, setUsersBase] = useState<string>(USERS_ENDPOINT[0]);
 
-   useEffect(() => {
+  const [modPendentes, setModPendentes] = useState<ModeracaoItem[]>([]);
+  const [modTotal, setModTotal] = useState(0);                           
+  const [modPage, setModPage] = useState(1);                            
+  const modPageSize = 20;                                                
+  const [modLoading, setModLoading] = useState(false);
+  
+  const [modStatus, setModStatus] =
+  useState<"pendente"|"aprovado"|"invalido"|"todos">("pendente");
+
+  useEffect(() => {
     const h = setTimeout(() => setDebouncedQ(q.trim()), 400);
     return () => clearTimeout(h);
   }, [q]);
@@ -124,15 +147,73 @@ export default function AdminDashboard() {
   }, [aba, tipoFiltro, debouncedQ]);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${API.BASE_URL}/api/treinos`, { headers: authHeaders() });
-        const json = await res.json();
-        const arr = Array.isArray(json) ? json : (json.items ?? json.data ?? json.treinos ?? []);
-        setTreinos(arr);
-      } catch (e) { console.error(e); setTreinos([]); }
-    })();
-  }, []);
+  (async () => {
+    try {
+      const res = await fetch(`${API.BASE_URL}/api/treinos`, { headers: authHeaders() });
+      const json = await res.json();
+
+      const arr =
+        Array.isArray(json)
+          ? json
+          : (json.items ??
+             json.data ??
+             json.treinos ??
+             json.treinosProgramados ??
+             json.rows ??
+             json.result ??
+             []);
+
+      setTreinos(Array.isArray(arr) ? arr : []);
+    } catch (e) {
+      console.error("Falha ao carregar treinos:", e);
+      setTreinos([]);
+    }
+  })();
+}, []);
+
+  useEffect(() => {
+  if (aba !== "moderacao") return;                     
+  carregarPendentes(1).catch(() => {});              
+}, [aba]);                                          
+
+async function carregarPendentes(page: number) {
+  setModLoading(true);
+  try {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("pageSize", String(modPageSize));
+    params.set("status", modStatus);
+    const res = await fetch(`${API.BASE_URL}/api/admin/moderacao/desafios?${params}`, {
+      headers: authHeaders(),
+    });
+    const json = await res.json();
+    setModPendentes(Array.isArray(json.items) ? json.items : []);
+    setModTotal(json.total ?? 0);
+    setModPage(page);
+  } finally { setModLoading(false); }
+}
+
+async function aprovarDesafio(id: string) {         
+  const txt = prompt("Ajuste de pontuação (opcional). Deixe vazio para usar a pontuação do desafio:");
+  const ajuste = txt ? Number(txt) : undefined;
+  await fetch(`${API.BASE_URL}/api/admin/moderacao/desafios/${id}/aprovar`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ ajustePontuacao: ajuste }),
+  });
+  await carregarPendentes(modPage);
+}
+
+async function invalidarDesafio(id: string) {       
+  const motivo = prompt("Motivo da invalidação (obrigatório):");
+  if (!motivo) return;
+  await fetch(`${API.BASE_URL}/api/admin/moderacao/desafios/${id}/invalidar`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ motivo }),
+  });
+  await carregarPendentes(modPage);
+}
 
   async function carregarUsuarios(targetPage: number) {
     setCarregandoUsuarios(true);
@@ -259,13 +340,19 @@ export default function AdminDashboard() {
     return Math.round((val * 100) / total);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("usuarioId");
-    localStorage.removeItem("tipoUsuario");
-    alert("Você saiu com sucesso.");
-    window.location.href = "/admin/login";
-  };
+  function handleLogout() {
+    try {
+      localStorage.removeItem("token");
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("jwt");
+      localStorage.removeItem("usuarioId");
+      sessionStorage.removeItem("token");
+      (window as any)?.Storage && ((window as any).Storage.token = null);
+    } catch {}
+    window.location.href = "/login";
+  }
+
+  const rotulo = { pendente: "pendentes", aprovado: "aprovados", invalido: "inválidos", todos: "registros" }[modStatus];
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -277,11 +364,11 @@ export default function AdminDashboard() {
       <h2 className="text-xl font-semibold text-green-900 my-4">Painel Administrativo</h2>
 
       <nav className="flex flex-wrap gap-3 mb-6">
-        {["dashboard","usuarios","exercicios","treinos","professores","desafios","configuracoes"].map((t) => (
+        {["dashboard","usuarios","exercicios","treinos","professores","desafios","configuracoes", "moderacao"].map((t) => (
           <button key={t}
             className={`px-4 py-2 rounded ${aba === (t as Tab) ? "bg-green-800 text-white" : "bg-gray-200"}`}
             onClick={() => setAba(t as Tab)}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === "moderacao" ? "Moderação" : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </nav>
@@ -290,7 +377,6 @@ export default function AdminDashboard() {
         {aba === "dashboard" && (
           <div>
             <h3 className="text-xl font-bold mb-4">Dashboard Administrativo</h3>
-
             <div className="grid grid-cols-2 gap-4 mb-6">
               <Card title="Total de Usuários" icon="👥" value={dados.totalUsuarios} />
               <Card title="Treinos Cadastrados" icon="🏋️" value={dados.totalTreinos} />
@@ -351,8 +437,8 @@ export default function AdminDashboard() {
                     <th className="px-3 py-2 text-left">Usuário</th>
                     <th className="px-3 py-2 text-left">Email</th>
                     <th className="px-3 py-2 text-left">Tipo</th>
-                    <th className="px-3 py-2 text-left">Criado em</th>
-                    <th className="px-3 py-2 text-left">Status</th>
+                                        <th className="px-3 py-2 text-left">Criado em</th>
+                    <th className="px-3 py-2 text-left">Última atv.</th>
                     <th className="px-3 py-2"></th>
                   </tr>
                 </thead>
@@ -377,7 +463,16 @@ export default function AdminDashboard() {
                         <td className="px-3 py-2">{u.email ?? "-"}</td>
                         <td className="px-3 py-2 capitalize">{u.tipo ?? "-"}</td>
                         <td className="px-3 py-2">{formatDate(u.criadoEm)}</td>
-                        <td className="px-3 py-2">{}-</td>
+                        <td className="px-3 py-2">
+                          {u.ultimaAtividade ? (
+                            <>
+                              <span className="block truncate max-w-[220px]" title={u.ultimaAtividadeNome ?? ""}>
+                                {u.ultimaAtividadeNome ?? "—"}
+                              </span>
+                              <span className="text-xs text-gray-500">{formatDate(u.ultimaAtividade)}</span>
+                            </>
+                          ) : "—"}
+                        </td>
                         <td className="px-3 py-2 text-right">
                           <button
                             onClick={() => abrirDetalhes(u.id)}
@@ -463,44 +558,58 @@ export default function AdminDashboard() {
                       </button>
 
                     </div>
-                    <ul className="space-y-2">
-                      {treinos.map((t: any) => (
-                        <li key={t.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
-                          <div>
-                            <strong>{t.nome}</strong> — {t.codigo} [{t.nivel}]
-                            <p className="text-sm text-gray-500">{t.descricao}</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => window.location.href = `/admin/treinos/create?id=${t.id}`}
-                              className="text-blue-600"
-                            >
-                              ✏️
-                            </button>
+                    {treinos.length === 0 ? (
+                          <p className="text-gray-500">Nenhum treino encontrado.</p>
+                        ) : (
+                          treinos.map((t: any) => {
+                            const nome = t.nome ?? t.titulo ?? "(sem nome)";
+                            const codigo = t.codigo ?? t.slug ?? (t.id ? String(t.id).slice(0, 6) : "-");
+                            const nivel = t.nivel ?? t.dificuldade ?? "-";
+                            const descricao = t.descricao ?? t.resumo ?? "";
 
-                            <button
-                              onClick={async () => {
-                                const confirmar = confirm("Deseja mesmo excluir este treino?");
-                                if (!confirmar) return;
+                            return (
+                              <li key={t.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
+                                <div>
+                                  <strong>{nome}</strong> — {codigo} [{nivel}]
+                                  <p className="text-sm text-gray-500">{descricao}</p>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => (window.location.href = `/admin/treinos/create?id=${t.id}`)}
+                                    className="text-blue-600"
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (!confirm("Deseja mesmo excluir este treino?")) return;
+                                     
+                                      let resp = await fetch(`${API.BASE_URL}/api/treinos/${t.id}`, {
+                                        method: "DELETE",
+                                        headers: authHeaders(),
+                                      });
+                                      if (!resp.ok) {
+                                        resp = await fetch(`${API.BASE_URL}/api/treinosprogramados/${t.id}`, {
+                                          method: "DELETE",
+                                          headers: authHeaders(),
+                                        });
+                                      }
+                                      if (resp.ok) {
+                                        alert("Treino excluído com sucesso!");
+                                        setTreinos(prev => prev.filter(x => x.id !== t.id));
+                                      } else {
+                                        alert("Erro ao excluir treino.");
+                                      }
+                                    }}
+                                  >
+                                    🗑
+                                  </button>
+                                </div>
+                              </li>
+                            );
+                          })
+                        )}
 
-                                const response = await fetch(`${API.BASE_URL}/api/treinosprogramados/${t.id}`, {
-                                  method: "DELETE",
-                                });
-
-                                if (response.ok) {
-                                  alert("Treino excluído com sucesso!");
-                                  } else {
-                                  alert("Erro ao excluir treino.");
-                                }
-                              }}
-                            >
-                              🗑
-                            </button>
-
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
                   </div>
                 )}
                 
@@ -654,7 +763,108 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                 )}
-         </div>
+                {aba === "moderacao" && ( 
+                  <div>
+                   <h3 className="text-xl font-bold mb-3">Moderação</h3>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="font-semibold text-green-900">Desafios</div>
+                      <select
+                        className="border rounded px-2 py-1"
+                        value={modStatus}
+                        onChange={(e) => { setModStatus(e.target.value as any); carregarPendentes(1); }}
+                      >
+                        <option value="pendente">Pendentes</option>
+                        <option value="aprovado">Aprovados</option>
+                        <option value="invalido">Inválidos</option>
+                        <option value="todos">Todos</option>
+                      </select>
+                    </div>
+                    <div className="bg-white rounded shadow overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left">Atleta</th>
+                            <th className="px-3 py-2 text-left">Desafio</th>
+                            <th className="px-3 py-2 text-left">Enviado</th>
+                            <th className="px-3 py-2 text-left">Vídeo</th>
+                            <th className="px-3 py-2"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {modPendentes.map((it) => {
+                            const foto = it.atleta.foto
+                              ? (it.atleta.foto.startsWith("http") ? it.atleta.foto : `${API.BASE_URL}${it.atleta.foto}`)
+                              : `${API.BASE_URL}/assets/default-user.png`;
+                            return (
+                              <tr key={it.id} className="border-t">
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <img src={foto} className="w-8 h-8 rounded-full object-cover border" />
+                                    <div className="font-medium">{it.atleta.nome}</div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  {it.desafio.titulo}{" "}
+                                  <span className="text-xs text-gray-600">({it.desafio.pontuacao} pts)</span>
+                                </td>
+                                <td className="px-3 py-2">{new Date(it.criadoEm).toLocaleString("pt-BR")}</td>
+                                <td className="px-3 py-2">
+                                  {it.videoUrl ? (
+                                    <a className="text-blue-600 underline" href={it.videoUrl} target="_blank" rel="noreferrer">
+                                      abrir vídeo
+                                    </a>
+                                  ) : "—"}
+                                </td>
+                                <td className="px-3 py-2 text-right">
+                                  <div className="flex gap-2 justify-end">
+                                    <button
+                                      onClick={() => aprovarDesafio(it.id)}
+                                      className="px-3 py-1 rounded bg-green-600 text-white"
+                                    >
+                                      Aprovar
+                                    </button>
+                                    <button
+                                      onClick={() => invalidarDesafio(it.id)}
+                                      className="px-3 py-1 rounded bg-red-600 text-white"
+                                    >
+                                      Invalidar
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {!modLoading && modPendentes.length === 0 && (
+                            <tr>
+                              <td colSpan={5} className="px-3 py-8 text-center text-gray-500">Nada pendente no momento.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-3">
+                      <button
+                        disabled={modPage <= 1}
+                        onClick={() => carregarPendentes(modPage - 1)}
+                        className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
+                      >
+                        Anterior
+                      </button>
+                      <div className="text-sm text-gray-600">
+                        {modLoading ? "Carregando…" : `Página ${modPage} • ${modTotal} ${rotulo}`}
+                      </div>
+                      <button
+                        disabled={(modPage * modPageSize) >= modTotal || modPendentes.length < modPageSize}
+                        onClick={() => carregarPendentes(modPage + 1)}
+                        className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
+                      >
+                        Próxima
+                      </button>
+                    </div>
+                  </div>
+                )}
+          </div>
 
       {detalheAberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -691,9 +901,19 @@ export default function AdminDashboard() {
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <Info label="Telefone" value={u.telefone || "-"} />
-                    <Info label="Nascimento" value={formatDate(u.dataNascimento)} />
+                    <Info label="Data de Nascimento" value={formatDate(u.dataNascimento)} />
                     <Info label="Endereço" value={u.endereco || "-"} />
-                    <Info label="Última atividade" value={formatDate(u.ultimaAtividade)} />
+                    {u.tipo === "Atleta" && (
+                      <Info label="Posição" value={u.posicaoCampo || "-"} />
+                    )}
+                    {(u.tipo === "Professor" || u.tipo === "Clube" || u.tipo === "Escolinha") && (
+                      <Info
+                        label="Alunos vinculados"
+                        value={
+                          typeof u.totalVinculados === "number" ? String(u.totalVinculados) : "-"
+                        }
+                      />
+                    )}
                     <Info label="Posts" value={String(u.contagens?.posts ?? "-")} />
                     <Info label="Comentários" value={String(u.contagens?.comentarios ?? "-")} />
                   </div>

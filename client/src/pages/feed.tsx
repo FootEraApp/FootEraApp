@@ -122,10 +122,8 @@ function PaginaFeed(): JSX.Element {
       sessionStorage.removeItem(k);
     });
 
-    // Se seu helper Storage guardar algo, tente limpar (ignora se não existir)
     try { (Storage as any)?.clear?.(); } catch {}
 
-    // redireciona para a página de login
     window.location.href = "/login";
   };
 

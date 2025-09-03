@@ -36,7 +36,7 @@ const timeKey = (t: Training) =>
     toDate(t.dataTreino)?.getTime() ??
     Number.MAX_SAFE_INTEGER);
 
- export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProgressProps) {
+export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProgressProps) {
   const qc = useQueryClient();
   const token = Storage.token || '';
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -63,9 +63,7 @@ const timeKey = (t: Training) =>
 
   const normalizeTipoTreino = (v?: string | null) => {
     if (!v) return null;
-    const s = String(v)
-      .normalize("NFD").replace(/\p{Diacritic}/gu, "")
-      .toLowerCase();
+    const s = String(v).normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
     if (s.includes("fis")) return "Físico";
     if (s.includes("tec")) return "Técnico";
     if (s.includes("tat")) return "Tático";
@@ -73,10 +71,10 @@ const timeKey = (t: Training) =>
     return v;
   };
 
-   const effectiveTipoUsuarioId =
+  const effectiveTipoUsuarioId =
     resolvedTipoUsuarioId || (Storage.tipoUsuarioId as string) || "";
 
-   const { data: atividades = [] } = useQuery<any[]>({
+  const { data: atividades = [] } = useQuery<any[]>({
     queryKey: ["perfilAtividades", targetUserId],
     enabled: Boolean(token && targetUserId),
     queryFn: async () => {
@@ -86,10 +84,11 @@ const timeKey = (t: Training) =>
       return r.json();
     },
   });
+
   const atletaId = resolvedTipoUsuarioId || (Storage.tipoUsuarioId as string) || "";
 
   const { data: treinosAgendados = [], isLoading: isLoadingTreinos } = useQuery<Training[]>({
-    queryKey: ["treinosAgendados", atletaId], 
+    queryKey: ["treinosAgendados", atletaId],
     enabled: Boolean(token && atletaId),
     queryFn: async () => {
       const r = await fetch(
@@ -108,7 +107,7 @@ const timeKey = (t: Training) =>
         duracaoMinutos: t?.treinoProgramado?.duracao ?? t.duracaoMinutos ?? null,
         tipo: normalizeTipoTreino(
           t?.treinoProgramado?.tipoTreino ??
-          t?.tipo ??                 
+          t?.tipo ??
           (Array.isArray(t?.categoria) ? t.categoria[0] : t?.categoria) ?? 
           null
         ),
@@ -134,12 +133,14 @@ const timeKey = (t: Training) =>
     },
   });
 
+  // PONTUAÇÃO — sempre via /api/perfil/:id/pontuacao
   const { data: pontuacao, isLoading: isLoadingPontuacao } = useQuery({
     queryKey: ["pontuacaoPerfil", targetUserId],
     enabled: Boolean(token && targetUserId),
     queryFn: async () => {
-      const r = await fetch(
-        `${API.BASE_URL}/api/perfil/pontuacao/${encodeURIComponent(targetUserId)}`, { headers });
+      const url = `${API.BASE_URL}/api/perfil/${encodeURIComponent(targetUserId)}/pontuacao`;
+      const r = await fetch(url, { headers });
+      if (r.status === 404) return { performance: 0, disciplina: 0, responsabilidade: 0 };
       if (!r.ok) throw new Error("Erro ao buscar pontuação do perfil");
       return r.json();
     },
@@ -176,13 +177,13 @@ const timeKey = (t: Training) =>
       .sort((a, b) => timeKey(a) - timeKey(b));
   }, [treinosAgendados]);
 
-    useEffect(() => {
-      const tipoAtual = upcomingTrainings?.[0]?.tipo;
-      if (tipoAtual) {
-        localStorage.setItem("ultimoTipoTreino", tipoAtual);
-        window.dispatchEvent(new CustomEvent("perfil:ultimoTipoTreino", { detail: tipoAtual }));
-      }
-    }, [upcomingTrainings]);
+  useEffect(() => {
+    const tipoAtual = upcomingTrainings?.[0]?.tipo;
+    if (tipoAtual) {
+      localStorage.setItem("ultimoTipoTreino", tipoAtual);
+      window.dispatchEvent(new CustomEvent("perfil:ultimoTipoTreino", { detail: tipoAtual }));
+    }
+  }, [upcomingTrainings]);
 
   const isLoading = isLoadingTreinos || isLoadingResumo || isLoadingPontuacao;
 
