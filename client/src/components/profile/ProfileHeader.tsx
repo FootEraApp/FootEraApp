@@ -1,7 +1,6 @@
-// client/src/components/profile/ProfileHeader.tsx
 import { useState, useEffect } from "react";
 import { Link, useParams } from "wouter";
-import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send } from "lucide-react";
+import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send, Eye } from "lucide-react"; // + Eye
 import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
@@ -19,16 +18,13 @@ interface ProfileHeaderProps {
   idade?: number;
   posicao?: string;
   time?: string;
-  /** Se quiser manter pontuação para atleta/professor/clube */
   pontuacao?: number;
-  /** Título da pontuação quando usada (padrão: "Pontuação FootEra") */
   scoreTitle?: string;
-  /** Para escola (ou qualquer tipo) mostrar cards no header */
-  kpis?: Kpi[]; // ex.: [{label:"Atletas", value:0}, {label:"Treinos", value:0}, {label:"Conquistas", value:0}]
+  kpis?: Kpi[];
   avatar?: string | null;
   foto?: string | null;
   isOwnProfile?: boolean;
-  perfilId: string;
+  perfilId: string; // <- usuario.id do perfil que estou vendo
 }
 
 export default function ProfileHeader({
@@ -58,6 +54,26 @@ export default function ProfileHeader({
     text: string;
     onYes: () => Promise<void> | void;
   } | null>(null);
+
+  // --- NOVO: saber se o alvo é Atleta (para exibir botão Observar) ---
+  const [podeObservar, setPodeObservar] = useState(false);
+
+  useEffect(() => {
+    if (isOwnProfile || !perfilId) {
+      setPodeObservar(false);
+      return;
+    }
+    const token = Storage.token;
+    if (!token) return;
+
+    // Busca tipo do perfil (Atleta/Professor/Clube/Escolinha)
+    fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(perfilId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setPodeObservar(data?.tipo === "Atleta"))
+      .catch(() => setPodeObservar(false));
+  }, [perfilId, isOwnProfile]);
 
   const iniciarChat = () => {
     const me = Storage.usuarioId;
@@ -257,6 +273,70 @@ export default function ProfileHeader({
     setEhFavorito(v => !v);
   }
 
+  // ===== NOVO: Observar Atleta =====
+  async function observarAtleta() {
+    const token = Storage.token;
+    if (!token) { alert("Faça login para observar atletas."); return; }
+
+    try {
+      const resp = await fetch(`${API.BASE_URL}/api/observados`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ atletaUsuarioId: perfilId }), // você está vendo o usuario do atleta
+      });
+
+      if (resp.ok) {
+        alert("Agora você está observando este atleta.");
+        return;
+      }
+
+      const body = await readBodySafe(resp);
+
+      if (resp.status === 409) {
+        // já observa -> oferecer parar de observar
+        pedirConfirmacao("Você já observa este atleta. Deseja parar de observar?", async () => {
+          const atletaId = await resolverAtletaIdObservadoAtual();
+          if (!atletaId) { alert("Não foi possível identificar o vínculo de observação."); return; }
+          const del = await fetch(`${API.BASE_URL}/api/observados/${atletaId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (del.ok) alert("Você parou de observar este atleta.");
+          else alert("Não foi possível parar de observar agora.");
+        });
+        return;
+      }
+
+      if (resp.status === 403) {
+        alert("Apenas Professor, Escolinha ou Clube podem observar atletas.");
+        return;
+      }
+
+      if (resp.status === 404) {
+        alert("Atleta não encontrado.");
+        return;
+      }
+
+      alert(body?.error || "Falha ao observar atleta.");
+    } catch (e) {
+      alert("Falha ao observar atleta.");
+    }
+  }
+
+  async function resolverAtletaIdObservadoAtual(): Promise<string | null> {
+    const token = Storage.token;
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/observados`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const lista = r.ok ? await r.json() : [];
+      const item = Array.isArray(lista) ? lista.find((x: any) => x?.id === perfilId) : null; // x.id = usuario.id do atleta
+      return item?.atletaId ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   return (
     <div className="footera-bg-green p-6 flex flex-col items-center relative">
       {isOwnProfile && (
@@ -340,6 +420,19 @@ export default function ProfileHeader({
           <button onClick={solicitarTreino} className="px-4 py-2 font-semibold bg-green-400 text-green-900 rounded-full">
             Treinar Juntos
           </button>
+
+          {/* === NOVO BOTÃO: OBSERVAR (só quando alvo é Atleta) === */}
+          {podeObservar && (
+            <button
+              onClick={observarAtleta}
+              className="px-4 py-2 font-semibold bg-amber-300 text-green-900 rounded-full inline-flex items-center gap-2"
+              title="Observar este atleta"
+            >
+              <Eye size={16} />
+              Observar
+            </button>
+          )}
+
           <button onClick={abrirModalCompartilhar} className="px-4 py-2 font-semibold bg-green-300 text-green-900 rounded-full">
             Compartilhar
           </button>
@@ -422,7 +515,10 @@ export default function ProfileHeader({
               </button>
               <button
                 className="px-4 py-2 rounded bg-green-700 text-white"
-                onClick={async () => { try { await confirmBox.onYes(); } finally { setConfirmBox(null); } }}
+                onClick={async () => {
+                  try { await confirmBox.onYes(); }
+                  finally { setConfirmBox(null); }
+                }}
               >
                 Sim
               </button>

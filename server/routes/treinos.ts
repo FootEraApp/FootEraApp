@@ -41,6 +41,7 @@ router.get("/exercicios", async (req, res) => {
     return res.status(500).json({ error: "Erro interno do servidor" });
   }
 });
+
 router.get("/atletas-vinculados", async (req, res) => {
   const { tipoUsuarioId } = req.query;
 
@@ -89,8 +90,6 @@ return res.json(atletas);
     return res.status(500).json({ error: "Erro ao buscar atletas vinculados" });
   }
 });
-
-
 
 router.get("/", async (req, res) => {
   try {
@@ -478,7 +477,6 @@ router.get("/pontuacoes", authenticateToken, async (req, res) => {
     return res.status(500).json({ error: "Erro ao buscar pontuações" });
   }
 });
-
 router.post("/", async (req, res) => {
   const {
     nome,

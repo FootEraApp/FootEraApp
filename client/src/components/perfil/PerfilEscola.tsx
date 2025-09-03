@@ -8,6 +8,7 @@ import {
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
+import { Link } from "wouter";
 
 /** ========== TYPES ========== */
 type Props = { idDaUrl?: string };
@@ -154,28 +155,53 @@ export default function PerfilEscola({ idDaUrl }: Props) {
 
     if (aba === "visao" && atividades == null) fetchAtividades();
 
-    async function fetchVinculados() {
-      try {
-        const { data } = await axios.get<AtletaItem[]>(
-          `${API.BASE_URL}/api/escolas/${targetId}/atletas/vinculados`,
-          { headers }
-        );
-        if (!cancel.v) setVinculados(Array.isArray(data) ? data : []);
-      } catch {
-        if (!cancel.v) setVinculados([]);
+async function fetchVinculados() {
+  const tipoId =
+    (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
+
+  if (!tipoId) {                      // sem id => não chama a API
+    if (!cancel.v) setVinculados([]);
+    return;
+  }
+
+  try {
+    const { data: lista } = await axios.get<AtletaItem[]>(
+      `${API.BASE_URL}/api/treinos/atletas-vinculados`,
+      {
+        headers,
+        params: { tipoUsuarioId: tipoId }, // <- obrigatório no seu backend
       }
-    }
-    async function fetchObservados() {
-      try {
-        const { data } = await axios.get<AtletaItem[]>(
-          `${API.BASE_URL}/api/escolas/${targetId}/atletas/observados`,
-          { headers }
-        );
-        if (!cancel.v) setObservados(Array.isArray(data) ? data : []);
-      } catch {
-        if (!cancel.v) setObservados([]);
+    );
+    if (!cancel.v) setVinculados(Array.isArray(lista) ? lista : []);
+  } catch {
+    if (!cancel.v) setVinculados([]);
+  }
+}
+
+async function fetchObservados() {
+  // quando for o próprio perfil, o id da tabela vem do Storage;
+  // quando for outro perfil, use o id do professor carregado em `data`
+  const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
+
+  if (!tipoId) {
+    if (!cancel.v) setObservados([]);
+    return;
+  }
+
+  try {
+    const { data: lista } = await axios.get<AtletaItem[]>(
+      `${API.BASE_URL}/api/observados`,
+      {
+        headers,
+        params: { tipoUsuarioId: tipoId }, // <- exigido pelo backend
       }
-    }
+    );
+    if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
+  } catch {
+    if (!cancel.v) setObservados([]);
+  }
+}
+
     async function fetchSolicitacoes() {
       try {
         const { data } = await axios.get<SolicitacaoItem[]>(
@@ -195,7 +221,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     }
 
     return () => { cancel.v = true; };
-  }, [aba, subAba, targetId, token, atividades, vinculados, observados, solicitacoes]);
+  }, [aba, subAba, targetId, token, data?.escolinha?.id, atividades, vinculados, observados, solicitacoes]);
 
   if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
   if (!data || !data.escolinha) return <div className="text-center p-10 text-red-600">Escolinha não encontrada.</div>;
@@ -369,9 +395,13 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                           <div className="text-sm font-medium text-green-900">{a.nome}</div>
                           <div className="text-xs text-green-900/70">{[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}</div>
                         </div>
-                        <button className="text-sm text-green-800 inline-flex items-center gap-1">
-                          Ver perfil <ChevronRight className="w-4 h-4" />
-                        </button>
+
+                        <Link href={`/perfil/${a.id}`}>
+                          <a className="text-sm text-green-800 inline-flex items-center gap-1">
+                            Ver perfil <ChevronRight className="w-4 h-4" />
+                          </a>
+                        </Link>
+
                       </li>
                     ))}
                   </ul>
@@ -410,9 +440,13 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                           <div className="text-sm font-medium text-green-900">{a.nome}</div>
                           <div className="text-xs text-green-900/70">{a.posicao ?? "-"}</div>
                         </div>
-                        <button className="text-sm text-green-800 inline-flex items-center gap-1">
-                          Ver perfil <ChevronRight className="w-4 h-4" />
-                        </button>
+
+                        <Link href={`/perfil/${a.id}`}>
+                          <a className="text-sm text-green-800 inline-flex items-center gap-1">
+                            Ver perfil <ChevronRight className="w-4 h-4" />
+                          </a>
+                        </Link>
+
                       </li>
                     ))}
                   </ul>

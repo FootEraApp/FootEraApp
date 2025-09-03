@@ -5,6 +5,7 @@ import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
+import { Activity, ChevronRight } from "lucide-react";
 
 type Props = { idDaUrl?: string };
 
@@ -34,19 +35,36 @@ type PayloadClube = {
     cep?: string | null;
     logo?: string | null;
     dataCriacao: string;
-    categorias?: string[] | null; // opcional, se existir no backend
-    responsavel?: string | null;  // opcional
+    categorias?: string[] | null;
+    responsavel?: string | null;
   };
-  // métricas do clube — eventos/conquistas opcionais para cair em 0 se não vierem
-  metrics: {
-    atletas: number;
-    eventos?: number;
-    conquistas?: number;
-  };
+  metrics: { atletas: number; eventos?: number; conquistas?: number };
 };
 
 type AbaTopo = "perfil" | "eventos" | "atletas";
 type SubAbaAtletas = "vinculados" | "observados" | "solicitacoes";
+
+/** lista que os endpoints retornam */
+type AtletaItem = {
+  id: string;          // usuario.id do atleta
+  atletaId: string;    // id da tabela Atleta
+  nome: string;
+  foto?: string | null;
+  posicao?: string | null;
+  idade?: number | null;
+  altura?: number | null;
+  peso?: number | null;
+  observadoEm?: string; // opcional, se o backend enviar
+};
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="text-center text-green-900/70 py-8">
+      <Activity className="mx-auto mb-2 opacity-70" />
+      <p>{text}</p>
+    </div>
+  );
+}
 
 export default function PerfilClube({ idDaUrl }: Props) {
   const token = Storage.token;
@@ -59,7 +77,11 @@ export default function PerfilClube({ idDaUrl }: Props) {
   const [loading, setLoading] = useState(true);
 
   const [aba, setAba] = useState<AbaTopo>("perfil");
-  const [subAba, setSubAba] = useState<SubAbaAtletas>("observados");
+  const [subAba, setSubAba] = useState<SubAbaAtletas>("vinculados");
+
+  // listas
+  const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
+  const [observados, setObservados] = useState<AtletaItem[] | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -82,6 +104,53 @@ export default function PerfilClube({ idDaUrl }: Props) {
     return () => { cancel = true; };
   }, [targetId, token]);
 
+  // lazy-load das listas quando as sub-abas forem abertas
+  useEffect(() => {
+    if (!token) return;
+    const cancel = { v: false };
+
+    async function fetchVinculados() {
+      const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
+      if (!tipoId) {
+        if (!cancel.v) setVinculados([]);
+        return;
+      }
+      try {
+        const { data: lista } = await axios.get<AtletaItem[]>(
+          `${API.BASE_URL}/api/treinos/atletas-vinculados`,
+          { headers, params: { tipoUsuarioId: tipoId } }
+        );
+        if (!cancel.v) setVinculados(Array.isArray(lista) ? lista : []);
+      } catch {
+        if (!cancel.v) setVinculados([]);
+      }
+    }
+
+    async function fetchObservados() {
+      const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
+      if (!tipoId) {
+        if (!cancel.v) setObservados([]);
+        return;
+      }
+      try {
+        const { data: lista } = await axios.get<AtletaItem[]>(
+          `${API.BASE_URL}/api/observados`,
+          { headers, params: { tipoUsuarioId: tipoId } }
+        );
+        if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
+      } catch {
+        if (!cancel.v) setObservados([]);
+      }
+    }
+
+    if (aba === "atletas") {
+      if (subAba === "vinculados" && vinculados == null) fetchVinculados();
+      if (subAba === "observados" && observados == null) fetchObservados();
+    }
+
+    return () => { cancel.v = true; };
+  }, [aba, subAba, token, isOwn, data?.clube?.id, vinculados, observados]);
+
   if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
   if (!data || !data.clube) return <div className="text-center p-10 text-red-600">Clube não encontrado.</div>;
 
@@ -96,11 +165,10 @@ export default function PerfilClube({ idDaUrl }: Props) {
       ? `${data.clube.cidade}${data.clube.estado ? " - " + data.clube.estado : ""}${data.clube.pais ? " - " + data.clube.pais : ""}`
       : undefined;
 
-  // KPIs do header (Atletas | Eventos | Conquistas)
   const kpis = [
-    { label: "Atletas",     value: data.metrics?.atletas ?? 0 },
-    { label: "Eventos",     value: data.metrics?.eventos ?? 0 },
-    { label: "Conquistas",  value: data.metrics?.conquistas ?? 0 },
+    { label: "Atletas",    value: data.metrics?.atletas ?? 0 },
+    { label: "Eventos",    value: data.metrics?.eventos ?? 0 },
+    { label: "Conquistas", value: data.metrics?.conquistas ?? 0 },
   ];
 
   return (
@@ -233,7 +301,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
             <p className="text-sm text-green-900/80 mt-1">
               Crie e gerencie seus eventos, peneiras e amistosos.
             </p>
-
             <div className="mt-4">
               <Link href="/eventos/novo">
                 <a className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-4 py-2">
@@ -268,52 +335,84 @@ export default function PerfilClube({ idDaUrl }: Props) {
             ))}
           </div>
 
-          {/* Vinculados */}
-          {subAba === "vinculados" && (
-            <div className="bg-white/70 rounded-xl p-6 text-center shadow-sm">
-              <h3 className="font-semibold text-green-900 mb-1">Atletas Vinculados</h3>
-              <p className="text-sm text-green-900/70">Atletas oficialmente vinculados ao seu clube</p>
-              <div className="mt-4">
-                <Link href="/atletas/vinculados">
-                  <a className="text-sm px-4 py-2 rounded-lg bg-white border border-green-200 text-green-900">
-                    Ver atletas
-                  </a>
-                </Link>
+{/* Vinculados */}
+{subAba === "vinculados" && (
+  <div className="bg-white/70 rounded-xl p-4 shadow-sm">
+    <h3 className="font-semibold text-green-900 mb-2">Atletas Vinculados</h3>
+    {vinculados && vinculados.length > 0 ? (
+      <ul className="grid grid-cols-1 gap-3">
+        {vinculados.map((a) => (
+          <li key={a.atletaId} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
+            <img
+              src={a.foto?.startsWith("http") ? a.foto! : `${API.BASE_URL}/uploads/${a.foto ?? ""}`}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/attached_assets/Perfil.jpg"; }}
+              className="w-10 h-10 rounded-full object-cover"
+              alt={a.nome}
+            />
+            <div className="flex-1">
+              <div className="text-sm font-medium text-green-900">{a.nome}</div>
+              <div className="text-xs text-green-900/70">
+                {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
               </div>
             </div>
-          )}
 
-          {/* Observados */}
-          {subAba === "observados" && (
-            <div className="bg-white/70 rounded-xl p-6 text-center shadow-sm">
-              <h3 className="font-semibold text-green-900 mb-1">Atletas Observados</h3>
-              <p className="text-sm text-green-900/70">
-                Atletas que você está observando, mas ainda não são vinculados
-              </p>
-              <div className="mt-4 flex gap-2 justify-center">
-                <Link href="/atletas/observados">
-                  <a className="text-sm px-4 py-2 rounded-lg bg-white border border-green-200 text-green-900">
-                    Ver atletas observados
-                  </a>
-                </Link>
-                <Link href="/explorar?tab=atletas">
-                  <a className="text-sm px-4 py-2 rounded-lg bg-yellow-500 text-green-900 font-semibold">
-                    + Descobrir novos atletas
-                  </a>
-                </Link>
+            {/* Link para o perfil do atleta (usa a.id = usuarioId) */}
+            <Link href={`/perfil/${a.id}`}>
+              <a className="text-sm text-green-800 inline-flex items-center gap-1">
+                Ver perfil <ChevronRight className="w-4 h-4" />
+              </a>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <EmptyState text="Nenhum atleta vinculado ainda" />
+    )}
+  </div>
+)}
+
+
+{/* Observados */}
+{subAba === "observados" && (
+  <div className="bg-white/70 rounded-xl p-4 shadow-sm">
+    <h3 className="font-semibold text-green-900 mb-2">Atletas Observados</h3>
+    {observados && observados.length > 0 ? (
+      <ul className="grid grid-cols-1 gap-3">
+        {observados.map((a) => (
+          <li key={a.atletaId} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
+            <img
+              src={a.foto?.startsWith("http") ? a.foto! : `${API.BASE_URL}/uploads/${a.foto ?? ""}`}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/attached_assets/Perfil.jpg"; }}
+              className="w-10 h-10 rounded-full object-cover"
+              alt={a.nome}
+            />
+            <div className="flex-1">
+              <div className="text-sm font-medium text-green-900">{a.nome}</div>
+              <div className="text-xs text-green-900/70">
+                {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
               </div>
             </div>
-          )}
+
+            {/* Link para o perfil do atleta (usa a.id = usuarioId) */}
+            <Link href={`/perfil/${a.id}`}>
+              <a className="text-sm text-green-800 inline-flex items-center gap-1">
+                Ver perfil <ChevronRight className="w-4 h-4" />
+              </a>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <EmptyState text="Você ainda não observa nenhum atleta" />
+    )}
+  </div>
+)}
+
 
           {/* Solicitações */}
           {subAba === "solicitacoes" && (
             <div className="bg-white/70 rounded-xl p-4 shadow-sm">
               <h3 className="font-semibold text-green-900 mb-2">Solicitações de Atletas</h3>
-              <div className="flex gap-2 text-sm mb-3">
-                <button className="px-3 py-1 rounded-lg bg-green-100 text-green-900">Pendentes</button>
-                <button className="px-3 py-1 rounded-lg bg-white/70 text-green-900">Aprovados</button>
-                <button className="px-3 py-1 rounded-lg bg-white/70 text-green-900">Rejeitados</button>
-              </div>
               <p className="text-sm text-green-900/70 text-center py-6">
                 Nenhuma solicitação pendente de atletas.
               </p>
