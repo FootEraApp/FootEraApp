@@ -3,8 +3,8 @@ import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { criarPost } from "@/services/feedService.js";
-import { API } from "../../config";
-import { formatarUrlFoto } from "@/utils/formatarFoto";
+import { API } from "../../config.js";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 
 // Normaliza caminhos legados e relativos para a API
 function normalizeMediaUrl(raw: string): string {

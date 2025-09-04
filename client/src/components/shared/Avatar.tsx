@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { API } from "../../config";
+import { API } from "../../config.js";
 
 type Props = {
   foto?: string | null;  // pode vir null/undefined

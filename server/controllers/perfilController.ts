@@ -740,54 +740,87 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
   }
 };
 
-export const getTreinosResumo = async (req: AuthenticatedRequest, res: Response) => {
-  const userId = req.params.id;
+export const getTreinosResumo = async (req: any, res: Response) => {
+  try {
+    // aceita /:id, /:usuarioId ou o próprio usuário autenticado
+    const usuarioId =
+      req.params?.id ?? req.params?.usuarioId ?? req.userId;
 
-  const atleta = await prisma.atleta.findUnique({
-    where: { usuarioId: userId },
-    select: { id: true },
-  });
-  if (!atleta) return res.status(404).json({ error: "Atleta não encontrado" });
+    if (!usuarioId) {
+      return res.status(400).json({ error: "usuarioId ausente" });
+    }
 
-  const [subsTreino, desafios] = await Promise.all([
-    prisma.submissaoTreino.findMany({
-      where: { atletaId: atleta.id, aprovado: true },
-      include: { treinoAgendado: { include: { treinoProgramado: true } } },
-      orderBy: { criadoEm: "desc" },
-    }),
-    prisma.submissaoDesafio.count({
-      where: { atletaId: atleta.id, aprovado: true },
-    }),
-  ]);
+    // se sua tabela Atleta tem unique(usuarioId), pode usar findUnique; caso contrário, findFirst
+    const atleta = await prisma.atleta.findFirst({
+      where: { usuarioId },
+      select: { id: true },
+    });
 
-  const completos = subsTreino.length;
+    // Sem cadastro de atleta? Devolva zeros (não 404)
+    if (!atleta) {
+      return res.status(200).json({
+        completos: 0,
+        horas: 0,
+        desafios: 0,
+        categorias: { Fisico: 0, Tecnico: 0, Tatico: 0, Mental: 0 },
+      });
+    }
 
-  let minutos = 0;
-  const categorias = { Fisico: 0, Tecnico: 0, Tatico: 0, Mental: 0 };
+    const [subsTreino, desafios] = await Promise.all([
+      prisma.submissaoTreino.findMany({
+        where: { atletaId: atleta.id, aprovado: true },
+        include: {
+          treinoAgendado: { include: { treinoProgramado: true } },
+        },
+        orderBy: { criadoEm: "desc" }, // ajuste se seu campo for createdAt
+      }),
+      prisma.submissaoDesafio.count({
+        where: { atletaId: atleta.id, aprovado: true },
+      }),
+    ]);
 
-  for (const s of subsTreino as any[]) {
-    minutos += Number(s.duracaoMinutos ?? s.treinoAgendado?.treinoProgramado?.duracao ?? 0) || 0;
+    const completos = subsTreino.length;
 
-    const raw =
-      s.tipoTreinoSnapshot ??
-      s.treinoAgendado?.treinoProgramado?.tipoTreino ??
-      "";
+    // soma de minutos (tolerante a campos diferentes)
+    let minutos = 0;
+    const categorias = { Fisico: 0, Tecnico: 0, Tatico: 0, Mental: 0 };
 
-    const norm = String(raw).normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-    if (norm.startsWith("fis")) categorias.Fisico++;
-    else if (norm.startsWith("tec")) categorias.Tecnico++;
-    else if (norm.startsWith("tat")) categorias.Tatico++;
-    else if (norm.startsWith("men")) categorias.Mental++;
+    for (const s of subsTreino as any[]) {
+      const dur =
+        Number(s?.duracaoMinutos) ||
+        Number(s?.duracao) ||
+        Number(s?.treinoAgendado?.treinoProgramado?.duracao) ||
+        0;
+      minutos += isFinite(dur) ? dur : 0;
+
+      const rawTipo =
+        s?.tipoTreinoSnapshot ??
+        s?.treinoAgendado?.treinoProgramado?.tipoTreino ??
+        "";
+
+      const norm = String(rawTipo)
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase();
+
+      if (norm.startsWith("fis")) categorias.Fisico++;
+      else if (norm.startsWith("tec")) categorias.Tecnico++;
+      else if (norm.startsWith("tat")) categorias.Tatico++;
+      else if (norm.startsWith("men")) categorias.Mental++;
+    }
+
+    const horas = Math.round((minutos / 60) * 10) / 10;
+
+    return res.status(200).json({
+      completos,
+      horas,
+      desafios,
+      categorias,
+    });
+  } catch (e) {
+    console.error("[getTreinosResumo] erro:", e);
+    return res.status(500).json({ error: "Erro ao buscar resumo de treinos" });
   }
-
-  const horas = +(minutos / 60).toFixed(1);
-
-  return res.json({
-    completos,
-    horas,
-    desafios,
-    categorias,
-  });
 };
 
 export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Response) => {

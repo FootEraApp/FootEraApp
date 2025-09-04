@@ -8,8 +8,8 @@ import {
   DroppableProps,
 } from "@hello-pangea/dnd";
 import axios from "axios";
-import Storage from "../../../server/utils/storage";
-import { API } from "../config";
+import Storage from "../../../server/utils/storage.js";
+import { API } from "../config.js";
 
 const ELENCOS_BASE = `${API.BASE_URL}/api/treinos/elencos`;
 const PONTOS_BASE  = `${API.BASE_URL}/api/treinos/pontuacoes`;

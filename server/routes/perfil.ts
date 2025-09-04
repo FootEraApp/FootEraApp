@@ -45,7 +45,6 @@ router.get("/escola/me", authenticateToken, (req, res) => {
 });
 router.get("/escola/:id", authenticateToken, getPerfilEscola);
 
-router.get("/me", authenticateToken, getPerfilUsuarioMe);
 router.get("/me/pontuacao", authenticateToken, getPontuacaoMe);
 router.get("/me/atividades", authenticateToken, getAtividadesRecentesMe);
 router.get("/me/badges", authenticateToken, getBadgesMe);

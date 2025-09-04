@@ -43,8 +43,7 @@ export default function PerfilUnico() {
     const url = typeof input === "string" ? input : (input as Request).url;
     if (
       url.includes("/api/perfil/pontuacao") &&
-      !/\/pontuacao\/[^/]+$/.test(url) &&
-      !/\/me\/pontuacao$/.test(url)
+      !/\/pontuacao\/[^/]+$/.test(url) 
     ) {
       console.group("%c[DEBUG] fetch /api/perfil/pontuacao (sem id)", "color:red;font-weight:bold");
       console.log("URL:", url);
@@ -243,32 +242,7 @@ export default function PerfilUnico() {
         foto={usuario.usuario.foto}
         perfilId={id}         
       />
-
-      {!isOwnProfile && (
-        <div className="flex justify-center gap-4 mb-6">
-          <button
-            onClick={seguirUsuario}
-            className="px-4 py-2 bg-green-600 text-white rounded-full"
-          >
-            Seguir
-          </button>
-
-          <button
-            onClick={solicitarTreino}
-            className="px-4 py-2 bg-green-100 text-green-800 rounded-full"
-          >
-            Treinar Juntos
-          </button>
-
-          <button
-            onClick={abrirModalCompartilhar}
-            className="px-4 py-2 bg-blue-600 text-white rounded-full"
-          >
-            Compartilhar
-          </button>
-        </div>
-      )}
-
+    
       <TrainingProgress userId={id} />
       <ActivityGrid activities={activities} />
       {usuarioId && <BadgesList userId={usuarioId} />}
