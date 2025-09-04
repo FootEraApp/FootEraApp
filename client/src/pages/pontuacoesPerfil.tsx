@@ -83,22 +83,163 @@ api.interceptors.response.use(
 );
 
 async function safeGet<T>(url: string, signal?: AbortSignal): Promise<T | null> {
-  const res = await api.get<T>(url, { signal: signal as any, validateStatus: () => true, timeout: 10000, });
-  if (res.status === 200) return res.data;
-  if (res.status === 404) return null;
-  if (res.status === 401) throw Object.assign(new Error("401"), { code: 401 });
-  if (res.status >= 500) throw Object.assign(new Error("5xx"), { code: res.status });
-  return null;
+  try {
+    const res = await api.get<T>(url, {
+      signal: signal as any,
+      validateStatus: () => true,
+      timeout: 10000,
+    });
+    if (res.status === 200) return res.data;
+    if (res.status === 404) return null;
+    if (res.status === 401) throw Object.assign(new Error("401"), { code: 401 });
+    if (res.status >= 500) throw Object.assign(new Error("5xx"), { code: res.status });
+    return null;
+  } catch (e: any) {
+    if (
+      e?.code === "ERR_CANCELED" ||
+      e?.name === "CanceledError" ||
+      e?.message === "canceled" ||
+      e?.cause?.name === "AbortError"
+    ) {
+      return null;
+    }
+    throw e;
+  }
 }
 
 function fixFotoPath(f?: string | null) {
   if (!f) return null;
-  if (/^https?:\/\//i.test(f)) return f;
+  if (/^https?:\/\//i.test(f)) return f;  
+  if (f.startsWith("/")) return `${API.BASE_URL}${f}`; 
+  return `${API.BASE_URL}/assets/usuarios/${f}`;     
+}
 
-  let rel = f.startsWith("/assets/") ? f : `/assets/usuarios/${f}`;
-  rel = rel.replace(/\/\d+-([^/]+\.(?:png|jpe?g|webp|gif))$/i, "/$1");
+function pickNumber(...vals: any[]): number {
+  for (const v of vals) {
+    if (v === null || v === undefined) continue;
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const m = v.match(/-?\d+(?:\.\d+)?/);
+      if (m) {
+        const n = Number(m[0]);
+        if (Number.isFinite(n)) return n;
+      }
+    }
+  }
+  return 0;
+}
 
-  return `${API.BASE_URL}${rel}`;
+const treinoNomeToPontos: Record<string, number> = {
+  "resistência física": 15,
+  "resistencia fisica": 15,
+};
+
+function normalizaTitulo(t?: string) {
+  return (t || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+}
+
+function pontosDoEvento(event: any): number {
+  if (!event || typeof event !== "object") return 0;
+
+  const direto = pickNumber(
+    event?.pontos, event?.pontuacao, event?.pontosPerformance, event?.pontosDesafio,
+    event?.score, event?.totalPontos, event?.valor, event?.xp
+  );
+  if (direto) return direto;
+
+  let sum = 0;
+  const reChave = /(ponto|pontu|score|nota|valor|total)/i;
+
+  const walk = (obj: any) => {
+    if (obj == null) return;
+    if (Array.isArray(obj)) { obj.forEach(walk); return; }
+    if (typeof obj === "object") {
+      for (const [k, v] of Object.entries(obj)) {
+        if (typeof v === "number" && Number.isFinite(v) && reChave.test(k)) {
+          sum += v;
+        } else if (typeof v === "string" && reChave.test(k)) {
+          const n = pickNumber(v);
+          if (n) sum += n;
+        } else {
+          walk(v);
+        }
+      }
+      return;
+    }
+    if (typeof obj === "string") {
+      const n = pickNumber(obj);
+      if (n) sum += n;
+    }
+  };
+
+  walk(event);
+
+  if (sum) return sum;
+
+  const titulo = normalizaTitulo(event?.titulo || event?.nome || event?.descricao);
+  for (const [nome, pts] of Object.entries(treinoNomeToPontos)) {
+    if (titulo.includes(nome)) return pts;
+  }
+
+  return 0;
+}
+
+function sumPointsFromCategories(cats: any): number {
+  if (!cats || typeof cats !== "object") return 0;
+  let sum = 0;
+  const reChave = /(ponto|pontu|score|nota|valor|total|perf)/i;
+
+  const walk = (obj: any) => {
+    if (obj == null) return;
+    if (Array.isArray(obj)) { obj.forEach(walk); return; }
+    if (typeof obj === "object") {
+      for (const [k, v] of Object.entries(obj)) {
+        if (typeof v === "number" && Number.isFinite(v) && reChave.test(k)) sum += v;
+        else if (typeof v === "string" && reChave.test(k)) {
+          const n = pickNumber(v);
+          if (n) sum += n;
+        } else {
+          walk(v);
+        }
+      }
+    }
+  };
+
+  walk(cats);
+  return sum;
+}
+
+function computeFromHistorico(wire?: any) {
+  const hist: any[] = Array.isArray(wire?.historico) ? wire.historico : [];
+
+  const isTreino = (t: any) =>
+    /treino/i.test(String(t?.tipo ?? t?.categoria ?? ""));
+  const isDesafio = (t: any) =>
+    /desaf/i.test(String(t?.tipo ?? t?.categoria ?? ""));
+  const isConcluido = (t: any) => {
+    const s = String(t?.status ?? t?.situacao ?? "").toLowerCase();
+    return !s || s.includes("conclu");
+  };
+
+  const treinos  = hist.filter((t) => isTreino(t)  && isConcluido(t));
+  const desafios = hist.filter((t) => isDesafio(t) && isConcluido(t));
+
+  const perfHist = [...treinos, ...desafios].reduce((acc, ev) => acc + pontosDoEvento(ev), 0);
+
+  const perfCats = sumPointsFromCategories(wire?.categorias);
+
+  const perfApi  = Number(wire?.performance ?? 0);
+  const performance = Math.max(perfHist, perfCats, perfApi);
+
+  const disciplina       = treinos.length  * 2;
+  const responsabilidade = desafios.length * 2;
+
+  return {
+    performance,
+    disciplina,
+    responsabilidade,
+    total: performance + disciplina + responsabilidade,
+  };
 }
 
 export default function PontuacaoDetalhada() {
@@ -155,9 +296,8 @@ export default function PontuacaoDetalhada() {
   );
 }
 
-  useEffect(() => {
+useEffect(() => {
   const token = readToken();
-
   if (!token) {
     setLoading(false);
     setLocation("/login");
@@ -184,6 +324,7 @@ export default function PontuacaoDetalhada() {
         `/api/perfil/${encodeURIComponent(targetUid)}`,
         controller.signal
       );
+
       const nomeBase = perfilResp?.usuario?.nome ?? "";
       const fotoBase = perfilResp?.usuario?.foto ?? null;
       const tipo = perfilResp?.tipo ?? null;
@@ -194,89 +335,83 @@ export default function PontuacaoDetalhada() {
 
       if (tipo === "Atleta" && perfilResp?.dadosEspecificos) {
         posicaoPerfil = perfilResp.dadosEspecificos.posicao ?? null;
-        if (perfilResp.dadosEspecificos.foto) {
-          foto = perfilResp.dadosEspecificos.foto;
-        }
+        if (perfilResp.dadosEspecificos.foto) foto = perfilResp.dadosEspecificos.foto;
       }
 
-      // defina uma flag: é o próprio usuário?
       const isMe = String(targetUid) === String((Storage as any)?.usuarioId);
-
-      // POSIÇÃO ATUAL (mantém /me quando for você mesmo)
       const posUrl = isMe
         ? `/api/perfil/me/posicao-atual`
         : `/api/perfil/${encodeURIComponent(targetUid)}/posicao-atual`;
-
-      console.log("[PosicaoAtual] GET:", posUrl);
       const posAtual = await safeGet<PosicaoAtualResp>(posUrl, controller.signal);
 
-      // PONTUAÇÃO (use /me quando for você mesmo)
-      const pontuacaoUrl = isMe
-        ? `/api/perfil/me/pontuacao`
-        : `/api/perfil/${encodeURIComponent(targetUid)}/pontuacao`;
-
-      console.log("[Pontuacao] GET:", pontuacaoUrl);
+      const pontuacaoUrl = `/api/perfil/${encodeURIComponent(targetUid)}/pontuacao`;
       const wire = await safeGet<PontuacaoWire>(pontuacaoUrl, controller.signal);
-      console.log("[Pontuacao] RES:", wire);
 
+      console.log("[DEBUG pontuacao] wire =", wire);
+      console.log("[DEBUG pontuacao] hist 1º item =", wire?.historico?.[0]);
 
       let posicaoVigente: string | null | undefined = undefined;
       if (posAtual) {
         posicaoVigente = posAtual.posicao ?? null;
-        if (!atletaId && posAtual.atletaId) {
-          atletaId = posAtual.atletaId;
-        }
+        if (!atletaId && posAtual.atletaId) atletaId = posAtual.atletaId;
       }
 
-      const fotoAbs = publicImgUrl(foto) ?? fixFotoPath(foto);
+      const fotoAbs =
+        (/^https?:\/\//i.test(String(foto || "")) ? String(foto) :
+        foto ? `${API.BASE_URL}${String(foto).startsWith("/assets/") ? foto : `/assets/usuarios/${foto}`}`
+        : `${API.BASE_URL}/assets/usuarios/menina.png`);
 
       setPerfil({
         atletaId,
         nome: nomeBase,
-        foto: fotoAbs,
+        foto,
         posicao: posicaoVigente ?? posicaoPerfil ?? undefined,
       });
 
-      const perf = Number(wire?.performance ?? 0);
-      const disc = Number(wire?.disciplina ?? 0);
-      const resp = Number(wire?.responsabilidade ?? 0);
-      const total = perf + disc + resp;
-      const mediaGeral = Math.round(total / 3);
+      const calc = computeFromHistorico(wire);
 
       setPontos({
         atletaId,
-        total,
-        performance: perf,
-        disciplina: disc,
-        responsabilidade: resp,
-        mediaGeral,
+        total: calc.total,
+        performance: calc.performance,
+        disciplina: calc.disciplina,
+        responsabilidade: calc.responsabilidade,
+        mediaGeral: Math.round(calc.total / 3),
         ultimaAtualizacao: wire?.ultimaAtualizacao || new Date().toISOString(),
       });
 
       setHistorico(Array.isArray(wire?.historico) ? wire!.historico! : []);
       setVideos(Array.isArray(wire?.videos) ? wire!.videos! : []);
     } catch (err: any) {
-      console.error("[PontuacaoDetalhada] Falha geral", {
-        msg: err?.message,
-        code: err?.code,
-        status: err?.response?.status,
-        data: err?.response?.data,
-      });
-      if (!axios.isCancel(err)) {
-        if (err?.code === 401 || (axios.isAxiosError(err) && err.response?.status === 401)) {
-          setErro("Sua sessão expirou. Faça login novamente.");
-          setLocation("/login");
-        } else {
-          setErro("Não foi possível carregar seu perfil agora. Tente novamente mais tarde.");
-        }
-      }
-    } finally {
-      setLoading(false);
-    }
+  if (
+    err?.code === "ERR_CANCELED" ||
+    err?.name === "CanceledError" ||
+    err?.message === "canceled" ||
+    (axios.isCancel && axios.isCancel(err))
+  ) {
+    return;
+  }
+
+  console.error("[PontuacaoDetalhada] Falha geral", {
+    msg: err?.message,
+    code: err?.code,
+    status: err?.response?.status,
+    data: err?.response?.data,
+  });
+
+  if (err?.code === 401 || (axios.isAxiosError(err) && err.response?.status === 401)) {
+    setErro("Sua sessão expirou. Faça login novamente.");
+    setLocation("/login");
+  } else {
+    setErro("Não foi possível carregar seu perfil agora. Tente novamente mais tarde.");
+  }
+} finally {
+  if (!controller.signal.aborted) setLoading(false);
+}
   })();
 
   return () => controller.abort();
-}, [matchedWithId, params?.id, setLocation]);
+}, [matchedWithId, params?.id, setLocation]); 
 
   useEffect(() => {
     if (!loading && typeof window !== "undefined" && window.location.hash === "#detalhes") {

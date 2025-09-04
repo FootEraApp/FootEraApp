@@ -4,11 +4,139 @@ import { BarChart2, Clock3, ShieldCheck } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
 
-type ScorePanelProps = {
-  performance?: number;
-  disciplina?: number;
-  responsabilidade?: number;
+  type ScorePanelProps = {
+    performance?: number;
+    disciplina?: number;
+    responsabilidade?: number;
+  };
+
+function pickNumber(...vals: any[]): number {
+  for (const v of vals) {
+    if (v === null || v === undefined) continue;
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const m = v.match(/-?\d+(?:\.\d+)?/);
+      if (m) {
+        const n = Number(m[0]);
+        if (Number.isFinite(n)) return n;
+      }
+    }
+  }
+  return 0;
+}
+
+const treinoNomeToPontos: Record<string, number> = {
+  "resistência física": 15,
+  "resistencia fisica": 15,
 };
+
+function normalizaTitulo(t?: string) {
+  return (t || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+}
+
+function pontosDoEvento(event: any): number {
+  if (!event || typeof event !== "object") return 0;
+
+  const direto = pickNumber(
+    event?.pontos, event?.pontuacao, event?.pontosPerformance, event?.pontosDesafio,
+    event?.score, event?.totalPontos, event?.valor, event?.xp
+  );
+  if (direto) return direto;
+
+  let sum = 0;
+  const reChave = /(ponto|pontu|score|nota|valor|total)/i;
+
+  const walk = (obj: any) => {
+    if (obj == null) return;
+    if (Array.isArray(obj)) { obj.forEach(walk); return; }
+    if (typeof obj === "object") {
+      for (const [k, v] of Object.entries(obj)) {
+        if (typeof v === "number" && Number.isFinite(v) && reChave.test(k)) {
+          sum += v;
+        } else if (typeof v === "string" && reChave.test(k)) {
+          const n = pickNumber(v);
+          if (n) sum += n;
+        } else {
+          walk(v);
+        }
+      }
+      return;
+    }
+    if (typeof obj === "string") {
+      const n = pickNumber(obj);
+      if (n) sum += n;
+    }
+  };
+
+  walk(event);
+
+  if (sum) return sum;
+
+  const titulo = normalizaTitulo(event?.titulo || event?.nome || event?.descricao);
+  for (const [nome, pts] of Object.entries(treinoNomeToPontos)) {
+    if (titulo.includes(nome)) return pts;
+  }
+
+  return 0;
+}
+
+ function sumPointsFromCategories(cats: any): number {
+  if (!cats || typeof cats !== "object") return 0;
+  let sum = 0;
+  const reChave = /(ponto|pontu|score|nota|valor|total|perf)/i;
+
+  const walk = (obj: any) => {
+    if (obj == null) return;
+    if (Array.isArray(obj)) { obj.forEach(walk); return; }
+    if (typeof obj === "object") {
+      for (const [k, v] of Object.entries(obj)) {
+        if (typeof v === "number" && Number.isFinite(v) && reChave.test(k)) sum += v;
+        else if (typeof v === "string" && reChave.test(k)) {
+          const n = pickNumber(v);
+          if (n) sum += n;
+        } else {
+          walk(v);
+        }
+      }
+    }
+  };
+
+  walk(cats);
+  return sum;
+}
+
+function computeFromHistorico(wire?: any) {
+  const hist: any[] = Array.isArray(wire?.historico) ? wire.historico : [];
+
+  const isTreino = (t: any) =>
+    /treino/i.test(String(t?.tipo ?? t?.categoria ?? ""));
+  const isDesafio = (t: any) =>
+    /desaf/i.test(String(t?.tipo ?? t?.categoria ?? ""));
+  const isConcluido = (t: any) => {
+    const s = String(t?.status ?? t?.situacao ?? "").toLowerCase();
+    return !s || s.includes("conclu");
+  };
+
+  const treinos  = hist.filter((t) => isTreino(t)  && isConcluido(t));
+  const desafios = hist.filter((t) => isDesafio(t) && isConcluido(t));
+
+  const perfHist = [...treinos, ...desafios].reduce((acc, ev) => acc + pontosDoEvento(ev), 0);
+
+  const perfCats = sumPointsFromCategories(wire?.categorias);
+
+  const perfApi  = Number(wire?.performance ?? 0);
+  const performance = Math.max(perfHist, perfCats, perfApi);
+
+  const disciplina       = treinos.length  * 2;
+  const responsabilidade = desafios.length * 2;
+
+  return {
+    performance,
+    disciplina,
+    responsabilidade,
+    total: performance + disciplina + responsabilidade,
+  };
+}
 
 export default function ScorePanel({
   performance,
@@ -19,7 +147,7 @@ export default function ScorePanel({
 
   const me = String(Storage?.usuarioId ?? "");
   const targetId = matched && params?.id ? params.id! : me;
-  const isOwn = !matched || params?.id === me; // mantém só pra navegação da UI
+  const isOwn = !matched || params?.id === me;
 
   const [vals, setVals] = useState({
     performance: performance ?? 0,
@@ -27,7 +155,6 @@ export default function ScorePanel({
     responsabilidade: responsabilidade ?? 0,
   });
 
-  // props -> estado
   useEffect(() => {
     setVals({
       performance: performance ?? 0,
@@ -36,29 +163,38 @@ export default function ScorePanel({
     });
   }, [performance, disciplina, responsabilidade]);
 
-  // API -> estado (sempre /perfil/:id/pontuacao)
-  useEffect(() => {
-    if (!targetId) return;
-    const token = Storage?.token || "";
-    const url = `${API.BASE_URL}/api/perfil/${encodeURIComponent(targetId)}/pontuacao`;
+    useEffect(() => {
+      if (!targetId) return;
+      const token = Storage?.token || "";
+      const url = API.BASE_URL + `/api/perfil/${encodeURIComponent(targetId)}/pontuacao`;
 
-    (async () => {
-      try {
-        const r = await fetch(url, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        });
-        if (!r.ok) return; // 404/401/etc -> mantém valores atuais
-        const data = await r.json();
-        setVals({
-          performance: Number(data?.performance) || 0,
-          disciplina: Number(data?.disciplina) || 0,
-          responsabilidade: Number(data?.responsabilidade) || 0,
-        });
-      } catch {}
-    })();
-  }, [targetId]);
+      (async () => {
+        try {
+          const r = await fetch(url, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          });
+          if (r.status !== 200) return;
+          const data = await r.json();
 
-  const hrefPontuacao = isOwn ? "/perfil/pontuacao" : `/perfil/${targetId}/pontuacao`;
+          const calc = computeFromHistorico(data);
+          if (calc.total > 0 || (data?.historico && Array.isArray(data.historico))) {
+            setVals({
+              performance: calc.performance,
+              disciplina: calc.disciplina,
+              responsabilidade: calc.responsabilidade,
+            });
+          } else {
+            setVals({
+              performance: Number(data?.performance) || 0,
+              disciplina: Number(data?.disciplina) || 0,
+              responsabilidade: Number(data?.responsabilidade) || 0,
+            });
+          }
+        } catch {}
+      })();
+    }, [targetId]);
+
+  const hrefPontuacao = `/perfil/pontuacao`;
 
   return (
     <Link href={hrefPontuacao} className="no-underline block">

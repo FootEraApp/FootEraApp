@@ -35,8 +35,7 @@ interface Activity {
 }
 
 export default function PerfilUnico() {
- // DEBUG: logar chamadas para /api/perfil/pontuacao sem id
-if (typeof window !== "undefined" && !(window as any).__patchFetchPontuacao) {
+  if (typeof window !== "undefined" && !(window as any).__patchFetchPontuacao) {
   (window as any).__patchFetchPontuacao = true;
   const origFetch = window.fetch;
   window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
