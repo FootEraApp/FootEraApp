@@ -44,9 +44,6 @@ type PosicaoAtualResp = {
   updatedAt?: string | null;
 };
 
-// -------------------- Axios + token --------------------
-const api = axios.create({ baseURL: API.BASE_URL || "http://localhost:3001" });
-
 const readToken = () => {
   const t1 = (Storage as any)?.token;
   const t2 =
