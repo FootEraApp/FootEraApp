@@ -36,6 +36,63 @@ const timeKey = (t: Training) =>
     toDate(t.dataTreino)?.getTime() ??
     Number.MAX_SAFE_INTEGER);
 
+    
+function pickNumber(...vals: any[]): number {
+  for (const v of vals) {
+    if (v === null || v === undefined) continue;
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const m = v.match(/-?\d+(?:\.\d+)?/);
+      if (m) {
+        const n = Number(m[0]);
+        if (Number.isFinite(n)) return n;
+      }
+    }
+  }
+  return 0;
+}
+
+function computeFromHistorico(wire?: any) {
+  const hist: any[] = Array.isArray(wire?.historico) ? wire.historico : [];
+
+  const isTreino = (t: any) =>
+    /treino/i.test(String(t?.tipo ?? t?.categoria ?? ""));
+  const isDesafio = (t: any) =>
+    /desaf/i.test(String(t?.tipo ?? t?.categoria ?? ""));
+
+  const isConcluido = (t: any) => {
+    const s = String(t?.status ?? t?.situacao ?? "").toLowerCase();
+    return !s || s.includes("conclu"); 
+  };
+
+  const treinosConcluidos  = hist.filter((t) => isTreino(t)  && isConcluido(t));
+  const desafiosConcluidos = hist.filter((t) => isDesafio(t) && isConcluido(t));
+
+  const eventosPontuaveis = [...treinosConcluidos, ...desafiosConcluidos];
+  const performance = eventosPontuaveis.reduce((acc, it) => {
+    const p = pickNumber(
+      it?.pontos,
+      it?.pontuacao,
+      it?.pontosPerformance,
+      it?.pontosDesafio,
+      it?.score,
+      it?.totalPontos,
+      it?.valor
+    );
+    return acc + p;
+  }, 0);
+
+  const disciplina = treinosConcluidos.length * 2;
+  const responsabilidade = desafiosConcluidos.length * 2;
+
+  return {
+    performance,
+    disciplina,
+    responsabilidade,
+    total: performance + disciplina + responsabilidade,
+  };
+}
+
 export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProgressProps) {
   const qc = useQueryClient();
   const token = Storage.token || '';
@@ -133,7 +190,6 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
     },
   });
 
-  // PONTUAÇÃO — sempre via /api/perfil/:id/pontuacao
   const { data: pontuacao, isLoading: isLoadingPontuacao } = useQuery({
     queryKey: ["pontuacaoPerfil", targetUserId],
     enabled: Boolean(token && targetUserId),
@@ -154,10 +210,9 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
     [resumo]
   );
 
-  const totalPontosTopo =
-    (pontuacao?.performance ?? 0) +
-    (pontuacao?.disciplina ?? 0) +
-    (pontuacao?.responsabilidade ?? 0);
+  const calcTop = useMemo(() => computeFromHistorico(pontuacao), [pontuacao]);
+
+  const totalPontosTopo = calcTop.performance + calcTop.disciplina + calcTop.responsabilidade;
 
   const raw = resumo?.categorias || {};
   const catFisico = (raw as any).Fisico ?? (raw as any)['Físico'] ?? 0;

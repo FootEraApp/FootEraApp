@@ -9,13 +9,11 @@ import PaginaFeed from "./pages/feed.js";
 import PaginaTreinos from "./pages/treinos.js";
 import PaginaCreatePost from "./pages/post/create.js";
 import PaginaExplorar from "./pages/explorar.js";
-
 import PaginaCreateDesafios from "./pages/admin/desafios/create.js";
 import PaginaCreateExercicios from "./pages/admin/exercicios/create.js";
 import PaginaCreateTreinos from "./pages/admin/treinos/create.js";
 import PaginaCreateProfessores from "./pages/admin/professores/create.js";
 import PaginaLoginAdmin from "./pages/admin/login.js";
-
 import PaginaPerfil from "./pages/perfil.js";
 import PaginaNovoTreino from "./pages/novoTreino.js";
 import PaginaPostUnico from "./pages/postUnico.js";
@@ -52,12 +50,6 @@ export function AppRoutes() {
 
       <Route path="/admin/login"><PaginaLoginAdmin /></Route>
 
-      <Route path="/admin">
-        <RequireAdmin>
-          <AdminDashboard />
-        </RequireAdmin>
-      </Route>
-
       <Route path="/admin/desafios/create">
         <RequireAdmin><PaginaCreateDesafios /></RequireAdmin>
       </Route>
@@ -70,27 +62,32 @@ export function AppRoutes() {
       <Route path="/admin/professores/create">
         <RequireAdmin><PaginaCreateProfessores /></RequireAdmin>
       </Route>
+      <Route path="/admin">
+        <RequireAdmin>
+          <AdminDashboard />
+        </RequireAdmin>
+      </Route>
 
-      <Route path="/feed"><Private><PaginaFeed /></Private></Route>
       <Route path="/feed/desafios"><Private><PaginaDesafios /></Private></Route>
+      <Route path="/feed"><Private><PaginaFeed /></Private></Route>
       <Route path="/desafios/:id"><Private><PaginaDesafioUnico /></Private></Route>
-      <Route path="/treinos"><Private><PaginaTreinos /></Private></Route>
       <Route path="/treinos/elenco"><Private><PaginaElenco /></Private></Route>
-      <Route path="/perfil"><Private><PaginaPerfil /></Private></Route>
-      <Route path="/perfil/:id"><Private><PaginaPerfilUnico /></Private></Route>
-      <Route path="/post"><Private><PaginaCreatePost /></Private></Route>
-      <Route path="/explorar"><Private><PaginaExplorar /></Private></Route>
-      <Route path="/post/:id"><Private><PaginaPostUnico /></Private></Route>
-      <Route path="/minha-rede"><Private><PaginaMinhaRede /></Private></Route>
       <Route path="/treinos/novo"><PaginaNovoTreino /></Route>
-      <Route path="/trainings"><PaginaTraining /></Route>
-      <Route path="/perfil/editar"><Private><PaginaEditarPerfil /></Private></Route>
-      <Route path="/configuracoes"><PaginaConfiguracoesPerfil /></Route>
+      <Route path="/treinos"><Private><PaginaTreinos /></Private></Route>
       <Route path="/perfil/pontuacao"><Private><PaginaPontuacaoPerfil /></Private></Route>
       <Route path="/perfil/:id/pontuacao"><Private><PaginaPontuacaoDePerfil /></Private></Route>
-      <Route path="/notificacoes"><PaginaNotificacoes /></Route>
-      <Route path="/submissao"><PaginaSubmissao /></Route>
+      <Route path="/perfil/editar"><Private><PaginaEditarPerfil /></Private></Route>
+      <Route path="/perfil/:id"><Private><PaginaPerfilUnico /></Private></Route>
+      <Route path="/perfil"><Private><PaginaPerfil /></Private></Route>
+      <Route path="/post/:id"><Private><PaginaPostUnico /></Private></Route>
+      <Route path="/post"><Private><PaginaCreatePost /></Private></Route>
       <Route path="/submissao/grupo/:grupoId/:desafioId"><PaginaSubmissaoDesafioEmGrupo /></Route>
+      <Route path="/submissao"><PaginaSubmissao /></Route>
+      <Route path="/explorar"><Private><PaginaExplorar /></Private></Route>
+      <Route path="/minha-rede"><Private><PaginaMinhaRede /></Private></Route>
+      <Route path="/trainings"><PaginaTraining /></Route>
+      <Route path="/configuracoes"><PaginaConfiguracoesPerfil /></Route>
+      <Route path="/notificacoes"><PaginaNotificacoes /></Route>
       <Route path="/mensagens"><PaginaMensagens /></Route>
       <Route path="/"><HomeRedirect /></Route>
       <Route><div style={{ padding: 16 }}>Página não encontrada</div></Route>

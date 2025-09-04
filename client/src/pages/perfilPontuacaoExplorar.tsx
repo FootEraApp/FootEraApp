@@ -21,6 +21,62 @@ type PontuacaoResp = {
   videos?: string[];
 };
 
+function pickNumber(...vals: any[]): number {
+  for (const v of vals) {
+    if (v === null || v === undefined) continue;
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const m = v.match(/-?\d+(?:\.\d+)?/);
+      if (m) {
+        const n = Number(m[0]);
+        if (Number.isFinite(n)) return n;
+      }
+    }
+  }
+  return 0;
+}
+
+function computeFromHistorico(wire?: any) {
+  const hist: any[] = Array.isArray(wire?.historico) ? wire.historico : [];
+
+  const isTreino = (t: any) =>
+    /treino/i.test(String(t?.tipo ?? t?.categoria ?? ""));
+  const isDesafio = (t: any) =>
+    /desaf/i.test(String(t?.tipo ?? t?.categoria ?? ""));
+
+  const isConcluido = (t: any) => {
+    const s = String(t?.status ?? t?.situacao ?? "").toLowerCase();
+    return !s || s.includes("conclu");
+  };
+
+  const treinosConcluidos  = hist.filter((t) => isTreino(t)  && isConcluido(t));
+  const desafiosConcluidos = hist.filter((t) => isDesafio(t) && isConcluido(t));
+
+  const eventosPontuaveis = [...treinosConcluidos, ...desafiosConcluidos];
+  const performance = eventosPontuaveis.reduce((acc, it) => {
+    const p = pickNumber(
+      it?.pontos,
+      it?.pontuacao,
+      it?.pontosPerformance,
+      it?.pontosDesafio,
+      it?.score,
+      it?.totalPontos,
+      it?.valor
+    );
+    return acc + p;
+  }, 0);
+
+  const disciplina = treinosConcluidos.length * 2;
+  const responsabilidade = desafiosConcluidos.length * 2;
+
+  return {
+    performance,
+    disciplina,
+    responsabilidade,
+    total: performance + disciplina + responsabilidade,
+  };
+}
+
 export default function PontuacaoDePerfil() {
   const [, setLocation] = useLocation();
   const [matched, params] = useRoute<{ id: string }>("/perfil/:id/pontuacao");
@@ -55,28 +111,31 @@ export default function PontuacaoDePerfil() {
       try {
         let resp: { data: PontuacaoResp } | null = null;
         try {
-          resp = await axios.get(`${API.BASE_URL}/api/perfil/pontuacao/${targetId}`, { headers: axiosHeaders });
+          resp = await axios.get(`${API.BASE_URL}/api/perfil/${targetId}/pontuacao`, { headers: axiosHeaders });
         } catch {
           resp = await axios.get(`${API.BASE_URL}/api/perfil/${targetId}/pontuacao`, { headers: axiosHeaders });
         }
 
-        const { performance, disciplina, responsabilidade, historico, videos } = resp!.data;
-        setPontuacao({
-          performance: performance ?? 0,
-          disciplina: disciplina ?? 0,
-          responsabilidade: responsabilidade ?? 0,
-        });
-        setHistorico(historico ?? []);
-        setVideos(videos ?? []);
-      } catch (e: any) {
-        console.error(e);
-        setErro("Não foi possível carregar a pontuação do atleta.");
-      } finally {
-        setCarregando(false);
-      }
-    };
+      const { performance, disciplina, responsabilidade, historico, videos } = resp!.data;
+      const wire = resp!.data;
 
-    carregar();
+      const calc = computeFromHistorico(wire);
+        
+      setPontuacao({
+          performance: calc.performance,
+          disciplina: calc.disciplina,
+          responsabilidade: calc.responsabilidade,
+        });
+        setHistorico(Array.isArray(wire?.historico) ? wire.historico : []);
+        setVideos(Array.isArray(wire?.videos) ? wire.videos : []);
+              } catch (e: any) {
+                console.error(e);
+                setErro("Não foi possível carregar a pontuação do atleta.");
+              } finally {
+                setCarregando(false);
+              }
+            };
+      carregar();
   }, [targetId, token, axiosHeaders, setLocation]);
 
   if (!matched) return null;

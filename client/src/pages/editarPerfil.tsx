@@ -40,7 +40,6 @@ const EditarPerfil = () => {
         data: res.data,
       });
 
-      // valida formato do payload esperado
       if (!res?.data?.usuario || !res?.data?.dadosEspecificos) {
         console.warn("[EditarPerfil] Payload inesperado", res?.data);
         setErro("Perfil não encontrado ou resposta inválida do servidor.");

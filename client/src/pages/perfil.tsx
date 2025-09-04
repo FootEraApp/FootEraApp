@@ -49,7 +49,6 @@ export default function ProfilePage() {
     (async () => {
      setLoading(true);
       try {
-        // 1) Perfil + atividades + badges
         const [{ data: meOuOutro }, { data: atividades }, { data: badgesData }] =
           await Promise.all([
             axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}`, { headers }),
@@ -70,13 +69,12 @@ export default function ProfilePage() {
         })));
         setBadges(badgesData || []);
 
-        // 2) Pontuação — APENAS UMA CHAMADA, com rota correta e tratando 404
         if (uid) {
           const relPont = `/api/perfil/${encodeURIComponent(uid)}/pontuacao`;
 
           const respPont = await axios.get(`${API.BASE_URL}${relPont}`, {
             headers,
-            validateStatus: () => true, // não joga 404 no catch
+            validateStatus: () => true,
           });
 
           if (respPont.status === 200) {
@@ -92,7 +90,7 @@ export default function ProfilePage() {
               pontuacaoResponsabilidade: responsab,
             });
           } else if (respPont.status === 404) {
-            setPontuacao(null); // sem pontos ainda; não quebra a tela
+            setPontuacao(null); 
           } else {
             console.warn("Falha ao buscar pontuação:", respPont.status, respPont.data);
             setPontuacao(null);
