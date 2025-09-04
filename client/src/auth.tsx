@@ -1,52 +1,18 @@
-import { useEffect } from "react";
-import { useLocation } from "wouter";
-import { jwtDecode } from "jwt-decode";
-import Storage  from "../../server/utils/storage.js";
+import { ReactNode } from "react";
+import { Redirect } from "wouter";
+import { readToken } from "@/utils/auth.js";
 
-function getToken() {
-  return Storage.token || sessionStorage.getItem("token") || "";
+export function Private({ children }: { children: ReactNode }) {
+  const token = readToken();
+  return token ? <>{children}</> : <Redirect to="/login" />;
 }
 
-function isTokenValid(token: string) {
-  try {
-    const { exp } = jwtDecode<{ exp?: number }>(token);
-    if (!exp) return true;
-    return Date.now() < exp * 1000;
-  } catch {
-    return false;
-  }
-}
-
-export function Private({ children }: { children: React.ReactNode }) {
-  const [, navigate] = useLocation();
-  useEffect(() => {
-    const token = getToken();
-    if (!token || !isTokenValid(token)) {
-      try { localStorage.removeItem("token"); sessionStorage.removeItem("token"); } catch {}
-      navigate("/login");
-    }
-  }, [navigate]);
-  const token = getToken();
-  return token && isTokenValid(token) ? <>{children}</> : null;
-}
-
-export function PublicOnly({ children }: { children: React.ReactNode }) {
-  const [, navigate] = useLocation();
-  useEffect(() => {
-    const token = getToken();
-    if (token && isTokenValid(token)) {
-      navigate("/feed");
-    }
-  }, [navigate]);
-  const token = getToken();
-  return token && isTokenValid(token) ? null : <>{children}</>;
+export function PublicOnly({ children }: { children: ReactNode }) {
+  const token = readToken();
+  return token ? <Redirect to="/feed" /> : <>{children}</>;
 }
 
 export function HomeRedirect() {
-  const [, navigate] = useLocation();
-  useEffect(() => {
-    const token = getToken();
-    navigate(token && isTokenValid(token) ? "/feed" : "/login");
-  }, [navigate]);
-  return null;
+  const token = readToken();
+  return <Redirect to={token ? "/feed" : "/login"} />;
 }

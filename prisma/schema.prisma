@@ -294,12 +294,14 @@ model AtletaObservado {
 }
 
 model Postagem {
-  id          String     @id @default(uuid())
-  conteudo    String     @unique
-  imagemUrl   String?
-  videoUrl    String?
-  tipoMidia   TipoMidia?
-  dataCriacao DateTime   @default(now())
+  id            String     @id @default(uuid())
+  conteudo      String     @unique
+  imagemUrl     String?
+  videoUrl      String?
+  tipoMidia     TipoMidia?
+  dataCriacao   DateTime   @default(now())
+  reportedCount Int        @default(0)
+  oculto        Boolean    @default(false)
 
   usuarioId String
   usuario   Usuario @relation(fields: [usuarioId], references: [id])
@@ -377,18 +379,20 @@ model Escolinha {
 }
 
 model Comentario {
-  id          String   @id @default(uuid())
-  conteudo    String
-  dataCriacao DateTime @default(now())
-  usuarioId   String
+  id            String            @id @default(uuid())
+  conteudo      String
+  dataCriacao   DateTime          @default(now())
+  reportedCount Int               @default(0)
+  oculto        Boolean           @default(false)
 
-  postagemId  String?
-  postagem    Postagem? @relation(fields: [postagemId], references: [id])
+  postagemId    String?
+  postagem      Postagem?         @relation(fields: [postagemId], references: [id])
 
-  submissaoId String?
-  submissao   SubmissaoDesafio? @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
+  submissaoId   String?
+  submissao     SubmissaoDesafio? @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
 
-  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+  usuarioId     String
+  usuario       Usuario           @relation(fields: [usuarioId], references: [id])
 
   @@index([postagemId])
   @@index([submissaoId])
