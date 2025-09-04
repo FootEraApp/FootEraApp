@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
 import axios from "axios";
-import { API } from "../config.js";     
+import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 
 export default function PaginaLogin() {
@@ -10,7 +10,7 @@ export default function PaginaLogin() {
   const [senha, setSenha] = useState("");
   const [lembrarDeMim, setLembrarDeMim] = useState(false);
   const [erro, setErro] = useState("");
-  const [_, navigate] = useLocation();
+  const [, navigate] = useLocation();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,35 +22,36 @@ export default function PaginaLogin() {
     }
 
     try {
-      const url = `${API.BASE_URL}/api/auth/login`;   
+      const url = `${API.BASE_URL}/api/auth/login`;
       const resp = await axios.post(url, { nomeDeUsuario, senha });
 
       const data = resp.data ?? {};
-      const token: string | undefined = data.token;
 
       const usuario = data.usuario ?? {};
       const usuarioId = usuario.id ?? data.id ?? "";
       const usuarioNome = usuario.nomeDeUsuario ?? data.nomeDeUsuario ?? "";
-      const tipoOriginal: string | undefined = usuario.tipo ?? data.tipo;
+      const rawTipo = (usuario.tipo ?? data.tipo ?? "").toString().toLowerCase();
+      const isAdmin = usuario.tipo === "Admin" || String(usuario.tipo).toLowerCase() === "admin";
+      const token = data.token;
 
       if (!token || !usuarioId) throw new Error("Resposta inválida do servidor");
 
-      const storage = lembrarDeMim ? localStorage : sessionStorage;
-      storage.setItem("token", token);
-      storage.setItem("usuarioId", usuarioId);
-      storage.setItem("nomeUsuario", usuarioNome);
+      const store = lembrarDeMim ? localStorage : sessionStorage;
+      store.setItem("token", token);
+      store.setItem("usuarioId", usuarioId);
+      store.setItem("nomeUsuario", usuarioNome);
 
-      const t = (tipoOriginal ?? "").toLowerCase();
       const tipoPadrao =
-        t === "atleta" ? "atleta" :
-        t === "escolinha" ? "escola" :
-        t === "clube" ? "clube" :
-        t === "professor" ? "professor" : null;
+        isAdmin ? "admin" :
+        rawTipo === "escolinha" ? "escola" :
+        rawTipo === "clube"     ? "clube" :
+        rawTipo === "professor" ? "professor" :
+        "atleta";
 
-      if (tipoPadrao) storage.setItem("tipoUsuario", tipoPadrao);
-      if (data.tipoUsuarioId) storage.setItem("tipoUsuarioId", String(data.tipoUsuarioId));
+      store.setItem("tipoUsuario", tipoPadrao);
+      if (data.tipoUsuarioId) store.setItem("tipoUsuarioId", String(data.tipoUsuarioId));
 
-      navigate("/feed");
+      navigate(isAdmin ? "/admin" : "/feed");
     } catch (err: any) {
       console.error("Erro no login:", err.response?.status, err.response?.data || err.message);
       setErro(err.response?.data?.message || "Nome de usuário ou senha inválidos.");
@@ -58,8 +59,11 @@ export default function PaginaLogin() {
   };
 
   useEffect(() => {
-    const token = Storage.token;
-    if (token) navigate("/feed");
+    const token = Storage.token || localStorage.getItem("token") || sessionStorage.getItem("token");
+    if (!token) return;
+
+    const tipo = (localStorage.getItem("tipoUsuario") || sessionStorage.getItem("tipoUsuario") || "").toLowerCase();
+    navigate(tipo === "admin" ? "/admin" : "/feed");
   }, []);
 
   return (
@@ -134,11 +138,10 @@ export default function PaginaLogin() {
             >
               Entrar
             </button>
-            
+
             <a href="/esqueci-senha" className="text-green-700 underline text-right text-sm mt-2 block">
               Esqueci minha senha
             </a>
-
           </form>
 
           <p className="text-center text-sm text-gray-600 mt-4">
@@ -147,7 +150,6 @@ export default function PaginaLogin() {
               Cadastre-se
             </a>
           </p>
-          
         </div>
       </div>
     </div>

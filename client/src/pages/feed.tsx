@@ -202,6 +202,18 @@ function PaginaFeed(): JSX.Element {
     }
   };
 
+  const handleLogout = () => {
+    const keys = ["token", "usuarioId", "nomeUsuario", "tipoUsuario", "tipoUsuarioId"];
+    keys.forEach((k) => {
+      localStorage.removeItem(k);
+      sessionStorage.removeItem(k);
+    });
+
+    try { (Storage as any)?.clear?.(); } catch {}
+
+    window.location.href = "/login";
+  };
+
   const abrirModalComentarios = (post: PostagemComUsuario) => {
     setPostSelecionado(post);
     setComentariosModalAberto(true);

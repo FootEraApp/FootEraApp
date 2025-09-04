@@ -38,7 +38,7 @@ export default function ProfilePage() {
 
     let cancelled = false;
     (async () => {
-      setLoading(true);
+     setLoading(true);
       try {
         // Busca mínima: só o tipo e o id do usuário
         const { data } = await axios.get<PerfilMinimo>(
@@ -57,6 +57,7 @@ export default function ProfilePage() {
       } finally {
         if (!cancelled) setLoading(false);
       }
+
     })();
 
     return () => {

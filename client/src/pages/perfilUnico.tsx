@@ -36,6 +36,25 @@ interface Activity {
 }
 
 export default function PerfilUnico() {
+  if (typeof window !== "undefined" && !(window as any).__patchFetchPontuacao) {
+  (window as any).__patchFetchPontuacao = true;
+  const origFetch = window.fetch;
+  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : (input as Request).url;
+    if (
+      url.includes("/api/perfil/pontuacao") &&
+      !/\/pontuacao\/[^/]+$/.test(url) &&
+      !/\/me\/pontuacao$/.test(url)
+    ) {
+      console.group("%c[DEBUG] fetch /api/perfil/pontuacao (sem id)", "color:red;font-weight:bold");
+      console.log("URL:", url);
+      console.trace("Stack:");
+      console.groupEnd();
+    }
+    return origFetch(input as any, init);
+  };
+}
+
   const { id } = useParams<{ id: string }>();
   const [usuario, setUsuario] = useState<any>(null);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
@@ -198,7 +217,11 @@ export default function PerfilUnico() {
         setUsuario(data);
       })
       .catch((err) => {
-        console.error("Erro ao buscar perfil:", err);
+        console.error("Erro ao buscar perfil:", {
+          msg: err?.message,
+          status: err?.response?.status,
+          data: err?.response?.data,
+        });
       });
   }, [id]);
 

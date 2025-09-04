@@ -28,26 +28,56 @@ const GOLDEN_MIN_OVR = 0;
 const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
   (Number.isFinite(ovr) ? Number(ovr) : 0) >= min;
 
-const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
-  atleta,
-  ovr,
-  perf,
-  disc,
-  resp,
-  size,
-  goldenMinOVR,
-}) => {
-  const W = size?.w ?? SHIELD_W_DESK;
-  const H = size?.h ?? SHIELD_H_DESK;
-  
-  const clipId = `shieldClip-${atleta.atletaId || atleta.id || atleta.nome || "x"}`;
-  const fotoUrl = useMemo(
-   () => publicImgUrl(atleta.foto) || `${API.BASE_URL}/assets/default-user.png`,
-   [atleta.foto]
-  );
-  const [imgOk, setImgOk] = useState(true);
-  const fotoResolved = imgOk ? fotoUrl : `${API.BASE_URL}/assets/default-user.png`;
+  const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
+    atleta,
+    ovr,
+    perf,
+    disc,
+    resp,
+    size,
+    goldenMinOVR,
+  }) => {
+    const W = size?.w ?? SHIELD_W_DESK;
+    const H = size?.h ?? SHIELD_H_DESK;
+    
+    const clipId = `shieldClip-${atleta.atletaId || atleta.id || atleta.nome || "x"}`;
+
+  function buildFotoCandidates(raw?: string | null): string[] {
+    const v = (raw || "").trim();
+    const out: string[] = [];
+
+    if (v) {
+      if (/^https?:\/\//i.test(v)) out.push(v);
+
+      if (v.startsWith("/assets/") || v.startsWith("/uploads/")) {
+        out.push(`${API.BASE_URL}${v}`);
+      }
+
+      if (!/^https?:\/\//i.test(v) && !v.startsWith("/")) {
+        out.push(`${API.BASE_URL}/assets/usuarios/${v}`);
+        out.push(`/public_assets/usuarios/${v}`);       
+        out.push(`/assets/usuarios/${v}`);                
+      }
+    }
+
+    out.push(`${API.BASE_URL}/assets/default-user.png`);
+    out.push(`/public_assets/default-user.png`);
+    out.push(`/assets/default-user.png`);
+
+    return Array.from(new Set(out));
+  }
+
+  const [fotoIdx, setFotoIdx] = useState(0);
+  const fotoCandidates = useMemo(() => buildFotoCandidates(atleta.foto), [atleta.foto]);
+  const fotoSrc = fotoCandidates[Math.min(fotoIdx, fotoCandidates.length - 1)];
   const imgRef = useRef<SVGImageElement | null>(null);
+
+  useEffect(() => {
+    try {
+      imgRef.current?.setAttribute("referrerpolicy", "no-referrer");
+      imgRef.current?.setAttribute("crossorigin", "anonymous");
+    } catch {}
+  }, [fotoSrc]);
 
   useEffect(() => {
     try {
@@ -102,7 +132,6 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
     };
   }, [isDragging, lastPos]);
 
-  // Touch (mobile) + travar scroll enquanto arrasta
   useEffect(() => {
     const handleGlobalTouchMove = (e: TouchEvent) => {
       if (isDragging) e.preventDefault();
@@ -132,11 +161,6 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
     setIsDragging(false);
     setRotation({ x: 0, y: 0 });
   };
-
-  const isCrossOrigin =
-    typeof window !== "undefined" &&
-    !!fotoResolved &&
-    new URL(fotoResolved, window.location.href).origin !== window.location.origin;
 
   return (
     <div
@@ -188,8 +212,8 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
         <g clipPath={`url(#${clipId})`}>
           <image
             ref={imgRef}
-            href={fotoResolved}
-            onError={() => setImgOk(false)}
+            href={fotoSrc}
+             onError={() => setFotoIdx((i) => i + 1)}
             x="0"
             y="-10"
             width="184"

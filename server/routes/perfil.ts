@@ -49,22 +49,18 @@ router.get("/me", authenticateToken, getPerfilUsuarioMe);
 router.get("/me/pontuacao", authenticateToken, getPontuacaoMe);
 router.get("/me/atividades", authenticateToken, getAtividadesRecentesMe);
 router.get("/me/badges", authenticateToken, getBadgesMe);
+router.get("/me/posicao-atual", authenticateToken, getPosicaoAtualAtleta);
+router.get("/me", authenticateToken, getPerfilUsuarioMe);
 
 router.get("/:usuarioId/pontuacao", authenticateToken, pontuacaoDoPerfil);
-router.get("/pontuacao/:usuarioId", authenticateToken, getPontuacaoPerfil);
+
 router.get("/:id/atividades", authenticateToken, getAtividadesRecentes);
 router.get("/:id/badges", authenticateToken, getBadges);
-router.get("/:id/pontuacao", authenticateToken, getPontuacaoDetalhada);
 router.get("/:id/treinos", authenticateToken, getTreinosResumo);
 router.get("/:id/progresso", authenticateToken, getProgressoTreinos);
+router.get("/:id/posicao-atual", authenticateToken, getPosicaoAtualAtleta);
+
 router.get("/:id", authenticateToken, getPerfilUsuario);
 router.put("/:id", authenticateToken, upload.single("foto"), atualizarPerfil);
-
-router.get("/me/posicao-atual", authenticateToken, (req, res) => {
-  getPosicaoAtualAtleta(req, res);
-});
-router.get("/:id/posicao-atual", authenticateToken, (req, res) => {
-  getPosicaoAtualAtleta(req, res);
-});
 
 export default router;
