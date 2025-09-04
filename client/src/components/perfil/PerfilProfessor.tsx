@@ -8,6 +8,7 @@ import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
+import Avatar from "../shared/Avatar.js";
 
 type Props = { idDaUrl?: string };
 
@@ -46,9 +47,14 @@ type AtletaItem = {
 
 type SolicitacaoItem = {
   id: string;
-  atleta: AtletaItem;
-  status: "PENDENTE" | "APROVADO" | "REJEITADO";
-  criadaEm: string;
+  remetenteId: string;
+  remetente: {
+    id: string;
+    nomeDeUsuario: string;
+    foto: string | null;
+  };
+  status?: "PENDENTE" | "APROVADO" | "REJEITADO";
+  criadaEm?: string;
 };
 
 type AtividadeRecente = {
@@ -197,7 +203,7 @@ async function fetchObservados() {
     async function fetchSolicitacoes() {
       try {
         const { data } = await axios.get<SolicitacaoItem[]>(
-          `${API.BASE_URL}/api/professores/${targetId}/solicitacoes`,
+          `${API.BASE_URL}/api/solicitacoes-treino`,
           { headers }
         );
         if (!cancel.v) setSolicitacoes(Array.isArray(data) ? data : []);
@@ -362,12 +368,13 @@ async function fetchObservados() {
                   <ul className="grid grid-cols-1 gap-3">
                     {vinculados.map((a) => (
                       <li key={a.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-                        <img
-                          src={a.foto?.startsWith("http") ? a.foto! : `${API.BASE_URL}/uploads/${a.foto ?? ""}`}
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/attached_assets/Perfil.jpg"; }}
-                          className="w-10 h-10 rounded-full object-cover"
+                        
+                        <Avatar
+                          foto={a.foto ?? null}
                           alt={a.nome}
+                          className="w-10 h-10"
                         />
+
                         <div className="flex-1">
                           <div className="text-sm font-medium text-green-900">{a.nome}</div>
                           <div className="text-xs text-green-900/70">
@@ -409,22 +416,23 @@ async function fetchObservados() {
                   <ul className="grid grid-cols-1 gap-3">
                     {observados.map((a) => (
                       <li key={a.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-                        <img
-                          src={a.foto?.startsWith("http") ? a.foto! : `${API.BASE_URL}/uploads/${a.foto ?? ""}`}
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/attached_assets/Perfil.jpg"; }}
-                          className="w-10 h-10 rounded-full object-cover"
+                        
+                        <Avatar
+                          foto={a.foto ?? null}
                           alt={a.nome}
+                          className="w-10 h-10"
                         />
+
                         <div className="flex-1">
                           <div className="text-sm font-medium text-green-900">{a.nome}</div>
                           <div className="text-xs text-green-900/70">{a.posicao ?? "-"}</div>
                         </div>
 
-<Link href={`/perfil/${a.id}`}>
-  <a className="text-sm text-green-800 inline-flex items-center gap-1">
-    Ver perfil <ChevronRight className="w-4 h-4" />
-  </a>
-</Link>
+                        <Link href={`/perfil/${a.id}`}>
+                          <a className="text-sm text-green-800 inline-flex items-center gap-1">
+                            Ver perfil <ChevronRight className="w-4 h-4" />
+                          </a>
+                        </Link>
 
                       </li>
                     ))}
@@ -443,36 +451,36 @@ async function fetchObservados() {
             {subAba === "solicitacoes" && (
               <SectionCard
                 title="Solicitações de Atletas"
-                right={
-                  <button className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900">
-                    <Filter className="w-4 h-4" />
-                    Filtrar
-                  </button>
-                }
+                right={<Link href="/notificacoes"><a className="text-sm text-green-800">Abrir notificações</a></Link>}
               >
                 {solicitacoes && solicitacoes.length > 0 ? (
                   <ul className="grid grid-cols-1 gap-3">
                     {solicitacoes.map((s) => (
-                      <li key={s.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-                        <img
-                          src={s.atleta.foto?.startsWith("http") ? s.atleta.foto! : `${API.BASE_URL}/uploads/${s.atleta.foto ?? ""}`}
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/attached_assets/Perfil.jpg"; }}
-                          className="w-10 h-10 rounded-full object-cover"
-                          alt={s.atleta.nome}
-                        />
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-green-900">{s.atleta.nome}</div>
-                          <div className="text-xs text-green-900/70">{new Date(s.criadaEm).toLocaleString()} • {s.status}</div>
-                        </div>
-                        {s.status === "PENDENTE" ? (
-                          <div className="flex gap-2">
-                            <button className="px-3 py-1.5 text-sm rounded-md bg-green-600 text-white">Aprovar</button>
-                            <button className="px-3 py-1.5 text-sm rounded-md bg-red-100 text-red-700">Rejeitar</button>
-                          </div>
-                        ) : (
-                          <span className="text-xs px-2 py-1 rounded bg-green-50 text-green-800">{s.status}</span>
-                        )}
+
+                      <li key={s.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3 hover:bg-green-50">
+                        <Link href={`/perfil/${s.remetenteId}`}>
+                          <a className="flex items-center gap-3 flex-1">
+                            <Avatar
+                              foto={s.remetente.foto ?? null}
+                              alt={s.remetente.nomeDeUsuario}
+                              className="w-10 h-10"
+                            />
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-green-900">
+                                {s.remetente.nomeDeUsuario}
+                              </div>
+                              <div className="text-xs text-green-900/70">
+                                {s.criadaEm ? new Date(s.criadaEm).toLocaleString() : "—"}{s.status ? ` • ${s.status}` : ""}
+                              </div>
+                              <div className="text-xs text-green-900/80">
+                                quer treinar junto com você
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-green-800" />
+                          </a>
+                        </Link>
                       </li>
+
                     ))}
                   </ul>
                 ) : (
