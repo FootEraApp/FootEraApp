@@ -1,11 +1,13 @@
 // client/src/components/perfil/PerfilClube.tsx
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import axios from "axios";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import { Activity, ChevronRight } from "lucide-react";
+import Avatar from "../shared/Avatar.js";
 
 type Props = { idDaUrl?: string };
 
@@ -57,12 +59,37 @@ type AtletaItem = {
   observadoEm?: string; // opcional, se o backend enviar
 };
 
+/** NOVO: modelo de solicitação igual à página de notificações */
+type Solicitacao = {
+  id: string;
+  remetenteId: string;
+  remetente: {
+    id: string;
+    nomeDeUsuario: string;
+    foto: string | null;
+  };
+};
+
 function EmptyState({ text }: { text: string }) {
   return (
     <div className="text-center text-green-900/70 py-8">
       <Activity className="mx-auto mb-2 opacity-70" />
       <p>{text}</p>
     </div>
+  );
+}
+/* --------- helper padrão igual Professor/Escola --------- */
+function SectionCard({
+  title, children, right,
+}: { title: string; children: ReactNode; right?: ReactNode }) {
+  return (
+    <section className="bg-white/90 rounded-2xl shadow-sm border border-green-100">
+      <div className="px-4 py-3 flex items-center justify-between border-b border-green-100">
+        <h3 className="font-semibold text-green-900">{title}</h3>
+        {right}
+      </div>
+      <div className="p-4">{children}</div>
+    </section>
   );
 }
 
@@ -82,6 +109,9 @@ export default function PerfilClube({ idDaUrl }: Props) {
   // listas
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
+
+  /** NOVO: estado de solicitações (somente visualização) */
+  const [solicitacoes, setSolicitacoes] = useState<Solicitacao[] | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -143,13 +173,27 @@ export default function PerfilClube({ idDaUrl }: Props) {
       }
     }
 
+    async function fetchSolicitacoes() {
+      try {
+        const { data } = await axios.get<Solicitacao[]>(
+          `${API.BASE_URL}/api/solicitacoes-treino`,
+          { headers }
+        );
+        if (!cancel.v) setSolicitacoes(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Erro ao buscar solicitações:", err);
+        if (!cancel.v) setSolicitacoes([]);
+      }
+    }
+
     if (aba === "atletas") {
       if (subAba === "vinculados" && vinculados == null) fetchVinculados();
       if (subAba === "observados" && observados == null) fetchObservados();
+      if (subAba === "solicitacoes" && solicitacoes == null) fetchSolicitacoes(); // NOVO
     }
 
     return () => { cancel.v = true; };
-  }, [aba, subAba, token, isOwn, data?.clube?.id, vinculados, observados]);
+  }, [aba, subAba, token, isOwn, data?.clube?.id, vinculados, observados, solicitacoes]);
 
   if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
   if (!data || !data.clube) return <div className="text-center p-10 text-red-600">Clube não encontrado.</div>;
@@ -335,89 +379,104 @@ export default function PerfilClube({ idDaUrl }: Props) {
             ))}
           </div>
 
-{/* Vinculados */}
-{subAba === "vinculados" && (
-  <div className="bg-white/70 rounded-xl p-4 shadow-sm">
-    <h3 className="font-semibold text-green-900 mb-2">Atletas Vinculados</h3>
-    {vinculados && vinculados.length > 0 ? (
-      <ul className="grid grid-cols-1 gap-3">
-        {vinculados.map((a) => (
-          <li key={a.atletaId} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-            <img
-              src={a.foto?.startsWith("http") ? a.foto! : `${API.BASE_URL}/uploads/${a.foto ?? ""}`}
-              onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/attached_assets/Perfil.jpg"; }}
-              className="w-10 h-10 rounded-full object-cover"
-              alt={a.nome}
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium text-green-900">{a.nome}</div>
-              <div className="text-xs text-green-900/70">
-                {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
-              </div>
-            </div>
+          {/* Vinculados */}
+           {subAba === "vinculados" && (
+            <SectionCard title="Atletas Vinculados">
+              {vinculados && vinculados.length > 0 ? (
+                <ul className="grid grid-cols-1 gap-3">
+                  {vinculados.map((a) => (
+                    <li key={a.atletaId} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
+                      <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-green-900">{a.nome}</div>
+                        <div className="text-xs text-green-900/70">
+                          {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
+                        </div>
+                      </div>
+                      <Link href={`/perfil/${a.id}`}>
+                        <a className="text-sm text-green-800 inline-flex items-center gap-1">
+                          Ver perfil <ChevronRight className="w-4 h-4" />
+                        </a>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState text="Nenhum atleta vinculado ainda" />
+              )}
 
-            {/* Link para o perfil do atleta (usa a.id = usuarioId) */}
-            <Link href={`/perfil/${a.id}`}>
-              <a className="text-sm text-green-800 inline-flex items-center gap-1">
-                Ver perfil <ChevronRight className="w-4 h-4" />
-              </a>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    ) : (
-      <EmptyState text="Nenhum atleta vinculado ainda" />
-    )}
-  </div>
-)}
+            </SectionCard>
 
-
-{/* Observados */}
-{subAba === "observados" && (
-  <div className="bg-white/70 rounded-xl p-4 shadow-sm">
-    <h3 className="font-semibold text-green-900 mb-2">Atletas Observados</h3>
-    {observados && observados.length > 0 ? (
-      <ul className="grid grid-cols-1 gap-3">
-        {observados.map((a) => (
-          <li key={a.atletaId} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-            <img
-              src={a.foto?.startsWith("http") ? a.foto! : `${API.BASE_URL}/uploads/${a.foto ?? ""}`}
-              onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/attached_assets/Perfil.jpg"; }}
-              className="w-10 h-10 rounded-full object-cover"
-              alt={a.nome}
-            />
-            <div className="flex-1">
-              <div className="text-sm font-medium text-green-900">{a.nome}</div>
-              <div className="text-xs text-green-900/70">
-                {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
-              </div>
-            </div>
-
-            {/* Link para o perfil do atleta (usa a.id = usuarioId) */}
-            <Link href={`/perfil/${a.id}`}>
-              <a className="text-sm text-green-800 inline-flex items-center gap-1">
-                Ver perfil <ChevronRight className="w-4 h-4" />
-              </a>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    ) : (
-      <EmptyState text="Você ainda não observa nenhum atleta" />
-    )}
-  </div>
-)}
-
-
-          {/* Solicitações */}
-          {subAba === "solicitacoes" && (
-            <div className="bg-white/70 rounded-xl p-4 shadow-sm">
-              <h3 className="font-semibold text-green-900 mb-2">Solicitações de Atletas</h3>
-              <p className="text-sm text-green-900/70 text-center py-6">
-                Nenhuma solicitação pendente de atletas.
-              </p>
-            </div>
           )}
+
+          {/* Observados */}
+
+           {subAba === "observados" && (
+            <SectionCard title="Atletas Observados">
+              {observados && observados.length > 0 ? (
+                <ul className="grid grid-cols-1 gap-3">
+                  {observados.map((a) => (
+                    <li key={a.atletaId} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
+                      <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-green-900">{a.nome}</div>
+                        <div className="text-xs text-green-900/70">
+                          {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
+                        </div>
+                      </div>
+                      <Link href={`/perfil/${a.id}`}>
+                        <a className="text-sm text-green-800 inline-flex items-center gap-1">
+                          Ver perfil <ChevronRight className="w-4 h-4" />
+                        </a>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState text="Você ainda não observa nenhum atleta" />
+              )}
+            </SectionCard>
+          )}
+
+          {/* Solicitações – SOMENTE VISUALIZAÇÃO */}
+
+          {subAba === "solicitacoes" && (
+            <SectionCard
+              title="Solicitações de Atletas"
+              right={
+                <Link href="/notificacoes">
+                  <a className="text-sm text-green-800">Abrir notificações</a>
+                </Link>
+              }
+            >
+              {solicitacoes && solicitacoes.length > 0 ? (
+                <ul className="space-y-3">
+                  {solicitacoes.map((s) => (
+                    <li
+                      key={s.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-green-100 p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar foto={s.remetente.foto} alt={s.remetente.nomeDeUsuario} className="w-10 h-10" />
+                        <div>
+                          <div className="text-sm font-medium text-green-900">{s.remetente.nomeDeUsuario}</div>
+                          <div className="text-xs text-green-900/70">quer treinar junto com você</div>
+                        </div>
+                      </div>
+                      <Link href={`/perfil/${s.remetenteId}`}>
+                        <a className="text-sm text-green-800 inline-flex items-center gap-1">
+                          Ver perfil <ChevronRight className="w-4 h-4" />
+                        </a>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState text="Nenhuma solicitação no momento." />
+              )}
+            </SectionCard>
+          )}
+
         </section>
       )}
     </div>
