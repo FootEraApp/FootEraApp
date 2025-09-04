@@ -96,7 +96,7 @@ export default function ProfileHeader({
     if (kpis && kpis.length) return;
     const token = Storage.token;
     if (!perfilId || !token) return;
-    fetch(`${API.BASE_URL}/api/perfil/pontuacao/${encodeURIComponent(perfilId)}`, {
+    fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(perfilId)}/pontuacao`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => (r.ok ? r.json() : null))

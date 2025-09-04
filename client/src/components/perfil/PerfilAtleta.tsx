@@ -97,7 +97,7 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
         setBadges(badgesData || []);
 
         if (uid) {
-          const { data: p } = await axios.get(`${API.BASE_URL}/api/perfil/pontuacao/${uid}`, { headers });
+          const { data: p } = await axios.get(`${API.BASE_URL}/api/perfil/${uid}/pontuacao`, { headers });
           if (cancelled) return;
 
           const performance = Number(p?.performance) || 0;

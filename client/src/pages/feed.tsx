@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
-import { formatarUrlFoto } from "@/utils/formatarFoto";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 import { publicImgUrl } from "@/utils/publicUrl.js";
 
 interface Usuario {

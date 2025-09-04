@@ -576,7 +576,7 @@ export default function PaginaMensagens() {
       const posicao = posJson?.posicao ?? null;
       const atletaId = posJson?.atletaId ?? null;
 
-      const pontosRes = await fetch(`${API.BASE_URL}/api/perfil/pontuacao/${usuarioId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const pontosRes = await fetch(`${API.BASE_URL}/api/perfil/${usuarioId}/pontuacao`, { headers: { Authorization: `Bearer ${token}` } });
       const w = pontosRes.ok ? await pontosRes.json() : null;
 
       const perf = Number(w?.performance ?? 0);

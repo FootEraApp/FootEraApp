@@ -109,12 +109,22 @@ function Explorar() {
             <h2 className="text-xl font-bold my-2">Atletas em Destaque</h2>
             <div className="grid grid-cols-2 gap-3">
               {dados.atletas.map((a) => {
-                const foto = formatarUrlFoto(a.foto ?? a.usuario?.foto) || "/placeholder.png";
+                  const foto = formatarUrlFoto(a.foto ?? a.usuario?.foto, "usuarios");
+                  const nome = a?.usuario?.nome ?? "profile";
+                  const uid  = a?.usuario?.id ?? a?.usuarioId ?? a.id;
                 return (
-                  <Link href={`/perfil/${a.usuario.id}`} key={a.id}>
+                  <Link href={`/perfil/${uid}`} key={a.id}>
                     <div className="bg-white rounded shadow p-2 flex flex-col items-center">
-                      <img src={foto} alt={`${a.usuario.nome} profile`} className="w-24 h-24 rounded-full object-cover" />
-                      <p className="mt-2 font-medium">{a.usuario.nome}</p>
+                      <img
+                        src={foto}
+                        alt={`${nome} profile`}
+                        className="w-24 h-24 rounded-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).src =
+                            `${API.BASE_URL}/assets/placeholder.png`;
+                        }}
+                      />
+                      <p className="mt-2 font-medium">{nome}</p>
                       {a.tipoTreino && (
                         <span className="mt-1 text-[10px] px-2 py-0.5 rounded bg-green-100 text-green-800">
                           {a.tipoTreino}
@@ -133,7 +143,7 @@ function Explorar() {
             <h2 className="text-xl font-bold my-4">Escolas de Futebol</h2>
             <div className="space-y-3">
               {dados.escolas.map((e) => {
-                const logo = formatarUrlFoto(e.logo) || "/placeholder.png";
+                const logo = formatarUrlFoto(e.logo, "escolas") || "/placeholder.png";
                 return (
                   <div key={e.id} className="bg-white rounded shadow p-3 flex items-center gap-3">
                     <img src={logo} alt="Logo da escola" className="w-16 h-16 rounded-full object-cover" />
@@ -156,7 +166,7 @@ function Explorar() {
             <h2 className="text-xl font-bold my-4">Clubes</h2>
             <div className="space-y-3">
               {dados.clubes.map((c) => {
-                const logo = formatarUrlFoto(c.logo) || "/placeholder.png";
+                const logo = formatarUrlFoto(c.logo, "clubes") || "/placeholder.png";
                 return (
                   <div key={c.id} className="bg-white rounded shadow p-3 flex items-center gap-3">
                     <img src={logo} alt="Logo do clube" className="w-16 h-16 rounded-full object-cover" />
@@ -179,7 +189,7 @@ function Explorar() {
             <h2 className="text-xl font-bold my-4">Desafios</h2>
             <div className="grid grid-cols-2 gap-3">
               {dados.desafios.map((d) => {
-                const img = formatarUrlFoto(d.imagemUrl) || "/placeholder.png";
+                const img = formatarUrlFoto(d.imagemUrl, "desafios") || "/placeholder.png";
                 return (
                   <div key={d.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
                     <img src={img} alt={d.titulo} className="w-24 h-24 object-cover rounded-full" />
@@ -197,7 +207,7 @@ function Explorar() {
             {dados.professores.length > 0 ? (
               <div className="grid grid-cols-2 gap-3">
                 {dados.professores.map((p) => {
-                  const foto = formatarUrlFoto(p.usuario?.foto) || "/placeholder.png";
+                  const foto = formatarUrlFoto(p.usuario?.foto, "usuarios") || "/placeholder.png";
                   return (
                     <Link href={`/perfil/${p.usuario.id}`} key={p.id}>
                       <div className="bg-white rounded shadow p-2 flex flex-col items-center">

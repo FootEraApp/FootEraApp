@@ -7,10 +7,10 @@ import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 
-import PerfilAtleta from "../components/perfil/PerfilAtleta";
-import PerfilProfessor from "../components/perfil/PerfilProfessor";
-import PerfilClube from "../components/perfil/PerfilClube";
-import PerfilEscola from "../components/perfil/PerfilEscola";
+import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
+import PerfilProfessor from "../components/perfil/PerfilProfessor.js";
+import PerfilClube from "../components/perfil/PerfilClube.js";
+import PerfilEscola from "../components/perfil/PerfilEscola.js";
 
 type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha";
 
