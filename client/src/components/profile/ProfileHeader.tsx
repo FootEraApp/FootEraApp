@@ -1,6 +1,7 @@
+// client/src/components/profile/ProfileHeader
 import { useState, useEffect } from "react";
 import { Link, useParams } from "wouter";
-import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send, Eye } from "lucide-react"; // + Eye
+import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send, Eye, UserPlus, Share2 } from "lucide-react"; // + Eye
 import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
@@ -96,7 +97,7 @@ export default function ProfileHeader({
     if (kpis && kpis.length) return;
     const token = Storage.token;
     if (!perfilId || !token) return;
-    fetch(`${API.BASE_URL}/api/perfil/pontuacao/${encodeURIComponent(perfilId)}`, {
+    fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(perfilId)}/pontuacao`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => (r.ok ? r.json() : null))
@@ -337,6 +338,10 @@ export default function ProfileHeader({
     }
   }
 
+  const btnBase =
+  "rounded-full font-semibold focus:outline-none focus:ring-2 focus:ring-white/40 transition " +
+  "inline-flex items-center justify-center gap-2";
+
   return (
     <div className="footera-bg-green p-6 flex flex-col items-center relative">
       {isOwnProfile && (
@@ -400,44 +405,75 @@ export default function ProfileHeader({
         )}
       </div>
 
-      {!isOwnProfile && (
-        <div className="flex justify-center gap-4 mt-4 mb-2">
-          <div className="flex justify-center mt-2">
-            <button
-              onClick={toggleFavorito}
-              className={`text-2xl  ${ehFavorito ? "text-yellow-500" : "text-gray-400"}`}
-              title={ehFavorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}
-            >
-              ★
-            </button>
-          </div>
-          <button onClick={seguirUsuario} className="px-4 py-2 font-semibold bg-green-600 text-green-900  rounded-full">
-            Seguir
-          </button>
-          <button onClick={iniciarChat} className="px-4 py-2 font-semibold bg-green-500 text-green-900 rounded-full">
-            Enviar mensagem
-          </button>
-          <button onClick={solicitarTreino} className="px-4 py-2 font-semibold bg-green-400 text-green-900 rounded-full">
-            Treinar Juntos
-          </button>
+{!isOwnProfile && (
+  <div className="w-full max-w-2xl px-3 mt-4 mb-2">
+    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+      {/* Favorito (estrela) — fica pequeno e não quebra layout */}
+      <button
+        onClick={toggleFavorito}
+        className={`text-xl sm:text-2xl ${ehFavorito ? "text-yellow-400" : "text-white/70"} px-2`}
+        title={ehFavorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+        aria-label={ehFavorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+      >
+        ★
+      </button>
 
-          {/* === NOVO BOTÃO: OBSERVAR (só quando alvo é Atleta) === */}
-          {podeObservar && (
-            <button
-              onClick={observarAtleta}
-              className="px-4 py-2 font-semibold bg-amber-300 text-green-900 rounded-full inline-flex items-center gap-2"
-              title="Observar este atleta"
-            >
-              <Eye size={16} />
-              Observar
-            </button>
-          )}
+      {/* Seguir */}
+      <button
+        onClick={seguirUsuario}
+        className={`${btnBase} bg-green-600 text-green-900
+                    px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
+      >
+        <UserPlus size={16} />
+        <span className="truncate">Seguir</span>
+      </button>
 
-          <button onClick={abrirModalCompartilhar} className="px-4 py-2 font-semibold bg-green-300 text-green-900 rounded-full">
-            Compartilhar
-          </button>
-        </div>
+      {/* Enviar mensagem */}
+      <button
+        onClick={iniciarChat}
+        className={`${btnBase} bg-green-500 text-green-900
+                    px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
+      >
+        <Send size={16} />
+        <span className="truncate">Enviar mensagem</span>
+      </button>
+
+      {/* Treinar Juntos */}
+      <button
+        onClick={solicitarTreino}
+        className={`${btnBase} bg-green-400 text-green-900
+                    px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
+      >
+        <Users size={16} />
+        <span className="truncate">Treinar Juntos</span>
+      </button>
+
+      {/* Observar (só para Atleta) */}
+      {podeObservar && (
+        <button
+          onClick={observarAtleta}
+          className={`${btnBase} bg-green-300 text-green-900
+                      px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
+          title="Observar este atleta"
+        >
+          <Eye size={16} />
+          <span className="truncate">Observar</span>
+        </button>
       )}
+
+      {/* Compartilhar */}
+      <button
+        onClick={abrirModalCompartilhar}
+        className={`${btnBase} bg-amber-300 text-green-900
+                    px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
+      >
+        <Share2 size={16} />
+        <span className="truncate">Compartilhar</span>
+      </button>
+    </div>
+  </div>
+)}
+
 
       {isOwnProfile && (
         <div className="mt-4 w-full grid grid-cols-2 gap-2">

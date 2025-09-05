@@ -1,9 +1,11 @@
+// client/src/pages/treinos
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { CalendarClock, Volleyball, User, CirclePlus, Search, House, CircleX, CircleCheck, Send, Share2, Trash2} from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { Badge } from "@/components/ui/badge.js";
+
 
 interface Exercicio {
   id: string;
@@ -167,33 +169,67 @@ export default function PaginaTreinos() {
     return new Date(data).toLocaleDateString("pt-BR");
   };
 
-const renderDesafioCard = (desafio: Desafio) => (
-  <div
-    key={desafio.id}
-    className="bg-white p-4 rounded shadow border border-yellow-400 mb-3"
-  >
-    <h4 className="font-bold text-yellow-700 text-lg mb-1">
-      {desafio.titulo}
-    </h4>
-    <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
-    <p className="text-sm text-gray-500">Nível: {desafio.nivel}</p>
-    <p className="text-sm text-gray-500">Pontos: {desafio.pontuacao}</p>
-    <div className="mt-3 flex justify-between">
-      <button
-        onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
-        className="bg-green-800 hover:bg-green-900 text-white px-4 py-2 rounded text-sm"
-      >
-        Fazer Submissão
-      </button>
-      <button
-        onClick={() => abrirModalCompartilhar(desafio.id)}
-        className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded flex items-center gap-1 text-sm"
-      >
-        <Share2 className="w-4 h-4" /> Compartilhar
-      </button>
+const renderDesafioCard = (desafio: Desafio) => {
+  // Resolve a URL da imagem:
+  const raw = desafio.imagemUrl || "";
+  let img = "/assets/desafios/placeholder.jpg"; // fallback (deixe esse arquivo em client/public/assets/desafios/)
+
+  if (raw) {
+    if (
+      raw.startsWith("http://") ||
+      raw.startsWith("https://") ||
+      raw.startsWith("/assets/") ||
+      raw.startsWith("/attached_assets/")
+    ) {
+      // assets do front ou URL absoluta -> usa direto
+      img = raw;
+    } else if (raw.startsWith("/uploads/")) {
+      // upload servido pelo backend
+      img = `${API.BASE_URL}${raw}`;
+    } else {
+      // nome de arquivo "cru" vindo do banco -> considera upload no back
+      img = `${API.BASE_URL}/uploads/${raw.replace(/^\/+/, "")}`;
+    }
+  }
+
+  return (
+    <div
+      key={desafio.id}
+      className="bg-white p-4 rounded shadow border border-yellow-400 mb-3"
+    >
+      {/* IMAGEM DO DESAFIO */}
+      <img
+        src={img}
+        alt={desafio.titulo}
+        className="w-full h-40 object-cover rounded mb-3"
+        onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/assets/desafios/placeholder.jpg"; }}
+      />
+
+      <h4 className="font-bold text-yellow-700 text-lg mb-1">
+        {desafio.titulo}
+      </h4>
+      <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
+      <p className="text-sm text-gray-500">Nível: {desafio.nivel}</p>
+      <p className="text-sm text-gray-500">Pontos: {desafio.pontuacao}</p>
+
+      <div className="mt-3 flex justify-between">
+        <button
+          onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
+          className="bg-green-800 hover:bg-green-900 text-white px-4 py-2 rounded text-sm"
+        >
+          Fazer Submissão
+        </button>
+        <button
+          onClick={() => abrirModalCompartilhar(desafio.id)}
+          className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded flex items-center gap-1 text-sm"
+        >
+          <Share2 className="w-4 h-4" /> Compartilhar
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
+
 
   if (!usuario) return <p className="text-center p-4">Carregando...</p>;
 
@@ -304,6 +340,7 @@ const renderDesafioCard = (desafio: Desafio) => (
       </div>
     );
   };
+
 async function removerTreinoAgendado(id: string) {
   const token = Storage.token;
   if (!token) return alert("Sessão expirada.");
