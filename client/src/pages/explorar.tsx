@@ -1,3 +1,4 @@
+// client/src/pages/explorar
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";
@@ -9,10 +10,26 @@ import Storage from "../../../server/utils/storage.js";
 type UsuarioBasic = { id: string; nome: string; foto?: string | null };
 type AtletaItem = { id: string; usuario: UsuarioBasic; usuarioId?: string; foto?: string | null; tipoTreino?: string | null };
 type ProfessorItem = { id: string; usuario: UsuarioBasic; foto?: string | null };
-type ClubeItem = { id: string; nome: string; cidade?: string | null; estado?: string | null; logo?: string | null };
-type EscolaItem = { id: string; nome: string; cidade?: string | null; estado?: string | null; logo?: string | null; siteOficial?: string | null };
-type DesafioItem = { id: string; titulo: string; imagemUrl?: string | null };
+type ClubeItem = { 
+  id: string; 
+  usuarioId?: string;
+  nome: string; 
+  cidade?: string | null; 
+  estado?: string | null; 
+  logo?: string | null 
+};
 
+type EscolaItem = { 
+  id: string; 
+  usuarioId?: string;
+  nome: string; 
+  cidade?: string | null; 
+  estado?: string | null; 
+  logo?: string | null; 
+  siteOficial?: string | null 
+};
+
+type DesafioItem = { id: string; titulo: string; imagemUrl?: string | null };
 type DadosExplorar = {
   atletas: AtletaItem[];
   professores: ProfessorItem[];
@@ -134,8 +151,9 @@ function Explorar() {
             <div className="space-y-3">
               {dados.escolas.map((e) => {
                 const logo = formatarUrlFoto(e.logo) || "/placeholder.png";
-                return (
-                  <div key={e.id} className="bg-white rounded shadow p-3 flex items-center gap-3">
+                const href = e.usuarioId ? `/perfil/${e.usuarioId}` : undefined;
+                const Card = (
+                  <div className="bg-white rounded shadow p-3 flex items-center gap-3 cursor-pointer">
                     <img src={logo} alt="Logo da escola" className="w-16 h-16 rounded-full object-cover" />
                     <div>
                       <h3 className="font-bold">{e.nome}</h3>
@@ -145,6 +163,11 @@ function Explorar() {
                       <p className="text-sm">{e.siteOficial || "Site indisponível"}</p>
                     </div>
                   </div>
+                );
+                return href ? (
+                  <Link href={href} key={e.id}>{Card}</Link>
+                ) : (
+                  <div key={e.id}>{Card}</div> // fallback sem link se não vier usuarioId
                 );
               })}
             </div>
@@ -157,8 +180,9 @@ function Explorar() {
             <div className="space-y-3">
               {dados.clubes.map((c) => {
                 const logo = formatarUrlFoto(c.logo) || "/placeholder.png";
-                return (
-                  <div key={c.id} className="bg-white rounded shadow p-3 flex items-center gap-3">
+                const href = c.usuarioId ? `/perfil/${c.usuarioId}` : undefined;
+                const Card = (
+                  <div className="bg-white rounded shadow p-3 flex items-center gap-3 cursor-pointer">
                     <img src={logo} alt="Logo do clube" className="w-16 h-16 rounded-full object-cover" />
                     <div>
                       <h3 className="font-bold">{c.nome}</h3>
@@ -169,10 +193,16 @@ function Explorar() {
                     </div>
                   </div>
                 );
+                return href ? (
+                  <Link href={href} key={c.id}>{Card}</Link>
+                ) : (
+                  <div key={c.id}>{Card}</div> // fallback sem link se não vier usuarioId
+                );
               })}
             </div>
           </>
         )}
+
 
         {aba === "desafios" && (
           <>
