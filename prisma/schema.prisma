@@ -78,7 +78,7 @@ model Professor {
 
   treinosProgramados  TreinoProgramado[]
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoProfessor")
-  observacoes AtletaObservado[] @relation("ObservacaoProfessor")
+  observacoes         AtletaObservado[]    @relation("ObservacaoProfessor")
 }
 
 model Amigo {
@@ -160,7 +160,7 @@ model Atleta {
   Ranking             Ranking?
   SubmissaoTreino     SubmissaoTreino[]
   relacoesTreinamento RelacaoTreinamento[]       @relation("RelacaoAtleta")
-  observadores AtletaObservado[] @relation("ObservacaoAtleta")
+  observadores        AtletaObservado[]          @relation("ObservacaoAtleta")
   treinosRecebidos    TreinoProgramadoRecebido[]
   mensagens           Mensagem[]                 @relation("AtletaMensagens")
   EstatisticaAtleta   EstatisticaAtleta[]
@@ -270,23 +270,22 @@ model RelacaoTreinamento {
 }
 
 model AtletaObservado {
-  id           String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  professorId  String?
-  escolinhaId  String?
-  clubeId      String?
-  atletaId     String
+  professorId String?
+  escolinhaId String?
+  clubeId     String?
+  atletaId    String
 
-  professor    Professor? @relation("ObservacaoProfessor", fields: [professorId], references: [id])
-  escolinha    Escolinha? @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id])
-  clube        Clube?     @relation("ObservacaoClube", fields: [clubeId], references: [id])
-  atleta       Atleta     @relation("ObservacaoAtleta", fields: [atletaId], references: [id])
+  professor Professor? @relation("ObservacaoProfessor", fields: [professorId], references: [id])
+  escolinha Escolinha? @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id])
+  clube     Clube?     @relation("ObservacaoClube", fields: [clubeId], references: [id])
+  atleta    Atleta     @relation("ObservacaoAtleta", fields: [atletaId], references: [id])
 
-  criadoEm     DateTime  @default(now())
-  atualizadoEm DateTime  @updatedAt
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
 
   @@unique([professorId, escolinhaId, clubeId, atletaId])
-
   @@index([atletaId])
   @@index([professorId])
   @@index([escolinhaId])
@@ -375,24 +374,24 @@ model Escolinha {
   postagens           Postagem[]
   treinoProgramado    TreinoProgramado[]
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoEscolinha")
-  observacoes AtletaObservado[] @relation("ObservacaoEscolinha")
+  observacoes         AtletaObservado[]    @relation("ObservacaoEscolinha")
 }
 
 model Comentario {
-  id            String            @id @default(uuid())
+  id            String   @id @default(uuid())
   conteudo      String
-  dataCriacao   DateTime          @default(now())
-  reportedCount Int               @default(0)
-  oculto        Boolean           @default(false)
+  dataCriacao   DateTime @default(now())
+  reportedCount Int      @default(0)
+  oculto        Boolean  @default(false)
 
-  postagemId    String?
-  postagem      Postagem?         @relation(fields: [postagemId], references: [id])
+  postagemId String?
+  postagem   Postagem? @relation(fields: [postagemId], references: [id])
 
-  submissaoId   String?
-  submissao     SubmissaoDesafio? @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
+  submissaoId String?
+  submissao   SubmissaoDesafio? @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
 
-  usuarioId     String
-  usuario       Usuario           @relation(fields: [usuarioId], references: [id])
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
 
   @@index([postagemId])
   @@index([submissaoId])
@@ -426,7 +425,7 @@ model Clube {
   midias              Midia[]
   postagens           Postagem[]
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoClube")
-  observacoes AtletaObservado[] @relation("ObservacaoClube")
+  observacoes         AtletaObservado[]    @relation("ObservacaoClube")
   treinoProgramado    TreinoProgramado[]
 }
 
@@ -468,8 +467,8 @@ model SubmissaoDesafio {
   Usuario          Usuario?                  @relation(fields: [usuarioId], references: [id])
   submissaoEmGrupo SubmissaoDesafioEmGrupo[]
 
-  comentarios      Comentario[]
-  curtidas         Curtida[]
+  comentarios Comentario[]
+  curtidas    Curtida[]
 }
 
 model SubmissaoTreino {
@@ -579,8 +578,8 @@ model LogErro {
 }
 
 model Curtida {
-  id         String   @id @default(uuid())
-  usuarioId  String
+  id        String @id @default(uuid())
+  usuarioId String
 
   postagemId String?
   postagem   Postagem? @relation(fields: [postagemId], references: [id], onDelete: Cascade)
@@ -588,8 +587,8 @@ model Curtida {
   submissaoId String?
   submissao   SubmissaoDesafio? @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
 
-  createdAt  DateTime @default(now())
-  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+  createdAt DateTime @default(now())
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id])
 
   @@unique([usuarioId, postagemId], name: "usuario_postagem_unique")
   @@unique([usuarioId, submissaoId], name: "usuario_submissao_unique")

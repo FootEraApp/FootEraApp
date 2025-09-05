@@ -26,58 +26,32 @@ function pickNumber(...vals: any[]): number {
 }
 
 const treinoNomeToPontos: Record<string, number> = {
-  "resistência física": 15,
   "resistencia fisica": 15,
+  "resistência física": 15, // deixe a acentuada também p/ segurança
+  // adicione outros mapeamentos locais se quiser fallback quando o servidor não mandar
 };
 
 function normalizaTitulo(t?: string) {
   return (t || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 }
 
+// antes: função grande que vasculha qualquer número
 function pontosDoEvento(event: any): number {
-  if (!event || typeof event !== "object") return 0;
-
   const direto = pickNumber(
-    event?.pontos, event?.pontuacao, event?.pontosPerformance, event?.pontosDesafio,
+    event?.pontuacao, event?.pontos, event?.pontosPerformance, event?.pontosDesafio,
     event?.score, event?.totalPontos, event?.valor, event?.xp
   );
   if (direto) return direto;
 
-  let sum = 0;
-  const reChave = /(ponto|pontu|score|nota|valor|total)/i;
-
-  const walk = (obj: any) => {
-    if (obj == null) return;
-    if (Array.isArray(obj)) { obj.forEach(walk); return; }
-    if (typeof obj === "object") {
-      for (const [k, v] of Object.entries(obj)) {
-        if (typeof v === "number" && Number.isFinite(v) && reChave.test(k)) {
-          sum += v;
-        } else if (typeof v === "string" && reChave.test(k)) {
-          const n = pickNumber(v);
-          if (n) sum += n;
-        } else {
-          walk(v);
-        }
-      }
-      return;
-    }
-    if (typeof obj === "string") {
-      const n = pickNumber(obj);
-      if (n) sum += n;
-    }
-  };
-
-  walk(event);
-
-  if (sum) return sum;
+  // ⛔️ REMOVA a varredura "walk" que somava números de QUALQUER lugar
+  // ...
 
   const titulo = normalizaTitulo(event?.titulo || event?.nome || event?.descricao);
+  let porNome = 0;
   for (const [nome, pts] of Object.entries(treinoNomeToPontos)) {
-    if (titulo.includes(nome)) return pts;
+    if (titulo.includes(normalizaTitulo(nome))) porNome = Math.max(porNome, pts);
   }
-
-  return 0;
+  return porNome;
 }
 
  function sumPointsFromCategories(cats: any): number {
@@ -170,27 +144,40 @@ export default function ScorePanel({
 
       (async () => {
         try {
-          const r = await fetch(url, {
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          });
+          const r = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
           if (r.status !== 200) return;
           const data = await r.json();
 
-          const calc = computeFromHistorico(data);
-          if (calc.total > 0 || (data?.historico && Array.isArray(data.historico))) {
-            setVals({
-              performance: calc.performance,
-              disciplina: calc.disciplina,
-              responsabilidade: calc.responsabilidade,
+          console.log("[ScorePanel] payload /pontuacao:", data);
+
+          // 1º: confiar no servidor
+          const perfApi = Number(data?.performance) || 0;
+          const discApi = Number(data?.disciplina) || 0;
+          const respApi = Number(data?.responsabilidade) || 0;
+
+          if (perfApi || discApi || respApi) {
+            setVals({ performance: perfApi, disciplina: discApi, responsabilidade: respApi });
+            // debug:
+            console.table((data?.historico || []).map((h: any) => ({
+              tipo: h.tipo, titulo: h.titulo, origem: h.origem, pts: h.pontuacao
+            })));
+            console.log("[ScorePanel] totais API =>", {
+              perf: data?.performance, disc: data?.disciplina, resp: data?.responsabilidade
             });
-          } else {
-            setVals({
-              performance: Number(data?.performance) || 0,
-              disciplina: Number(data?.disciplina) || 0,
-              responsabilidade: Number(data?.responsabilidade) || 0,
-            });
+            return;
           }
-        } catch {}
+
+          // 2º: fallback calculado localmente
+          const calc = computeFromHistorico(data);
+          console.log("[ScorePanel] calculado (fallback):", calc);
+          setVals({
+            performance: calc.performance,
+            disciplina: calc.disciplina,
+            responsabilidade: calc.responsabilidade,
+          });
+        } catch (e) {
+          console.error(e);
+        }
       })();
     }, [targetId]);
 
@@ -224,7 +211,7 @@ export default function ScorePanel({
           <span className="text-sm font-bold text-blue-900">{vals.disciplina} pts</span>
         </div>
 
-        <div className="flex items-center justify-between bg-transparent border rounded-lg p-3 hover:bg-amber-50 transition">
+        <div className="flex items-center justify-between bg-transparent border rounded-lg p-3 hover:bg-amber-50 transition mb-10">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-md bg-amber-700 text-white flex items-center justify-center">
               <ShieldCheck className="w-4 h-4" />
