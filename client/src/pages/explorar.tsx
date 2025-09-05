@@ -11,20 +11,19 @@ type AtletaItem = { id: string; usuario: UsuarioBasic; usuarioId?: string; foto?
 type ProfessorItem = { id: string; usuario: UsuarioBasic; foto?: string | null };
 type ClubeItem = { id: string; nome: string; cidade?: string | null; estado?: string | null; logo?: string | null };
 type EscolaItem = { id: string; nome: string; cidade?: string | null; estado?: string | null; logo?: string | null; siteOficial?: string | null };
-type DesafioItem = { id: string; titulo: string; imagemUrl?: string | null };
 
 type DadosExplorar = {
   atletas: AtletaItem[];
   professores: ProfessorItem[];
   clubes: ClubeItem[];
   escolas: EscolaItem[];
-  desafios: DesafioItem[];
 };
+
 
 function Explorar() {
   const [busca, setBusca] = useState("");
-  const [aba, setAba] = useState<"atletas" | "escolas" | "clubes" | "desafios" | "professores">("atletas");
-  const [dados, setDados] = useState<DadosExplorar>({ atletas: [], professores: [], clubes: [], escolas: [], desafios: [] });
+  const [aba, setAba] = useState<"atletas" | "escolas" | "clubes" | "professores">("atletas");
+  const [dados, setDados] = useState<DadosExplorar>({ atletas: [], professores: [], clubes: [], escolas: [] });
 
   const loggedUserId = useMemo(
     () =>
@@ -58,20 +57,18 @@ function Explorar() {
           professores: filtrarEu<ProfessorItem>(data.professores || []),
           clubes: (data.clubes || []) as ClubeItem[],
           escolas: (data.escolas || []) as EscolaItem[],
-          desafios: (data.desafios || []) as DesafioItem[],
         });
       })
       .catch((e) => {
         console.error(e);
-        setDados({ atletas: [], professores: [], clubes: [], escolas: [], desafios: [] });
+        setDados({ atletas: [], professores: [], clubes: [], escolas: [], });
       });
   }, [busca, loggedUserId, filtrarEu]);
 
-  const abas: Array<["atletas" | "escolas" | "clubes" | "desafios" | "professores", string]> = [
+  const abas: Array<["atletas" | "escolas" | "clubes" |  "professores", string]> = [
     ["atletas", "Atletas"],
     ["escolas", "Escolas"],
     ["clubes", "Clubes"],
-    ["desafios", "Desafios"],
     ["professores", "Profissionais"],
   ];
 
@@ -115,15 +112,16 @@ function Explorar() {
                 return (
                   <Link href={`/perfil/${uid}`} key={a.id}>
                     <div className="bg-white rounded shadow p-2 flex flex-col items-center">
-                      <img
-                        src={foto}
-                        alt={`${nome} profile`}
-                        className="w-24 h-24 rounded-full object-cover"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src =
-                            `${API.BASE_URL}/assets/placeholder.png`;
-                        }}
-                      />
+                    <img
+                      src={formatarUrlFoto(a.foto ?? a.usuario?.foto, "usuarios")}
+                      alt={`${a?.usuario?.nome ?? "profile"} profile`}
+                      className="w-24 h-24 rounded-full object-cover"
+                      onError={(e) => {
+                        // fallback definitivo para usuário
+                        (e.currentTarget as HTMLImageElement).src =
+                          `${API.BASE_URL}/assets/default-user.png`;
+                      }}
+                    />
                       <p className="mt-2 font-medium">{nome}</p>
                       {a.tipoTreino && (
                         <span className="mt-1 text-[10px] px-2 py-0.5 rounded bg-green-100 text-green-800">
@@ -143,10 +141,18 @@ function Explorar() {
             <h2 className="text-xl font-bold my-4">Escolas de Futebol</h2>
             <div className="space-y-3">
               {dados.escolas.map((e) => {
-                const logo = formatarUrlFoto(e.logo, "escolas") || "/placeholder.png";
+                const logo = formatarUrlFoto(e.logo, "escolas");
                 return (
                   <div key={e.id} className="bg-white rounded shadow p-3 flex items-center gap-3">
-                    <img src={logo} alt="Logo da escola" className="w-16 h-16 rounded-full object-cover" />
+                    <img
+                      src={formatarUrlFoto(e.logo, "escolas")}
+                      alt="Logo da escola"
+                      className="w-16 h-16 rounded-full object-cover"
+                      onError={(ev) => {
+                        (ev.currentTarget as HTMLImageElement).src =
+                          `${API.BASE_URL}/assets/misc/placeholder.png`;
+                      }}
+                    />
                     <div>
                       <h3 className="font-bold">{e.nome}</h3>
                       <p className="text-sm text-gray-600">
@@ -166,10 +172,18 @@ function Explorar() {
             <h2 className="text-xl font-bold my-4">Clubes</h2>
             <div className="space-y-3">
               {dados.clubes.map((c) => {
-                const logo = formatarUrlFoto(c.logo, "clubes") || "/placeholder.png";
+                const logo = formatarUrlFoto(c.logo, "clubes");
                 return (
                   <div key={c.id} className="bg-white rounded shadow p-3 flex items-center gap-3">
-                    <img src={logo} alt="Logo do clube" className="w-16 h-16 rounded-full object-cover" />
+                    <img
+                      src={formatarUrlFoto(c.logo, "clubes")}
+                      alt="Logo do clube"
+                      className="w-16 h-16 rounded-full object-cover"
+                      onError={(ev) => {
+                        (ev.currentTarget as HTMLImageElement).src =
+                          `${API.BASE_URL}/assets/misc/placeholder.png`;
+                      }}
+                    />
                     <div>
                       <h3 className="font-bold">{c.nome}</h3>
                       <p className="text-sm text-gray-600">
@@ -184,30 +198,13 @@ function Explorar() {
           </>
         )}
 
-        {aba === "desafios" && (
-          <>
-            <h2 className="text-xl font-bold my-4">Desafios</h2>
-            <div className="grid grid-cols-2 gap-3">
-              {dados.desafios.map((d) => {
-                const img = formatarUrlFoto(d.imagemUrl, "desafios") || "/placeholder.png";
-                return (
-                  <div key={d.id} className="bg-white rounded shadow p-2 flex flex-col items-center">
-                    <img src={img} alt={d.titulo} className="w-24 h-24 object-cover rounded-full" />
-                    <p className="mt-2 text-center text-sm">{d.titulo}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
-
         {aba === "professores" && (
           <>
             <h2 className="text-xl font-bold my-4">Profissionais</h2>
             {dados.professores.length > 0 ? (
               <div className="grid grid-cols-2 gap-3">
                 {dados.professores.map((p) => {
-                  const foto = formatarUrlFoto(p.usuario?.foto, "usuarios") || "/placeholder.png";
+                  const foto = formatarUrlFoto(p.usuario?.foto, "usuarios");
                   return (
                     <Link href={`/perfil/${p.usuario.id}`} key={p.id}>
                       <div className="bg-white rounded shadow p-2 flex flex-col items-center">

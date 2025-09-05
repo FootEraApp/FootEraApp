@@ -6,21 +6,17 @@ import { API } from '../config.js';
 
 const EditarPerfil = () => {
   const usuarioId = Storage.usuarioId;
-  const tipoUsuario = Storage.tipoSalvo;
+  const tipoUsuarioOriginal = Storage.tipoSalvo;
   const token = Storage.token;
 
   const [dadosUsuario, setDadosUsuario] = useState<any>(null);
   const [dadosTipo, setDadosTipo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [tipoRender, setTipoRender] =
+   useState<'atleta' | 'professor' | 'escola' | 'clube' | null>(null);
 
   useEffect(() => {
-  console.log("[EditarPerfil] init", {
-    usuarioId,
-    tipoUsuario,
-    hasToken: !!token,
-    baseUrl: API.BASE_URL,
-  });
 
   if (!usuarioId || !token) {
     console.error("[EditarPerfil] Sem usuarioId ou token — verifique login.");
@@ -48,6 +44,9 @@ const EditarPerfil = () => {
 
       setDadosUsuario(res.data.usuario);
       setDadosTipo(res.data.dadosEspecificos);
+      const tipoSrv = res.data?.tipo ?? tipoUsuarioOriginal ?? '';
+      setTipoRender(String(tipoSrv).toLowerCase() as any);
+    
     } catch (err: any) {
       console.error("[EditarPerfil] Erro ao buscar dados", {
         status: err?.response?.status,
@@ -102,7 +101,7 @@ const EditarPerfil = () => {
       </div>
     );
 
-    switch (tipoUsuario) {
+    switch (tipoRender) {
       case 'atleta':
         return (
           <>
@@ -182,10 +181,8 @@ const EditarPerfil = () => {
         <div className="mb-6">
           <label className="block text-sm font-medium">Foto Atual</label>
           <img
-            src={
-              formatarUrlFoto(dadosUsuario.foto)
-            }
-            alt="Foto de perfil"
+            src={formatarUrlFoto(dadosUsuario.foto, 'usuarios')}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`; }}
             className="w-24 h-24 rounded-full object-cover mt-2"
           />
         </div>
@@ -240,7 +237,7 @@ const EditarPerfil = () => {
               const formData = new FormData();
               formData.append("foto", dadosUsuario.foto);
               formData.append("usuarioId", usuarioId!);
-              formData.append("tipo", tipoUsuario!);
+              formData.append("tipo", tipoUsuarioOriginal!);
 
               const uploadRes = await axios.post(`${API.BASE_URL}/api/upload/perfil`, formData, {
                 headers: {Authorization: `Bearer ${token}` }
@@ -249,7 +246,7 @@ const EditarPerfil = () => {
             }
 
           const tipo = { ...dadosTipo };
-            if (tipoUsuario === "professor") {
+            if (tipoUsuarioOriginal === "professor") {
               if (typeof tipo.qualificacoes === "string") {
                 tipo.qualificacoes = tipo.qualificacoes.split(',').map((q: string) => q.trim());
               }
@@ -258,18 +255,12 @@ const EditarPerfil = () => {
               }
             }
 
-            console.log("[EditarPerfil] Enviando PUT /api/perfil/:id", {
-              usuarioId,
-              tipoUsuario,
-              bodyPreview: { usuario: { ...dadosUsuario, foto: typeof dadosUsuario.foto === "string" ? dadosUsuario.foto : "__ARQUIVO__" }, tipo: dadosTipo },
-            });
-
             await axios.put(
               `${API.BASE_URL}/api/perfil/${usuarioId}`,
               {
                 usuario: { ...dadosUsuario, foto: fotoUrl },
                 tipo,
-                tipoUsuario
+                tipoUsuario: tipoUsuarioOriginal
               },
               {
                 headers: { Authorization: `Bearer ${token}` }

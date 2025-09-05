@@ -1,5 +1,4 @@
 import { APP } from "../../config.js";
-import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 import { publicImgUrl } from "@/utils/publicUrl.js";
 
 interface Activity {

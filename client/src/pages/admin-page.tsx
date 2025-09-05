@@ -8,8 +8,8 @@ type Tab =
   | "treinos"
   | "professores"
   | "desafios"
-  | "configuracoes"
-  | "moderacao";
+  | "moderacao"
+  | "configuracoes";
 
 interface Treinos {
   id: string;
@@ -364,7 +364,7 @@ async function invalidarDesafio(id: string) {
       <h2 className="text-xl font-semibold text-green-900 my-4">Painel Administrativo</h2>
 
       <nav className="flex flex-wrap gap-3 mb-6">
-        {["dashboard","usuarios","exercicios","treinos","professores","desafios","configuracoes", "moderacao"].map((t) => (
+        {["dashboard","usuarios","exercicios","treinos","professores","desafios", "moderacao", "configuracoes"].map((t) => (
           <button key={t}
             className={`px-4 py-2 rounded ${aba === (t as Tab) ? "bg-green-800 text-white" : "bg-gray-200"}`}
             onClick={() => setAba(t as Tab)}>
@@ -697,72 +697,6 @@ async function invalidarDesafio(id: string) {
                     </ul>
                   </div>
                 )}
-                {aba === "configuracoes" && configuracoes && (
-                  <div className="bg-white p-6 rounded shadow">
-                    <h3 className="text-xl font-bold mb-4">Configurações do Sistema</h3>
-        
-                    <div className="mb-6">
-                      <h4 className="font-semibold text-green-800 mb-2">🔍 Funcionalidades</h4>
-                      {[
-                        { key: "registrationEnabled", label: "registration_enabled", desc: "Habilita o registro de novos usuários na plataforma" },
-                        { key: "maintenanceMode", label: "maintenance_mode", desc: "Coloca o site em modo de manutenção" },
-                        { key: "allowAthleteChallenges", label: "allow_athete_challenges", desc: "Permite que atletas participem de desafios" },
-                        { key: "allowProfileEditing", label: "allow_profile_editing", desc: "Permite edição de perfis pelos usuários" },
-                      ].map((item) => (
-                        <div key={item.key} className="flex items-center justify-between border-b py-2">
-                          <div>
-                            <p className="font-medium">{item.label} ✅</p>
-                            <p className="text-sm text-gray-600">{item.desc}</p>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={configuracoes[item.key]}
-                            onChange={async (e) => {
-                              const res = await fetch(`${API.BASE_URL}/api/configuracoes`, {
-                                method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ [item.key]: e.target.checked }),
-                              });
-                              if (res.ok) {
-                                setConfiguracoes({ ...configuracoes, [item.key]: e.target.checked });
-                              }
-                            }}
-                            className="scale-125"
-                          />
-                        </div>
-                      ))}
-                    </div>
-        
-                    <div className="mb-6">
-                      <h4 className="font-semibold text-green-800 mb-2">⚙️ Outras Configurações</h4>
-                      <label className="font-semibold flex items-center justify-between py-2">max_daily_posts </label> 
-                        <p className="text-sm -mt-2">Número máximo de postagens diárias por usuário</p>
-                      <input
-                        type="number"
-                        className="border px-2 py-1 rounded w-24"
-                        value={configuracoes.maxDailyPosts}
-                        onChange={async (e) => {
-                          const novoValor = parseInt(e.target.value);
-                          setConfiguracoes({ ...configuracoes, maxDailyPosts: novoValor });
-        
-                          await fetch(`${API.BASE_URL}/api/configuracoes`, {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ maxDailyPosts: novoValor }),
-                          });
-                        }}
-                      />
-                    </div>
-        
-                    <div className="mt-4">
-                      <h4 className="font-semibold text-green-800 mb-2">🔧 Ações Administrativas</h4>
-                      <div className="flex gap-4">
-                        <button className="bg-gray-200 px-4 py-2 rounded" onClick={() => alert("Cache atualizado!")}>Atualizar Cache</button>
-                        <button className="bg-gray-200 px-4 py-2 rounded" onClick={() => alert("Verificação de integridade feita!")}>Verificar Integridade</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
                 {aba === "moderacao" && ( 
                   <div>
                    <h3 className="text-xl font-bold mb-3">Moderação</h3>
@@ -861,6 +795,73 @@ async function invalidarDesafio(id: string) {
                       >
                         Próxima
                       </button>
+                    </div>
+                  </div>
+                )}
+
+                {aba === "configuracoes" && configuracoes && (
+                  <div className="bg-white p-6 rounded shadow">
+                    <h3 className="text-xl font-bold mb-4">Configurações do Sistema</h3>
+        
+                    <div className="mb-6">
+                      <h4 className="font-semibold text-green-800 mb-2">🔍 Funcionalidades</h4>
+                      {[
+                        { key: "registrationEnabled", label: "registration_enabled", desc: "Habilita o registro de novos usuários na plataforma" },
+                        { key: "maintenanceMode", label: "maintenance_mode", desc: "Coloca o site em modo de manutenção" },
+                        { key: "allowAthleteChallenges", label: "allow_athete_challenges", desc: "Permite que atletas participem de desafios" },
+                        { key: "allowProfileEditing", label: "allow_profile_editing", desc: "Permite edição de perfis pelos usuários" },
+                      ].map((item) => (
+                        <div key={item.key} className="flex items-center justify-between border-b py-2">
+                          <div>
+                            <p className="font-medium">{item.label} ✅</p>
+                            <p className="text-sm text-gray-600">{item.desc}</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={configuracoes[item.key]}
+                            onChange={async (e) => {
+                              const res = await fetch(`${API.BASE_URL}/api/configuracoes`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ [item.key]: e.target.checked }),
+                              });
+                              if (res.ok) {
+                                setConfiguracoes({ ...configuracoes, [item.key]: e.target.checked });
+                              }
+                            }}
+                            className="scale-125"
+                          />
+                        </div>
+                      ))}
+                    </div>
+        
+                    <div className="mb-6">
+                      <h4 className="font-semibold text-green-800 mb-2">⚙️ Outras Configurações</h4>
+                      <label className="font-semibold flex items-center justify-between py-2">max_daily_posts </label> 
+                        <p className="text-sm -mt-2">Número máximo de postagens diárias por usuário</p>
+                      <input
+                        type="number"
+                        className="border px-2 py-1 rounded w-24"
+                        value={configuracoes.maxDailyPosts}
+                        onChange={async (e) => {
+                          const novoValor = parseInt(e.target.value);
+                          setConfiguracoes({ ...configuracoes, maxDailyPosts: novoValor });
+        
+                          await fetch(`${API.BASE_URL}/api/configuracoes`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ maxDailyPosts: novoValor }),
+                          });
+                        }}
+                      />
+                    </div>
+        
+                    <div className="mt-4">
+                      <h4 className="font-semibold text-green-800 mb-2">🔧 Ações Administrativas</h4>
+                      <div className="flex gap-4">
+                        <button className="bg-gray-200 px-4 py-2 rounded" onClick={() => alert("Cache atualizado!")}>Atualizar Cache</button>
+                        <button className="bg-gray-200 px-4 py-2 rounded" onClick={() => alert("Verificação de integridade feita!")}>Verificar Integridade</button>
+                      </div>
                     </div>
                   </div>
                 )}

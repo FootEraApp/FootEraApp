@@ -1,33 +1,35 @@
-import { API } from "@/config";
+// client/src/utils/formatarFoto.ts
+import { API } from "@/config.js";
 
-type Pasta =
-  | "usuarios"
-  | "desafios"
-  | "escolas"
-  | "clubes"
-  | "treinos"
-  | "misc";
+type Pasta = "usuarios" | "desafios" | "escolas" | "clubes" | "treinos" | "misc";
 
-export function formatarUrlFoto(
-  raw?: string | null,
-  pastaPadrao: Pasta = "usuarios"
-): string {
-  if (!raw) {
-    // fallback genérico
-    return `${API.BASE_URL}/assets/default-user.png`;
-  }
+export function formatarUrlFoto(raw?: string | null, pastaPadrao: Pasta = "usuarios"): string {
+  // fallback genérico
+  const fallback = `${API.BASE_URL}/assets/default-user.png`;
+  if (!raw) return fallback;
 
-  // já é URL absoluta
-  if (/^https?:\/\//i.test(raw)) return raw;
+  let v = String(raw).trim();
 
-  // já veio com /assets/… (caminho completo do servidor)
-  if (raw.startsWith("/assets/")) return `${API.BASE_URL}${raw}`;
+  // URL absoluta já pronta
+  if (/^https?:\/\//i.test(v)) return v;
 
-  // veio “pasta/arquivo.ext” (ex.: "desafios/controle-aereo.png")
-  if (/^(usuarios|desafios|escolas|clubes|treinos)\//i.test(raw)) {
-    return `${API.BASE_URL}/assets/${raw}`;
-  }
+  // tira barras iniciais
+  v = v.replace(/^\/+/, "");
 
-  // veio só o nome do arquivo ⇒ usa a pasta padrão informada
-  return `${API.BASE_URL}/assets/${pastaPadrao}/${raw}`;
+  // remove prefixos comuns
+  v = v.replace(/^public\//i, "");
+  v = v.replace(/^assets\//i, "");
+
+  // se já vier /assets/... mantenha
+  if (v.startsWith("assets/")) return `${API.BASE_URL}/${v}`;
+
+  // detecta se já tem a pasta na frente
+  const temPasta = /^(usuarios|desafios|escolas|clubes|treinos)\//i.test(v);
+
+  // se não tiver extensão, assume .jpg
+  const temExt = /\.[a-z0-9]{3,4}$/i.test(v);
+  if (!temExt) v += ".jpg";
+
+  const caminho = temPasta ? v : `${pastaPadrao}/${v}`;
+  return `${API.BASE_URL}/assets/${caminho}`;
 }
