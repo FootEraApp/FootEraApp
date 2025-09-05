@@ -23,6 +23,7 @@ interface TreinoProgramado {
   dicas?: string[];
   professorId?: string;
   escolinhaId?: string;
+  clubeId?: string;
 }
 
 interface TreinoAgendado {
@@ -60,7 +61,7 @@ interface Desafio {
 }
 
 interface UsuarioLogado {
-  tipo: 'atleta' | 'escola' | 'clube' | 'professor';
+  tipo: 'admin' | 'atleta' | 'escola' | 'escolinha' | 'clube' | 'professor';
   usuarioId: string;
   tipoUsuarioId: string;
 }
@@ -87,77 +88,113 @@ export default function PaginaTreinos() {
   }, []);
 
   useEffect(() => {
-    const carregar = async () => {
-      const tipo = Storage.tipoSalvo;
-      const tipoUsuarioId = Storage.tipoUsuarioId;
-      const token = Storage.token;
+  const carregar = async () => {
+    const tipo =
+      (Storage as any).tipoSalvo ??
+      (Storage as any).tipoUsuario ??
+      (Storage as any).tipo ??
+      localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario");
 
-      if (tipo === "atleta" && tipoUsuarioId && token) {
-        const [resTreinos, resDesafios] = await Promise.all([
-          fetch(`${API.BASE_URL}/api/treinos/agendados?tipoUsuarioId=${tipoUsuarioId}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }),
-          fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }),
-        ]);
+    const tipoUsuarioId =
+      (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
 
-        const treinosJson = await resTreinos.json();
-        const desafiosJson = await resDesafios.json();
+    const token =
+      (Storage as any).token ?? localStorage.getItem("token");
 
-        const normalizados = (Array.isArray(treinosJson) ? treinosJson : []).map((t: any) => ({
-          id: t.id,
-          titulo: t.titulo,
-          dataTreino: t.dataTreino ?? null,
-          prazoEnvio: t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t.treinoProgramado?.dataAgendada ?? null,
-          nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
-          duracaoMinutos: t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
-          treinoProgramado: t.treinoProgramado ?? null,
-        }));
+    console.log("[treinos] usando", { tipo, tipoUsuarioId, token: !!token });
 
-        const agora = Date.now();
-        const apenasVigentes = normalizados.filter(t => {
-          if (!t.prazoEnvio) return true;
-          const ts = Date.parse(t.prazoEnvio);
-          return Number.isFinite(ts) ? ts >= agora : true;
-        });
+    if (tipo === "atleta" && tipoUsuarioId && token) {
+      const [resTreinos, resDesafios] = await Promise.all([
+        fetch(`${API.BASE_URL}/api/treinos/agendados?tipoUsuarioId=${tipoUsuarioId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
 
-        setTreinosAgendados(apenasVigentes);
-        setDesafios(desafiosJson || []);
-      } else {
-        const res = await fetch(`${API.BASE_URL}/api/treinos`);
-        const json = await res.json();
+      const treinosJson = await resTreinos.json();
+      const desafiosJson = await resDesafios.json();
 
-        setTreinos(json.treinosProgramados || []);
-        setDesafios(json.desafiosOficiais || []);
-      }
-    };
+      const normalizados = (Array.isArray(treinosJson) ? treinosJson : []).map((t: any) => ({
+        id: t.id,
+        titulo: t.titulo,
+        dataTreino: t.dataTreino ?? null,
+        prazoEnvio: t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t.treinoProgramado?.dataAgendada ?? null,
+        nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
+        duracaoMinutos: t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
+        treinoProgramado: t.treinoProgramado ?? null,
+      }));
+
+      const agora = Date.now();
+      const apenasVigentes = normalizados.filter(t => {
+        if (!t.prazoEnvio) return true;
+        const ts = Date.parse(t.prazoEnvio);
+        return Number.isFinite(ts) ? ts >= agora : true;
+      });
+
+      setTreinosAgendados(apenasVigentes);
+      setDesafios(desafiosJson || []);
+    } else if (tipo === "admin" && token) {
+      // Admin enxerga tudo
+      const [resTreinos, resDesafios] = await Promise.all([
+        fetch(`${API.BASE_URL}/api/treinos`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API.BASE_URL}/api/desafios`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const jsonTreinos = await resTreinos.json();
+      const jsonDesafios = await resDesafios.json();
+
+      setTreinos(jsonTreinos?.treinosProgramados ?? jsonTreinos ?? []);
+      setDesafios(jsonDesafios?.desafiosOficiais ?? jsonDesafios ?? []);
+      setTreinosAgendados([]); // admin não lista "meus agendados"
+    } else {
+      // Visitante (sem login)
+      const res = await fetch(`${API.BASE_URL}/api/treinos`);
+      const json = await res.json();
+      setTreinos(json.treinosProgramados || []);
+      setDesafios(json.desafiosOficiais || []);
+    }
+  };
 
     const carregarUsuario = () => {
-      const tipoSalvo = Storage.tipoSalvo;
-      const usuarioId = Storage.usuarioId;
-      const tipoUsuarioId = Storage.tipoUsuarioId;
+    const tipoSalvo =
+      (Storage as any).tipoSalvo ??
+      (Storage as any).tipoUsuario ??
+      (Storage as any).tipo ??
+      localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario");
 
-      if (
-        ["atleta", "escola", "clube", "professor"].includes(tipoSalvo || "") &&
-        usuarioId && tipoUsuarioId
-      ) {
-        setUsuario({
-          tipo: tipoSalvo as UsuarioLogado["tipo"],
-          usuarioId,
-          tipoUsuarioId,
-        });
-      } else {
-        console.warn("Tipo de usuário, tipoUsuarioId ou ID inválido ou não encontrado.");
-      }
-    };
-    carregar();
-    carregarUsuario();
-  }, []);
+    const usuarioId =
+      (Storage as any).usuarioId ?? localStorage.getItem("usuarioId");
+
+    const tipoUsuarioId =
+      (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
+
+    if (
+      ["admin", "atleta", "escola", "escolinha", "clube", "professor"].includes(
+        String(tipoSalvo || "")
+      ) &&
+      usuarioId &&
+      tipoUsuarioId
+    ) {
+      setUsuario({
+        tipo: (tipoSalvo as any) === "escolinha" ? "escolinha" : (tipoSalvo as any),
+        usuarioId,
+        tipoUsuarioId,
+      });
+    } else {
+      console.warn("Tipo de usuário, tipoUsuarioId ou ID inválido ou não encontrado.", {
+        tipoSalvo,
+        usuarioId,
+        tipoUsuarioId,
+      });
+    }
+  };
+
+  carregar();
+  carregarUsuario();
+}, []);
 
   const formatarDataHora = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
@@ -363,136 +400,146 @@ function toggleSelecionado(idUsuario: string) {
   });
 }
 
-async function enviarCompartilhamentoPorDM() {
-  if (selecionados.size === 0 || !desafioParaCompartilhar) {
-    alert("Selecione ao menos uma pessoa para compartilhar.");
-    return;
+  async function enviarCompartilhamentoPorDM() {
+    if (selecionados.size === 0 || !desafioParaCompartilhar) {
+      alert("Selecione ao menos uma pessoa para compartilhar.");
+      return;
+    }
+    const token = Storage.token;
+
+    try {
+      setEnviandoDM(true);
+      await Promise.all(
+        Array.from(selecionados).map((paraId) =>
+          fetch(`${API.BASE_URL}/api/mensagem`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              paraId,
+              conteudo: desafioParaCompartilhar,
+              tipo: "DESAFIO",
+            }),
+          })
+        )
+      );
+
+      alert("Desafio compartilhado por mensagem!");
+      setModalAberto(false);
+    } catch (e) {
+      console.error(e);
+      alert("Falha ao enviar mensagens.");
+    } finally {
+      setEnviandoDM(false);
+    }
   }
-  const token = Storage.token;
 
-  try {
-    setEnviandoDM(true);
-    await Promise.all(
-      Array.from(selecionados).map((paraId) =>
-        fetch(`${API.BASE_URL}/api/mensagem`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            paraId,
-            conteudo: desafioParaCompartilhar,
-            tipo: "DESAFIO",
-          }),
-        })
-      )
-    );
-
-    alert("Desafio compartilhado por mensagem!");
-    setModalAberto(false);
-  } catch (e) {
-    console.error(e);
-    alert("Falha ao enviar mensagens.");
-  } finally {
-    setEnviandoDM(false);
-  }
-}
-
-  return (
-    <div className="min-h-screen bg-yellow-50 pb-20">
-      <div className="p-4 max-w-2xl mx-auto">
-        {usuario.tipo === 'clube' ? (
-          <div className="text-center py-10">
-            <h2 className="text-lg font-semibold">Treinos e Desafios</h2>
-            <p className="text-gray-500">Em breve disponível para clubes</p>
-          </div>
-        ) : (
-          <>
-            {usuario.tipo === 'atleta' && (
-              <div className="space-y-6">
-                 <div className="bg-white rounded shadow p-4">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-lg font-semibold">Meus Treinos</h3>
-                    <button
-                      className="bg-green-800 text-white px-4 py-2 rounded text-sm"
-                      onClick={() => navigate("/treinos/novo")}
-                    >
-                      Agendar novo treino
-                    </button>
-                  </div>
-
-                  {treinosAgendados.length > 0 ? (
-                    treinosAgendados.map(renderTreinoAgendadoCard)
-                  ) : (
-                    <p className="text-gray-500">Nenhum treino disponível ainda.</p>
-                  )}
-                </div>
-
-                <div className="bg-white rounded shadow p-4">
-                  <h3 className="text-lg font-semibold mb-2">Desafios</h3>
-                  {desafios.length > 0 ? (
-                    desafios.map(renderDesafioCard)
-                  ) : (
-                    <p className="text-gray-500">Nenhum desafio disponível no momento.</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {usuario.tipo === 'professor' && (
-              <div className="space-y-6">
-                <div className="flex space-x-4 mb-4">
-                  <button
-                    onClick={() => setAbaProfessor("avaliar")}
-                    className={`px-4 py-2 rounded ${abaProfessor === "avaliar" ? "bg-green-800 text-white" : "bg-gray-200 text-gray-800"}`}
-                  >
-                    Avaliar Treinos
-                  </button>
-                  <button
-                    onClick={() => setAbaProfessor("criar")}
-                    className={`px-4 py-2 rounded ${abaProfessor === "criar" ? "bg-green-800 text-white" : "bg-gray-200 text-gray-800"}`}
-                  >
-                    Meus Treinos
-                  </button>
-                </div>
-
-                {abaProfessor === "avaliar" && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2">Treinos dos atletas afiliados</h3>
-                    <p className="text-gray-500">Nenhum treino pendente para avaliação no momento.</p>
-                  </div>
-                )}
-
-                {abaProfessor === "criar" && (
-                  <div>
-                    <div className="text-right mb-4">
+    return (
+      <div className="min-h-screen bg-yellow-50 pb-20">
+        <div className="p-4 max-w-2xl mx-auto">
+          {(
+            <>
+              {usuario.tipo === 'atleta' && (
+                <div className="space-y-6">
+                  <div className="bg-white rounded shadow p-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h3 className="text-lg font-semibold">Meus Treinos</h3>
                       <button
-                        className="bg-green-800 text-white px-4 py-2 rounded"
+                        className="bg-green-800 text-white px-4 py-2 rounded text-sm"
                         onClick={() => navigate("/treinos/novo")}
                       >
-                        Criar novo treino
+                        Agendar novo treino
                       </button>
                     </div>
 
-                    <h3 className="text-lg font-semibold mb-2">Treinos que você criou</h3>
-                    {treinos.filter(
-                      (t) => t.professorId === usuario.tipoUsuarioId || t.escolinhaId === usuario.tipoUsuarioId
-                    ).length > 0 ? (
-                      treinos
-                        .filter((t) =>
-                          t.professorId === usuario.tipoUsuarioId || t.escolinhaId === usuario.tipoUsuarioId
-                        )
-                        .map(renderTreinoCard)
+                    {treinosAgendados.length > 0 ? (
+                      treinosAgendados.map(renderTreinoAgendadoCard)
                     ) : (
-                      <p className="text-gray-500">Você ainda não criou nenhum treino.</p>
+                      <p className="text-gray-500">Nenhum treino disponível ainda.</p>
                     )}
                   </div>
-                )}
-              </div>
-            )}
-          </>
-        )}
+
+                  <div className="bg-white rounded shadow p-4">
+                    <h3 className="text-lg font-semibold mb-2">Desafios</h3>
+                    {desafios.length > 0 ? (
+                      desafios.map(renderDesafioCard)
+                    ) : (
+                      <p className="text-gray-500">Nenhum desafio disponível no momento.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {(usuario.tipo === "professor" || usuario.tipo === "admin" || usuario.tipo === "escola" || usuario.tipo === "escolinha" || usuario.tipo === "clube") && (
+                <div className="space-y-6">
+                  <div className="flex space-x-4 mb-4">
+                    <button
+                      onClick={() => setAbaProfessor("avaliar")}
+                      className={`px-4 py-2 rounded ${
+                        abaProfessor === "avaliar" ? "bg-green-800 text-white" : "bg-gray-200 text-gray-800"
+                      }`}
+                    >
+                      Avaliar Treinos
+                    </button>
+                    <button
+                      onClick={() => setAbaProfessor("criar")}
+                      className={`px-4 py-2 rounded ${
+                        abaProfessor === "criar" ? "bg-green-800 text-white" : "bg-gray-200 text-gray-800"
+                      }`}
+                    >
+                      Meus Treinos
+                    </button>
+                  </div>
+
+                  {abaProfessor === "avaliar" && (
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">Treinos dos atletas afiliados</h3>
+                      <p className="text-gray-500">Nenhum treino pendente para avaliação no momento.</p>
+                    </div>
+                  )}
+
+                  {abaProfessor === "criar" && (
+                    <div>
+                      <div className="text-right mb-4">
+                        <button
+                          className="bg-green-800 text-white px-4 py-2 rounded"
+                          onClick={() => navigate("/treinos/novo")}
+                        >
+                          Criar novo treino
+                        </button>
+                      </div>
+
+                      <h3 className="text-lg font-semibold mb-2">
+                        {usuario.tipo === "admin" ? "Todos os Treinos" : "Treinos que você criou"}
+                      </h3>
+
+                      {(
+                        usuario.tipo === "admin"
+                          ? treinos // admin vê todos aqui
+                          : treinos.filter(
+                              (t) => t.professorId === usuario.tipoUsuarioId || t.escolinhaId === usuario.tipoUsuarioId || t.clubeId === usuario.tipoUsuarioId
+                            )
+                      ).length > 0 ? (
+                        (usuario.tipo === "admin"
+                          ? treinos
+                          : treinos.filter(
+                              (t) => t.professorId === usuario.tipoUsuarioId || t.escolinhaId === usuario.tipoUsuarioId || t.clubeId === usuario.tipoUsuarioId
+                            )
+                        ).map(renderTreinoCard)
+                      ) : (
+                        <p className="text-gray-500">
+                          {usuario.tipo === "admin" ? "Nenhum treino cadastrado." : "Você ainda não criou nenhum treino."}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">

@@ -941,7 +941,7 @@ export default function PaginaMensagens() {
             </div>
           </div>
 
-          <div className="sticky bottom-[64px] md:bottom-0 bg-transparent border-green-100">
+          <div className="sticky bottom-[64px] md:bottom-0 bg-transparent border-green-100 mb-10">
             <div className="mx-auto w-full sm:max-w-3xl px-3 sm:px-4 py-3 flex items-center gap-2">
               <input
                 className="flex-1 bg-white border border-green-700 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-700"
