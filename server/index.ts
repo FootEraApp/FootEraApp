@@ -110,7 +110,7 @@ app.use("/api/observados", observadosRoutes);
 app.use(adminModeracaoRoutes);
 
 app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
-
+app.use("/assets", express.static(path.join(__dirname, "../client/public_assets")));
 app.get("/", (req, res) => {
   res.send("FootEra API está ativa!");
 });
