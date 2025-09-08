@@ -47,6 +47,5 @@ export async function removerTreinosExpirados() {
       prisma.treinoProgramado.delete({ where: { id: treino.id } }),
     ]);
 
-    console.log(`[DEL] ${treino.nome} expirado e sem submissões – removido.`);
   }
 }

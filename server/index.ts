@@ -21,11 +21,11 @@ import configuracoesRoutes from "./routes/configuracoes.js";
 import conquistaRoutes from "./routes/conquista.js";
 import categoriasRoutes from "./routes/categorias.js"
 import desafiosRoutes from "./routes/desafios.js";
-    import desafiosEmGrupoRoutes from "./routes/desafiosEmGrupo.js";
+import desafiosEmGrupoRoutes from "./routes/desafiosEmGrupo.js";
 import escolinhaRoutes from "./routes/escolinha.js";
 import exerciciosRoutes from "./routes/exercicios.js";
 import explorarRoutes from "./routes/explorar.js";
-    import favoritosRoutes from "./routes/favorito.js";
+import favoritosRoutes from "./routes/favorito.js";
 import feedRoutes from "./routes/feed.js";
 import gruposRoutes from "./routes/grupos.js";
 import homeRoutes from "./routes/home.js";

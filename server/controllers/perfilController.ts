@@ -1,13 +1,9 @@
-// server/controllers/perfilcontroller
-
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
-import { calcularPontuacaoPorUsuarioId, atualizarCachePontuacao } from "server/services/pontuacao.service.js";
-import { AnyArn } from "aws-sdk/clients/groundstation.js";
+
 const prisma = new PrismaClient();
 
-/** util: aceita tanto id de Usuario quanto id da entidade específica */
 async function resolveByUsuarioOrEntity(opts: {
   entity: "professor" | "clube" | "escolinha";
   usuarioOrEntityId: string;
@@ -16,14 +12,12 @@ async function resolveByUsuarioOrEntity(opts: {
   const { entity, usuarioOrEntityId, select } = opts;
 
   if (entity === "professor") {
-    // 1) por usuarioId
     let row = await prisma.professor.findFirst({
       where: { usuarioId: usuarioOrEntityId },
       select,
     });
     if (row) return row;
 
-    // 2) por id
     row = await prisma.professor.findUnique({
       where: { id: usuarioOrEntityId },
       select,
@@ -45,7 +39,6 @@ async function resolveByUsuarioOrEntity(opts: {
     return row;
   }
 
-  // entity === "escolinha"
   let row = await prisma.escolinha.findFirst({
     where: { usuarioId: usuarioOrEntityId },
     select,
@@ -742,7 +735,6 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
 
 export const getTreinosResumo = async (req: any, res: Response) => {
   try {
-    // aceita /:id, /:usuarioId ou o próprio usuário autenticado
     const usuarioId =
       req.params?.id ?? req.params?.usuarioId ?? req.userId;
 
@@ -750,13 +742,11 @@ export const getTreinosResumo = async (req: any, res: Response) => {
       return res.status(400).json({ error: "usuarioId ausente" });
     }
 
-    // se sua tabela Atleta tem unique(usuarioId), pode usar findUnique; caso contrário, findFirst
     const atleta = await prisma.atleta.findFirst({
       where: { usuarioId },
       select: { id: true },
     });
 
-    // Sem cadastro de atleta? Devolva zeros (não 404)
     if (!atleta) {
       return res.status(200).json({
         completos: 0,
@@ -772,7 +762,7 @@ export const getTreinosResumo = async (req: any, res: Response) => {
         include: {
           treinoAgendado: { include: { treinoProgramado: true } },
         },
-        orderBy: { criadoEm: "desc" }, // ajuste se seu campo for createdAt
+        orderBy: { criadoEm: "desc" },
       }),
       prisma.submissaoDesafio.count({
         where: { atletaId: atleta.id, aprovado: true },
@@ -781,7 +771,6 @@ export const getTreinosResumo = async (req: any, res: Response) => {
 
     const completos = subsTreino.length;
 
-    // soma de minutos (tolerante a campos diferentes)
     let minutos = 0;
     const categorias = { Fisico: 0, Tecnico: 0, Tatico: 0, Mental: 0 };
 
@@ -881,8 +870,6 @@ export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Resp
   }
 };
 
-// PAGINA DE PERFIL TIPOS
-
 export async function getPerfilProfessor(req: Request, res: Response) {
   try {
     const { id } = req.params;
@@ -910,11 +897,9 @@ export async function getPerfilProfessor(req: Request, res: Response) {
 
   if (!prof) return res.status(404).json({ error: "Professor não encontrado" });
 
-  // 🔒 Narrowing seguro para o usuário relacionado
   const usuarioMin: { id: string; nome: string; email: string; foto?: string | null } | null =
     (prof as any).usuario ?? null;
 
-  // Foto prioriza foto do tipo e cai para a foto do usuário
   const fotoPerfil: string | null =
     (prof as any).fotoUrl ?? (usuarioMin?.foto ?? null);
 

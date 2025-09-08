@@ -1,4 +1,3 @@
-// client/src/pages/elenco.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   DragDropContext,
@@ -14,20 +13,19 @@ import { API } from "../config.js";
 const ELENCOS_BASE = `${API.BASE_URL}/api/treinos/elencos`;
 const PONTOS_BASE  = `${API.BASE_URL}/api/treinos/pontuacoes`;
 
-// ----------------- TIPOS -----------------
 type PontuacaoDTO = {
   atletaId: string;
   total: number;
   performance: number;
   disciplina: number;
   responsabilidade: number;
-  mediaGeral: number; // OVR
+  mediaGeral: number;
   ultimaAtualizacao: string;
 };
 
 interface Atleta {
-  id: string;        // id do USUÁRIO (para DnD/visual)
-  atletaId: string;  // id da tabela Atleta (FK usada no backend)
+  id: string;    
+  atletaId: string; 
   nome: string;
   foto?: string | null;
   idade?: number | null;
@@ -74,7 +72,6 @@ type ElencoServidor = {
   atletasElenco?: { atletaId: string; posicao: PosicaoCampo }[];
 };
 
-// === escala enriquecida vinda do backend ===
 type EscalaItem = {
   atletaId: string;
   usuarioId: string;
@@ -85,7 +82,6 @@ type EscalaItem = {
 };
 type EscalaEnriquecida = Record<PosicaoCampo, EscalaItem | null>;
 
-// ----------------- UTILS -----------------
 function useIsMobile(breakpointPx = 768) {
   const [isMobile, setIsMobile] = useState<boolean>(
     typeof window !== "undefined" ? window.innerWidth <= breakpointPx : false
@@ -115,8 +111,6 @@ function useSize<T extends HTMLElement>() {
   return { ref, size };
 }
 
-// ----------------- CARD EM FORMATO ESCUDO (SVG) -----------------
-// tamanhos base
 const SHIELD_W_DESK = 150;
 const SHIELD_H_DESK = 210;
 const SHIELD_W_MOB  = 112;
@@ -125,8 +119,7 @@ const SHIELD_H_MOB  = 156;
 const SHIELD_PATH =
   "M92 6 C120 6 146 10 168 18 C168 22 168 26 174 30 C178 33 182 34 184 34 L184 188 C184 197 139 204 115 212 C98 218 88 228 92 254 C86 240 74 233 48 224 C21 215 0 209 0 196 L0 34 C2 34 6 33 10 30 C16 26 16 22 16 18 C38 10 64 6 92 6 Z";
 
-// ==== Destaque Dourado (mude só este número) ====
-const GOLDEN_MIN_OVR = 88; // mínimo para ativar o efeito dourado
+const GOLDEN_MIN_OVR = 100;
 const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
   (Number.isFinite(ovr) ? Number(ovr) : 0) >= min;
 
@@ -239,7 +232,6 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
   );
 };
 
-// ----------------- CARD RETANGULAR (lista) -----------------
 const CardAtleta: React.FC<{ atleta: Atleta }> = ({ atleta }) => (
   <div className="p-2 bg-white rounded-md shadow w-[180px] sm:w-[200px] flex items-center gap-3">
     <img
@@ -255,7 +247,6 @@ const CardAtleta: React.FC<{ atleta: Atleta }> = ({ atleta }) => (
   </div>
 );
 
-// ----------------- PÁGINA -----------------
 export default function PaginaElenco() {
   const isMobile = useIsMobile();
 
@@ -274,7 +265,6 @@ export default function PaginaElenco() {
     [posicoes]
   );
 
-  // ---- BUSCA PONTUAÇÕES DOS ATLETAS ----
   const fetchPontuacoes = async (ids: string[]) => {
     const token = Storage.token;
     
@@ -291,7 +281,6 @@ export default function PaginaElenco() {
     }
   };
 
-  // ---- Aplicadores de escala ----
   const aplicarEscalaNasPosicoes = (
     escala: Record<PosicaoCampo, string | null>,
     listaAtletas: Atleta[]
@@ -352,21 +341,18 @@ export default function PaginaElenco() {
     fetchPontuacoes(Array.from(usados));
   };
 
-  // ---- Carregamento inicial ----
   useEffect(() => {
     (async () => {
       try {
         const tipoUsuarioId = Storage.tipoUsuarioId;
         const token = Storage.token;
 
-        // (1) atletas vinculados
         const resAtletas = await axios.get(
           `${API.BASE_URL}/api/treinos/atletas-vinculados`,
           { params: { tipoUsuarioId }, headers: { Authorization: `Bearer ${token}` } }
         );
         const lista = resAtletas.data as Atleta[];
 
-        // (2) escala pronta do dono
         const resEscala = await axios.get(`${ELENCOS_BASE}/escala-por-dono`, {
           params: { tipoUsuarioId },
           headers: { Authorization: `Bearer ${token}` },
@@ -392,7 +378,6 @@ export default function PaginaElenco() {
           }
         }
 
-        // (3) fallback antigo
         const resElenco = await axios.get(ELENCOS_BASE, {
           params: { tipoUsuarioId },
           headers: { Authorization: `Bearer ${token}` },
@@ -437,46 +422,34 @@ export default function PaginaElenco() {
         setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ----------------- AUTO-FIT DO CAMPO -----------------
-  // A área verde é medida via ResizeObserver para caber todas as 4 linhas (3,3,4,1)
   const fieldBox = useSize<HTMLDivElement>();
 
-  // grid: linhas/colunas fixas por seção (mantivemos seu layout)
-  const rowsHeights = 4;           // 4 blocos/linhas de slots
-  const maxCols = 4;               // a maior linha tem 4 slots
-  const gapY = 20;                 // espaçamento vertical entre blocos
-  const gapX = 12;                 // gap interno dos grids
+  const rowsHeights = 4;        
+  const maxCols = 4;           
+  const gapY = 20;             
+  const gapX = 12;                 
 
-  // tamanhos base por plataforma
   const BASE_W = isMobile ? SHIELD_W_MOB : SHIELD_W_DESK;
   const BASE_H = isMobile ? SHIELD_H_MOB : SHIELD_H_DESK;
 
-  // rótulo + respiro do slot
   const BASE_SLOT_EXTRA = isMobile ? 48 : 64;
 
-  // largura/altura efetiva do SLOT (escudo + rótulos/margens internas)
-  const baseSlotW = BASE_W + 12;                  // 6px padding de cada lado
-  const baseSlotH = BASE_H + BASE_SLOT_EXTRA;     // espaço pro rótulo e respiro
+  const baseSlotW = BASE_W + 12;               
+  const baseSlotH = BASE_H + BASE_SLOT_EXTRA;     
 
-  // espaço necessário para caber o maior grid (4 colunas) + gaps horizontais
   const needW = maxCols * baseSlotW + (maxCols - 1) * gapX;
-  // altura total das 4 faixas + gaps verticais entre elas
   const needH = rowsHeights * baseSlotH + (rowsHeights - 1) * gapY;
 
-  // espaço disponível (com folga interna do container)
   const availW = Math.max(0, fieldBox.size.w - 8);
   const availH = Math.max(0, fieldBox.size.h - 8);
 
-  // fator de escala para caber por largura E altura
   const scale = Math.max(0.6, Math.min(availW / needW, availH / needH));
   const SHIELD_W = Math.round(BASE_W * scale);
   const SHIELD_H = Math.round(BASE_H * scale);
   const SLOT_EXTRA_H = Math.round(BASE_SLOT_EXTRA * scale);
 
-  // ---- DnD ----
   const handleDragEnd = (result: DropResult) => {
     const { source, destination } = result;
     if (!destination) return;
@@ -548,7 +521,6 @@ export default function PaginaElenco() {
     }
   };
 
-  // ---- Salvar ----
   const salvarElenco = async () => {
     try {
       const token = Storage.token;
@@ -606,7 +578,6 @@ export default function PaginaElenco() {
     }
   };
 
-  // ----------------- SLOT (escudo no campo) -----------------
   const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) => {
     const a = posicoes[pos];
     const pts = a ? pontos[a.atletaId] : undefined;
@@ -661,7 +632,6 @@ export default function PaginaElenco() {
     );
   };
 
-  // ----------------- LAYOUT -----------------
   const listaClasses =
     (isMobile
       ? "flex flex-row gap-3 overflow-x-auto py-2"

@@ -24,7 +24,6 @@
   --ring: 158 43% 17%;
   --radius: 0.5rem;
 
-  /* Custom colors for FootEra */
   --footera-green: 158 43% 17%;
   --footera-cream: 54 47% 95%;
   --footera-gold: 45 100% 50%;
@@ -54,7 +53,6 @@
   --input: 158 43% 30%;
   --ring: 54 47% 95%;
 
-  /* Custom colors for FootEra dark mode */
   --footera-green: 158 43% 17%;
   --footera-cream: 54 47% 95%;
   --footera-gold: 45 100% 50%;
@@ -65,7 +63,7 @@
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
   
   body {
@@ -83,7 +81,7 @@
   }
   
   .footera-text-green {
-    @apply text-[#0A4B3A];
+    color: #0A4B3A;
   }
   
   .footera-bg-cream {

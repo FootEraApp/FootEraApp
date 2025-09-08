@@ -181,7 +181,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           data: {
             usuarioId: novoUsuario.id,
             cargo: "Administrador Geral",
-            nivel: Nivel.Base, // Ou outro valor do enum que você definir
+            nivel: Nivel.Base, 
           },
         });
         break;

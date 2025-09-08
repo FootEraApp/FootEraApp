@@ -6,16 +6,19 @@ import {
   aceitarSolicitacao,
   recusarSolicitacao,
   cancelarSolicitacao,
+  listarSolicitacoesMinhas
 } from "../controllers/solicitacaoTreinoController.js";
 
 const router = express.Router();
 
 router.use(authenticateToken);
 
-router.post("/", criarSolicitacao);
+router.get("/minhas", listarSolicitacoesMinhas);
 router.get("/", listarSolicitacoesRecebidas);
 router.delete("/:destinatarioId", cancelarSolicitacao);  
 router.post("/cancelar", cancelarSolicitacao);    
+router.post("/", criarSolicitacao);
+
 router.put("/:id", async (req, res) => {
   const { aceitar } = (req.body ?? {}) as { aceitar?: boolean };
   return aceitar ? aceitarSolicitacao(req, res) : recusarSolicitacao(req, res);

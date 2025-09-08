@@ -1,4 +1,3 @@
-// client/src/pages/notificações
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";

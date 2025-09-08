@@ -27,24 +27,19 @@ function pickNumber(...vals: any[]): number {
 
 const treinoNomeToPontos: Record<string, number> = {
   "resistencia fisica": 15,
-  "resistência física": 15, // deixe a acentuada também p/ segurança
-  // adicione outros mapeamentos locais se quiser fallback quando o servidor não mandar
-};
+  "resistência física": 15,
+  };
 
 function normalizaTitulo(t?: string) {
   return (t || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 }
 
-// antes: função grande que vasculha qualquer número
 function pontosDoEvento(event: any): number {
   const direto = pickNumber(
     event?.pontuacao, event?.pontos, event?.pontosPerformance, event?.pontosDesafio,
     event?.score, event?.totalPontos, event?.valor, event?.xp
   );
   if (direto) return direto;
-
-  // ⛔️ REMOVA a varredura "walk" que somava números de QUALQUER lugar
-  // ...
 
   const titulo = normalizaTitulo(event?.titulo || event?.nome || event?.descricao);
   let porNome = 0;
@@ -148,28 +143,16 @@ export default function ScorePanel({
           if (r.status !== 200) return;
           const data = await r.json();
 
-          console.log("[ScorePanel] payload /pontuacao:", data);
-
-          // 1º: confiar no servidor
           const perfApi = Number(data?.performance) || 0;
           const discApi = Number(data?.disciplina) || 0;
           const respApi = Number(data?.responsabilidade) || 0;
 
           if (perfApi || discApi || respApi) {
             setVals({ performance: perfApi, disciplina: discApi, responsabilidade: respApi });
-            // debug:
-            console.table((data?.historico || []).map((h: any) => ({
-              tipo: h.tipo, titulo: h.titulo, origem: h.origem, pts: h.pontuacao
-            })));
-            console.log("[ScorePanel] totais API =>", {
-              perf: data?.performance, disc: data?.disciplina, resp: data?.responsabilidade
-            });
             return;
           }
 
-          // 2º: fallback calculado localmente
           const calc = computeFromHistorico(data);
-          console.log("[ScorePanel] calculado (fallback):", calc);
           setVals({
             performance: calc.performance,
             disciplina: calc.disciplina,
@@ -182,9 +165,8 @@ export default function ScorePanel({
     }, [targetId]);
 
   const hrefPontuacao = `/perfil/pontuacao`;
-
-  return (
-    <Link href={hrefPontuacao} className="no-underline block">
+  const content = (
+    <>
       <h1 className="text-green-900 text-xl p-4">Pontuação Detalhada</h1>
       <div className="grid gap-3 cursor-pointer">
         <div className="flex items-center justify-between bg-transparent border rounded-lg p-3 hover:bg-green-50 transition">
@@ -223,6 +205,14 @@ export default function ScorePanel({
           <span className="text-sm font-bold text-amber-800">{vals.responsabilidade} pts</span>
         </div>
       </div>
-    </Link>
+    </>
   );
-}
+
+  return isOwn ? (
+    <Link href={hrefPontuacao} className="no-underline block">
+      {content}
+    </Link>
+  ) : (
+    <div className="block">{content}</div>
+  );
+  }

@@ -1,4 +1,3 @@
-// client/src/pages/explorar
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";
@@ -135,7 +134,6 @@ function Explorar() {
                       alt={`${a?.usuario?.nome ?? "profile"} profile`}
                       className="w-24 h-24 rounded-full object-cover"
                       onError={(e) => {
-                        // fallback definitivo para usuário
                         (e.currentTarget as HTMLImageElement).src =
                           `${API.BASE_URL}/assets/default-user.png`;
                       }}
@@ -176,7 +174,7 @@ function Explorar() {
                 return href ? (
                   <Link href={href} key={e.id}>{Card}</Link>
                 ) : (
-                  <div key={e.id}>{Card}</div> // fallback sem link se não vier usuarioId
+                  <div key={e.id}>{Card}</div> 
                 );
               })}
             </div>
@@ -205,7 +203,7 @@ function Explorar() {
                 return href ? (
                   <Link href={href} key={c.id}>{Card}</Link>
                 ) : (
-                  <div key={c.id}>{Card}</div> // fallback sem link se não vier usuarioId
+                  <div key={c.id}>{Card}</div>
                 );
               })}
             </div>

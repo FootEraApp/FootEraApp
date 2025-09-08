@@ -82,7 +82,6 @@ api.interceptors.response.use(
   }
 );
 
-// -------------------- Helpers --------------------
 async function safeGet<T>(url: string, signal?: AbortSignal): Promise<T | null> {
   try {
     const res = await api.get<T>(url, {
@@ -413,6 +412,14 @@ useEffect(() => {
 
   return () => controller.abort();
 }, [matchedWithId, params?.id, setLocation]); 
+
+  const selfId = String((Storage as any)?.usuarioId ?? "");
+
+  useEffect(() => {
+    if (matchedWithId && params?.id && params.id !== selfId) {
+      setLocation(`/perfil/${params.id}`);
+    }
+  }, [matchedWithId, params?.id, selfId, setLocation]);
 
   useEffect(() => {
     if (!loading && typeof window !== "undefined" && window.location.hash === "#detalhes") {

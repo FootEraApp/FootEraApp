@@ -139,17 +139,22 @@ export default function PaginaMensagens() {
     resp: number;
   } | null>(null);
 
-  const compactMsgs = <T extends { tipo: string; conteudo: any }>(arr: T[]) =>
-    arr.slice(-60).map((m) => {
-      if (m.tipo === "CARD") return { ...m, conteudo: "__CARD__", pending: false, clientMsgId: undefined } as T;
+const compactMsgs = <T extends { tipo: string; conteudo: any }>(arr: T[]) =>
+  arr.slice(-60).map((m) => {
+    if (m.tipo === "CARD") {
       const clone: any = { ...m };
-      if (typeof clone.conteudo === "string" && clone.conteudo.length > 2000) {
-        clone.conteudo = clone.conteudo.slice(0, 2000);
-      }
       delete clone.pending;
       delete clone.clientMsgId;
       return clone as T;
-    });
+    }
+    const clone: any = { ...m };
+    if (typeof clone.conteudo === "string" && clone.conteudo.length > 2000) {
+      clone.conteudo = clone.conteudo.slice(0, 2000);
+    }
+    delete clone.pending;
+    delete clone.clientMsgId;
+    return clone as T;
+  });
 
   const safeSave = (key: string, value: any[]) => {
     try {
@@ -249,57 +254,73 @@ export default function PaginaMensagens() {
     </div>
   );
 
-  const compartilharPerfilNoChat = async () => {
-    if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
-    try {
-      const dados = (meuCardDados ?? await getMeuPerfilEBonus());
-      if (!dados) { alert("Não consegui montar seu card agora."); return; }
-      setMeuCardDados(dados);
+const compartilharPerfilNoChat = async () => {
+  if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
 
-      await new Promise((r) => setTimeout(r, 0));
-      const node = cardRef.current;
-      if (!node) { alert("Falha ao preparar o card para captura."); return; }
+  try {
+    const dados = (meuCardDados ?? await getMeuPerfilEBonus());
+    if (!dados) { alert("Não consegui montar seu card agora."); return; }
+    setMeuCardDados(dados);
 
-      const dataUrl = await htmlToImage.toPng(node, { cacheBust: true });
-      const clientMsgId = genClientId();
+    await new Promise((r) => setTimeout(r, 0));
+    const node = cardRef.current;
+    if (!node) { alert("Falha ao preparar o card para captura."); return; }
 
-      setMensagensPrivadas(prev => [
-        ...prev,
-        {
-          id: clientMsgId,
-          clientMsgId,
-          pending: true,
-          criadaEm: new Date().toISOString(),
-          conteudo: dataUrl,
-          deId: usuarioId!,
-          paraId: alvo.usuario.id,
-          tipo: "CARD",
-        }
-      ]);
+    const dataUrl = await htmlToImage.toPng(node, { cacheBust: true, pixelRatio: 2 });
 
-      const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
+    const clientMsgId = genClientId();
+    setMensagensPrivadas(prev => [
+      ...prev,
+      {
+        id: clientMsgId,
+        clientMsgId,
+        pending: true,
+        criadaEm: new Date().toISOString(),
+        conteudo: dataUrl,       
+        deId: usuarioId!,
+        paraId: alvo.usuario.id,
+        tipo: "CARD",                
+      }
+    ]);
+
+    let resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        paraId: alvo.usuario.id,
+        tipo: "CARD",
+        conteudo: dataUrl,   
+        clientMsgId,
+      }),
+    });
+
+    if (!resp.ok && (resp.status === 400 || resp.status === 415)) {
+      const blob = await (await fetch(dataUrl)).blob();
+      const form = new FormData();
+      form.append("paraId", alvo.usuario.id);
+      form.append("tipo", "CARD");
+      form.append("midia", new File([blob], "card.png", { type: "image/png" }));
+
+      resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ paraId: alvo.usuario.id, conteudo: dataUrl, tipo: "CARD", clientMsgId }),
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
       });
-      if (resp.ok) {
-        const saved: Mensagem = await resp.json();
-        reconcilePrivadaByClientId(saved);
-      } else {
-        console.error("POST /api/mensagem (CARD) falhou:", resp.status, await resp.text());
-      }
-
-      try {
-        const legenda = `Meu Card FOOTERA OVR: ${dados.ovr} Performance: ${dados.perf} pts Disciplina: ${dados.disc} pts Responsabilidade: ${dados.resp} pts`;
-        await publicarCardNoFeed(dataUrl, legenda);
-      } catch (e) {
-        console.warn("Falha ao publicar o card no feed:", e);
-      }
-    } catch (err) {
-      console.error("Falha ao compartilhar card no chat:", err);
-      alert("Não foi possível compartilhar seu card agora.");
     }
-  };
+
+    if (resp.ok) {
+      const saved: Mensagem = await resp.json();
+      reconcilePrivadaByClientId(saved);
+    } else {
+      console.error("POST /api/mensagem (CARD) falhou:", resp.status, await resp.text());
+      alert("Não consegui enviar o card agora.");
+    }
+
+  } catch (err) {
+    console.error("Falha ao compartilhar card:", err);
+    alert("Não foi possível compartilhar seu card agora.");
+  }
+};
 
   useEffect(() => {
     if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
@@ -788,6 +809,19 @@ export default function PaginaMensagens() {
       </div>
     );
 
+    if (msg.tipo === "CARD") {
+      return Shell(
+        <img
+          src={msg.conteudo}
+          alt="Card do atleta"
+          className="w-56 h-auto rounded"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/fallback.png`;
+          }}
+        />
+      );
+    }
+
     if (msg.tipo === "POST") {
       const post = postsCache[msg.conteudo];
       if (!post) return Shell(<div className="text-sm">Carregando post...</div>);
@@ -846,11 +880,6 @@ export default function PaginaMensagens() {
           </div>
         </div>
       );
-    }
-
-    if (msg.tipo === "CARD") {
-      if (msg.conteudo === "__CARD__") return Shell(<span className="text-xs opacity-80">[card sendo enviado...]</span>);
-      return Shell(<img src={msg.conteudo} alt="Card do atleta" className="w-56 h-auto rounded" />);
     }
 
     return Shell(<p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.conteudo}</p>);

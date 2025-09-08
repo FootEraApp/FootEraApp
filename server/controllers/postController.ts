@@ -1,46 +1,37 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
-import fs from "fs/promises";
-import path from "path";
 
 type AuthedReq = Request & { userId?: string };
 
-// aceita http(s), /uploads e legado /assets
 function isAllowedUrl(u?: string | null) {
   if (!u) return false;
   const s = u.trim();
   return /^https?:\/\//i.test(s) || s.startsWith("/uploads/") || s.startsWith("/assets/");
 }
 
-// normaliza qqr entrada p/ salvar consistente
 function normalizeIncomingUrl(u: string, req: Request): string {
   let s = (u || "").trim();
   if (!s) return "";
 
-  // legado -> uploads
   s = s.replace(/\/assets\/usuarios\//g, "/uploads/").replace(/^\/assets\//, "/uploads/");
 
-  // se já é relativo válido
   if (s.startsWith("/uploads/")) return s;
 
-  // absoluto: se for do mesmo host (ou tiver caminho /uploads), guarde relativo
   if (/^https?:\/\//i.test(s)) {
     try {
       const url = new URL(s);
       const sameHost = url.host === (req.headers.host || "");
       if (url.pathname.startsWith("/uploads/")) return url.pathname;
       if (url.pathname.startsWith("/assets/usuarios/")) return url.pathname.replace("/assets/usuarios/", "/uploads/");
-      // externo (ex.: YouTube/CDN) -> mantenha absoluto
       return url.toString();
     } catch {
       return s;
     }
   }
 
-  // “uploads/arquivo.ext” sem barra
   if (s.startsWith("uploads/")) return `/${s}`;
 
-  return s; // último recurso (não deve acontecer com o front novo)
+  return s; 
 }
 
 function dataUrlToBuffer(dataUrl: string) {
@@ -63,11 +54,9 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
     let finalImagemUrl: string | null = null;
     let finalVideoUrl: string | null = null;
 
-    // URLs vindas do front (http absoluto, /uploads ou legado /assets)
     if (isAllowedUrl(imagemUrl)) finalImagemUrl = normalizeIncomingUrl(imagemUrl!, req) || null;
     if (isAllowedUrl(videoUrl))  finalVideoUrl  = normalizeIncomingUrl(videoUrl!,  req) || null;
 
-    // Upload de arquivo (campo "arquivo")
     if (!finalImagemUrl && !finalVideoUrl && file) {
       if (file.mimetype.startsWith("image/")) {
         finalImagemUrl = `/uploads/${file.filename}`;

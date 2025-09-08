@@ -5,10 +5,10 @@ import { criarProfessor, editarProfessor, excluirProfessor, listarProfessores, b
 const router = express.Router();
 const upload = multer({ dest: "upload/" });
 
-router.get("/", listarProfessores);
 router.get("/:id", buscarProfessorPorId);
 router.post("/", upload.single("fotoUrl"), criarProfessor);
 router.put("/:id", upload.single("fotoUrl"), editarProfessor);
 router.delete("/:id", excluirProfessor);
+router.get("/", listarProfessores);
 
 export default router;

@@ -1,4 +1,3 @@
-// client/src/components/perfil/PerfilClube.tsx
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
@@ -46,20 +45,18 @@ type PayloadClube = {
 type AbaTopo = "perfil" | "eventos" | "atletas";
 type SubAbaAtletas = "vinculados" | "observados" | "solicitacoes";
 
-/** lista que os endpoints retornam */
 type AtletaItem = {
-  id: string;          // usuario.id do atleta
-  atletaId: string;    // id da tabela Atleta
+  id: string;       
+  atletaId: string; 
   nome: string;
   foto?: string | null;
   posicao?: string | null;
   idade?: number | null;
   altura?: number | null;
   peso?: number | null;
-  observadoEm?: string; // opcional, se o backend enviar
+  observadoEm?: string;
 };
 
-/** NOVO: modelo de solicitação igual à página de notificações */
 type Solicitacao = {
   id: string;
   remetenteId: string;
@@ -78,7 +75,7 @@ function EmptyState({ text }: { text: string }) {
     </div>
   );
 }
-/* --------- helper padrão igual Professor/Escola --------- */
+
 function SectionCard({
   title, children, right,
 }: { title: string; children: ReactNode; right?: ReactNode }) {
@@ -106,11 +103,9 @@ export default function PerfilClube({ idDaUrl }: Props) {
   const [aba, setAba] = useState<AbaTopo>("perfil");
   const [subAba, setSubAba] = useState<SubAbaAtletas>("vinculados");
 
-  // listas
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
 
-  /** NOVO: estado de solicitações (somente visualização) */
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[] | null>(null);
 
   useEffect(() => {
@@ -134,7 +129,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
     return () => { cancel = true; };
   }, [targetId, token]);
 
-  // lazy-load das listas quando as sub-abas forem abertas
   useEffect(() => {
     if (!token) return;
     const cancel = { v: false };
@@ -189,7 +183,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
     if (aba === "atletas") {
       if (subAba === "vinculados" && vinculados == null) fetchVinculados();
       if (subAba === "observados" && observados == null) fetchObservados();
-      if (subAba === "solicitacoes" && solicitacoes == null) fetchSolicitacoes(); // NOVO
+      if (subAba === "solicitacoes" && solicitacoes == null) fetchSolicitacoes();
     }
 
     return () => { cancel.v = true; };
@@ -226,7 +220,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
         kpis={kpis}
       />
 
-      {/* Abas topo */}
       <div className="mt-4 grid grid-cols-3 gap-2">
         {[
           { key: "perfil",   label: "Perfil" },
@@ -247,10 +240,8 @@ export default function PerfilClube({ idDaUrl }: Props) {
         ))}
       </div>
 
-      {/* Conteúdo das abas */}
       {aba === "perfil" && (
         <section className="mt-4 grid gap-4">
-          {/* Informações do Clube */}
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <h3 className="font-semibold text-green-900 mb-2">Informações do Clube</h3>
             <ul className="text-sm text-green-900/90 space-y-1">
@@ -275,7 +266,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
             </ul>
           </div>
 
-          {/* FootEra Formadores */}
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <h3 className="font-semibold text-green-900 mb-1">FootEra Formadores</h3>
             <p className="text-sm text-green-900/80">
@@ -290,7 +280,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
             </div>
           </div>
 
-          {/* Categorias */}
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <h3 className="font-semibold text-green-900 mb-2">Categorias</h3>
             {data.clube.categorias?.length ? (
@@ -306,7 +295,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
             )}
           </div>
 
-          {/* Contato */}
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <h3 className="font-semibold text-green-900 mb-2">Contato</h3>
             <ul className="text-sm text-green-900/90 space-y-1">
@@ -323,7 +311,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
             </ul>
           </div>
 
-          {/* Documentação */}
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <h3 className="font-semibold text-green-900 mb-2">Documentação</h3>
             {data.clube.cnpj
@@ -358,7 +345,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
 
       {aba === "atletas" && (
         <section className="mt-4 grid gap-4">
-          {/* sub-abas */}
           <div className="grid grid-cols-3 gap-2">
             {[
               { key: "vinculados",   label: "Vinculados" },
@@ -379,7 +365,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
             ))}
           </div>
 
-          {/* Vinculados */}
            {subAba === "vinculados" && (
             <SectionCard title="Atletas Vinculados">
               {vinculados && vinculados.length > 0 ? (
@@ -409,8 +394,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
 
           )}
 
-          {/* Observados */}
-
            {subAba === "observados" && (
             <SectionCard title="Atletas Observados">
               {observados && observados.length > 0 ? (
@@ -437,8 +420,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
               )}
             </SectionCard>
           )}
-
-          {/* Solicitações – SOMENTE VISUALIZAÇÃO */}
 
           {subAba === "solicitacoes" && (
             <SectionCard

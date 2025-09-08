@@ -1,4 +1,3 @@
-// client/src/pages/perfil.tsx
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";
@@ -29,7 +28,6 @@ export default function ProfilePage() {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-  // Se não tiver id na URL, exibe o próprio perfil
   const isOwnProfile = !idDaUrl || idDaUrl === Storage.usuarioId;
   const basePerfil = isOwnProfile ? "me" : (idDaUrl as string);
 
@@ -40,7 +38,6 @@ export default function ProfilePage() {
     (async () => {
      setLoading(true);
       try {
-        // Busca mínima: só o tipo e o id do usuário
         const { data } = await axios.get<PerfilMinimo>(
           `${API.BASE_URL}/api/perfil/${basePerfil}`,
           { headers }
@@ -75,13 +72,11 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-transparent pb-20">
-      {/* Conteúdo específico por tipo */}
       {tipo === "Atleta" && <PerfilAtleta idDaUrl={idDaUrl} />}
       {tipo === "Professor" && <PerfilProfessor idDaUrl={idDaUrl} />}
       {tipo === "Clube" && <PerfilClube idDaUrl={idDaUrl} />}
       {tipo === "Escolinha" && <PerfilEscola idDaUrl={idDaUrl} />}
 
-      {/* Bottom Nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed"><House /></Link>
         <Link href="/explorar"><Search /></Link>
