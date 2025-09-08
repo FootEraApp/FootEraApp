@@ -1,4 +1,3 @@
-// server/controllers/uploadController
 import { Request, Response } from "express";
 import multer from "multer";
 import path from "path";
@@ -27,7 +26,6 @@ export const uploadFotoPerfil = [
 
     if (!req.file) return res.status(400).json({ erro: "Arquivo não enviado" });
 
-    // CAMINHO PÚBLICO CORRETO (bate com app.use('/uploads', ...))
     const caminhoPublico = `/uploads/${req.file.filename}`;
 
     try {

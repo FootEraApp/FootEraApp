@@ -1,4 +1,3 @@
-// client/src/pages/treinos
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { CalendarClock, Volleyball, User, CirclePlus, Search, House, CircleX, CircleCheck, Send, Share2, Trash2} from "lucide-react";
@@ -139,7 +138,6 @@ export default function PaginaTreinos() {
       setTreinosAgendados(apenasVigentes);
       setDesafios(desafiosJson || []);
     } else if (tipo === "admin" && token) {
-      // Admin enxerga tudo
       const [resTreinos, resDesafios] = await Promise.all([
         fetch(`${API.BASE_URL}/api/treinos`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API.BASE_URL}/api/desafios`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -149,9 +147,8 @@ export default function PaginaTreinos() {
 
       setTreinos(jsonTreinos?.treinosProgramados ?? jsonTreinos ?? []);
       setDesafios(jsonDesafios?.desafiosOficiais ?? jsonDesafios ?? []);
-      setTreinosAgendados([]); // admin não lista "meus agendados"
+      setTreinosAgendados([]); 
     } else {
-      // Visitante (sem login)
       const res = await fetch(`${API.BASE_URL}/api/treinos`);
       const json = await res.json();
       setTreinos(json.treinosProgramados || []);
@@ -207,9 +204,8 @@ export default function PaginaTreinos() {
   };
 
 const renderDesafioCard = (desafio: Desafio) => {
-  // Resolve a URL da imagem:
   const raw = desafio.imagemUrl || "";
-  let img = "/assets/desafios/placeholder.jpg"; // fallback (deixe esse arquivo em client/public/assets/desafios/)
+  let img = "/assets/desafios/placeholder.jpg";
 
   if (raw) {
     if (
@@ -218,13 +214,10 @@ const renderDesafioCard = (desafio: Desafio) => {
       raw.startsWith("/assets/") ||
       raw.startsWith("/attached_assets/")
     ) {
-      // assets do front ou URL absoluta -> usa direto
       img = raw;
     } else if (raw.startsWith("/uploads/")) {
-      // upload servido pelo backend
       img = `${API.BASE_URL}${raw}`;
     } else {
-      // nome de arquivo "cru" vindo do banco -> considera upload no back
       img = `${API.BASE_URL}/uploads/${raw.replace(/^\/+/, "")}`;
     }
   }
@@ -554,7 +547,7 @@ function toggleSelecionado(idUsuario: string) {
 
                       {(
                         usuario.tipo === "admin"
-                          ? treinos // admin vê todos aqui
+                          ? treinos 
                           : treinos.filter(
                               (t) => t.professorId === usuario.tipoUsuarioId || t.escolinhaId === usuario.tipoUsuarioId || t.clubeId === usuario.tipoUsuarioId
                             )

@@ -1,4 +1,3 @@
-// server/controllers/feedController
 import { Response, RequestHandler } from "express";
 import { Request } from "express";
 import { TipoMidia, Prisma } from "@prisma/client";

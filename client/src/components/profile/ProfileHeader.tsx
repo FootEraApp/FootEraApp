@@ -1,7 +1,6 @@
-// client/src/components/profile/ProfileHeader
 import { useState, useEffect } from "react";
 import { Link, useParams } from "wouter";
-import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send, Eye, UserPlus, Share2 } from "lucide-react"; // + Eye
+import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send, Eye, UserPlus, Share2 } from "lucide-react";
 import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
@@ -25,7 +24,7 @@ interface ProfileHeaderProps {
   avatar?: string | null;
   foto?: string | null;
   isOwnProfile?: boolean;
-  perfilId: string; // <- usuario.id do perfil que estou vendo
+  perfilId: string;
 }
 
 export default function ProfileHeader({
@@ -49,6 +48,9 @@ export default function ProfileHeader({
   const [pontosTotal, setPontosTotal] = useState<number>(pontuacao ?? 0);
   const [ehFavorito, setEhFavorito] = useState(false);
   const { id: idDaUrl } = useParams<{ id?: string }>();
+  const [seguindo, setSeguindo] = useState<boolean | null>(null);
+  const [treinoJunto, setTreinoJunto] = useState<boolean | null>(null);
+  const [observando, setObservando] = useState<boolean | null>(null);
 
   const [confirmBox, setConfirmBox] = useState<{
     open: boolean;
@@ -56,8 +58,96 @@ export default function ProfileHeader({
     onYes: () => Promise<void> | void;
   } | null>(null);
 
-  // --- NOVO: saber se o alvo é Atleta (para exibir botão Observar) ---
   const [podeObservar, setPodeObservar] = useState(false);
+
+    useEffect(() => {
+    if (isOwnProfile || !perfilId) return;
+    const token = Storage.token;
+    if (!token) return;
+
+    (async () => {
+      try {
+        let done = false;
+
+        const r1 = await fetch(
+          `${API.BASE_URL}/api/seguidores/status?seguidoUsuarioId=${encodeURIComponent(perfilId)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (r1.ok) {
+          const j = await r1.json();
+          setSeguindo(!!(j?.seguindo || j?.isFollowing));
+          done = true;
+        }
+
+        if (!done) {
+          const r2 = await fetch(`${API.BASE_URL}/api/seguidores/seguindo`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (r2.ok) {
+            const lista = await r2.json();
+            const ids = new Set(
+              (Array.isArray(lista) ? lista : []).map(
+                (x: any) => x.seguidoUsuarioId ?? x.id ?? x.usuarioId ?? x.userId
+              )
+            );
+            setSeguindo(ids.has(perfilId));
+            done = true;
+          }
+        }
+
+        if (!done) setSeguindo(false);
+      } catch {
+        setSeguindo(false);
+      }
+    })();
+  }, [perfilId, isOwnProfile]);
+
+  useEffect(() => {
+    if (isOwnProfile || !perfilId) return;
+    const token = Storage.token;
+    if (!token) return;
+
+    (async () => {
+      try {
+        const r = await fetch(`${API.BASE_URL}/api/solicitacoes-treino/minhas`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (r.ok) {
+          const arr = await r.json();
+          const ativo = (arr || []).some((x: any) => {
+            const envolve = [x.destinatarioId, x.solicitanteId, x.usuarioId, x.userId].includes(perfilId);
+            const statusAtivo = /aceit|aprov|ativo/i.test(String(x.status || ""));
+            return envolve && statusAtivo;
+          });
+          setTreinoJunto(ativo);
+        } else {
+          setTreinoJunto(false);
+        }
+      } catch {
+        setTreinoJunto(false);
+      }
+    })();
+  }, [perfilId, isOwnProfile]);
+
+  useEffect(() => {
+    if (!podeObservar || isOwnProfile) return;
+    const token = Storage.token;
+    if (!token) return;
+
+    (async () => {
+      try {
+        const r = await fetch(`${API.BASE_URL}/api/observados`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const lista = r.ok ? await r.json() : [];
+        setObservando(Array.isArray(lista) && lista.some((x: any) =>
+          x?.id === perfilId || x?.usuarioId === perfilId
+        ));
+      } catch {
+        setObservando(false);
+      }
+    })();
+  }, [perfilId, podeObservar, isOwnProfile]);
 
   useEffect(() => {
     if (isOwnProfile || !perfilId) {
@@ -67,7 +157,6 @@ export default function ProfileHeader({
     const token = Storage.token;
     if (!token) return;
 
-    // Busca tipo do perfil (Atleta/Professor/Clube/Escolinha)
     fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(perfilId)}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -92,7 +181,6 @@ export default function ProfileHeader({
 
   useEffect(() => { setPontosTotal(pontuacao ?? 0); }, [pontuacao]);
 
-  // Só busca pontuação automática quando NÃO estamos mostrando KPIs
   useEffect(() => {
     if (kpis && kpis.length) return;
     const token = Storage.token;
@@ -124,27 +212,6 @@ export default function ProfileHeader({
     return msg.includes("já segue") || msg.includes("ja segue") || msg.includes("já existe") || msg.includes("pendente");
   }
 
-  const seguirUsuario = async () => {
-    const token = Storage.token;
-    const seguidorUsuarioId = Storage.usuarioId;
-    if (!token || !seguidorUsuarioId) { alert("Faça login para seguir."); return; }
-    const resp = await fetch(`${API.BASE_URL}/api/seguidores`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ seguidoUsuarioId: perfilId }),
-    });
-    if (resp.ok) { alert("Agora você está seguindo este usuário!"); return; }
-    const body = await readBodySafe(resp);
-    if (isDuplicado(resp, body)) {
-      pedirConfirmacao("Você já segue esse usuário. Deseja parar de seguir?", async () => {
-        const ok = await deixarDeSeguir(perfilId);
-        alert(ok ? "Você deixou de seguir este usuário." : "Não foi possível deixar de seguir agora.");
-      });
-      return;
-    }
-    alert("Falha ao seguir usuário.");
-  };
-
   async function deixarDeSeguir(alvoId: string) {
     const token = Storage.token;
     const r = await fetch(`${API.BASE_URL}/api/seguidores/`, {
@@ -154,26 +221,6 @@ export default function ProfileHeader({
     });
     return r.ok;
   }
-
-  const solicitarTreino = async () => {
-    const token = Storage.token;
-    if (!token) { alert("Faça login para solicitar treino."); return; }
-    const resp = await fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ destinatarioId: perfilId }),
-    });
-    if (resp.ok) { alert("Solicitação enviada!"); return; }
-    const body = await readBodySafe(resp);
-    if (isDuplicado(resp, body)) {
-      pedirConfirmacao("Você já tem uma solicitação com este usuário. Deseja cancelar?", async () => {
-        const ok = await cancelarSolicitacaoTreino(perfilId);
-        alert(ok ? "Solicitação cancelada." : "Não foi possível cancelar agora.");
-      });
-      return;
-    }
-    alert("Falha ao solicitar treino.");
-  };
 
   async function cancelarSolicitacaoTreino(destinatarioId: string) {
     const token = Storage.token;
@@ -274,55 +321,86 @@ export default function ProfileHeader({
     setEhFavorito(v => !v);
   }
 
-  // ===== NOVO: Observar Atleta =====
-  async function observarAtleta() {
+  const seguirUsuario = async (): Promise<boolean> => {
     const token = Storage.token;
-    if (!token) { alert("Faça login para observar atletas."); return; }
+    const seguidorUsuarioId = Storage.usuarioId;
+    if (!token || !seguidorUsuarioId) { alert("Faça login para seguir."); return false; }
 
-    try {
-      const resp = await fetch(`${API.BASE_URL}/api/observados`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ atletaUsuarioId: perfilId }), // você está vendo o usuario do atleta
-      });
+    const resp = await fetch(`${API.BASE_URL}/api/seguidores`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ seguidoUsuarioId: perfilId }),
+    });
 
-      if (resp.ok) {
-        alert("Agora você está observando este atleta.");
-        return;
-      }
+    if (resp.ok) return true;
+    const body = await readBodySafe(resp);
+    return isDuplicado(resp, body);
+  };
 
-      const body = await readBodySafe(resp);
-
-      if (resp.status === 409) {
-        // já observa -> oferecer parar de observar
-        pedirConfirmacao("Você já observa este atleta. Deseja parar de observar?", async () => {
-          const atletaId = await resolverAtletaIdObservadoAtual();
-          if (!atletaId) { alert("Não foi possível identificar o vínculo de observação."); return; }
-          const del = await fetch(`${API.BASE_URL}/api/observados/${atletaId}`, {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (del.ok) alert("Você parou de observar este atleta.");
-          else alert("Não foi possível parar de observar agora.");
-        });
-        return;
-      }
-
-      if (resp.status === 403) {
-        alert("Apenas Professor, Escolinha ou Clube podem observar atletas.");
-        return;
-      }
-
-      if (resp.status === 404) {
-        alert("Atleta não encontrado.");
-        return;
-      }
-
-      alert(body?.error || "Falha ao observar atleta.");
-    } catch (e) {
-      alert("Falha ao observar atleta.");
-    }
+const toggleSeguir = async () => {
+  if (seguindo) {
+    const ok = await deixarDeSeguir(perfilId);
+    if (ok) setSeguindo(false);
+    return;
   }
+  const ok = await seguirUsuario();
+  if (ok) setSeguindo(true);
+};
+
+const solicitarTreino = async (): Promise<boolean> => {
+  const token = Storage.token;
+  if (!token) { alert("Faça login para solicitar treino."); return false; }
+
+  const resp = await fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ destinatarioId: perfilId }),
+  });
+
+  if (resp.ok) return true;
+  const body = await readBodySafe(resp);
+  return isDuplicado(resp, body);
+};
+
+const toggleTreino = async () => {
+  if (treinoJunto) {
+    const ok = await cancelarSolicitacaoTreino(perfilId);
+    if (ok) setTreinoJunto(false);
+    return;
+  }
+  const ok = await solicitarTreino();
+  if (ok) setTreinoJunto(true);
+};
+
+const observarAtleta = async (): Promise<boolean> => {
+  const token = Storage.token;
+  if (!token) { alert("Faça login para observar atletas."); return false; }
+
+  const resp = await fetch(`${API.BASE_URL}/api/observados`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ atletaUsuarioId: perfilId }),
+  });
+
+  if (resp.ok) return true;
+  if (resp.status === 409) return true;
+  return false;
+};
+
+const toggleObservar = async () => {
+  if (observando) {
+    const atletaId = await resolverAtletaIdObservadoAtual();
+    if (!atletaId) { alert("Não foi possível identificar o vínculo de observação."); return; }
+    const del = await fetch(`${API.BASE_URL}/api/observados/${atletaId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${Storage.token}` },
+    });
+    if (del.ok) setObservando(false);
+    return;
+  }
+  const ok = await observarAtleta();
+  if (ok) setObservando(true);
+};
 
   async function resolverAtletaIdObservadoAtual(): Promise<string | null> {
     const token = Storage.token;
@@ -331,8 +409,12 @@ export default function ProfileHeader({
         headers: { Authorization: `Bearer ${token}` },
       });
       const lista = r.ok ? await r.json() : [];
-      const item = Array.isArray(lista) ? lista.find((x: any) => x?.id === perfilId) : null; // x.id = usuario.id do atleta
-      return item?.atletaId ?? null;
+
+      const item = (Array.isArray(lista) ? lista : []).find((x: any) =>
+        [x?.id, x?.usuarioId, x?.atletaUsuarioId].includes(perfilId)
+      );
+
+      return item?.atletaId ?? item?.idAtleta ?? item?.atleta?.id ?? null;
     } catch {
       return null;
     }
@@ -384,7 +466,6 @@ export default function ProfileHeader({
         </p>
       )}
 
-      {/* === ÁREA DINÂMICA: KPIs ou Pontuação === */}
       <div className="w-full mt-4">
         {kpis && kpis.length ? (
           <div className="grid grid-cols-3 gap-3">
@@ -408,7 +489,6 @@ export default function ProfileHeader({
 {!isOwnProfile && (
   <div className="w-full max-w-2xl px-3 mt-4 mb-2">
     <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-      {/* Favorito (estrela) — fica pequeno e não quebra layout */}
       <button
         onClick={toggleFavorito}
         className={`text-xl sm:text-2xl ${ehFavorito ? "text-yellow-400" : "text-white/70"} px-2`}
@@ -417,51 +497,52 @@ export default function ProfileHeader({
       >
         ★
       </button>
-
-      {/* Seguir */}
       <button
-        onClick={seguirUsuario}
-        className={`${btnBase} bg-green-600 text-green-900
+        disabled={seguindo === null}
+        aria-pressed={!!seguindo}
+        onClick={toggleSeguir}
+        className={`${btnBase} ${seguindo ? "bg-white/10 text-white border border-white/40" : "bg-green-600 text-green-900"}
                     px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
+        title={seguindo ? "Deixar de seguir" : "Seguir"}
       >
         <UserPlus size={16} />
-        <span className="truncate">Seguir</span>
+        <span className="truncate">{seguindo ? "Seguindo" : "Seguir"}</span>
       </button>
 
-      {/* Enviar mensagem */}
       <button
         onClick={iniciarChat}
-        className={`${btnBase} bg-green-500 text-green-900
-                    px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
+        className={`${btnBase} bg-green-500 text-green-900 px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
       >
         <Send size={16} />
         <span className="truncate">Enviar mensagem</span>
       </button>
-
-      {/* Treinar Juntos */}
+      
       <button
-        onClick={solicitarTreino}
-        className={`${btnBase} bg-green-400 text-green-900
+        disabled={treinoJunto === null}
+        aria-pressed={!!treinoJunto}
+        onClick={toggleTreino}
+        className={`${btnBase} ${treinoJunto ? "bg-white/10 text-white border border-white/40" : "bg-green-400 text-green-900"}
                     px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
+        title={treinoJunto ? "Cancelar treino em conjunto" : "Solicitar treino em conjunto"}
       >
         <Users size={16} />
-        <span className="truncate">Treinar Juntos</span>
+        <span className="truncate">{treinoJunto ? "Já treino junto" : "Treinar juntos"}</span>
       </button>
 
-      {/* Observar (só para Atleta) */}
       {podeObservar && (
         <button
-          onClick={observarAtleta}
-          className={`${btnBase} bg-green-300 text-green-900
+          disabled={observando === null}
+          aria-pressed={!!observando}
+          onClick={toggleObservar}
+          className={`${btnBase} ${observando ? "bg-white/10 text-white border border-white/40" : "bg-green-300 text-green-900"}
                       px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
-          title="Observar este atleta"
+          title={observando ? "Parar de observar" : "Observar este atleta"}
         >
           <Eye size={16} />
-          <span className="truncate">Observar</span>
+          <span className="truncate">{observando ? "Observando" : "Observar"}</span>
         </button>
       )}
 
-      {/* Compartilhar */}
       <button
         onClick={abrirModalCompartilhar}
         className={`${btnBase} bg-amber-300 text-green-900
@@ -492,7 +573,6 @@ export default function ProfileHeader({
         </div>
       )}
 
-      {/* Modal compartilhar */}
       {modalAberto && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
           <div className="bg-white p-6 rounded-xl w-96 shadow-lg relative">

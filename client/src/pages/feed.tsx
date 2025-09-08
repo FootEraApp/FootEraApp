@@ -1,4 +1,3 @@
-// client/src/pages/feed.tsx
 import React, { useEffect, useState, useMemo } from "react";
 import { FaHeart, FaRegHeart, FaRegCommentDots, FaShare, FaPaperPlane, FaTrash, FaLink } from "react-icons/fa";
 import { Volleyball, User, CirclePlus, Search, House, CircleX, Send, CircleCheck, Trophy } from "lucide-react";
@@ -26,24 +25,19 @@ async function getUsuariosMutuos(token: string): Promise<Usuario[]> {
   return await res.json();
 }
 
-// Normaliza URLs de mídia (legado /assets -> /uploads, relativo -> absoluto na API)
 function normalizeMediaUrl(raw?: string | null): string {
   let s = (raw || "").trim();
   if (!s) return "";
 
-  // absoluto/data/blob -> só corrige /assets -> /uploads
   if (/^(https?:)?\/\//i.test(s) || s.startsWith("data:") || s.startsWith("blob:")) {
     return s.replace(/\/assets\/usuarios\//, "/uploads/").replace(/\/assets\//, "/uploads/");
   }
 
-  // relativo legado /assets/... -> /uploads/...
   s = s.replace(/^\/?assets\/usuarios\//, "/uploads/").replace(/^\/?assets\//, "/uploads/");
 
-  // prefixa API quando necessário
   if (s.startsWith("/uploads/")) return `${API.BASE_URL}${s}`;
   if (s.startsWith("uploads/")) return `${API.BASE_URL}/${s}`;
-
-  // se veio só um nome, joga em /uploads/
+  
   if (!s.startsWith("/")) s = `/${s}`;
   return `${API.BASE_URL}/uploads${s}`;
 }
@@ -57,7 +51,7 @@ function BottomSheet({
 }: {
   open: boolean;
   onClose: () => void;
-  heightPct?: number; // 30-40 recomendado
+  heightPct?: number; 
   children: React.ReactNode;
   ariaLabel?: string;
 }) {
@@ -65,7 +59,6 @@ function BottomSheet({
     if (!open) return;
     const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onEsc);
-    // trava o scroll do body
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {

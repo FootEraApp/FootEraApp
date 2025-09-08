@@ -36,19 +36,32 @@ export const deixarDeSeguir: RequestHandler = async (req, res) => {
   res.sendStatus(204);
 };
 
-export const listarSeguindo: RequestHandler = async (req, res) => {
-  const meuId = req.userId!;
+export async function listarSeguindo(req: Request, res: Response) {
+  const seguidorUsuarioId = (req as any).user?.id || (req as any).userId;
+  if (!seguidorUsuarioId) return res.status(401).json({ error: "Não autenticado." });
+
   const rows = await prisma.seguidor.findMany({
-    where: { seguidorUsuarioId: meuId },
-    include: { seguidoUsuario: { select: { id: true, nome: true, foto: true } } },
+    where: { seguidorUsuarioId },
+    select: { seguidoUsuarioId: true },
+    orderBy: { seguidoUsuarioId: "asc" },
   });
-  const seguindo = rows.map(r => ({
-    id: r.seguidoUsuario.id,
-    nome: r.seguidoUsuario.nome,
-    foto: r.seguidoUsuario.foto ?? null,
-  }));
-  res.json(seguindo);
-};
+
+  return res.json(rows.map(r => ({ seguidoUsuarioId: r.seguidoUsuarioId })));
+}
+
+export async function statusSeguidor(req: Request, res: Response) {
+  const seguidorUsuarioId = (req as any).user?.id || (req as any).userId;
+  const seguidoUsuarioId = String(req.query.seguidoUsuarioId || "");
+  if (!seguidorUsuarioId) return res.status(401).json({ error: "Não autenticado." });
+  if (!seguidoUsuarioId) return res.status(400).json({ error: "seguidoUsuarioId é obrigatório." });
+
+  const exists = await prisma.seguidor.findFirst({
+    where: { seguidorUsuarioId, seguidoUsuarioId },
+    select: { id: true },
+  });
+
+  return res.json({ seguindo: !!exists, isFollowing: !!exists });
+}
 
 export async function minhaRede(req: any, res: Response) {
   try {

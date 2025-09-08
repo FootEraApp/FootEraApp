@@ -91,12 +91,10 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
   const respShow = Number.isFinite(resp) ? Math.round(Number(resp)) : 0;
   const golden = isGolden(ovrShow, goldenMinOVR ?? GOLDEN_MIN_OVR);
 
-  // --- estado para rotação com arrasto ---
   const [rotation, setRotation] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
 
-  // Mouse
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
     setLastPos({ x: e.clientX, y: e.clientY });

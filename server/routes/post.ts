@@ -1,4 +1,3 @@
-// server/routes/post
 import { Router } from "express";
 import multer from "multer";
 import path from "path";
@@ -19,7 +18,6 @@ import { curtirPostagem } from "server/controllers/feedController.js";
 
 const router = Router();
 
-// >>> MESMA pasta dos outros uploads <<<
 const uploadsDir = path.join(process.cwd(), "public", "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
 
@@ -31,13 +29,11 @@ const storage = multer.diskStorage({
   },
 });
 
-// limite opcional (ex.: 200MB)
 const upload = multer({
   storage,
   limits: { fileSize: 200 * 1024 * 1024 },
 });
 
-// campo do arquivo deve ser "arquivo"
 router.post(["/", "/postar"], authenticateToken, upload.single("arquivo"), postarConteudo);
 
 router.get("/visualizar/:id", authenticateToken, buscarPostagemPorId);
