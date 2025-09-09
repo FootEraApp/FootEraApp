@@ -1,3 +1,4 @@
+//server/routes/solicitacaoTreino
 import express from "express";
 import { authenticateToken } from "../middlewares/auth.js";
 import {
