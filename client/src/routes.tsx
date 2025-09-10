@@ -33,6 +33,7 @@ import PaginaTraining from "./pages/trainings.js";
 import PaginaMinhaRede from "./pages/minhaRede.js";
 import PaginaPontuacaoDePerfil from "./pages/perfilPontuacaoExplorar.js";
 import PaginaElenco from "./pages/elenco.js";
+import PaginaGerenciarAtleta from "./pages/GerenciarAtletas.js"
 
 export function AppRoutes() {
   return (
@@ -67,6 +68,11 @@ export function AppRoutes() {
           <AdminDashboard />
         </RequireAdmin>
       </Route>
+
+      <Route path="/perfil/GerenciarAtletas">
+        <PaginaGerenciarAtleta />
+      </Route>
+
 
       <Route path="/feed/desafios"><Private><PaginaDesafios /></Private></Route>
       <Route path="/feed"><Private><PaginaFeed /></Private></Route>

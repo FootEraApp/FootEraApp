@@ -50,6 +50,7 @@ import uploadRoutes from "./routes/upload.js";
 import usuarioRoutes from "./routes/usuario.js";
 import vinculoRoutes from "./routes/vinculo.js";
 import observadosRoutes from "./routes/observadosRoutes.js";
+import gerenciarAtletasRoutes from "./routes/gerenciarAtletas.js";
 
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 import { removerTreinosExpirados } from "./routes/removerTreinosExpirados.js";
@@ -107,6 +108,8 @@ app.use("/api/treinosprogramados", treinoProgramadoRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
 app.use("/api/observados", observadosRoutes);
+app.use("/api/gerenciar", gerenciarAtletasRoutes);
+
 app.use(adminModeracaoRoutes);
 
 app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
