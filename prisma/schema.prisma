@@ -49,6 +49,7 @@ model Usuario {
   clube         Clube?
   escolinha     Escolinha?
   administrador Administrador?
+  olheiro       Olheiro?
   PasswordReset PasswordReset[]
 
   favoritos        FavoritoUsuario[]         @relation("UsuarioFavoritador")
@@ -90,6 +91,34 @@ model Amigo {
 
   amigo   Usuario @relation("AmigoUsuario", fields: [amigoId], references: [id])
   usuario Usuario @relation("UsuarioAmigo", fields: [usuarioId], references: [id])
+}
+
+model Olheiro {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  fotoUrl         String?
+  headline        String?
+  descricao       String?
+  areaAtuacao     String?
+  anosExperiencia Int     @default(0)
+
+  emailPublico    String?
+  telefonePublico String?
+  siteOuLinkedin  String?
+
+  colaboracaoClubeId String?
+  colaboracaoClube   Clube?  @relation(fields: [colaboracaoClubeId], references: [id])
+
+  reputacaoScore  Int @default(0)
+  totalIndicacoes Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([areaAtuacao])
+  @@index([colaboracaoClubeId])
 }
 
 model Mensagem {
@@ -427,6 +456,7 @@ model Clube {
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoClube")
   observacoes         AtletaObservado[]    @relation("ObservacaoClube")
   treinoProgramado    TreinoProgramado[]
+  Olheiro             Olheiro[]
 }
 
 model SolicitacaoVinculo {
@@ -560,6 +590,7 @@ model Administrador {
   usuarioId String  @unique
   cargo     String
   nivel     Nivel
+  fotoUrl   String?
   usuario   Usuario @relation(fields: [usuarioId], references: [id])
 }
 
@@ -867,6 +898,7 @@ enum TipoUsuario {
   Clube
   Escolinha
   Admin
+  Olheiro
 }
 
 enum TipoMidia {

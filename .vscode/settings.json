@@ -1,11 +1,3 @@
 {
-  "files.associations": {
-    "client/src/**/*.css": "tailwindcss"
-  },
-  "css.lint.unknownAtRules": "ignore",
-  "tailwindCSS.experimental.configFile": "client/tailwind.config.cjs",
-  "tailwindCSS.includeLanguages": {
-    "css": "tailwindcss",
-    "postcss": "tailwindcss"
-  }
+    "liveServer.settings.multiRootWorkspaceName": "footera_completo"
 }

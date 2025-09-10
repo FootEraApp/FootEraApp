@@ -31,13 +31,7 @@ const EditarPerfil = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      console.log("[EditarPerfil] GET /api/perfil/:id resposta", {
-        status: res.status,
-        data: res.data,
-      });
-
       if (!res?.data?.usuario || !res?.data?.dadosEspecificos) {
-        console.warn("[EditarPerfil] Payload inesperado", res?.data);
         setErro("Perfil não encontrado ou resposta inválida do servidor.");
         return;
       }

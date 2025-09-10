@@ -114,6 +114,19 @@ function fixFotoPath(f?: string | null) {
   return `${API.BASE_URL}/assets/usuarios/${f}`;     
 }
 
+async function toDataUrlWithAuth(url: string) {
+  const token = readToken();
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Imagem ${url} -> ${res.status}`);
+  const blob = await res.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+
 function pickNumber(...vals: any[]): number {
   for (const v of vals) {
     if (v === null || v === undefined) continue;
@@ -347,9 +360,6 @@ useEffect(() => {
       const pontuacaoUrl = `/api/perfil/${encodeURIComponent(targetUid)}/pontuacao`;
       const wire = await safeGet<PontuacaoWire>(pontuacaoUrl, controller.signal);
 
-      console.log("[DEBUG pontuacao] wire =", wire);
-      console.log("[DEBUG pontuacao] hist 1º item =", wire?.historico?.[0]);
-
       let posicaoVigente: string | null | undefined = undefined;
       if (posAtual) {
         posicaoVigente = posAtual.posicao ?? null;
@@ -360,6 +370,16 @@ useEffect(() => {
         (/^https?:\/\//i.test(String(foto || "")) ? String(foto) :
         foto ? `${API.BASE_URL}${String(foto).startsWith("/assets/") ? foto : `/assets/usuarios/${foto}`}`
         : `${API.BASE_URL}/assets/usuarios/menina.png`);
+
+      let fotoForCard = foto;
+        if (fotoForCard && !fotoForCard.startsWith("data:")) {
+          try { 
+            const abs = /^https?:\/\//i.test(fotoForCard)
+              ? fotoForCard
+              : (fotoForCard.startsWith("/") ? `${API.BASE_URL}${fotoForCard}` : `${API.BASE_URL}/assets/usuarios/${fotoForCard}`);
+            fotoForCard = await toDataUrlWithAuth(abs);
+          } catch {}
+        }
 
       setPerfil({
         atletaId,
@@ -464,7 +484,7 @@ useEffect(() => {
 
     const dataUrl = await htmlToImage.toPng(node, {
       pixelRatio: 2,
-      cacheBust: true,
+      cacheBust: false,
       imagePlaceholder: IMG_PLACEHOLDER,
     });
 

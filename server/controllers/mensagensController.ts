@@ -2,6 +2,57 @@ import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { getIO } from "../socket.js";
+import fs from "fs/promises";
+import path from "path";
+
+async function salvarDataUrlComoPng(dataUrl: string, sub = "cards") {
+  const [meta, b64] = dataUrl.split(",");
+  if (!meta?.startsWith("data:image/")) throw new Error("formato inválido");
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
+  const dir = path.join(process.cwd(), "uploads", sub);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, filename), Buffer.from(b64, "base64"));
+  return `/uploads/${sub}/${filename}`;
+}
+
+export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { tipo, conteudo, paraId, clientMsgId } = req.body as {
+      tipo: "NORMAL" | "POST" | "DESAFIO" | "USUARIO" | "CARD";
+      conteudo: string;
+      paraId: string;
+      clientMsgId?: string;
+    };
+
+    let conteudoFinal = conteudo;
+    if (tipo === "CARD" && typeof conteudo === "string" && conteudo.startsWith("data:image/")) {
+      conteudoFinal = await salvarDataUrlComoPng(conteudo, "cards");
+    }
+
+    const saved = await prisma.mensagem.create({
+      data: {
+        tipo,
+        conteudo: conteudoFinal,
+        paraId,
+        deId: req.userId!, // vindo do seu middleware de auth
+      },
+    });
+
+    const payload = { ...saved, clientMsgId, pending: false };
+
+    const io = getIO();
+    if (io) {
+      // notifica remetente e destinatário
+      io.to(paraId).emit("novaMensagem", payload);
+      io.to(req.userId!).emit("novaMensagem", payload);
+    }
+
+    return res.json(payload);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return res.status(400).json({ error: msg });
+  }
+}
 
 export const buscarMensagens = async (req: Request, res: Response) => {
   try {
@@ -16,16 +67,11 @@ export const buscarMensagens = async (req: Request, res: Response) => {
       },
       orderBy: { criadaEm: "desc" },
       take: Number(limit),
-      ...(cursor && {
-        skip: 1,
-        cursor: {
-          id: cursor as string,
-        },
-      }),
+      ...(cursor && { skip: 1, cursor: { id: cursor as string } }),
     });
 
     res.json(mensagens);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Erro ao buscar mensagens" });
   }
 };
@@ -60,34 +106,6 @@ export const listarMensagensGrupo = async (req: AuthenticatedRequest, res: Respo
   } catch (error) {
     console.error("Erro ao listar mensagens do grupo:", error);
     res.status(500).json({ error: "Erro ao listar mensagens do grupo" });
-  }
-};
-
-export const enviarMensagem = async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const deId = req.userId!;
-    const { paraId, conteudo, tipo = "NORMAL", clientMsgId } = req.body;
-
-    if (!deId || !paraId || !conteudo) {
-      return res.status(400).json({ error: "Campos obrigatórios faltando" });
-    }
-
-    const nova = await prisma.mensagem.create({
-      data: { deId, paraId, conteudo, tipo },
-    });
-
-    const payload = { ...nova, clientMsgId, pending: false };
-
-    const io = getIO();
-    if (io) {
-      io.to(deId).emit("novaMensagem", payload);
-      io.to(paraId).emit("novaMensagem", payload);
-    }
-
-    return res.status(201).json(payload);
-  } catch (error) {
-    console.error("Erro ao enviar mensagem:", error);
-    return res.status(500).json({ error: "Erro ao enviar mensagem" });
   }
 };
 

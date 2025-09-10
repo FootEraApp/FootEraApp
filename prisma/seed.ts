@@ -1,4 +1,4 @@
-import { PrismaClient, TipoUsuario, Nivel, Categoria } from '@prisma/client';
+import { PrismaClient, TipoUsuario, TipoTreino, Nivel, Categoria } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -19,7 +19,8 @@ async function main() {
     'ana.mendes': 'atleta123',
     'teste': 'teste123',
     'aaaaa': 'aaaaa123',
-    'admin': 'admin123'
+    'admin': 'admin123',
+    'olheiro.joao': 'olheiro123',
   } as const;
 
   const H = Object.fromEntries(
@@ -40,6 +41,7 @@ async function main() {
       cidade: 'São Paulo',
       estado: 'SP',
       pais: 'Brasil',
+      foto: '/assets/usuarios/clube-footera.png',
       clube: {
         create: {
           nome: "Clube FootEra FC",
@@ -56,6 +58,7 @@ async function main() {
           complemento: "Campo 1",
           cep: "01234-567",
           cnpj: "12.345.678/0001-90",
+          logo: "/assets/usuarios/clube-footera.png",
           siteOficial: "https://clubefootera.com",
           email: "clube.footera@example.com",
           }
@@ -75,6 +78,7 @@ async function main() {
       cidade: 'Vitória',
       estado: 'ES',
       pais: 'Brasil',
+      foto: '/assets/usuarios/clube-teste.png',
       clube: {
         create: {
           nome: "Clube de Teste",
@@ -86,6 +90,7 @@ async function main() {
           telefone2: "27999990011",
           logradouro: "Rua do Teste",
           numero: "456",
+          logo: "/assets/usuarios/clube-teste.png",
           bairro: "Futebol teste",
           complemento: "Campo de Teste",
           cep: "12345-678",
@@ -110,6 +115,7 @@ async function main() {
       cidade: "São Paulo",
       estado: "SP",
       pais: "Brasil",
+      foto: '/assets/usuarios/escola-futebol.png',
       escolinha: {
         create: {
           nome: "Escola Estrelas do Futebol",
@@ -126,6 +132,7 @@ async function main() {
           complemento: "Campo 2",
           cep: "01234-567",
           sede: "São Paulo",
+          logo: "/assets/usuarios/escola-futebol.png",
           siteOficial: "https://escolaestrelas.com",
           }
       }
@@ -144,6 +151,7 @@ async function main() {
       cidade: "Rio de Janeiro",
       estado: "RJ",
       pais: "Brasil",
+      foto: '/assets/usuarios/academia-escola.png',
       escolinha: {
         create: {
           nome: "Academia FC",
@@ -155,6 +163,7 @@ async function main() {
           telefone2: "21999990005",
           logradouro: "Rua do Treino",
           numero: "321",
+          logo: "/assets/usuarios/academia-escola.png",
           bairro: "Zona Sul",
           complemento: "Campo de Treino",
           cep: "12345-678",
@@ -206,7 +215,7 @@ async function main() {
     tipo: TipoUsuario.Professor,
     estado: 'ES',
     pais: 'Brasil',
-    foto: '/assets/usuarios/mateus.jpg',
+    foto: '/assets/usuarios/prof-teste.png',
     professor: {
       create: {
         codigo: 'PROF001',
@@ -215,7 +224,7 @@ async function main() {
         escola: '',
         qualificacoes: [],
         certificacoes: [],
-        fotoUrl: '/assets/usuarios/mateus.jpg',
+        fotoUrl: '/assets/usuarios/prof-teste.png',
         nome: 'Mateus Barbarioli Furieri'
       }
     }
@@ -235,10 +244,12 @@ await prisma.usuario.upsert({
     cidade: 'São Paulo',
     estado: 'SP',
     pais: 'Brasil',
+    foto: '/assets/usuarios/profa-teste.png',
     administrador: {
       create: {
         cargo: 'Super Admin',
-        nivel: Nivel.Performance
+        nivel: Nivel.Performance,
+        fotoUrl: '/assets/usuarios/profa-teste.png',
       }
     }
   }
@@ -252,6 +263,31 @@ await prisma.usuario.upsert({
     where: { usuario: { nomeDeUsuario: "clube_teste" } }
   });
 
+  const olheiroJoao = await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'olheiro_joao' },
+    update: {},
+    create: {
+      nome: 'João Nogueira',
+      nomeDeUsuario: 'olheiro_joao',
+      email: 'olheiro.joao@example.com',
+      senhaHash: H['olheiro.joao'],
+      tipo: TipoUsuario.Olheiro, 
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/olheiro-joao.png',
+      olheiro: {               
+        create: {
+          descricao: 'Olheiro independente em SP; 10 anos de experiência. Foco Sub15–Sub20.',
+          areaAtuacao: 'Sudeste (SP, RJ, MG, ES)',
+          telefonePublico: '11999997777',
+          emailPublico: 'olheiro.joao@example.com',
+          fotoUrl: '/assets/usuarios/olheiro-joao.png', 
+          id: clube1Db?.id,
+        }
+      }
+    }
+  });
 
   const atletaLucas = await prisma.usuario.upsert({
     where: { nomeDeUsuario: 'lucas.ferreira' },
@@ -264,6 +300,7 @@ await prisma.usuario.upsert({
       tipo: TipoUsuario.Atleta,
       cidade: "Vitória",
       estado: "ES",
+      foto: "/assets/usuarios/lucas.jpg",
       pais: "Brasil",
       atleta: {
         create: {
@@ -299,6 +336,7 @@ await prisma.usuario.upsert({
       cidade: "Vila Velha",
       estado: "ES",
       pais: "Brasil",
+      foto: "/assets/usuarios/ana.webp",
       atleta: {
         create: {
           nome: "Ana Beatriz",
@@ -576,6 +614,8 @@ const professorMateus = await prisma.professor.findFirst({
   where: { usuario: { nomeDeUsuario: 'mateus.furieri' } }
 });
 
+const prazo25Out = new Date(new Date().getFullYear(), 9, 25, 23, 59, 0);
+
 const ex1 = await prisma.exercicio.findUnique({ where: { codigo: 'EX005' } });
 const ex2 = await prisma.exercicio.findUnique({ where: { codigo: 'EX009' } }); 
 const ex3 = await prisma.exercicio.findUnique({ where: { codigo: 'EX010' } }); 
@@ -593,8 +633,9 @@ if (professorMateus && ex1 && ex2 && ex3 && ex4 && ex5) {
       nivel: Nivel.Base,
       categoria: [Categoria.Livre],
       duracao: 60,
+      tipoTreino: TipoTreino.Tecnico,
       professorId: professorMateus.id,
-      dataAgendada: new Date(),
+      dataAgendada: prazo25Out,
       imagemUrl: '/assets/treinos/agilidade.jpg',
       pontuacao: 12,
       exercicios: {
@@ -692,6 +733,7 @@ if (professorMateus && ex1 && ex2 && ex3 && ex4 && ex5) {
       nomeDeUsuario: "teste",
       email: "teste@example.com",
       senhaHash: H['teste'],
+      foto: "/assets/usuarios/teste.jpg",
       tipo: TipoUsuario.Atleta,
       cidade: "Curitiba",
       estado: "PR",
@@ -709,7 +751,7 @@ if (professorMateus && ex1 && ex2 && ex3 && ex4 && ex5) {
           telefone1: "11999999999",
           seloQualidade: "Bronze",
           categoria: [Categoria.Sub17],
-          foto: "/assets/usuarios/footera-logo.png"
+          foto: "/assets/usuarios/teste.jpg"
         }
       }
     }
@@ -731,7 +773,7 @@ if (professorMateus && ex1 && ex2 && ex3 && ex4 && ex5) {
       telefone1: "11999999999",
       seloQualidade: "Bronze",
       categoria: [Categoria.Sub17],
-      foto: "/assets/usuarios/footera-logo.png"
+      foto: "/assets/usuarios/teste.jpg"
     }
   });
 
@@ -827,6 +869,7 @@ const usuarioAaaaa = await prisma.usuario.upsert({
     tipo: TipoUsuario.Atleta,
     cidade: "Vitória",
     estado: "ES",
+    foto: "/assets/usuarios/isadora.jpg",
     pais: "Brasil",
     atleta: {
       create: {
@@ -851,18 +894,54 @@ const atletaAaaaa = await prisma.atleta.findUnique({
   where: { usuarioId: usuarioAaaaa.id }
 });
 
+const exA = await prisma.exercicio.findUnique({ where: { codigo: 'EX006' } });
+const exB = await prisma.exercicio.findUnique({ where: { codigo: 'EX011' } });
+const exC = await prisma.exercicio.findUnique({ where: { codigo: 'EX012' } });
+const exD = await prisma.exercicio.findUnique({ where: { codigo: 'EX021' } });
+const exE = await prisma.exercicio.findUnique({ where: { codigo: 'EX024' } });
+
 if (atletaAaaaa && professorArthur) {
+  if (!(exA && exB && exC && exD && exE)) {
+    throw new Error('Exercícios do TR001 não encontrados no seed');
+  }
+
   const treino = await prisma.treinoProgramado.upsert({
     where: { codigo: "TR001" },
-    update: {},
+    update: {
+      tipoTreino: TipoTreino.Fisico,
+      dataAgendada: prazo25Out,
+      exercicios: {
+        deleteMany: {},
+        create: [
+          { exercicioId: exA.id, ordem: 1, repeticoes: '4x 45s + 15s descanso' },
+          { exercicioId: exB.id, ordem: 2, repeticoes: '3x 12 reps' },
+          { exercicioId: exC.id, ordem: 3, repeticoes: '3x 10 lançamentos' },
+          { exercicioId: exD.id, ordem: 4, repeticoes: '4x 8 cabeceios' },
+          { exercicioId: exE.id, ordem: 5, repeticoes: '4x 60s' },
+        ],
+      },
+    },
     create: {
       nome: "Treino Resistencia Física",
       codigo: "TR001",
       descricao: "Treino voltado para resistência",
       nivel: Nivel.Avancado,
+      pontuacao: 10,
+      duracao: 45,
       categoria: [Categoria.Livre],
       imagemUrl: "/assets/treinos/resistencia.jpg",
       professor: { connect: { id: professorArthur.id } },
+      tipoTreino: TipoTreino.Fisico,
+      dataAgendada: prazo25Out,
+      exercicios: {
+        create: [
+          { exercicioId: exA.id, ordem: 1, repeticoes: '4x 45s + 15s descanso' },
+          { exercicioId: exB.id, ordem: 2, repeticoes: '3x 12 reps' },
+          { exercicioId: exC.id, ordem: 3, repeticoes: '3x 10 lançamentos' },
+          { exercicioId: exD.id, ordem: 4, repeticoes: '4x 8 cabeceios' },
+          { exercicioId: exE.id, ordem: 5, repeticoes: '4x 60s' },
+        ],
+      },
     },
   });
 
