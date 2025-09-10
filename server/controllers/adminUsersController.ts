@@ -1,22 +1,39 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
+
 const prisma = new PrismaClient();
+
+function normalizaTipo(raw: string) {
+  const t = raw?.toLowerCase();
+  const map: Record<string, string> = {
+    atleta: "Atleta",
+    escola: "Escolinha",
+    escolinha: "Escolinha",
+    clube: "Clube",
+    professor: "Professor",
+    admin: "Admin",
+    olheiro: "Olheiro",
+  };
+  return map[t] || "";
+}
+
+function resolveFoto(u: any): string | null {
+  return (
+    u.foto ??
+    u.atleta?.foto ??
+    u.professor?.fotoUrl ??
+    u.clube?.logo ??
+    u.escolinha?.logo ??
+    u.olheiro?.fotoUrl ??
+    null
+  );
+}
 
 export async function listAdminUsers(req: Request, res: Response) {
   const page = Number(req.query.page || 1);
   const pageSize = Number(req.query.pageSize || 20);
   const q = String(req.query.q || "").trim();
-
-  const rawTipo = String(req.query.tipo || "").toLowerCase();
-  const map: Record<string, string> = {
-    atleta: "Atleta",
-    escolinha: "Escolinha",
-    escola: "Escolinha",
-    clube: "Clube",
-    professor: "Professor",
-    admin: "Admin",
-  };
-  const tipoNormalizado = map[rawTipo] || "";
+  const tipo = normalizaTipo(String(req.query.tipo || ""));
 
   const where: any = {};
   if (q) {
@@ -26,49 +43,84 @@ export async function listAdminUsers(req: Request, res: Response) {
       { email: { contains: q, mode: "insensitive" } },
     ];
   }
-  if (tipoNormalizado) where.tipo = tipoNormalizado;
+  if (tipo) where.tipo = tipo;
 
   const [rows, total] = await prisma.$transaction([
     prisma.usuario.findMany({
       where,
       skip: (page - 1) * pageSize,
       take: pageSize,
-      orderBy: { dataCriacao: "desc" },
-      select: {
-        id: true,
-        nome: true,
-        nomeDeUsuario: true,
-        email: true,
-        tipo: true,
-        foto: true,
-        dataCriacao: true,
-        verified: true,
+      include: {
+        atleta:     { select: { foto: true } },
+        professor:  { select: { fotoUrl: true } },
+        clube:      { select: { logo: true } },
+        escolinha:  { select: { logo: true } },
+        olheiro:    { select: { fotoUrl: true } },
       },
     }),
     prisma.usuario.count({ where }),
   ]);
 
-  const items = await Promise.all(
-    rows.map(async (u) => {
-      const ultima =
-        u.tipo === "Atleta" ? await ultimaAtividadeDeAtleta(u.id) : null;
-
-      return {
-        id: u.id,
-        nome: u.nome,
-        nomeDeUsuario: u.nomeDeUsuario,
-        email: u.email ?? null,
-        tipo: u.tipo,
-        foto: u.foto ?? null,
-        criadoEm: u.dataCriacao,
-        verificado: u.verified,
-        ultimaAtividade: ultima?.when?.toISOString() ?? null,
-        ultimaAtividadeNome: ultima?.label ?? null,
-      };
-    })
-  );
+  const items = rows.map((u) => ({
+    id: u.id,
+    nome: u.nome,
+    nomeDeUsuario: u.nomeDeUsuario,
+    email: u.email ?? null,
+    tipo: u.tipo,
+    foto: resolveFoto(u),
+    criadoEm: (u as any).criadoEm ?? (u as any).dataCriacao ?? null,
+    verificado: (u as any).verified ?? false,
+    ultimaAtividade: null as string | null,
+    ultimaAtividadeNome: null as string | null,
+  }));
 
   res.json({ items, total });
+}
+
+export async function getAdminUserDetail(req: Request, res: Response) {
+  const { id } = req.params;
+
+  const u = await prisma.usuario.findUnique({
+    where: { id },
+    include: {
+      atleta: { select: { id: true, foto: true, posicao: true } },
+      professor: { select: { id: true, fotoUrl: true } },
+      clube: { select: { id: true, logo: true } },
+      escolinha: { select: { id: true, logo: true } },
+      olheiro: { select: { id: true, fotoUrl: true } },
+      _count: {
+        select: { postagens: true, comentarios: true, seguidores: true },
+      },
+    },
+  });
+
+  if (!u) return res.status(404).json({ message: "Usuário não encontrado" });
+
+  const [ultima, posicaoCampo, totalVinculados] = await Promise.all([
+    u.tipo === "Atleta" ? ultimaAtividadeDeAtleta(u.id) : Promise.resolve(null),
+    u.tipo === "Atleta" ? posicaoDoAtletaPorUsuarioId(u.id) : Promise.resolve(null),
+    totalVinculadosDoUsuario(u as any),
+  ]);
+
+  res.json({
+    id: u.id,
+    nome: u.nome,
+    nomeDeUsuario: u.nomeDeUsuario,
+    email: u.email ?? null,
+    tipo: u.tipo,
+    foto: resolveFoto(u),
+    criadoEm: (u as any).criadoEm ?? (u as any).dataCriacao ?? null,
+    verificado: (u as any).verified ?? false,
+    contagens: {
+      posts: u._count.postagens,
+      comentarios: u._count.comentarios,
+      seguidores: u._count.seguidores,
+    },
+    posicaoCampo,
+    totalVinculados,
+    ultimaAtividade: ultima?.when?.toISOString() ?? null,
+    ultimaAtividadeNome: ultima?.label ?? null,
+  });
 }
 
 async function ultimaAtividadeDeAtleta(usuarioId: string) {
@@ -95,14 +147,12 @@ async function ultimaAtividadeDeAtleta(usuarioId: string) {
   });
 
   const candidatos: { when: Date; label: string }[] = [];
-
   if (ultimaSub) {
     candidatos.push({
       when: ultimaSub.createdAt,
       label: `Desafio: ${ultimaSub.desafio?.titulo ?? "Desafio"}`,
     });
   }
-
   if (ultimaTreino) {
     const when = (ultimaTreino.atualizadoEm ?? ultimaTreino.criadoEm) as Date;
     const nomeTreino =
@@ -113,9 +163,9 @@ async function ultimaAtividadeDeAtleta(usuarioId: string) {
     candidatos.push({ when, label: `Treino: ${nomeTreino}` });
   }
 
-  if (candidatos.length === 0) return null;
+  if (!candidatos.length) return null;
   candidatos.sort((a, b) => +b.when - +a.when);
-  return candidatos[0]; 
+  return candidatos[0];
 }
 
 function legivelPosicao(cod?: string | null): string | null {
@@ -143,15 +193,12 @@ async function posicaoDoAtletaPorUsuarioId(usuarioId: string) {
     select: { id: true, posicao: true },
   });
   if (!atleta) return null;
-
   if (atleta.posicao) return legivelPosicao(atleta.posicao);
-
   const ultNoElenco = await prisma.atletaElenco.findFirst({
     where: { atletaId: atleta.id },
     orderBy: { updatedAt: "desc" },
     select: { posicao: true },
   });
-
   return ultNoElenco ? legivelPosicao(ultNoElenco.posicao) : null;
 }
 
@@ -166,7 +213,6 @@ async function totalVinculadosDoUsuario(u: { id: string; tipo: string }) {
       where: { professorId: prof.id, atletaId: { not: null } },
     });
   }
-
   if (u.tipo === "Clube") {
     const clube = await prisma.clube.findFirst({
       where: { usuarioId: u.id },
@@ -175,7 +221,6 @@ async function totalVinculadosDoUsuario(u: { id: string; tipo: string }) {
     if (!clube) return 0;
     return prisma.atleta.count({ where: { clubeId: clube.id } });
   }
-
   if (u.tipo === "Escolinha") {
     const esc = await prisma.escolinha.findFirst({
       where: { usuarioId: u.id },
@@ -184,104 +229,32 @@ async function totalVinculadosDoUsuario(u: { id: string; tipo: string }) {
     if (!esc) return 0;
     return prisma.atleta.count({ where: { escolinhaId: esc.id } });
   }
-
   return 0;
-}
-
-export async function getAdminUserDetail(req: Request, res: Response) {
-  const { id } = req.params;
-
-  const u = await prisma.usuario.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      nome: true,
-      nomeDeUsuario: true,
-      email: true,
-      tipo: true,
-      foto: true,
-      dataCriacao: true,
-      verified: true,
-      _count: {
-        select: { postagens: true, comentarios: true, seguidores: true },
-      },
-    },
-  });
-
-  if (!u) return res.status(404).json({ message: "Usuário não encontrado" });
-
-  const [ultima, posicaoCampo, totalVinculados] = await Promise.all([
-    u.tipo === "Atleta" ? ultimaAtividadeDeAtleta(id) : Promise.resolve(null),
-    u.tipo === "Atleta" ? posicaoDoAtletaPorUsuarioId(id) : Promise.resolve(null),
-    totalVinculadosDoUsuario(u),
-  ]);
-
-  res.json({
-    id: u.id,
-    nome: u.nome,
-    nomeDeUsuario: u.nomeDeUsuario,
-    email: u.email ?? null,
-    tipo: u.tipo,
-    foto: u.foto ?? null,
-    criadoEm: u.dataCriacao,
-    verificado: u.verified,
-    contagens: {
-      posts: u._count.postagens,
-      comentarios: u._count.comentarios,
-      seguidores: u._count.seguidores,
-    },
-    posicaoCampo,         
-    totalVinculados,          
-    ultimaAtividade: ultima?.when?.toISOString() ?? null,
-    ultimaAtividadeNome: ultima?.label ?? null,
-  });
 }
 
 export async function patchAdminUser(req: Request, res: Response) {
   const { id } = req.params;
-  const { verificado, destaque } = req.body as {
-    verificado?: boolean;
-    destaque?: boolean;
-  };
-
-  if (typeof destaque === "boolean") {
-    return res
-      .status(501)
-      .json({ message: "Campo 'destaque' não existe no schema Usuario." });
-  }
+  const { verificado } = req.body as { verificado?: boolean };
 
   const data: any = {};
   if (typeof verificado === "boolean") data.verified = verificado;
-
-  if (Object.keys(data).length === 0) {
+  if (!Object.keys(data).length) {
     return res.status(400).json({ message: "Nenhum campo válido para atualizar." });
   }
-
   const u = await prisma.usuario.update({ where: { id }, data });
   res.json(u);
 }
 
 export async function banUser(_req: Request, res: Response) {
-  return res
-    .status(501)
-    .json({ message: "Banimento não implementado (campo 'status' ausente)." });
+  res.status(501).json({ message: "Banimento não implementado." });
 }
-
 export async function unbanUser(_req: Request, res: Response) {
-  return res
-    .status(501)
-    .json({ message: "Desbanir não implementado (campo 'status' ausente)." });
+  res.status(501).json({ message: "Desbanir não implementado." });
 }
-
 export async function removeUserContent(req: Request, res: Response) {
   const { id } = req.params;
   const { escopo } = req.body as { escopo: "posts" | "comentarios" | "todos" };
-
-  if (escopo === "posts" || escopo === "todos") {
-    await prisma.postagem.deleteMany({ where: { usuarioId: id } });
-  }
-  if (escopo === "comentarios" || escopo === "todos") {
-    await prisma.comentario.deleteMany({ where: { usuarioId: id } });
-  }
+  if (escopo === "posts" || escopo === "todos") await prisma.postagem.deleteMany({ where: { usuarioId: id } });
+  if (escopo === "comentarios" || escopo === "todos") await prisma.comentario.deleteMany({ where: { usuarioId: id } });
   res.json({ ok: true });
 }
