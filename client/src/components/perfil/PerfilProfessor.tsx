@@ -292,20 +292,28 @@ async function fetchObservados() {
             </SectionCard>
           )}
 
-          <SectionCard
+         <SectionCard
             title="Treinos"
             right={
               <div className="flex gap-2">
-                <button className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900">
-                  Ver todos
-                </button>
-                <button className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1">
-                  <PlusCircle className="w-4 h-4" /> Criar novo treino
-                </button>
+                <Link href="/treinos">
+                  <a className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900">
+                    Ver todos
+                  </a>
+                </Link>
+
+                <Link href="/treinos/novo">
+                  <a className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1">
+                    <PlusCircle className="w-4 h-4" />
+                    Criar novo treino
+                  </a>
+                </Link>
               </div>
             }
           >
-            <p className="text-sm text-green-900/90">Crie e gerencie seus treinos.</p>
+            <p className="text-sm text-green-900/90">
+              Crie e gerencie treinos para seus atletas vinculados.
+            </p>
           </SectionCard>
 
           <SectionCard title="Atividade Recente">

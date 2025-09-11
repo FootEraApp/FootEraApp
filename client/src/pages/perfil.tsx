@@ -12,7 +12,7 @@ import PerfilClube from "../components/perfil/PerfilClube.js";
 import PerfilEscola from "../components/perfil/PerfilEscola.js";
 import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
 
-type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha" | "Olheiro";
+type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha" | "Admin" | "Olheiro";
 
 interface PerfilMinimo {
   tipo: TipoPerfil;
