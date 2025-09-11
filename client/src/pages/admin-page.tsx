@@ -80,6 +80,30 @@ type ModeracaoItem = {
   desafio: { id: string | null; titulo: string; pontuacao: number };
 };
 
+function toAbsoluteUrl(raw?: string | null) {
+  if (!raw) return null;
+  if (raw.startsWith("http")) return raw;
+  // se for só o ID do YouTube (11 chars)
+  if (/^[\w-]{11}$/.test(raw)) return `https://www.youtube.com/watch?v=${raw}`;
+  return `${API.BASE_URL}${raw.startsWith("/") ? raw : `/${raw}`}`;
+}
+
+function resolveVideoUrl(ex: any) {
+  const raw =
+    ex.videoDemonstrativoUrl ??   // <- ESTE É O CAMPO DO SEU DB
+    ex.videoDemonstrativoURL ??   // variação
+    ex.videoDemonstrativo ??      // fallback
+    ex.videoUrl ??
+    ex.video ??
+    ex.urlVideo ??
+    ex.linkVideo ??
+    ex.youtubeUrl ??
+    ex.demoUrl ??
+    null;
+
+  return raw ? toAbsoluteUrl(String(raw)) : null;
+}
+
 export default function AdminDashboard() {
   const [aba, setAba] = useState<Tab>("dashboard");
 
@@ -505,48 +529,69 @@ async function invalidarDesafio(id: string) {
           </div>
         )}
 
-        {aba === "exercicios" && (
-                  <div>
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-bold text-lg">Gerenciar Exercícios</h3>
-                      <button
-                        className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800"
-                        onClick={() => (window.location.href = "/admin/exercicios/create")}
-                      >
-                        + Novo Exercicio
-                      </button>
-                    </div>
-                    <ul className="space-y-2">
-                      {exercicios.map((ex: any) => (
-                        <li key={ex.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
-                          <div>
-                            <strong>{ex.nome}</strong> — {ex.codigo} [{ex.nivel}]
-                            <p className="text-sm text-gray-500">{ex.descricao}</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => (window.location.href = `/admin/exercicios/create?id=${ex.id}`)}
-                              className="text-blue-600"
-                            >
-                              ✏️
-                            </button>
-                            <button
-                              onClick={async () => {
-                                const confirmar = confirm("Deseja excluir este exercício?");
-                                if (!confirmar) return;
-                                const response = await fetch(`${API.BASE_URL}/api/exercicios/${ex.id}`, {
-                                  method: "DELETE", headers: authHeaders()
-                                });
-                                response.ok ? alert("Exercício excluído!") : alert("Erro ao excluir.");
-                              }}
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+       {aba === "exercicios" && (
+         <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-lg">Gerenciar Exercícios</h3>
+             <button
+               className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800"
+               onClick={() => (window.location.href = "/admin/exercicios/create")}
+             >
+               + Novo Exercicio
+             </button>
+           </div>
+           <ul className="space-y-2">
+             {exercicios.map((ex: any) => {
+               const videoUrl = resolveVideoUrl(ex);
+            
+               return (
+               <li key={ex.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
+                 <div>
+                  <strong>{ex.nome}</strong> — {ex.codigo} [{ex.nivel}]
+                  <p className="text-sm text-gray-500">{ex.descricao}</p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => (window.location.href = `/admin/exercicios/create?id=${ex.id}`)}
+                    className="text-blue-600"
+                    title="Editar exercício"
+                  >
+                    ✏️
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (!videoUrl) return alert("Este exercício não possui vídeo cadastrado.");
+                      window.open(videoUrl, "_blank", "noopener,noreferrer");
+                    }}
+                    className={videoUrl ? "text-green-600" : "text-gray-400 cursor-not-allowed"}
+                    title={videoUrl ? "Abrir vídeo demonstrativo" : "Sem vídeo"}
+                    disabled={!videoUrl}
+                  >
+                    ▶️
+                  </button>
+
+                 <button
+                    onClick={async () => {
+                      const confirmar = confirm("Deseja excluir este exercício?");
+                      if (!confirmar) return;
+                      const response = await fetch(`${API.BASE_URL}/api/exercicios/${ex.id}`, {
+                       method: "DELETE", headers: authHeaders()
+                     });
+                       response.ok ? alert("Exercício excluído!") : alert("Erro ao excluir.");
+                     }}
+                     className="text-red-600"
+                     title="Excluir exercício"
+                    >
+                     🗑️
+                  </button>
+                      </div>
+                      </li>
+                       );
+                    })}
+                  </ul>
+                 </div>
                 )}
         
                 {aba === "treinos" && (
