@@ -5,7 +5,6 @@ import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { Badge } from "@/components/ui/badge.js";
 
-
 interface Exercicio {
   id: string;
   nome: string;
@@ -102,8 +101,6 @@ export default function PaginaTreinos() {
 
     const token =
       (Storage as any).token ?? localStorage.getItem("token");
-
-    console.log("[treinos] usando", { tipo, tipoUsuarioId, token: !!token });
 
     if (tipo === "atleta" && tipoUsuarioId && token) {
       const [resTreinos, resDesafios] = await Promise.all([
@@ -227,7 +224,6 @@ const renderDesafioCard = (desafio: Desafio) => {
       key={desafio.id}
       className="bg-white p-4 rounded shadow border border-yellow-400 mb-3"
     >
-      {/* IMAGEM DO DESAFIO */}
       <img
         src={img}
         alt={desafio.titulo}
@@ -467,7 +463,7 @@ function toggleSelecionado(idUsuario: string) {
   }
 
     return (
-      <div className="min-h-screen bg-yellow-50 pb-20">
+      <div className="min-h-screen bg-transparent pb-20">
         <div className="p-4 max-w-2xl mx-auto">
           {(
             <>
