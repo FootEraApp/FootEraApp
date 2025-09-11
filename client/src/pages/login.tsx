@@ -1,3 +1,4 @@
+// client/src/pages/login.tsx
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
@@ -30,8 +31,9 @@ export default function PaginaLogin() {
       const usuario = data.usuario ?? {};
       const usuarioId = usuario.id ?? data.id ?? "";
       const usuarioNome = usuario.nomeDeUsuario ?? data.nomeDeUsuario ?? "";
-      const rawTipo = (usuario.tipo ?? data.tipo ?? "").toString().toLowerCase();
-      const isAdmin = usuario.tipo === "Admin" || String(usuario.tipo).toLowerCase() === "admin";
+      const rawTipo = String(usuario.tipo ?? data.tipo ?? "").toLowerCase();
+      const isAdmin =
+        usuario.tipo === "Admin" || String(usuario.tipo).toLowerCase() === "admin";
       const token = data.token;
 
       if (!token || !usuarioId) throw new Error("Resposta inválida do servidor");
@@ -46,10 +48,24 @@ export default function PaginaLogin() {
         rawTipo === "escolinha" ? "escola" :
         rawTipo === "clube"     ? "clube" :
         rawTipo === "professor" ? "professor" :
+        rawTipo === "olheiro"   ? "olheiro" :
         "atleta";
 
       store.setItem("tipoUsuario", tipoPadrao);
-      if (data.tipoUsuarioId) store.setItem("tipoUsuarioId", String(data.tipoUsuarioId));
+      store.setItem("usuarioTipoRaw", rawTipo);
+
+      const tipoUsuarioId =
+        data.tipoUsuarioId ||
+        data?.olheiro?.id ||
+        data?.professor?.id ||
+        data?.clube?.id ||
+        data?.escolinha?.id ||
+        data?.atleta?.id ||
+        null;
+
+      if (tipoUsuarioId) {
+        store.setItem("tipoUsuarioId", String(tipoUsuarioId));
+      }
 
       navigate(isAdmin ? "/admin" : "/feed");
     } catch (err: any) {
@@ -59,10 +75,16 @@ export default function PaginaLogin() {
   };
 
   useEffect(() => {
-    const token = Storage.token || localStorage.getItem("token") || sessionStorage.getItem("token");
+    const token =
+      Storage.token || localStorage.getItem("token") || sessionStorage.getItem("token");
     if (!token) return;
 
-    const tipo = (localStorage.getItem("tipoUsuario") || sessionStorage.getItem("tipoUsuario") || "").toLowerCase();
+    const tipo =
+      (localStorage.getItem("tipoUsuario") ||
+        sessionStorage.getItem("tipoUsuario") ||
+        "")
+        .toLowerCase();
+
     navigate(tipo === "admin" ? "/admin" : "/feed");
   }, []);
 

@@ -1,3 +1,4 @@
+// server/controllers/perfilController
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
@@ -5,53 +6,43 @@ import { AuthenticatedRequest } from "server/middlewares/auth.js";
 const prisma = new PrismaClient();
 
 async function resolveByUsuarioOrEntity(opts: {
-  entity: "professor" | "clube" | "escolinha";
+  entity: "professor" | "clube" | "escolinha" | "olheiro";
   usuarioOrEntityId: string;
   select: any;
-}) {
+}): Promise<any> {
   const { entity, usuarioOrEntityId, select } = opts;
 
   if (entity === "professor") {
-    let row = await prisma.professor.findFirst({
-      where: { usuarioId: usuarioOrEntityId },
-      select,
-    });
+    let row = await prisma.professor.findFirst({ where: { usuarioId: usuarioOrEntityId }, select });
     if (row) return row;
-
-    row = await prisma.professor.findUnique({
-      where: { id: usuarioOrEntityId },
-      select,
-    });
+    row = await prisma.professor.findUnique({ where: { id: usuarioOrEntityId }, select });
     return row;
   }
 
   if (entity === "clube") {
-    let row = await prisma.clube.findFirst({
-      where: { usuarioId: usuarioOrEntityId },
-      select,
-    });
+    let row = await prisma.clube.findFirst({ where: { usuarioId: usuarioOrEntityId }, select });
     if (row) return row;
-
-    row = await prisma.clube.findUnique({
-      where: { id: usuarioOrEntityId },
-      select,
-    });
+    row = await prisma.clube.findUnique({ where: { id: usuarioOrEntityId }, select });
     return row;
   }
 
-  let row = await prisma.escolinha.findFirst({
-    where: { usuarioId: usuarioOrEntityId },
-    select,
-  });
-  if (row) return row;
+  if (entity === "escolinha") {
+    let row = await prisma.escolinha.findFirst({ where: { usuarioId: usuarioOrEntityId }, select });
+    if (row) return row;
+    row = await prisma.escolinha.findUnique({ where: { id: usuarioOrEntityId }, select });
+    return row;
+  }
 
-  row = await prisma.escolinha.findUnique({
-    where: { id: usuarioOrEntityId },
-    select,
-  });
-  return row;
+  // NOVO: Olheiro
+  if (entity === "olheiro") {
+    let row = await prisma.olheiro.findFirst({ where: { usuarioId: usuarioOrEntityId }, select });
+    if (row) return row;
+    row = await prisma.olheiro.findUnique({ where: { id: usuarioOrEntityId }, select });
+    return row;
+  }
+
+  return null;
 }
-
 
 export async function getPontuacaoDetalhada(req: Request, res: Response) {
   try {
@@ -162,15 +153,9 @@ export const getTreinosPorUsuario = async (req: Request, res: Response) => {
 
   try {
     const treinos = await prisma.treinoRealizado.findMany({
-      where: {
-        usuarioId: id,
-      },
-      include: {
-        treino: true,
-      },
-      orderBy: {
-        dataExpiracao: "desc",
-      },
+      where: { usuarioId: id },
+      include: { treino: true },
+      orderBy: { dataExpiracao: "desc" },
     });
 
     const resultado = treinos.map((t: any) => ({
@@ -205,7 +190,7 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
     prisma.submissaoDesafio.findMany({
       where: { atletaId: atleta.id, aprovado: true },
       include: { desafio: true },
-      orderBy: { createdAt: "desc" }, 
+      orderBy: { createdAt: "desc" },
       take: 10,
     }),
   ]);
@@ -227,9 +212,11 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
         nome: s.treinoAgendado?.treinoProgramado?.nome ?? s.treinoAgendado?.titulo ?? "Treino",
         data: s.criadoEm,
         duracao: typeof dur === "number" && dur > 0 ? `${dur} min` : undefined,
-        pontuacao: Number(pts) || 0,                   
-        categoria: s.tipoTreinoSnapshot ??
-                   s.treinoAgendado?.treinoProgramado?.tipoTreino ?? null,
+        pontuacao: Number(pts) || 0,
+        categoria:
+          s.tipoTreinoSnapshot ??
+          s.treinoAgendado?.treinoProgramado?.tipoTreino ??
+          null,
       };
     }),
     ...subsDesafio.map((s: any) => ({
@@ -239,7 +226,7 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
       nome: s.desafio?.titulo ?? "Desafio",
       data: s.createdAt,
       duracao: undefined,
-      pontuacao: Number(s.desafio?.pontuacao ?? 0),   
+      pontuacao: Number(s.desafio?.pontuacao ?? 0),
     })),
   ]
     .sort((a, b) => +new Date(b.data as any) - +new Date(a.data as any))
@@ -248,9 +235,7 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
   return res.json(itens);
 };
 
-export const getBadges = async (req: Request, res: Response) => {
-  const { id } = req.params;
-
+export const getBadges = async (_req: Request, res: Response) => {
   try {
     const badges = [
       { id: "1", nome: "Disciplina", icon: "stopwatch" },
@@ -326,9 +311,7 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
       where: { atletaId: atleta.id, aprovado: true as any },
       include: {
         treinoAgendado: {
-          include: {
-            treinoProgramado: { include: { exercicios: true } },
-          },
+          include: { treinoProgramado: { include: { exercicios: true } } },
         },
       },
       orderBy: { criadoEm: "desc" },
@@ -338,12 +321,16 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
     const agRows = agIds.length
       ? await prisma.treinoAgendado.findMany({
           where: { id: { in: agIds } },
-          select: { id: true, treinoProgramado: { select: { pontuacao: true, exercicios: true, duracao: true, nome: true } } },
+          select: {
+            id: true,
+            treinoProgramado: { select: { pontuacao: true, exercicios: true, duracao: true, nome: true } },
+          },
         })
       : [];
-    const progPontuacaoMap = new Map<string, { pontuacao: number; exerciciosCount: number }>(
-      agRows.map((r) => [r.id, { pontuacao: r.treinoProgramado?.pontuacao ?? 0, exerciciosCount: r.treinoProgramado?.exercicios?.length ?? 0 }])
-    );
+    const progPontuacaoMap = new Map<
+      string,
+      { pontuacao: number; exerciciosCount: number }
+    >(agRows.map((r) => [r.id, { pontuacao: r.treinoProgramado?.pontuacao ?? 0, exerciciosCount: r.treinoProgramado?.exercicios?.length ?? 0 }]));
 
     const historicoTreinos = subsTreino.map((s: any) => {
       const fromCredit = Number(s.pontosCreditados ?? 0);
@@ -372,7 +359,7 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
         duracao: typeof dur === "number" && dur > 0 ? `${dur} min` : undefined,
         titulo,
         pontuacao: Number(pontos) || 0,
-        };
+      };
     });
 
     const subsDesafio = await prisma.submissaoDesafio.findMany({
@@ -398,6 +385,7 @@ export async function getPontuacaoPerfil(req: Request, res: Response) {
     const performanceFromHistorico = historico.reduce((acc, h) => acc + (Number((h as any).pontuacao) || 0), 0);
     const disciplinaFromHistorico = historicoTreinos.length * 2;
     const responsabilidadeFromHistorico = historicoDesafios.length * 2;
+
     const postagensVideo = await prisma.postagem.findMany({
       where: { usuarioId, OR: [{ videoUrl: { not: null } }] },
       select: { videoUrl: true },
@@ -432,8 +420,8 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Usuário não encontrado" });
     }
 
-    let dadosEspecificos = null;
-    let tipoPerfil = null;
+    let dadosEspecificos: any = null;
+    let tipoPerfil: "Atleta" | "Professor" | "Clube" | "Escolinha" | "Olheiro" | null = null;
 
     const atleta = await prisma.atleta.findUnique({
       where: { usuarioId: id },
@@ -517,6 +505,29 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       tipoPerfil = "Clube";
     }
 
+    if (!tipoPerfil) {
+      const olheiro = await prisma.olheiro.findUnique({
+        where: { usuarioId: id },
+        select: {
+          id: true,
+          fotoUrl: true,
+          headline: true,
+          areaAtuacao: true,
+          anosExperiencia: true,
+        },
+      });
+      if (olheiro) {
+        dadosEspecificos = {
+          id: olheiro.id,
+          foto: olheiro.fotoUrl,
+          headline: olheiro.headline,
+          areaAtuacao: olheiro.areaAtuacao,
+          anosExperiencia: olheiro.anosExperiencia,
+        };
+        tipoPerfil = "Olheiro";
+      }
+    }
+
     return res.json({
       tipo: tipoPerfil,
       usuario: {
@@ -549,7 +560,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
   }
 
   try {
-   await prisma.usuario.update({
+    await prisma.usuario.update({
       where: { id },
       data: {
         nome: usuario.nome,
@@ -693,10 +704,7 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
     };
 
     const desafiosCompletos = await prisma.submissaoDesafio.count({
-      where: {
-        atletaId: atleta.id,
-        aprovado: true,
-      },
+      where: { atletaId: atleta.id, aprovado: true },
     });
 
     const pontuacao = await prisma.pontuacaoAtleta.findUnique({
@@ -723,7 +731,7 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
     return res.json({
       ...categoriaContagem,
       totalTreinos: atleta.treinosRecebidos.length,
-      horasTreinadas: Number((atleta.treinosRecebidos.length * 0.5).toFixed(1)), 
+      horasTreinadas: Number((atleta.treinosRecebidos.length * 0.5).toFixed(1)),
       desafiosCompletos,
       pontosConquistados
     });
@@ -759,9 +767,7 @@ export const getTreinosResumo = async (req: any, res: Response) => {
     const [subsTreino, desafios] = await Promise.all([
       prisma.submissaoTreino.findMany({
         where: { atletaId: atleta.id, aprovado: true },
-        include: {
-          treinoAgendado: { include: { treinoProgramado: true } },
-        },
+        include: { treinoAgendado: { include: { treinoProgramado: true } } },
         orderBy: { criadoEm: "desc" },
       }),
       prisma.submissaoDesafio.count({
@@ -836,8 +842,8 @@ export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Resp
       },
       orderBy: [
         { elenco: { dataCriacao: "desc" } },
-        { updatedAt: "desc" }, 
-      ],           
+        { updatedAt: "desc" },
+      ],
     });
 
     if (vinculoMaisRecente && vinculoMaisRecente.posicao) {
@@ -895,36 +901,35 @@ export async function getPerfilProfessor(req: Request, res: Response) {
       },
     });
 
-  if (!prof) return res.status(404).json({ error: "Professor não encontrado" });
+    if (!prof) return res.status(404).json({ error: "Professor não encontrado" });
 
-  const usuarioMin: { id: string; nome: string; email: string; foto?: string | null } | null =
-    (prof as any).usuario ?? null;
+    const usuarioMin:
+      | { id: string; nome: string; email: string; foto?: string | null }
+      | null = (prof as any).usuario ?? null;
 
-  const fotoPerfil: string | null =
-    (prof as any).fotoUrl ?? (usuarioMin?.foto ?? null);
+    const fotoPerfil: string | null = (prof as any).fotoUrl ?? (usuarioMin?.foto ?? null);
 
-  return res.json({
-    tipo: "Professor" as const,
-    usuario: usuarioMin,
-    professor: {
-      id: prof.id,
-      usuarioId: prof.usuarioId,
-      nome: prof.nome,
-      codigo: prof.codigo,
-      cref: prof.cref,
-      areaFormacao: prof.areaFormacao,
-      escola: prof.escola,
-      qualificacoes: prof.qualificacoes ?? [],
-      certificacoes: prof.certificacoes ?? [],
-      fotoUrl: fotoPerfil,
-      statusCref: prof.statusCref ?? null,
-    },
-    metrics: {
-      treinosProgramados: (prof as any).treinosProgramados?.length ?? 0,
-      alunosRelacionados: (prof as any).relacoesTreinamento?.length ?? 0,
-    },
-  });
-
+    return res.json({
+      tipo: "Professor" as const,
+      usuario: usuarioMin,
+      professor: {
+        id: prof.id,
+        usuarioId: prof.usuarioId,
+        nome: prof.nome,
+        codigo: prof.codigo,
+        cref: prof.cref,
+        areaFormacao: prof.areaFormacao,
+        escola: prof.escola,
+        qualificacoes: prof.qualificacoes ?? [],
+        certificacoes: prof.certificacoes ?? [],
+        fotoUrl: fotoPerfil,
+        statusCref: prof.statusCref ?? null,
+      },
+      metrics: {
+        treinosProgramados: (prof as any).treinosProgramados?.length ?? 0,
+        alunosRelacionados: (prof as any).relacoesTreinamento?.length ?? 0,
+      },
+    });
   } catch (e) {
     console.error("getPerfilProfessor error:", e);
     return res.status(500).json({ error: "Erro interno ao buscar professor" });
@@ -966,46 +971,45 @@ export async function getPerfilClube(req: Request, res: Response) {
       },
     });
 
-  if (!clube) return res.status(404).json({ error: "Clube não encontrado" });
+    if (!clube) return res.status(404).json({ error: "Clube não encontrado" });
 
-  const usuarioMin: { id: string; nome: string; email: string; foto?: string | null } | null =
-    (clube as any).usuario ?? null;
+    const usuarioMin:
+      | { id: string; nome: string; email: string; foto?: string | null }
+      | null = (clube as any).usuario ?? null;
 
-  const logoOuFoto: string | null =
-    (clube as any).logo ?? (usuarioMin?.foto ?? null);
+    const logoOuFoto: string | null = (clube as any).logo ?? (usuarioMin?.foto ?? null);
 
-  return res.json({
-    tipo: "Clube" as const,
-    usuario: usuarioMin,
-    clube: {
-      id: clube.id,
-      usuarioId: clube.usuarioId,
-      nome: clube.nome,
-      cnpj: clube.cnpj,
-      telefone1: clube.telefone1,
-      telefone2: clube.telefone2,
-      email: clube.email,
-      siteOficial: clube.siteOficial,
-      sede: clube.sede,
-      estadio: clube.estadio,
-      logradouro: clube.logradouro,
-      numero: clube.numero,
-      complemento: clube.complemento,
-      bairro: clube.bairro,
-      cidade: clube.cidade,
-      estado: clube.estado,
-      pais: clube.pais,
-      cep: clube.cep,
-      logo: logoOuFoto,
-      dataCriacao: clube.dataCriacao,
-    },
-    metrics: {
-      atletas: (clube as any).atletas?.length ?? 0,
-      treinosProgramados: (clube as any).treinoProgramado?.length ?? 0,
-      postagens: (clube as any).postagens?.length ?? 0,
-    },
-  });
-
+    return res.json({
+      tipo: "Clube" as const,
+      usuario: usuarioMin,
+      clube: {
+        id: clube.id,
+        usuarioId: clube.usuarioId,
+        nome: clube.nome,
+        cnpj: clube.cnpj,
+        telefone1: clube.telefone1,
+        telefone2: clube.telefone2,
+        email: clube.email,
+        siteOficial: clube.siteOficial,
+        sede: clube.sede,
+        estadio: clube.estadio,
+        logradouro: clube.logradouro,
+        numero: clube.numero,
+        complemento: clube.complemento,
+        bairro: clube.bairro,
+        cidade: clube.cidade,
+        estado: clube.estado,
+        pais: clube.pais,
+        cep: clube.cep,
+        logo: logoOuFoto,
+        dataCriacao: clube.dataCriacao,
+      },
+      metrics: {
+        atletas: (clube as any).atletas?.length ?? 0,
+        treinosProgramados: (clube as any).treinoProgramado?.length ?? 0,
+        postagens: (clube as any).postagens?.length ?? 0,
+      },
+    });
   } catch (e) {
     console.error("getPerfilClube error:", e);
     return res.status(500).json({ error: "Erro interno ao buscar clube" });
@@ -1046,47 +1050,125 @@ export async function getPerfilEscola(req: Request, res: Response) {
       },
     });
 
-  if (!escola) return res.status(404).json({ error: "Escolinha não encontrada" });
+    if (!escola) return res.status(404).json({ error: "Escolinha não encontrada" });
 
-  const usuarioMin: { id: string; nome: string; email: string; foto?: string | null } | null =
-    (escola as any).usuario ?? null;
+    const usuarioMin:
+      | { id: string; nome: string; email: string; foto?: string | null }
+      | null = (escola as any).usuario ?? null;
 
-  const logoOuFoto: string | null =
-    (escola as any).logo ?? (usuarioMin?.foto ?? null);
+    const logoOuFoto: string | null = (escola as any).logo ?? (usuarioMin?.foto ?? null);
 
-  return res.json({
-    tipo: "Escolinha" as const,
-    usuario: usuarioMin,
-    escolinha: {
-      id: escola.id,
-      usuarioId: escola.usuarioId,
-      nome: escola.nome,
-      cnpj: escola.cnpj,
-      telefone1: escola.telefone1,
-      telefone2: escola.telefone2,
-      email: escola.email,
-      siteOficial: escola.siteOficial,
-      sede: escola.sede,
-      logradouro: escola.logradouro,
-      numero: escola.numero,
-      complemento: escola.complemento,
-      bairro: escola.bairro,
-      cidade: escola.cidade,
-      estado: escola.estado,
-      pais: escola.pais,
-      cep: escola.cep,
-      logo: logoOuFoto,
-      dataCriacao: escola.dataCriacao,
-    },
-    metrics: {
-      atletas: (escola as any).atletas?.length ?? 0,
-      treinosProgramados: (escola as any).treinoProgramado?.length ?? 0,
-      postagens: (escola as any).postagens?.length ?? 0,
-    },
-  });
-
+    return res.json({
+      tipo: "Escolinha" as const,
+      usuario: usuarioMin,
+      escolinha: {
+        id: escola.id,
+        usuarioId: escola.usuarioId,
+        nome: escola.nome,
+        cnpj: escola.cnpj,
+        telefone1: escola.telefone1,
+        telefone2: escola.telefone2,
+        email: escola.email,
+        siteOficial: escola.siteOficial,
+        sede: escola.sede,
+        logradouro: escola.logradouro,
+        numero: escola.numero,
+        complemento: escola.complemento,
+        bairro: escola.bairro,
+        cidade: escola.cidade,
+        estado: escola.estado,
+        pais: escola.pais,
+        cep: escola.cep,
+        logo: logoOuFoto,
+        dataCriacao: escola.dataCriacao,
+      },
+      metrics: {
+        atletas: (escola as any).atletas?.length ?? 0,
+        treinosProgramados: (escola as any).treinoProgramado?.length ?? 0,
+        postagens: (escola as any).postagens?.length ?? 0,
+      },
+    });
   } catch (e) {
     console.error("getPerfilEscola error:", e);
     return res.status(500).json({ error: "Erro interno ao buscar escolinha" });
+  }
+}
+
+
+export async function getPerfilOlheiro(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+
+    const olheiro: any = await resolveByUsuarioOrEntity({
+      entity: "olheiro",
+      usuarioOrEntityId: id,
+      select: {
+        id: true,
+        usuarioId: true,
+        usuario: { select: { id: true, nome: true, email: true, foto: true } },
+
+        fotoUrl: true,
+        headline: true,
+        descricao: true,
+        areaAtuacao: true,
+        anosExperiencia: true,
+
+        emailPublico: true,
+        telefonePublico: true,
+        siteOuLinkedin: true,
+
+        reputacaoScore: true,
+        totalIndicacoes: true,
+
+        colaboracaoClubeId: true,
+        colaboracaoClube: { select: { id: true, nome: true, logo: true } },
+
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!olheiro) return res.status(404).json({ error: "Olheiro não encontrado" });
+
+    const usuarioMin = (olheiro as any).usuario ?? null;
+
+    const colabClube: null | { id: string; nome: string; logo?: string | null } =
+      olheiro?.colaboracaoClube ?? null
+
+    return res.json({
+      tipo: "Olheiro" as const,
+      usuario: usuarioMin,
+      olheiro: {
+        id: olheiro.id,
+        usuarioId: olheiro.usuarioId,
+        fotoUrl: olheiro.fotoUrl ?? null,
+        headline: olheiro.headline ?? null,
+        descricao: olheiro.descricao ?? null,
+        areaAtuacao: olheiro.areaAtuacao ?? null,
+        anosExperiencia: olheiro.anosExperiencia ?? 0,
+        contato: {
+          emailPublico: olheiro.emailPublico ?? null,
+          telefonePublico: olheiro.telefonePublico ?? null,
+          siteOuLinkedin: olheiro.siteOuLinkedin ?? null,
+        },
+        colaboracaoClube: olheiro.colaboracaoClube
+          ? {
+              id: olheiro.colaboracaoClube.id,
+              nome: olheiro.colaboracaoClube.nome,
+              logo: (olheiro as any).colaboracaoClube?.logo ?? null,
+            }
+          : null,
+        createdAt: olheiro.createdAt,
+        updatedAt: olheiro.updatedAt,
+      },
+      metrics: {
+        observados: 0, 
+        indicacoes: olheiro.totalIndicacoes ?? 0,
+        reputacao: olheiro.reputacaoScore ?? 0,
+      },
+    });
+  } catch (e) {
+    console.error("getPerfilOlheiro error:", e);
+    return res.status(500).json({ error: "Erro interno ao buscar olheiro" });
   }
 }

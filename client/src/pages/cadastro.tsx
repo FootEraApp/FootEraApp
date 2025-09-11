@@ -5,7 +5,7 @@ import logo from "/assets/usuarios/footera-logo.png";
 import { API } from "../config.js";
 
 // ====== Tipos ======
-type TipoPerfil = "Atleta" | "Professor" | "Escolinha" | "Clube" | "Admin";
+type TipoPerfil = "Atleta" | "Professor" | "Escolinha" | "Clube" | "Admin" | "Olheiro";
 type Etapa = 1 | 2 | 3;
 
 type UsuarioBase = {
@@ -39,6 +39,17 @@ type CamposClube = {
 type CamposEscolinha = {
   cnpjEscolinha: string;
   cidadeEscolinha: string;
+};
+
+type CamposOlheiro = {
+  areaAtuacao: string;
+  anosExperiencia: number | "";
+  headline: string;
+  siteOuLinkedin: string;
+  telefonePublico: string;
+  emailPublico: string;
+  descricao: string;
+  colaboracaoClubeId?: string;
 };
 
 type CamposVinculo = {
@@ -97,6 +108,16 @@ export default function Cadastro() {
   });
   const [clube, setClube] = useState<CamposClube>({ cnpjClube: "", cidadeClube: "" });
   const [escolinha, setEscolinha] = useState<CamposEscolinha>({ cnpjEscolinha: "", cidadeEscolinha: "" });
+  const [olheiro, setOlheiro] = useState<CamposOlheiro>({
+    areaAtuacao: "",
+    anosExperiencia: "",
+    headline: "",
+    siteOuLinkedin: "",
+    telefonePublico: "",
+    emailPublico: "",
+    descricao: "",
+    colaboracaoClubeId: ""
+  });
 
   // ====== Complementar (Etapa 3) – vínculo p/ Atleta ======
   const [vinculo, setVinculo] = useState<CamposVinculo>({
@@ -168,6 +189,12 @@ export default function Cadastro() {
     if (tipoPerfil === "Escolinha") {
       if (!escolinha.cidadeEscolinha) return setErro("Informe a cidade da escolinha."), false;
     }
+    if (tipoPerfil === "Olheiro") {
+      if (!olheiro.areaAtuacao) return setErro("Informe a área de atuação do olheiro."), false;
+      if (olheiro.anosExperiencia !== "" && Number.isNaN(Number(olheiro.anosExperiencia))) {
+        return setErro("Anos de experiência inválido."), false;
+      }
+    }
     setErro("");
     return true;
   };
@@ -206,6 +233,16 @@ export default function Cadastro() {
         payload.cnpjEscolinha = escolinha.cnpjEscolinha || undefined;
         payload.cidadeEscolinha = escolinha.cidadeEscolinha || undefined;
       }
+      if (tipoPerfil === "Olheiro") {
+        payload.areaAtuacao = olheiro.areaAtuacao || undefined;
+        payload.anosExperiencia = olheiro.anosExperiencia === "" ? undefined : Number(olheiro.anosExperiencia);
+        payload.headline = olheiro.headline || undefined;
+        payload.siteOuLinkedin = olheiro.siteOuLinkedin || undefined;
+        payload.telefonePublico = olheiro.telefonePublico || undefined;
+        payload.emailPublico = olheiro.emailPublico || undefined;
+        payload.descricao = olheiro.descricao || undefined;
+        payload.colaboracaoClubeId = olheiro.colaboracaoClubeId || undefined;
+      }
 
       // cria usuário/tipo
       const res = await fetch(`${API.BASE_URL}/api/cadastro/cadastro`, {
@@ -229,7 +266,6 @@ export default function Cadastro() {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              // o controller de cadastro retorna um token opcional (se existirem as vars de ambiente)
               ...(data?.token ? { Authorization: `Bearer ${data.token}` } : {}),
             },
             body: JSON.stringify({ destinatarioId: vinculo.destinatarioId }),
@@ -336,7 +372,7 @@ export default function Cadastro() {
 
               <label className="block mb-2 font-medium">Tipo de Perfil</label>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                {(["Atleta","Escolinha","Clube","Professor","Admin"] as TipoPerfil[]).map((t) => (
+                {(["Atleta","Escolinha","Clube","Professor","Olheiro","Admin"] as TipoPerfil[]).map((t) => (
                   <label className="flex items-center text-sm" key={t}>
                     <input
                       type="radio"
@@ -348,7 +384,8 @@ export default function Cadastro() {
                     />
                     {t === "Escolinha" ? "Escolinha de Futebol" :
                      t === "Clube" ? "Clube Profissional" :
-                     t === "Professor" ? "Profissional do Futebol" : t}
+                     t === "Professor" ? "Profissional do Futebol" :
+                     t === "Olheiro" ? "Olheiro (Scout)" : t}
                   </label>
                 ))}
               </div>
@@ -626,6 +663,90 @@ export default function Cadastro() {
                 </>
               )}
 
+              {tipoPerfil === "Olheiro" && (
+                <>
+                  <div className="mt-2 grid grid-cols-1 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Área de Atuação *</label>
+                      <input
+                        className="w-full border rounded px-3 py-2"
+                        placeholder="Ex: Base, Profissional, Captação SP"
+                        value={olheiro.areaAtuacao}
+                        onChange={(e) => setOlheiro(p => ({ ...p, areaAtuacao: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Anos de Experiência</label>
+                      <input
+                        type="number"
+                        className="w-full border rounded px-3 py-2"
+                        placeholder="0"
+                        value={olheiro.anosExperiencia}
+                        onChange={(e) => setOlheiro(p => ({ ...p, anosExperiencia: e.target.value ? Number(e.target.value) : "" }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Headline</label>
+                      <input
+                        className="w-full border rounded px-3 py-2"
+                        placeholder="Ex: Scout focado em categorias de base"
+                        value={olheiro.headline}
+                        onChange={(e) => setOlheiro(p => ({ ...p, headline: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Site ou Linkedin</label>
+                      <input
+                        className="w-full border rounded px-3 py-2"
+                        placeholder="https://..."
+                        value={olheiro.siteOuLinkedin}
+                        onChange={(e) => setOlheiro(p => ({ ...p, siteOuLinkedin: e.target.value }))}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Telefone público</label>
+                        <input
+                          className="w-full border rounded px-3 py-2"
+                          placeholder="(00) 00000-0000"
+                          value={olheiro.telefonePublico}
+                          onChange={(e) => setOlheiro(p => ({ ...p, telefonePublico: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Email público</label>
+                        <input
+                          type="email"
+                          className="w-full border rounded px-3 py-2"
+                          placeholder="seuemail@exemplo.com"
+                          value={olheiro.emailPublico}
+                          onChange={(e) => setOlheiro(p => ({ ...p, emailPublico: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Descrição</label>
+                      <textarea
+                        className="w-full border rounded px-3 py-2"
+                        rows={3}
+                        placeholder="Fale um pouco sobre seu trabalho como olheiro…"
+                        value={olheiro.descricao}
+                        onChange={(e) => setOlheiro(p => ({ ...p, descricao: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Colaboração com Clube (ID opcional)</label>
+                      <input
+                        className="w-full border rounded px-3 py-2"
+                        placeholder="UUID do clube (se houver)"
+                        value={olheiro.colaboracaoClubeId || ""}
+                        onChange={(e) => setOlheiro(p => ({ ...p, colaboracaoClubeId: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
               {tipoPerfil === "Admin" && (
                 <p className="text-sm text-gray-600">Nenhuma informação adicional é necessária para Admin.</p>
               )}
@@ -799,6 +920,18 @@ export default function Cadastro() {
                   <div className="mt-2">
                     <div><span className="font-medium">CNPJ:</span> {escolinha.cnpjEscolinha || "-"}</div>
                     <div><span className="font-medium">Cidade:</span> {escolinha.cidadeEscolinha || "-"}</div>
+                  </div>
+                )}
+                {tipoPerfil === "Olheiro" && (
+                  <div className="mt-2 space-y-1">
+                    <div><span className="font-medium">Área de atuação:</span> {olheiro.areaAtuacao || "-"}</div>
+                    <div><span className="font-medium">Experiência:</span> {olheiro.anosExperiencia === "" ? "-" : `${olheiro.anosExperiencia} ano(s)`}</div>
+                    <div><span className="font-medium">Headline:</span> {olheiro.headline || "-"}</div>
+                    <div><span className="font-medium">Site/Linkedin:</span> {olheiro.siteOuLinkedin || "-"}</div>
+                    <div><span className="font-medium">Telefone público:</span> {olheiro.telefonePublico || "-"}</div>
+                    <div><span className="font-medium">Email público:</span> {olheiro.emailPublico || "-"}</div>
+                    <div><span className="font-medium">Descrição:</span> {olheiro.descricao || "-"}</div>
+                    <div><span className="font-medium">Colaboração Clube ID:</span> {olheiro.colaboracaoClubeId || "-"}</div>
                   </div>
                 )}
               </div>

@@ -1,3 +1,4 @@
+// client/src/pages/perfil.tsx (ProfilePage)
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";
@@ -10,8 +11,9 @@ import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
 import PerfilProfessor from "../components/perfil/PerfilProfessor.js";
 import PerfilClube from "../components/perfil/PerfilClube.js";
 import PerfilEscola from "../components/perfil/PerfilEscola.js";
+import PerfilOlheiro from "../components/perfil/perfilOlheiro.js";
 
-type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha";
+type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha" | "Olheiro";
 
 interface PerfilMinimo {
   tipo: TipoPerfil;
@@ -36,7 +38,7 @@ export default function ProfilePage() {
 
     let cancelled = false;
     (async () => {
-     setLoading(true);
+      setLoading(true);
       try {
         const { data } = await axios.get<PerfilMinimo>(
           `${API.BASE_URL}/api/perfil/${basePerfil}`,
@@ -54,7 +56,6 @@ export default function ProfilePage() {
       } finally {
         if (!cancelled) setLoading(false);
       }
-
     })();
 
     return () => {
@@ -76,6 +77,7 @@ export default function ProfilePage() {
       {tipo === "Professor" && <PerfilProfessor idDaUrl={idDaUrl} />}
       {tipo === "Clube" && <PerfilClube idDaUrl={idDaUrl} />}
       {tipo === "Escolinha" && <PerfilEscola idDaUrl={idDaUrl} />}
+      {tipo === "Olheiro" && <PerfilOlheiro idDaUrl={idDaUrl} />}
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed"><House /></Link>
