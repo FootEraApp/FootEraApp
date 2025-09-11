@@ -11,7 +11,10 @@ export const getCadastroIndex = async (_req: Request, res: Response) => {
 };
 
 export const getEscolhaTipo = async (_req: Request, res: Response) => {
-  res.json({ message: "Escolha o tipo de usuário: Atleta, Clube, Escolinha, Professor ou Admin" });
+  res.json({
+    message:
+      "Escolha o tipo de usuário: Atleta, Clube, Escolinha, Professor, Olheiro ou Admin",
+  });
 };
 
 export const getCriar = async (_req: Request, res: Response) => {
@@ -43,122 +46,157 @@ export const deletarUsuario = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * Busca pública para Etapa 3 (vínculo do atleta):
- * - query por nome / @username
- * - filtra por tipo (Professor | Clube | Escolinha | Todos)
- * - retorna SEMPRE id = usuarioId (para usar como destinatarioId)
- * - inclui foto/logo normalizada em fotoUrl
- */
-
 export async function buscarPerfisPublico(req: Request, res: Response) {
   try {
-    const tipo = String(req.query.tipo ?? "").trim(); // "Professor" | "Clube" | "Escolinha" | "Todos" | ""
+    const tipo = String(req.query.tipo ?? "").trim();
     const q = String(req.query.query ?? "").trim();
-    if (q.length < 2) return res.json([]);
+    if (!q) return res.json([]);
 
-    const BASE = process.env.BASE_URL || process.env.APP_BASE_URL || "";
+    const BASE_URL = process.env.BASE_URL || process.env.APP_BASE_URL || "";
 
-    const whereCommon = {
-      OR: [
-        { nome: { contains: q, mode: "insensitive" as const } },
-        { usuario: { nomeDeUsuario: { contains: q, mode: "insensitive" as const } } },
-      ],
-    };
+    // ---- normalizadores (padronizam o shape de saída) ----
+    const normProfessor = (rows: any[]) =>
+      rows.map((p) => ({
+        id: p.id as string,
+        tipo: "Professor" as const,
+        nome: p.nome as string,
+        username: p.usuario?.nomeDeUsuario ?? "",
+        fotoUrl:
+          p.fotoUrl
+            ? `${BASE_URL}${p.fotoUrl}`
+            : p.usuario?.foto
+              ? `${BASE_URL}${p.usuario.foto}`
+              : null,
+      }));
 
-    const buildFoto = (path?: string | null) =>
-      path ? (path.startsWith("http") ? path : `${BASE}${path}`) : null;
+    const normClube = (rows: any[]) =>
+      rows.map((c) => ({
+        id: c.id as string,
+        tipo: "Clube" as const,
+        nome: c.nome as string,
+        username: c.usuario?.nomeDeUsuario ?? "",
+        fotoUrl:
+          c.logo
+            ? `${BASE_URL}${c.logo}`
+            : c.usuario?.foto
+              ? `${BASE_URL}${c.usuario.foto}`
+              : null,
+      }));
 
-    type Item = {
-      id: string; // sempre o usuarioId (para destinatarioId)
-      tipo: "Professor" | "Clube" | "Escolinha";
-      nome: string | null;
-      username: string | null;
-      fotoUrl: string | null;
-    };
+    const normEscolinha = (rows: any[]) =>
+      rows.map((e) => ({
+        id: e.id as string,
+        tipo: "Escolinha" as const,
+        nome: e.nome as string,
+        username: e.usuario?.nomeDeUsuario ?? "",
+        fotoUrl:
+          e.logo
+            ? `${BASE_URL}${e.logo}`
+            : e.usuario?.foto
+              ? `${BASE_URL}${e.usuario.foto}`
+              : null,
+      }));
 
-    const items: Item[] = [];
+    const normOlheiro = (rows: any[]) =>
+      rows.map((o) => ({
+        id: o.id as string,
+        tipo: "Olheiro" as const,
+        nome: o.usuario?.nome ?? "", // Olheiro não tem 'nome' próprio; vem de Usuario
+        username: o.usuario?.nomeDeUsuario ?? "",
+        fotoUrl:
+          o.fotoUrl
+            ? `${BASE_URL}${o.fotoUrl}`
+            : o.usuario?.foto
+              ? `${BASE_URL}${o.usuario.foto}`
+              : null,
+      }));
 
-    // Professores
+    const results: any[] = [];
+
+    // ---- Professor ----
     if (!tipo || tipo === "Todos" || tipo === "Professor") {
-      const rows = await prisma.professor.findMany({
-        where: whereCommon,
+      const profs = await prisma.professor.findMany({
+        where: {
+          OR: [
+            { nome: { contains: q, mode: "insensitive" } },
+            { usuario: { nomeDeUsuario: { contains: q, mode: "insensitive" } } },
+          ],
+        },
         select: {
           id: true,
-          usuarioId: true, // string | null no tipo do Prisma
           nome: true,
           fotoUrl: true,
           usuario: { select: { nomeDeUsuario: true, foto: true } },
         },
         take: 20,
       });
-
-      for (const r of rows) {
-        if (!r.usuarioId) continue; // garante string
-        items.push({
-          id: r.usuarioId!, // ok após o guard
-          tipo: "Professor",
-          nome: r.nome,
-          username: r.usuario?.nomeDeUsuario ?? null,
-          fotoUrl: buildFoto(r.fotoUrl || r.usuario?.foto || null),
-        });
-      }
+      results.push(...normProfessor(profs));
     }
 
-    // Clubes
+    // ---- Clube ----
     if (!tipo || tipo === "Todos" || tipo === "Clube") {
-      const rows = await prisma.clube.findMany({
-        where: whereCommon,
+      const clubes = await prisma.clube.findMany({
+        where: {
+          OR: [
+            { nome: { contains: q, mode: "insensitive" } },
+            { usuario: { nomeDeUsuario: { contains: q, mode: "insensitive" } } },
+          ],
+        },
         select: {
           id: true,
-          usuarioId: true,
           nome: true,
           logo: true,
           usuario: { select: { nomeDeUsuario: true, foto: true } },
         },
         take: 20,
       });
-
-      for (const r of rows) {
-        if (!r.usuarioId) continue;
-        items.push({
-          id: r.usuarioId!,
-          tipo: "Clube",
-          nome: r.nome,
-          username: r.usuario?.nomeDeUsuario ?? null,
-          fotoUrl: buildFoto(r.logo || r.usuario?.foto || null),
-        });
-      }
+      results.push(...normClube(clubes));
     }
 
-    // Escolinhas
+    // ---- Escolinha ----
     if (!tipo || tipo === "Todos" || tipo === "Escolinha") {
-      const rows = await prisma.escolinha.findMany({
-        where: whereCommon,
+      const escolas = await prisma.escolinha.findMany({
+        where: {
+          OR: [
+            { nome: { contains: q, mode: "insensitive" } },
+            { usuario: { nomeDeUsuario: { contains: q, mode: "insensitive" } } },
+          ],
+        },
         select: {
           id: true,
-          usuarioId: true,
           nome: true,
           logo: true,
           usuario: { select: { nomeDeUsuario: true, foto: true } },
         },
         take: 20,
       });
-
-      for (const r of rows) {
-        if (!r.usuarioId) continue;
-        items.push({
-          id: r.usuarioId!,
-          tipo: "Escolinha",
-          nome: r.nome,
-          username: r.usuario?.nomeDeUsuario ?? null,
-          fotoUrl: buildFoto(r.logo || r.usuario?.foto || null),
-        });
-      }
+      results.push(...normEscolinha(escolas));
     }
 
-    items.sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
-    return res.json(items);
+    // ---- Olheiro ----
+    if (!tipo || tipo === "Todos" || tipo === "Olheiro") {
+      const olheiros = await prisma.olheiro.findMany({
+        where: {
+          usuario: {
+            OR: [
+              { nome: { contains: q, mode: "insensitive" } },
+              { nomeDeUsuario: { contains: q, mode: "insensitive" } },
+            ],
+          },
+        },
+        select: {
+          id: true,
+          fotoUrl: true,
+          usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } },
+        },
+        take: 20,
+      });
+      results.push(...normOlheiro(olheiros));
+    }
+
+    // ordena por nome
+    results.sort((a, b) => String(a.nome).localeCompare(String(b.nome), "pt-BR"));
+    return res.json(results);
   } catch (e) {
     console.error("buscarPerfisPublico error:", e);
     return res.status(500).json([]);
@@ -172,16 +210,16 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     nomeDeUsuario, cidade, estado, pais, bairro, cpf,
 
     // ATLETA
-    idade,                // number (obrigatório p/ Atleta no seu schema)
-    categoria,            // Categoria[] (ex.: ["Sub11", "Sub13"])
+    idade,
+    categoria,
 
     // PROFESSOR
-    areaFormacao,         // string (obrigatório no schema)
-    cref,                 // string? (opcional)
-    statusCref,           // "Ativo" | "Desativo" | "Pendente"
+    areaFormacao,
+    cref,
+    statusCref,
 
     // CLUBE
-    nomeClube,            // opcional: se quiser diferenciar do "nome" do Usuario
+    nomeClube,
     cnpjClube, telefone1Clube, telefone2Clube, emailClube,
     siteOficialClube, sedeClube, logradouroClube, numeroClube,
     complementoClube, bairroClube, cidadeClube, estadoClube, paisClube, cepClube, estadio,
@@ -191,6 +229,10 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     cnpjEscolinha, telefone1Escolinha, telefone2Escolinha, emailEscolinha,
     siteOficialEscolinha, sedeEscolinha, logradouroEscolinha, numeroEscolinha,
     complementoEscolinha, bairroEscolinha, cidadeEscolinha, estadoEscolinha, paisEscolinha, cepEscolinha,
+
+    // OLHEIRO
+    areaAtuacao, anosExperiencia, headline, siteOuLinkedin,
+    telefonePublico, emailPublico, descricao, colaboracaoClubeId,
   } = req.body ?? {};
 
   if (!nome || !email || !senha || !tipo) {
@@ -201,7 +243,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     const tipoEnum = stringParaTipoUsuario(tipo);
     if (!tipoEnum) return res.status(400).json({ error: "Tipo de usuário inválido." });
 
-    // normalizações
     const emailNorm = String(email).trim().toLowerCase();
     const usernameFinal = (nomeDeUsuario ? String(nomeDeUsuario) : String(nome).toLowerCase().replace(/\s+/g, "_"))
       .trim().toLowerCase();
@@ -233,7 +274,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       select: { id: true, tipo: true, nome: true, email: true },
     });
 
-    // cria o registro do TIPO (atenção aos @unique do schema)
     let tipoUsuarioId: string | null = null;
 
     switch (tipoEnum) {
@@ -246,11 +286,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           },
           select: { id: true },
         });
-
-        await prisma.pontuacaoAtleta.create({
-          data: { atletaId: atleta.id },
-        });
-
+        await prisma.pontuacaoAtleta.create({ data: { atletaId: atleta.id } });
         tipoUsuarioId = atleta.id;
         break;
       }
@@ -270,7 +306,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           },
           select: { id: true },
         });
-
         tipoUsuarioId = professor.id;
         break;
       }
@@ -299,7 +334,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           },
           select: { id: true },
         });
-
         tipoUsuarioId = clube.id;
         break;
       }
@@ -327,8 +361,30 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           },
           select: { id: true },
         });
-
         tipoUsuarioId = escolinha.id;
+        break;
+      }
+
+      case TipoUsuario.Olheiro: {
+        const olheiro = await prisma.olheiro.create({
+          data: {
+            usuarioId: usuario.id,
+            fotoUrl: null,
+            headline: headline ?? null,
+            descricao: descricao ?? null,
+            areaAtuacao: areaAtuacao ?? null,
+            anosExperiencia:
+              typeof anosExperiencia === "number"
+                ? anosExperiencia
+                : (anosExperiencia ? Number(anosExperiencia) : 0),
+            emailPublico: emailPublico ?? null,
+            telefonePublico: telefonePublico ?? null,
+            siteOuLinkedin: siteOuLinkedin ?? null,
+            colaboracaoClubeId: colaboracaoClubeId || null,
+          },
+          select: { id: true },
+        });
+        tipoUsuarioId = olheiro.id;
         break;
       }
 
@@ -342,10 +398,14 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       }
     }
 
-    // token (útil para a Etapa 3 de solicitação autenticada)
+    // token
     let token: string | null = null;
     if (process.env.JWT_SECRET) {
-      token = jwt.sign({ userId: usuario.id, tipo: usuario.tipo }, process.env.JWT_SECRET, { expiresIn: "7d" });
+      token = jwt.sign(
+        { userId: usuario.id, tipo: usuario.tipo },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+      );
     }
 
     return res.status(201).json({
@@ -373,6 +433,7 @@ function stringParaTipoUsuario(v: any): TipoUsuario | null {
   if (s === "clube") return TipoUsuario.Clube;
   if (s === "escolinha") return TipoUsuario.Escolinha;
   if (s === "admin") return TipoUsuario.Admin;
+  if (s === "olheiro") return TipoUsuario.Olheiro;
   return null;
 }
 
@@ -386,5 +447,7 @@ function mapStatusCref(v: any): StatusCref | null {
 }
 
 function gerarCodigo(prefixo: string) {
-  return `${prefixo}-${Math.floor(Math.random() * 10_000).toString().padStart(4, "0")}`;
+  return `${prefixo}-${Math.floor(Math.random() * 10000)
+    .toString()
+    .padStart(4, "0")}`;
 }
