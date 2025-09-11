@@ -1,12 +1,25 @@
-// server/controllers/solicitacaoTreinoController
 import { Response, Request } from "express";
 import { PrismaClient } from "@prisma/client";
-import { authenticateToken } from "../middlewares/auth.js"; 
 
 const prisma = new PrismaClient();
 
+export async function listarSolicitacoesMinhas(req: Request, res: Response) {
+  const me: string | undefined = (req as any).user?.id || (req as any).userId;
+  if (!me) return res.status(401).json({ error: "Não autenticado." });
+
+  try {
+    const rows = await prisma.solicitacaoTreino.findMany({
+      where: { OR: [{ remetenteId: me }, { destinatarioId: me }] },
+      orderBy: { criadoEm: "desc" },
+    });
+    return res.json(rows);
+  } catch {
+    return res.status(500).json({ error: "Falha ao listar solicitações" });
+  }
+}
+
 export async function criarSolicitacao(req: Request, res: Response) {
-  const remetenteId = req.userId;
+  const remetenteId: string | undefined = (req as any).user?.id || (req as any).userId;
   const { destinatarioId } = (req.body ?? {}) as { destinatarioId?: string };
 
   if (!remetenteId) return res.status(401).json({ message: "Não autenticado." });
@@ -15,10 +28,19 @@ export async function criarSolicitacao(req: Request, res: Response) {
     return res.status(400).json({ message: "Não é permitido enviar para si mesmo." });
   }
 
-  const existe = await prisma.solicitacaoTreino.findFirst({
-    where: { remetenteId, destinatarioId, status: { in: ["pendente", "ativa"] } },
+  const existente = await prisma.solicitacaoTreino.findFirst({
+    where: {
+      status: { in: ["pendente", "ativa"] },
+      OR: [
+        { remetenteId, destinatarioId },
+        { remetenteId: destinatarioId, destinatarioId: remetenteId },
+      ],
+    },
   });
-  if (existe) return res.status(409).json({ message: "Já existe uma solicitação." });
+
+  if (existente) {
+    return res.status(200).json({ id: existente.id, status: existente.status, ok: true, duplicated: true });
+  }
 
   const nova = await prisma.solicitacaoTreino.create({
     data: { remetenteId, destinatarioId, status: "pendente" },
@@ -27,21 +49,28 @@ export async function criarSolicitacao(req: Request, res: Response) {
 }
 
 export async function cancelarSolicitacao(req: Request, res: Response) {
-  const remetenteId = req.userId;
-  const destinatarioId = (req.params as any).destinatarioId || (req.body ?? {}).destinatarioId;
+  const me: string | undefined = (req as any).user?.id || (req as any).userId;
+  const outroId = (req.params as any).destinatarioId || (req.body ?? {}).destinatarioId;
 
-  if (!remetenteId) return res.status(401).json({ message: "Não autenticado." });
-  if (!destinatarioId) return res.status(400).json({ message: "destinatarioId é obrigatório" });
+  if (!me) return res.status(401).json({ message: "Não autenticado." });
+  if (!outroId) return res.status(400).json({ message: "destinatarioId é obrigatório" });
 
   const del = await prisma.solicitacaoTreino.deleteMany({
-    where: { remetenteId, destinatarioId, status: "pendente" },
+    where: {
+      status: "pendente",
+      OR: [
+        { remetenteId: me, destinatarioId: outroId },
+        { remetenteId: outroId, destinatarioId: me },
+      ],
+    },
   });
+
   if (del.count === 0) return res.status(404).json({ message: "Não há solicitação pendente" });
   return res.sendStatus(204);
 }
 
 export async function listarSolicitacoesRecebidas(req: Request, res: Response) {
-  const usuarioId = req.userId;
+  const usuarioId: string | undefined = (req as any).user?.id || (req as any).userId;
   if (!usuarioId) return res.status(401).json({ error: "Usuário não autenticado." });
 
   try {
@@ -74,7 +103,7 @@ export async function listarSolicitacoesRecebidas(req: Request, res: Response) {
 
 export async function aceitarSolicitacao(req: Request, res: Response) {
   const { id } = req.params as { id: string };
-  const destinatarioId = req.userId;
+  const destinatarioId: string | undefined = (req as any).user?.id || (req as any).userId;
   if (!destinatarioId) return res.status(401).json({ error: "Não autenticado." });
 
   try {
@@ -88,7 +117,6 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
       prisma.usuario.findUnique({ where: { id: solicitacao.destinatarioId }, select: { tipo: true } }),
     ]);
 
-    // helpers para obter o id da tabela por tipo
     async function getIdsByTipo(usuarioId: string, tipo?: string) {
       switch (tipo) {
         case "Professor": {
@@ -100,7 +128,6 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
           return { atletaId: r?.id };
         }
         case "Escolinha": {
-          // ajuste o nome do model se no seu schema for "escola" em vez de "escolinha"
           const r = await prisma.escolinha.findUnique({ where: { usuarioId } });
           return { escolinhaId: r?.id };
         }
@@ -113,20 +140,17 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
       }
     }
 
-    // combina remetente + destinatário
     const idsRem = await getIdsByTipo(solicitacao.remetenteId, remetente?.tipo);
     const idsDes = await getIdsByTipo(solicitacao.destinatarioId, destinatario?.tipo);
     const ids = { ...idsRem, ...idsDes } as {
       professorId?: string; escolinhaId?: string; clubeId?: string; atletaId?: string;
     };
 
-    // validação: precisa ter 1 dono (professor/escolinha/clube) + 1 atleta
     const donos = ["professorId", "escolinhaId", "clubeId"].filter(k => (ids as any)[k]);
     if (!ids.atletaId || donos.length !== 1) {
       return res.status(400).json({ error: "Tipos de usuário inválidos para relação." });
     }
 
-    // evita duplicidade do vínculo
     const existente = await prisma.relacaoTreinamento.findFirst({
       where: {
         atletaId: ids.atletaId!,
@@ -147,7 +171,6 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
       });
     }
 
-    // remove a solicitação (concluída)
     await prisma.solicitacaoTreino.delete({ where: { id } });
 
     return res.json({ message: existente ? "Relação já existia. Solicitação removida." : "Solicitação aceita com sucesso." });
@@ -159,12 +182,12 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
 
 export async function recusarSolicitacao(req: Request, res: Response) {
   const { id } = req.params as { id: string };
-  const usuarioId = req.userId;
-  if (!usuarioId) return res.status(401).json({ error: "Não autenticado." });
+  const me: string | undefined = (req as any).user?.id || (req as any).userId;
+  if (!me) return res.status(401).json({ error: "Não autenticado." });
 
   try {
     const solicitacao = await prisma.solicitacaoTreino.findUnique({ where: { id } });
-    if (!solicitacao || solicitacao.destinatarioId !== usuarioId) {
+    if (!solicitacao || solicitacao.destinatarioId !== me) {
       return res.status(404).json({ error: "Solicitação não encontrada" });
     }
 

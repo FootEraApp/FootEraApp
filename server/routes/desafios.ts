@@ -308,9 +308,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
     return res.status(500).json({ error: "Erro interno ao buscar desafio" });
   }
 });
-{/* Pagina de desafios funções para curtir comentar e compartilhar */}
 
-// --- CURTIR/REMOVER CURTIDA numa submissão ---
 router.post("/submissoes/:id/like", authenticateToken, async (req, res) => {
   try {
     const usuarioId = (req as any).userId as string;
@@ -336,7 +334,6 @@ router.post("/submissoes/:id/like", authenticateToken, async (req, res) => {
   }
 });
 
-// --- COMENTAR numa submissão ---
 router.post("/submissoes/:id/comentarios", authenticateToken, async (req, res) => {
   try {
     const usuarioId = (req as any).userId as string;
@@ -362,17 +359,15 @@ router.post("/submissoes/:id/comentarios", authenticateToken, async (req, res) =
   }
 });
 
-// LISTAR comentários de uma submissão (usado pelo modal)
 router.get("/submissoes/:id/comentarios", authenticateToken, async (req, res) => {
   const { id } = req.params;
 
   try {
-    // opcional: validar existência
     const exists = await prisma.submissaoDesafio.findUnique({ where: { id } });
     if (!exists) return res.status(404).json({ error: "Submissão não encontrada" });
 
     const comentarios = await prisma.comentario.findMany({
-      where: { submissaoId: id }, // <- requer schema com submissaoId
+      where: { submissaoId: id },
       include: { usuario: { select: { id: true, nome: true, foto: true } } },
       orderBy: { dataCriacao: "asc" },
     });

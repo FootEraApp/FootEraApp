@@ -1,4 +1,3 @@
-// client/src/components/perfil/PerfilProfessor.tsx
 import { useEffect, useState } from "react";
 import axios from "axios";
 import {
@@ -65,7 +64,6 @@ type AtividadeRecente = {
   imagemUrl?: string | null;
 };
 
-/* ---------- UI helpers ---------- */
 function SectionCard({
   title, children, right,
 }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
@@ -89,7 +87,6 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-/* ---------- Component ---------- */
 export default function PerfilProfessor({ idDaUrl }: Props) {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -100,15 +97,12 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   const [data, setData] = useState<PayloadProfessor | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // abas topo
   type Aba = "visao" | "atletas" | "conquistas";
   const [aba, setAba] = useState<Aba>("visao");
 
-  // sub-abas atletas
   type SubAba = "vinculados" | "observados" | "solicitacoes";
   const [subAba, setSubAba] = useState<SubAba>("vinculados");
 
-  // listas (lazy)
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(null);
@@ -135,7 +129,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     return () => { cancel = true; };
   }, [targetId, token]);
 
-  // lazy loads por aba (ajuste as rotas quando integrar)
   useEffect(() => {
     if (!token) return;
     const cancel = { v: false };
@@ -157,7 +150,7 @@ async function fetchVinculados() {
   const tipoId =
     (isOwn ? Storage.tipoUsuarioId : data?.professor?.id) ?? null;
 
-  if (!tipoId) {                      // sem id => não chama a API
+  if (!tipoId) {                   
     if (!cancel.v) setVinculados([]);
     return;
   }
@@ -167,7 +160,7 @@ async function fetchVinculados() {
       `${API.BASE_URL}/api/treinos/atletas-vinculados`,
       {
         headers,
-        params: { tipoUsuarioId: tipoId }, // <- obrigatório no seu backend
+        params: { tipoUsuarioId: tipoId },
       }
     );
     if (!cancel.v) setVinculados(Array.isArray(lista) ? lista : []);
@@ -177,8 +170,6 @@ async function fetchVinculados() {
 }
 
 async function fetchObservados() {
-  // quando for o próprio perfil, o id da tabela vem do Storage;
-  // quando for outro perfil, use o id do professor carregado em `data`
   const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.professor?.id) ?? null;
 
   if (!tipoId) {
@@ -191,7 +182,7 @@ async function fetchObservados() {
       `${API.BASE_URL}/api/observados`,
       {
         headers,
-        params: { tipoUsuarioId: tipoId }, // <- exigido pelo backend
+        params: { tipoUsuarioId: tipoId }, 
       }
     );
     if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
@@ -235,7 +226,6 @@ async function fetchObservados() {
 
   return (
     <div className="max-w-md mx-auto">
-      {/* HEADER com KPIs do professor */}
       <ProfileHeader
         nome={nome}
         time={time}
@@ -249,7 +239,6 @@ async function fetchObservados() {
         ]}
       />
 
-      {/* TABS */}
       <div className="mt-4 px-4">
         <div className="bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100">
           {[
@@ -270,7 +259,6 @@ async function fetchObservados() {
         </div>
       </div>
 
-      {/* VISÃO GERAL */}
       {aba === "visao" && (
         <div className="mt-4 px-4 grid gap-4">
           <SectionCard title="Informações do Professor">
@@ -340,7 +328,6 @@ async function fetchObservados() {
         </div>
       )}
 
-      {/* ATLETAS */}
       {aba === "atletas" && (
         <div className="mt-4 px-4">
           <div className="bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100">
@@ -492,7 +479,6 @@ async function fetchObservados() {
         </div>
       )}
 
-      {/* CONQUISTAS */}
       {aba === "conquistas" && (
         <div className="mt-4 px-4 grid gap-4">
           <SectionCard title="Conquistas e Troféus">

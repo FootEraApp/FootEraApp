@@ -1,4 +1,3 @@
-// client/src/pages/desafios
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -15,20 +14,19 @@ import {
   X,
 } from "lucide-react";
 import { Link } from "wouter";
-
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 
 interface Midia {
   id: string;
   url: string;
-  tipo: string; // "Video" | "Imagem"
+  tipo: string;
 }
 
 interface Desafio {
   id: string;
   titulo: string;
-  nivel: string; // Base | Avancado | Performance
+  nivel: string;
   pontuacao: number;
   categoria: string[];
   imagemUrl?: string;
@@ -85,14 +83,11 @@ const DesafiosPage: React.FC = () => {
   const [comentarioTexto, setComentarioTexto] = useState<Record<string, string>>({});
   const [aba, setAba] = useState<"feed" | "ranking">("feed");
 
-  // modal de mídia (ranking)
   const [modalSub, setModalSub] = useState<Submissao | null>(null);
-  // modal de comentários
   const [commentModalSub, setCommentModalSub] = useState<Submissao | null>(null);
 
   const token = Storage.token;
 
-  // ----- Carregar dados -----
   useEffect(() => {
     const fetchSubmissoesEseguindo = async () => {
       try {
@@ -150,7 +145,6 @@ const DesafiosPage: React.FC = () => {
     });
   }, [submissoes, filtroNivel, filtroCategoria, filtroSeguindo, seguindoSet]);
 
-  // ----- Ações (like, comentar, compartilhar) -----
   const toggleLike = async (subId: string) => {
     try {
       const r = await axios.post(
@@ -226,7 +220,6 @@ const DesafiosPage: React.FC = () => {
     }
   };
 
-  // ----- Ranking (client-side) -----
   const seteDiasAtras = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
@@ -240,7 +233,6 @@ const DesafiosPage: React.FC = () => {
       .slice(0, 20);
   }, [submissoes, seteDiasAtras]);
 
-  // ----- Comentários: fetch on-demand -----
   const fetchComentariosDaSubmissao = async (subId: string) => {
     try {
       const r = await axios.get(`${API.BASE_URL}/api/desafios/submissoes/${subId}/comentarios`, {
@@ -255,11 +247,9 @@ const DesafiosPage: React.FC = () => {
         setCommentModalSub((m) => (m && m.id === subId ? { ...m, comentarios: lista } : m));
       }
     } catch {
-      // rota pode não existir ainda; tudo bem
     }
   };
 
-  // ----- Modal mídia (ranking) -----
   const abrirModal = (s: Submissao) => {
     setModalSub(s);
     if (!s.comentarios || s.comentarios.length === 0) fetchComentariosDaSubmissao(s.id);
@@ -270,7 +260,6 @@ const DesafiosPage: React.FC = () => {
     document.body.style.overflow = "";
   };
 
-  // ----- Modal comentários -----
   const abrirCommentModal = (s: Submissao) => {
     setCommentModalSub(s);
     if (!s.comentarios || s.comentarios.length === 0) fetchComentariosDaSubmissao(s.id);
@@ -281,7 +270,6 @@ const DesafiosPage: React.FC = () => {
     document.body.style.overflow = "";
   };
 
-  // Fechar modais com ESC
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -297,7 +285,6 @@ const DesafiosPage: React.FC = () => {
     <div className="max-w-3xl mx-auto p-4 pb-24">
       <h1 className="text-2xl font-bold mb-4">Desafios dos Atletas</h1>
 
-      {/* Abas */}
       <div className="flex gap-2 mb-3">
         <button
           onClick={() => setAba("feed")}
@@ -321,7 +308,6 @@ const DesafiosPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Filtros */}
       {aba === "feed" && (
         <>
           <button
@@ -371,22 +357,20 @@ const DesafiosPage: React.FC = () => {
         </>
       )}
 
-      {/* CONTEÚDO */}
       {aba === "ranking" ? (
         <div className="space-y-3">
           {rankingSemanal.length === 0 ? (
             <p className="text-gray-500">Sem submissões nesta semana.</p>
           ) : (
             <>
-              {/* Pódio Top 3 */}
               <div className="grid grid-cols-3 gap-4 items-end mb-6 text-center">
                 {rankingSemanal.slice(0, 3).map((s, i) => {
                   const borda =
                     i === 0
-                      ? "border-yellow-400" // ouro
+                      ? "border-yellow-400" 
                       : i === 1
-                      ? "border-gray-400"   // prata
-                      : "border-amber-700"; // bronze
+                      ? "border-gray-400" 
+                      : "border-amber-700"; 
 
                   return (
                     <div
@@ -427,7 +411,6 @@ const DesafiosPage: React.FC = () => {
                 })}
               </div>
 
-              {/* Lista do restante */}
               <div className="space-y-3">
                 {rankingSemanal.slice(3).map((s, i) => (
                   <button
@@ -557,7 +540,6 @@ const DesafiosPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Comentário inline opcional */}
               <div className="mt-3 flex items-center gap-2">
                 <input
                   value={comentarioTexto[sub.id] || ""}
@@ -589,7 +571,6 @@ const DesafiosPage: React.FC = () => {
         })
       )}
 
-      {/* MODAL MÍDIA (RANKING) */}
       {modalSub && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-3"
@@ -600,7 +581,6 @@ const DesafiosPage: React.FC = () => {
           }}
         >
           <div className="w-full max-w-2xl max-h-[90vh] bg-white rounded-xl shadow-xl overflow-hidden relative">
-            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b">
               <div className="flex items-center gap-3">
                 <img
@@ -628,7 +608,6 @@ const DesafiosPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Conteúdo (rolável) */}
             <div className="p-4 overflow-auto max-h-[calc(90vh-64px)]">
               <h2 className="text-lg font-bold mb-2">{modalSub.desafio.titulo}</h2>
 
@@ -644,7 +623,6 @@ const DesafiosPage: React.FC = () => {
                 ))}
               </div>
 
-              {/* Mídia com limite de altura */}
               {modalSub.midias[0] && (
                 <div className="mb-4">
                   <div className="w-full max-h-[65vh] overflow-hidden rounded-lg bg-black/5 flex items-center justify-center">
@@ -669,7 +647,6 @@ const DesafiosPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Ações */}
               <div className="flex items-center gap-6 text-sm text-gray-600 mb-3">
                 <button
                   onClick={() => toggleLike(modalSub.id)}
@@ -707,7 +684,6 @@ const DesafiosPage: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL DE COMENTÁRIOS */}
       {commentModalSub && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-3"
@@ -718,7 +694,6 @@ const DesafiosPage: React.FC = () => {
           }}
         >
           <div className="w-full max-w-xl max-h-[90vh] bg-white rounded-xl shadow-xl overflow-hidden relative">
-            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b">
               <div className="flex items-center gap-3">
                 <img
@@ -746,7 +721,6 @@ const DesafiosPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Lista de comentários (rolável) */}
             <div className="p-4 overflow-auto max-h-[calc(90vh-64px)]">
               <h3 className="font-semibold mb-3">
                 Comentários ({commentModalSub.comentariosCount})
@@ -777,7 +751,6 @@ const DesafiosPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Ações: like e compartilhar aqui também */}
               <div className="flex items-center gap-6 text-sm text-gray-600 mt-4 mb-2">
                 <button
                   onClick={() => toggleLike(commentModalSub.id)}
@@ -802,7 +775,6 @@ const DesafiosPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Input de novo comentário */}
               <div className="mt-2 flex items-center gap-2">
                 <input
                   value={comentarioTexto[commentModalSub.id] || ""}
@@ -824,7 +796,6 @@ const DesafiosPage: React.FC = () => {
         </div>
       )}
 
-      {/* NAV */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
           <House />

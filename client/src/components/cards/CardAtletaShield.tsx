@@ -42,29 +42,16 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
     
     const clipId = `shieldClip-${atleta.atletaId || atleta.id || atleta.nome || "x"}`;
 
-  function buildFotoCandidates(raw?: string | null): string[] {
+   function buildFotoCandidates(raw?: string | null): string[] {
     const v = (raw || "").trim();
-    const out: string[] = [];
-
-    if (v) {
-      if (/^https?:\/\//i.test(v)) out.push(v);
-
-      if (v.startsWith("/assets/") || v.startsWith("/uploads/")) {
-        out.push(`${API.BASE_URL}${v}`);
-      }
-
-      if (!/^https?:\/\//i.test(v) && !v.startsWith("/")) {
-        out.push(`${API.BASE_URL}/assets/usuarios/${v}`);
-        out.push(`/public_assets/usuarios/${v}`);       
-        out.push(`/assets/usuarios/${v}`);                
-      }
-    }
-
-    out.push(`${API.BASE_URL}/assets/default-user.png`);
-    out.push(`/public_assets/default-user.png`);
-    out.push(`/assets/default-user.png`);
-
-    return Array.from(new Set(out));
+    if (!v) return [];
+    if (v.startsWith("data:")) return [v];
+    if (/^https?:\/\//i.test(v)) return [v];
+    if (v.startsWith("/")) return [`${API.BASE_URL}${v}`];
+    return [
+      `${API.BASE_URL}/uploads/usuarios/${v}`,
+      `${API.BASE_URL}/uploads/${v}`,
+    ];
   }
 
   const [fotoIdx, setFotoIdx] = useState(0);
@@ -91,12 +78,10 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
   const respShow = Number.isFinite(resp) ? Math.round(Number(resp)) : 0;
   const golden = isGolden(ovrShow, goldenMinOVR ?? GOLDEN_MIN_OVR);
 
-  // --- estado para rotação com arrasto ---
   const [rotation, setRotation] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
 
-  // Mouse
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
     setLastPos({ x: e.clientX, y: e.clientY });
@@ -213,13 +198,14 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
           <image
             ref={imgRef}
             href={fotoSrc}
-             onError={() => setFotoIdx((i) => i + 1)}
             x="0"
             y="-10"
             width="184"
             height="280"
             preserveAspectRatio="xMidYMid slice"
+            onError={() => setFotoIdx((i) => i + 1)}
           />
+
           <rect x="0" y="0" width="184" height="260" fill="url(#cardGrad)" />
           {golden && (
             <>

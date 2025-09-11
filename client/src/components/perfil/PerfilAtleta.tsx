@@ -1,9 +1,7 @@
-// client/src/components/perfil/PerfilAtleta.tsx
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
-
 import ProfileHeader from "../profile/ProfileHeader.js";
 import ActivityGrid from "../profile/ActivityGrid.js";
 import { BadgesList } from "../profile/BadgesList.js";
@@ -50,7 +48,6 @@ interface Pontuacao {
 }
 
 type Props = {
-  /** id do usuário na URL. Se não vier, assume o próprio usuário logado */
   idDaUrl?: string;
 };
 
@@ -124,7 +121,6 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idDaUrl, token]);
 
   const handleSeguir = async () => {
@@ -190,7 +186,6 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
           perfilId={idDaUrl || perfil.usuario.id}
         />
 
-        {/* Aviso de Independente */}
         {isIndependente && (
           <div className="bg-yellow-100 border border-yellow-300 rounded p-4 my-4 text-sm text-yellow-900">
             <div className="font-semibold">Atleta Independente</div>
@@ -199,31 +194,6 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
           </div>
         )}
 
-        {/* Ações rápidas (seguir, treinar juntos, compartilhar) */}
-        {!isOwnProfile && (
-          <div className="flex gap-2 my-4">
-            <button
-              onClick={handleSeguir}
-              className="px-4 py-2 rounded-lg bg-green-700 text-white hover:bg-green-800"
-            >
-              Seguir
-            </button>
-            <button
-              onClick={handleTreinarJuntos}
-              className="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700"
-            >
-              Treinar juntos
-            </button>
-            <button
-              onClick={handleCompartilhar}
-              className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
-            >
-              Compartilhar perfil
-            </button>
-          </div>
-        )}
-
-        {/* Progresso de Treinos */}
         <TrainingProgress
           userId={perfil.usuario.id}
           tipoUsuarioId={
@@ -234,13 +204,9 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
           }
         />
 
-        {/* Atividades recentes */}
         <ActivityGrid activities={activities} />
-
-        {/* Badges */}
         <BadgesList userId={usuarioId ?? undefined} badges={badges} />
 
-        {/* Painel de Pontuação */}
         {pontuacao && (
           <ScorePanel
             performance={pontuacao.pontuacaoPerformance}
