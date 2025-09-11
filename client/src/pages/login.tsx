@@ -1,4 +1,3 @@
-// client/src/pages/login.tsx
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
