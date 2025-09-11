@@ -1,4 +1,3 @@
-// server/controllers/cadastroController.ts
 import { Request, Response } from "express";
 import { PrismaClient, TipoUsuario, Nivel, StatusCref } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -54,7 +53,6 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
 
     const BASE_URL = process.env.BASE_URL || process.env.APP_BASE_URL || "";
 
-    // ---- normalizadores (padronizam o shape de saída) ----
     const normProfessor = (rows: any[]) =>
       rows.map((p) => ({
         id: p.id as string,
@@ -101,7 +99,7 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
       rows.map((o) => ({
         id: o.id as string,
         tipo: "Olheiro" as const,
-        nome: o.usuario?.nome ?? "", // Olheiro não tem 'nome' próprio; vem de Usuario
+        nome: o.usuario?.nome ?? "",
         username: o.usuario?.nomeDeUsuario ?? "",
         fotoUrl:
           o.fotoUrl
@@ -113,7 +111,6 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
 
     const results: any[] = [];
 
-    // ---- Professor ----
     if (!tipo || tipo === "Todos" || tipo === "Professor") {
       const profs = await prisma.professor.findMany({
         where: {
@@ -133,7 +130,6 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
       results.push(...normProfessor(profs));
     }
 
-    // ---- Clube ----
     if (!tipo || tipo === "Todos" || tipo === "Clube") {
       const clubes = await prisma.clube.findMany({
         where: {
@@ -153,7 +149,6 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
       results.push(...normClube(clubes));
     }
 
-    // ---- Escolinha ----
     if (!tipo || tipo === "Todos" || tipo === "Escolinha") {
       const escolas = await prisma.escolinha.findMany({
         where: {
@@ -173,7 +168,6 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
       results.push(...normEscolinha(escolas));
     }
 
-    // ---- Olheiro ----
     if (!tipo || tipo === "Todos" || tipo === "Olheiro") {
       const olheiros = await prisma.olheiro.findMany({
         where: {
@@ -194,7 +188,6 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
       results.push(...normOlheiro(olheiros));
     }
 
-    // ordena por nome
     results.sort((a, b) => String(a.nome).localeCompare(String(b.nome), "pt-BR"));
     return res.json(results);
   } catch (e) {
@@ -205,32 +198,26 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
 
 export const cadastrarUsuario = async (req: Request, res: Response) => {
   const {
-    // comuns
     nome, email, senha, tipo,
     nomeDeUsuario, cidade, estado, pais, bairro, cpf,
 
-    // ATLETA
     idade,
     categoria,
 
-    // PROFESSOR
     areaFormacao,
     cref,
     statusCref,
 
-    // CLUBE
     nomeClube,
     cnpjClube, telefone1Clube, telefone2Clube, emailClube,
     siteOficialClube, sedeClube, logradouroClube, numeroClube,
     complementoClube, bairroClube, cidadeClube, estadoClube, paisClube, cepClube, estadio,
 
-    // ESCOLINHA
     nomeEscolinha,
     cnpjEscolinha, telefone1Escolinha, telefone2Escolinha, emailEscolinha,
     siteOficialEscolinha, sedeEscolinha, logradouroEscolinha, numeroEscolinha,
     complementoEscolinha, bairroEscolinha, cidadeEscolinha, estadoEscolinha, paisEscolinha, cepEscolinha,
 
-    // OLHEIRO
     areaAtuacao, anosExperiencia, headline, siteOuLinkedin,
     telefonePublico, emailPublico, descricao, colaboracaoClubeId,
   } = req.body ?? {};
@@ -247,7 +234,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     const usernameFinal = (nomeDeUsuario ? String(nomeDeUsuario) : String(nome).toLowerCase().replace(/\s+/g, "_"))
       .trim().toLowerCase();
 
-    // checagem de duplicidade
     const [jaEmail, jaUser] = await Promise.all([
       prisma.usuario.findUnique({ where: { email: emailNorm } }),
       prisma.usuario.findUnique({ where: { nomeDeUsuario: usernameFinal } }),
@@ -257,7 +243,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
 
     const senhaHash = await bcrypt.hash(String(senha), 10);
 
-    // cria Usuario
     const usuario = await prisma.usuario.create({
       data: {
         nome,
@@ -425,7 +410,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
   }
 };
 
-// ===== helpers =====
 function stringParaTipoUsuario(v: any): TipoUsuario | null {
   const s = String(v ?? "").toLowerCase();
   if (s === "atleta") return TipoUsuario.Atleta;

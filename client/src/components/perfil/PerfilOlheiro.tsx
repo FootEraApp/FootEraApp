@@ -1,4 +1,3 @@
-// client/src/pages/perfilOlheiro.tsx
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -75,7 +74,6 @@ type ResultadoBuscaClube = {
   fotoUrl: string | null;
 };
 
-// ---------- UI helpers ----------
 function SectionCard({
   title, children, right,
 }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
@@ -107,7 +105,6 @@ function debounce<T extends (...args: any[]) => void>(fn: T, ms = 400) {
   };
 }
 
-// ---------- Página ----------
 export default function PerfilOlheiro({ idDaUrl }: Props) {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -128,7 +125,6 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
   const [indicacoes, setIndicacoes] = useState<IndicacaoItem[] | null>(null);
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
 
-  // Nova indicação
   const [indicAtletaId, setIndicAtletaId] = useState("");
   const [clubeQuery, setClubeQuery] = useState("");
   const [clubes, setClubes] = useState<ResultadoBuscaClube[]>([]);
@@ -136,7 +132,6 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
   const [enviando, setEnviando] = useState(false);
   const [feedback, setFeedback] = useState<{ tipo: "ok" | "erro"; msg: string } | null>(null);
 
-  // --------- Carrega perfil ---------
   useEffect(() => {
     if (!token) return;
     let cancel = false;
@@ -158,7 +153,6 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
     return () => { cancel = true; };
   }, [targetId, token]);
 
-  // --------- Abas dependentes ---------
   useEffect(() => {
     if (!token) return;
     const cancel = { v: false };
@@ -213,7 +207,6 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
     data?.olheiro?.id, atividades, observados, indicacoes, isOwn
   ]);
 
-  // --------- Busca clubes (nova indicação) ---------
   const buscarClubes = useMemo(
     () =>
       debounce(async (q: string) => {
@@ -247,7 +240,6 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
     else { setClubes([]); setClubeSel(null); }
   }, [clubeQuery]);
 
-  // --------- Enviar indicação ---------
   async function enviarIndicacao() {
     setFeedback(null);
     if (!indicAtletaId) { setFeedback({ tipo: "erro", msg: "Informe o ID do atleta." }); return; }
@@ -265,7 +257,6 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
       setClubeQuery("");
       setClubes([]);
       setClubeSel(null);
-      // refresh lista
       setIndicacoes(null);
       setAba("indicacoes");
     } catch (e: any) {
@@ -276,7 +267,6 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
     }
   }
 
-  // --------- Render ---------
   if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
   if (!data || !data.olheiro) return <div className="text-center p-10 text-red-600">Olheiro não encontrado.</div>;
 

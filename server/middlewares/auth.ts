@@ -1,4 +1,3 @@
-// server/middleware/auth.ts
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { PrismaClient, TipoUsuario } from "@prisma/client";
@@ -8,7 +7,7 @@ const prisma = new PrismaClient();
 export interface AuthenticatedRequest extends Request {
   userId?: string;
   tipoUsuarioId?: string;
-  tipoUsuario?: string; // "atleta" | "professor" | "clube" | "escolinha" | "olheiro" | "admin"
+  tipoUsuario?: string; 
   tipo?: TipoUsuario | string;
   isAdmin?: boolean;
 }
@@ -26,7 +25,6 @@ export const authenticateToken = async (
   const token = authHeader.slice(7);
 
   try {
-    // Aceita tokens emitidos como { userId, ... } ou { id, ... }
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET || "defaultsecret"
@@ -42,7 +40,7 @@ export const authenticateToken = async (
         professor: true,
         clube: true,
         escolinha: true,
-        olheiro: true, // <<--- novo
+        olheiro: true,
       },
     });
 
@@ -52,7 +50,6 @@ export const authenticateToken = async (
     req.tipo = usuario.tipo;
     req.isAdmin = usuario.tipo === TipoUsuario.Admin;
 
-    // Mapeia de acordo com o enum do usuário (fonte da verdade)
     let tipoUsuarioStr: AuthenticatedRequest["tipoUsuario"];
     let tipoUsuarioId: string | undefined;
 
@@ -79,15 +76,12 @@ export const authenticateToken = async (
         break;
       case TipoUsuario.Admin:
         tipoUsuarioStr = "admin";
-        // admin não tem tipoUsuarioId próprio
         break;
       default:
-        // fallback defensivo
         tipoUsuarioStr = undefined;
         break;
     }
 
-    // Fallback adicional se por algum motivo o enum não bateu mas a relação existe
     if (!tipoUsuarioId) {
       if (usuario.atleta)       { tipoUsuarioStr = "atleta";    tipoUsuarioId = usuario.atleta.id; }
       else if (usuario.professor){ tipoUsuarioStr = "professor"; tipoUsuarioId = usuario.professor.id; }

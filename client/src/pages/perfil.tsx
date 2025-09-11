@@ -1,4 +1,3 @@
-// client/src/pages/perfil.tsx (ProfilePage)
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";
@@ -11,7 +10,7 @@ import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
 import PerfilProfessor from "../components/perfil/PerfilProfessor.js";
 import PerfilClube from "../components/perfil/PerfilClube.js";
 import PerfilEscola from "../components/perfil/PerfilEscola.js";
-import PerfilOlheiro from "../components/perfil/perfilOlheiro.js";
+import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
 
 type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha" | "Olheiro";
 

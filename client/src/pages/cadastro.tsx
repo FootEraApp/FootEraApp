@@ -1,10 +1,8 @@
-// client/src/pages/cadastro.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
 import { API } from "../config.js";
 
-// ====== Tipos ======
 type TipoPerfil = "Atleta" | "Professor" | "Escolinha" | "Clube" | "Admin" | "Olheiro";
 type Etapa = 1 | 2 | 3;
 
@@ -55,8 +53,8 @@ type CamposOlheiro = {
 type CamposVinculo = {
   desejaVinculo: boolean;
   tipoAlvo: "Professor" | "Escolinha" | "Clube" | "";
-  alvoBusca: string;           // busca por nome/username
-  destinatarioId: string;      // selecionado/confirmado
+  alvoBusca: string;           
+  destinatarioId: string;      
 };
 
 type ResultadoBusca = {
@@ -67,10 +65,10 @@ type ResultadoBusca = {
   fotoUrl: string | null;
 };
 
-// Placeholder para avatar
+
 const PLACEHOLDER_AVATAR = logo;
 
-// Helper: debounce
+
 function debounce<T extends (...args: any[]) => void>(fn: T, ms = 400) {
   let t: any;
   return (...args: Parameters<T>) => {
@@ -82,7 +80,6 @@ function debounce<T extends (...args: any[]) => void>(fn: T, ms = 400) {
 export default function Cadastro() {
   const [_, navigate] = useLocation();
 
-  // ====== Estado base (Etapa 1) ======
   const [tipoPerfil, setTipoPerfil] = useState<TipoPerfil>("Atleta");
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
@@ -91,14 +88,11 @@ export default function Cadastro() {
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [aceitaTermos, setAceitaTermos] = useState(false);
 
-  // feedbacks
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
 
-  // ====== Etapas ======
   const [etapa, setEtapa] = useState<Etapa>(1);
 
-  // ====== Campos por tipo (Etapa 2) ======
   const [atleta, setAtleta] = useState<CamposAtleta>({ idade: "", categoria: "", treinaEscolinha: "" });
   const [professor, setProfessor] = useState<CamposProfessor>({
     treinaEscolinha: "",
@@ -119,7 +113,6 @@ export default function Cadastro() {
     colaboracaoClubeId: ""
   });
 
-  // ====== Complementar (Etapa 3) – vínculo p/ Atleta ======
   const [vinculo, setVinculo] = useState<CamposVinculo>({
     desejaVinculo: false,
     tipoAlvo: "",
@@ -127,7 +120,6 @@ export default function Cadastro() {
     destinatarioId: "",
   });
 
-  // ====== Checagens de disponibilidade (Etapa 1) ======
   const [emailDisp, setEmailDisp] = useState<null | boolean>(null);
   const [userDisp, setUserDisp] = useState<null | boolean>(null);
 
@@ -164,7 +156,6 @@ export default function Cadastro() {
   useEffect(() => { verificarEmail(email.trim().toLowerCase()); }, [email]);
   useEffect(() => { verificarUsername(nomeDeUsuario.trim().toLowerCase()); }, [nomeDeUsuario]);
 
-  // ====== Validações por etapa ======
   const podeIrParaEtapa2 = () => {
     if (!aceitaTermos) return setErro("Você deve aceitar os termos."), false;
     if (!nome || !email || !nomeDeUsuario || !senha || !confirmarSenha) return setErro("Preencha todos os campos obrigatórios da etapa 1."), false;
@@ -199,13 +190,11 @@ export default function Cadastro() {
     return true;
   };
 
-  // ====== Submeter (criar conta + opcional: criar solicitação de vínculo) ======
   const handleFinalizar = async () => {
     setErro("");
     setSucesso("");
 
     try {
-      // monta payload principal
       const payload: any = {
         tipo: tipoPerfil,
         nome,
@@ -244,7 +233,6 @@ export default function Cadastro() {
         payload.colaboracaoClubeId = olheiro.colaboracaoClubeId || undefined;
       }
 
-      // cria usuário/tipo
       const res = await fetch(`${API.BASE_URL}/api/cadastro/cadastro`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -259,7 +247,6 @@ export default function Cadastro() {
       const data = await res.json();
       setSucesso("Cadastro realizado com sucesso!");
 
-      // Se for atleta e marcou "deseja vínculo", cria a solicitação
       if (tipoPerfil === "Atleta" && vinculo.desejaVinculo && vinculo.destinatarioId) {
         try {
           await fetch(`${API.BASE_URL}/api/solicitacoes`, {
@@ -281,7 +268,6 @@ export default function Cadastro() {
     }
   };
 
-  // ====== Busca simples do alvo para o vínculo ======
   const [resultadosBusca, setResultadosBusca] = useState<ResultadoBusca[]>([]);
 
   const buscarAlvo = useMemo(
@@ -312,13 +298,11 @@ export default function Cadastro() {
     }
   }, [etapa, tipoPerfil, vinculo.desejaVinculo, vinculo.tipoAlvo, vinculo.alvoBusca]);
 
-  // Item selecionado (para mostrar cartão com foto)
   const selectedAlvo: ResultadoBusca | null = useMemo(
     () => resultadosBusca.find(r => r.id === vinculo.destinatarioId) || null,
     [resultadosBusca, vinculo.destinatarioId]
   );
 
-  // ====== UI helpers ======
   const Step = ({ n, label }: { n: Etapa; label: string }) => {
     const active = etapa === n;
     const done = etapa > n;
@@ -483,7 +467,7 @@ export default function Cadastro() {
                           onChange={(e) => {
                             const v = e.target.value as "sim" | "nao";
                             setAtleta(p => ({ ...p, treinaEscolinha: v }));
-                            if (v === "sim") setVinculo(p => ({ ...p, desejaVinculo: true })); // liga vínculo
+                            if (v === "sim") setVinculo(p => ({ ...p, desejaVinculo: true }));
                           }}
                         />
                         Sim
