@@ -490,6 +490,11 @@ model SubmissaoDesafio {
   createdAt  DateTime @default(now())
   usuarioId  String?
   observacao String?
+  conteudo           Json?
+  resultado          Float?
+  resultadoDeclarado Float?
+  unidadeResultado   String?
+  tempoMs            Int?
 
   atleta           Atleta                    @relation(fields: [atletaId], references: [id])
   desafio          DesafioOficial            @relation(fields: [desafioId], references: [id])

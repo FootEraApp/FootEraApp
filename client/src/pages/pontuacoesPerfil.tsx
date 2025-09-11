@@ -536,7 +536,7 @@ useEffect(() => {
       <header className="bg-green-900 text-white text-center py-3 text-xl font-bold">FOOTERA</header>
 
       {loading && (
-        <div className="mx-4 mt-4 rounded-md bg-yellow-50 text-yellow-900 border border-yellow-200 p-3 text-sm flex items-center gap-2">
+        <div className="mx-4 mt-4 rounded-md bg-transparent text-yellow-900 border border-yellow-200 p-3 text-sm flex items-center gap-2">
           <svg width="16" height="16" viewBox="0 0 24 24" className="animate-spin">
             <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
             <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="4" fill="none" />
@@ -687,7 +687,6 @@ useEffect(() => {
         </>
       )}
 
-      {/* Barra de navegação fixa no rodapé */}
         <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
           <Link href="/feed" className="hover:underline">
             <House /> 

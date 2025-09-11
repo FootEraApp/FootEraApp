@@ -313,12 +313,18 @@ async function fetchObservados() {
             title="Treinos"
             right={
               <div className="flex gap-2">
-                <button className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900">
-                  Ver todos
-                </button>
-                <button className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1">
-                  <PlusCircle className="w-4 h-4" /> Criar novo treino
-                </button>
+                <Link href="/treinos">
+                  <a className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900">
+                    Ver todos
+                  </a>
+                </Link>
+
+                <Link href="/treinos/novo">
+                  <a className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1">
+                    <PlusCircle className="w-4 h-4" />
+                    Criar novo treino
+                  </a>
+                </Link>
               </div>
             }
           >

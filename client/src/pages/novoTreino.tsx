@@ -3,9 +3,10 @@ import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
+import { set } from "date-fns";
 
 interface UsuarioLogado {
-  tipo: "atleta" | "escola" | "clube" | "professor";
+  tipo: "atleta" | "escola" | "escolinha" | "clube" | "professor";
 }
 
 interface Exercicio {
@@ -53,6 +54,7 @@ export default function NovoTreino() {
   const [categoria, setCategoria] = useState<string>("Sub13");
   const [tipoTreino, setTipoTreino] = useState<string>("Tecnico");
   const [objetivo, setObjetivo] = useState<string>("");
+  const [iniciado, setIniciado] = useState<boolean>(false);
 
   type ExercicioSelecionado = {
     nome: string;
@@ -74,45 +76,92 @@ export default function NovoTreino() {
     treinoProgramadoId: string;
   };
 
-  useEffect(() => {
-    const tipoSalvo = Storage.tipoSalvo;
-    const idSalvo = Storage.usuarioId;
-    const atletaId = Storage.tipoUsuarioId;
-    const token = Storage.token;
+  function normalizaTreinos(raw: any[]): TreinoProgramado[] {
+    return raw.map((t: any) => ({
+      id: t.id,
+      nome: t.nome ?? t.titulo ?? "(sem nome)",
+      descricao: t.descricao ?? t.resumo ?? "",
+      nivel: t.nivel ?? t.dificuldade ?? "-",
+      exercicios: (t.exercicios ?? t.exs ?? []).map((ex: any, i: number) => ({
+        id: ex.id ?? ex.exercicioId ?? String(i),
+        nome: ex.nome ?? ex.titulo ?? "",
+        repeticoes: ex.repeticoes ?? ex.reps ?? ex.qtde ?? "",
+      })),
+    }));
+  }
 
-    if (["atleta", "escola", "clube", "professor"].includes(tipoSalvo || "")) {
-      setUsuario({ tipo: tipoSalvo as UsuarioLogado["tipo"] });
-      if (idSalvo) setUsuarioId(idSalvo);
+  useEffect(() => {
+    if (!iniciado) return;
+
+    const token =
+      Storage.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
+
+    const opt: RequestInit = token
+      ? { headers: { Authorization: `Bearer ${token}` } as any }
+      : {};
+
+    (async () => {
+      try {
+        const urls = [
+          `${API.BASE_URL}/api/treinos/disponiveis?tipoUsuarioId=${Storage.tipoUsuarioId ?? ""}`,
+          `${API.BASE_URL}/api/treinosprogramados`,
+          `${API.BASE_URL}/api/treinos`,
+        ];
+
+        for (const url of urls) {
+          const r = await fetch(url, opt);
+          if (!r.ok) continue;
+
+          const j = await r.json();
+          const arr = Array.isArray(j)
+            ? j
+            : (j.items ?? j.data ?? j.treinos ?? j.rows ?? j.result ?? []);
+
+          if (Array.isArray(arr) && arr.length) {
+            setTreinosDisponiveis(normalizaTreinos(arr));
+            return;
+          }
+        }
+        setTreinosDisponiveis([]);
+      } catch (e) {
+        console.error("Falha ao carregar treinos:", e);
+        setTreinosDisponiveis([]);
+      }
+    })();
+  }, [iniciado]);
+
+  useEffect(() => {
+    const tipoPersistido =
+      (localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario") ??
+      Storage.tipoSalvo ??
+      "")
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    const tipoNormalizado = tipoPersistido === "escolinha" ? "escola" : tipoPersistido;
+
+    const permitidos = ["escola", "clube", "professor", "atleta"] as const;
+
+    if (permitidos.includes(tipoNormalizado as any)) {
+      setUsuario({ tipo: tipoNormalizado as typeof permitidos[number] });
+    } else {
+      console.warn("tipoUsuario inválido/inesperado:", { tipoPersistido, tipoNormalizado });
+      setUsuario(null);
     }
 
-    const carregarExercicios = async () => {
-      const res = await fetch(`${API.BASE_URL}/api/exercicios`);
-      const json = await res.json();
-      setExerciciosDisponiveis(json);
-    };
+    const id =
+      localStorage.getItem("usuarioId") ??
+      sessionStorage.getItem("usuarioId") ??
+      Storage.usuarioId ??
+      null;
+    setUsuarioId(id);
 
-    const carregarAtletas = async () => {
-      if (!atletaId) return;
-      const res = await fetch(
-        `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${atletaId}`
-      );
-      const json = await res.json();
-      setAtletasVinculados(json);
-    };
-
-    const carregarTreinosDisp = async () => {
-      if (!atletaId || !token) return;
-      const res = await fetch(
-        `${API.BASE_URL}/api/treinos/disponiveis?tipoUsuarioId=${atletaId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const json = await res.json();
-      setTreinosDisponiveis(json);
-    };
-
-    carregarExercicios();
-    carregarAtletas();
-    carregarTreinosDisp();
+    setIniciado(true);
   }, []);
 
   const adicionarExercicio = () => {
@@ -257,7 +306,12 @@ export default function NovoTreino() {
     }
   };
 
-  if (!usuario) return <p className="text-center p-4">Carregando...</p>;
+  if (!iniciado) return <p className="text-center p-4">Carregando...</p>;
+  if (!usuario) return (
+    <div className="p-4 text-center">
+      Você precisa estar logado como <b>Escola</b>, <b>Clube</b> ou <b>Professor</b> para criar treinos.
+    </div>
+  );
 
   if (usuario.tipo === "atleta") {
     return (

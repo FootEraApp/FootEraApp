@@ -80,7 +80,7 @@ export default function PaginaSubmissao() {
   };
 
   return (
-    <div className="min-h-screen bg-yellow-50 pb-24 px-4 pt-6">
+    <div className="min-h-screen bg-yellow-transparent pb-24 px-4 pt-6">
       <div className="max-w-xl mx-auto bg-white rounded-xl shadow-lg p-6">
         <h1 className="text-2xl font-bold mb-6 text-green-800 text-center">Enviar Submissão</h1>
 

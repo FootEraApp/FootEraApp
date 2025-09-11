@@ -19,7 +19,7 @@ interface Treinos {
   descricao: string;
 }
 
-type UsuarioTipo = "" | "atleta" | "escola" | "clube" | "professor" | "admin";
+type UsuarioTipo = "" | "atleta" | "escola" | "clube" | "professor" | "admin" | "olheiro";
 
 const tipoToServer: Record<UsuarioTipo, string> = {
   "": "",
@@ -28,6 +28,7 @@ const tipoToServer: Record<UsuarioTipo, string> = {
   clube: "Clube",
   professor: "Professor",
   admin: "Admin",
+  olheiro: "Olheiro",
 };
 
 interface UsuarioAdmin {
@@ -71,28 +72,18 @@ function authHeaders(extra: Record<string, string> = {}) {
   return token ? { Authorization: `Bearer ${token}`, ...extra } : { ...extra };
 }
 
-type ModeracaoItem = {
-  id: string;
-  criadoEm: string;
-  videoUrl?: string | null;
-  observacao?: string | null;
-  atleta: { id: string | null; nome: string; foto: string | null };
-  desafio: { id: string | null; titulo: string; pontuacao: number };
-};
-
 function toAbsoluteUrl(raw?: string | null) {
   if (!raw) return null;
   if (raw.startsWith("http")) return raw;
-  // se for só o ID do YouTube (11 chars)
   if (/^[\w-]{11}$/.test(raw)) return `https://www.youtube.com/watch?v=${raw}`;
   return `${API.BASE_URL}${raw.startsWith("/") ? raw : `/${raw}`}`;
 }
 
 function resolveVideoUrl(ex: any) {
   const raw =
-    ex.videoDemonstrativoUrl ??   // <- ESTE É O CAMPO DO SEU DB
-    ex.videoDemonstrativoURL ??   // variação
-    ex.videoDemonstrativo ??      // fallback
+    ex.videoDemonstrativoUrl ?? 
+    ex.videoDemonstrativoURL ??  
+    ex.videoDemonstrativo ??   
     ex.videoUrl ??
     ex.video ??
     ex.urlVideo ??
@@ -102,6 +93,58 @@ function resolveVideoUrl(ex: any) {
     null;
 
   return raw ? toAbsoluteUrl(String(raw)) : null;
+}
+
+type ModeracaoItem = {
+  id: string;
+  criadoEm: string;
+  videoUrl?: string | null;
+  observacao?: string | null;
+  resultado?: string | number | null;
+  resultadoDeclarado?: string | number | null;
+  unidadeResultado?: string | null; 
+  tempoMs?: number | null;          
+  conteudoJson?: any;             
+
+  atleta: { id: string | null; nome: string; foto: string | null };
+  desafio: { id: string | null; titulo: string; pontuacao: number };
+};
+
+function formatResultado(it: ModeracaoItem) {
+  const r =
+    it.resultado ??
+    it.resultadoDeclarado ??
+    (it as any).resultado_atleta ??
+    (it as any).valor ??
+    it.conteudoJson?.resultado ??
+    null;
+
+  const unidade =
+    it.unidadeResultado ??
+    (it as any).unidade ??
+    it.conteudoJson?.unidade ??
+    null;
+
+  if (r === null || r === undefined || r === "") return "—";
+
+  const msLike =
+    typeof it.tempoMs === "number"
+      ? it.tempoMs
+      : unidade === "ms"
+      ? Number(r)
+      : null;
+
+  if (typeof msLike === "number" && Number.isFinite(msLike)) {
+    const min = Math.floor(msLike / 60000);
+    const sec = Math.floor((msLike % 60000) / 1000);
+    const cent = Math.floor((msLike % 1000) / 10);
+    return min
+      ? `${min}:${String(sec).padStart(2, "0")}.${String(cent).padStart(2, "0")}`
+      : `${sec}.${String(cent).padStart(2, "0")}s`;
+  }
+
+  if (unidade === "s") return `${r}s`;
+  return unidade ? `${r} ${unidade}` : String(r);
 }
 
 export default function AdminDashboard() {
@@ -136,9 +179,33 @@ export default function AdminDashboard() {
   const [modPage, setModPage] = useState(1);                            
   const modPageSize = 20;                                                
   const [modLoading, setModLoading] = useState(false);
-  
-  const [modStatus, setModStatus] =
-  useState<"pendente"|"aprovado"|"invalido"|"todos">("pendente");
+  const [player, setPlayer] = useState<{ src: string; kind: "video" | "iframe" } | null>(null);
+  const [modStatus, setModStatus] = useState<"pendente"|"aprovado"|"invalido"|"todos">("pendente");
+
+  function toPlayer(raw?: string | null) {
+    if (!raw) return null;
+    const url = toAbsoluteUrl(raw) || raw;
+
+    if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(url)) return { kind: "video" as const, src: url };
+
+    const yt1 = url.match(/youtube\.com\/watch\?v=([^&]+)/i);
+    const yt2 = url.match(/youtu\.be\/([^?]+)/i);
+    if (yt1?.[1]) return { kind: "iframe" as const, src: `https://www.youtube.com/embed/${yt1[1]}` };
+    if (yt2?.[1]) return { kind: "iframe" as const, src: `https://www.youtube.com/embed/${yt2[1]}` };
+
+    return { kind: "iframe" as const, src: url };
+  }
+
+  function openVideo(raw?: string | null) {
+    const p = toPlayer(raw);
+    if (p) setPlayer(p);
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPlayer(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     const h = setTimeout(() => setDebouncedQ(q.trim()), 400);
@@ -247,7 +314,9 @@ async function invalidarDesafio(id: string) {
       params.set("page", String(targetPage));
       params.set("pageSize", String(pageSize));
       if (debouncedQ) params.set("q", debouncedQ);
-      if (tipoFiltro) params.set("tipo", tipoToServer[tipoFiltro]);
+      if (tipoFiltro && tipoToServer[tipoFiltro]) {
+        params.set("tipo", tipoToServer[tipoFiltro]);
+      }
 
       let gotOk = false;
       let items: UsuarioAdmin[] = [];
@@ -434,13 +503,18 @@ async function invalidarDesafio(id: string) {
             <div className="flex flex-wrap gap-2 items-center mb-4">
               <input value={q} onChange={(e) => setQ(e.target.value)}
                 placeholder="Buscar por nome ou email…" className="border rounded px-3 py-2 w-64" />
-              <select value={tipoFiltro} onChange={(e) => setTipoFiltro(e.target.value as UsuarioTipo)}
-                className="border rounded px-3 py-2">
+              <select
+                value={tipoFiltro}
+                onChange={(e) => setTipoFiltro(e.target.value as UsuarioTipo)}
+                className="border rounded px-3 py-2"
+              >
                 <option value="">Todos os tipos</option>
                 <option value="atleta">Atletas</option>
                 <option value="escola">Escolas</option>
                 <option value="clube">Clubes</option>
                 <option value="professor">Professores</option>
+                <option value="admin">Administrador</option>
+                <option value="olheiro">Olheiro</option>
               </select>
               <button className="px-3 py-2 rounded bg-gray-200" onClick={() => carregarUsuarios(1)}>Atualizar</button>
               <div className="ml-auto text-sm text-gray-600">
@@ -480,7 +554,7 @@ async function invalidarDesafio(id: string) {
                             <div className="font-medium flex items-center gap-2">
                               {nome}
                               {u.verificado && <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-800">Verificado</span>}
-                              {u.destaque && <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-900">Destaque</span>}
+                              {u.destaque && <span className="text-[10px] px-2 py-0.5 rounded-full bg-transparent text-yellow-900">Destaque</span>}
                             </div>
                           </div>
                         </td>
@@ -563,10 +637,10 @@ async function invalidarDesafio(id: string) {
                   <button
                     onClick={() => {
                       if (!videoUrl) return alert("Este exercício não possui vídeo cadastrado.");
-                      window.open(videoUrl, "_blank", "noopener,noreferrer");
+                      openVideo(videoUrl);
                     }}
                     className={videoUrl ? "text-green-600" : "text-gray-400 cursor-not-allowed"}
-                    title={videoUrl ? "Abrir vídeo demonstrativo" : "Sem vídeo"}
+                    title={videoUrl ? "Ver vídeo demonstrativo" : "Sem vídeo"}
                     disabled={!videoUrl}
                   >
                     ▶️
@@ -752,10 +826,10 @@ async function invalidarDesafio(id: string) {
                         value={modStatus}
                         onChange={(e) => { setModStatus(e.target.value as any); carregarPendentes(1); }}
                       >
+                        <option value="todos">Todos</option>
                         <option value="pendente">Pendentes</option>
                         <option value="aprovado">Aprovados</option>
                         <option value="invalido">Inválidos</option>
-                        <option value="todos">Todos</option>
                       </select>
                     </div>
                     <div className="bg-white rounded shadow overflow-x-auto">
@@ -764,11 +838,13 @@ async function invalidarDesafio(id: string) {
                           <tr>
                             <th className="px-3 py-2 text-left">Atleta</th>
                             <th className="px-3 py-2 text-left">Desafio</th>
+                            <th className="px-3 py-2 text-left">Resultado</th>
                             <th className="px-3 py-2 text-left">Enviado</th>
                             <th className="px-3 py-2 text-left">Vídeo</th>
                             <th className="px-3 py-2"></th>
                           </tr>
                         </thead>
+
                         <tbody>
                           {modPendentes.map((it) => {
                             const foto = it.atleta.foto
@@ -786,14 +862,25 @@ async function invalidarDesafio(id: string) {
                                   {it.desafio.titulo}{" "}
                                   <span className="text-xs text-gray-600">({it.desafio.pontuacao} pts)</span>
                                 </td>
-                                <td className="px-3 py-2">{new Date(it.criadoEm).toLocaleString("pt-BR")}</td>
+                                <td className="px-3 py-2">
+                                  <div>{formatResultado(it)}</div>
+                                  {it.observacao && (
+                                    <div className="text-xs text-gray-500">{it.observacao}</div>
+                                  )}
+                                </td>
+
+                                <td className="px-3 py-2">
+                                  {new Date(it.criadoEm).toLocaleString("pt-BR")}
+                                </td>
+
                                 <td className="px-3 py-2">
                                   {it.videoUrl ? (
-                                    <a className="text-blue-600 underline" href={it.videoUrl} target="_blank" rel="noreferrer">
-                                      abrir vídeo
-                                    </a>
+                                    <button className="text-blue-600 underline" onClick={() => openVideo(it.videoUrl)}>
+                                      ver vídeo
+                                    </button>
                                   ) : "—"}
                                 </td>
+
                                 <td className="px-3 py-2 text-right">
                                   <div className="flex gap-2 justify-end">
                                     <button
@@ -815,7 +902,7 @@ async function invalidarDesafio(id: string) {
                           })}
                           {!modLoading && modPendentes.length === 0 && (
                             <tr>
-                              <td colSpan={5} className="px-3 py-8 text-center text-gray-500">Nada pendente no momento.</td>
+                              <td colSpan={6} className="px-3 py-8 text-center text-gray-500">Nada pendente no momento.</td>
                             </tr>
                           )}
                         </tbody>
@@ -911,6 +998,41 @@ async function invalidarDesafio(id: string) {
                   </div>
                 )}
           </div>
+
+          {player && (
+            <div className="fixed inset-0 z-[70] grid place-items-center">
+              <div className="absolute inset-0 bg-black/60" onClick={() => setPlayer(null)} />
+
+              <div className="relative z-10">
+                {player.kind === "video" ? (
+                  <video
+                    src={player.src}
+                    controls
+                    autoPlay
+                    className="block max-w-[92vw] max-h-[90vh] rounded-lg shadow-xl"
+                  />
+                ) : (
+                  <div className="rounded-lg shadow-xl overflow-hidden">
+                    <iframe
+                      src={player.src}
+                      className="block w-[min(92vw,calc(90vh*16/9))] h-[min(90vh,calc(92vw*9/16))]"
+                      allow="autoplay; encrypted-media; picture-in-picture"
+                      referrerPolicy="no-referrer"
+                      allowFullScreen
+                    />
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setPlayer(null)}
+                  className="absolute -top-3 -right-3 bg-white text-gray-700 rounded-full shadow p-2"
+                  title="Fechar"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
 
       {detalheAberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
