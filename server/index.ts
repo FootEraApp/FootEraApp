@@ -9,6 +9,7 @@ import http from "http";
 import { setupSocket } from "./socket.js";
 import qrcode from "qrcode-terminal";
 import { APP } from "./config.js";
+import * as fs from "fs";
 
 import adminRoutes from "./routes/admin.js";
 import adminModeracaoRoutes from "./routes/adminModeracao.js";
@@ -113,7 +114,21 @@ app.use("/api/gerenciar", gerenciarAtletasRoutes);
 app.use(adminModeracaoRoutes);
 
 app.use("/uploads", express.static(path.join(process.cwd(), "public/uploads")));
-app.use('/assets', express.static(path.join(__dirname, 'public/assets')));
+
+const candidates = [
+  path.join(process.cwd(), "client/public/assets"),
+  path.join(process.cwd(), "public/assets"),
+  path.join(__dirname, "public/assets"),
+];
+
+const found = candidates.find((dir) => fs.existsSync(dir));
+if (found) {
+  console.log("Servindo /assets de:", found);
+  app.use("/assets", express.static(found));
+} else {
+  console.warn("⚠️ Pasta de assets não encontrada. Tentado:", candidates);
+}
+
 app.get("/", (req, res) => {
   res.send("FootEra API está ativa!");
 });
