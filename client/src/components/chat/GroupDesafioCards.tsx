@@ -86,7 +86,7 @@ export function CardDesafioGrupo({ msg }: { msg: MsgGrupo }) {
   };
 
   return (
-    <div className="max-w-md rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm">
+    <div className="max-w-md rounded-lg border border-yellow-300 bg-transparent p-3 text-sm">
       <div className="font-semibold">Desafio em Grupo</div>
       <div className="mt-1">🏁 <b>{titulo}</b></div>
       <div className="mt-1">🗓️ Prazo: {formatarData(prazo)}</div>

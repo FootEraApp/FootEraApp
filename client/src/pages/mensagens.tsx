@@ -314,6 +314,34 @@ export default function PaginaMensagens() {
     const base = (meuCardDados ?? await getMeuPerfilEBonus());
     if (!base) { alert("Não consegui montar seu card agora."); return; }
 
+    const payload = {
+      kind: "card-shield",
+      atleta: {
+        atletaId: base.atletaId ?? "",
+        nome: base.nome,
+        foto: base.foto ?? null,  
+        posicao: base.posicao ?? null,
+        idade: null
+      },
+      ovr: base.ovr, perf: base.perf, disc: base.disc, resp: base.resp,
+      size: { w: 300, h: 420 }, goldenMinOVR: 88
+    };
+    const encoded = "CARD_JSON:" + btoa(encodeURIComponent(JSON.stringify(payload)));
+
+    const clientMsgId = genClientId();
+    setMensagensPrivadas(prev => [...prev, {
+      id: clientMsgId, clientMsgId, pending: true,
+      criadaEm: new Date().toISOString(),
+      conteudo: encoded,
+      deId: usuarioId!, paraId: alvo.usuario.id, tipo: "CARD",
+    }]);
+
+    const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ paraId: alvo.usuario.id, tipo: "CARD", conteudo: encoded, clientMsgId }),
+    });
+
     let fotoData = base.foto; 
     if (fotoData && !fotoData.startsWith("data:")) {
       try {
@@ -335,20 +363,6 @@ export default function PaginaMensagens() {
       cacheBust: false,
       pixelRatio: 2,
       imagePlaceholder: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
-    });
-
-    const clientMsgId = genClientId();
-    setMensagensPrivadas(prev => [...prev, {
-      id: clientMsgId, clientMsgId, pending: true,
-      criadaEm: new Date().toISOString(),
-      conteudo: "__PENDING_CARD__",
-      deId: usuarioId!, paraId: alvo.usuario.id, tipo: "CARD",
-    }]);
-
-    const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ paraId: alvo.usuario.id, tipo: "CARD", conteudo: dataUrl, clientMsgId }),
     });
 
     if (resp.ok) {
@@ -878,14 +892,28 @@ useEffect(() => {
         return Shell(<div className="w-56 h-72 bg-gray-200 rounded animate-pulse" />);
       }
 
-      const isDataUrl = typeof msg.conteudo === "string" && msg.conteudo.startsWith("data:image/");
-      const isAbs = typeof msg.conteudo === "string" && /^https?:\/\//i.test(msg.conteudo);
-      const path = isDataUrl
-        ? msg.conteudo
-        : (isAbs
-            ? msg.conteudo
-            : `${API.BASE_URL}${msg.conteudo.startsWith("/") ? "" : "/"}${msg.conteudo}`);
-      return Shell(<img src={path} alt="Card do atleta" className="w-56 h-auto rounded" />);
+     if (typeof msg.conteudo === "string" && msg.conteudo.startsWith("CARD_JSON:")) {
+      try {
+        const raw = decodeURIComponent(atob(msg.conteudo.slice("CARD_JSON:".length)));
+        const data = JSON.parse(raw);
+        return Shell(
+          <CardAtletaShield
+            atleta={data.atleta}
+            ovr={data.ovr}
+            perf={data.perf}
+            disc={data.disc}
+            resp={data.resp}
+            size={data.size}
+            goldenMinOVR={data.goldenMinOVR}
+          />
+        );
+      } catch {}
+    }
+
+    const isDataUrl = typeof msg.conteudo === "string" && msg.conteudo.startsWith("data:image/");
+    const isAbs = typeof msg.conteudo === "string" && /^https?:\/\//i.test(msg.conteudo);
+    const path = isDataUrl ? msg.conteudo : (isAbs ? msg.conteudo : `${API.BASE_URL}${msg.conteudo.startsWith("/") ? "" : "/"}${msg.conteudo}`);
+    return Shell(<img src={path} alt="Card do atleta" className="w-56 h-auto rounded" />);
     }
 
     if (msg.tipo === "POST") {

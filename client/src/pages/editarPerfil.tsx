@@ -13,8 +13,8 @@ const EditarPerfil = () => {
   const [dadosTipo, setDadosTipo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-  const [tipoRender, setTipoRender] =
-   useState<'atleta' | 'professor' | 'escola' | 'clube' | null>(null);
+  type TipoRender = 'atleta' | 'professor' | 'escola' | 'escolinha' | 'clube' | 'admin' | 'olheiro';
+  const [tipoRender, setTipoRender] = useState<TipoRender | null>(null);
 
   useEffect(() => {
 
@@ -37,10 +37,13 @@ const EditarPerfil = () => {
       }
 
       setDadosUsuario(res.data.usuario);
-      setDadosTipo(res.data.dadosEspecificos);
+      const dadosEsp = { ...(res.data.dadosEspecificos || {}) };
+      if (dadosEsp.site && !dadosEsp.siteOficial) dadosEsp.siteOficial = dadosEsp.site;
+      setDadosTipo(dadosEsp);
+
       const tipoSrv = res.data?.tipo ?? tipoUsuarioOriginal ?? '';
-      setTipoRender(String(tipoSrv).toLowerCase() as any);
-    
+      const t = String(tipoSrv).toLowerCase();
+      setTipoRender((t === 'escolinha' ? 'escola' : (t as TipoRender)));
     } catch (err: any) {
       console.error("[EditarPerfil] Erro ao buscar dados", {
         status: err?.response?.status,
@@ -124,6 +127,7 @@ const EditarPerfil = () => {
           </>
         );
       case 'escola':
+      case 'escolinha':
         return (
           <>
             {renderInput("Nome de Exibição", "nome")}
@@ -131,10 +135,8 @@ const EditarPerfil = () => {
             {renderInput("Telefone 2", "telefone2")}
             {renderInput("Email", "email")}
             {renderInput("Site Oficial", "siteOficial")}
-            {renderInput("Sede", "sede")}
-            {renderInput("Logradouro", "logradouro")}
-            {renderInput("Número", "numero")}
             {renderInput("Complemento", "complemento")}
+            {renderInput("Número", "numero")}
             {renderInput("Bairro", "bairro")}
             {renderInput("Cidade", "cidade")}
             {renderInput("Estado", "estado")}
@@ -240,6 +242,8 @@ const EditarPerfil = () => {
             }
 
           const tipo = { ...dadosTipo };
+            if (tipo.siteOficial && !tipo.site) tipo.site = tipo.siteOficial;
+
             if (tipoUsuarioOriginal === "professor") {
               if (typeof tipo.qualificacoes === "string") {
                 tipo.qualificacoes = tipo.qualificacoes.split(',').map((q: string) => q.trim());

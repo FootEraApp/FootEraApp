@@ -23,6 +23,11 @@ export async function listPendentesDesafio(req: Request, res: Response) {
         createdAt: true,
         videoUrl: true,
         observacao: true,
+        conteudo: true,
+        resultado: true,          
+        resultadoDeclarado: true, 
+        unidadeResultado: true,   
+        tempoMs: true,     
         atleta: {
           select: {
             id: true,
@@ -39,6 +44,12 @@ export async function listPendentesDesafio(req: Request, res: Response) {
     id: s.id,
     criadoEm: s.createdAt,
     videoUrl: s.videoUrl,
+    observacao: s.observacao ?? null,
+    resultado: (s as any).resultado ?? null,
+    resultadoDeclarado: (s as any).resultadoDeclarado ?? null,
+    unidadeResultado: (s as any).unidadeResultado ?? null,
+    tempoMs: (s as any).tempoMs ?? null,
+    conteudoJson: (s as any).conteudo ?? null,
     atleta: {
       id: s.atleta?.id ?? null,
       nome: s.atleta?.usuario?.nome ?? s.atleta?.usuario?.nomeDeUsuario ?? "(sem nome)",
@@ -50,7 +61,6 @@ export async function listPendentesDesafio(req: Request, res: Response) {
       titulo: s.desafio?.titulo ?? "Desafio",
       pontuacao: s.desafio?.pontuacao ?? 0,
     },
-    observacao: s.observacao ?? null,
   }));
 
   res.json({ items: rows, total });

@@ -34,7 +34,7 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
         tipo,
         conteudo: conteudoFinal,
         paraId,
-        deId: req.userId!, // vindo do seu middleware de auth
+        deId: req.userId!,
       },
     });
 
@@ -42,7 +42,6 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
 
     const io = getIO();
     if (io) {
-      // notifica remetente e destinatário
       io.to(paraId).emit("novaMensagem", payload);
       io.to(req.userId!).emit("novaMensagem", payload);
     }

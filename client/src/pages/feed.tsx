@@ -71,12 +71,10 @@ function BottomSheet({
 
   return (
     <div className="fixed inset-0 z-50">
-      {/* overlay */}
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
         onClick={onClose}
       />
-      {/* sheet (full no mobile, limitado no desktop) */}
       <div
         role="dialog"
         aria-label={ariaLabel}
@@ -92,11 +90,9 @@ function BottomSheet({
           className="bg-white rounded-t-2xl shadow-2xl h-full flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* “pegador” */}
           <div className="w-full flex justify-center pt-2">
             <div className="h-1.5 w-12 rounded-full bg-gray-300" />
           </div>
-          {/* conteúdo rolável */}
           <div className="h-full px-4 pb-4 pt-2 flex flex-col">{children}</div>
         </div>
       </div>
@@ -534,9 +530,7 @@ function PaginaFeed(): JSX.Element {
 >
   {postSelecionado && (
     <div className="mx-auto w-full h-full max-w-[1110px]">
-      {/* CARD ocupa toda a altura disponível do sheet */}
       <div className="bg-white border rounded-2xl shadow-md h-full flex flex-col overflow-hidden">
-        {/* HEADER (fixo) */}
         <div className="px-4 py-3 border-b flex items-center justify-between shrink-0">
           <h2 className="text-base font-bold">Comentários</h2>
           <button
@@ -549,7 +543,6 @@ function PaginaFeed(): JSX.Element {
           </button>
         </div>
 
-        {/* LISTA (rolável) */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-white">
           {postSelecionado.comentarios.length === 0 && (
             <p className="text-sm text-gray-500">Seja o primeiro a comentar!</p>
@@ -577,7 +570,6 @@ function PaginaFeed(): JSX.Element {
           ))}
         </div>
 
-        {/* COMPOSER (fixo no rodapé do card) */}
         <div className="border-t bg-gray-50 px-3 py-3 shrink-0 sticky bottom-0">
           <div className="flex items-center gap-2">
             <input
