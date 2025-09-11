@@ -1,12 +1,9 @@
-// server/controllers/perfilcontroller
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
-import { calcularPontuacaoPorUsuarioId, atualizarCachePontuacao } from "server/services/pontuacao.service.js";
-import { AnyArn } from "aws-sdk/clients/groundstation.js";
+
 const prisma = new PrismaClient();
 
-/** util: aceita tanto id de Usuario quanto id da entidade específica */
 async function resolveByUsuarioOrEntity(opts: {
   entity: "professor" | "clube" | "escolinha";
   usuarioOrEntityId: string;
@@ -15,14 +12,12 @@ async function resolveByUsuarioOrEntity(opts: {
   const { entity, usuarioOrEntityId, select } = opts;
 
   if (entity === "professor") {
-    // 1) por usuarioId
     let row = await prisma.professor.findFirst({
       where: { usuarioId: usuarioOrEntityId },
       select,
     });
     if (row) return row;
 
-    // 2) por id
     row = await prisma.professor.findUnique({
       where: { id: usuarioOrEntityId },
       select,
@@ -44,7 +39,6 @@ async function resolveByUsuarioOrEntity(opts: {
     return row;
   }
 
-  // entity === "escolinha"
   let row = await prisma.escolinha.findFirst({
     where: { usuarioId: usuarioOrEntityId },
     select,
@@ -739,54 +733,83 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
   }
 };
 
-export const getTreinosResumo = async (req: AuthenticatedRequest, res: Response) => {
-  const userId = req.params.id;
+export const getTreinosResumo = async (req: any, res: Response) => {
+  try {
+    const usuarioId =
+      req.params?.id ?? req.params?.usuarioId ?? req.userId;
 
-  const atleta = await prisma.atleta.findUnique({
-    where: { usuarioId: userId },
-    select: { id: true },
-  });
-  if (!atleta) return res.status(404).json({ error: "Atleta não encontrado" });
+    if (!usuarioId) {
+      return res.status(400).json({ error: "usuarioId ausente" });
+    }
 
-  const [subsTreino, desafios] = await Promise.all([
-    prisma.submissaoTreino.findMany({
-      where: { atletaId: atleta.id, aprovado: true },
-      include: { treinoAgendado: { include: { treinoProgramado: true } } },
-      orderBy: { criadoEm: "desc" },
-    }),
-    prisma.submissaoDesafio.count({
-      where: { atletaId: atleta.id, aprovado: true },
-    }),
-  ]);
+    const atleta = await prisma.atleta.findFirst({
+      where: { usuarioId },
+      select: { id: true },
+    });
 
-  const completos = subsTreino.length;
+    if (!atleta) {
+      return res.status(200).json({
+        completos: 0,
+        horas: 0,
+        desafios: 0,
+        categorias: { Fisico: 0, Tecnico: 0, Tatico: 0, Mental: 0 },
+      });
+    }
 
-  let minutos = 0;
-  const categorias = { Fisico: 0, Tecnico: 0, Tatico: 0, Mental: 0 };
+    const [subsTreino, desafios] = await Promise.all([
+      prisma.submissaoTreino.findMany({
+        where: { atletaId: atleta.id, aprovado: true },
+        include: {
+          treinoAgendado: { include: { treinoProgramado: true } },
+        },
+        orderBy: { criadoEm: "desc" },
+      }),
+      prisma.submissaoDesafio.count({
+        where: { atletaId: atleta.id, aprovado: true },
+      }),
+    ]);
 
-  for (const s of subsTreino as any[]) {
-    minutos += Number(s.duracaoMinutos ?? s.treinoAgendado?.treinoProgramado?.duracao ?? 0) || 0;
+    const completos = subsTreino.length;
 
-    const raw =
-      s.tipoTreinoSnapshot ??
-      s.treinoAgendado?.treinoProgramado?.tipoTreino ??
-      "";
+    let minutos = 0;
+    const categorias = { Fisico: 0, Tecnico: 0, Tatico: 0, Mental: 0 };
 
-    const norm = String(raw).normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-    if (norm.startsWith("fis")) categorias.Fisico++;
-    else if (norm.startsWith("tec")) categorias.Tecnico++;
-    else if (norm.startsWith("tat")) categorias.Tatico++;
-    else if (norm.startsWith("men")) categorias.Mental++;
+    for (const s of subsTreino as any[]) {
+      const dur =
+        Number(s?.duracaoMinutos) ||
+        Number(s?.duracao) ||
+        Number(s?.treinoAgendado?.treinoProgramado?.duracao) ||
+        0;
+      minutos += isFinite(dur) ? dur : 0;
+
+      const rawTipo =
+        s?.tipoTreinoSnapshot ??
+        s?.treinoAgendado?.treinoProgramado?.tipoTreino ??
+        "";
+
+      const norm = String(rawTipo)
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase();
+
+      if (norm.startsWith("fis")) categorias.Fisico++;
+      else if (norm.startsWith("tec")) categorias.Tecnico++;
+      else if (norm.startsWith("tat")) categorias.Tatico++;
+      else if (norm.startsWith("men")) categorias.Mental++;
+    }
+
+    const horas = Math.round((minutos / 60) * 10) / 10;
+
+    return res.status(200).json({
+      completos,
+      horas,
+      desafios,
+      categorias,
+    });
+  } catch (e) {
+    console.error("[getTreinosResumo] erro:", e);
+    return res.status(500).json({ error: "Erro ao buscar resumo de treinos" });
   }
-
-  const horas = +(minutos / 60).toFixed(1);
-
-  return res.json({
-    completos,
-    horas,
-    desafios,
-    categorias,
-  });
 };
 
 export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Response) => {
@@ -847,8 +870,6 @@ export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Resp
   }
 };
 
-// PAGINA DE PERFIL TIPOS
-
 export async function getPerfilProfessor(req: Request, res: Response) {
   try {
     const { id } = req.params;
@@ -876,11 +897,9 @@ export async function getPerfilProfessor(req: Request, res: Response) {
 
   if (!prof) return res.status(404).json({ error: "Professor não encontrado" });
 
-  // 🔒 Narrowing seguro para o usuário relacionado
   const usuarioMin: { id: string; nome: string; email: string; foto?: string | null } | null =
     (prof as any).usuario ?? null;
 
-  // Foto prioriza foto do tipo e cai para a foto do usuário
   const fotoPerfil: string | null =
     (prof as any).fotoUrl ?? (usuarioMin?.foto ?? null);
 

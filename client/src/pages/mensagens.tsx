@@ -87,6 +87,21 @@ export default function PaginaMensagens() {
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [alvo, setAlvo] = useState<ChatTarget | null>(null);
 
+  function selecionarAlvo(novo: ChatTarget) {
+  setAlvo(novo);
+  localStorage.setItem(
+    "mensagens_last_target",
+    JSON.stringify(
+      novo.tipo === "usuario"
+        ? { tipo: "usuario", id: novo.usuario.id }
+        : { tipo: "grupo", id: novo.grupo.id }
+    )
+  );
+  if (novo.tipo === "usuario") saveRecentUser(novo.usuario);
+
+  setShowSidebar(false);
+}
+
   const [mensagensPrivadas, setMensagensPrivadas] = useState<Mensagem[]>([]);
   const [temMaisPriv, setTemMaisPriv] = useState(true);
   const [carregandoMaisPriv, setCarregandoMaisPriv] = useState(false);
@@ -112,9 +127,46 @@ export default function PaginaMensagens() {
   const pendingOpenRef = useRef(false);
 
   const RECENTS_KEY = "mensagens_recent_usuarios";
+  
+  function initials(name?: string) {
+    if (!name) return "U";
+    const parts = name.trim().split(/\s+/).slice(0, 2);
+    return parts.map(p => p[0]?.toUpperCase() ?? "").join("") || "U";
+  }
+
+  function Avatar({ src, name, className = "w-10 h-10" }:{
+    src?: string | null; name?: string; className?: string
+  }) {
+    const [broken, setBroken] = useState(false);
+    const ok = !!src && typeof src === "string" && !broken;
+
+    if (ok) {
+      const url = publicImgUrl(src) ?? undefined; 
+      if (url) {
+        return (
+          <img
+            src={url}
+            className={`${className} rounded-full object-cover border`}
+            onError={() => setBroken(true)}
+          />
+        );
+      }
+    }
+
+    return (
+      <div
+        className={`${className} rounded-full border bg-gray-200 text-gray-700 flex items-center justify-center text-sm font-semibold`}
+        title={name || "Usuário"}
+      >
+        {initials(name)}
+      </div>
+    );
+  }
+
   const loadRecentUsers = (): Usuario[] => {
     try { return JSON.parse(localStorage.getItem(RECENTS_KEY) || "[]"); } catch { return []; }
   };
+
   const saveRecentUser = (u: Usuario) => {
     try {
       const cur = loadRecentUsers();
@@ -122,6 +174,7 @@ export default function PaginaMensagens() {
       localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
     } catch {}
   };
+
   const mergeUnique = (a: Usuario[], b: Usuario[]) => {
     const m = new Map<string, Usuario>();
     [...a, ...b].forEach(u => m.set(u.id, u));
@@ -140,12 +193,17 @@ export default function PaginaMensagens() {
   } | null>(null);
 
   const compactMsgs = <T extends { tipo: string; conteudo: any }>(arr: T[]) =>
-    arr.slice(-60).map((m) => {
-      if (m.tipo === "CARD") return { ...m, conteudo: "__CARD__", pending: false, clientMsgId: undefined } as T;
+    arr.slice(-80).map((m) => {
       const clone: any = { ...m };
-      if (typeof clone.conteudo === "string" && clone.conteudo.length > 2000) {
+
+      if (clone.tipo === "CARD" && typeof clone.conteudo === "string") {
+        if (clone.conteudo.startsWith("data:image/")) {
+          clone.conteudo = "__IMG_DATAURL_OMITTED__";
+        }
+      } else if (typeof clone.conteudo === "string" && clone.conteudo.length > 2000) {
         clone.conteudo = clone.conteudo.slice(0, 2000);
       }
+
       delete clone.pending;
       delete clone.clientMsgId;
       return clone as T;
@@ -184,14 +242,17 @@ export default function PaginaMensagens() {
     }
   };
 
-  async function publicarCardNoFeed(dataUrl: string, legenda = "Meu Card FOOTERA") {
-    const resp = await fetch(`${API.BASE_URL}/api/post`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ descricao: legenda, midiaBase64: dataUrl }),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-  }
+  async function toDataUrlWithAuth(url: string): Promise<string> {
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Imagem ${url} -> ${res.status}`);
+  const blob = await res.blob();
+  return await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
 
   const SidebarContent = () => (
     <div className="p-4 overflow-y-auto h-full">
@@ -213,7 +274,7 @@ export default function PaginaMensagens() {
             <div
               key={g.id}
               className={`p-3 mb-2 rounded-lg cursor-pointer border shadow-sm transition ${selecionado ? "bg-green-50 border-green-300" : "hover:bg-gray-50 bg-white"}`}
-              onClick={() => { setAlvo({ tipo: "grupo", grupo: g }); setShowSidebar(false); }}
+              onClick={() => selecionarAlvo({ tipo: "grupo", grupo: g })}
             >
               <div className="font-medium text-sm">{g.nome}</div>
               {g.descricao && <div className="text-xs text-gray-500 line-clamp-1">{g.descricao}</div>}
@@ -232,12 +293,9 @@ export default function PaginaMensagens() {
             <div
               key={u.id}
               className={`flex items-center gap-3 p-3 mb-3 rounded-lg cursor-pointer border shadow-sm transition ${selecionado ? "bg-green-50 border-green-300" : "hover:bg-gray-50 bg-white"}`}
-              onClick={() => { setAlvo({ tipo: "usuario", usuario: u }); setShowSidebar(false); }}
+              onClick={() => selecionarAlvo({ tipo: "usuario", usuario: u })}
             >
-              <img
-                src={publicImgUrl(u.foto) || `${API.BASE_URL}/assets/default-user.png`}
-                className="w-12 h-12 rounded-full object-cover border"
-              />
+              <Avatar src={u.foto} name={u.nome} className="w-12 h-12" />
               <div className="flex flex-col">
                 <span className="font-medium text-sm">{u.nome}</span>
                 <span className="text-xs text-gray-500">Clique para conversar</span>
@@ -250,56 +308,62 @@ export default function PaginaMensagens() {
   );
 
   const compartilharPerfilNoChat = async () => {
-    if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
-    try {
-      const dados = (meuCardDados ?? await getMeuPerfilEBonus());
-      if (!dados) { alert("Não consegui montar seu card agora."); return; }
-      setMeuCardDados(dados);
+  if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
 
-      await new Promise((r) => setTimeout(r, 0));
-      const node = cardRef.current;
-      if (!node) { alert("Falha ao preparar o card para captura."); return; }
+  try {
+    const base = (meuCardDados ?? await getMeuPerfilEBonus());
+    if (!base) { alert("Não consegui montar seu card agora."); return; }
 
-      const dataUrl = await htmlToImage.toPng(node, { cacheBust: true });
-      const clientMsgId = genClientId();
-
-      setMensagensPrivadas(prev => [
-        ...prev,
-        {
-          id: clientMsgId,
-          clientMsgId,
-          pending: true,
-          criadaEm: new Date().toISOString(),
-          conteudo: dataUrl,
-          deId: usuarioId!,
-          paraId: alvo.usuario.id,
-          tipo: "CARD",
-        }
-      ]);
-
-      const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ paraId: alvo.usuario.id, conteudo: dataUrl, tipo: "CARD", clientMsgId }),
-      });
-      if (resp.ok) {
-        const saved: Mensagem = await resp.json();
-        reconcilePrivadaByClientId(saved);
-      } else {
-        console.error("POST /api/mensagem (CARD) falhou:", resp.status, await resp.text());
-      }
-
+    let fotoData = base.foto; 
+    if (fotoData && !fotoData.startsWith("data:")) {
       try {
-        const legenda = `Meu Card FOOTERA OVR: ${dados.ovr} Performance: ${dados.perf} pts Disciplina: ${dados.disc} pts Responsabilidade: ${dados.resp} pts`;
-        await publicarCardNoFeed(dataUrl, legenda);
-      } catch (e) {
-        console.warn("Falha ao publicar o card no feed:", e);
+        const resolvedUrl = publicImgUrl(fotoData) ?? fotoData;
+        fotoData = await toDataUrlWithAuth(resolvedUrl);
+      } catch {
+        fotoData = null; 
       }
-    } catch (err) {
-      console.error("Falha ao compartilhar card no chat:", err);
-      alert("Não foi possível compartilhar seu card agora.");
     }
-  };
+
+    setMeuCardDados({ ...base, foto: fotoData });
+
+    await new Promise<void>(r => requestAnimationFrame(() => r()));
+
+    const node = cardRef.current;
+    if (!node) { alert("Falha ao preparar o card para captura."); return; }
+
+    const dataUrl = await htmlToImage.toPng(node, {
+      cacheBust: false,
+      pixelRatio: 2,
+      imagePlaceholder: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+    });
+
+    const clientMsgId = genClientId();
+    setMensagensPrivadas(prev => [...prev, {
+      id: clientMsgId, clientMsgId, pending: true,
+      criadaEm: new Date().toISOString(),
+      conteudo: "__PENDING_CARD__",
+      deId: usuarioId!, paraId: alvo.usuario.id, tipo: "CARD",
+    }]);
+
+    const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ paraId: alvo.usuario.id, tipo: "CARD", conteudo: dataUrl, clientMsgId }),
+    });
+
+    if (resp.ok) {
+      const saved: Mensagem = await resp.json();
+      reconcilePrivadaByClientId(saved);
+    } else {
+      console.error("POST /api/mensagem (CARD) falhou:", resp.status, await resp.text());
+      alert("Não consegui enviar o card agora.");
+      setMensagensPrivadas(prev => prev.filter(m => m.clientMsgId !== clientMsgId));
+    }
+  } catch (err) {
+    console.error("Falha ao compartilhar card:", err);
+    alert("Não foi possível compartilhar seu card agora.");
+  }
+};
 
   useEffect(() => {
     if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
@@ -489,6 +553,32 @@ export default function PaginaMensagens() {
     } catch {}
   }, [usuariosMutuos, token]);
 
+useEffect(() => {
+  try {
+    const raw = localStorage.getItem("mensagens_last_target");
+    if (!raw) return;
+    const last = JSON.parse(raw) as { tipo: "usuario" | "grupo"; id: string };
+
+    if (last.tipo === "usuario") {
+      const u = usuariosMutuos.find(x => x.id === last.id);
+      if (u) { setAlvo({ tipo: "usuario", usuario: u }); return; }
+      (async () => {
+        const r = await fetch(`${API.BASE_URL}/api/usuarios/${last.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (r.ok) {
+          const usuario: Usuario = await r.json();
+          setUsuariosMutuos(prev => prev.some(p => p.id === usuario.id) ? prev : [usuario, ...prev]);
+          setAlvo({ tipo: "usuario", usuario });
+        }
+      })();
+    } else {
+      const g = grupos.find(x => x.id === last.id);
+      if (g) setAlvo({ tipo: "grupo", grupo: g });
+    }
+  } catch {}
+}, [usuariosMutuos, grupos, token]);
+
   async function carregarMensagensPrivadas(usuarioIdAlvo: string, append: boolean) {
     try {
       const base = append ? mensagensPrivadas : [];
@@ -504,20 +594,17 @@ export default function PaginaMensagens() {
       if (novas.length < limite) setTemMaisPriv(false);
 
       const novasOrdenadas = [...novas].reverse();
-      if (append) {
-        setMensagensPrivadas((prev) => {
-          const combined = [...novasOrdenadas, ...prev];
-          const map = new Map<string, Mensagem>();
-          combined.forEach((m) => map.set(m.id, m));
-          return Array.from(map.values()).sort((a, b) => new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime());
-        });
-      } else {
-        setMensagensPrivadas(novasOrdenadas);
-      }
-
-      const key = `conversa_${usuarioId}_${usuarioIdAlvo}`;
-      const mensagensSalvas = append ? [...novasOrdenadas, ...mensagensPrivadas] : novasOrdenadas;
-      safeSave(key, mensagensSalvas);
+      setMensagensPrivadas((prev) => {
+        const combined = append ? [...novasOrdenadas, ...prev] : [...prev, ...novasOrdenadas];
+        const map = new Map<string, Mensagem>();
+        combined.forEach((m) => map.set(m.id, m));
+        const next = Array.from(map.values()).sort(
+          (a, b) => new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime()
+        );
+        const key = `conversa_${usuarioId}_${usuarioIdAlvo}`;
+        safeSave(key, next);
+        return next;
+      });
     } catch (err) {
       console.error("Erro ao carregar mensagens privadas:", err);
     }
@@ -534,20 +621,17 @@ export default function PaginaMensagens() {
       if (novas.length < limite) setTemMaisGrupo(false);
 
       const novasOrdenadas = [...novas].reverse();
-      if (append) {
         setMensagensGrupo((prev) => {
-          const combined = [...novasOrdenadas, ...prev];
+          const combined = append ? [...novasOrdenadas, ...prev] : [...prev, ...novasOrdenadas];
           const map = new Map<string, MensagemGrupo>();
           combined.forEach((m) => map.set(m.id, m));
-          return Array.from(map.values()).sort((a, b) => new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime());
+          const next = Array.from(map.values()).sort(
+            (a, b) => new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime()
+          );
+          const key = `conversa_grupo_${grupoId}`;
+          safeSave(key, next);
+          return next;
         });
-      } else {
-        setMensagensGrupo(novasOrdenadas);
-      }
-
-      const key = `conversa_grupo_${grupoId}`;
-      const mensagensSalvas = append ? [...novasOrdenadas, ...mensagensGrupo] : novasOrdenadas;
-      safeSave(key, mensagensSalvas);
     } catch (err) {
       console.error("Erro ao carregar mensagens do grupo:", err);
     }
@@ -569,14 +653,15 @@ export default function PaginaMensagens() {
       const perfilJson = await perfilRes.json();
 
       const nome = perfilJson?.usuario?.nome ?? "";
-      const foto = publicImgUrl(perfilJson?.usuario?.foto ?? null);
+      const fotoPath = perfilJson?.usuario?.foto ?? null;
+      const foto = fotoPath ? publicImgUrl(fotoPath) : null;
 
       const posRes = await fetch(`${API.BASE_URL}/api/perfil/me/posicao-atual`, { headers: { Authorization: `Bearer ${token}` } });
       const posJson = posRes.ok ? await posRes.json() : null;
       const posicao = posJson?.posicao ?? null;
       const atletaId = posJson?.atletaId ?? null;
 
-      const pontosRes = await fetch(`${API.BASE_URL}/api/perfil/pontuacao/${usuarioId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const pontosRes = await fetch(`${API.BASE_URL}/api/perfil/${usuarioId}/pontuacao`, { headers: { Authorization: `Bearer ${token}` } });
       const w = pontosRes.ok ? await pontosRes.json() : null;
 
       const perf = Number(w?.performance ?? 0);
@@ -788,6 +873,21 @@ export default function PaginaMensagens() {
       </div>
     );
 
+    if (msg.tipo === "CARD") {
+      if (msg.conteudo === "__PENDING_CARD__") {
+        return Shell(<div className="w-56 h-72 bg-gray-200 rounded animate-pulse" />);
+      }
+
+      const isDataUrl = typeof msg.conteudo === "string" && msg.conteudo.startsWith("data:image/");
+      const isAbs = typeof msg.conteudo === "string" && /^https?:\/\//i.test(msg.conteudo);
+      const path = isDataUrl
+        ? msg.conteudo
+        : (isAbs
+            ? msg.conteudo
+            : `${API.BASE_URL}${msg.conteudo.startsWith("/") ? "" : "/"}${msg.conteudo}`);
+      return Shell(<img src={path} alt="Card do atleta" className="w-56 h-auto rounded" />);
+    }
+
     if (msg.tipo === "POST") {
       const post = postsCache[msg.conteudo];
       if (!post) return Shell(<div className="text-sm">Carregando post...</div>);
@@ -798,7 +898,7 @@ export default function PaginaMensagens() {
       return Shell(
         <div onClick={() => navigate(`/post/${post.id}`)} className="cursor-pointer">
           <div className="flex items-center gap-2 mb-2">
-            <img src={publicImgUrl(post.usuario.foto) || `${API.BASE_URL}/assets/default-user.png`} className="w-8 h-8 rounded-full object-cover border" />
+            <Avatar src={post.usuario.foto} name={post.usuario.nome} className="w-8 h-8" />
             <span className="text-sm font-semibold">{post.usuario.nome}</span>
           </div>
           {img && <img src={img} className="w-60 max-h-48 object-cover rounded mb-2" />}
@@ -817,7 +917,7 @@ export default function PaginaMensagens() {
       if (!u) return Shell(<div className="text-sm">Carregando usuário...</div>);
       return Shell(
         <div onClick={() => navigate(`/perfil/${u.id}`)} className="flex items-center gap-2 cursor-pointer">
-          <img src={publicImgUrl(u.foto) || `${API.BASE_URL}/assets/default-user.png`} className="w-10 h-10 rounded-full object-cover border" />
+          <Avatar src={u.foto} name={u.nome} className="w-12 h-12" />
           <div>
             <p className="text-sm font-semibold">{u.nome}</p>
             <p className="text-xs opacity-80">Ver perfil</p>
@@ -846,11 +946,6 @@ export default function PaginaMensagens() {
           </div>
         </div>
       );
-    }
-
-    if (msg.tipo === "CARD") {
-      if (msg.conteudo === "__CARD__") return Shell(<span className="text-xs opacity-80">[card sendo enviado...]</span>);
-      return Shell(<img src={msg.conteudo} alt="Card do atleta" className="w-56 h-auto rounded" />);
     }
 
     return Shell(<p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.conteudo}</p>);
@@ -941,7 +1036,7 @@ export default function PaginaMensagens() {
             </div>
           </div>
 
-          <div className="sticky bottom-[64px] md:bottom-0 bg-transparent border-green-100">
+          <div className="sticky bottom-[64px] md:bottom-0 bg-transparent border-green-100 mb-10">
             <div className="mx-auto w-full sm:max-w-3xl px-3 sm:px-4 py-3 flex items-center gap-2">
               <input
                 className="flex-1 bg-white border border-green-700 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-700"

@@ -1,14 +1,13 @@
 import { useMemo } from "react";
-import { API } from "../../config";
+import { API } from "../../config.js";
 
 type Props = {
-  foto?: string | null;  // pode vir null/undefined
+  foto?: string | null;  
   alt: string;
   className?: string;
-  size?: number;         // opcional, default 40px
+  size?: number;     
 };
 
-/** Placeholder inline (não faz request nenhum) */
 const FALLBACK =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(
@@ -21,7 +20,7 @@ const FALLBACK =
 
 export default function Avatar({ foto, alt, className = "w-10 h-10", size = 40 }: Props) {
   const src = useMemo<string>(() => {
-    if (!foto) return FALLBACK; // sem request
+    if (!foto) return FALLBACK;
     return foto.startsWith("http") ? foto : `${API.BASE_URL}/uploads/${foto}`;
   }, [foto]);
 
@@ -35,7 +34,6 @@ export default function Avatar({ foto, alt, className = "w-10 h-10", size = 40 }
       referrerPolicy="no-referrer"
       className={`${className} rounded-full object-cover`}
       onError={(e) => {
-        // desarma o handler para evitar loop e seta placeholder inline
         const img = e.currentTarget as HTMLImageElement;
         img.onerror = null;
         img.src = FALLBACK;

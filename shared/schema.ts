@@ -8,10 +8,9 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  profileType: text("profile_type").notNull(), // "athlete", "school", "club", "admin"
+  profileType: text("profile_type").notNull(),
   avatar: text("avatar"),
   verified: boolean("verified").default(false),
-  // O campo isAdmin não existe no banco
   age: integer("age"),
   position: text("position"),
   team: text("team"),
@@ -24,10 +23,10 @@ export const athletes = pgTable("athletes", {
   userId: integer("user_id").references(() => users.id).notNull(),
   age: integer("age"),
   birthdate: timestamp("birthdate"),
-  gender: text("gender").notNull().default("male"), // "male" ou "female"
+  gender: text("gender").notNull().default("male"), 
   position: text("position"),
-  height: integer("height"), // em cm
-  weight: integer("weight"), // em kg
+  height: integer("height"), 
+  weight: integer("weight"), 
   city: text("city"),
   state: text("state"),
   phone: text("phone"),
@@ -36,9 +35,9 @@ export const athletes = pgTable("athletes", {
   schoolApproved: boolean("school_approved").default(false),
   bio: text("bio"),
   ageGroup: text("age_group"),
-  videos: text("videos").array().default([]), // Array de URLs de vídeos
-  achievements: text("achievements").array().default([]), // Conquistas do atleta
-  footballType: text("football_type").notNull().default("field"), // "field", "futsal", "society", etc.
+  videos: text("videos").array().default([]),
+  achievements: text("achievements").array().default([]),
+  footballType: text("football_type").notNull().default("field"), 
 });
 
 export const schools = pgTable("schools", {
@@ -54,9 +53,9 @@ export const schools = pgTable("schools", {
   website: text("website"),
   instagram: text("instagram"),
   facebook: text("facebook"),
-  ageGroups: text("age_groups").array(), // e.g. ["Sub-10", "Sub-13", "Sub-15"]
+  ageGroups: text("age_groups").array(),
   description: text("description"),
-  infrastructure: text("infrastructure").array(), // e.g. ["Campo oficial", "Campo society", "Academia"]
+  infrastructure: text("infrastructure").array(), 
 });
 
 export const clubs = pgTable("clubs", {
@@ -72,14 +71,14 @@ export const clubs = pgTable("clubs", {
   instagram: text("instagram"),
   facebook: text("facebook"),
   description: text("description"),
-  division: text("division"), // e.g. "Primeira Divisão", "Segunda Divisão"
+  division: text("division"),
 });
 
 export const schoolAthleteRequests = pgTable("school_athlete_requests", {
   id: serial("id").primaryKey(),
   athleteId: integer("athlete_id").references(() => athletes.id).notNull(),
   schoolId: integer("school_id").references(() => schools.id).notNull(),
-  status: text("status").notNull(), // "pending", "approved", "rejected"
+  status: text("status").notNull(),
   requestedAt: timestamp("requested_at").defaultNow(),
   resolvedAt: timestamp("resolved_at"),
 });
@@ -122,7 +121,7 @@ export const trainings = pgTable("trainings", {
   category: text("category").notNull(),
   ageGroup: text("age_group").notNull(),
   objective: text("objective").notNull(),
-  duration: integer("duration").notNull(), // in minutes
+  duration: integer("duration").notNull(), 
   exercises: jsonb("exercises").notNull(),
   tips: text("tips").array().notNull(),
 });
@@ -154,7 +153,7 @@ export const userTrainings = pgTable("user_trainings", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),
   trainingId: integer("training_id").references(() => trainings.id),
-  status: text("status").notNull(), // "scheduled", "completed", "in_progress"
+  status: text("status").notNull(),
   scheduledFor: timestamp("scheduled_for"),
   completedAt: timestamp("completed_at"),
 });
@@ -163,7 +162,7 @@ export const userChallenges = pgTable("user_challenges", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),
   challengeId: integer("challenge_id").references(() => challenges.id),
-  status: text("status").notNull(), // "pending", "completed", "failed"
+  status: text("status").notNull(), 
   videoUrl: text("video_url"),
   submittedAt: timestamp("submitted_at"),
   pointsEarned: integer("points_earned"),
@@ -225,7 +224,7 @@ export const groupMembers = pgTable("group_members", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").references(() => groups.id).notNull(),
   userId: integer("user_id").references(() => users.id).notNull(),
-  status: text("status").notNull().default("pending"), // "pending", "accepted", "rejected"
+  status: text("status").notNull().default("pending"),
   invitedAt: timestamp("invited_at").defaultNow(),
   joinedAt: timestamp("joined_at"),
 });
@@ -244,7 +243,7 @@ export const insertUserSchema = z.object({
   name: z.string(),
   email: z.string(),
   profileType: z.enum(["admin", "athlete", "club", "school"]),
-  verified: z.boolean().optional() // 👈 adicionado
+  verified: z.boolean().optional() 
 });
 
 export const createExercicioSchema = z.object({
@@ -255,8 +254,6 @@ export const createExercicioSchema = z.object({
   videoDemonstrativoUrl: z.string().url().optional()
 });
 
-
-// Insert schemas
 export const insertAthleteSchema = createInsertSchema(athletes).omit({ id: true, schoolApproved: true });
 export const insertSchoolSchema = createInsertSchema(schools).omit({ id: true });
 export const insertClubSchema = createInsertSchema(clubs).omit({ id: true });
@@ -279,7 +276,6 @@ export const insertGroupSchema = createInsertSchema(groups).omit({ id: true, cre
 export const insertGroupMemberSchema = createInsertSchema(groupMembers).omit({ id: true, invitedAt: true, joinedAt: true });
 export const insertGroupScoreSchema = createInsertSchema(groupScores).omit({ id: true, lastUpdated: true });
 
-// Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 
@@ -346,7 +342,6 @@ export type InsertGroupMember = z.infer<typeof insertGroupMemberSchema>;
 export type GroupScore = typeof groupScores.$inferSelect;
 export type InsertGroupScore = z.infer<typeof insertGroupScoreSchema>;
 
-// Type for exercises which are stored as jsonb
 export type Exercise = {
   id: string;
   name: string;

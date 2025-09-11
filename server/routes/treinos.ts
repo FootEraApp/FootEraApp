@@ -32,6 +32,187 @@ router.delete('/agendados/:id', authenticateToken, excluirTreinoAgendado);
 router.get("/agendados", authenticateToken, getTreinosAgendados);
 router.get("/disponiveis", treinosController.disponiveis);
 router.get("/programados", listarTodosTreinosProgramados);
+router.get("/elencos/:id/escala", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const elenco = await prisma.elenco.findUnique({ where: { id } });
+    if (!elenco) return res.status(404).json({ error: "Elenco não encontrado" });
+
+    const vinculos = await prisma.atletaElenco.findMany({
+      where: { elencoId: id },
+      include: {
+        atleta: {
+          include: { usuario: true },
+        },
+      },
+    });
+
+    const posicoes: PosicaoCampo[] = [
+      "GOL","LD","ZD","ZE","LE","VOL1","VOL2","MEI","PD","CA","PE"
+    ];
+
+    const escala = posicoes.reduce((acc, pos) => {
+      acc[pos] = null as any;
+      return acc;
+    }, {} as Record<PosicaoCampo, {
+      atletaId: string;
+      usuarioId: string;
+      nome: string;
+      foto?: string | null;
+      idade?: number | null;
+      posicao?: string | null;
+    } | null>);
+
+    for (const v of vinculos) {
+      const a = v.atleta;
+      const u = a?.usuario;
+      if (!u) continue;
+      escala[v.posicao] = {
+        atletaId: a.id, 
+        usuarioId: u.id,  
+        nome: u.nome,
+        foto: u.foto,
+        idade: a.idade ?? null,
+        posicao: a.posicao ?? null,
+      };
+    }
+
+    return res.json({
+      id: elenco.id,
+      nome: elenco.nome,
+      maxJogadores: elenco.maxJogadores,
+      escala,             
+      atletasCount: vinculos.length,
+    });
+  } catch (err) {
+    console.error("Erro ao buscar escala do elenco:", err);
+    return res.status(500).json({ error: "Erro ao buscar escala do elenco" });
+  }
+});
+
+router.get("/elencos/escala-por-dono", authenticateToken, async (req, res) => {
+  try {
+    const { tipoUsuarioId } = req.query;
+
+    if (!tipoUsuarioId || typeof tipoUsuarioId !== "string") {
+      return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+    }
+
+    const elenco = await prisma.elenco.findFirst({
+      where: {
+        ativo: true,
+        OR: [
+          { professorId: tipoUsuarioId },
+          { escolinhaId: tipoUsuarioId },
+          { clubeId: tipoUsuarioId },
+        ],
+      },
+      orderBy: { dataCriacao: "desc" },
+    });
+
+    if (!elenco) {
+      return res.json(null);
+    }
+
+    const vinculos = await prisma.atletaElenco.findMany({
+      where: { elencoId: elenco.id },
+      include: {
+        atleta: {
+          include: { usuario: true },
+        },
+      },
+    });
+
+    const posicoes: PosicaoCampo[] = [
+      "GOL","LD","ZD","ZE","LE","VOL1","VOL2","MEI","PD","CA","PE"
+    ];
+
+    const escala = posicoes.reduce((acc, pos) => {
+      acc[pos] = null as any;
+      return acc;
+    }, {} as Record<PosicaoCampo, {
+      atletaId: string;
+      usuarioId: string;
+      nome: string;
+      foto?: string | null;
+      idade?: number | null;
+      posicao?: string | null;
+    } | null>);
+
+    for (const v of vinculos) {
+      const a = v.atleta;
+      const u = a?.usuario;
+      if (!u) continue;
+      escala[v.posicao] = {
+        atletaId: a.id,
+        usuarioId: u.id,
+        nome: u.nome,
+        foto: u.foto,
+        idade: a.idade ?? null,
+        posicao: a.posicao ?? null,
+      };
+    }
+
+    return res.json({
+      id: elenco.id,
+      nome: elenco.nome,
+      maxJogadores: elenco.maxJogadores,
+      escala,
+      atletasCount: vinculos.length,
+    });
+  } catch (err) {
+    console.error("Erro ao buscar escala por dono:", err);
+    return res.status(500).json({ error: "Erro ao buscar escala por dono" });
+  }
+});
+
+router.get("/pontuacoes", authenticateToken, async (req, res) => {
+  try {
+    const raw = (req.query.atletaIds as string) || "";
+    const atletaIds = raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    if (!atletaIds.length) {
+      return res.status(400).json({ error: "Informe 1+ atletaIds" });
+    }
+
+    const rows = await prisma.pontuacaoAtleta.findMany({
+      where: { atletaId: { in: atletaIds } },
+      select: {
+        atletaId: true,
+        pontuacaoTotal: true,
+        pontuacaoPerformance: true,
+        pontuacaoDisciplina: true,
+        pontuacaoResponsabilidade: true,
+        ultimaAtualizacao: true,
+      },
+    });
+
+    const payload = rows.map((r) => {
+      const mediaGeral = Math.round(
+        (r.pontuacaoPerformance + r.pontuacaoDisciplina + r.pontuacaoResponsabilidade) / 3
+      );
+      return {
+        atletaId: r.atletaId,
+        total: r.pontuacaoTotal,
+        performance: r.pontuacaoPerformance,
+        disciplina: r.pontuacaoDisciplina,
+        responsabilidade: r.pontuacaoResponsabilidade,
+        mediaGeral,       
+        ultimaAtualizacao: r.ultimaAtualizacao,
+      };
+    });
+
+    return res.json(payload);
+  } catch (err) {
+    console.error("Erro ao buscar pontuações:", err);
+    return res.status(500).json({ error: "Erro ao buscar pontuações" });
+  }
+});
+
 router.get("/exercicios", async (req, res) => {
   try {
     const exercicios = await prisma.exercicio.findMany();
@@ -39,6 +220,53 @@ router.get("/exercicios", async (req, res) => {
   } catch (err) {
     console.error("Erro ao buscar exercícios:", err);
     return res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+router.get("/elencos", authenticateToken, async (req, res) => {
+  try {
+    const { tipoUsuarioId } = req.query;
+
+    if (!tipoUsuarioId || typeof tipoUsuarioId !== "string") {
+      return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+    }
+
+    const elencos = await prisma.elenco.findMany({
+      where: {
+        OR: [
+          { professorId: tipoUsuarioId },
+          { escolinhaId: tipoUsuarioId },
+          { clubeId: tipoUsuarioId },
+        ],
+        ativo: true,
+      },
+      orderBy: { dataCriacao: "desc" },
+    });
+
+    if (!elencos.length) return res.json([]);
+
+    const elencoIds = elencos.map((e) => e.id);
+
+    const vinculos = await prisma.atletaElenco.findMany({
+      where: { elencoId: { in: elencoIds } },
+    });
+
+    const porElenco = new Map<string, { atletaId: string; posicao: PosicaoCampo }[]>();
+    for (const v of vinculos) {
+      const arr = porElenco.get(v.elencoId) ?? [];
+      arr.push({ atletaId: v.atletaId, posicao: v.posicao });
+      porElenco.set(v.elencoId, arr);
+    }
+
+    const resposta = elencos.map((e) => ({
+      ...e,
+      atletas: porElenco.get(e.id) ?? [],
+    }));
+
+    return res.json(resposta);
+  } catch (err) {
+    console.error("Erro ao listar elencos:", err);
+    return res.status(500).json({ error: "Erro ao listar elencos" });
   }
 });
 
@@ -90,6 +318,8 @@ return res.json(atletas);
     return res.status(500).json({ error: "Erro ao buscar atletas vinculados" });
   }
 });
+
+router.get("/:id", authenticateToken, obterTreinoProgramadoPorId);
 
 router.get("/", async (req, res) => {
   try {
@@ -191,52 +421,7 @@ router.post("/elencos", authenticateToken, async (req, res) => {
     return res.status(500).json({ error: "Erro ao criar elenco" });
   }
 });
-router.get("/elencos", authenticateToken, async (req, res) => {
-  try {
-    const { tipoUsuarioId } = req.query;
 
-    if (!tipoUsuarioId || typeof tipoUsuarioId !== "string") {
-      return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
-    }
-
-    const elencos = await prisma.elenco.findMany({
-      where: {
-        OR: [
-          { professorId: tipoUsuarioId },
-          { escolinhaId: tipoUsuarioId },
-          { clubeId: tipoUsuarioId },
-        ],
-        ativo: true,
-      },
-      orderBy: { dataCriacao: "desc" },
-    });
-
-    if (!elencos.length) return res.json([]);
-
-    const elencoIds = elencos.map((e) => e.id);
-
-    const vinculos = await prisma.atletaElenco.findMany({
-      where: { elencoId: { in: elencoIds } },
-    });
-
-    const porElenco = new Map<string, { atletaId: string; posicao: PosicaoCampo }[]>();
-    for (const v of vinculos) {
-      const arr = porElenco.get(v.elencoId) ?? [];
-      arr.push({ atletaId: v.atletaId, posicao: v.posicao });
-      porElenco.set(v.elencoId, arr);
-    }
-
-    const resposta = elencos.map((e) => ({
-      ...e,
-      atletas: porElenco.get(e.id) ?? [],
-    }));
-
-    return res.json(resposta);
-  } catch (err) {
-    console.error("Erro ao listar elencos:", err);
-    return res.status(500).json({ error: "Erro ao listar elencos" });
-  }
-});
 router.put("/elencos/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -299,184 +484,36 @@ router.put("/elencos/:id", authenticateToken, async (req, res) => {
     return res.status(500).json({ error: "Erro ao atualizar elenco" });
   }
 });
-router.get("/elencos/:id/escala", authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
 
-    const elenco = await prisma.elenco.findUnique({ where: { id } });
-    if (!elenco) return res.status(404).json({ error: "Elenco não encontrado" });
-
-    const vinculos = await prisma.atletaElenco.findMany({
-      where: { elencoId: id },
-      include: {
-        atleta: {
-          include: { usuario: true },
-        },
-      },
-    });
-
-    const posicoes: PosicaoCampo[] = [
-      "GOL","LD","ZD","ZE","LE","VOL1","VOL2","MEI","PD","CA","PE"
-    ];
-
-    const escala = posicoes.reduce((acc, pos) => {
-      acc[pos] = null as any;
-      return acc;
-    }, {} as Record<PosicaoCampo, {
-      atletaId: string;
-      usuarioId: string;
-      nome: string;
-      foto?: string | null;
-      idade?: number | null;
-      posicao?: string | null;
-    } | null>);
-
-    for (const v of vinculos) {
-      const a = v.atleta;
-      const u = a?.usuario;
-      if (!u) continue;
-      escala[v.posicao] = {
-        atletaId: a.id, 
-        usuarioId: u.id,  
-        nome: u.nome,
-        foto: u.foto,
-        idade: a.idade ?? null,
-        posicao: a.posicao ?? null,
-      };
-    }
-
-    return res.json({
-      id: elenco.id,
-      nome: elenco.nome,
-      maxJogadores: elenco.maxJogadores,
-      escala,             
-      atletasCount: vinculos.length,
-    });
-  } catch (err) {
-    console.error("Erro ao buscar escala do elenco:", err);
-    return res.status(500).json({ error: "Erro ao buscar escala do elenco" });
+router.post("/restaurar", authenticateToken, async (req, res) => {
+  const { nomes } = req.body as { nomes: string[] };
+  if (!Array.isArray(nomes) || nomes.length === 0) {
+    return res.status(400).json({ error: "Informe 'nomes: string[]'." });
   }
-});
-router.get("/elencos/escala-por-dono", authenticateToken, async (req, res) => {
-  try {
-    const { tipoUsuarioId } = req.query;
 
-    if (!tipoUsuarioId || typeof tipoUsuarioId !== "string") {
-      return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
-    }
-
-    const elenco = await prisma.elenco.findFirst({
-      where: {
-        ativo: true,
-        OR: [
-          { professorId: tipoUsuarioId },
-          { escolinhaId: tipoUsuarioId },
-          { clubeId: tipoUsuarioId },
-        ],
+  const ops = nomes.map((nome) =>
+    prisma.treinoProgramado.upsert({
+      where: { nome },
+      update: { naoExpira: true, dataAgendada: null },
+      create: {
+        nome,
+        codigo: `${nome}-${Date.now()}`,
+        nivel: "Base",
+        tipoTreino: "Fisico",
+        categoria: [],
+        duracao: 60,
+        pontuacao: 15,
+        dicas: [],
+        naoExpira: true,
+        dataAgendada: null,
       },
-      orderBy: { dataCriacao: "desc" },
-    });
+    })
+  );
 
-    if (!elenco) {
-      return res.json(null);
-    }
-
-    const vinculos = await prisma.atletaElenco.findMany({
-      where: { elencoId: elenco.id },
-      include: {
-        atleta: {
-          include: { usuario: true },
-        },
-      },
-    });
-
-    const posicoes: PosicaoCampo[] = [
-      "GOL","LD","ZD","ZE","LE","VOL1","VOL2","MEI","PD","CA","PE"
-    ];
-
-    const escala = posicoes.reduce((acc, pos) => {
-      acc[pos] = null as any;
-      return acc;
-    }, {} as Record<PosicaoCampo, {
-      atletaId: string;
-      usuarioId: string;
-      nome: string;
-      foto?: string | null;
-      idade?: number | null;
-      posicao?: string | null;
-    } | null>);
-
-    for (const v of vinculos) {
-      const a = v.atleta;
-      const u = a?.usuario;
-      if (!u) continue;
-      escala[v.posicao] = {
-        atletaId: a.id,
-        usuarioId: u.id,
-        nome: u.nome,
-        foto: u.foto,
-        idade: a.idade ?? null,
-        posicao: a.posicao ?? null,
-      };
-    }
-
-    return res.json({
-      id: elenco.id,
-      nome: elenco.nome,
-      maxJogadores: elenco.maxJogadores,
-      escala,
-      atletasCount: vinculos.length,
-    });
-  } catch (err) {
-    console.error("Erro ao buscar escala por dono:", err);
-    return res.status(500).json({ error: "Erro ao buscar escala por dono" });
-  }
+  await Promise.all(ops);
+  return res.json({ ok: true, restaurados: nomes.length });
 });
-router.get("/pontuacoes", authenticateToken, async (req, res) => {
-  try {
-    const raw = (req.query.atletaIds as string) || "";
-    const atletaIds = raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
 
-    if (!atletaIds.length) {
-      return res.status(400).json({ error: "Informe 1+ atletaIds" });
-    }
-
-    const rows = await prisma.pontuacaoAtleta.findMany({
-      where: { atletaId: { in: atletaIds } },
-      select: {
-        atletaId: true,
-        pontuacaoTotal: true,
-        pontuacaoPerformance: true,
-        pontuacaoDisciplina: true,
-        pontuacaoResponsabilidade: true,
-        ultimaAtualizacao: true,
-      },
-    });
-
-    const payload = rows.map((r) => {
-      const mediaGeral = Math.round(
-        (r.pontuacaoPerformance + r.pontuacaoDisciplina + r.pontuacaoResponsabilidade) / 3
-      );
-      return {
-        atletaId: r.atletaId,
-        total: r.pontuacaoTotal,
-        performance: r.pontuacaoPerformance,
-        disciplina: r.pontuacaoDisciplina,
-        responsabilidade: r.pontuacaoResponsabilidade,
-        mediaGeral,       
-        ultimaAtualizacao: r.ultimaAtualizacao,
-      };
-    });
-
-    return res.json(payload);
-  } catch (err) {
-    console.error("Erro ao buscar pontuações:", err);
-    return res.status(500).json({ error: "Erro ao buscar pontuações" });
-  }
-});
 router.post("/", async (req, res) => {
   const {
     nome,
@@ -568,36 +605,5 @@ router.post("/", async (req, res) => {
     return res.status(500).json({ error: "Erro ao criar treino" });
   }
 });
-router.post("/restaurar", authenticateToken, async (req, res) => {
-  const { nomes } = req.body as { nomes: string[] };
-  if (!Array.isArray(nomes) || nomes.length === 0) {
-    return res.status(400).json({ error: "Informe 'nomes: string[]'." });
-  }
-
-  const ops = nomes.map((nome) =>
-    prisma.treinoProgramado.upsert({
-      where: { nome },
-      update: { naoExpira: true, dataAgendada: null },
-      create: {
-        nome,
-        codigo: `${nome}-${Date.now()}`,
-        nivel: "Base",
-        tipoTreino: "Fisico",
-        categoria: [],
-        duracao: 60,
-        pontuacao: 15,
-        dicas: [],
-        naoExpira: true,
-        dataAgendada: null,
-      },
-    })
-  );
-
-  await Promise.all(ops);
-  return res.json({ ok: true, restaurados: nomes.length });
-});
-
-
-router.get("/:id", authenticateToken, obterTreinoProgramadoPorId);
 
 export default router;

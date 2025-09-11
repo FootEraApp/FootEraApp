@@ -3,8 +3,8 @@ import {uploadVideo, criarExercicio, editarExercicio, excluirExercicio, listarEx
 
 const router = express.Router();
 
-router.get("/", listarExercicios);
 router.get("/:id", buscarExercicioPorId);
+router.get("/", listarExercicios);
 router.post("/", uploadVideo, criarExercicio);
 router.put("/:id", uploadVideo, editarExercicio);
 router.delete("/:id", excluirExercicio);

@@ -1,4 +1,3 @@
-// Server/routes/perfil
 import { Router } from "express";
 import {
   getPontuacaoDetalhada, getPerfilUsuario, getAtividadesRecentes, getBadges,
@@ -25,7 +24,6 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 const router = Router();
 
-// ROTAS ESPECÍFICAS POR TIPO (adicione ANTES do genérico "/:id")
 router.get("/professor/me", authenticateToken, (req, res) => {
   (req as any).params = { id: req.userId };
   getPerfilProfessor(req as any, res);
@@ -44,7 +42,6 @@ router.get("/escola/me", authenticateToken, (req, res) => {
 });
 router.get("/escola/:id", authenticateToken, getPerfilEscola);
 
-router.get("/me", authenticateToken, getPerfilUsuarioMe);
 router.get("/me/pontuacao", authenticateToken, getPontuacaoMe);
 router.get("/me/atividades", authenticateToken, getAtividadesRecentesMe);
 router.get("/me/badges", authenticateToken, getBadgesMe);

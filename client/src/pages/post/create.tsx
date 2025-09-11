@@ -1,29 +1,23 @@
-// client/src/pages/post/create.tsx
 import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { criarPost } from "@/services/feedService.js";
-import { API } from "../../config";
-import { formatarUrlFoto } from "@/utils/formatarFoto";
+import { API } from "../../config.js";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 
-// Normaliza caminhos legados e relativos para a API
 function normalizeMediaUrl(raw: string): string {
   let s = (raw || "").trim();
   if (!s) return "";
 
-  // Absoluto (http/https), data, blob -> só corrige /assets -> /uploads
   if (/^(https?:)?\/\//i.test(s) || s.startsWith("data:") || s.startsWith("blob:")) {
     return s.replace(/\/assets\/usuarios\//, "/uploads/").replace(/\/assets\//, "/uploads/");
   }
 
-  // Relativo legado /assets/... -> /uploads/...
   s = s.replace(/^\/?assets\/usuarios\//, "/uploads/").replace(/^\/?assets\//, "/uploads/");
 
-  // Prefixa a API quando for /uploads ou uploads
   if (s.startsWith("/uploads/")) return `${API.BASE_URL}${s}`;
   if (s.startsWith("uploads/")) return `${API.BASE_URL}/${s}`;
 
-  // Caso tenha vindo só um nome de arquivo, coloque em /uploads/
   if (!s.startsWith("/")) s = `/${s}`;
   return `${API.BASE_URL}/uploads${s}`;
 }
@@ -63,7 +57,7 @@ export default function PaginaPostagem() {
         descricao: descricao.trim(),
         imagemUrl: img,
         videoUrl: vid,
-        arquivo: arquivo || undefined, // se houver arquivo, o service faz o upload
+        arquivo: arquivo || undefined, 
       });
 
       setMensagem("Postagem enviada com sucesso!");
@@ -81,7 +75,6 @@ export default function PaginaPostagem() {
     }
   }
 
-  // Pré-visualização
   const preview = (() => {
     if (arquivo) {
       const isVideo = arquivo.type?.startsWith("video/");

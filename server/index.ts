@@ -21,11 +21,11 @@ import configuracoesRoutes from "./routes/configuracoes.js";
 import conquistaRoutes from "./routes/conquista.js";
 import categoriasRoutes from "./routes/categorias.js"
 import desafiosRoutes from "./routes/desafios.js";
-    import desafiosEmGrupoRoutes from "./routes/desafiosEmGrupo.js";
+import desafiosEmGrupoRoutes from "./routes/desafiosEmGrupo.js";
 import escolinhaRoutes from "./routes/escolinha.js";
 import exerciciosRoutes from "./routes/exercicios.js";
 import explorarRoutes from "./routes/explorar.js";
-    import favoritosRoutes from "./routes/favorito.js";
+import favoritosRoutes from "./routes/favorito.js";
 import feedRoutes from "./routes/feed.js";
 import gruposRoutes from "./routes/grupos.js";
 import homeRoutes from "./routes/home.js";
@@ -66,8 +66,8 @@ dotenv.config();
 startExpiredTrainingsJob();
 
 app.use(cors());
-app.use(express.json({limit: "10mb"}));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
 app.use("/api/admin", adminRoutes);
 app.use("/api/atletas", atletaRoutes);
@@ -112,8 +112,8 @@ app.use("/api/gerenciar", gerenciarAtletasRoutes);
 
 app.use(adminModeracaoRoutes);
 
-app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
-
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use('/assets', express.static(path.join(__dirname, 'public/assets')));
 app.get("/", (req, res) => {
   res.send("FootEra API está ativa!");
 });
