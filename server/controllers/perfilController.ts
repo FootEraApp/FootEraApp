@@ -32,7 +32,6 @@ async function resolveByUsuarioOrEntity(opts: {
     return row;
   }
 
-  // NOVO: Olheiro
   if (entity === "olheiro") {
     let row = await prisma.olheiro.findFirst({ where: { usuarioId: usuarioOrEntityId }, select });
     if (row) return row;

@@ -383,7 +383,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       }
     }
 
-    // token
     let token: string | null = null;
     if (process.env.JWT_SECRET) {
       token = jwt.sign(

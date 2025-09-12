@@ -1,4 +1,3 @@
-// client/src/pages/GerenciarAtletas.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
@@ -22,17 +21,6 @@ import {
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 
-/**
- * GerenciarAtletas.tsx — Painel unificado para Escola/Clube/Professor
- *
- * Integração com backend dedicado (rotas /api/gerenciar/*):
- * - GET  /api/gerenciar/atletas?vinculo=escolinha|clube|professor&id=<usuarioId>&search=&categoria=&posicao=&status=&order=
- * - GET  /api/gerenciar/treinosprogramados?criador=escolinha|clube|professor&id=<usuarioId>
- * - POST /api/gerenciar/treinosprogramados/convocar
- * - GET  /api/gerenciar/atletas/:usuarioId/pontuacao
- */
-
-// ===== Tipos alinhados ao schema Prisma =====
 export type CategoriaBase =
   | "Sub-9"
   | "Sub-11"
@@ -40,7 +28,7 @@ export type CategoriaBase =
   | "Sub-15"
   | "Sub-17"
   | "Sub-20"
-  | "Livre"; // (equivale ao "Adulto" no discurso, no schema é Categoria.Livre)
+  | "Livre";
 
 export type Posicao =
   | "Goleiro"
@@ -70,7 +58,6 @@ type EstatisticasAtleta = {
   evolucaoPontuacaoSemanas: Array<{ semana: string; pontos: number }>;
 };
 
-// Treinos programados disponíveis para o perfil institucional
 type TreinoProgramadoMin = {
   id: string;
   titulo: string;
@@ -81,7 +68,6 @@ type TreinoProgramadoMin = {
   naoExpira?: boolean | null;
 };
 
-// ===== Utils =====
 const getFoto = (f?: string | null) => {
   if (!f || f === "" || f === "null") return "/assets/usuarios/default-user.png";
   if (f.startsWith("http")) return f;
@@ -101,7 +87,6 @@ const StatusBadge: React.FC<{ ativo?: boolean }> = ({ ativo }) => (
   </span>
 );
 
-// Conversão Categoria UI <-> API (Prisma enum: Sub9|Sub11|...|Livre)
 const apiToUiCategoria = (c?: string | null): CategoriaBase | null => {
   if (!c) return null;
   if (c === "Livre") return "Livre";
@@ -114,21 +99,16 @@ const uiToApiCategoria = (c?: CategoriaBase | ""): string | undefined => {
   return c.replace("Sub-", "Sub");
 };
 
-// ===== Componente Principal =====
 const GerenciarAtletas: React.FC = () => {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-  // tipo/id obtidos como no perfil.tsx
-  const [tipo, setTipo] = useState<"Escola" | "Clube" | "Professor" | null>(null); // manter literal para bater com backend
-  const [entidadeUsuarioId, setEntidadeUsuarioId] = useState<string | null>(null); // usuario.id da entidade
-
-  // Estado base
+  const [tipo, setTipo] = useState<"Escola" | "Clube" | "Professor" | null>(null);
+  const [entidadeUsuarioId, setEntidadeUsuarioId] = useState<string | null>(null); 
   const [atletas, setAtletas] = useState<AtletaMin[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtros (servidor já filtra/ordena)
   const [q, setQ] = useState("");
   const [categoria, setCategoria] = useState<"" | CategoriaBase>("");
   const [posicao, setPosicao] = useState<"" | Posicao>("");
@@ -137,31 +117,28 @@ const GerenciarAtletas: React.FC = () => {
     "pontuacao_desc" | "pontuacao_asc" | "nome_asc" | "nome_desc"
   >("pontuacao_desc");
 
-  // Seleção e detalhe
   const [selecionados, setSelecionados] = useState<Record<string, boolean>>({});
   const [focado, setFocado] = useState<AtletaMin | null>(null);
   const [stats, setStats] = useState<EstatisticasAtleta | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Designar treino (modal)
   const [abrirDesignar, setAbrirDesignar] = useState(false);
   const [treinosDisponiveis, setTreinosDisponiveis] = useState<TreinoProgramadoMin[]>([]);
   const [treinoSelecionado, setTreinoSelecionado] = useState<string>("");
   const [objetivo, setObjetivo] = useState("");
-  const [prazo, setPrazo] = useState(""); // yyyy-mm-dd
+  const [prazo, setPrazo] = useState("");
   const [alcance, setAlcance] = useState<"todos" | "categoria" | "selecionados">("todos");
   const [categoriaFiltroDesignacao, setCategoriaFiltroDesignacao] = useState<"" | CategoriaBase>("");
   const [salvandoDesignacao, setSalvandoDesignacao] = useState(false);
 
   const tipoParaVinculo = (t: "Escola" | "Clube" | "Professor") =>
-    t === "Escola" ? "escolinha" : t.toLowerCase(); // "escolinha" | "clube" | "professor"
+    t === "Escola" ? "escolinha" : t.toLowerCase();
 
-  // === Descobrir tipo + usuarioId da entidade (igual perfil.tsx) ===
   const descobrirPerfil = async () => {
     try {
       const { data } = await axios.get(`${API.BASE_URL}/api/perfil/me`, { headers });
 
-      const perfilTipo: string = data?.tipo; // "Escolinha" | "Clube" | "Professor" | ...
+      const perfilTipo: string = data?.tipo;
       const normalizado =
         perfilTipo === "Escolinha" ? "Escola" :
         perfilTipo === "Clube" ? "Clube" :
@@ -178,7 +155,6 @@ const GerenciarAtletas: React.FC = () => {
     }
   };
 
-  // ===== Carregar atletas via novo backend =====
   const carregarAtletas = async () => {
     if (!tipo || !entidadeUsuarioId) return;
     try {
@@ -186,7 +162,7 @@ const GerenciarAtletas: React.FC = () => {
       setLoading(true);
 
       const params: any = {
-        vinculo: tipoParaVinculo(tipo), // "escolinha" | "clube" | "professor"
+        vinculo: tipoParaVinculo(tipo),
         id: entidadeUsuarioId,
         order: ordenacao,
       };
@@ -218,7 +194,6 @@ const GerenciarAtletas: React.FC = () => {
     }
   };
 
-  // ===== Carregar treinos do perfil institucional =====
   const carregarTreinos = async () => {
     if (!tipo || !entidadeUsuarioId) return;
     try {
@@ -241,7 +216,6 @@ const GerenciarAtletas: React.FC = () => {
     }
   };
 
-  // ===== Detalhes do atleta (stats rápidas) =====
   const carregarStatsAtleta = async (atletaUsuarioId: string) => {
     setStats(null);
     try {
@@ -263,12 +237,10 @@ const GerenciarAtletas: React.FC = () => {
     } catch (_) {}
   };
 
-  // === Efeitos ===
   useEffect(() => {
     if (!token) return;
     descobrirPerfil();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    }, [token]);
 
   useEffect(() => {
     if (!tipo || !entidadeUsuarioId) return;
@@ -283,20 +255,15 @@ const GerenciarAtletas: React.FC = () => {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tipo, entidadeUsuarioId]);
 
-  // Recarrega quando filtros/ordenação mudarem
   useEffect(() => {
     if (!tipo || !entidadeUsuarioId) return;
     carregarAtletas();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, categoria, posicao, status, ordenacao]);
 
-  // ===== Dados já vêm filtrados/ordenados do servidor =====
   const filtrados = useMemo(() => atletas, [atletas]);
 
-  // Métricas agregadas (client-side)
   const metricas = useMemo(() => {
     const total = filtrados.length || 0;
     const soma = filtrados.reduce((acc, a) => acc + (a.pontuacao ?? 0), 0);
@@ -305,17 +272,14 @@ const GerenciarAtletas: React.FC = () => {
     return { total, mediaPont, ativos };
   }, [filtrados]);
 
-  // Seleção
   const toggleSelecionado = (id: string) => setSelecionados((prev) => ({ ...prev, [id]: !prev[id] }));
   const limparSelecao = () => setSelecionados({});
 
-  // Abrir detalhe
   const abrirDetalhe = (a: AtletaMin) => {
     setFocado(a);
     carregarStatsAtleta(a.usuarioId || a.id);
   };
 
-  // ===== Designar treino =====
   const idsDestino = useMemo(() => {
     if (alcance === "todos") return filtrados.map((a) => a.usuarioId || a.id);
     if (alcance === "categoria" && categoriaFiltroDesignacao)
@@ -333,7 +297,7 @@ const GerenciarAtletas: React.FC = () => {
         treinoProgramadoId: treinoSelecionado,
         objetivo: objetivo || undefined,
         prazo: prazo || undefined,
-        destinatarios: idsDestino, // usuarioIds dos atletas
+        destinatarios: idsDestino,
         origem: tipo ? (tipoParaVinculo(tipo) as "escolinha" | "clube" | "professor") : "escolinha",
       };
       await axios.post(`${API.BASE_URL}/api/gerenciar/treinosprogramados/convocar`, payload, { headers });
@@ -354,7 +318,6 @@ const GerenciarAtletas: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
-      {/* Cabeçalho */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-emerald-600/10 p-3 text-emerald-700">
@@ -376,7 +339,6 @@ const GerenciarAtletas: React.FC = () => {
         </div>
       </div>
 
-      {/* Filtros */}
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-12">
         <div className="md:col-span-4">
           <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2">
@@ -430,7 +392,6 @@ const GerenciarAtletas: React.FC = () => {
         </div>
       </div>
 
-      {/* Métricas rápidas */}
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-zinc-200 bg-white p-4">
           <div className="flex items-center gap-2 text-zinc-600">
@@ -455,9 +416,7 @@ const GerenciarAtletas: React.FC = () => {
         </div>
       </div>
 
-      {/* Lista + Detalhe */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        {/* Lista */}
         <div className="lg:col-span-7 xl:col-span-8">
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-zinc-600">
@@ -558,7 +517,6 @@ const GerenciarAtletas: React.FC = () => {
             </table>
           </div>
 
-          {/* Selecao footer */}
           <div className="mt-3 flex items-center justify-between text-sm">
             <div className="text-zinc-500">
               {Object.values(selecionados).filter(Boolean).length} selecionado(s)
@@ -580,7 +538,6 @@ const GerenciarAtletas: React.FC = () => {
           </div>
         </div>
 
-        {/* Detalhe */}
         <div className="lg:col-span-5 xl:col-span-4">
           <div className="rounded-2xl border border-zinc-200 bg-white">
             <div className="flex items-center justify-between border-b border-zinc-100 p-4">
@@ -663,7 +620,6 @@ const GerenciarAtletas: React.FC = () => {
             )}
           </div>
 
-          {/* Ranking interno */}
           <div className="mt-4 rounded-2xl border border-zinc-200 bg-white">
             <div className="flex items-center gap-2 border-b border-zinc-100 p-4 text-sm font-semibold text-zinc-900">
               <Trophy className="h-4 w-4" /> Ranking interno (Pontuação)
@@ -697,7 +653,6 @@ const GerenciarAtletas: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal Designar Treino */}
       {abrirDesignar && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
           <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">

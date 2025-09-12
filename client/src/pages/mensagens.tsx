@@ -380,6 +380,15 @@ export default function PaginaMensagens() {
 };
 
   useEffect(() => {
+    const token = Storage.token;
+    if (!token) return;
+    fetch(`${API.BASE_URL}/api/mensagem/mark-all-read`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
     const key = `conversa_${usuarioId}_${alvo.usuario.id}`;
     safeSave(key, mensagensPrivadas);
