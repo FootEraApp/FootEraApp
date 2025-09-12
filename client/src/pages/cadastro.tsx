@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
 import { API } from "../config.js";
+import { Eye, EyeOff } from "lucide-react";
 
 type TipoPerfil = "Atleta" | "Professor" | "Escolinha" | "Clube" | "Admin" | "Olheiro";
 type Etapa = 1 | 2 | 3;
@@ -122,6 +123,8 @@ export default function Cadastro() {
 
   const [emailDisp, setEmailDisp] = useState<null | boolean>(null);
   const [userDisp, setUserDisp] = useState<null | boolean>(null);
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [mostrarConfirmar, setMostrarConfirmar] = useState(false);
 
   const verificarEmail = useMemo(
     () =>
@@ -319,7 +322,6 @@ export default function Cadastro() {
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen">
-      {/* Lado esquerdo */}
       <div className="w-full lg:w-1/2 bg-green-800 text-white flex flex-col justify-center items-center p-10">
         <img src={logo} alt="Logo FootEra" className="w-20 mb-4" />
         <h1 className="text-3xl font-bold mb-4">Bem-vindo à FootEra</h1>
@@ -336,10 +338,8 @@ export default function Cadastro() {
         </ul>
       </div>
 
-      {/* Lado direito (form) */}
       <div className="bg-cream flex justify-center items-center p-6 lg:p-10 w-full lg:w-1/2">
         <div className="bg-white rounded-2xl shadow-md w-full max-w-xl p-6">
-          {/* Stepper */}
           <div className="flex items-center justify-between mb-6">
             <Step n={1} label="Dados de Usuário" />
             <div className={`flex-1 mx-2 h-0.5 ${etapa >= 2 ? "bg-green-800" : "bg-gray-200"}`} />
@@ -348,7 +348,6 @@ export default function Cadastro() {
             <Step n={3} label="Complementar" />
           </div>
 
-          {/* Conteúdo por etapa */}
           {etapa === 1 && (
             <div>
               <h2 className="text-xl font-semibold mb-1">Criar conta</h2>
@@ -411,11 +410,44 @@ export default function Cadastro() {
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium mb-1">Senha</label>
-                  <input type="password" className="w-full border rounded px-3 py-2" value={senha} onChange={(e) => setSenha(e.target.value)} />
+                  <div className="relative">
+                    <input
+                      type={mostrarSenha ? "text" : "password"}
+                      autoComplete="new-password"
+                      className="w-full border rounded px-3 py-2 pr-10"
+                      value={senha}
+                      onChange={(e) => setSenha(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                      onClick={() => setMostrarSenha((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700"
+                    >
+                      {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium mb-1">Confirmar Senha</label>
-                  <input type="password" className="w-full border rounded px-3 py-2" value={confirmarSenha} onChange={(e) => setConfirmarSenha(e.target.value)} />
+                  <div className="relative">
+                    <input
+                      type={mostrarConfirmar ? "text" : "password"}
+                      autoComplete="new-password"
+                      className="w-full border rounded px-3 py-2 pr-10"
+                      value={confirmarSenha}
+                      onChange={(e) => setConfirmarSenha(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      aria-label={mostrarConfirmar ? "Ocultar senha" : "Mostrar senha"}
+                      onClick={() => setMostrarConfirmar((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700"
+                    >
+                      {mostrarConfirmar ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -759,7 +791,6 @@ export default function Cadastro() {
               <h2 className="text-xl font-semibold mb-1">Complementar</h2>
               <p className="text-sm text-green-600 mb-4">Revise e finalize o cadastro</p>
 
-              {/* Opção de vínculo só aparece para Atleta */}
               {tipoPerfil === "Atleta" && (
                 <div className="border rounded-md p-3 mb-4">
                   <label className="flex items-center text-sm">
@@ -836,7 +867,6 @@ export default function Cadastro() {
                             </div>
                           )}
 
-                          {/* Cartão de confirmação do selecionado */}
                           {selectedAlvo && (
                             <div className="mt-3 p-3 border rounded bg-gray-50 flex items-center gap-3">
                               <img
@@ -875,7 +905,6 @@ export default function Cadastro() {
                 </div>
               )}
 
-              {/* Resumo simples */}
               <div className="bg-gray-50 border rounded p-3 text-sm">
                 <div><span className="font-medium">Tipo:</span> {tipoPerfil}</div>
                 <div><span className="font-medium">Nome:</span> {nome}</div>

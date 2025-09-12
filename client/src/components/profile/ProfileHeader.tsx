@@ -4,6 +4,7 @@ import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send, Eye, Use
 import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 
 interface Usuario {
   id: string;
@@ -25,6 +26,15 @@ interface ProfileHeaderProps {
   foto?: string | null;
   isOwnProfile?: boolean;
   perfilId: string;
+}
+
+function Badge({ count }: { count?: number }) {
+  if (!count || count <= 0) return null;
+  return (
+    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] min-w-[18px] h-[18px] px-1 rounded-full leading-none flex items-center justify-center shadow">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
 }
 
 export default function ProfileHeader({
@@ -51,6 +61,11 @@ export default function ProfileHeader({
   const [seguindo, setSeguindo] = useState<boolean | null>(null);
   const [treinoJunto, setTreinoJunto] = useState<boolean | null>(null);
   const [observando, setObservando] = useState<boolean | null>(null);
+  const [notifCount, setNotifCount] = useState<number>(0);
+  const [unreadDM, setUnreadDM] = useState<number>(0);
+  const [badgeCount, setBadgeCount] = useState(0);
+
+  const storageKey = `tj_${Storage.usuarioId}_${perfilId}`;
 
   const [confirmBox, setConfirmBox] = useState<{
     open: boolean;
@@ -59,6 +74,73 @@ export default function ProfileHeader({
   } | null>(null);
 
   const [podeObservar, setPodeObservar] = useState(false);
+
+  useEffect(() => {
+    const onBadge = (e: Event) => {
+      const total = (e as CustomEvent<number>).detail ?? 0;
+      setBadgeCount(total);
+    };
+    window.addEventListener("badge:update", onBadge as EventListener);
+    return () => window.removeEventListener("badge:update", onBadge as EventListener);
+  }, []);
+
+  useEffect(() => {
+    if (!isOwnProfile) return;
+    const token = Storage.token;
+    if (!token) return;
+
+    (async () => {
+      try {
+        const r = await fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!r.ok) throw 0;
+        const arr = await r.json();
+        const me = Storage.usuarioId;
+        const pend = (arr || []).filter((x: any) => {
+          const s = String(x.status || "").toLowerCase();
+          const isPend = !s || /pend|solic|aguard|nov/i.test(s);
+          const destIsMe = [x.destinatarioId, x.usuarioId, x.userId].includes(me);
+          return isPend && destIsMe;
+        }).length;
+        setNotifCount(pend);
+      } catch {
+        setNotifCount(0);
+      }
+    })();
+  }, [isOwnProfile]);
+
+  useEffect(() => {
+    if (!isOwnProfile) return;
+    const token = Storage.token;
+    if (!token) return;
+
+    (async () => {
+      try {
+        const r = await fetch(`${API.BASE_URL}/api/mensagem/unread-count`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (r.ok) {
+          const j = await r.json();
+          const count = typeof j === "number" ? j : (j?.count ?? 0);
+          setUnreadDM(count);
+          return;
+        }
+      } catch {}
+
+      try {
+        const r = await fetch(`${API.BASE_URL}/api/mensagem/unread`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (r.ok) {
+          const arr = await r.json();
+          setUnreadDM(Array.isArray(arr) ? arr.length : 0);
+          return;
+        }
+      } catch {}
+      setUnreadDM(0);
+    })();
+  }, [isOwnProfile]);
 
     useEffect(() => {
     if (isOwnProfile || !perfilId) return;
@@ -115,11 +197,12 @@ export default function ProfileHeader({
         if (r.ok) {
           const arr = await r.json();
           const ativo = (arr || []).some((x: any) => {
-            const envolve = [x.destinatarioId, x.solicitanteId, x.usuarioId, x.userId].includes(perfilId);
-            const statusAtivo = /aceit|aprov|ativo/i.test(String(x.status || ""));
-            return envolve && statusAtivo;
-          });
-          setTreinoJunto(ativo);
+          const envolve = [x.destinatarioId, x.solicitanteId, x.usuarioId, x.userId].includes(perfilId);
+          const s = String(x.status || "");
+          const ligado = /aceit|aprov|ativ|pend|solic|aguard/i.test(s);
+          return envolve && ligado;
+        });
+          setTreinoJunto(ativo || localStorage.getItem(storageKey) === "1");
         } else {
           setTreinoJunto(false);
         }
@@ -290,15 +373,29 @@ export default function ProfileHeader({
     }
   };
 
-  const resolveImageSrc = () => {
-    if (!foto && !avatar) return "/attached_assets/Perfil.jpg";
-    const caminho = foto || avatar;
-    if (caminho?.startsWith("http") || caminho?.startsWith("/")) return caminho;
-    return `${API.BASE_URL}/uploads/${caminho}`;
-  };
-  const imageSrc = resolveImageSrc();
+  const imageSrc = formatarUrlFoto(foto ?? avatar, "usuarios");
 
   const alvoUsuarioId = isOwnProfile ? (Storage.usuarioId as string) : (idDaUrl as string);
+
+  useEffect(() => {
+    const token = Storage.token || localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+    if (!token) return;
+
+    const load = () => {
+      fetch(`${API.BASE_URL}/api/notificacoes/badge`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.json())
+        .then(d => setBadgeCount(d?.solicitacoes ?? 0))
+        .catch(() => setBadgeCount(0));
+    };
+
+    load();
+    const onFocus = () => document.visibilityState === "visible" && load();
+    document.addEventListener("visibilitychange", onFocus);
+    return () => document.removeEventListener("visibilitychange", onFocus);
+  }, []);
+
 
   useEffect(() => {
     if (!alvoUsuarioId) return;
@@ -365,11 +462,17 @@ const solicitarTreino = async (): Promise<boolean> => {
 const toggleTreino = async () => {
   if (treinoJunto) {
     const ok = await cancelarSolicitacaoTreino(perfilId);
-    if (ok) setTreinoJunto(false);
+    if (ok) {
+      setTreinoJunto(false);
+      localStorage.removeItem(storageKey);
+    }
     return;
   }
   const ok = await solicitarTreino();
-  if (ok) setTreinoJunto(true);
+  if (ok) {
+    setTreinoJunto(true);
+    localStorage.setItem(storageKey, "1");
+  }
 };
 
 const observarAtleta = async (): Promise<boolean> => {
@@ -426,19 +529,31 @@ const toggleObservar = async () => {
 
   return (
     <div className="footera-bg-green p-6 flex flex-col items-center relative">
-      {isOwnProfile && (
+       {isOwnProfile && (
         <div>
           <div className="absolute top-4 left-4 flex gap-2">
             <Link href="/mensagens">
-              <Button variant="ghost" size="icon" className="bg-white/10 hover:bg-white/20 text-white rounded-full">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative bg-white/10 hover:bg-white/20 text-white rounded-full"
+                title="Mensagens"
+              >
                 <Mail />
+                <Badge count={unreadDM} />
               </Button>
             </Link>
           </div>
           <div className="absolute top-4 right-4 flex gap-2">
             <Link href="/notificacoes">
-              <Button variant="ghost" size="icon" className="bg-white/10 hover:bg-white/20 text-white rounded-full">
-                <Bell size={18} />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative bg-white/10 hover:bg-white/20 text-white rounded-full"
+                title="Notificações"
+              >
+                <Bell />
+                <Badge count={badgeCount} />
               </Button>
             </Link>
             <Link href="/perfil/editar">

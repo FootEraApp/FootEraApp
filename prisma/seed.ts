@@ -20,7 +20,7 @@ async function main() {
     'teste': 'teste123',
     'aaaaa': 'aaaaa123',
     'admin': 'admin123',
-    'olheiro.joao': 'olheiro123',
+    'olheiro_joao': 'olheiro123',
   } as const;
 
   const H = Object.fromEntries(

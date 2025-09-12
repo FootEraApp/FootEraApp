@@ -28,19 +28,20 @@ type EscolaItem = {
   siteOficial?: string | null 
 };
 
-type DesafioItem = { id: string; titulo: string; imagemUrl?: string | null };
+type OlheiroItem = { id: string; usuario: UsuarioBasic; foto?: string | null };
+
 type DadosExplorar = {
   atletas: AtletaItem[];
   professores: ProfessorItem[];
+  olheiros: OlheiroItem[];   
   clubes: ClubeItem[];
   escolas: EscolaItem[];
 };
 
-
 function Explorar() {
   const [busca, setBusca] = useState("");
-  const [aba, setAba] = useState<"atletas" | "escolas" | "clubes" | "professores">("atletas");
-  const [dados, setDados] = useState<DadosExplorar>({ atletas: [], professores: [], clubes: [], escolas: [] });
+  const [aba, setAba] = useState<"atletas" | "escolas" | "clubes" | "profissionais">("atletas");
+  const [dados, setDados] = useState<DadosExplorar>({ atletas: [], professores: [], olheiros: [], clubes: [], escolas: [] });
 
   const loggedUserId = useMemo(
     () =>
@@ -72,22 +73,42 @@ function Explorar() {
         setDados({
           atletas: filtrarEu<AtletaItem>(data.atletas || []),
           professores: filtrarEu<ProfessorItem>(data.professores || []),
+          olheiros: filtrarEu<OlheiroItem>(data.olheiros || []),
           clubes: (data.clubes || []) as ClubeItem[],
           escolas: (data.escolas || []) as EscolaItem[],
         });
       })
       .catch((e) => {
         console.error(e);
-        setDados({ atletas: [], professores: [], clubes: [], escolas: [], });
+        setDados({ atletas: [], professores: [], olheiros: [], clubes: [], escolas: [], });
       });
   }, [busca, loggedUserId, filtrarEu]);
 
-  const abas: Array<["atletas" | "escolas" | "clubes" |  "professores", string]> = [
+  const abas: Array<["atletas" | "escolas" | "clubes" |  "profissionais", string]> = [
     ["atletas", "Atletas"],
     ["escolas", "Escolas"],
     ["clubes", "Clubes"],
-    ["professores", "Profissionais"],
+    ["profissionais", "Profissionais"],
   ];
+
+  const profissionais = useMemo(
+    () =>
+      [
+        ...(dados.professores || []).map((p) => ({
+          id: p.id,
+          usuario: p.usuario,
+          foto: p.usuario?.foto ?? p.foto,
+          role: "Professor" as const,
+        })),
+        ...(dados.olheiros || []).map((o) => ({
+          id: o.id,
+          usuario: o.usuario,
+          foto: o.usuario?.foto ?? o.foto,
+          role: "Olheiro" as const,
+        })),
+      ].filter((x) => x?.usuario?.id),
+    [dados.professores, dados.olheiros]
+  );
 
   return (
     <div className="min-h-screen bg-cream text-green-900">
@@ -210,18 +231,30 @@ function Explorar() {
           </>
         )}
 
-        {aba === "professores" && (
+        {aba === "profissionais" && (
           <>
             <h2 className="text-xl font-bold my-4">Profissionais</h2>
-            {dados.professores.length > 0 ? (
+
+            {profissionais.length > 0 ? (
               <div className="grid grid-cols-2 gap-3">
-                {dados.professores.map((p) => {
-                  const foto = formatarUrlFoto(p.usuario?.foto, "usuarios");
+                {profissionais.map((p) => {
+                  const foto = formatarUrlFoto(p.foto, "usuarios");
+                  const uid = p.usuario.id;
                   return (
-                    <Link href={`/perfil/${p.usuario.id}`} key={p.id}>
+                    <Link href={`/perfil/${uid}`} key={`${p.role}-${p.id}`}>
                       <div className="bg-white rounded shadow p-2 flex flex-col items-center">
-                        <img src={foto} alt="Foto do usuário" className="w-24 h-24 rounded-full object-cover" />
-                        <p className="mt-2 font-medium">{p.usuario.nome}</p>
+                        <img
+                          src={foto}
+                          alt="Foto do usuário"
+                          className="w-24 h-24 rounded-full object-cover"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`;
+                          }}
+                        />
+                        <p className="mt-2 font-medium text-center">{p.usuario.nome}</p>
+                        <span className="mt-1 text-[11px] px-1.5 py-0.2 rounded bg-green-800 text-white">
+                          {p.role}
+                        </span>
                       </div>
                     </Link>
                   );

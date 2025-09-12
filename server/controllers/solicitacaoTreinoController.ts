@@ -9,8 +9,10 @@ export async function listarSolicitacoesMinhas(req: Request, res: Response) {
 
   try {
     const rows = await prisma.solicitacaoTreino.findMany({
-      where: { OR: [{ remetenteId: me }, { destinatarioId: me }] },
-      orderBy: { criadoEm: "desc" },
+      where: { destinatarioId: req.userId },
+      include: {
+        remetente: { select: { id: true, nomeDeUsuario: true, foto: true } },
+      },
     });
     return res.json(rows);
   } catch {

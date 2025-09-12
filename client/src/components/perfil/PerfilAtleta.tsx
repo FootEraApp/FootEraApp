@@ -159,10 +159,13 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
     return <div className="text-center p-10 text-red-600">Erro ao carregar perfil.</div>;
   }
 
+  const afiliacaoTexto = [
+    perfil.dadosEspecificos.escola,
+    perfil.dadosEspecificos.clube,
+  ].filter(Boolean).join(" • ");
+
   const isIndependente =
-    perfil.tipo === "Atleta" &&
-    !perfil.dadosEspecificos.escola &&
-    !perfil.dadosEspecificos.clube;
+    perfil.tipo === "Atleta" && !afiliacaoTexto;
 
   const total = pontuacao?.pontuacaoTotal || 0;
 
@@ -173,13 +176,7 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
           nome={perfil.usuario.nome}
           idade={perfil.dadosEspecificos.idade}
           posicao={perfil.dadosEspecificos.posicao}
-          time={
-            perfil.tipo === "Atleta"
-              ? (perfil.dadosEspecificos.escola ||
-                 perfil.dadosEspecificos.clube ||
-                 "Independente")
-              : undefined
-          }
+          time={perfil.tipo === "Atleta" ? (afiliacaoTexto || "Independente") : undefined}
           pontuacao={total}
           isOwnProfile={isOwnProfile}
           foto={perfil.usuario.foto || perfil.dadosEspecificos.foto || undefined}

@@ -1,10 +1,8 @@
-// server/controllers/gerenciarAtletasController.ts
 import { PrismaClient, Categoria } from "@prisma/client";
 import { Request, Response } from "express";
 
 const prisma = new PrismaClient();
 
-// ===== Helpers =====
 const CATEGORIA_ORDER: Categoria[] = [
   "Sub9",
   "Sub11",
@@ -17,7 +15,6 @@ const CATEGORIA_ORDER: Categoria[] = [
 
 function pickMainCategoria(categorias: Categoria[] | null | undefined): Categoria | null {
   if (!categorias || categorias.length === 0) return null;
-  // pega a de maior "idade" (ordem do array acima)
   const sorted = [...categorias].sort(
     (a, b) => CATEGORIA_ORDER.indexOf(b) - CATEGORIA_ORDER.indexOf(a)
   );
@@ -38,7 +35,6 @@ function parseOrder(order?: string) {
   }
 }
 
-// Determina se o atleta está ativo recentemente (últimos 14 dias)
 async function isAtivoRecentemente(usuarioId: string) {
   const since = new Date();
   since.setDate(since.getDate() - 14);
@@ -49,10 +45,7 @@ async function isAtivoRecentemente(usuarioId: string) {
   return !!recent;
 }
 
-// ===== Controllers =====
 export const gerenciarAtletasController = {
-  // GET /api/gerenciar/atletas
-  // Query params: vinculo=escolinha|clube|professor, id=<usuarioId da entidade>, search, categoria, posicao, status, order
   list: async (req: Request, res: Response) => {
     try {
       const vinculo = String(req.query.vinculo || "").toLowerCase();
@@ -70,7 +63,6 @@ export const gerenciarAtletasController = {
         return res.status(400).json({ message: "Parâmetro 'id' (usuarioId da entidade) é obrigatório" });
       }
 
-      // resolve entidade pela tabela (a partir do usuarioId informado)
       let whereByVinculo: any = {};
       if (vinculo === "clube") {
         const entidade = await prisma.clube.findUnique({ where: { usuarioId: entidadeUsuarioId }, select: { id: true } });
@@ -81,15 +73,12 @@ export const gerenciarAtletasController = {
         if (!entidade) return res.status(404).json({ message: "Entidade não encontrada" });
         whereByVinculo = { escolinhaId: entidade.id };
       } else {
-        // professor
         const prof = await prisma.professor.findUnique({ where: { usuarioId: entidadeUsuarioId }, select: { id: true } });
         if (!prof) return res.status(404).json({ message: "Professor não encontrado" });
         whereByVinculo = {
-          relacoesTreinamento: { some: { professorId: prof.id } }, // via RelacaoTreinamento
+          relacoesTreinamento: { some: { professorId: prof.id } },
         };
       }
-
-      // filtros
       const where: any = { ...whereByVinculo };
       if (posicao) where.posicao = posicao;
       if (categoria) where.categoria = { has: categoria };
@@ -115,7 +104,6 @@ export const gerenciarAtletasController = {
         },
       });
 
-      // enriquece com ativoRecentemente + aplica status
       const enriched = await Promise.all(
         atletas.map(async (a) => {
           const ativo = await isAtivoRecentemente(a.usuarioId);
@@ -138,7 +126,6 @@ export const gerenciarAtletasController = {
         filtered = filtered.filter((x) => (status === "ativo" ? x.ativoRecentemente : !x.ativoRecentemente));
       }
 
-      // ordenação
       const ord = parseOrder(order);
       if ((ord as any).nome) {
         filtered.sort((a, b) => ((ord as any).nome === "asc" ? a.nome.localeCompare(b.nome) : b.nome.localeCompare(a.nome)));
@@ -155,7 +142,6 @@ export const gerenciarAtletasController = {
     }
   },
 
-  // GET /api/gerenciar/treinosprogramados?criador=escolinha|clube|professor&id=<usuarioId>
   listTreinos: async (req: Request, res: Response) => {
     try {
       const criador = String(req.query.criador || "").toLowerCase();
@@ -214,15 +200,13 @@ export const gerenciarAtletasController = {
     }
   },
 
-  // POST /api/gerenciar/treinosprogramados/convocar
-  // body: { treinoProgramadoId: string, destinatarios: string[] (usuarioIds de atletas), objetivo?, prazo?, origem: "escolinha"|"clube"|"professor" }
   convocarTreino: async (req: Request, res: Response) => {
     try {
       const { treinoProgramadoId, destinatarios, objetivo, prazo, origem } = req.body as {
         treinoProgramadoId: string;
-        destinatarios: string[]; // usuarioId dos atletas
+        destinatarios: string[];
         objetivo?: string;
-        prazo?: string; // yyyy-mm-dd
+        prazo?: string; 
         origem: "escolinha" | "clube" | "professor";
       };
 
@@ -236,7 +220,6 @@ export const gerenciarAtletasController = {
       const treino = await prisma.treinoProgramado.findUnique({ where: { id: treinoProgramadoId } });
       if (!treino) return res.status(404).json({ message: "Treino programado não encontrado" });
 
-      // converte usuarioId -> atletaId
       const atletas = await prisma.atleta.findMany({
         where: { usuarioId: { in: destinatarios } },
         select: { id: true, usuarioId: true },
@@ -244,7 +227,6 @@ export const gerenciarAtletasController = {
 
       if (atletas.length === 0) return res.status(400).json({ message: "Nenhum atleta válido encontrado" });
 
-      // cria registros TreinoProgramadoRecebido (evita duplicidade)
       for (const a of atletas) {
         const existente = await prisma.treinoProgramadoRecebido.findFirst({
           where: { atletaId: a.id, treinoId: treino.id },
@@ -257,7 +239,6 @@ export const gerenciarAtletasController = {
         }
       }
 
-      // opcional: criar TreinoAgendado com prazo/objetivo snapshot
       if (prazo || objetivo) {
         const dataExp = prazo ? new Date(prazo) : null;
         await prisma.$transaction(
@@ -266,10 +247,9 @@ export const gerenciarAtletasController = {
               data: {
                 atletaId: a.id,
                 treinoProgramadoId: treino.id,
-                // titulo é unique; timestamp ajuda a evitar colisão
                 titulo: `${treino.nome} · ${new Date().toISOString()}`,
                 dataExpiracao: dataExp ?? undefined,
-                local: objetivo ?? undefined, // guardando objetivo em 'local' como snapshot simples
+                local: objetivo ?? undefined,
               },
             })
           )
@@ -283,9 +263,7 @@ export const gerenciarAtletasController = {
     }
   },
 
-  // GET /api/gerenciar/atletas/:usuarioId/pontuacao
-  // Retorna resumo para painel lateral (mês corrente + evolução últimas 4 semanas)
-  statsAtleta: async (req: Request, res: Response) => {
+   statsAtleta: async (req: Request, res: Response) => {
     try {
       const usuarioId = String(req.params.usuarioId || "");
       if (!usuarioId) return res.status(400).json({ message: "usuarioId obrigatório" });
@@ -300,7 +278,6 @@ export const gerenciarAtletasController = {
         where: { atletaId: atleta.id, criadoEm: { gte: startOfMonth } },
       });
 
-      // Treinos do mês: considerando dataTreino (quando existir)
       const totalTreinosMes = await prisma.treinoAgendado.count({
         where: { atletaId: atleta.id, dataTreino: { gte: startOfMonth } },
       });
@@ -309,7 +286,6 @@ export const gerenciarAtletasController = {
         where: { atletaId: atleta.id, createdAt: { gte: startOfMonth } },
       });
 
-      // média das últimas 4 semanas baseada na pontuacaoSnapshot das submissões de treino
       const fourWeeksAgo = new Date();
       fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
       const ultimas = await prisma.submissaoTreino.findMany({
@@ -317,7 +293,6 @@ export const gerenciarAtletasController = {
         select: { criadoEm: true, pontuacaoSnapshot: true },
       });
 
-      // agrega por semana (cálculo simplificado)
       const buckets: Record<string, number> = {};
       for (const s of ultimas) {
         const d = new Date(s.criadoEm);
@@ -348,7 +323,6 @@ export const gerenciarAtletasController = {
     }
   },
 
-  // GET /api/gerenciar/ranking?vinculo=escolinha|clube|professor&id=<usuarioId>
   ranking: async (req: Request, res: Response) => {
     try {
       const vinculo = String(req.query.vinculo || "").toLowerCase();

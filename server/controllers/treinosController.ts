@@ -1,9 +1,34 @@
-import { Request, RequestHandler, Response } from "express";
+import { Response } from "express";
 import { PrismaClient } from "@prisma/client";
+import { getIO } from "../socket.js";
+import { AuthenticatedRequest } from "../middlewares/auth.js";
 
 const prisma = new PrismaClient();
 
-export async function agendarTreino(req: Request, res: Response) {
+async function notificarNovoTreino(deUsuarioId: string, atletaId: string, treinoId: string, titulo: string) {
+  const atleta = await prisma.atleta.findUnique({
+    where: { id: atletaId },
+    select: { usuarioId: true },
+  });
+  if (!atleta) return;
+
+  const saved = await prisma.mensagem.create({
+    data: {
+      deId: deUsuarioId,
+      paraId: atleta.usuarioId,
+      tipo: "NORMAL",
+      conteudo: `NOVO_TREINO:${treinoId}:${titulo}`,
+    },
+  });
+
+  const io = getIO();
+  if (io) {
+    io.to(atleta.usuarioId).emit("novaMensagem", { ...saved, pending: false });
+    io.to(deUsuarioId).emit("novaMensagem", { ...saved, pending: false });
+  }
+}
+
+export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
   try {
     const {
       treinoProgramadoId,
@@ -11,10 +36,18 @@ export async function agendarTreino(req: Request, res: Response) {
       dataExpiracao,
       titulo,
       atletaId: atletaIdBody,
-      tipoUsuarioId, 
-    } = req.body;
+      tipoUsuarioId,
+    } = req.body as {
+      treinoProgramadoId: string;
+      dataTreino: string;
+      dataExpiracao?: string | null;
+      titulo?: string | null;
+      atletaId?: string | null;
+      tipoUsuarioId?: string | null;
+    };
 
-    const atletaId = atletaIdBody || tipoUsuarioId; 
+    const deUsuarioId = req.userId!;
+    const atletaId = atletaIdBody || tipoUsuarioId;
     if (!treinoProgramadoId || !atletaId || !dataTreino) {
       return res.status(400).json({ message: "Dados incompletos." });
     }
@@ -32,24 +65,86 @@ export async function agendarTreino(req: Request, res: Response) {
       },
       include: {
         treinoProgramado: {
-          include: {
-            exercicios: { include: { exercicio: true } },
-          },
+          include: { exercicios: { include: { exercicio: true } } },
         },
       },
     });
 
-    return res.json(novo);
+    await notificarNovoTreino(deUsuarioId, atletaId, novo.id, novo.titulo ?? tp.nome);
+
+    return res.status(201).json(novo);
   } catch (error) {
     console.error("Erro ao agendar treino:", error);
     return res.status(500).json({ message: "Erro ao agendar treino." });
   }
 }
 
-export const getTreinosAgendados: RequestHandler = async (req, res) => {
+export async function criarTreino(req: AuthenticatedRequest, res: Response) {
+  try {
+    const {
+      nome,
+      descricao,
+      nivel,
+      categoria = [],
+      tipoTreino,
+      objetivo,
+      duracao,
+      dataTreino,        
+      dicas = [],
+      exercicios = [],
+      atletasIds = [],
+    } = req.body as any;
+
+    const criadorId = req.userId!;
+
+    const treino = await prisma.treinoProgramado.create({
+      data: {
+        codigo: `${nome}-${Date.now()}`,
+        nome,
+        descricao,
+        nivel,
+        categoria,
+        tipoTreino,
+        objetivo,
+        duracao,
+        dicas,
+        exercicios: {
+          create: (exercicios as any[]).map((ex: any, i: number) => ({
+            ordem: ex.ordem ?? i + 1,
+            repeticoes: ex.repeticoes ?? "",
+            exercicio: ex.exercicioId
+              ? { connect: { id: ex.exercicioId } }
+              : { create: { nome: ex.nome || `Exercício ${i + 1}`, codigo: `AUTO-${Date.now()}-${i}`, nivel: "Base", categorias: [] } },
+          })),
+        },
+      },
+    });
+
+    const prazo = dataTreino ? new Date(dataTreino) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+    for (const atletaId of atletasIds as string[]) {
+      const ag = await prisma.treinoAgendado.create({
+        data: {
+          atletaId,
+          treinoProgramadoId: treino.id,
+          titulo: nome,
+          dataTreino: prazo,
+          dataExpiracao: prazo,
+        },
+      });
+      await notificarNovoTreino(criadorId, atletaId, ag.id, nome);
+    }
+
+    res.status(201).json(treino);
+  } catch (e) {
+    console.error("Erro ao criar treino:", e);
+    res.status(500).json({ message: "Erro ao criar treino." });
+  }
+}
+
+export async function getTreinosAgendados(req: AuthenticatedRequest, res: Response) {
   try {
     const q = req.query as Record<string, string | undefined>;
-    const authUserId = (req as any).userId as string | undefined;
+    const authUserId = req.userId;
 
     const atletaIdParam = q.atletaId;
     const usuarioIdParam = q.usuarioId || authUserId || null;
@@ -62,20 +157,13 @@ export const getTreinosAgendados: RequestHandler = async (req, res) => {
         where: { id: String(usuarioIdParam) },
         include: { atleta: true, professor: true, clube: true, escolinha: true },
       });
+      if (!usuario) return res.json([]);
 
-      if (!usuario) return res.json([]); 
-
-      if (usuario.atleta) {
-        where.atletaId = usuario.atleta.id;
-      } else if (usuario.professor) {
-        where.treinoProgramado = { professorId: usuario.professor.id };
-      } else if (usuario.clube) {
-        where.treinoProgramado = { clubeId: usuario.clube.id };
-      } else if (usuario.escolinha) {
-        where.treinoProgramado = { escolinhaId: usuario.escolinha.id };
-      } else {
-        return res.json([]);
-      }
+      if (usuario.atleta) where.atletaId = usuario.atleta.id;
+      else if (usuario.professor) where.treinoProgramado = { professorId: usuario.professor.id };
+      else if (usuario.clube) where.treinoProgramado = { clubeId: usuario.clube.id };
+      else if (usuario.escolinha) where.treinoProgramado = { escolinhaId: usuario.escolinha.id };
+      else return res.json([]);
     } else {
       return res.json([]);
     }
@@ -91,9 +179,9 @@ export const getTreinosAgendados: RequestHandler = async (req, res) => {
     console.error("Erro em getTreinosAgendados:", err);
     return res.status(500).json({ message: "Erro ao buscar treinos agendados" });
   }
-};
+}
 
-export async function listarTodosTreinosProgramados(req: Request, res: Response) {
+export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, res: Response) {
   try {
     const rows = await prisma.treinoProgramado.findMany({
       include: {
@@ -131,7 +219,7 @@ export async function listarTodosTreinosProgramados(req: Request, res: Response)
   }
 }
 
-export const excluirTreinoAgendado = async (req: Request, res: Response) => {
+export const excluirTreinoAgendado = async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
 
   try {
@@ -147,7 +235,7 @@ export const excluirTreinoAgendado = async (req: Request, res: Response) => {
 };
 
 export const treinosController = {
- async disponiveis(req: Request, res: Response) {
+ async disponiveis(req: AuthenticatedRequest, res: Response) {
   try {
     const treinos = await prisma.treinoProgramado.findMany({
       include: {
@@ -181,7 +269,7 @@ export const treinosController = {
   }
 },
 
-  async dashboard(req: Request, res: Response) {
+  async dashboard(req: AuthenticatedRequest, res: Response) {
     try {
       const treinos = await prisma.treinoProgramado.findMany({
         include: {
@@ -204,7 +292,7 @@ export const treinosController = {
   },
 };
 
-export async function obterTreinoProgramadoPorId(req: Request, res: Response) {
+export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res: Response) {
   try {
     const { id } = req.params;
     const treino = await prisma.treinoProgramado.findUnique({
@@ -226,7 +314,7 @@ export async function obterTreinoProgramadoPorId(req: Request, res: Response) {
   }
 }
 
-export async function concluirTreino(req: Request, res: Response) {
+export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
   try {
     const { treinoAgendadoId, atletaId, pontos } = req.body as {
       treinoAgendadoId: string; atletaId: string; pontos?: number;
