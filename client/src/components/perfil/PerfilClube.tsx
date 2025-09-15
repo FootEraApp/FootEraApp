@@ -24,7 +24,6 @@ type PayloadClube = {
     telefone2?: string | null;
     email?: string | null;
     siteOficial?: string | null;
-    sede?: string | null;
     estadio?: string | null;
     logradouro?: string | null;
     numero?: string | null;
@@ -38,6 +37,7 @@ type PayloadClube = {
     dataCriacao: string;
     categorias?: string[] | null;
     responsavel?: string | null;
+    descricao?: string | null;
   };
   metrics: { atletas: number; eventos?: number; conquistas?: number };
 };
@@ -246,7 +246,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
             <h3 className="font-semibold text-green-900 mb-2">Informações do Clube</h3>
             <ul className="text-sm text-green-900/90 space-y-1">
               <li><b>Nome:</b> {data.clube.nome}</li>
-              {data.clube.sede && <li><b>Sede:</b> {data.clube.sede}</li>}
               {data.clube.estadio && <li><b>Estádio:</b> {data.clube.estadio}</li>}
               {(data.clube.cidade || data.clube.estado || data.clube.pais) && (
                 <li>
@@ -280,8 +279,20 @@ export default function PerfilClube({ idDaUrl }: Props) {
             </div>
           </div>
 
+           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
+            <h3 className="font-semibold text-green-900 mb-2">Sobre o Clube</h3>
+            {data.clube.descricao?.trim() ? (
+              <p className="text-sm text-green-900/90 whitespace-pre-wrap">
+                {data.clube.descricao}
+              </p>
+            ) : (
+              <p className="text-sm text-green-900/70">Sem descrição cadastrada.</p>
+            )}
+          </div>
+
+          {/* renomeie a seção para reforçar que é base */}
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
-            <h3 className="font-semibold text-green-900 mb-2">Categorias</h3>
+            <h3 className="font-semibold text-green-900 mb-2">Categorias de Base</h3>
             {data.clube.categorias?.length ? (
               <div className="flex flex-wrap gap-2">
                 {data.clube.categorias.map((c) => (
@@ -291,7 +302,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-green-900/70">Nenhuma categoria cadastrada.</p>
+              <p className="text-sm text-green-900/70">Nenhuma categoria de base cadastrada.</p>
             )}
           </div>
 

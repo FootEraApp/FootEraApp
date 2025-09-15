@@ -34,6 +34,11 @@ import PaginaMinhaRede from "./pages/minhaRede.js";
 import PaginaPontuacaoDePerfil from "./pages/perfilPontuacaoExplorar.js";
 import PaginaElenco from "./pages/elenco.js";
 import PaginaGerenciarAtleta from "./pages/GerenciarAtletas.js"
+import PaginaPerfilClube from "./components/perfil/PerfilClube.js";
+import PaginaPerfilEscola from "./components/perfil/PerfilEscola.js";
+import PaginaPerfilOlheiro from "./components/perfil/PerfilOlheiro.js";
+import PaginaPerfilAtleta from "./components/perfil/PerfilAtleta.js";
+import PaginaPerfilProfessor from "./components/perfil/PerfilProfessor.js";
 
 export function AppRoutes() {
   return (
@@ -67,6 +72,10 @@ export function AppRoutes() {
         <RequireAdmin>
           <AdminDashboard />
         </RequireAdmin>
+      </Route>
+
+      <Route path="/perfil-olheiro/:id">
+        {({ id }: { id: string }) => <PaginaPerfilOlheiro idDaUrl={id} />}
       </Route>
 
       <Route path="/perfil/GerenciarAtletas">

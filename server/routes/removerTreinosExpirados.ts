@@ -17,7 +17,6 @@ export async function removerTreinosExpirados() {
 
   for (const treino of treinos) {
     if (treino.naoExpira) {
-      console.log(`[SKIP] ${treino.nome} marcado como 'naoExpira'.`);
       continue;
     }
 
@@ -25,7 +24,6 @@ export async function removerTreinosExpirados() {
     const expirado = !!(expiracao && agora > expiracao);
 
     if (!expirado) {
-      console.log(`[OK] ${treino.nome} ainda válido.`);
       continue;
     }
 
@@ -34,9 +32,7 @@ export async function removerTreinosExpirados() {
     });
 
     if (temSub > 0) {
-      console.log(
-        `[SKIP] ${treino.nome} expirado mas tem ${temSub} submissão(ões) – não será deletado.`
-      );
+
       continue;
     }
 

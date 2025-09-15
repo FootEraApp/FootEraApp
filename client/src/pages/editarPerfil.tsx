@@ -85,18 +85,26 @@ const EditarPerfil = () => {
   const renderCamposEspecificos = () => {
     if (!dadosTipo) return null;
 
-    const renderInput = (label: string, name: string, type = "text") => (
-      <div className="mb-4" key={name}>
-        <label className="block text-sm font-medium">{label}</label>
-        <input
-          type={type}
-          name={`tipo_${name}`}
-          value={dadosTipo[name] ?? ""}
-          onChange={handleChange}
-          className="w-full border px-3 py-2 rounded"
-        />
-      </div>
-    );
+    const renderInput = (label: string, name: string, type = "text") => {
+      const raw = dadosTipo[name];
+      const value =
+        name === "categorias"
+          ? (Array.isArray(raw) ? raw.join(", ") : (raw ?? ""))
+          : (raw ?? "");
+
+      return (
+        <div className="mb-4" key={name}>
+          <label className="block text-sm font-medium">{label}</label>
+          <input
+            type={type}
+            name={`tipo_${name}`}
+            value={value}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+          />
+        </div>
+      );
+    };
 
     switch (tipoRender) {
       case 'atleta':
@@ -146,6 +154,7 @@ const EditarPerfil = () => {
             {renderInput("CEP", "cep")}
           </>
         );
+      
       case 'clube':
         return (
           <>
@@ -164,35 +173,27 @@ const EditarPerfil = () => {
             {renderInput("Estado", "estado")}
             {renderInput("País", "pais")}
             {renderInput("CEP", "cep")}
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium">Descrição</label>
+              <textarea
+                name="tipo_descricao"
+                value={dadosTipo["descricao"] ?? ""}
+                onChange={handleChange}
+                className="w-full border px-3 py-2 rounded"
+                rows={4}
+                placeholder="Fale sobre o clube, história, missão, etc."
+              />
+            </div>
+
+            {renderInput("Categorias de Base (separadas por vírgula)", "categorias")}
+            <p className="text-xs text-gray-500 -mt-3 mb-2">
+              Ex.: Sub-9, Sub-11, Sub-13, Sub-15, Sub-17, Sub-20
+            </p>
           </>
         );
-        case 'olheiro':
-          return (
-            <>
-              {renderInput("Área de Atuação", "areaAtuacao")}
-              {renderInput("Anos de Experiência", "anosExperiencia", "number")}
-              {renderInput("Headline", "headline")}
-              {renderInput("Site/LinkedIn", "siteOuLinkedin")}
-              {renderInput("Telefone (público)", "telefonePublico")}
-              {renderInput("E-mail (público)", "emailPublico")}
-              <div className="mb-4">
-                <label className="block text-sm font-medium">Sobre / Descrição</label>
-                <textarea
-                  name="tipo_descricao"
-                  value={dadosTipo["descricao"] ?? ""}
-                  onChange={handleChange}
-                  className="w-full border px-3 py-2 rounded"
-                  rows={4}
-                />
-              </div>
-              {renderInput("Colaboração com Clube (ID opcional)", "colaboracaoClubeId")}
-            </>
-          );
-      default:
-        return null;
-      }
-    };
-
+      };
+    }
     return (
       <div className="p-6 max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">Editar Perfil</h1>
@@ -279,49 +280,41 @@ const EditarPerfil = () => {
               formData.append("foto", dadosUsuario.foto);
               formData.append("usuarioId", usuarioId!);
               formData.append("tipo", tipoUsuarioOriginal!);
-
               const uploadRes = await axios.post(`${API.BASE_URL}/api/upload/perfil`, formData, {
-                headers: {Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
               });
               fotoUrl = uploadRes.data.url;
             }
 
-          const tipo = { ...dadosTipo };
+            const tipo: any = { ...dadosTipo };
+
             if (tipo.siteOficial && !tipo.site) tipo.site = tipo.siteOficial;
 
-            ["escola", "clube"].forEach((k) => {
-              if (typeof tipo[k] === "string") {
-                const v = (tipo[k] as string).trim();
-                if (v) tipo[k] = v;
-                else delete tipo[k];
-              }
-            });
+            if (typeof tipo.categorias === "string") {
+              tipo.categorias = tipo.categorias
+                .split(",")
+                .map((s: string) => s.trim())
+                .filter(Boolean);
+            }
 
             if (typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== "") {
               const n = Number(tipo.anosExperiencia);
               tipo.anosExperiencia = Number.isNaN(n) ? undefined : n;
             }
-
             if (tipoUsuarioOriginal === "professor") {
               if (typeof tipo.qualificacoes === "string") {
-                tipo.qualificacoes = tipo.qualificacoes.split(',').map((q: string) => q.trim());
+                tipo.qualificacoes = tipo.qualificacoes.split(",").map((q: string) => q.trim()).filter(Boolean);
               }
               if (typeof tipo.certificacoes === "string") {
-                tipo.certificacoes = tipo.certificacoes.split(',').map((c: string) => c.trim());
+                tipo.certificacoes = tipo.certificacoes.split(",").map((c: string) => c.trim()).filter(Boolean);
               }
             }
 
-            await axios.put(
-              `${API.BASE_URL}/api/perfil/${usuarioId}`,
-              {
-                usuario: { ...dadosUsuario, foto: fotoUrl },
-                tipo,
-                tipoUsuario: tipoUsuarioOriginal
-              },
-              {
-                headers: { Authorization: `Bearer ${token}` }
-              }
-            );
+            await axios.put(`${API.BASE_URL}/api/perfil/${usuarioId}`, {
+              usuario: { ...dadosUsuario, foto: fotoUrl },
+              tipo,
+              tipoUsuario: tipoUsuarioOriginal,
+            }, { headers: { Authorization: `Bearer ${token}` } });
 
             alert("Dados atualizados com sucesso!");
             window.location.href = "/perfil";
