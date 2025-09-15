@@ -145,7 +145,7 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
   const W = size?.w ?? SHIELD_W_DESK;
   const H = size?.h ?? SHIELD_H_DESK;
   const clipId = `shieldClip-${atleta.atletaId}`;
-  const fotoUrl = atleta.foto ? `${API.BASE_URL}${atleta.foto}` : "/default-avatar.png";
+  const fotoUrl = atleta.foto ? `${atleta.foto}` : "/default-avatar.png";
 
   const ovrShow  = Number.isFinite(ovr)  ? Math.round(Number(ovr))  : 0;
   const perfShow = Number.isFinite(perf) ? Math.round(Number(perf)) : 0;
@@ -235,7 +235,7 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
 const CardAtleta: React.FC<{ atleta: Atleta }> = ({ atleta }) => (
   <div className="p-2 bg-white rounded-md shadow w-[180px] sm:w-[200px] flex items-center gap-3">
     <img
-      src={atleta.foto ? `${API.BASE_URL}${atleta.foto}` : "/default-avatar.png"}
+      src={atleta.foto ? `${atleta.foto}` : "/default-avatar.png"}
       alt={atleta.nome}
       className="w-10 h-10 rounded-full object-cover"
     />
