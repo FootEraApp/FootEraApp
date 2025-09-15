@@ -1,4 +1,3 @@
-// client/src/pages/novoTreino.tsx
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from "lucide-react";
@@ -6,6 +5,8 @@ import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 
 interface UsuarioLogado {
+  // valores persistidos no Storage/localStorage podem variar ("escola" para escolinha)
+  // aqui apenas usamos para renderização; ao enviar para o backend normalizamos para "Professor" | "Clube" | "Escolinha"
   tipo: "atleta" | "escola" | "escolinha" | "clube" | "professor";
 }
 
@@ -54,8 +55,6 @@ type TreinoAgendadoResp = {
 
 /** =====================  Utilities (autosave)  ===================== **/
 const SAVE_KEY = "novoTreinoState";
-
-const mediaUrl = (u?: string) => (!u ? "" : u.startsWith("http") ? u : `${API.BASE_URL}${u}`);
 
 function safeParse<T>(str: string | null, fallback: T): T {
   try {
@@ -165,13 +164,9 @@ export default function NovoTreino() {
   const [dicas, setDicas] = useState<string[]>([]);
   const [dicaAtual, setDicaAtual] = useState<string>("");
 
-  // busca/filtragem da lista de exercícios
   const [filtroEx, setFiltroEx] = useState("");
-
-  // rastrear carregamento/restauração única
   const restoredRef = useRef(false);
 
-  /** =====================  Normalização de treinos  ===================== **/
   function normalizaTreinos(raw: any[]): TreinoProgramado[] {
     return raw.map((t: any) => ({
       id: t.id,
@@ -191,7 +186,7 @@ export default function NovoTreino() {
     const tipoPersistido = (
       localStorage.getItem("tipoUsuario") ??
       sessionStorage.getItem("tipoUsuario") ??
-      Storage.tipoSalvo ??
+      (Storage as any).tipoSalvo ??
       ""
     )
       .toString()
@@ -412,7 +407,6 @@ export default function NovoTreino() {
   };
 
   /** =====================  Derivados (sempre fora de condicionais!)  ===================== **/
-  // ⚠️ Mantido aqui, acima de qualquer return condicional, para não quebrar a ordem dos hooks
   const exerciciosFiltrados = useMemo(() => {
     const q = filtroEx.trim().toLowerCase();
     if (!q) return exerciciosDisponiveis;
@@ -461,50 +455,116 @@ export default function NovoTreino() {
     }
   };
 
+  // normalizar o par (tipoUsuario, tipoUsuarioId) para o backend
+  function getDono() {
+    const tipoRaw =
+      (Storage as any).tipoSalvo ??
+      localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario") ??
+      "";
+
+    // "escola" (frontend) == "Escolinha" (backend)
+    const normalized =
+      String(tipoRaw).trim().toLowerCase() === "escola" || String(tipoRaw).trim().toLowerCase() === "escolinha"
+        ? "Escolinha"
+        : String(tipoRaw).trim().toLowerCase() === "professor"
+        ? "Professor"
+        : String(tipoRaw).trim().toLowerCase() === "clube"
+        ? "Clube"
+        : null;
+
+    const tipoUsuarioId =
+      (Storage as any).tipoUsuarioId ||
+      localStorage.getItem("tipoUsuarioId") ||
+      sessionStorage.getItem("tipoUsuarioId") ||
+      null;
+
+    return { tipoUsuario: normalized as "Professor" | "Clube" | "Escolinha" | null, tipoUsuarioId };
+  }
+
   const criarTreino = async () => {
-    const exerciciosParaEnvio = exerciciosSelecionados.map((ex, index) => ({
-      exercicioId: ex.exercicioId,
-      nome: ex.nome,
-      descricao: ex.descricao,
-      repeticoes: ex.repeticoes,
-      series: ex.series,
-      ordem: index + 1,
-    }));
+    try {
+      const { tipoUsuario, tipoUsuarioId } = getDono();
 
-    if (!usuarioId) {
-      alert("Erro: usuário não autenticado.");
-      return;
-    }
+      if (!tipoUsuario || !tipoUsuarioId) {
+        alert("Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).");
+        return;
+      }
 
-    const res = await fetch(`${API.BASE_URL}/api/treinos`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      if (!usuarioId) {
+        alert("Erro: usuário não autenticado.");
+        return;
+      }
+
+      const token =
+        (Storage as any).token ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token") ||
+        "";
+
+      const exerciciosParaEnvio = exerciciosSelecionados.map((ex, index) => ({
+        exercicioId: ex.exercicioId,
+        nome: ex.nome,
+        descricao: ex.descricao,
+        repeticoes: ex.repeticoes,
+        series: ex.series,
+        ordem: index + 1,
+      }));
+
+      // gerar um 'codigo' padrão se não houver um input específico
+      const codigo =
+        `${nome}`.trim()
+          ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) + "-" + Date.now().toString(36)
+          : "TP-" + Date.now().toString(36);
+
+      const payload = {
+        // obrigatórios
         nome,
-        descricao,
-        nivel,
-        categoria: [categoria],
+        codigo,
+        nivel, // "Base" | "Avancado" | "Performance"
+        categoria: [categoria], // no schema é Categoria[]
+        // opcionais
         tipoTreino,
         objetivo,
         duracao,
-        dataTreino,
+        dataAgendada: dataTreino || null,
         dicas,
+        metas: null as string | null,
+        pontuacao: null as number | null,
+        // dono do treino
+        tipoUsuario, // "Professor" | "Clube" | "Escolinha"
+        tipoUsuarioId, // ID da tabela correspondente
+        // exercícios
         exercicios: exerciciosParaEnvio,
-        usuarioId,
-        tipoUsuario: usuario?.tipo,
+        // seleção de atletas (guarda para agendamento posterior em outra rota/fluxo)
         atletasIds: atletasSelecionados,
-      }),
-    });
+      };
 
-    if (res.ok) {
+      const res = await fetch(`${API.BASE_URL}/api/treinosprogramados`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        console.error("Erro ao criar treino:", errJson);
+        alert(errJson?.message || "Erro ao criar treino. Verifique o console.");
+        return;
+      }
+
       alert("Treino criado com sucesso!");
       sessionStorage.removeItem(SAVE_KEY);
       setEtapa(1);
       setCompletedUntil(1);
-    } else {
-      const erro = await res.json().catch(() => ({}));
-      console.error("Erro ao criar treino:", erro);
-      alert("Erro ao criar treino. Verifique o console.");
+      // opcional: navegar para /treinos
+      // navigate("/treinos");
+    } catch (e) {
+      console.error("Falha inesperada ao criar treino:", e);
+      alert("Erro inesperado ao criar treino.");
     }
   };
 
