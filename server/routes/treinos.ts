@@ -32,6 +32,7 @@ router.delete('/agendados/:id', authenticateToken, excluirTreinoAgendado);
 router.get("/agendados", authenticateToken, getTreinosAgendados);
 router.get("/disponiveis", treinosController.disponiveis);
 router.get("/programados", listarTodosTreinosProgramados);
+
 router.get("/elencos/:id/escala", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;

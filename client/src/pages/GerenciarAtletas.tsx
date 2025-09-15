@@ -323,6 +323,19 @@ const GerenciarAtletas: React.FC = () => {
     return Object.keys(selecionados).filter((k) => selecionados[k]);
   }, [alcance, filtrados, selecionados, categoriaFiltroDesignacao]);
 
+  // 👉 leva os ids pré-selecionados para /treinos/novo (novoTreino.tsx usa sessionStorage: "novoTreinoState")
+  const irCriarTreinoComPreselecionados = () => {
+    try {
+      const prev = JSON.parse(sessionStorage.getItem("novoTreinoState") || "{}");
+      const next = {
+        ...prev,
+        atletasSelecionados: Array.from(new Set(idsDestino.length ? idsDestino : filtrados.map((a) => a.usuarioId || a.id))),
+      };
+      sessionStorage.setItem("novoTreinoState", JSON.stringify(next));
+    } catch {}
+    window.location.href = "/treinos/novo";
+  };
+
   const enviarDesignacao = async () => {
     if (!treinoSelecionado) return alert("Selecione um treino");
     if (idsDestino.length === 0) return alert("Nenhum atleta selecionado para designação");
@@ -628,26 +641,6 @@ const GerenciarAtletas: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="mt-4">
-                  <div className="mb-2 flex items-center gap-2 text-sm text-zinc-700">
-                    <Target className="h-4 w-4" /> Evolução (últimas semanas)
-                  </div>
-                  <div className="space-y-2">
-                    {(stats?.evolucaoPontuacaoSemanas || []).map((s, idx) => {
-                      const pct = Math.min(100, Math.max(0, s.pontos));
-                      return (
-                        <div key={idx} className="flex items-center gap-2">
-                          <div className="w-10 shrink-0 text-xs text-zinc-500">{s.semana}</div>
-                          <div className="h-2 w-full rounded-full bg-zinc-100">
-                            <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
-                          </div>
-                          <div className="w-10 shrink-0 text-right text-xs text-zinc-500">{s.pontos}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 <div className="mt-4 flex items-center justify-end gap-2">
                   <button
                     onClick={() => {
@@ -714,19 +707,46 @@ const GerenciarAtletas: React.FC = () => {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-600">Treino</label>
-                  <select
-                    value={treinoSelecionado}
-                    onChange={(e) => setTreinoSelecionado(e.target.value)}
-                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
-                  >
-                    <option value="">Selecione um treino…</option>
-                    {treinosDisponiveis.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.titulo}
-                      </option>
-                    ))}
-                  </select>
+
+                  {/* Se não houver treinos do perfil: sugere criar novo e leva os atletas pré-selecionados */}
+                  {treinosDisponiveis.length === 0 ? (
+                    <>
+                      <select
+                        disabled
+                        className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-400"
+                      >
+                        <option>Nenhum treino programado encontrado</option>
+                      </select>
+
+                      <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                        <div className="font-medium">Você ainda não tem treinos programados.</div>
+                        <div className="mt-1">
+                          Crie um treino agora — já levaremos <b>{idsDestino.length}</b> atleta(s) selecionado(s) para a etapa 4.
+                        </div>
+                        <button
+                          onClick={irCriarTreinoComPreselecionados}
+                          className="mt-3 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-white hover:bg-emerald-700"
+                        >
+                          Criar treino em /treinos/novo
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <select
+                      value={treinoSelecionado}
+                      onChange={(e) => setTreinoSelecionado(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+                    >
+                      <option value="">Selecione um treino…</option>
+                      {treinosDisponiveis.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.titulo}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
+
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-600">Prazo (opcional)</label>
                   <input
@@ -736,6 +756,7 @@ const GerenciarAtletas: React.FC = () => {
                     className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
                   />
                 </div>
+
                 <div className="sm:col-span-2">
                   <label className="mb-1 block text-xs font-medium text-zinc-600">Objetivo (opcional)</label>
                   <input
@@ -795,8 +816,9 @@ const GerenciarAtletas: React.FC = () => {
                 </button>
                 <button
                   onClick={enviarDesignacao}
-                  disabled={salvandoDesignacao}
+                  disabled={salvandoDesignacao || treinosDisponiveis.length === 0}
                   className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-white hover:bg-emerald-700 disabled:opacity-70"
+                  title={treinosDisponiveis.length === 0 ? "Crie um treino primeiro" : "Designar treino"}
                 >
                   {salvandoDesignacao ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   Designar treino

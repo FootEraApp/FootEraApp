@@ -5,22 +5,10 @@ import { Request, Response } from "express";
 const prisma = new PrismaClient();
 
 // ===== Helpers =====
-const CATEGORIA_ORDER: Categoria[] = [
-  "Sub9",
-  "Sub11",
-  "Sub13",
-  "Sub15",
-  "Sub17",
-  "Sub20",
-  "Livre",
-];
-
+const CATEGORIA_ORDER: Categoria[] = ["Sub9", "Sub11", "Sub13", "Sub15", "Sub17", "Sub20", "Livre"];
 function pickMainCategoria(categorias: Categoria[] | null | undefined): Categoria | null {
   if (!categorias || categorias.length === 0) return null;
-  // pega a de maior "idade" (ordem do array acima)
-  const sorted = [...categorias].sort(
-    (a, b) => CATEGORIA_ORDER.indexOf(b) - CATEGORIA_ORDER.indexOf(a)
-  );
+  const sorted = [...categorias].sort((a, b) => CATEGORIA_ORDER.indexOf(b) - CATEGORIA_ORDER.indexOf(a));
   return sorted[0] ?? null;
 }
 
@@ -38,7 +26,6 @@ function parseOrder(order?: string) {
   }
 }
 
-// Determina se o atleta está ativo recentemente (últimos 14 dias)
 async function isAtivoRecentemente(usuarioId: string) {
   const since = new Date();
   since.setDate(since.getDate() - 14);
@@ -49,17 +36,15 @@ async function isAtivoRecentemente(usuarioId: string) {
   return !!recent;
 }
 
-// ===== Controllers =====
 export const gerenciarAtletasController = {
   // GET /api/gerenciar/atletas
-  // Query params: vinculo=escolinha|clube|professor, id=<usuarioId da entidade>, search, categoria, posicao, status, order
   list: async (req: Request, res: Response) => {
     try {
       const vinculo = String(req.query.vinculo || "").toLowerCase();
       const entidadeUsuarioId = String(req.query.id || "");
       const search = (req.query.search as string) || "";
       const categoria = (req.query.categoria as Categoria) || undefined;
-      const posicao = (req.query.posicao as string) || undefined;
+      const posicaoFiltro = (req.query.posicao as string) || undefined; // posição efetiva (elenco)
       const status = (req.query.status as "ativo" | "inativo" | undefined) || undefined;
       const order = (req.query.order as string) || "pontuacao_desc";
 
@@ -70,28 +55,39 @@ export const gerenciarAtletasController = {
         return res.status(400).json({ message: "Parâmetro 'id' (usuarioId da entidade) é obrigatório" });
       }
 
-      // resolve entidade pela tabela (a partir do usuarioId informado)
+      // === Resolve entidade pelo usuarioId e prepara filtro base de vínculo ===
       let whereByVinculo: any = {};
+      let entidadeId: string | null = null;
+
       if (vinculo === "clube") {
-        const entidade = await prisma.clube.findUnique({ where: { usuarioId: entidadeUsuarioId }, select: { id: true } });
+        const entidade = await prisma.clube.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
+          select: { id: true },
+        });
         if (!entidade) return res.status(404).json({ message: "Entidade não encontrada" });
+        entidadeId = entidade.id;
         whereByVinculo = { clubeId: entidade.id };
       } else if (vinculo === "escolinha") {
-        const entidade = await prisma.escolinha.findUnique({ where: { usuarioId: entidadeUsuarioId }, select: { id: true } });
+        const entidade = await prisma.escolinha.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
+          select: { id: true },
+        });
         if (!entidade) return res.status(404).json({ message: "Entidade não encontrada" });
+        entidadeId = entidade.id;
         whereByVinculo = { escolinhaId: entidade.id };
       } else {
         // professor
-        const prof = await prisma.professor.findUnique({ where: { usuarioId: entidadeUsuarioId }, select: { id: true } });
+        const prof = await prisma.professor.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
+          select: { id: true },
+        });
         if (!prof) return res.status(404).json({ message: "Professor não encontrado" });
-        whereByVinculo = {
-          relacoesTreinamento: { some: { professorId: prof.id } }, // via RelacaoTreinamento
-        };
+        entidadeId = prof.id;
+        whereByVinculo = { relacoesTreinamento: { some: { professorId: prof.id } } };
       }
 
-      // filtros
+      // === Filtros básicos no banco (não filtrar por Atleta.posicao aqui)
       const where: any = { ...whereByVinculo };
-      if (posicao) where.posicao = posicao;
       if (categoria) where.categoria = { has: categoria };
       if (search) {
         where.OR = [
@@ -100,6 +96,7 @@ export const gerenciarAtletasController = {
         ];
       }
 
+      // Busca atletas vinculados à entidade
       const atletas = await prisma.atleta.findMany({
         where,
         select: {
@@ -108,24 +105,53 @@ export const gerenciarAtletasController = {
           nome: true,
           idade: true,
           foto: true,
-          posicao: true,
+          posicao: true, // fallback
           categoria: true,
           usuario: { select: { nome: true } },
           pontuacao: { select: { pontuacaoTotal: true } },
         },
       });
 
-      // enriquece com ativoRecentemente + aplica status
+      // === Coleta todos os elencos da entidade (sem orderBy em Elenco)
+      let elencoIds: string[] = [];
+      if (vinculo === "clube" && entidadeId) {
+        const elencos = await prisma.elenco.findMany({ where: { clubeId: entidadeId }, select: { id: true } });
+        elencoIds = elencos.map((e) => e.id);
+      } else if (vinculo === "escolinha" && entidadeId) {
+        const elencos = await prisma.elenco.findMany({ where: { escolinhaId: entidadeId }, select: { id: true } });
+        elencoIds = elencos.map((e) => e.id);
+      } else if (vinculo === "professor" && entidadeId) {
+        const elencos = await prisma.elenco.findMany({ where: { professorId: entidadeId }, select: { id: true } });
+        elencoIds = elencos.map((e) => e.id);
+      }
+
+      // === Mapa atletaId -> posição mais recente no(s) elencos (pelo createdAt do vínculo)
+      const posicaoPorAtletaId = new Map<string, string>();
+      if (elencoIds.length > 0) {
+        const vincs = await prisma.atletaElenco.findMany({
+          where: { elencoId: { in: elencoIds } },
+          select: { atletaId: true, posicao: true, createdAt: true },
+          orderBy: { createdAt: "desc" }, // createdAt existe em AtletaElenco
+        });
+        for (const v of vincs) {
+          if (!posicaoPorAtletaId.has(v.atletaId)) {
+            posicaoPorAtletaId.set(v.atletaId, v.posicao as unknown as string);
+          }
+        }
+      }
+
+      // Monta payload final
       const enriched = await Promise.all(
         atletas.map(async (a) => {
           const ativo = await isAtivoRecentemente(a.usuarioId);
+          const posicaoElenco = posicaoPorAtletaId.get(a.id) ?? null; // a.id é atletaId
           return {
             id: a.id,
             usuarioId: a.usuarioId,
             nome: a.nome || a.usuario?.nome || "—",
             idade: a.idade,
             foto: a.foto,
-            posicao: a.posicao || null,
+            posicao: posicaoElenco || a.posicao || null,
             categoria: pickMainCategoria(a.categoria) || null,
             pontuacao: a.pontuacao?.pontuacaoTotal ?? 0,
             ativoRecentemente: ativo,
@@ -133,18 +159,29 @@ export const gerenciarAtletasController = {
         })
       );
 
+      // Filtro por posição efetiva
       let filtered = enriched;
+      if (posicaoFiltro) {
+        const needle = posicaoFiltro.toLowerCase();
+        filtered = filtered.filter((x) => (x.posicao || "").toLowerCase() === needle);
+      }
+
+      // Filtro de status
       if (status) {
         filtered = filtered.filter((x) => (status === "ativo" ? x.ativoRecentemente : !x.ativoRecentemente));
       }
 
-      // ordenação
+      // Ordenação
       const ord = parseOrder(order);
       if ((ord as any).nome) {
-        filtered.sort((a, b) => ((ord as any).nome === "asc" ? a.nome.localeCompare(b.nome) : b.nome.localeCompare(a.nome)));
+        filtered.sort((a, b) =>
+          (ord as any).nome === "asc" ? a.nome.localeCompare(b.nome) : b.nome.localeCompare(a.nome)
+        );
       } else if ((ord as any).pontuacao) {
         filtered.sort((a, b) =>
-          (ord as any).pontuacao === "asc" ? (a.pontuacao ?? 0) - (b.pontuacao ?? 0) : (b.pontuacao ?? 0) - (a.pontuacao ?? 0)
+          (ord as any).pontuacao === "asc"
+            ? (a.pontuacao ?? 0) - (b.pontuacao ?? 0)
+            : (b.pontuacao ?? 0) - (a.pontuacao ?? 0)
         );
       }
 
@@ -156,10 +193,12 @@ export const gerenciarAtletasController = {
   },
 
   // GET /api/gerenciar/treinosprogramados?criador=escolinha|clube|professor&id=<usuarioId>
+  // Retorna apenas TreinoProgramado cujo <tipo>Id corresponda ao id da ENTIDADE (resolvida a partir do usuarioId).
   listTreinos: async (req: Request, res: Response) => {
     try {
-      const criador = String(req.query.criador || "").toLowerCase();
-      const entidadeUsuarioId = String(req.query.id || "");
+      const criador = String(req.query.criador || "").toLowerCase(); // "escolinha" | "clube" | "professor"
+      const entidadeUsuarioId = String(req.query.id || ""); // usuario.id da entidade
+
       if (!["escolinha", "clube", "professor"].includes(criador)) {
         return res.status(400).json({ message: "Parâmetro 'criador' inválido" });
       }
@@ -167,20 +206,34 @@ export const gerenciarAtletasController = {
         return res.status(400).json({ message: "Parâmetro 'id' obrigatório" });
       }
 
-      let whereTreino: any = {};
+      // 1) Resolver id da ENTIDADE a partir do usuarioId
+      let entidadeId: string | null = null;
       if (criador === "clube") {
-        const entidade = await prisma.clube.findUnique({ where: { usuarioId: entidadeUsuarioId }, select: { id: true } });
-        if (!entidade) return res.status(404).json({ message: "Entidade não encontrada" });
-        whereTreino = { clubeId: entidade.id };
+        const clube = await prisma.clube.findUnique({ where: { usuarioId: entidadeUsuarioId }, select: { id: true } });
+        if (!clube) return res.status(404).json({ message: "Entidade não encontrada" });
+        entidadeId = clube.id;
       } else if (criador === "escolinha") {
-        const entidade = await prisma.escolinha.findUnique({ where: { usuarioId: entidadeUsuarioId }, select: { id: true } });
-        if (!entidade) return res.status(404).json({ message: "Entidade não encontrada" });
-        whereTreino = { escolinhaId: entidade.id };
+        const escolinha = await prisma.escolinha.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
+          select: { id: true },
+        });
+        if (!escolinha) return res.status(404).json({ message: "Entidade não encontrada" });
+        entidadeId = escolinha.id;
       } else {
-        const prof = await prisma.professor.findUnique({ where: { usuarioId: entidadeUsuarioId }, select: { id: true } });
+        const prof = await prisma.professor.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
+          select: { id: true },
+        });
         if (!prof) return res.status(404).json({ message: "Professor não encontrado" });
-        whereTreino = { professorId: prof.id };
+        entidadeId = prof.id;
       }
+
+      // 2) Montar filtro diretamente na TABELA TreinoProgramado
+      //    - clubeId / escolinhaId / professorId = entidadeId
+      let whereTreino: any = {};
+      if (criador === "clube") whereTreino = { clubeId: entidadeId };
+      else if (criador === "escolinha") whereTreino = { escolinhaId: entidadeId };
+      else whereTreino = { professorId: entidadeId };
 
       const treinos = await prisma.treinoProgramado.findMany({
         where: whereTreino,
@@ -193,6 +246,11 @@ export const gerenciarAtletasController = {
           categoria: true,
           expiraEm: true,
           naoExpira: true,
+          // (campos extras do schema – se quiser usar depois)
+          // nivel: true,
+          // tipoTreino: true,
+          // dataAgendada: true,
+          // imagemUrl: true,
         },
         orderBy: { createdAt: "desc" },
       });
@@ -201,11 +259,11 @@ export const gerenciarAtletasController = {
         items: treinos.map((t) => ({
           id: t.id,
           titulo: t.nome,
-          objetivo: t.objetivo,
+          objetivo: t.objetivo ?? null,
           pontuacao: t.pontuacao ?? null,
           categoria: pickMainCategoria(t.categoria) ?? null,
-          expiraEm: t.expiraEm,
-          naoExpira: t.naoExpira,
+          expiraEm: t.expiraEm ?? null,
+          naoExpira: t.naoExpira ?? false,
         })),
       });
     } catch (e: any) {
