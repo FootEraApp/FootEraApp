@@ -115,6 +115,11 @@ app.use(adminModeracaoRoutes);
 
 app.use("/uploads", express.static(path.join(process.cwd(), "public/uploads")));
 
+app.use("/exercicios", express.static(path.join(process.cwd(), "public", "exercicios"), {
+  setHeaders: (res) => res.setHeader("Accept-Ranges", "bytes"),
+}));
+
+
 const candidates = [
   path.join(process.cwd(), "client/public/assets"),
   path.join(process.cwd(), "public/assets"),

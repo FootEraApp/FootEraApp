@@ -1,3 +1,4 @@
+// client/src/components/perfil/PerfilProfessor
 import { useEffect, useState } from "react";
 import axios from "axios";
 import {
@@ -358,7 +359,14 @@ async function fetchObservados() {
 
           <div className="mt-4 grid gap-4">
             {subAba === "vinculados" && (
-              <SectionCard title="Atletas Vinculados">
+              <SectionCard
+                title="Atletas Vinculados"
+                right={
+                  <Link href="/perfil/GerenciarAtletas">
+                    <a className="text-sm text-green-800">Gerenciar Atletas</a>
+                  </Link>
+                }
+              >
                 {vinculados && vinculados.length > 0 ? (
                   <ul className="grid grid-cols-1 gap-3">
                     {vinculados.map((a) => (

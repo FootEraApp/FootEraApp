@@ -1,37 +1,52 @@
+// server/controllers/exerciciosController.ts
 import { Request, Response } from "express";
 import multer from "multer";
-import path,{ dirname } from "path";
+import path, { dirname } from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient;
+const prisma = new PrismaClient();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// === NOVO: vídeos vão para public/exercicios/videos ===
+const exercisesVideosDir = path.join(__dirname, "..", "..", "public", "exercicios", "videos");
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, "..", "..", "uploads", "videos");
-    fs.mkdirSync(uploadPath, { recursive: true });
-    cb(null, uploadPath);
+    fs.mkdirSync(exercisesVideosDir, { recursive: true });
+    cb(null, exercisesVideosDir);
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}-${file.fieldname}${ext}`);
+    cb(null, `${Date.now()}-video${ext}`);
   },
 });
 
 export const uploadVideo = multer({ storage }).single("video");
 
+// helper para limpar barra inicial e juntar em 'public'
+const publicJoin = (p: string) =>
+  path.join(__dirname, "..", "..", "public", p.replace(/^\/+/, ""));
+
 export const criarExercicio = async (req: Request, res: Response) => {
   try {
-    const { codigo, nome, descricao, nivel, categorias } = req.body;
-    const videoDemonstrativoUrl = req.file ? `/uploads/videos/${req.file.filename}` : null;
+    const { codigo, nome, descricao, nivel } = req.body;
 
-    const categoriasArray = categorias 
-      ? (Array.isArray(categorias) ? categorias : JSON.parse(categorias))
-      : [];
+    // aceita categorias tanto string (JSON) quanto array
+    const categorias =
+      req.body.categorias
+        ? (Array.isArray(req.body.categorias)
+            ? req.body.categorias
+            : JSON.parse(req.body.categorias))
+        : [];
+
+    // URL pública agora é /exercicios/videos/...
+    const videoDemonstrativoUrl = req.file
+      ? `/exercicios/videos/${req.file.filename}`
+      : null;
 
     const novoExercicio = await prisma.exercicio.create({
       data: {
@@ -39,7 +54,7 @@ export const criarExercicio = async (req: Request, res: Response) => {
         nome,
         descricao,
         nivel,
-        categorias: { set: categoriasArray },
+        categorias: { set: categorias },
         videoDemonstrativoUrl,
       },
     });
@@ -53,22 +68,30 @@ export const criarExercicio = async (req: Request, res: Response) => {
 
 export const editarExercicio = async (req: Request, res: Response) => {
   const { id } = req.params;
-  console.log("body:", req.body);
-  console.log("file:", req.file);
 
   try {
-    const { codigo, nome, descricao, nivel, categorias } = req.body;
-    const videoDemonstrativoUrl = req.file ? `/uploads/videos/${req.file.filename}` : undefined;
-    
+    const { codigo, nome, descricao, nivel } = req.body;
+
     if (!["Base", "Avancado", "Performance"].includes(nivel)) {
       return res.status(400).json({ message: "Nível inválido" });
     }
 
     const exercicioAtual = await prisma.exercicio.findUnique({ where: { id } });
 
-    if (videoDemonstrativoUrl && exercicioAtual?.videoDemonstrativoUrl) {
-      const oldPath = path.join(__dirname, "..", "..", exercicioAtual.videoDemonstrativoUrl);
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    const categorias =
+      req.body.categorias
+        ? (Array.isArray(req.body.categorias)
+            ? req.body.categorias
+            : JSON.parse(req.body.categorias))
+        : [];
+
+    const novaUrl = req.file ? `/exercicios/videos/${req.file.filename}` : undefined;
+
+    if (novaUrl && exercicioAtual?.videoDemonstrativoUrl) {
+      const oldAbs = publicJoin(exercicioAtual.videoDemonstrativoUrl);
+      if (fs.existsSync(oldAbs)) {
+        try { fs.unlinkSync(oldAbs); } catch {}
+      }
     }
 
     const exercicio = await prisma.exercicio.update({
@@ -78,12 +101,11 @@ export const editarExercicio = async (req: Request, res: Response) => {
         nome,
         descricao,
         nivel,
-        categorias: categorias
-        ? { set: Array.isArray(categorias) ? categorias : JSON.parse(categorias) }
-        : { set: [] },
-        ...(videoDemonstrativoUrl && { videoDemonstrativoUrl }),
+        categorias: { set: categorias },
+        ...(novaUrl && { videoDemonstrativoUrl: novaUrl }),
       },
     });
+
     res.json(exercicio);
   } catch (error) {
     const err = error as Error;
@@ -105,9 +127,7 @@ export const listarExercicios = async (req: Request, res: Response) => {
 export const buscarExercicioPorId = async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
-    const exercicio = await prisma.exercicio.findUnique({
-      where: { id },
-    });
+    const exercicio = await prisma.exercicio.findUnique({ where: { id } });
     if (!exercicio) return res.status(404).json({ message: "Exercício não encontrado." });
     res.json(exercicio);
   } catch (error) {
@@ -119,9 +139,7 @@ export const buscarExercicioPorId = async (req: Request, res: Response) => {
 export const excluirExercicio = async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
-    await prisma.exercicio.delete({
-      where: { id },
-    });
+    await prisma.exercicio.delete({ where: { id } });
     res.status(204).send();
   } catch (error) {
     console.error("Erro ao excluir exercício:", error);
