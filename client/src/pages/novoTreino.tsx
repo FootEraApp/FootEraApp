@@ -315,7 +315,7 @@ export default function NovoTreino() {
 
   if (usuario.tipo === "atleta") {
     return (
-      <div className="p-4 max-w-xl mx-auto">
+      <div className="p-4 max-w-xl mx-auto mb-5">
         <h2 className="text-lg font-bold mb-4">Treinos Disponíveis</h2>
 
         {treinosDisponiveis.length === 0 ? (

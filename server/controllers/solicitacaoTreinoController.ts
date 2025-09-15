@@ -3,20 +3,83 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+const getBase = (req: Request) =>
+  process.env.API_BASE_URL || `${req.protocol}://${req.get("host")}`;
+
+const absFoto = (req: Request, f?: string | null) =>
+  f
+    ? (/^(https?:|data:|blob:)/i.test(f)
+        ? f
+        : `${getBase(req)}${f.startsWith("/") ? f : `/${f}`}`)
+    : null;
+
 export async function listarSolicitacoesMinhas(req: Request, res: Response) {
   const me: string | undefined = (req as any).user?.id || (req as any).userId;
   if (!me) return res.status(401).json({ error: "Não autenticado." });
 
   try {
     const rows = await prisma.solicitacaoTreino.findMany({
-      where: { destinatarioId: req.userId },
+      where: { remetenteId: me },             
       include: {
-        remetente: { select: { id: true, nomeDeUsuario: true, foto: true } },
+        destinatario: {
+          select: { id: true, nomeDeUsuario: true, nome: true, foto: true },
+        },
       },
+      orderBy: { criadoEm: "desc" },
     });
-    return res.json(rows);
-  } catch {
+
+    const payload = rows.map((s) => ({
+      id: s.id,
+      status: s.status,
+      criadaEm: s.criadoEm,
+      destinatarioId: s.destinatarioId,
+      destinatario: {
+        id: s.destinatario.id,
+        nomeDeUsuario: s.destinatario.nomeDeUsuario,
+        nome: s.destinatario.nome,
+        foto: absFoto(req, s.destinatario.foto),   
+      },
+    }));
+
+    return res.json(payload);
+  } catch (e) {
+    console.error(e);
     return res.status(500).json({ error: "Falha ao listar solicitações" });
+  }
+}
+
+export async function listarSolicitacoesRecebidas(req: Request, res: Response) {
+  const me: string | undefined = (req as any).user?.id || (req as any).userId;
+  if (!me) return res.status(401).json({ error: "Usuário não autenticado." });
+
+  try {
+    const rows = await prisma.solicitacaoTreino.findMany({
+      where: { destinatarioId: me, status: "pendente" },
+      include: {
+        remetente: {
+          select: { id: true, nomeDeUsuario: true, nome: true, foto: true },
+        },
+      },
+      orderBy: { criadoEm: "desc" },
+    });
+
+    const payload = rows.map((s) => ({
+      id: s.id,
+      status: s.status,
+      criadaEm: s.criadoEm,
+      remetenteId: s.remetenteId,
+      remetente: {
+        id: s.remetente.id,
+        nomeDeUsuario: s.remetente.nomeDeUsuario,
+        nome: s.remetente.nome,
+        foto: absFoto(req, s.remetente.foto),    
+      },
+    }));
+
+    return res.json(payload);
+  } catch (error) {
+    console.error("Erro ao listar solicitações recebidas:", error);
+    return res.status(500).json({ error: "Erro interno do servidor" });
   }
 }
 
@@ -69,38 +132,6 @@ export async function cancelarSolicitacao(req: Request, res: Response) {
 
   if (del.count === 0) return res.status(404).json({ message: "Não há solicitação pendente" });
   return res.sendStatus(204);
-}
-
-export async function listarSolicitacoesRecebidas(req: Request, res: Response) {
-  const usuarioId: string | undefined = (req as any).user?.id || (req as any).userId;
-  if (!usuarioId) return res.status(401).json({ error: "Usuário não autenticado." });
-
-  try {
-    const solicitacoes = await prisma.solicitacaoTreino.findMany({
-      where: { destinatarioId: usuarioId, status: "pendente" },
-      include: {
-        remetente: { select: { id: true, nomeDeUsuario: true, foto: true, nome: true } },
-      },
-    });
-
-    const BASE_URL = process.env.BASE_URL || process.env.APP_BASE_URL || "";
-
-    const payload = solicitacoes.map((s) => ({
-      id: s.id,
-      remetenteId: s.remetenteId,
-      remetente: {
-        id: s.remetente.id,
-        nomeDeUsuario: s.remetente.nomeDeUsuario,
-        nome: s.remetente.nome,
-        fotoUrl: s.remetente.foto ? `${BASE_URL}${s.remetente.foto}` : null,
-      },
-    }));
-
-    return res.json(payload);
-  } catch (error) {
-    console.error("Erro ao listar solicitações recebidas:", error);
-    return res.status(500).json({ error: "Erro interno do servidor" });
-  }
 }
 
 export async function aceitarSolicitacao(req: Request, res: Response) {

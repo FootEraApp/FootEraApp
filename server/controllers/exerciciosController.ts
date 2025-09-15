@@ -53,8 +53,6 @@ export const criarExercicio = async (req: Request, res: Response) => {
 
 export const editarExercicio = async (req: Request, res: Response) => {
   const { id } = req.params;
-  console.log("body:", req.body);
-  console.log("file:", req.file);
 
   try {
     const { codigo, nome, descricao, nivel, categorias } = req.body;

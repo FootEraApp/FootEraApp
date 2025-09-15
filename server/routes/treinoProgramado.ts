@@ -54,8 +54,6 @@ router.put("/:id", async (req, res) => {
     repeticoes: String(e.repeticoes ?? ""),
   }));
 
-  console.log("PUT /treinosprogramados/:id", { id, itensCount: itens.length });
-
   try {
     await prisma.$transaction([
       prisma.treinoProgramadoExercicio.deleteMany({ where: { treinoProgramadoId: id } }),

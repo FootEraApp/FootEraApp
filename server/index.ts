@@ -125,7 +125,6 @@ const candidates = [
 
 const found = candidates.find((dir) => fs.existsSync(dir));
 if (found) {
-  console.log("Servindo /assets de:", found);
   app.use("/assets", express.static(found));
 } else {
   console.warn("⚠️ Pasta de assets não encontrada. Tentado:", candidates);

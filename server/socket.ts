@@ -9,16 +9,13 @@ export function setupSocket(server: http.Server) {
   });
 
   io.on("connection", (socket) => {
-    console.log("Novo cliente conectado:", socket.id);
-
+    
     socket.on("join", (usuarioId: string) => {
       socket.join(usuarioId);
-      console.log(`Usuário ${usuarioId} entrou na sala privada dele`);
     });
 
     socket.on("joinGroup", (grupoId: string) => {
       socket.join(grupoId);
-      console.log(`Socket ${socket.id} entrou no grupo ${grupoId}`);
     });
 
     socket.on("sendMessage", (mensagem) => {
@@ -31,7 +28,6 @@ export function setupSocket(server: http.Server) {
     });
 
     socket.on("disconnect", () => {
-      console.log("Cliente desconectado:", socket.id);
     });
   });
 

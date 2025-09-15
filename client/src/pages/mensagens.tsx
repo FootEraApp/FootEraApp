@@ -86,6 +86,18 @@ export default function PaginaMensagens() {
   const [usuariosMutuos, setUsuariosMutuos] = useState<Usuario[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [alvo, setAlvo] = useState<ChatTarget | null>(null);
+  const [isAtleta, setIsAtleta] = useState(
+    String(Storage?.tipoSalvo ?? "").toLowerCase() === "atleta"
+  );
+
+  useEffect(() => {
+    if (isAtleta || !Storage.token) return;
+    fetch(`${API.BASE_URL}/api/perfil/me/posicao-atual`, {
+      headers: { Authorization: `Bearer ${Storage.token}` },
+    })
+      .then(r => setIsAtleta(r.ok)) 
+      .catch(() => setIsAtleta(false));
+  }, [isAtleta]);
 
   function selecionarAlvo(novo: ChatTarget) {
   setAlvo(novo);
@@ -121,7 +133,6 @@ export default function PaginaMensagens() {
   const fecharModal = () => setModalAberto(false);
 
   const [modalDesafiosAberto, setModalDesafiosAberto] = useState(false);
-  const abrirModalDesafios = () => setModalDesafiosAberto(true);
   const fecharModalDesafios = () => setModalDesafiosAberto(false);
 
   const pendingOpenRef = useRef(false);
@@ -308,7 +319,8 @@ export default function PaginaMensagens() {
   );
 
   const compartilharPerfilNoChat = async () => {
-  if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
+    if (!isAtleta) return;
+    if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
 
   try {
     const base = (meuCardDados ?? await getMeuPerfilEBonus());
@@ -1031,7 +1043,7 @@ useEffect(() => {
             </div>
 
             <div className="flex items-center gap-2">
-              {alvo?.tipo === "usuario" && (
+              {alvo?.tipo === "usuario" && isAtleta &&  (
                 <button
                   onClick={compartilharPerfilNoChat}
                   className="flex items-center gap-1 text-green-800 hover:underline text-sm"

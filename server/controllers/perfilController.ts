@@ -42,6 +42,32 @@ async function resolveByUsuarioOrEntity(opts: {
   return null;
 }
 
+async function countAtletasPorEntidade(opts: { escolinhaId?: string; clubeId?: string }) {
+  const { escolinhaId, clubeId } = opts;
+
+  const relWhere: any = { atletaId: { not: null } };
+  if (escolinhaId) relWhere.escolinhaId = escolinhaId;
+  if (clubeId) relWhere.clubeId = clubeId;
+
+  const rel = await prisma.relacaoTreinamento.findMany({
+    where: relWhere,
+    select: { atletaId: true },
+  });
+
+  const diretos = await prisma.atleta.findMany({
+    where: {
+      ...(escolinhaId ? { escolinhaId } : {}),
+      ...(clubeId ? { clubeId } : {}),
+    },
+    select: { id: true },
+  });
+
+  return new Set([
+    ...rel.map(r => r.atletaId!).filter(Boolean),
+    ...diretos.map(a => a.id),
+  ]).size;
+}
+
 export async function getPontuacaoDetalhada(req: Request, res: Response) {
   try {
     const id = req.params.id;
@@ -1042,18 +1068,15 @@ export async function getPerfilEscola(req: Request, res: Response) {
         cep: true,
         logo: true,
         dataCriacao: true,
-        atletas: { select: { id: true } },
-        treinoProgramado: { select: { id: true } },
-        postagens: { select: { id: true } },
       },
     });
 
     if (!escola) return res.status(404).json({ error: "Escolinha não encontrada" });
 
-    const usuarioMin:
-      | { id: string; nome: string; email: string; foto?: string | null }
-      | null = (escola as any).usuario ?? null;
+    const atletasCount = await countAtletasPorEntidade({ escolinhaId: escola.id });
+    const treinosCount = await prisma.treinoProgramado.count({ where: { escolinhaId: escola.id } });
 
+    const usuarioMin = (escola as any).usuario ?? null;
     const logoOuFoto: string | null = (escola as any).logo ?? (usuarioMin?.foto ?? null);
 
     return res.json({
@@ -1081,9 +1104,10 @@ export async function getPerfilEscola(req: Request, res: Response) {
         dataCriacao: escola.dataCriacao,
       },
       metrics: {
-        atletas: (escola as any).atletas?.length ?? 0,
-        treinosProgramados: (escola as any).treinoProgramado?.length ?? 0,
-        postagens: (escola as any).postagens?.length ?? 0,
+        atletas: atletasCount,
+        treinosProgramados: treinosCount,
+        postagens: 0,
+        conquistas: 0,
       },
     });
   } catch (e) {
@@ -1091,7 +1115,6 @@ export async function getPerfilEscola(req: Request, res: Response) {
     return res.status(500).json({ error: "Erro interno ao buscar escolinha" });
   }
 }
-
 
 export async function getPerfilOlheiro(req: Request, res: Response) {
   try {

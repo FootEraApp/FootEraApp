@@ -88,10 +88,8 @@ export default function CriarOuEditarTreino() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    console.log("PUT/POST status:", res.status);
     const body = await res.json().catch(() => ({}));
-    console.log("PUT/POST body:", body);
-
+    
     if (!res.ok) {
       alert("Erro ao salvar treino.");
       return;

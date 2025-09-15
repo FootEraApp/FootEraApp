@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import {
-  Users, GraduationCap, ChevronRight, ChevronDown, CalendarClock, Activity,
-  Trophy, Shield, PlusCircle, Filter, Mail
+  ChevronRight, CalendarClock, Activity,
+  Trophy, Shield, PlusCircle
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
@@ -13,62 +13,25 @@ import Avatar from "../shared/Avatar.js";
 type Props = { idDaUrl?: string };
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
 type Escolinha = {
-  id: string;
-  usuarioId?: string | null;
-  nome: string;
-  cnpj?: string | null;
-  telefone1?: string | null;
-  telefone2?: string | null;
-  email?: string | null;
-  siteOficial?: string | null;
-  sede?: string | null;
-  logradouro?: string | null;
-  numero?: string | null;
-  complemento?: string | null;
-  bairro?: string | null;
-  cidade?: string | null;
-  estado?: string | null;
-  pais?: string | null;
-  cep?: string | null;
-  logo?: string | null;
-  dataCriacao: string;
+  id: string; usuarioId?: string | null; nome: string;
+  cnpj?: string | null; telefone1?: string | null; telefone2?: string | null;
+  email?: string | null; siteOficial?: string | null; sede?: string | null;
+  logradouro?: string | null; numero?: string | null; complemento?: string | null;
+  bairro?: string | null; cidade?: string | null; estado?: string | null;
+  pais?: string | null; cep?: string | null; logo?: string | null; dataCriacao: string;
 };
-
 type Metrics = { atletas: number; treinosProgramados: number; postagens: number; conquistas?: number };
+type PayloadEscola = { tipo: "Escolinha"; usuario: UsuarioMin | null; escolinha: Escolinha; metrics: Metrics; };
 
-type PayloadEscola = {
-  tipo: "Escolinha";
-  usuario: UsuarioMin | null;
-  escolinha: Escolinha;
-  metrics: Metrics;
-};
-
-type AtletaItem = {
-  id: string;
-  nome: string;
-  foto?: string | null;
-  posicao?: string | null;
-  idade?: number | null;
-};
-
+type AtletaItem = { id: string; nome: string; foto?: string | null; posicao?: string | null; idade?: number | null; };
 type SolicitacaoItem = {
-  id: string;
-  remetenteId: string;
-  remetente: {
-    id: string;
-    nomeDeUsuario: string;
-    foto: string | null;
-  };
-  status?: "PENDENTE" | "APROVADO" | "REJEITADO";
-  criadaEm?: string;
+  id: string; remetenteId: string;
+  remetente: { id: string; nomeDeUsuario: string; foto: string | null; };
+  status?: "PENDENTE" | "APROVADO" | "REJEITADO"; criadaEm?: string;
 };
-
 type AtividadeRecente = {
-  id: string;
-  tipo: "Treino" | "Desafio" | "Vídeo" | "Postagem";
-  titulo: string;
-  criadoEm: string;
-  imagemUrl?: string | null;
+  id: string; tipo: "Treino" | "Desafio" | "Vídeo" | "Postagem";
+  titulo: string; criadoEm: string; imagemUrl?: string | null;
 };
 
 function SectionCard({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
@@ -114,6 +77,13 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
 
   useEffect(() => {
+    setVinculados(null);
+    setObservados(null);
+    setSolicitacoes(null);
+    setAtividades(null);
+  }, [isOwn, data?.escolinha?.id, data?.usuario?.id]); 
+
+  useEffect(() => {
     if (!token) return;
     let cancel = false;
     (async () => {
@@ -138,64 +108,48 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     if (!token) return;
     const cancel = { v: false };
 
-    async function fetchAtividades() {
+    const targetUserForActivities = isOwn ? "me" : (data?.usuario?.id ?? "");
+
+    async function loadAtividadesIfNeeded() {
+      if (aba !== "visao" || atividades != null || !targetUserForActivities) return;
       try {
-        const { data } = await axios.get<AtividadeRecente[]>(
-          `${API.BASE_URL}/api/perfil/${targetId}/atividades`,
+        const { data: itens } = await axios.get<AtividadeRecente[]>(
+          `${API.BASE_URL}/api/perfil/${targetUserForActivities}/atividades`,
           { headers }
         );
-        if (!cancel.v) setAtividades(Array.isArray(data) ? data : []);
+        if (!cancel.v) setAtividades(Array.isArray(itens) ? itens : []);
       } catch {
         if (!cancel.v) setAtividades([]);
       }
     }
 
-    if (aba === "visao" && atividades == null) fetchAtividades();
-
-async function fetchVinculados() {
-  const tipoId =
-    (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
-
-  if (!tipoId) {                    
-    if (!cancel.v) setVinculados([]);
-    return;
-  }
-
-  try {
-    const { data: lista } = await axios.get<AtletaItem[]>(
-      `${API.BASE_URL}/api/treinos/atletas-vinculados`,
-      {
-        headers,
-        params: { tipoUsuarioId: tipoId },
+    async function fetchVinculados() {
+      const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
+      if (!tipoId) return; 
+      try {
+        const { data: lista } = await axios.get<AtletaItem[]>(
+          `${API.BASE_URL}/api/treinos/atletas-vinculados`,
+          { headers, params: { tipoUsuarioId: tipoId } }
+        );
+        if (!cancel.v) setVinculados(Array.isArray(lista) ? lista : []);
+      } catch {
+        if (!cancel.v) setVinculados([]);
       }
-    );
-    if (!cancel.v) setVinculados(Array.isArray(lista) ? lista : []);
-  } catch {
-    if (!cancel.v) setVinculados([]);
-  }
-}
+    }
 
-async function fetchObservados() {
-  const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
-
-  if (!tipoId) {
-    if (!cancel.v) setObservados([]);
-    return;
-  }
-
-  try {
-    const { data: lista } = await axios.get<AtletaItem[]>(
-      `${API.BASE_URL}/api/observados`,
-      {
-        headers,
-        params: { tipoUsuarioId: tipoId },
+    async function fetchObservados() {
+      const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
+      if (!tipoId) return;
+      try {
+        const { data: lista } = await axios.get<AtletaItem[]>(
+          `${API.BASE_URL}/api/observados`,
+          { headers, params: { tipoUsuarioId: tipoId } }
+        );
+        if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
+      } catch {
+        if (!cancel.v) setObservados([]);
       }
-    );
-    if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
-  } catch {
-    if (!cancel.v) setObservados([]);
-  }
-}
+    }
 
     async function fetchSolicitacoes() {
       try {
@@ -209,6 +163,8 @@ async function fetchObservados() {
       }
     }
 
+    if (aba === "visao") loadAtividadesIfNeeded();
+
     if (aba === "atletas") {
       if (subAba === "vinculados" && vinculados == null) fetchVinculados();
       if (subAba === "observados" && observados == null) fetchObservados();
@@ -216,7 +172,12 @@ async function fetchObservados() {
     }
 
     return () => { cancel.v = true; };
-  }, [aba, subAba, targetId, token, data?.escolinha?.id, atividades, vinculados, observados, solicitacoes]);
+  }, [
+    aba, subAba, token,
+    isOwn,
+    data?.usuario?.id,    
+    data?.escolinha?.id  
+  ]);
 
   if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
   if (!data || !data.escolinha) return <div className="text-center p-10 text-red-600">Escolinha não encontrada.</div>;
@@ -259,9 +220,7 @@ async function fetchObservados() {
             <button
               key={t.id}
               onClick={() => setAba(t.id as Aba)}
-              className={`py-2 rounded-lg text-sm font-medium ${
-                aba === t.id ? "bg-green-600 text-white" : "text-green-900"
-              }`}
+              className={`py-2 rounded-lg text-sm font-medium ${aba === t.id ? "bg-green-600 text-white" : "text-green-900"}`}
             >
               {t.label}
             </button>
@@ -309,28 +268,12 @@ async function fetchObservados() {
             </p>
           </SectionCard>
 
-          <SectionCard
-            title="Treinos"
-            right={
-              <div className="flex gap-2">
-                <Link href="/treinos">
-                  <a className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900">
-                    Ver todos
-                  </a>
-                </Link>
-
-                <Link href="/treinos/novo">
-                  <a className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1">
-                    <PlusCircle className="w-4 h-4" />
-                    Criar novo treino
-                  </a>
-                </Link>
-              </div>
-            }
-          >
-            <p className="text-sm text-green-900/90">
-              Crie e gerencie treinos para seus atletas vinculados.
-            </p>
+          <SectionCard title="Treinos">
+            <div className="flex gap-2 justify-end">
+              <Link href="/treinos"><a className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900">Ver todos</a></Link>
+              <Link href="/treinos/novo"><a className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"><PlusCircle className="w-4 h-4" />Criar novo treino</a></Link>
+            </div>
+            <p className="text-sm text-green-900/90 mt-2">Crie e gerencie treinos para seus atletas vinculados.</p>
           </SectionCard>
 
           <SectionCard title="Atividade Recente">
@@ -364,9 +307,7 @@ async function fetchObservados() {
               <button
                 key={t.id}
                 onClick={() => setSubAba(t.id as SubAba)}
-                className={`py-2 rounded-lg text-sm font-medium ${
-                  subAba === t.id ? "bg-green-600 text-white" : "text-green-900"
-                }`}
+                className={`py-2 rounded-lg text-sm font-medium ${subAba === t.id ? "bg-green-600 text-white" : "text-green-900"}`}
               >
                 {t.label}
               </button>
@@ -380,24 +321,16 @@ async function fetchObservados() {
                   <ul className="grid grid-cols-1 gap-3">
                     {vinculados.map((a) => (
                       <li key={a.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-                        
-                        <Avatar
-                          foto={a.foto ?? null}
-                          alt={a.nome}
-                          className="w-10 h-10"
-                        />
-
+                        <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
                         <div className="flex-1">
                           <div className="text-sm font-medium text-green-900">{a.nome}</div>
                           <div className="text-xs text-green-900/70">{[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}</div>
                         </div>
-
                         <Link href={`/perfil/${a.id}`}>
                           <a className="text-sm text-green-800 inline-flex items-center gap-1">
                             Ver perfil <ChevronRight className="w-4 h-4" />
                           </a>
                         </Link>
-
                       </li>
                     ))}
                   </ul>
@@ -426,24 +359,16 @@ async function fetchObservados() {
                   <ul className="grid grid-cols-1 gap-3">
                     {observados.map((a) => (
                       <li key={a.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-                        
-                        <Avatar
-                          foto={a.foto ?? null}
-                          alt={a.nome}
-                          className="w-10 h-10"
-                        />
-
+                        <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
                         <div className="flex-1">
                           <div className="text-sm font-medium text-green-900">{a.nome}</div>
                           <div className="text-xs text-green-900/70">{a.posicao ?? "-"}</div>
                         </div>
-
                         <Link href={`/perfil/${a.id}`}>
                           <a className="text-sm text-green-800 inline-flex items-center gap-1">
                             Ver perfil <ChevronRight className="w-4 h-4" />
                           </a>
                         </Link>
-
                       </li>
                     ))}
                   </ul>
@@ -467,31 +392,21 @@ async function fetchObservados() {
                   <div className="space-y-3">
                     <ul className="grid grid-cols-1 gap-3">
                       {solicitacoes.map((s) => (
-
-                      <li key={s.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3 hover:bg-green-50">
-                        <Link href={`/perfil/${s.remetenteId}`}>
-                          <a className="flex items-center gap-3 flex-1">
-                            <Avatar
-                              foto={s.remetente.foto ?? null}
-                              alt={s.remetente.nomeDeUsuario}
-                              className="w-10 h-10"
-                            />
-                            <div className="flex-1">
-                              <div className="text-sm font-medium text-green-900">
-                                {s.remetente.nomeDeUsuario}
+                        <li key={s.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3 hover:bg-green-50">
+                          <Link href={`/perfil/${s.remetenteId}`}>
+                            <a className="flex items-center gap-3 flex-1">
+                              <Avatar foto={s.remetente.foto ?? null} alt={s.remetente.nomeDeUsuario} className="w-10 h-10" />
+                              <div className="flex-1">
+                                <div className="text-sm font-medium text-green-900">{s.remetente.nomeDeUsuario}</div>
+                                <div className="text-xs text-green-900/70">
+                                  {s.criadaEm ? new Date(s.criadaEm).toLocaleString() : "—"}{s.status ? ` • ${s.status}` : ""}
+                                </div>
+                                <div className="text-xs text-green-900/80">quer treinar junto com você</div>
                               </div>
-                              <div className="text-xs text-green-900/70">
-                                {s.criadaEm ? new Date(s.criadaEm).toLocaleString() : "—"}{s.status ? ` • ${s.status}` : ""}
-                              </div>
-                              <div className="text-xs text-green-900/80">
-                                quer treinar junto com você
-                              </div>
-                            </div>
-                            <ChevronRight className="w-4 h-4 text-green-800" />
-                          </a>
-                        </Link>
-                      </li>
-
+                              <ChevronRight className="w-4 h-4 text-green-800" />
+                            </a>
+                          </Link>
+                        </li>
                       ))}
                     </ul>
                   </div>
