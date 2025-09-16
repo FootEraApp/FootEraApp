@@ -24,6 +24,7 @@ import categoriasRoutes from "./routes/categorias.js"
 import desafiosRoutes from "./routes/desafios.js";
 import desafiosEmGrupoRoutes from "./routes/desafiosEmGrupo.js";
 import escolinhaRoutes from "./routes/escolinha.js";
+import eventosRoutes from "./routes/eventos.js";
 import exerciciosRoutes from "./routes/exercicios.js";
 import explorarRoutes from "./routes/explorar.js";
 import favoritosRoutes from "./routes/favorito.js";
@@ -67,7 +68,11 @@ const io = setupSocket(server);
 dotenv.config();
 startExpiredTrainingsJob();
 
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
@@ -83,6 +88,7 @@ app.use("/api/conquistas", conquistaRoutes);
 app.use("/api/desafios", desafiosRoutes);
 app.use("/api/desafios/em-grupo", desafiosEmGrupoRoutes);
 app.use("/api/escolinhas", escolinhaRoutes);
+app.use("/api/eventos", eventosRoutes);
 app.use("/api/explorar", explorarRoutes);
 app.use("/api/exercicios", exerciciosRoutes);
 app.use("/api/favoritos", favoritosRoutes);

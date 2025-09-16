@@ -457,6 +457,7 @@ model Clube {
   observacoes         AtletaObservado[]    @relation("ObservacaoClube")
   treinoProgramado    TreinoProgramado[]
   Olheiro             Olheiro[]
+  Evento              Evento[]
 }
 
 model SolicitacaoVinculo {
@@ -482,14 +483,14 @@ model SolicitacaoTreino {
 }
 
 model SubmissaoDesafio {
-  id         String   @id @default(uuid())
-  atletaId   String
-  desafioId  String
-  videoUrl   String   @unique
-  aprovado   Boolean?
-  createdAt  DateTime @default(now())
-  usuarioId  String?
-  observacao String?
+  id                 String   @id @default(uuid())
+  atletaId           String
+  desafioId          String
+  videoUrl           String   @unique
+  aprovado           Boolean?
+  createdAt          DateTime @default(now())
+  usuarioId          String?
+  observacao         String?
   conteudo           Json?
   resultado          Float?
   resultadoDeclarado Float?
@@ -861,6 +862,30 @@ model AtletaElenco {
   @@index([atletaId])
 }
 
+model Evento {
+  id             String       @id @default(uuid())
+  clubeId        String
+  clube          Clube        @relation(fields: [clubeId], references: [id])
+  titulo         String
+  tipo           EventoTipo   @default(PENEIRA)
+  descricao      String?
+  inicio         DateTime
+  fim            DateTime?
+  local          String?
+  cidade         String?
+  estado         String?
+  pais           String?
+  endereco       String?
+  vagas          Int?
+  valorInscricao Decimal?     @db.Decimal(10, 2)
+  linkInscricao  String?
+  requisitos     String[]     @db.Text
+  status         EventoStatus @default(ABERTO)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+}
+
 enum PosicaoCampo {
   GOL
   LD
@@ -946,4 +971,15 @@ enum TipoMembro {
   DONO
   ADMIN
   MEMBRO
+}
+
+enum EventoTipo {
+  PENEIRA
+  EVENTO
+}
+
+enum EventoStatus {
+  ABERTO
+  ENCERRADO
+  CANCELADO
 }
