@@ -246,11 +246,6 @@ export const gerenciarAtletasController = {
           categoria: true,
           expiraEm: true,
           naoExpira: true,
-          // (campos extras do schema – se quiser usar depois)
-          // nivel: true,
-          // tipoTreino: true,
-          // dataAgendada: true,
-          // imagemUrl: true,
         },
         orderBy: { createdAt: "desc" },
       });
@@ -273,14 +268,14 @@ export const gerenciarAtletasController = {
   },
 
   // POST /api/gerenciar/treinosprogramados/convocar
-  // body: { treinoProgramadoId: string, destinatarios: string[] (usuarioIds de atletas), objetivo?, prazo?, origem: "escolinha"|"clube"|"professor" }
+  // body: { treinoProgramadoId: string, destinatarios: string[], objetivo?: string, prazo?: string (yyyy-mm-dd), origem: "escolinha"|"clube"|"professor" }
   convocarTreino: async (req: Request, res: Response) => {
     try {
       const { treinoProgramadoId, destinatarios, objetivo, prazo, origem } = req.body as {
         treinoProgramadoId: string;
-        destinatarios: string[]; // usuarioId dos atletas
+        destinatarios: string[]; // usuarioIds dos atletas
         objetivo?: string;
-        prazo?: string; // yyyy-mm-dd
+        prazo?: string;          // yyyy-mm-dd
         origem: "escolinha" | "clube" | "professor";
       };
 
@@ -294,55 +289,62 @@ export const gerenciarAtletasController = {
       const treino = await prisma.treinoProgramado.findUnique({ where: { id: treinoProgramadoId } });
       if (!treino) return res.status(404).json({ message: "Treino programado não encontrado" });
 
-      // converte usuarioId -> atletaId
+      // usuarioId -> atletaId
       const atletas = await prisma.atleta.findMany({
         where: { usuarioId: { in: destinatarios } },
         select: { id: true, usuarioId: true },
       });
-
       if (atletas.length === 0) return res.status(400).json({ message: "Nenhum atleta válido encontrado" });
 
-      // cria registros TreinoProgramadoRecebido (evita duplicidade)
-      for (const a of atletas) {
-        const existente = await prisma.treinoProgramadoRecebido.findFirst({
-          where: { atletaId: a.id, treinoId: treino.id },
-          select: { id: true },
-        });
-        if (!existente) {
-          await prisma.treinoProgramadoRecebido.create({
-            data: { atletaId: a.id, treinoId: treino.id },
+      // Deriva datas/objetivo (snapshot)
+      const dataExpiracaoDerivada =
+        prazo ? new Date(prazo) :
+        treino.expiraEm ?? undefined;
+
+      const dataTreinoDerivada = treino.dataAgendada ?? undefined;
+      const objetivoSnapshot   = (objetivo ?? treino.objetivo ?? undefined);
+
+      // Tudo em transação: garante consistência
+      await prisma.$transaction(async (tx) => {
+        for (const a of atletas) {
+          // 1) Garante TreinoProgramadoRecebido (sem duplicar)
+          const existente = await tx.treinoProgramadoRecebido.findFirst({
+            where: { atletaId: a.id, treinoId: treino.id },
+            select: { id: true },
+          });
+          if (!existente) {
+            await tx.treinoProgramadoRecebido.create({
+              data: { atletaId: a.id, treinoId: treino.id },
+            });
+          }
+
+          // 2) SEMPRE cria um TreinoAgendado para o atleta
+          // titulo é unique no schema => inclui atletaId + timestamp para não colidir
+          await tx.treinoAgendado.create({
+            data: {
+              atletaId: a.id,
+              treinoProgramadoId: treino.id,
+              titulo: `${treino.nome}`,
+              dataExpiracao: dataExpiracaoDerivada,
+              dataTreino: dataTreinoDerivada,
+              // usando 'local' como snapshot de objetivo (como já fazia antes)
+              local: objetivoSnapshot,
+            },
           });
         }
-      }
+      });
 
-      // opcional: criar TreinoAgendado com prazo/objetivo snapshot
-      if (prazo || objetivo) {
-        const dataExp = prazo ? new Date(prazo) : null;
-        await prisma.$transaction(
-          atletas.map((a) =>
-            prisma.treinoAgendado.create({
-              data: {
-                atletaId: a.id,
-                treinoProgramadoId: treino.id,
-                // titulo é unique; timestamp ajuda a evitar colisão
-                titulo: `${treino.nome} · ${new Date().toISOString()}`,
-                dataExpiracao: dataExp ?? undefined,
-                local: objetivo ?? undefined, // guardando objetivo em 'local' como snapshot simples
-              },
-            })
-          )
-        );
-      }
-
-      return res.json({ ok: true, count: atletas.length });
+      return res.json({ ok: true, count: atletas.length, criouAgendados: true });
     } catch (e: any) {
       console.error("[gerenciarAtletas.convocarTreino]", e);
       return res.status(500).json({ message: e?.message || "Erro ao convocar treino" });
     }
   },
 
+
   // GET /api/gerenciar/atletas/:usuarioId/pontuacao
   // Retorna resumo para painel lateral (mês corrente + evolução últimas 4 semanas)
+  // Treinos (mês) = submissões de treino do mês + submissões de desafio do mês
   statsAtleta: async (req: Request, res: Response) => {
     try {
       const usuarioId = String(req.params.usuarioId || "");
@@ -353,33 +355,37 @@ export const gerenciarAtletasController = {
 
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-      const concluidosMes = await prisma.submissaoTreino.count({
-        where: { atletaId: atleta.id, criadoEm: { gte: startOfMonth } },
-      });
+      // Contadores do mês
+      const [treinosMes, desafiosMes] = await Promise.all([
+        prisma.submissaoTreino.count({
+          where: { atletaId: atleta.id, criadoEm: { gte: startOfMonth, lt: startOfNextMonth } },
+        }),
+        prisma.submissaoDesafio.count({
+          where: { atletaId: atleta.id, createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
+        }),
+      ]);
 
-      // Treinos do mês: considerando dataTreino (quando existir)
-      const totalTreinosMes = await prisma.treinoAgendado.count({
-        where: { atletaId: atleta.id, dataTreino: { gte: startOfMonth } },
-      });
-
-      const desafiosFeitosMes = await prisma.submissaoDesafio.count({
-        where: { atletaId: atleta.id, createdAt: { gte: startOfMonth } },
-      });
+      const totalTreinosMes = treinosMes + desafiosMes; // soma pedida
+      const concluidosMes = treinosMes;                  // apenas treinos
+      const desafiosFeitosMes = desafiosMes;             // apenas desafios
 
       // média das últimas 4 semanas baseada na pontuacaoSnapshot das submissões de treino
       const fourWeeksAgo = new Date();
       fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+
       const ultimas = await prisma.submissaoTreino.findMany({
         where: { atletaId: atleta.id, criadoEm: { gte: fourWeeksAgo } },
         select: { criadoEm: true, pontuacaoSnapshot: true },
       });
 
-      // agrega por semana (cálculo simplificado)
+      // agrega por "semana" simples (chave YYYY-WN)
       const buckets: Record<string, number> = {};
       for (const s of ultimas) {
         const d = new Date(s.criadoEm);
-        const weekKey = `${d.getFullYear()}-W${Math.ceil((d.getDate() + (new Date(d.getFullYear(), d.getMonth(), 1).getDay())) / 7)}`;
+        const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).getDay();
+        const weekKey = `${d.getFullYear()}-W${Math.ceil((d.getDate() + firstDay) / 7)}`;
         buckets[weekKey] = (buckets[weekKey] || 0) + (s.pontuacaoSnapshot || 0);
       }
 
@@ -387,17 +393,18 @@ export const gerenciarAtletasController = {
       for (let i = 3; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i * 7);
-        const key = `${d.getFullYear()}-W${Math.ceil((d.getDate() + (new Date(d.getFullYear(), d.getMonth(), 1).getDay())) / 7)}`;
+        const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).getDay();
+        const key = `${d.getFullYear()}-W${Math.ceil((d.getDate() + firstDay) / 7)}`;
         series.push({ semana: i === 0 ? "S" : `S-${i}`, pontos: buckets[key] || 0 });
       }
-      const mediaPontuacaoUltimas4Semanas =
+      const mediaUltimas4Semanas =
         series.reduce((acc, x) => acc + x.pontos, 0) / (series.length || 1);
 
       return res.json({
         totalTreinosMes,
         concluidosMes,
         desafiosFeitosMes,
-        mediaUltimas4Semanas: Math.round(mediaPontuacaoUltimas4Semanas),
+        mediaUltimas4Semanas: Math.round(mediaUltimas4Semanas),
         evolucaoSemanas: series,
       });
     } catch (e: any) {
@@ -463,6 +470,175 @@ export const gerenciarAtletasController = {
     } catch (e: any) {
       console.error("[gerenciarAtletas.ranking]", e);
       return res.status(500).json({ message: e?.message || "Erro ao obter ranking" });
+    }
+  },
+
+  // GET /api/gerenciar/atletas/:usuarioId/detalhes
+  // Mesmo cômputo do mês + snapshot simples (últimos itens)
+  detalhesAtleta: async (req: Request, res: Response) => {
+    try {
+      const usuarioId = String(req.params.usuarioId || "");
+      if (!usuarioId) return res.status(400).json({ message: "usuarioId obrigatório" });
+
+      const atleta = await prisma.atleta.findUnique({ where: { usuarioId }, select: { id: true, nome: true, foto: true } });
+      if (!atleta) return res.status(404).json({ message: "Atleta não encontrado" });
+
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+      const [treinosMes, desafiosMes, ultTreinos, ultDesafios] = await Promise.all([
+        prisma.submissaoTreino.count({
+          where: { atletaId: atleta.id, criadoEm: { gte: startOfMonth, lt: startOfNextMonth } },
+        }),
+        prisma.submissaoDesafio.count({
+          where: { atletaId: atleta.id, createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
+        }),
+        prisma.submissaoTreino.findMany({
+          where: { atletaId: atleta.id },
+          select: {
+            id: true,
+            criadoEm: true,
+            aprovado: true,
+            pontuacaoSnapshot: true,
+            treinoTituloSnapshot: true,
+            treinoAgendado: { select: { titulo: true } },
+          },
+          orderBy: { criadoEm: "desc" },
+          take: 5,
+        }),
+        prisma.submissaoDesafio.findMany({
+          where: { atletaId: atleta.id },
+          // usamos include para trazer a relação 'desafio' (não misturar select+include)
+          include: {
+            desafio: { select: { titulo: true } },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        }),
+      ]);
+
+      const totalTreinosMes = treinosMes + desafiosMes;
+      const concluidosMes = treinosMes;
+      const desafiosFeitosMes = desafiosMes;
+
+      return res.json({
+        atleta: { id: atleta.id, nome: atleta.nome, foto: atleta.foto },
+        mes: {
+          totalTreinosMes,
+          concluidosMes,
+          desafiosFeitosMes,
+        },
+        ultimasSubmissoes: {
+          treinos: ultTreinos.map((t) => ({
+            id: t.id,
+            tipo: "treino" as const,
+            criadoEm: t.criadoEm,
+            aprovado: t.aprovado ?? null,
+            pontos: t.pontuacaoSnapshot ?? null,
+            titulo: t.treinoTituloSnapshot || t.treinoAgendado?.titulo || "Treino",
+          })),
+          desafios: ultDesafios.map((d) => ({
+            id: d.id,
+            tipo: "desafio" as const,
+            criadoEm: d.createdAt,
+            aprovado: (d as any).aprovado ?? null, // scalar vem por padrão ao usar include
+            titulo: d.desafio?.titulo || "Desafio",
+          })),
+        },
+      });
+    } catch (e: any) {
+      console.error("[gerenciarAtletas.detalhesAtleta]", e);
+      return res.status(500).json({ message: e?.message || "Erro ao obter detalhes do atleta" });
+    }
+  },
+
+  // GET /api/gerenciar/atletas/:usuarioId/submissoes?period=month|all&type=all|treinos|desafios&limit=20
+  submissoesAtleta: async (req: Request, res: Response) => {
+    try {
+      const usuarioId = String(req.params.usuarioId || "");
+      if (!usuarioId) return res.status(400).json({ message: "usuarioId obrigatório" });
+
+      const atleta = await prisma.atleta.findUnique({ where: { usuarioId }, select: { id: true } });
+      if (!atleta) return res.status(404).json({ message: "Atleta não encontrado" });
+
+      const { period = "all", type = "all", limit = "20" } = req.query as Record<string, string>;
+      const take = Math.min(Math.max(parseInt(String(limit), 10) || 20, 1), 100);
+
+      // Período
+      let dateFilterTreino: any = undefined;
+      let dateFilterDesafio: any = undefined;
+      if (period === "month") {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        dateFilterTreino = { gte: startOfMonth, lt: startOfNextMonth };
+        dateFilterDesafio = { gte: startOfMonth, lt: startOfNextMonth };
+      }
+
+      // Queries em paralelo conforme 'type'
+      const doTreinos = type === "all" || type === "treinos";
+      const doDesafios = type === "all" || type === "desafios";
+
+      const [treinos, desafios] = await Promise.all([
+        doTreinos
+          ? prisma.submissaoTreino.findMany({
+              where: { atletaId: atleta.id, ...(dateFilterTreino ? { criadoEm: dateFilterTreino } : {}) },
+              select: {
+                id: true,
+                criadoEm: true,
+                aprovado: true,
+                pontuacaoSnapshot: true,
+                treinoTituloSnapshot: true,
+                treinoAgendado: { select: { titulo: true } },
+              },
+              orderBy: { criadoEm: "desc" },
+              take,
+            })
+          : Promise.resolve([]),
+        doDesafios
+          ? prisma.submissaoDesafio.findMany({
+              where: { atletaId: atleta.id, ...(dateFilterDesafio ? { createdAt: dateFilterDesafio } : {}) },
+              // usar include para trazer relação 'desafio'
+              include: {
+                desafio: { select: { titulo: true } },
+              },
+              orderBy: { createdAt: "desc" },
+              take,
+            })
+          : Promise.resolve([]),
+      ]);
+
+      // Unifica e ordena por data (desc)
+      type Row =
+        | { id: string; tipo: "treino"; data: Date; aprovado: boolean | null; titulo: string; pontos?: number | null }
+        | { id: string; tipo: "desafio"; data: Date; aprovado: boolean | null; titulo: string };
+
+      const rows: Row[] = [
+        ...treinos.map((t) => ({
+          id: t.id,
+          tipo: "treino" as const,
+          data: t.criadoEm,
+          aprovado: t.aprovado ?? null,
+          titulo: t.treinoTituloSnapshot || t.treinoAgendado?.titulo || "Treino",
+          pontos: t.pontuacaoSnapshot ?? null,
+        })),
+        ...desafios.map((d) => ({
+          id: d.id,
+          tipo: "desafio" as const,
+          data: (d as any).createdAt,
+          aprovado: (d as any).aprovado ?? null,
+          titulo: (d as any).desafio?.titulo || "Desafio",
+        })),
+      ].sort((a, b) => b.data.getTime() - a.data.getTime());
+
+      return res.json({
+        total: rows.length,
+        items: rows.slice(0, take),
+      });
+    } catch (e: any) {
+      console.error("[gerenciarAtletas.submissoesAtleta]", e);
+      return res.status(500).json({ message: e?.message || "Erro ao listar submissões" });
     }
   },
 };
