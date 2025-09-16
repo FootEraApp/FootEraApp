@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import axios from "axios";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
@@ -46,8 +45,8 @@ type AbaTopo = "perfil" | "eventos" | "atletas";
 type SubAbaAtletas = "vinculados" | "observados" | "solicitacoes";
 
 type AtletaItem = {
-  id: string;       
-  atletaId: string; 
+  id: string;
+  atletaId: string;
   nome: string;
   foto?: string | null;
   posicao?: string | null;
@@ -55,16 +54,14 @@ type AtletaItem = {
   altura?: number | null;
   peso?: number | null;
   observadoEm?: string;
+  categoria?: string | null;
+  pontuacao?: number | null;
 };
 
 type Solicitacao = {
   id: string;
   remetenteId: string;
-  remetente: {
-    id: string;
-    nomeDeUsuario: string;
-    foto: string | null;
-  };
+  remetente: { id: string; nomeDeUsuario: string; foto: string | null };
 };
 
 function EmptyState({ text }: { text: string }) {
@@ -105,7 +102,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
 
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
-
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[] | null>(null);
 
   useEffect(() => {
@@ -119,8 +115,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
           { headers }
         );
         if (!cancel) setData(resp.data);
-      } catch (e) {
-        console.error("PerfilClube GET error:", e);
+      } catch {
         if (!cancel) setData(null);
       } finally {
         if (!cancel) setLoading(false);
@@ -135,14 +130,11 @@ export default function PerfilClube({ idDaUrl }: Props) {
 
     async function fetchVinculados() {
       const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
-      if (!tipoId) {
-        if (!cancel.v) setVinculados([]);
-        return;
-      }
+      if (!tipoId) { if (!cancel.v) setVinculados([]); return; }
       try {
         const { data: lista } = await axios.get<AtletaItem[]>(
           `${API.BASE_URL}/api/treinos/atletas-vinculados`,
-          { headers, params: { tipoUsuarioId: tipoId } }
+          { headers, params: { tipoUsuarioId: tipoId, incluirPontuacao: 1} }
         );
         if (!cancel.v) setVinculados(Array.isArray(lista) ? lista : []);
       } catch {
@@ -152,10 +144,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
 
     async function fetchObservados() {
       const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
-      if (!tipoId) {
-        if (!cancel.v) setObservados([]);
-        return;
-      }
+      if (!tipoId) { if (!cancel.v) setObservados([]); return; }
       try {
         const { data: lista } = await axios.get<AtletaItem[]>(
           `${API.BASE_URL}/api/observados`,
@@ -174,8 +163,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
           { headers }
         );
         if (!cancel.v) setSolicitacoes(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error("Erro ao buscar solicitações:", err);
+      } catch {
         if (!cancel.v) setSolicitacoes([]);
       }
     }
@@ -185,7 +173,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
       if (subAba === "observados" && observados == null) fetchObservados();
       if (subAba === "solicitacoes" && solicitacoes == null) fetchSolicitacoes();
     }
-
     return () => { cancel.v = true; };
   }, [aba, subAba, token, isOwn, data?.clube?.id, vinculados, observados, solicitacoes]);
 
@@ -193,7 +180,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
   if (!data || !data.clube) return <div className="text-center p-10 text-red-600">Clube não encontrado.</div>;
 
   const nome = data.clube.nome || data.usuario?.nome || "Clube";
-  const headerFoto: string | undefined =
+  const headerFoto =
     (typeof data.clube.logo === "string" && data.clube.logo) ||
     (typeof data.usuario?.foto === "string" && data.usuario.foto) ||
     undefined;
@@ -204,10 +191,12 @@ export default function PerfilClube({ idDaUrl }: Props) {
       : undefined;
 
   const kpis = [
-    { label: "Atletas",    value: data.metrics?.atletas ?? 0 },
-    { label: "Eventos",    value: data.metrics?.eventos ?? 0 },
+    { label: "Atletas", value: data.metrics?.atletas ?? 0 },
+    { label: "Eventos", value: data.metrics?.eventos ?? 0 },
     { label: "Conquistas", value: data.metrics?.conquistas ?? 0 },
   ];
+
+  const clubeId = data.clube.id;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
@@ -222,17 +211,15 @@ export default function PerfilClube({ idDaUrl }: Props) {
 
       <div className="mt-4 grid grid-cols-3 gap-2">
         {[
-          { key: "perfil",   label: "Perfil" },
-          { key: "eventos",  label: "Eventos" },
-          { key: "atletas",  label: "Atletas" },
+          { key: "perfil", label: "Perfil" },
+          { key: "eventos", label: "Eventos" },
+          { key: "atletas", label: "Atletas" },
         ].map((t) => (
           <button
             key={t.key}
             onClick={() => setAba(t.key as AbaTopo)}
             className={`py-2 rounded-lg text-sm font-medium ${
-              aba === t.key
-                ? "bg-green-100 text-green-900"
-                : "bg-white/70 text-green-900 hover:bg-white"
+              aba === t.key ? "bg-green-100 text-green-900" : "bg-white/70 text-green-900 hover:bg-white"
             }`}
           >
             {t.label}
@@ -248,10 +235,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
               <li><b>Nome:</b> {data.clube.nome}</li>
               {data.clube.estadio && <li><b>Estádio:</b> {data.clube.estadio}</li>}
               {(data.clube.cidade || data.clube.estado || data.clube.pais) && (
-                <li>
-                  <b>Localização:</b>{" "}
-                  {[data.clube.cidade, data.clube.estado, data.clube.pais].filter(Boolean).join(", ")}
-                </li>
+                <li><b>Localização:</b> {[data.clube.cidade, data.clube.estado, data.clube.pais].filter(Boolean).join(", ")}</li>
               )}
               {(data.clube.logradouro || data.clube.bairro || data.clube.cep) && (
                 <li>
@@ -271,34 +255,28 @@ export default function PerfilClube({ idDaUrl }: Props) {
               Gerencie vínculos de formação de atletas e documentos para mecanismo de solidariedade
             </p>
             <div className="mt-3">
-              <Link href="/formadores">
-                <a className="inline-block rounded-lg bg-green-600 text-white px-4 py-2 font-semibold">
-                  Acessar Módulo Formadores
-                </a>
+              <Link
+                href="/formadores"
+                className="inline-block rounded-lg bg-green-600 text-white px-4 py-2 font-semibold"
+              >
+                Acessar Módulo Formadores
               </Link>
             </div>
           </div>
 
-           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
+          <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <h3 className="font-semibold text-green-900 mb-2">Sobre o Clube</h3>
-            {data.clube.descricao?.trim() ? (
-              <p className="text-sm text-green-900/90 whitespace-pre-wrap">
-                {data.clube.descricao}
-              </p>
-            ) : (
-              <p className="text-sm text-green-900/70">Sem descrição cadastrada.</p>
-            )}
+            {data.clube.descricao?.trim()
+              ? <p className="text-sm text-green-900/90 whitespace-pre-wrap">{data.clube.descricao}</p>
+              : <p className="text-sm text-green-900/70">Sem descrição cadastrada.</p>}
           </div>
 
-          {/* renomeie a seção para reforçar que é base */}
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <h3 className="font-semibold text-green-900 mb-2">Categorias de Base</h3>
             {data.clube.categorias?.length ? (
               <div className="flex flex-wrap gap-2">
                 {data.clube.categorias.map((c) => (
-                  <span key={c} className="text-xs bg-green-100 text-green-900 px-2 py-1 rounded-full">
-                    {c}
-                  </span>
+                  <span key={c} className="text-xs bg-green-100 text-green-900 px-2 py-1 rounded-full">{c}</span>
                 ))}
               </div>
             ) : (
@@ -314,10 +292,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
               )}
               {data.clube.email && <li><b>Email:</b> {data.clube.email}</li>}
               {(data.clube.telefone1 || data.clube.telefone2) && (
-                <li>
-                  <b>Telefone:</b>{" "}
-                  {[data.clube.telefone1, data.clube.telefone2].filter(Boolean).join(" / ")}
-                </li>
+                <li><b>Telefone:</b> {[data.clube.telefone1, data.clube.telefone2].filter(Boolean).join(" / ")}</li>
               )}
             </ul>
           </div>
@@ -336,20 +311,28 @@ export default function PerfilClube({ idDaUrl }: Props) {
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-green-900">Eventos e Peneiras</h3>
-              <Link href="/eventos">
-                <a className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900">Ver eventos</a>
+              <Link
+                href={`/eventos/clubes/${clubeId}`}
+                className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
+              >
+                Ver eventos
               </Link>
             </div>
+
             <p className="text-sm text-green-900/80 mt-1">
               Crie e gerencie seus eventos, peneiras e amistosos.
             </p>
-            <div className="mt-4">
-              <Link href="/eventos/novo">
-                <a className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-4 py-2">
+
+            {isOwn && (
+              <div className="mt-4">
+                <Link
+                  href={`/eventos/clubes/${clubeId}/novo`}
+                  className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-4 py-2"
+                >
                   <span>+</span> Criar novo evento
-                </a>
-              </Link>
-            </div>
+                </Link>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -358,17 +341,15 @@ export default function PerfilClube({ idDaUrl }: Props) {
         <section className="mt-4 grid gap-4">
           <div className="grid grid-cols-3 gap-2">
             {[
-              { key: "vinculados",   label: "Vinculados" },
-              { key: "observados",   label: "Observados" },
+              { key: "vinculados", label: "Vinculados" },
+              { key: "observados", label: "Observados" },
               { key: "solicitacoes", label: "Solicitações" },
             ].map((t) => (
               <button
                 key={t.key}
                 onClick={() => setSubAba(t.key as SubAbaAtletas)}
                 className={`py-2 rounded-lg text-sm font-medium ${
-                  subAba === t.key
-                    ? "bg-green-100 text-green-900"
-                    : "bg-white/70 text-green-900 hover:bg-white"
+                  subAba === t.key ? "bg-green-100 text-green-900" : "bg-white/70 text-green-900 hover:bg-white"
                 }`}
               >
                 {t.label}
@@ -376,7 +357,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
             ))}
           </div>
 
-           {subAba === "vinculados" && (
+          {subAba === "vinculados" && (
             <SectionCard title="Atletas Vinculados">
               {vinculados && vinculados.length > 0 ? (
                 <ul className="grid grid-cols-1 gap-3">
@@ -386,13 +367,21 @@ export default function PerfilClube({ idDaUrl }: Props) {
                       <div className="flex-1">
                         <div className="text-sm font-medium text-green-900">{a.nome}</div>
                         <div className="text-xs text-green-900/70">
-                          {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
+                          {[
+                            a.posicao,
+                            a.idade ? `${a.idade} anos` : "",
+                            a.categoria ? `Cat. ${a.categoria}` : "",
+                            a.pontuacao != null ? `${a.pontuacao} pts` : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" • ")}
                         </div>
                       </div>
-                      <Link href={`/perfil/${a.id}`}>
-                        <a className="text-sm text-green-800 inline-flex items-center gap-1">
-                          Ver perfil <ChevronRight className="w-4 h-4" />
-                        </a>
+                      <Link
+                        href={`/perfil/${a.id}`}
+                        className="text-sm text-green-800 inline-flex items-center gap-1"
+                      >
+                        Ver perfil <ChevronRight className="w-4 h-4" />
                       </Link>
                     </li>
                   ))}
@@ -400,12 +389,10 @@ export default function PerfilClube({ idDaUrl }: Props) {
               ) : (
                 <EmptyState text="Nenhum atleta vinculado ainda" />
               )}
-
             </SectionCard>
-
           )}
 
-           {subAba === "observados" && (
+          {subAba === "observados" && (
             <SectionCard title="Atletas Observados">
               {observados && observados.length > 0 ? (
                 <ul className="grid grid-cols-1 gap-3">
@@ -418,10 +405,11 @@ export default function PerfilClube({ idDaUrl }: Props) {
                           {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
                         </div>
                       </div>
-                      <Link href={`/perfil/${a.id}`}>
-                        <a className="text-sm text-green-800 inline-flex items-center gap-1">
-                          Ver perfil <ChevronRight className="w-4 h-4" />
-                        </a>
+                      <Link
+                        href={`/perfil/${a.id}`}
+                        className="text-sm text-green-800 inline-flex items-center gap-1"
+                      >
+                        Ver perfil <ChevronRight className="w-4 h-4" />
                       </Link>
                     </li>
                   ))}
@@ -436,8 +424,8 @@ export default function PerfilClube({ idDaUrl }: Props) {
             <SectionCard
               title="Solicitações de Atletas"
               right={
-                <Link href="/notificacoes">
-                  <a className="text-sm text-green-800">Abrir notificações</a>
+                <Link href="/notificacoes" className="text-sm text-green-800">
+                  Abrir notificações
                 </Link>
               }
             >
@@ -455,10 +443,11 @@ export default function PerfilClube({ idDaUrl }: Props) {
                           <div className="text-xs text-green-900/70">quer treinar junto com você</div>
                         </div>
                       </div>
-                      <Link href={`/perfil/${s.remetenteId}`}>
-                        <a className="text-sm text-green-800 inline-flex items-center gap-1">
-                          Ver perfil <ChevronRight className="w-4 h-4" />
-                        </a>
+                      <Link
+                        href={`/perfil/${s.remetenteId}`}
+                        className="text-sm text-green-800 inline-flex items-center gap-1"
+                      >
+                        Ver perfil <ChevronRight className="w-4 h-4" />
                       </Link>
                     </li>
                   ))}
@@ -468,7 +457,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
               )}
             </SectionCard>
           )}
-
         </section>
       )}
     </div>

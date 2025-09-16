@@ -34,11 +34,10 @@ import PaginaMinhaRede from "./pages/minhaRede.js";
 import PaginaPontuacaoDePerfil from "./pages/perfilPontuacaoExplorar.js";
 import PaginaElenco from "./pages/elenco.js";
 import PaginaGerenciarAtleta from "./pages/GerenciarAtletas.js"
-import PaginaPerfilClube from "./components/perfil/PerfilClube.js";
-import PaginaPerfilEscola from "./components/perfil/PerfilEscola.js";
 import PaginaPerfilOlheiro from "./components/perfil/PerfilOlheiro.js";
-import PaginaPerfilAtleta from "./components/perfil/PerfilAtleta.js";
-import PaginaPerfilProfessor from "./components/perfil/PerfilProfessor.js";
+import PaginaEventosClube from "./pages/eventosClube.js";
+import PaginaNovoEventoClube from "./pages/eventosClubeNovo.js";
+import PaginaEventoDetalhe from "./pages/eventoDetalhe.js";
 
 export function AppRoutes() {
   return (
@@ -82,6 +81,18 @@ export function AppRoutes() {
         <PaginaGerenciarAtleta />
       </Route>
 
+      <Route path="/eventos/clubes/:id/novo">
+        {(params?: { id: string }) =>
+          params ? <PaginaNovoEventoClube clubeId={params.id} /> : null}
+      </Route>
+      <Route path="/eventos/clubes/:id">
+        {(params?: { id: string }) =>
+          params ? <PaginaEventosClube clubeId={params.id} /> : null}
+      </Route>
+      <Route path="/eventos/:id">
+        {(params?: { id: string }) =>
+          params ? <PaginaEventoDetalhe eventoId={params.id} /> : null}
+      </Route>
 
       <Route path="/feed/desafios"><Private><PaginaDesafios /></Private></Route>
       <Route path="/feed"><Private><PaginaFeed /></Private></Route>

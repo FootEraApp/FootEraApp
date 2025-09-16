@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Response, Request } from "express";
 import { PrismaClient } from "@prisma/client";
 import { getIO } from "../socket.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
@@ -352,4 +352,75 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
     console.error(e);
     res.status(500).json({ error: "Erro ao concluir treino" });
   }
+}
+
+export async function atletasVinculados(req: Request, res: Response) {
+  const tipoUsuarioId = String(req.query.tipoUsuarioId ?? "");
+  const incluirPontuacao = String(req.query.incluirPontuacao ?? "0") === "1";
+  if (!tipoUsuarioId) return res.json([]);
+
+   const atletas = await prisma.atleta.findMany({
+    where: { clubeId: tipoUsuarioId },
+    select: {
+      id: true,               
+      usuarioId: true,    
+      nome: true,
+      foto: true,
+      posicao: true,
+      idade: true,
+      categoria: true,       
+      pontuacao: {          
+        select: {
+          pontuacaoTotal: true,
+          pontuacaoPerformance: true,
+          pontuacaoDisciplina: true,
+          pontuacaoResponsabilidade: true,
+        },
+      },
+    },
+  });
+
+  let itens = atletas.map(a => {
+    const cat = (a.categoria && a.categoria.length) ? a.categoria[0] : null;
+    let pontos: number | null = null;
+
+    if (incluirPontuacao) {
+      const p = a.pontuacao;
+      if (p) {
+        pontos =
+          (p.pontuacaoTotal ??
+            ((p.pontuacaoPerformance ?? 0) +
+             (p.pontuacaoDisciplina ?? 0) +
+             (p.pontuacaoResponsabilidade ?? 0))) ?? 0;
+      }
+    }
+
+    return {
+      id: a.usuarioId,   
+      atletaId: a.id,
+      nome: a.nome ?? "",
+      foto: a.foto ?? null,
+      posicao: a.posicao ?? null,
+      idade: a.idade ?? null,
+      categoria: cat,    
+      pontuacao: pontos, 
+    };
+  });
+
+  if (incluirPontuacao) {
+    const faltando = itens.filter(i => i.pontuacao == null).map(i => i.atletaId);
+    if (faltando.length) {
+      const stats = await prisma.estatisticaAtleta.findMany({
+        where: { atletaId: { in: faltando } },
+        select: { atletaId: true, totalPontos: true },
+      });
+      const mapa = new Map(stats.map(s => [s.atletaId, s.totalPontos ?? 0]));
+      itens = itens.map(i => ({
+        ...i,
+        pontuacao: i.pontuacao ?? mapa.get(i.atletaId) ?? 0,
+      }));
+    }
+  }
+
+  res.json(itens);
 }
