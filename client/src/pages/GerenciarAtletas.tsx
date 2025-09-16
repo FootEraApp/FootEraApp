@@ -1,5 +1,7 @@
 // client/src/pages/GerenciarAtletas.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "wouter";
+import { Volleyball, User, CirclePlus, House } from "lucide-react";
 import axios from "axios";
 import {
   Users,
@@ -16,7 +18,6 @@ import {
   X,
   CalendarClock,
   ListChecks,
-  Target,
   Send,
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
@@ -66,8 +67,8 @@ type EstatisticasAtleta = {
   totalTreinosMes: number;
   concluidosMes: number;
   desafiosFeitosMes: number;
-  mediaPontuacaoUltimas4Semanas: number;
-  evolucaoPontuacaoSemanas: Array<{ semana: string; pontos: number }>;
+  mediaUltimas4Semanas: number;
+  evolucaoSemanas: Array<{ semana: string; pontos: number }>;
 };
 
 // Treinos programados disponíveis para o perfil institucional
@@ -100,6 +101,20 @@ const StatusBadge: React.FC<{ ativo?: boolean }> = ({ ativo }) => (
     {ativo ? "ativo" : "inativo"}
   </span>
 );
+
+const posicoesMap: Record<string, string> = {
+  GOL: "Goleiro",
+  LD: "Lateral Direito",
+  ZD: "Zagueiro Direito",
+  ZE: "Zagueiro Esquerdo",
+  LE: "Lateral Esquerdo",
+  VOL1: "Volante 1",
+  VOL2: "Volante 2",
+  MEI: "Meia",
+  PD: "Ponta Direita",
+  CA: "Centroavante",
+  PE: "Ponta Esquerda",
+};
 
 // Conversão Categoria UI <-> API (Prisma enum: Sub9|Sub11|...|Livre)
 const apiToUiCategoria = (c?: string | null): CategoriaBase | null => {
@@ -140,8 +155,12 @@ const GerenciarAtletas: React.FC = () => {
   // Seleção e detalhe
   const [selecionados, setSelecionados] = useState<Record<string, boolean>>({});
   const [focado, setFocado] = useState<AtletaMin | null>(null);
+
+  // Stats
   const [stats, setStats] = useState<EstatisticasAtleta | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingStatsRef = useRef<NodeJS.Timeout | null>(null);
 
   // Designar treino (modal)
   const [abrirDesignar, setAbrirDesignar] = useState(false);
@@ -243,24 +262,27 @@ const GerenciarAtletas: React.FC = () => {
 
   // ===== Detalhes do atleta (stats rápidas) =====
   const carregarStatsAtleta = async (atletaUsuarioId: string) => {
-    setStats(null);
+    setStatsLoading(true);
     try {
       const res = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas/${atletaUsuarioId}/pontuacao`, { headers });
       const s: EstatisticasAtleta = {
         totalTreinosMes: res.data?.totalTreinosMes ?? 0,
         concluidosMes: res.data?.concluidosMes ?? 0,
         desafiosFeitosMes: res.data?.desafiosFeitosMes ?? 0,
-        mediaPontuacaoUltimas4Semanas: res.data?.mediaUltimas4Semanas ?? 0,
-        evolucaoPontuacaoSemanas:
-          res.data?.evolucaoSemanas ?? [
-            { semana: "S-3", pontos: 0 },
-            { semana: "S-2", pontos: 0 },
-            { semana: "S-1", pontos: 0 },
-            { semana: "S", pontos: 0 },
-          ],
+        mediaUltimas4Semanas: res.data?.mediaUltimas4Semanas ?? 0,
+        evolucaoSemanas: res.data?.evolucaoSemanas ?? [
+          { semana: "S-3", pontos: 0 },
+          { semana: "S-2", pontos: 0 },
+          { semana: "S-1", pontos: 0 },
+          { semana: "S", pontos: 0 },
+        ],
       };
       setStats(s);
-    } catch (_) {}
+    } catch (_) {
+      setStats(null);
+    } finally {
+      setStatsLoading(false);
+    }
   };
 
   // === Efeitos ===
@@ -312,8 +334,28 @@ const GerenciarAtletas: React.FC = () => {
   // Abrir detalhe
   const abrirDetalhe = (a: AtletaMin) => {
     setFocado(a);
-    carregarStatsAtleta(a.usuarioId || a.id);
   };
+
+  // Carrega (e faz polling) das stats enquanto houver atleta focado
+  useEffect(() => {
+    if (!focado) {
+      setStats(null);
+      if (pollingStatsRef.current) clearInterval(pollingStatsRef.current);
+      return;
+    }
+    const uid = focado.usuarioId || focado.id;
+    carregarStatsAtleta(uid);
+
+    if (pollingStatsRef.current) clearInterval(pollingStatsRef.current);
+    pollingStatsRef.current = setInterval(() => {
+      carregarStatsAtleta(uid);
+    }, 15000);
+
+    return () => {
+      if (pollingStatsRef.current) clearInterval(pollingStatsRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focado?.usuarioId, focado?.id]);
 
   // ===== Designar treino =====
   const idsDestino = useMemo(() => {
@@ -423,9 +465,9 @@ const GerenciarAtletas: React.FC = () => {
             className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
           >
             <option value="">Posição (todas)</option>
-            {["Goleiro", "Zagueiro", "Lateral", "Volante", "Meia", "Atacante"].map((p) => (
-              <option key={p} value={p}>
-                {p}
+            {Object.entries(posicoesMap).map(([valor, label]) => (
+              <option key={valor} value={valor}>
+                {label}
               </option>
             ))}
           </select>
@@ -629,15 +671,21 @@ const GerenciarAtletas: React.FC = () => {
                 <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                   <div className="rounded-xl border border-zinc-200 p-3">
                     <div className="text-xs text-zinc-500">Treinos (mês)</div>
-                    <div className="text-lg font-semibold">{stats?.totalTreinosMes ?? "–"}</div>
+                    <div className="text-lg font-semibold">
+                      {statsLoading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : (stats?.totalTreinosMes ?? "–")}
+                    </div>
                   </div>
                   <div className="rounded-xl border border-zinc-200 p-3">
                     <div className="text-xs text-zinc-500">Concluídos</div>
-                    <div className="text-lg font-semibold">{stats?.concluidosMes ?? "–"}</div>
+                    <div className="text-lg font-semibold">
+                      {statsLoading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : (stats?.concluidosMes ?? "–")}
+                    </div>
                   </div>
                   <div className="rounded-xl border border-zinc-200 p-3">
                     <div className="text-xs text-zinc-500">Desafios</div>
-                    <div className="text-lg font-semibold">{stats?.desafiosFeitosMes ?? "–"}</div>
+                    <div className="text-lg font-semibold">
+                      {statsLoading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : (stats?.desafiosFeitosMes ?? "–")}
+                    </div>
                   </div>
                 </div>
 
@@ -828,6 +876,14 @@ const GerenciarAtletas: React.FC = () => {
           </div>
         </div>
       )}
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
+        <Link href="/feed"><House /></Link>
+        <Link href="/explorar"><Search /></Link>
+        <Link href="/post"><CirclePlus /></Link>
+        <Link href="/treinos"><Volleyball /></Link>
+        <Link href="/perfil"><User /></Link>
+      </nav>
     </div>
   );
 };
