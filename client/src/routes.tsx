@@ -1,7 +1,6 @@
 import { Route, Switch } from "wouter";
 import { Private, PublicOnly, HomeRedirect } from "./auth.js";
 import RequireAdmin from "./routes/RequireAdmin.js";
-
 import AdminDashboard from "./pages/admin-page.js";
 import PaginaLogin from "./pages/login.js";
 import PaginaCadastro from "./pages/cadastro.js";
@@ -38,6 +37,7 @@ import PaginaPerfilOlheiro from "./components/perfil/PerfilOlheiro.js";
 import PaginaEventosClube from "./pages/eventosClube.js";
 import PaginaNovoEventoClube from "./pages/eventosClubeNovo.js";
 import PaginaEventoDetalhe from "./pages/eventoDetalhe.js";
+import PaginaTreinoUnico from "./pages/TreinoUnico.js";
 
 export function AppRoutes() {
   return (
@@ -99,6 +99,7 @@ export function AppRoutes() {
       <Route path="/desafios/:id"><Private><PaginaDesafioUnico /></Private></Route>
       <Route path="/treinos/elenco"><Private><PaginaElenco /></Private></Route>
       <Route path="/treinos/novo"><PaginaNovoTreino /></Route>
+      <Route path="/treinos/unico"><Private><PaginaTreinoUnico /></Private></Route>
       <Route path="/treinos"><Private><PaginaTreinos /></Private></Route>
       <Route path="/perfil/pontuacao"><Private><PaginaPontuacaoPerfil /></Private></Route>
       <Route path="/perfil/:id/pontuacao"><Private><PaginaPontuacaoDePerfil /></Private></Route>
