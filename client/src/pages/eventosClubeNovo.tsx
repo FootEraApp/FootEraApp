@@ -10,17 +10,17 @@ type EventoForm = {
   titulo: string;
   tipo: "PENEIRA" | "EVENTO";
   descricao: string;
-  inicio: string;           // datetime-local -> string
-  fim: string;              // datetime-local -> string
+  inicio: string;         
+  fim: string;            
   local: string;
   cidade: string;
   estado: string;
   pais: string;
   endereco: string;
-  vagas: string;            // input number retorna string
-  valorInscricao: string;   // idem
+  vagas: string;         
+  valorInscricao: string;  
   linkInscricao: string;
-  requisitos: string;       // separado por vírgula no UI
+  requisitos: string;    
   status: "ABERTO" | "ENCERRADO" | "CANCELADO";
 };
 
@@ -63,7 +63,6 @@ export default function PaginaNovoEventoClube({ clubeId }: Props) {
 
       const body = {
         ...form,
-        // transforma campos antes de enviar
         vagas: form.vagas ? Number(form.vagas) : null,
         valorInscricao: form.valorInscricao ? Number(form.valorInscricao) : null,
         requisitos: form.requisitos

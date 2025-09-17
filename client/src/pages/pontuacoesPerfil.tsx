@@ -455,81 +455,55 @@ useEffect(() => {
     return form;
   }
 
- async function postarMeuCard() {
-  if (postando) return;
-  setPostando(true);
-  try {
-    const token = readToken();
-    if (!token) { setLocation("/login"); return; }
+  async function postarMeuCard() {
+    if (postando) return;
+    setPostando(true);
+    try {
+      const token = readToken();
+      if (!token) { setLocation("/login"); return; }
 
-    const perf = pontos?.performance ?? 0;
-    const disc = pontos?.disciplina ?? 0;
-    const resp = pontos?.responsabilidade ?? 0;
-    const ovr  = pontos?.mediaGeral ?? Math.round((perf + disc + resp) / 3);
+      const perf = pontos?.performance ?? 0;
+      const disc = pontos?.disciplina ?? 0;
+      const resp = pontos?.responsabilidade ?? 0;
+      const ovr  = pontos?.mediaGeral ?? Math.round((perf + disc + resp) / 3);
 
-    const descricaoBase =
-      `Meu Card FOOTERA\n` +
-      `OVR: ${ovr}\n` +
-      `Performance: ${perf} pts\n` +
-      `Disciplina: ${disc} pts\n` +
-      `Responsabilidade: ${resp} pts`;
+      const conteudo =
+        `Meu Card FOOTERA\n` +
+        `OVR: ${ovr}\n` +
+        `Performance: ${perf} pts\n` +
+        `Disciplina: ${disc} pts\n` +
+        `Responsabilidade: ${resp} pts`;
 
-    const descricao = `${descricaoBase}\u200D`;
+      const node = cardShotRef.current;
+      if (!node) { alert("Não consegui capturar o card."); return; }
 
-    const node = cardShotRef.current;
-    if (!node) { alert("Não consegui capturar o card."); return; }
+      await preloadImgs(node);
+      await new Promise(r => requestAnimationFrame(r as any));
 
-    await preloadImgs(node);
-    await new Promise(r => requestAnimationFrame(r as any));
-
-    const dataUrl = await htmlToImage.toPng(node, {
-      pixelRatio: 2,
-      cacheBust: false,
-      imagePlaceholder: IMG_PLACEHOLDER,
-    });
-
-    let res = await api.post("/api/post",
-      { descricao, midiaBase64: dataUrl },
-      { validateStatus: () => true }
-    );
-
-    if (res.status === 400) {
-      res = await api.post("/api/post",
-        { descricao, imagemBase64: dataUrl },
-        { validateStatus: () => true }
-      );
-    }
-
-    if (res.status === 400) {
+      const dataUrl = await htmlToImage.toPng(node, { pixelRatio: 2 });
       const blob = await (await fetch(dataUrl)).blob();
 
-      const fdA = new FormData();
-      fdA.append("descricao", descricao);
-      fdA.append("midia", new File([blob], "card.png", { type: "image/png" }));
-      res = await api.post("/api/post", fdA, { validateStatus: () => true });
+      const fd = new FormData();
+      fd.append("conteudo", conteudo);
+      fd.append("arquivo", new File([blob], "card.png", { type: "image/png" }));
 
-      if (res.status === 400) {
-        const fdB = new FormData();
-        fdB.append("descricao", descricao);
-        fdB.append("imagem", new File([blob], "card.png", { type: "image/png" }));
-        res = await api.post("/api/post", fdB, { validateStatus: () => true });
+      const res = await api.post("/api/post", fd, { validateStatus: () => true });
+
+      if (res.status >= 200 && res.status < 300) {
+        const postId = res.data?.id || res.data?.post?.id || res.data?.data?.id;
+        if (postId) setLocation(`/post/${postId}`);
+        else alert("Post criado, mas sem ID para redirecionar.");
+      } else {
+        console.error("Falha ao criar post:", res.status, res.data);
+        alert(res.data?.message || "Não foi possível criar o post.");
       }
+    } catch (e) {
+      console.error(e);
+      alert("Falha ao publicar seu card.");
+    } finally {
+      setPostando(false);
     }
-
-    if (res.status >= 200 && res.status < 300) {
-      const postId = res.data?.id || res.data?.post?.id || res.data?.postagem?.id || res.data?.data?.id;
-      if (postId) setLocation(`/post/${postId}`); else alert("Post criado, mas sem ID para redirecionar.");
-    } else {
-      console.error("Falha ao criar post:", res.status, res.data);
-      alert(res.data?.message || res.data?.error || "Não foi possível criar o post agora.");
-    }
-  } catch (e) {
-    console.error(e);
-    alert("Falha ao publicar seu card.");
-  } finally {
-    setPostando(false);
   }
-}
 
   return (
     <div className="min-h-screen bg-transparent pb-28">
