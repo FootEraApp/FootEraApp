@@ -183,15 +183,6 @@ const pontosTreino = (a: typeof treinosConcluidos[number]): number => {
 
   const final = Math.max(bySnapshot, byDeclared, byScan, byExCount);
 
-  console.log("[PONTOS] Treino:", {
-    titulo: a.titulo ?? tp?.nome ?? "Treino",
-    snapshot: bySnapshot,
-    declarado: byDeclared,
-    scan: byScan,
-    exCount: byExCount,
-    final
-  });
-
   return final;
 };
 
@@ -208,13 +199,6 @@ const pontosDesafio = (s: typeof desafiosConcluidos[number]): number => {
   );
   const byScan = Math.max(sumFromObject(d?.pontuacao), sumFromObject(d));
   const final = Math.max(byDeclared, byScan, 1); 
-  
-  console.log("[PONTOS] Desafio:", {
-    titulo: d?.titulo ?? "Desafio",
-    declarado: byDeclared,
-    scan: byScan,
-    final
-  });
 
   return final;
 };

@@ -125,3 +125,33 @@ export const uploadMidiaAtleta = async (req: Request, res: Response) => {
 
   res.status(201).json(midia);
 };
+
+export async function getProfessorDoAtleta(req: Request, res: Response) {
+  try {
+    const { atletaId } = req.params;
+
+    const atleta = await prisma.atleta.findUnique({
+      where: { id: atletaId },
+      select: { id: true },
+    });
+    if (!atleta) return res.status(404).json({ error: "Atleta não encontrado" });
+
+    const rel = await prisma.relacaoTreinamento.findFirst({
+      where: { atletaId: atleta.id, professorId: { not: null } },
+      orderBy: { criadoEm: "desc" },
+      include: { professor: { include: { usuario: true } } },
+    });
+
+    const payload = rel?.professor
+      ? {
+          id: rel.professor.id,
+          nome: rel.professor.nome || rel.professor.usuario?.nome || null,
+        }
+      : null;
+
+    res.json(payload);
+  } catch (e) {
+    console.error("getProfessorDoAtleta erro:", e);
+    res.status(500).json({ error: "Erro ao buscar professor do atleta" });
+  }
+}

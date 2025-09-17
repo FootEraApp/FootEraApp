@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";
-import {API} from "../config.js";
+import { API } from "../config.js";
+import { formatarUrlFoto } from "../utils/formatarFoto.js";
 
 interface Solicitacao {
   id: string;
@@ -16,8 +17,6 @@ interface Solicitacao {
 export default function PaginaNotificacoes() {
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [location, setLocation] = useLocation();
-
-  
 
   useEffect(() => {
     const token = Storage.token;
@@ -56,7 +55,6 @@ export default function PaginaNotificacoes() {
   }
 };
 
-
   const irParaPerfil = (id: string) => {
     setLocation(`/perfil/${id}`);
   };
@@ -69,46 +67,57 @@ export default function PaginaNotificacoes() {
         <p className="text-gray-500">Nenhuma solicitação no momento.</p>
       ) : (
         <div className="space-y-4">
-          {solicitacoes.map((solicitacao) => (
-            <div
-              key={solicitacao.id}
-              className="bg-white shadow-md rounded-xl p-4 flex items-center justify-between hover:bg-gray-100 cursor-pointer"
-              onClick={() => irParaPerfil(solicitacao.remetenteId)}
-            >
-              <div className="flex items-center gap-4">
-                <img
-                  src={solicitacao.remetente.foto ?? "https://via.placeholder.com/50"}
-                  alt={`Foto de ${solicitacao.remetente.nomeDeUsuario}`}
-                  className="w-12 h-12 rounded-full object-cover"
-                />
+          {solicitacoes.map((solicitacao) => {
+            const foto = solicitacao.remetente?.foto;
+            const fotoSrc = foto ? formatarUrlFoto(foto, "usuarios") : "";
 
-                <div>
-                  <p className="font-semibold">{solicitacao.remetente.nomeDeUsuario}</p>
-                  <p className="text-sm text-gray-600">
-                    quer treinar junto com você
-                  </p>
+            return (
+              <div
+                key={solicitacao.id}
+                className="bg-white shadow-md rounded-xl p-4 flex items-center justify-between hover:bg-gray-100 cursor-pointer"
+                onClick={() => irParaPerfil(solicitacao.remetenteId)}
+              >
+                <div className="flex items-center gap-4">
+                  {foto ? (
+                    <img
+                      src={fotoSrc}
+                      alt={`Foto de ${solicitacao.remetente.nomeDeUsuario}`}
+                      className="w-12 h-12 rounded-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src =
+                          "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+                      }}
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-gray-300 text-gray-700 flex items-center justify-center">
+                      {(solicitacao.remetente.nomeDeUsuario || "?").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="font-semibold">{solicitacao.remetente.nomeDeUsuario}</p>
+                    <p className="text-sm text-gray-600">quer treinar junto com você</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    className="bg-green-500 hover:bg-green-600 text-white rounded px-3 py-1"
+                    onClick={() => responderSolicitacao(solicitacao.id, true)}
+                  >
+                    Aceitar
+                  </button>
+                  <button
+                    className="bg-red-500 hover:bg-red-600 text-white rounded px-3 py-1"
+                    onClick={() => responderSolicitacao(solicitacao.id, false)}
+                  >
+                    Rejeitar
+                  </button>
                 </div>
               </div>
-
-              <div
-                className="flex gap-2"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  className="bg-green-500 hover:bg-green-600 text-white rounded px-3 py-1"
-                  onClick={() => responderSolicitacao(solicitacao.id, true)}
-                >
-                  Aceitar
-                </button>
-                <button
-                  className="bg-red-500 hover:bg-red-600 text-white rounded px-3 py-1"
-                  onClick={() => responderSolicitacao(solicitacao.id, false)}
-                >
-                  Rejeitar
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

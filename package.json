@@ -60,6 +60,7 @@
     "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
     "date-fns": "^3.6.0",
+    "dayjs": "^1.11.18",
     "dotenv": "^16.6.1",
     "drizzle-orm": "^0.39.3",
     "drizzle-zod": "^0.7.1",

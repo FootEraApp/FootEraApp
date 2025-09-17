@@ -85,18 +85,26 @@ const EditarPerfil = () => {
   const renderCamposEspecificos = () => {
     if (!dadosTipo) return null;
 
-    const renderInput = (label: string, name: string, type = "text") => (
-      <div className="mb-4" key={name}>
-        <label className="block text-sm font-medium">{label}</label>
-        <input
-          type={type}
-          name={`tipo_${name}`}
-          value={dadosTipo[name] ?? ""}
-          onChange={handleChange}
-          className="w-full border px-3 py-2 rounded"
-        />
-      </div>
-    );
+    const renderInput = (label: string, name: string, type = "text") => {
+      const raw = dadosTipo[name];
+      const value =
+        name === "categorias"
+          ? (Array.isArray(raw) ? raw.join(", ") : (raw ?? ""))
+          : (raw ?? "");
+
+      return (
+        <div className="mb-4" key={name}>
+          <label className="block text-sm font-medium">{label}</label>
+          <input
+            type={type}
+            name={`tipo_${name}`}
+            value={value}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded"
+          />
+        </div>
+      );
+    };
 
     switch (tipoRender) {
       case 'atleta':
@@ -113,6 +121,8 @@ const EditarPerfil = () => {
             {renderInput("Altura (cm)", "altura", "number")}
             {renderInput("Peso (kg)", "peso", "number")}
             {renderInput("Selo de Qualidade", "seloQualidade")}
+            {renderInput("Escola (nome)", "escola")}
+            {renderInput("Clube (nome)", "clube")}
           </>
         );
       case 'professor':
@@ -144,6 +154,7 @@ const EditarPerfil = () => {
             {renderInput("CEP", "cep")}
           </>
         );
+      
       case 'clube':
         return (
           <>
@@ -162,40 +173,61 @@ const EditarPerfil = () => {
             {renderInput("Estado", "estado")}
             {renderInput("País", "pais")}
             {renderInput("CEP", "cep")}
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium">Descrição</label>
+              <textarea
+                name="tipo_descricao"
+                value={dadosTipo["descricao"] ?? ""}
+                onChange={handleChange}
+                className="w-full border px-3 py-2 rounded"
+                rows={4}
+                placeholder="Fale sobre o clube, história, missão, etc."
+              />
+            </div>
+
+            {renderInput("Categorias de Base (separadas por vírgula)", "categorias")}
+            <p className="text-xs text-gray-500 -mt-3 mb-2">
+              Ex.: Sub-9, Sub-11, Sub-13, Sub-15, Sub-17, Sub-20
+            </p>
           </>
         );
-      default:
-        return null;
+      };
     }
-  };
+    return (
+      <div className="p-6 max-w-3xl mx-auto">
+        <h1 className="text-2xl font-bold mb-4">Editar Perfil</h1>
 
-  return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Editar Perfil</h1>
-
-      {dadosUsuario.foto && typeof dadosUsuario.foto === "string" && (
+      {typeof dadosUsuario.foto === "string" && dadosUsuario.foto && (
         <div className="mb-6">
           <label className="block text-sm font-medium">Foto Atual</label>
           <img
-            src={formatarUrlFoto(dadosUsuario.foto, 'usuarios')}
-            onError={(e) => { (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`; }}
+            src={formatarUrlFoto(dadosUsuario.foto, "usuarios")}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`;
+            }}
             className="w-24 h-24 rounded-full object-cover mt-2"
+            alt="Foto atual"
           />
         </div>
       )}
 
-      <div className="mb-6">
-        <label className="block text-sm font-medium">Foto de Perfil</label>
+    <div className="mb-6">
+      <label className="block text-sm font-medium">Foto de Perfil</label>
+        {dadosUsuario?.foto instanceof File && (
+          <img
+            src={URL.createObjectURL(dadosUsuario.foto)}
+            className="w-24 h-24 rounded-full object-cover mt-2 mb-2 border"
+            alt="Preview"
+          />
+        )}
+
         <input
           type="file"
           accept="image/*"
           onChange={(e) => {
-            if (e.target.files && e.target.files[0]) {
-              setDadosUsuario((prev: any) => ({
-                ...prev,
-                foto: e.target.files![0]
-              }));
-            }
+            const file = e.target.files?.[0];
+            if (file) setDadosUsuario((prev: any) => ({ ...prev, foto: file }));
           }}
           className="w-full border px-3 py-2 rounded"
         />
@@ -209,6 +241,20 @@ const EditarPerfil = () => {
           onChange={handleChange}
           className="w-full border px-3 py-2 rounded"
         />
+      </div>
+
+      <div className="mb-6">
+        <label className="block text-sm font-medium">Nome de usuário (@)</label>
+        <input
+          name="nomeDeUsuario"
+          value={dadosUsuario.nomeDeUsuario || ''}
+          onChange={handleChange}
+          className="w-full border px-3 py-2 rounded"
+          placeholder="ex: joao.olheiro"
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          Use apenas letras, números, pontos e underline.
+        </p>
       </div>
 
       <div className="mb-6">
@@ -234,36 +280,41 @@ const EditarPerfil = () => {
               formData.append("foto", dadosUsuario.foto);
               formData.append("usuarioId", usuarioId!);
               formData.append("tipo", tipoUsuarioOriginal!);
-
               const uploadRes = await axios.post(`${API.BASE_URL}/api/upload/perfil`, formData, {
-                headers: {Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
               });
               fotoUrl = uploadRes.data.url;
             }
 
-          const tipo = { ...dadosTipo };
+            const tipo: any = { ...dadosTipo };
+
             if (tipo.siteOficial && !tipo.site) tipo.site = tipo.siteOficial;
 
+            if (typeof tipo.categorias === "string") {
+              tipo.categorias = tipo.categorias
+                .split(",")
+                .map((s: string) => s.trim())
+                .filter(Boolean);
+            }
+
+            if (typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== "") {
+              const n = Number(tipo.anosExperiencia);
+              tipo.anosExperiencia = Number.isNaN(n) ? undefined : n;
+            }
             if (tipoUsuarioOriginal === "professor") {
               if (typeof tipo.qualificacoes === "string") {
-                tipo.qualificacoes = tipo.qualificacoes.split(',').map((q: string) => q.trim());
+                tipo.qualificacoes = tipo.qualificacoes.split(",").map((q: string) => q.trim()).filter(Boolean);
               }
               if (typeof tipo.certificacoes === "string") {
-                tipo.certificacoes = tipo.certificacoes.split(',').map((c: string) => c.trim());
+                tipo.certificacoes = tipo.certificacoes.split(",").map((c: string) => c.trim()).filter(Boolean);
               }
             }
 
-            await axios.put(
-              `${API.BASE_URL}/api/perfil/${usuarioId}`,
-              {
-                usuario: { ...dadosUsuario, foto: fotoUrl },
-                tipo,
-                tipoUsuario: tipoUsuarioOriginal
-              },
-              {
-                headers: { Authorization: `Bearer ${token}` }
-              }
-            );
+            await axios.put(`${API.BASE_URL}/api/perfil/${usuarioId}`, {
+              usuario: { ...dadosUsuario, foto: fotoUrl },
+              tipo,
+              tipoUsuario: tipoUsuarioOriginal,
+            }, { headers: { Authorization: `Bearer ${token}` } });
 
             alert("Dados atualizados com sucesso!");
             window.location.href = "/perfil";

@@ -9,7 +9,6 @@ import {
 
 const router = Router();
 
-// CRUD — sem lógica aqui, tudo no controller
 router.post("/", createTreinoProgramado);
 router.get("/", getAllTreinos);
 router.get("/:id", getTreinoById);

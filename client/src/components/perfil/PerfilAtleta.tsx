@@ -51,6 +51,58 @@ type Props = {
   idDaUrl?: string;
 };
 
+function pickProfessorNome(anyData: any): string | null {
+  if (!anyData) return null;
+  const o = Array.isArray(anyData) ? anyData[0] : anyData;
+
+  if (o?.professor?.nome) return o.professor.nome;
+  if (o?.treinador?.nome) return o.treinador.nome;
+  if (o?.dadosEspecificos?.professor) return o.dadosEspecificos.professor;
+  if (o?.dadosEspecificos?.professorNome) return o.dadosEspecificos.professorNome;
+
+  if (o?.tipo === "Professor" && o?.nome) return o.nome;
+  if (o?.usuario?.tipo === "Professor" && o?.usuario?.nome) return o.usuario.nome;
+
+  return null;
+}
+
+function VinculosCard({
+  professor,
+  escola,
+  clube,
+}: { professor?: string | null; escola?: string | null; clube?: string | null }) {
+  const items = [
+    { icon: "👨‍🏫", label: "Professor", value: professor },
+    { icon: "🏫",   label: "Escola",    value: escola },
+    { icon: "🏟️",   label: "Clube",     value: clube },
+  ].filter(i => i.value);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="bg-white border rounded-xl shadow-sm p-4 my-4">
+      <div className="text-green-900 font-semibold mb-3">Vínculos</div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {items.map((it, idx) => (
+          <VinculoItem key={idx} icon={it.icon} label={it.label} value={it.value!} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VinculoItem({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-3 p-3 bg-green-50 border rounded-lg">
+      <span className="text-xl">{icon}</span>
+      <div className="min-w-0">
+        <div className="text-[11px] uppercase tracking-wide text-green-800">{label}</div>
+        <div className="font-medium truncate" title={value}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function PerfilAtleta({ idDaUrl }: Props) {
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
@@ -58,6 +110,9 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   const [badges, setBadges] = useState<Badge[]>([]);
   const [pontuacao, setPontuacao] = useState<Pontuacao | null>(null);
   const [loading, setLoading] = useState(true);
+  const [professor, setProfessor] = useState<{ id?: string; nome: string } | null>(null);
+  const [escolaNome, setEscolaNome] = useState<string | null>(null);
+  const [clubeNome, setClubeNome] = useState<string | null>(null);
 
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -85,6 +140,34 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
         const uid = (meOuOutro?.usuario?.id as string) || alvoUsuarioId || null;
         setUsuarioId(uid);
 
+        setEscolaNome(meOuOutro?.dadosEspecificos?.escola ?? null);
+        setClubeNome(meOuOutro?.dadosEspecificos?.clube ?? null);
+        
+        if (meOuOutro?.tipo === "Atleta") {
+          const idParaConsulta =
+            meOuOutro?.atleta?.id ??
+            meOuOutro?.dadosEspecificos?.id ??
+            meOuOutro?.usuario?.id ??
+            alvoUsuarioId;
+
+          const nomeInline =
+            pickProfessorNome(meOuOutro?.professor) ||
+            pickProfessorNome(meOuOutro?.vinculos?.professor) ||
+            pickProfessorNome(meOuOutro?.dadosEspecificos);
+
+          if (nomeInline && !professor) setProfessor({ nome: nomeInline });
+
+          try {
+            const { data: vinc } = await axios.get(
+              `${API.BASE_URL}/api/atletas/${idParaConsulta}/vinculos-basic`,
+              { headers }
+            );
+
+            if (!professor && vinc?.professor?.nome) setProfessor({ nome: vinc.professor.nome });
+            if (!escolaNome && vinc?.escolinha?.nome) setEscolaNome(vinc.escolinha.nome);
+            if (!clubeNome && vinc?.clube?.nome) setClubeNome(vinc.clube.nome);
+          } catch {}
+        }
         setActivities((atividades || []).map((a: any) => ({
           id: a.id,
           tipo: a.tipo as TipoAtividade,
@@ -158,11 +241,9 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   if (!perfil) {
     return <div className="text-center p-10 text-red-600">Erro ao carregar perfil.</div>;
   }
-
-  const isIndependente =
-    perfil.tipo === "Atleta" &&
-    !perfil.dadosEspecificos.escola &&
-    !perfil.dadosEspecificos.clube;
+  
+  const temVinculo = Boolean(professor?.nome || escolaNome || clubeNome);
+  const isIndependente = perfil.tipo === "Atleta" && !temVinculo;
 
   const total = pontuacao?.pontuacaoTotal || 0;
 
@@ -173,17 +254,17 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
           nome={perfil.usuario.nome}
           idade={perfil.dadosEspecificos.idade}
           posicao={perfil.dadosEspecificos.posicao}
-          time={
-            perfil.tipo === "Atleta"
-              ? (perfil.dadosEspecificos.escola ||
-                 perfil.dadosEspecificos.clube ||
-                 "Independente")
-              : undefined
-          }
+          time={undefined}
           pontuacao={total}
           isOwnProfile={isOwnProfile}
           foto={perfil.usuario.foto || perfil.dadosEspecificos.foto || undefined}
           perfilId={idDaUrl || perfil.usuario.id}
+        />
+
+        <VinculosCard
+          professor={professor?.nome || null}
+          escola={escolaNome}
+          clube={clubeNome}
         />
 
         {isIndependente && (

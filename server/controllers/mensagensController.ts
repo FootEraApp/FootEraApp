@@ -108,6 +108,32 @@ export const listarMensagensGrupo = async (req: AuthenticatedRequest, res: Respo
   }
 };
 
+export async function getUnreadCount(req: any, res: Response) {
+  const userId = req.userId;
+  const count = await prisma.mensagem.count({
+    where: { paraId: userId, lida: false },
+  });
+  res.json({ count });
+}
+
+export async function listUnread(req: any, res: Response) {
+  const userId = req.userId;
+  const rows = await prisma.mensagem.findMany({
+    where: { paraId: userId, lida: false },
+    select: { id: true },
+  });
+  res.json(rows);
+}
+
+export async function markAllRead(req: any, res: Response) {
+  const userId = req.userId;
+  await prisma.mensagem.updateMany({
+    where: { paraId: userId, lida: false },
+    data: { lida: true },            
+  });
+  res.sendStatus(204);
+}
+
 export const enviarMensagemGrupo = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const usuarioId = req.userId!;

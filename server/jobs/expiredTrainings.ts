@@ -10,7 +10,6 @@ export function startExpiredTrainingsJob(intervalMs = 15 * 60_000) {
     if (running) return;         
     running = true;
     try {
-      console.log('[job] Verificando treinos expirados...');
       await removerTreinosExpirados();
     } catch (e) {
       console.error('[job] erro:', e);
