@@ -1,3 +1,4 @@
+// client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from "lucide-react";
@@ -641,7 +642,14 @@ export default function NovoTreino() {
         ) : (
           treinosDisponiveis.map((t) => (
             <div key={t.id} className="bg-white border p-4 rounded shadow mb-4">
-              <h3 className="text-green-800 text-lg font-semibold">{t.nome}</h3>
+              
+              <h3
+                className="text-green-800 text-lg font-semibold cursor-pointer hover:underline"
+                onClick={() => navigate(`/treinos/unico?programadoId=${t.id}`)}
+                title="Ver detalhes do treino"
+              >
+                {t.nome}
+              </h3>
 
               <p className="text-sm">
                 <strong>Descrição:</strong> {t.descricao}

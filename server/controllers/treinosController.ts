@@ -1,3 +1,4 @@
+// server/controllers/treinosController
 import { Response, Request } from "express";
 import { PrismaClient } from "@prisma/client";
 import { getIO } from "../socket.js";
