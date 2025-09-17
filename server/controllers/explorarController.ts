@@ -57,7 +57,7 @@ const out = atletas.map(a => ({
     atletas: out,
     clubes: [],
     escolas: [],
-    desafios: [],
+    olheiros: [],
     professores: [],
   });
 }
@@ -68,39 +68,31 @@ export const buscarExplorar = async (req: Request, res: Response) => {
   try {
     const termo = q ? String(q).toLowerCase() : "";
 
-    const [atletas, clubes, escolas, desafios, professores] = await Promise.all([
+    const [atletas, clubes, escolas, professores, olheiros] = await Promise.all([
       prisma.atleta.findMany({
-        where: {
-          usuario: { nome: { contains: termo, mode: "insensitive" } }
-        },
-        include: { usuario: true }
+        where: { usuario: { nome: { contains: termo, mode: "insensitive" } } },
+        include: { usuario: { select: { id: true, nome: true, foto: true } } },
       }),
       prisma.clube.findMany({
-        where: {
-          nome: { contains: termo, mode: "insensitive" }
-        },
-        include: { usuario: true }
+        where: { nome: { contains: termo, mode: "insensitive" } },
+        include: { usuario: true },
       }),
       prisma.escolinha.findMany({
-        where: {
-          nome: { contains: termo, mode: "insensitive" }
-        },
-        include: { usuario: true }
-      }),
-      prisma.desafioOficial.findMany({
-        where: {
-          titulo: { contains: termo, mode: "insensitive" }
-        },
+        where: { nome: { contains: termo, mode: "insensitive" } },
+        include: { usuario: true },
       }),
       prisma.professor.findMany({
-        where: {
-          usuario: { nome: { contains: termo, mode: "insensitive" } }
-        },
-        include: { usuario: true }
-      })
+        where: { usuario: { nome: { contains: termo, mode: "insensitive" } } },
+        include: { usuario: { select: { id: true, nome: true, foto: true } } },
+      }),
+      prisma.olheiro.findMany({
+        where: { usuario: { nome: { contains: termo, mode: "insensitive" } } },
+        include: { usuario: { select: { id: true, nome: true, foto: true } } },
+      }),
     ]);
 
-    res.json({ atletas, clubes, escolas, desafios, professores });
+    res.json({ atletas, clubes, escolas, professores, olheiros });
+
   } catch (error) {
     console.error("Erro em /api/explorar:", error);
     res.status(500).json({ error: "Erro ao buscar dados" });

@@ -34,6 +34,10 @@ import PaginaMinhaRede from "./pages/minhaRede.js";
 import PaginaPontuacaoDePerfil from "./pages/perfilPontuacaoExplorar.js";
 import PaginaElenco from "./pages/elenco.js";
 import PaginaGerenciarAtleta from "./pages/GerenciarAtletas.js"
+import PaginaPerfilOlheiro from "./components/perfil/PerfilOlheiro.js";
+import PaginaEventosClube from "./pages/eventosClube.js";
+import PaginaNovoEventoClube from "./pages/eventosClubeNovo.js";
+import PaginaEventoDetalhe from "./pages/eventoDetalhe.js";
 
 export function AppRoutes() {
   return (
@@ -69,10 +73,26 @@ export function AppRoutes() {
         </RequireAdmin>
       </Route>
 
+      <Route path="/perfil-olheiro/:id">
+        {({ id }: { id: string }) => <PaginaPerfilOlheiro idDaUrl={id} />}
+      </Route>
+
       <Route path="/perfil/GerenciarAtletas">
         <PaginaGerenciarAtleta />
       </Route>
 
+      <Route path="/eventos/clubes/:id/novo">
+        {(params?: { id: string }) =>
+          params ? <PaginaNovoEventoClube clubeId={params.id} /> : null}
+      </Route>
+      <Route path="/eventos/clubes/:id">
+        {(params?: { id: string }) =>
+          params ? <PaginaEventosClube clubeId={params.id} /> : null}
+      </Route>
+      <Route path="/eventos/:id">
+        {(params?: { id: string }) =>
+          params ? <PaginaEventoDetalhe eventoId={params.id} /> : null}
+      </Route>
 
       <Route path="/feed/desafios"><Private><PaginaDesafios /></Private></Route>
       <Route path="/feed"><Private><PaginaFeed /></Private></Route>

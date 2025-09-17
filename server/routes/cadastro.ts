@@ -1,4 +1,3 @@
-// server/routes/cadastro
 import express from "express";
 import {
   getCadastroIndex,
@@ -23,7 +22,7 @@ router.get("/criar", getCriar);
 router.post("/cadastro", cadastrarUsuario);
 router.delete("/deletar/:id", deletarUsuario);
 
-router.get("/buscar", buscarPerfisPublico); // sem auth
+router.get("/buscar", buscarPerfisPublico); 
 
 
 export default router;

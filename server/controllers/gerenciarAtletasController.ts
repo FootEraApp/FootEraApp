@@ -1,4 +1,3 @@
-// server/controllers/gerenciarAtletasController.ts
 import { PrismaClient, Categoria } from "@prisma/client";
 import { Request, Response } from "express";
 
@@ -371,7 +370,6 @@ export const gerenciarAtletasController = {
       const concluidosMes = treinosMes;                  // apenas treinos
       const desafiosFeitosMes = desafiosMes;             // apenas desafios
 
-      // média das últimas 4 semanas baseada na pontuacaoSnapshot das submissões de treino
       const fourWeeksAgo = new Date();
       fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
 
@@ -413,7 +411,6 @@ export const gerenciarAtletasController = {
     }
   },
 
-  // GET /api/gerenciar/ranking?vinculo=escolinha|clube|professor&id=<usuarioId>
   ranking: async (req: Request, res: Response) => {
     try {
       const vinculo = String(req.query.vinculo || "").toLowerCase();

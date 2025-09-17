@@ -24,6 +24,7 @@ import categoriasRoutes from "./routes/categorias.js"
 import desafiosRoutes from "./routes/desafios.js";
 import desafiosEmGrupoRoutes from "./routes/desafiosEmGrupo.js";
 import escolinhaRoutes from "./routes/escolinha.js";
+import eventosRoutes from "./routes/eventos.js";
 import exerciciosRoutes from "./routes/exercicios.js";
 import explorarRoutes from "./routes/explorar.js";
 import favoritosRoutes from "./routes/favorito.js";
@@ -34,6 +35,7 @@ import logErroRoutes from "./routes/logErro.js";
 import loginRoutes from "./routes/login.js";
 import mensagemRoutes from "./routes/mensagem.js";
 import midiaRoutes from "./routes/midia.js";
+import notificacoesRoutes from "./routes/notificacoes.js";
 import perfilRoutes from "./routes/perfil.js";
 import pontuacaoRoutes from "./routes/pontuacao.js";
 import postRoutes from "./routes/post.js";
@@ -66,7 +68,11 @@ const io = setupSocket(server);
 dotenv.config();
 startExpiredTrainingsJob();
 
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
@@ -80,11 +86,12 @@ app.use("/api/clubes", clubeRoutes);
 app.use("/api/configuracoes", configuracoesRoutes);
 app.use("/api/conquistas", conquistaRoutes);
 app.use("/api/desafios", desafiosRoutes);
-    app.use("/api/desafios/em-grupo", desafiosEmGrupoRoutes);
+app.use("/api/desafios/em-grupo", desafiosEmGrupoRoutes);
 app.use("/api/escolinhas", escolinhaRoutes);
+app.use("/api/eventos", eventosRoutes);
 app.use("/api/explorar", explorarRoutes);
 app.use("/api/exercicios", exerciciosRoutes);
-    app.use("/api/favoritos", favoritosRoutes);
+app.use("/api/favoritos", favoritosRoutes);
 app.use("/api/feed", feedRoutes);
 app.use("/api/grupos", gruposRoutes);
 app.use("/api/home", homeRoutes);
@@ -92,6 +99,7 @@ app.use("/api/logerro", logErroRoutes);
 app.use("/api/login", loginRoutes);
 app.use("/api/mensagem", mensagemRoutes);
 app.use("/api/midias", midiaRoutes);
+app.use("/api/notificacoes", notificacoesRoutes);
 app.use("/api/perfil", perfilRoutes);
 app.use("/api/pontuacao", pontuacaoRoutes);
 app.use("/api/post", postRoutes);
@@ -128,7 +136,6 @@ const candidates = [
 
 const found = candidates.find((dir) => fs.existsSync(dir));
 if (found) {
-  console.log("Servindo /assets de:", found);
   app.use("/assets", express.static(found));
 } else {
   console.warn("⚠️ Pasta de assets não encontrada. Tentado:", candidates);
