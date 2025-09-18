@@ -270,7 +270,7 @@ await prisma.usuario.upsert({
       nome: 'João Nogueira',
       nomeDeUsuario: 'olheiro_joao',
       email: 'olheiro.joao@example.com',
-      senhaHash: H['olheiro.joao'],
+      senhaHash: H['olheiro_joao'],
       tipo: TipoUsuario.Olheiro, 
       cidade: 'São Paulo',
       estado: 'SP',
@@ -283,7 +283,7 @@ await prisma.usuario.upsert({
           telefonePublico: '11999997777',
           emailPublico: 'olheiro.joao@example.com',
           fotoUrl: '/assets/usuarios/olheiro-joao.png', 
-          id: clube1Db?.id,
+          colaboracaoClubeId: clube1Db?.id
         }
       }
     }

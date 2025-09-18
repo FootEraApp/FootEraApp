@@ -226,6 +226,7 @@ model TreinoProgramado {
   escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id])
 
   exercicios               TreinoProgramadoExercicio[]
+  temporarios              ExercicioTemporario[]
   createdAt                DateTime                    @default(now())
   treinoAgendado           TreinoAgendado[]
   realizados               TreinoRealizado[]
@@ -233,14 +234,20 @@ model TreinoProgramado {
 }
 
 model TreinoProgramadoExercicio {
-  id                 String @id @default(uuid())
-  treinoProgramadoId String
-  exercicioId        String
-  ordem              Int
-  repeticoes         String
+  id                    String  @id @default(uuid())
+  treinoProgramadoId    String
+  exercicioId           String?
+  exercicioTemporarioId String?
+  ordem                 Int
+  repeticoes            String
 
-  exercicio        Exercicio        @relation(fields: [exercicioId], references: [id])
-  treinoProgramado TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+  treinoProgramado    TreinoProgramado     @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+  exercicio           Exercicio?           @relation(fields: [exercicioId], references: [id])
+  exercicioTemporario ExercicioTemporario? @relation(fields: [exercicioTemporarioId], references: [id], onDelete: SetNull)
+
+  @@index([treinoProgramadoId])
+  @@index([exercicioId])
+  @@index([exercicioTemporarioId])
 }
 
 model Exercicio {
@@ -253,6 +260,22 @@ model Exercicio {
   videoDemonstrativoUrl String?     @unique
 
   treinoProgramadoExercicios TreinoProgramadoExercicio[]
+}
+
+model ExercicioTemporario {
+  id                 String      @id @default(uuid())
+  treinoProgramadoId String
+  codigo             String?
+  nome               String
+  descricao          String?
+  nivel              Nivel
+  categorias         Categoria[]
+
+  treinoProgramado TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+
+  treinos TreinoProgramadoExercicio[]
+
+  @@index([treinoProgramadoId])
 }
 
 model DesafioOficial {
