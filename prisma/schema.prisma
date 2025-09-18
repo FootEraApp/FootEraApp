@@ -177,6 +177,7 @@ model Atleta {
   pontuacao                    PontuacaoAtleta?
   perfilTipoTreino             String?
   perfilTipoTreinoAtualizadoEm DateTime?
+  pontosTotal                  Int?             @default(0)
 
   postagens           Postagem[]
   midias              Midia[]

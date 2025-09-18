@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
+import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
 
 const prisma = new PrismaClient();
 
@@ -64,10 +65,11 @@ export const criarSubmissaoDesafio = async (req: Request, res: Response) => {
         atletaId,
         desafioId: id,
         videoUrl,
-        aprovado: null 
+        aprovado: true 
       }
     });
 
+    await recomputePontuacaoAtleta(atletaId);
     res.status(201).json(submissao);
   } catch (error) {
     console.error("Erro ao criar submissão:", error);
@@ -89,6 +91,26 @@ export const getSubmissoesPorDesafio = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Erro ao buscar submissões:", error);
     res.status(500).json({ message: "Erro ao buscar submissões." });
+  }
+};
+
+export const decidirSubmissaoDesafio = async (req: Request, res: Response) => {
+  const { submissaoId } = req.params;
+  const { aprovado } = req.body as { aprovado: boolean };
+
+  try {
+    const sub = await prisma.submissaoDesafio.update({
+      where: { id: submissaoId },
+      data: { aprovado },
+      select: { atletaId: true, aprovado: true },
+    });
+
+    if (sub.aprovado) await recomputePontuacaoAtleta(sub.atletaId);
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Erro ao decidir submissão" });
   }
 };
 

@@ -1,4 +1,3 @@
-// client/src/pages/eventoDetalhe.tsx
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { API } from "../config.js";

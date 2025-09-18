@@ -34,8 +34,6 @@ const upload = multer({
   limits: { fileSize: 200 * 1024 * 1024 },
 });
 
-router.post(["/", "/postar"], authenticateToken, upload.single("arquivo"), postarConteudo);
-
 router.get("/visualizar/:id", authenticateToken, buscarPostagemPorId);
 router.post("/:postId/comentario", authenticateToken, adicionarComentario);
 router.post("/:postId/like", authenticateToken, curtirPostagem);
@@ -45,5 +43,7 @@ router.post("/:postId/repost", authenticateToken, repostarPost);
 router.delete("/:id", authenticateToken, deletarPost);
 router.get("/editar/:id", authenticateToken, editarPostagemGet);
 router.post("/editar/:id", authenticateToken, editarPostagemPost);
+
+router.post(["/", "/postar"], authenticateToken, upload.single("arquivo"), postarConteudo);
 
 export default router;
