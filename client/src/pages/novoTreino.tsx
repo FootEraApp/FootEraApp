@@ -5,9 +5,12 @@ import { Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 
+// >>> NOVOS IMPORTS (utils)
+import { TreinosApi } from "../utils/treinosApi";
+import { montarExerciciosParaPayload } from "../utils/treinos.helpers";
+import type { ExItemUI, TreinoCreatePayload } from "../utils/treinos.types";
+
 interface UsuarioLogado {
-  // valores persistidos no Storage/localStorage podem variar ("escola" para escolinha)
-  // aqui apenas usamos para renderização; ao enviar para o backend normalizamos para "Professor" | "Clube" | "Escolinha"
   tipo: "atleta" | "escola" | "escolinha" | "clube" | "professor";
 }
 
@@ -38,14 +41,6 @@ interface TreinoProgramado {
     repeticoes?: string;
   }[];
 }
-
-type ExercicioSelecionado = {
-  nome: string;
-  series: string;
-  repeticoes: string;
-  descricao: string;
-  exercicioId?: string;
-};
 
 type TreinoAgendadoResp = {
   id: string;
@@ -161,7 +156,8 @@ export default function NovoTreino() {
   const [objetivo, setObjetivo] = useState<string>("");
   const [iniciado, setIniciado] = useState<boolean>(false);
 
-  const [exerciciosSelecionados, setExerciciosSelecionados] = useState<ExercicioSelecionado[]>([]);
+  // >>>> trocado: agora usamos ExItemUI (idCatalogo para exercícios do banco; nome/descricao para temporários)
+  const [exerciciosSelecionados, setExerciciosSelecionados] = useState<ExItemUI[]>([]);
   const [dicas, setDicas] = useState<string[]>([]);
   const [dicaAtual, setDicaAtual] = useState<string>("");
 
@@ -176,7 +172,7 @@ export default function NovoTreino() {
       nivel: t.nivel ?? t.dificuldade ?? "-",
       exercicios: (t.exercicios ?? t.exs ?? []).map((ex: any, i: number) => ({
         id: ex.id ?? ex.exercicioId ?? String(i),
-        nome: ex.nome ?? ex.titulo ?? "",
+        nome: ex.nome ?? ex.titulo ?? ex?.exercicio?.nome ?? ex?.exercicioTemporario?.nome ?? "",
         repeticoes: ex.repeticoes ?? ex.reps ?? ex.qtde ?? "",
       })),
     }));
@@ -223,7 +219,19 @@ export default function NovoTreino() {
         setCategoria(saved.categoria ?? "Sub13");
         setTipoTreino(saved.tipoTreino ?? "Tecnico");
         setObjetivo(saved.objetivo ?? "");
-        setExerciciosSelecionados(saved.exerciciosSelecionados ?? []);
+        // conversão de itens salvos antigos -> ExItemUI
+        const exOld = Array.isArray(saved.exerciciosSelecionados) ? saved.exerciciosSelecionados : [];
+        const exUi: ExItemUI[] = exOld.map((x: any, idx: number) => ({
+          idCatalogo: x.exercicioId ?? null,
+          nome: x.nome ?? "",
+          descricao: x.descricao ?? null,
+          repeticoes: x.repeticoes ?? "",
+          ordem: x.ordem ?? idx + 1,
+          // series não vai ao payload, mas mantemos no estado se você quiser continuar exibindo
+          // @ts-ignore
+          series: x.series ?? "",
+        }));
+        setExerciciosSelecionados(exUi);
         setDicas(saved.dicas ?? []);
         setAtletasSelecionados(saved.atletasSelecionados ?? []);
       }
@@ -259,7 +267,6 @@ export default function NovoTreino() {
 
           const j = await r.json();
           const arr = Array.isArray(j) ? j : j.items ?? j.data ?? j.treinos ?? j.rows ?? j.result ?? [];
-
           if (Array.isArray(arr) && arr.length) {
             setTreinosDisponiveis(normalizaTreinos(arr));
             return;
@@ -279,7 +286,17 @@ export default function NovoTreino() {
 
     (async () => {
       try {
-        const r = await fetch(`${API.BASE_URL}/api/exercicios`);
+        // >>> usa a rota do treinosController com auth
+        const token =
+          (Storage as any).token ||
+          localStorage.getItem("token") ||
+          sessionStorage.getItem("token") ||
+          "";
+
+        const r = await fetch(`${API.BASE_URL}/api/treinos/exercicios`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
         if (!r.ok) return;
         const data = await r.json();
         const arr: Exercicio[] = Array.isArray(data) ? data : data.items ?? data.data ?? [];
@@ -323,7 +340,7 @@ export default function NovoTreino() {
           sessionStorage.getItem("tipoUsuarioId") ||
           (Storage as any).usuarioId;
 
-        if (!id || !["professor", "clube", "escola"].includes(vinculo)) return;
+        if (!id || !["professor", "escola", "clube"].includes(vinculo)) return;
 
         const r = await fetch(
           `${API.BASE_URL}/api/relacoes/atletas?vinculo=${encodeURIComponent(vinculo)}&id=${encodeURIComponent(id)}`,
@@ -421,30 +438,45 @@ export default function NovoTreino() {
 
   /** =====================  Handlers  ===================== **/
   const adicionarExercicio = () => {
-    setExerciciosSelecionados((prev) => [...prev, { nome: "", series: "", repeticoes: "", descricao: "" }]);
+    // linha para EXERCÍCIO TEMPORÁRIO
+    setExerciciosSelecionados((prev) => [
+      ...prev,
+      { idCatalogo: null, nome: "", descricao: "", repeticoes: "", ordem: prev.length + 1, /* @ts-ignore */ series: "" },
+    ]);
   };
 
-  const atualizarExercicio = (index: number, campo: keyof ExercicioSelecionado, valor: string) => {
+  const atualizarExercicio = (index: number, campo: keyof ExItemUI | "series", valor: string) => {
     const copia = [...exerciciosSelecionados];
+    // @ts-ignore - mantemos "series" apenas no estado para UI; payload não usa diretamente
     (copia[index][campo] as string | undefined) = valor;
+    // ajuste de ordem se necessário
+    if (campo === "ordem") {
+      const n = parseInt(valor, 10);
+      if (!isNaN(n)) copia[index].ordem = n;
+    }
     setExerciciosSelecionados(copia);
   };
 
   const removerExercicio = (index: number) => {
     const novaLista = [...exerciciosSelecionados];
     novaLista.splice(index, 1);
-    setExerciciosSelecionados(novaLista);
+    // re-normaliza ordem
+    const renumerado = novaLista.map((x, i) => ({ ...x, ordem: i + 1 }));
+    setExerciciosSelecionados(renumerado);
   };
 
   const adicionarExercicioExistente = (exercicio: Exercicio) => {
+    // linha para EXERCÍCIO DO BANCO (usa idCatalogo)
     setExerciciosSelecionados((prev) => [
       ...prev,
       {
-        nome: exercicio.nome,
-        series: "",
-        repeticoes: "",
+        idCatalogo: exercicio.id,
+        nome: exercicio.nome, // só para exibição; payload usa idCatalogo
         descricao: "",
-        exercicioId: exercicio.id,
+        repeticoes: "",
+        ordem: prev.length + 1,
+        // @ts-ignore
+        series: "",
       },
     ]);
   };
@@ -483,89 +515,67 @@ export default function NovoTreino() {
     return { tipoUsuario: normalized as "Professor" | "Clube" | "Escolinha" | null, tipoUsuarioId };
   }
 
-  const criarTreino = async () => {
-    try {
-      const { tipoUsuario, tipoUsuarioId } = getDono();
+  type DonoLiteral = "professor" | "clube" | "escolinha";
+  function isDono(v: string): v is DonoLiteral {
+    return v === "professor" || v === "clube" || v === "escolinha";
+  }
 
-      if (!tipoUsuario || !tipoUsuarioId) {
-        alert("Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).");
-        return;
-      }
 
-      if (!usuarioId) {
-        alert("Erro: usuário não autenticado.");
-        return;
-      }
+const criarTreino = async () => {
+  try {
+    const { tipoUsuario, tipoUsuarioId } = getDono();
+    const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
 
-      const token =
-        (Storage as any).token ||
-        localStorage.getItem("token") ||
-        sessionStorage.getItem("token") ||
-        "";
+    if (!tipoUsuario || !tipoUsuarioId) {
+      alert("Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).");
+      return;
+    }
 
-      const exerciciosParaEnvio = exerciciosSelecionados.map((ex, index) => ({
-        exercicioId: ex.exercicioId,
-        nome: ex.nome,
-        descricao: ex.descricao,
-        repeticoes: ex.repeticoes,
-        series: ex.series,
-        ordem: index + 1,
-      }));
+    if (!isDono(tipoUsuarioNormRaw)) {
+      alert("Erro: tipo de usuário inválido.");
+      return;
+    }
+    const tipoUsuarioNorm: DonoLiteral = tipoUsuarioNormRaw;
 
-      // gerar um 'codigo' padrão se não houver um input específico
+    if (!usuarioId) {
+      alert("Erro: usuário não autenticado.");
+      return;
+    }
+
+    const exercicios = montarExerciciosParaPayload(exerciciosSelecionados);
+
+      // gerar um 'codigo' padrão (opcional; o treinosController não exige, mas não faz mal enviar)
       const codigo =
         `${nome}`.trim()
           ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) + "-" + Date.now().toString(36)
           : "TP-" + Date.now().toString(36);
 
-      const payload = {
-        // obrigatórios
+      const payload: TreinoCreatePayload = {
         nome,
-        codigo,
-        nivel, // "Base" | "Avancado" | "Performance"
-        categoria: [categoria], // no schema é Categoria[]
-        // opcionais
-        tipoTreino,
-        objetivo,
-        duracao,
+        descricao: descricao || null,
+        nivel, 
+        usuarioId,                    
+        tipoUsuario: tipoUsuarioNorm,  
+        tipoUsuarioId,               
+        categoria: categoria ? [categoria] : [],
+        tipoTreino: tipoTreino || null,
+        objetivo: objetivo || null,
+        duracao: duracao ? Number(duracao) : null,
+        dataTreino: dataTreino || null,
         dataAgendada: dataTreino || null,
         dicas,
-        metas: null as string | null,
-        pontuacao: null as number | null,
-        // dono do treino
-        tipoUsuario, // "Professor" | "Clube" | "Escolinha"
-        tipoUsuarioId, // ID da tabela correspondente
-        // exercícios
-        exercicios: exerciciosParaEnvio,
-        // seleção de atletas (guarda para agendamento posterior em outra rota/fluxo)
         atletasIds: atletasSelecionados,
+        exercicios,
       };
 
-      const res = await fetch(`${API.BASE_URL}/api/treinosprogramados`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        console.error("Erro ao criar treino:", errJson);
-        alert(errJson?.message || "Erro ao criar treino. Verifique o console.");
-        return;
-      }
-
+      await TreinosApi.criar(payload);
       alert("Treino criado com sucesso!");
       sessionStorage.removeItem(SAVE_KEY);
       setEtapa(1);
       setCompletedUntil(1);
-      // opcional: navegar para /treinos
-      // navigate("/treinos");
-    } catch (e) {
-      console.error("Falha inesperada ao criar treino:", e);
-      alert("Erro inesperado ao criar treino.");
+    } catch (e: any) {
+      console.error("Falha inesperada ao criar treino:", e?.response?.data || e);
+      alert(e?.response?.data?.error || e?.response?.data?.message || "Erro inesperado ao criar treino.");
     }
   };
 
@@ -642,7 +652,6 @@ export default function NovoTreino() {
         ) : (
           treinosDisponiveis.map((t) => (
             <div key={t.id} className="bg-white border p-4 rounded shadow mb-4">
-              
               <h3
                 className="text-green-800 text-lg font-semibold cursor-pointer hover:underline"
                 onClick={() => navigate(`/treinos/unico?programadoId=${t.id}`)}
@@ -848,7 +857,7 @@ export default function NovoTreino() {
 
               <div className="space-y-3">
                 {exerciciosSelecionados.map((ex, i) => {
-                  const base = ex.exercicioId ? exerciciosDisponiveis.find((e) => e.id === ex.exercicioId) : undefined;
+                  const base = ex.idCatalogo ? exerciciosDisponiveis.find((e) => e.id === ex.idCatalogo) : undefined;
 
                   const videoSrc = base?.videoDemonstrativoUrl
                     ? base.videoDemonstrativoUrl.startsWith("http")
@@ -856,11 +865,11 @@ export default function NovoTreino() {
                       : `${API.BASE_URL}${base.videoDemonstrativoUrl}`
                     : "";
 
-                  const nomeFinal = base?.nome ?? ex.nome;
-                  const nivelFinal = base?.nivel;
-                  const descFinal = base?.descricao ?? ex.descricao;
+                  const nomeFinal = base?.nome ?? ex.nome ?? "";
+                  const nivelFinal = base?.nivel ?? undefined;
+                  const descFinal = base?.descricao ?? ex.descricao ?? "";
 
-                  const ehDoBanco = Boolean(ex.exercicioId);
+                  const ehDoBanco = Boolean(ex.idCatalogo);
 
                   return (
                     <div key={i} className="border rounded-lg p-3 relative bg-white shadow-sm">
@@ -897,7 +906,7 @@ export default function NovoTreino() {
                               <input
                                 className="border p-1 rounded w-full"
                                 placeholder="Nome do exercício"
-                                value={ex.nome}
+                                value={ex.nome || ""}
                                 onChange={(e) => atualizarExercicio(i, "nome", e.target.value)}
                               />
                             )}
@@ -911,14 +920,12 @@ export default function NovoTreino() {
 
                           {/* Descrição (só leitura se veio do banco) */}
                           {ehDoBanco ? (
-                            <p className="text-sm text-gray-700 mb-2 whitespace-pre-line">
-                              {descFinal || "Sem descrição."}
-                            </p>
+                            <p className="text-sm text-gray-700 mb-2 whitespace-pre-line">{descFinal || "Sem descrição."}</p>
                           ) : (
                             <textarea
                               className="border w-full mb-2 p-1 rounded"
                               placeholder="Descrição"
-                              value={ex.descricao}
+                              value={ex.descricao || ""}
                               onChange={(e) => atualizarExercicio(i, "descricao", e.target.value)}
                             />
                           )}
@@ -930,7 +937,8 @@ export default function NovoTreino() {
                               <input
                                 className="border w-full p-1 rounded"
                                 placeholder="ex.: 3"
-                                value={ex.series}
+                                // @ts-ignore (series é só para UI)
+                                value={ex.series || ""}
                                 onChange={(e) => atualizarExercicio(i, "series", e.target.value)}
                               />
                             </div>
@@ -939,7 +947,7 @@ export default function NovoTreino() {
                               <input
                                 className="border w-full p-1 rounded"
                                 placeholder="ex.: 12"
-                                value={ex.repeticoes}
+                                value={ex.repeticoes || ""}
                                 onChange={(e) => atualizarExercicio(i, "repeticoes", e.target.value)}
                               />
                             </div>

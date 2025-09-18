@@ -12,6 +12,8 @@ import {
   concluirTreino,
   criarTreinoProgramado,
   restaurarTreinos,
+  atualizarTreinoProgramado,
+  deletarTreinoProgramado,
 
   // Exercícios / Métricas
   getExercicios,
@@ -37,6 +39,8 @@ router.get("/atletas-vinculados", atletasVinculados);
 router.get("/disponiveis", treinosDisponiveis);
 router.get("/programados", listarTodosTreinosProgramados);
 router.get("/:id", authenticateToken, obterTreinoProgramadoPorId);
+router.put("/:id", authenticateToken, atualizarTreinoProgramado);
+router.delete("/:id", authenticateToken, deletarTreinoProgramado);
 
 router.post("/agendados", authenticateToken, agendarTreino);
 router.delete("/agendados/:id", authenticateToken, excluirTreinoAgendado);

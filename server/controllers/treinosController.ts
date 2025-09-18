@@ -54,9 +54,9 @@ async function resolveEntidade(usuarioOuEntidadeId: string): Promise<
 
 export async function treinosDisponiveis(req: AuthenticatedRequest, res: Response) {
   try {
-    const treinos = await prisma.treinoProgramado.findMany({
-      include: { exercicios: { include: { exercicio: true } } },
-    });
+  const treinos = await prisma.treinoProgramado.findMany({
+    include: { exercicios: { include: { exercicio: true, exercicioTemporario: true } } },
+  });
 
     const resposta = treinos.map(t => ({
       id: t.id,
@@ -67,8 +67,8 @@ export async function treinosDisponiveis(req: AuthenticatedRequest, res: Respons
       objetivo: t.objetivo,
       dicas: t.dicas,
       exercicios: t.exercicios.map(e => ({
-        id: e.exercicio.id,
-        nome: e.exercicio.nome,
+        id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
+        nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
         repeticoes: e.repeticoes
       }))
     }));
@@ -84,7 +84,7 @@ export async function listarTodosTreinosProgramados(_req: AuthenticatedRequest, 
   try {
     const rows = await prisma.treinoProgramado.findMany({
       include: {
-        exercicios: { include: { exercicio: true } },
+        exercicios: { include: { exercicio: true, exercicioTemporario: true } },
         professor: { select: { nome: true } },
         clube: { select: { nome: true } },
         escolinha: { select: { nome: true } },
@@ -104,7 +104,7 @@ export async function listarTodosTreinosProgramados(_req: AuthenticatedRequest, 
       categoria: t.categoria ?? [],
       exercicios: t.exercicios.map((x) => ({
         repeticoes: x.repeticoes ?? "",
-        exercicio: { nome: x.exercicio?.nome ?? "" },
+        exercicio: { nome: x.exercicio?.nome ?? x.exercicioTemporario?.nome ?? "" },
       })),
       professor: t.professor ? { nome: t.professor.nome } : null,
       clube: t.clube ? { nome: t.clube.nome } : null,
@@ -128,12 +128,23 @@ export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res:
           select: {
             repeticoes: true,
             exercicio: { select: { id: true, nome: true } },
+            exercicioTemporario: { select: { id: true, nome: true } },
           },
         },
       },
     });
     if (!treino) return res.status(404).json({ message: "Treino não encontrado" });
-    res.json(treino);
+    const out = {
+      ...treino,
+      exercicios: treino.exercicios.map(e => ({
+        repeticoes: e.repeticoes,
+        exercicio: {
+          id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
+          nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
+        }
+      }))
+    };
+     res.json(out);
   } catch (e) {
     console.error(e);
     res.status(500).json({ message: "Erro ao buscar treino programado" });
@@ -176,7 +187,7 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
         dataExpiracao: dataExpiracao ? new Date(dataExpiracao) : null,
       },
       include: {
-        treinoProgramado: { include: { exercicios: { include: { exercicio: true } } } },
+        treinoProgramado: { include: { exercicios: { include: { exercicio: true, exercicioTemporario: true } } } },
       },
     });
 
@@ -652,19 +663,20 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
     const {
       nome,
       descricao,
-      nivel,
-      exercicios,
+      nivel,                 
+      exercicios,            
       usuarioId,
-      categoria,
-      tipoTreino,
+      categoria,            
+      tipoTreino,           
       objetivo,
       duracao,
-      dataTreino,
+      dataTreino,           
+      dataAgendada,         
       dicas,
-      tipoUsuario,
+      tipoUsuario,           
       tipoUsuarioId,
       atletasIds,
-    } = req.body;
+    } = req.body as any;
 
     if (!nome || !nivel || !Array.isArray(exercicios) || !usuarioId || !tipoUsuarioId) {
       return res.status(400).json({ error: "Dados inválidos" });
@@ -678,34 +690,69 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
       return res.status(400).json({ error: "TipoTreino inválido" });
     }
 
-    const dataCreate: any = {
-      nome,
-      descricao,
-      nivel,
-      codigo: `${nome}-${Date.now()}`,
-      dataAgendada: dataTreino ? new Date(dataTreino) : undefined,
-      objetivo,
-      duracao,
-      dicas,
-      categoria: Array.isArray(categoria) ? (categoria as any[]) : [],
-      tipoTreino: tipoTreino as TipoTreino,
-      exercicios: {
-        create: exercicios
-          .filter((ex: any) => ex.exercicioId)
-          .map((ex: any, index: number) => ({
-            exercicioId: ex.exercicioId!,
-            repeticoes: ex.repeticoes,
-            ordem: index + 1
-          }))
-      }
-    };
+    const when = dataTreino || dataAgendada || null;
+    const tipoNorm = typeof tipoUsuario === "string" ? (tipoUsuario as string).toLowerCase() : null;
 
-    if (tipoUsuario === "professor") dataCreate.professorId = tipoUsuarioId;
-    else if (tipoUsuario === "escolinha") dataCreate.escolinhaId = tipoUsuarioId;
-    else if (tipoUsuario === "clube") dataCreate.clubeId = tipoUsuarioId;
+    // 1) cria o treino SEM exercícios
+    const treino = await prisma.treinoProgramado.create({
+      data: {
+        nome,
+        descricao,
+        nivel,
+        codigo: `${nome}-${Date.now()}`,
+        dataAgendada: when ? new Date(when) : undefined,
+        objetivo,
+        duracao,
+        dicas,
+        categoria: Array.isArray(categoria) ? (categoria as any[]) : [],
+        tipoTreino: tipoTreino as TipoTreino,
+        ...(tipoNorm === "professor"  ? { professorId: tipoUsuarioId } :
+          tipoNorm === "escolinha"    ? { escolinhaId: tipoUsuarioId } :
+          tipoNorm === "clube"        ? { clubeId: tipoUsuarioId } : {}),
+      },
+    });
 
-    const treino = await prisma.treinoProgramado.create({ data: dataCreate });
+    // 2) separa exercícios do banco x temporários
+    const exsBanco = (exercicios as any[]).filter(e => e.exercicioId);
+    const exsTemp  = (exercicios as any[]).filter(e => !e.exercicioId && e.nome);
 
+    // 3) cria vínculos para exercícios do banco
+    if (exsBanco.length) {
+      await prisma.treinoProgramadoExercicio.createMany({
+        data: exsBanco.map((e, i) => ({
+          treinoProgramadoId: treino.id,
+          exercicioId: e.exercicioId,
+          repeticoes: e.repeticoes ?? null,
+          ordem: e.ordem ?? i + 1,
+        })),
+      });
+    }
+
+    // 4) cria exercícios temporários + vínculos
+    //    (usa o nivel e a(s) categoria(s) do treino como default)
+    for (const [i, e] of exsTemp.entries()) {
+      const temp = await prisma.exercicioTemporario.create({
+        data: {
+          treinoProgramadoId: treino.id,
+          codigo: null,            // opcional
+          nome: e.nome,
+          descricao: e.descricao ?? null,
+          nivel,                   // herda do treino
+          categorias: Array.isArray(categoria) ? (categoria as any[]) : [],
+        },
+      });
+
+      await prisma.treinoProgramadoExercicio.create({
+        data: {
+          treinoProgramadoId: treino.id,
+          exercicioTemporarioId: temp.id,
+          repeticoes: e.repeticoes ?? null,
+          ordem: e.ordem ?? (exsBanco.length + i + 1),
+        },
+      });
+    }
+
+    // 5) agendar para atletas selecionados (mesmo comportamento que você já tinha)
     if (Array.isArray(atletasIds) && atletasIds.length > 0) {
       const dataAgendada = treino.dataAgendada ?? new Date();
       await Promise.all(
@@ -729,3 +776,130 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
     return res.status(500).json({ error: "Erro ao criar treino" });
   }
 }
+
+// --- UPDATE Treino Programado (suporta exercícios do banco e temporários) ---
+export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { id } = req.params;
+    const {
+      nome, codigo, descricao, nivel, categoria, tipoTreino, dataAgendada, objetivo,
+      duracao, dicas, imagemUrl, metas, pontuacao, expiraEm, naoExpira,
+      exercicios = [],
+      tipoUsuario, tipoUsuarioId,
+    } = req.body as any;
+
+    if (nome || codigo) {
+      const dup = await prisma.treinoProgramado.findFirst({
+        where: { id: { not: id }, OR: [{ nome: nome ?? "" }, { codigo: codigo ?? "" }] },
+        select: { id: true, nome: true, codigo: true },
+      });
+      if (dup) {
+        return res.status(400).json({ message: "Já existe treino com esse nome ou código.", duplicado: dup });
+      }
+    }
+
+    // troca de dono (desconecta todos e conecta o novo, se solicitado)
+    const donoUpdate: any = {};
+    if (tipoUsuario || tipoUsuarioId) {
+      const s = String(tipoUsuario || "").toLowerCase();
+      donoUpdate.professor = { disconnect: true };
+      donoUpdate.clube = { disconnect: true };
+      donoUpdate.escolinha = { disconnect: true };
+      if (s === "professor") donoUpdate.professor  = { connect: { id: tipoUsuarioId } };
+      if (s === "clube")     donoUpdate.clube      = { connect: { id: tipoUsuarioId } };
+      if (s === "escolinha" || s === "escola") donoUpdate.escolinha = { connect: { id: tipoUsuarioId } };
+    }
+
+    const exs: any[] = Array.isArray(exercicios) ? exercicios : [];
+    const exsBanco = exs.filter(e => e.exercicioId);
+    const exsTemp  = exs.filter(e => !e.exercicioId && e.nome);
+
+    await prisma.$transaction(async (tx) => {
+      // limpa vínculos e temporários anteriores
+      await tx.treinoProgramadoExercicio.deleteMany({ where: { treinoProgramadoId: id } });
+      await tx.exercicioTemporario.deleteMany({ where: { treinoProgramadoId: id } });
+
+      // atualiza o treino
+      await tx.treinoProgramado.update({
+        where: { id },
+        data: {
+          ...(nome !== undefined ? { nome } : {}),
+          ...(codigo !== undefined ? { codigo } : {}),
+          ...(descricao !== undefined ? { descricao } : {}),
+          ...(nivel !== undefined ? { nivel } : {}),
+          ...(categoria !== undefined ? { categoria: Array.isArray(categoria) ? categoria : [] } : {}),
+          ...(tipoTreino !== undefined ? { tipoTreino } : {}),
+          ...(dataAgendada !== undefined ? { dataAgendada: dataAgendada ? new Date(dataAgendada) : null } : {}),
+          ...(objetivo !== undefined ? { objetivo } : {}),
+          ...(duracao !== undefined ? { duracao: duracao != null ? Number(duracao) : null } : {}),
+          ...(dicas !== undefined ? { dicas: Array.isArray(dicas) ? dicas : [] } : {}),
+          ...(imagemUrl !== undefined ? { imagemUrl } : {}),
+          ...(metas !== undefined ? { metas } : {}),
+          ...(pontuacao !== undefined ? { pontuacao: pontuacao != null ? Number(pontuacao) : null } : {}),
+          ...(expiraEm !== undefined ? { expiraEm: expiraEm ? new Date(expiraEm) : null } : {}),
+          ...(naoExpira !== undefined ? { naoExpira: Boolean(naoExpira) } : {}),
+          ...donoUpdate,
+        },
+      });
+
+      // recria vínculos para exercícios do banco
+      if (exsBanco.length) {
+        await tx.treinoProgramadoExercicio.createMany({
+          data: exsBanco.map((e, i) => ({
+            treinoProgramadoId: id,
+            exercicioId: e.exercicioId,
+            repeticoes: e.repeticoes ?? null,
+            ordem: e.ordem ?? i + 1,
+          })),
+        });
+      }
+
+      // recria temporários + vínculos
+      for (const [i, e] of exsTemp.entries()) {
+        const temp = await tx.exercicioTemporario.create({
+          data: {
+            treinoProgramadoId: id,
+            codigo: null,
+            nome: e.nome,
+            descricao: e.descricao ?? null,
+            nivel: nivel,
+            categorias: Array.isArray(categoria) ? categoria : [],
+          },
+        });
+
+        await tx.treinoProgramadoExercicio.create({
+          data: {
+            treinoProgramadoId: id,
+            exercicioTemporarioId: temp.id,
+            repeticoes: e.repeticoes ?? null,
+            ordem: e.ordem ?? (exsBanco.length + i + 1),
+          },
+        });
+      }
+    });
+
+    res.setHeader("X-TPR-Handler", "treinos.put.v2");
+    return res.json({ ok: true, id, updated: true });
+  } catch (error: any) {
+    console.error("ERRO PUT /treinos/:id", error);
+    return res.status(500).json({ message: "Erro ao atualizar treino.", error: error.message });
+  }
+}
+
+// --- DELETE Treino Programado (limpa vínculos e temporários) ---
+export const deletarTreinoProgramado = async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.treinoAgendado.deleteMany({ where: { treinoProgramadoId: id } }); // opcional
+      await tx.treinoProgramadoExercicio.deleteMany({ where: { treinoProgramadoId: id } });
+      await tx.exercicioTemporario.deleteMany({ where: { treinoProgramadoId: id } });
+      await tx.treinoProgramado.delete({ where: { id } });
+    });
+    return res.status(200).json({ message: "Treino excluído." });
+  } catch (e: any) {
+    console.error(e);
+    return res.status(500).json({ message: "Erro ao excluir treino.", error: e.message });
+  }
+};
+

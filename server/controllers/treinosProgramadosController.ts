@@ -1,3 +1,4 @@
+// server/controllers/treinoProgramadosController
 import { Request, Response } from "express";
 import { PrismaClient, Categoria, Nivel, TipoTreino } from "@prisma/client";
 
@@ -10,7 +11,7 @@ function normalizarTipoUsuario(v?: string): Dono | null {
   const s = v.toLowerCase();
   if (s === "professor") return "Professor";
   if (s === "clube") return "Clube";
-  if (s === "escolinha" || s === "escola") return "Escolinha"; // frontend manda "escola"
+  if (s === "escolinha" || s === "escola") return "Escolinha";
   return null;
 }
 
