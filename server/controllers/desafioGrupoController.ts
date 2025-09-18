@@ -1,34 +1,11 @@
 import { Request, Response } from "express";
 import { PrismaClient, TipoMensagem } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
+import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
 
 const prisma = new PrismaClient();
 
 type AuthedRequest = Request & { userId?: string };
-
-async function creditarPontosPerformance(atletaId: string, pontos: number) {
-  if (pontos <= 0) return;
-
-  await prisma.pontuacaoAtleta.upsert({
-    where: { atletaId },
-    create: {
-      atletaId,
-      pontuacaoTotal: pontos,
-      pontuacaoPerformance: pontos,
-    },
-    update: {
-      pontuacaoTotal: { increment: pontos },
-      pontuacaoPerformance: { increment: pontos },
-      ultimaAtualizacao: new Date(),
-    },
-  });
-
-  await prisma.estatisticaAtleta.upsert({
-    where: { atletaId },
-    create: { atletaId, totalDesafios: 1, totalPontos: pontos },
-    update: { totalDesafios: { increment: 1 }, totalPontos: { increment: pontos } },
-  });
-}
 
 export async function assignDesafioAoGrupo(req: AuthedRequest, res: Response) {
   try {
@@ -142,6 +119,7 @@ export async function submeterDesafioGrupo(req: AuthedRequest, res: Response) {
         videoUrl,
         usuarioId: userId,
         observacao,
+        aprovado: true,
       },
     });
 
@@ -162,8 +140,8 @@ export async function submeterDesafioGrupo(req: AuthedRequest, res: Response) {
       },
     });
 
-    await creditarPontosPerformance(atletaId, pontos);
-
+    await recomputePontuacaoAtleta(atletaId);
+    
     const totalMembros = await prisma.membroGrupo.count({
       where: { grupoId: assignment.grupoId },
     });
@@ -189,21 +167,30 @@ export async function submeterDesafioGrupo(req: AuthedRequest, res: Response) {
     });
 
     if (!assignment.bonusDado && totalMembros > 0 && enviadosNoPrazo >= totalMembros) {
-      const membros = await prisma.membroGrupo.findMany({
-        where: { grupoId: assignment.grupoId },
-        include: { usuario: { include: { atleta: true } } },
-      });
       const bonus = assignment.bonus ?? pontos;
 
-      for (const m of membros) {
-        const aId = m.usuario.atleta?.id;
-        if (aId) await creditarPontosPerformance(aId, bonus);
-      }
+      await prisma.$transaction(async (tx) => {
+        await tx.submissaoDesafioEmGrupo.updateMany({
+          where: { desafioEmGrupoId },
+          data: { pontosGanhos: { increment: bonus } },
+        });
 
-      await prisma.desafioEmGrupo.update({
-        where: { id: desafioEmGrupoId },
-        data: { bonusDado: true },
+        await tx.desafioEmGrupo.update({
+          where: { id: desafioEmGrupoId },
+          data: { bonusDado: true },
+        });
       });
+
+      const membros = await prisma.membroGrupo.findMany({
+        where: { grupoId: assignment.grupoId },
+        include: { usuario: { select: { atleta: { select: { id: true } } } } },
+      });
+
+      await Promise.all(
+        membros.map(m => m.usuario.atleta?.id
+          ? recomputePontuacaoAtleta(m.usuario.atleta.id)
+          : Promise.resolve())
+      );
 
       await prisma.mensagemGrupo.create({
         data: {
