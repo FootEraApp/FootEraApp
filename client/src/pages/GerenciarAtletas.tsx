@@ -102,7 +102,6 @@ const posicoesMap: Record<string, string> = {
   PE: "Ponta Esquerda",
 };
 
-// Conversão Categoria UI <-> API (Prisma enum: Sub9|Sub11|...|Livre)
 const apiToUiCategoria = (c?: string | null): CategoriaBase | null => {
   if (!c) return null;
   if (c === "Livre") return "Livre";
@@ -135,8 +134,6 @@ const GerenciarAtletas: React.FC = () => {
 
   const [selecionados, setSelecionados] = useState<Record<string, boolean>>({});
   const [focado, setFocado] = useState<AtletaMin | null>(null);
-
-  // Stats
   const [stats, setStats] = useState<EstatisticasAtleta | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -302,7 +299,6 @@ const GerenciarAtletas: React.FC = () => {
     setFocado(a);
   };
 
-  // Carrega (e faz polling) das stats enquanto houver atleta focado
   useEffect(() => {
     if (!focado) {
       setStats(null);
@@ -320,10 +316,8 @@ const GerenciarAtletas: React.FC = () => {
     return () => {
       if (pollingStatsRef.current) clearInterval(pollingStatsRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focado?.usuarioId, focado?.id]);
 
-  // ===== Designar treino =====
   const idsDestino = useMemo(() => {
     if (alcance === "todos") return filtrados.map((a) => a.usuarioId || a.id);
     if (alcance === "categoria" && categoriaFiltroDesignacao)
@@ -331,7 +325,6 @@ const GerenciarAtletas: React.FC = () => {
     return Object.keys(selecionados).filter((k) => selecionados[k]);
   }, [alcance, filtrados, selecionados, categoriaFiltroDesignacao]);
 
-  // 👉 leva os ids pré-selecionados para /treinos/novo (novoTreino.tsx usa sessionStorage: "novoTreinoState")
   const irCriarTreinoComPreselecionados = () => {
     try {
       const prev = JSON.parse(sessionStorage.getItem("novoTreinoState") || "{}");
@@ -713,7 +706,6 @@ const GerenciarAtletas: React.FC = () => {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-600">Treino</label>
 
-                  {/* Se não houver treinos do perfil: sugere criar novo e leva os atletas pré-selecionados */}
                   {treinosDisponiveis.length === 0 ? (
                     <>
                       <select

@@ -1,4 +1,3 @@
-// server/routes/treinos.ts
 import { Router } from "express";
 import { Nivel, Categoria, TipoTreino, PrismaClient, PosicaoCampo } from "@prisma/client";
 import { authenticateToken } from "server/middlewares/auth.js";

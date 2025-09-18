@@ -1,4 +1,3 @@
-//client/src/pages/desafioUnico
 import React, { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { Volleyball, ArrowLeft } from "lucide-react";

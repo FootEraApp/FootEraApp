@@ -17,6 +17,8 @@ import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 
+const TODAS_CATEGORIAS = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"] as const;
+
 interface Midia {
   id: string;
   url: string;
@@ -346,7 +348,7 @@ const DesafiosPage: React.FC = () => {
                 onChange={(e) => setFiltroCategoria(e.target.value === "" ? null : e.target.value)}
               >
                 <option value="">Todas as categorias</option>
-                {Array.from(new Set(submissoes.flatMap((s) => s.desafio.categoria))).map((cat) => (
+                {TODAS_CATEGORIAS.map((cat) => (
                   <option key={cat} value={cat}>
                     {cat}
                   </option>

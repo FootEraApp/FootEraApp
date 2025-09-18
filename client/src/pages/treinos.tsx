@@ -1,4 +1,3 @@
-// client/src/pages/treinos.tsx
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -17,6 +16,17 @@ import {
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { Badge } from "@/components/ui/badge.js";
+
+const tipoUser =
+  String(
+    (Storage as any)?.tipoSalvo ??
+    (Storage as any)?.tipoUsuario ??
+    localStorage.getItem("tipoUsuario") ??
+    sessionStorage.getItem("tipoUsuario") ??
+    ""
+  ).toLowerCase();
+
+const isOlheiro = tipoUser === "olheiro";
 
 interface Exercicio {
   id: string;
@@ -80,7 +90,7 @@ interface UsuarioLogado {
 }
 
 const PLACEHOLDER_USER = "/assets/default-user.png";
-
+ 
 function resolveUploadUrl(raw?: string | null) {
   if (!raw) return "";
   if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
@@ -208,6 +218,12 @@ export default function PaginaTreinos() {
     carregarUsuario();
   }, []);
 
+    useEffect(() => {
+      if (isOlheiro) {
+        window.location.replace("/olheiros");
+      }
+    }, [isOlheiro]);
+
   const formatarDataHora = (iso?: string | null) =>
     iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
 
@@ -217,7 +233,6 @@ export default function PaginaTreinos() {
   };
 
   const renderDesafioCard = (desafio: Desafio) => {
-    // TÍTULO CLICÁVEL → /desafios/:id
     return (
       <div key={desafio.id} className="bg-white p-4 rounded shadow border border-yellow-400 mb-3">
         <h4 className="font-bold text-yellow-700 text-lg mb-1">
@@ -612,7 +627,7 @@ export default function PaginaTreinos() {
         <Link href="/post" className="hover:underline">
           <CirclePlus />
         </Link>
-        <Link href="/treinos" className="hover:underline">
+        <Link href={isOlheiro ? "/olheiros" : "/treinos"} className="hover:underline">
           <Volleyball />
         </Link>
         <Link href="/perfil" className="hover:underline">

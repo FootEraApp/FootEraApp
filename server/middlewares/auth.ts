@@ -93,6 +93,13 @@ export const authenticateToken = async (
     req.tipoUsuario = tipoUsuarioStr;
     if (tipoUsuarioId) req.tipoUsuarioId = tipoUsuarioId;
 
+    (req as any).user = {
+      id:            req.userId,
+      usuarioId:     req.userId,
+      tipo:          req.tipo,
+      tipoUsuarioId: req.tipoUsuarioId ?? null,
+    };
+    
     return next();
   } catch {
     return res.status(401).json({ message: "Token inválido" });

@@ -475,9 +475,9 @@ const toggleTreino = async () => {
   }
 };
 
-const observarAtleta = async (): Promise<boolean> => {
+const observarAtleta = async (): Promise<"ok"|"dup"|"auth"|"err"> => {
   const token = Storage.token;
-  if (!token) { alert("Faça login para observar atletas."); return false; }
+  if (!token) return "auth";
 
   const resp = await fetch(`${API.BASE_URL}/api/observados`, {
     method: "POST",
@@ -485,24 +485,33 @@ const observarAtleta = async (): Promise<boolean> => {
     body: JSON.stringify({ atletaUsuarioId: perfilId }),
   });
 
-  if (resp.ok) return true;
-  if (resp.status === 409) return true;
-  return false;
+  if (resp.status === 201) return "ok";
+  if (resp.status === 409) return "dup";
+  if (resp.status === 401) return "auth";
+  return "err";
 };
 
 const toggleObservar = async () => {
   if (observando) {
+    const prev = observando;
+    setObservando(false);
     const atletaId = await resolverAtletaIdObservadoAtual();
-    if (!atletaId) { alert("Não foi possível identificar o vínculo de observação."); return; }
+    if (!atletaId) { setObservando(prev); alert("Não foi possível identificar o vínculo."); return; }
     const del = await fetch(`${API.BASE_URL}/api/observados/${atletaId}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${Storage.token}` },
     });
-    if (del.ok) setObservando(false);
+    if (!del.ok) setObservando(prev);
     return;
   }
-  const ok = await observarAtleta();
-  if (ok) setObservando(true);
+
+  // otimista para criar
+  const prev = observando;
+  setObservando(true);
+  const r = await observarAtleta();
+  if (r === "auth") { setObservando(prev); alert("Faça login novamente."); }
+  if (r === "err")  { setObservando(prev); alert("Não foi possível observar agora."); }
+  // "ok"/"dup" mantém true
 };
 
   async function resolverAtletaIdObservadoAtual(): Promise<string | null> {

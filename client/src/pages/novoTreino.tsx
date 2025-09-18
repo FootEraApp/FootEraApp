@@ -1,4 +1,3 @@
-// client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from "lucide-react";
@@ -6,8 +5,6 @@ import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 
 interface UsuarioLogado {
-  // valores persistidos no Storage/localStorage podem variar ("escola" para escolinha)
-  // aqui apenas usamos para renderização; ao enviar para o backend normalizamos para "Professor" | "Clube" | "Escolinha"
   tipo: "atleta" | "escola" | "escolinha" | "clube" | "professor";
 }
 
@@ -54,7 +51,6 @@ type TreinoAgendadoResp = {
   treinoProgramadoId: string;
 };
 
-/** =====================  Utilities (autosave)  ===================== **/
 const SAVE_KEY = "novoTreinoState";
 
 function safeParse<T>(str: string | null, fallback: T): T {
@@ -74,7 +70,6 @@ function saveState(partial: any) {
   } catch {}
 }
 
-/** =====================  Stepper  ===================== **/
 const steps = [
   { id: 1, label: "Informações" },
   { id: 2, label: "Exercícios" },
@@ -137,7 +132,6 @@ function StepCard({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** =====================  Página  ===================== **/
 export default function NovoTreino() {
   const [, navigate] = useLocation();
 
@@ -182,7 +176,6 @@ export default function NovoTreino() {
     }));
   }
 
-  /** =====================  Bootstrap  ===================== **/
   useEffect(() => {
     const tipoPersistido = (
       localStorage.getItem("tipoUsuario") ??
@@ -233,7 +226,6 @@ export default function NovoTreino() {
     setIniciado(true);
   }, []);
 
-  /** =====================  Carregar treinos (visão atleta)  ===================== **/
   useEffect(() => {
     if (!iniciado) return;
 
@@ -273,7 +265,6 @@ export default function NovoTreino() {
     })();
   }, [iniciado]);
 
-  /** =====================  Carregar exercícios e atletas  ===================== **/
   useEffect(() => {
     let cancel = { v: false };
 
@@ -369,7 +360,6 @@ export default function NovoTreino() {
     };
   }, []);
 
-  /** =====================  Autosave  ===================== **/
   useEffect(() => {
     saveState({
       etapa,
@@ -400,14 +390,12 @@ export default function NovoTreino() {
     atletasSelecionados,
   ]);
 
-  /** =====================  Navegação  ===================== **/
   const [completedUntil, setCompletedUntil] = useState<number>(1);
   const goTo = (n: number) => {
     setEtapa(n);
     setCompletedUntil((prev) => Math.max(prev, n));
   };
 
-  /** =====================  Derivados (sempre fora de condicionais!)  ===================== **/
   const exerciciosFiltrados = useMemo(() => {
     const q = filtroEx.trim().toLowerCase();
     if (!q) return exerciciosDisponiveis;
@@ -419,7 +407,6 @@ export default function NovoTreino() {
     });
   }, [filtroEx, exerciciosDisponiveis]);
 
-  /** =====================  Handlers  ===================== **/
   const adicionarExercicio = () => {
     setExerciciosSelecionados((prev) => [...prev, { nome: "", series: "", repeticoes: "", descricao: "" }]);
   };
@@ -456,7 +443,6 @@ export default function NovoTreino() {
     }
   };
 
-  // normalizar o par (tipoUsuario, tipoUsuarioId) para o backend
   function getDono() {
     const tipoRaw =
       (Storage as any).tipoSalvo ??
@@ -464,7 +450,6 @@ export default function NovoTreino() {
       sessionStorage.getItem("tipoUsuario") ??
       "";
 
-    // "escola" (frontend) == "Escolinha" (backend)
     const normalized =
       String(tipoRaw).trim().toLowerCase() === "escola" || String(tipoRaw).trim().toLowerCase() === "escolinha"
         ? "Escolinha"
@@ -512,19 +497,16 @@ export default function NovoTreino() {
         ordem: index + 1,
       }));
 
-      // gerar um 'codigo' padrão se não houver um input específico
       const codigo =
         `${nome}`.trim()
           ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) + "-" + Date.now().toString(36)
           : "TP-" + Date.now().toString(36);
 
       const payload = {
-        // obrigatórios
         nome,
         codigo,
-        nivel, // "Base" | "Avancado" | "Performance"
-        categoria: [categoria], // no schema é Categoria[]
-        // opcionais
+        nivel,
+        categoria: [categoria],
         tipoTreino,
         objetivo,
         duracao,
@@ -532,12 +514,9 @@ export default function NovoTreino() {
         dicas,
         metas: null as string | null,
         pontuacao: null as number | null,
-        // dono do treino
-        tipoUsuario, // "Professor" | "Clube" | "Escolinha"
-        tipoUsuarioId, // ID da tabela correspondente
-        // exercícios
+        tipoUsuario, 
+        tipoUsuarioId,
         exercicios: exerciciosParaEnvio,
-        // seleção de atletas (guarda para agendamento posterior em outra rota/fluxo)
         atletasIds: atletasSelecionados,
       };
 
@@ -561,8 +540,6 @@ export default function NovoTreino() {
       sessionStorage.removeItem(SAVE_KEY);
       setEtapa(1);
       setCompletedUntil(1);
-      // opcional: navegar para /treinos
-      // navigate("/treinos");
     } catch (e) {
       console.error("Falha inesperada ao criar treino:", e);
       alert("Erro inesperado ao criar treino.");
@@ -622,7 +599,6 @@ export default function NovoTreino() {
     }
   };
 
-  /** =====================  Render  ===================== **/
   if (!iniciado) return <p className="text-center p-4">Carregando...</p>;
   if (!usuario)
     return (
@@ -631,7 +607,6 @@ export default function NovoTreino() {
       </div>
     );
 
-  // VISÃO ATLETA
   if (usuario.tipo === "atleta") {
     return (
       <div className="p-4 max-w-xl mx-auto mb-5">
@@ -710,7 +685,6 @@ export default function NovoTreino() {
     );
   }
 
-  // VISÃO CRIADOR (escola/clube/professor)
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="p-4 sm:p-6 max-w-3xl mx-auto">
@@ -744,7 +718,6 @@ export default function NovoTreino() {
 
         <Stepper current={etapa} onJump={goTo} completedUntil={completedUntil} />
 
-        {/* Etapa 1 */}
         {etapa === 1 && (
           <StepCard title="Informações Básicas">
             <label className="block text-sm text-gray-700 mb-1">Título do Treino</label>
@@ -838,7 +811,6 @@ export default function NovoTreino() {
           </StepCard>
         )}
 
-        {/* Etapa 2 */}
         {etapa === 2 && (
           <>
             <StepCard title="Exercícios Selecionados">
@@ -873,7 +845,6 @@ export default function NovoTreino() {
                       </button>
 
                       <div className="flex flex-col sm:flex-row gap-3 items-start">
-                        {/* Mídia */}
                         {videoSrc ? (
                           <video
                             className="w-full h-44 sm:w-44 sm:h-28 rounded bg-black object-cover shrink-0"
@@ -887,9 +858,7 @@ export default function NovoTreino() {
                           </div>
                         )}
 
-                        {/* Conteúdo */}
-                        <div className="flex-1 min-w-0">
-                          {/* Título + nível */}
+                       <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             {ehDoBanco ? (
                               <div className="font-semibold">{nomeFinal}</div>
@@ -909,7 +878,6 @@ export default function NovoTreino() {
                             ) : null}
                           </div>
 
-                          {/* Descrição (só leitura se veio do banco) */}
                           {ehDoBanco ? (
                             <p className="text-sm text-gray-700 mb-2 whitespace-pre-line">
                               {descFinal || "Sem descrição."}
@@ -923,7 +891,6 @@ export default function NovoTreino() {
                             />
                           )}
 
-                          {/* Inputs de séries e repetições */}
                           <div className="grid grid-cols-2 gap-2">
                             <div>
                               <label className="block text-xs text-gray-600 mb-1">Séries</label>
@@ -959,7 +926,6 @@ export default function NovoTreino() {
             <div className="h-4" />
 
             <StepCard title="Exercícios Disponíveis">
-              {/* Busca */}
               <div className="mb-3 flex items-center gap-2">
                 <div className="relative flex-1">
                   <input
@@ -975,7 +941,6 @@ export default function NovoTreino() {
                 </span>
               </div>
 
-              {/* Lista rolável */}
               <ul className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1">
                 {exerciciosFiltrados.map((exercicio) => {
                   const videoParcial = exercicio.videoDemonstrativoUrl;
@@ -988,7 +953,6 @@ export default function NovoTreino() {
                   return (
                     <li key={exercicio.id} className="py-3">
                       <div className="flex flex-col sm:flex-row gap-3 items-start">
-                        {/* Thumb / vídeo */}
                         {videoSrc ? (
                           <video
                             className="w-full h-40 sm:w-40 sm:h-24 rounded bg-black object-cover shrink-0"
@@ -1002,7 +966,6 @@ export default function NovoTreino() {
                           </div>
                         )}
 
-                        {/* Conteúdo */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <div className="font-semibold truncate">{exercicio.nome}</div>
@@ -1017,7 +980,6 @@ export default function NovoTreino() {
                           ) : null}
                         </div>
 
-                        {/* Ação */}
                         <button
                           onClick={() => adicionarExercicioExistente(exercicio)}
                           className="bg-blue-600 text-white text-sm px-3 py-1.5 rounded w-full sm:w-auto"
@@ -1031,7 +993,6 @@ export default function NovoTreino() {
                 })}
               </ul>
 
-              {/* Controles da etapa */}
               <div className="flex flex-col sm:flex-row justify-between gap-2 mt-6">
                 <button onClick={() => goTo(1)} className="bg-gray-200 px-4 py-2 rounded w-full sm:w-auto">
                   Voltar
@@ -1044,7 +1005,6 @@ export default function NovoTreino() {
           </>
         )}
 
-        {/* Etapa 3 */}
         {etapa === 3 && (
           <StepCard title="Dicas para os Atletas">
             <div className="flex gap-2 mb-3">
@@ -1076,7 +1036,6 @@ export default function NovoTreino() {
           </StepCard>
         )}
 
-        {/* Etapa 4 */}
         {etapa === 4 && (
           <StepCard title="Selecionar Atletas Vinculados">
             {atletasVinculados.length === 0 ? (

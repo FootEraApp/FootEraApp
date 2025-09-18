@@ -61,6 +61,17 @@ type Filtros = {
   pontuacaoMax?: number | null;
 };
 
+type RankItem = {
+  atletaId: string;
+  total: number;
+  usuario: { id: string; nome: string; foto?: string | null };
+};
+
+const CAT_LABEL: Record<string, string> = {
+  Sub9: "Sub-9", Sub11: "Sub-11", Sub13: "Sub-13", Sub15: "Sub-15",
+  Sub17: "Sub-17", Sub20: "Sub-20", Livre: "Livre",
+};
+
 const CATEGORIAS = [
   "Sub-9","Sub-11","Sub-13","Sub-15","Sub-17","Sub-20","Sub-23","Profissional",
 ];
@@ -85,6 +96,8 @@ function Explorar() {
   const [showFilters, setShowFilters] = useState(false);
   const [filtros, setFiltros] = useState<Filtros>({ independente: null, pontuacaoMin: null, pontuacaoMax: null });
   const [draft, setDraft] = useState<Filtros>({ independente: null, pontuacaoMin: null, pontuacaoMax: null });
+  const [topGeral, setTopGeral] = useState<RankItem[]>([]);
+  const [topPorCategoria, setTopPorCategoria] = useState<Record<string, RankItem[]>>({});
 
   const loggedUserId = useMemo(
     () => (Storage?.usuarioId ?? (typeof window !== "undefined" ? Storage.usuarioId : "") ?? "") as string,
@@ -99,6 +112,20 @@ function Explorar() {
       }),
     [loggedUserId]
   );
+
+  useEffect(() => {
+    const token = Storage?.token ?? "";
+    axios.get(`${API.BASE_URL}/api/ranking/weekly`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+    .then(({ data }) => {
+      setTopGeral(Array.isArray(data?.geral) ? data.geral : []);
+      setTopPorCategoria(typeof data?.porCategoria === "object" && data?.porCategoria ? data.porCategoria : {});
+    })
+    .catch(() => {
+      setTopGeral([]); setTopPorCategoria({});
+    });
+  }, []);
 
   useEffect(() => {
     const token = Storage?.token ?? (typeof window !== "undefined" ? Storage.token : "");
@@ -379,6 +406,59 @@ function Explorar() {
                 );
               })}
             </div>
+            <h2 className="text-xl font-bold my-2">Top da semana (geral)</h2>
+            {topGeral.length === 0 ? (
+              <p className="text-gray-600 mb-4">Sem dados desta semana.</p>
+            ) : (
+              <div className="flex gap-3 overflow-x-auto pb-2 mb-4">
+                {topGeral.slice(0, 10).map((r, idx) => {
+                  const foto = formatarUrlFoto(r.usuario?.foto, "usuarios");
+                  return (
+                    <Link href={`/perfil/${r.usuario.id}`} key={r.atletaId}>
+                      <div className="min-w-[150px] bg-white rounded shadow p-2 flex flex-col items-center">
+                        <div className="text-xs font-semibold mb-1">{idx + 1}º</div>
+                        <img
+                          src={foto}
+                          onError={(e) => ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`)}
+                          className="w-16 h-16 rounded-full object-cover"
+                          alt={r.usuario.nome}
+                        />
+                        <div className="mt-2 text-sm text-center line-clamp-2">{r.usuario.nome}</div>
+                        <div className="text-xs mt-1">❤️ {r.total}</div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+
+            <h3 className="text-lg font-bold mt-4 mb-2">Líderes por categoria</h3>
+            <div className="space-y-2 mb-4">
+              {Object.entries(topPorCategoria).map(([cat, lista]) => {
+                const top = (lista as RankItem[])[0];
+                if (!top) return null;
+                const foto = formatarUrlFoto(top.usuario?.foto, "usuarios");
+                const rotulo = CAT_LABEL[cat] ?? cat;
+                return (
+                  <Link href={`/perfil/${top.usuario.id}`} key={`cat-${cat}`}>
+                    <div className="bg-white rounded shadow p-2 flex items-center gap-3">
+                      <div className="text-sm font-bold w-24">{rotulo}</div>
+                      <img
+                        src={foto}
+                        onError={(e) => ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`)}
+                        className="w-10 h-10 rounded-full object-cover"
+                        alt={top.usuario.nome}
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{top.usuario.nome}</div>
+                        <div className="text-xs text-gray-600">❤️ {top.total}</div>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+
           </>
         )}
 
