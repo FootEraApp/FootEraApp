@@ -1,4 +1,3 @@
-// server/controllers/exerciciosController.ts
 import { Request, Response } from "express";
 import multer from "multer";
 import path, { dirname } from "path";
@@ -11,7 +10,6 @@ const prisma = new PrismaClient();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// === NOVO: vídeos vão para public/exercicios/videos ===
 const exercisesVideosDir = path.join(__dirname, "..", "..", "public", "exercicios", "videos");
 
 const storage = multer.diskStorage({
@@ -27,7 +25,6 @@ const storage = multer.diskStorage({
 
 export const uploadVideo = multer({ storage }).single("video");
 
-// helper para limpar barra inicial e juntar em 'public'
 const publicJoin = (p: string) =>
   path.join(__dirname, "..", "..", "public", p.replace(/^\/+/, ""));
 
@@ -35,7 +32,6 @@ export const criarExercicio = async (req: Request, res: Response) => {
   try {
     const { codigo, nome, descricao, nivel } = req.body;
 
-    // aceita categorias tanto string (JSON) quanto array
     const categorias =
       req.body.categorias
         ? (Array.isArray(req.body.categorias)
@@ -43,7 +39,6 @@ export const criarExercicio = async (req: Request, res: Response) => {
             : JSON.parse(req.body.categorias))
         : [];
 
-    // URL pública agora é /exercicios/videos/...
     const videoDemonstrativoUrl = req.file
       ? `/exercicios/videos/${req.file.filename}`
       : null;

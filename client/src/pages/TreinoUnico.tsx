@@ -1,4 +1,3 @@
-// client/src/pages/TreinoUnico.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
@@ -98,7 +97,6 @@ export default function TreinoUnico() {
       return;
     }
     fetchTreino();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agendadoId, programadoId]);
 
   const formatarDataHora = (iso?: string | null) =>
@@ -123,7 +121,6 @@ export default function TreinoUnico() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* HEADER */}
       <header className="sticky top-0 bg-white/90 backdrop-blur border-b p-3 flex items-center gap-3 z-10">
         <button
           onClick={() => history.back()}
@@ -134,9 +131,7 @@ export default function TreinoUnico() {
         <h1 className="text-lg font-semibold text-green-900">Detalhes do Treino</h1>
       </header>
 
-      {/* MAIN */}
       <main className="mx-auto p-4 sm:p-6 w-full max-w-5xl space-y-6">
-        {/* RESUMO DO TREINO */}
         <section className="bg-white rounded-2xl shadow-sm border p-4 sm:p-6">
           <h2 className="text-2xl font-bold text-green-900">{treino.titulo}</h2>
           {treino.descricao && (
@@ -201,7 +196,6 @@ export default function TreinoUnico() {
           )}
         </section>
 
-        {/* EXERCÍCIOS */}
         <section className="bg-white rounded-2xl shadow-sm border p-4 sm:p-6">
           <h3 className="font-semibold text-gray-800 mb-3 inline-flex items-center gap-2 text-lg">
             <Dumbbell className="w-5 h-5" /> Exercícios
@@ -217,9 +211,7 @@ export default function TreinoUnico() {
                     key={ex.id || `${i}-${ex.nome}`}
                     className="border rounded-xl overflow-hidden bg-white shadow-sm"
                   >
-                    {/* Layout responsivo: vídeo acima no mobile, ao lado no desktop */}
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-0 md:gap-4">
-                      {/* VÍDEO */}
                       <div className="md:col-span-5">
                         {src ? (
                           <div className="w-full bg-black">
@@ -242,7 +234,6 @@ export default function TreinoUnico() {
                         )}
                       </div>
 
-                      {/* TEXTO */}
                       <div className="md:col-span-7 p-4">
                         <div className="font-semibold text-gray-900 text-base sm:text-lg">
                           {i + 1}. {ex.nome}
@@ -270,7 +261,6 @@ export default function TreinoUnico() {
           )}
         </section>
 
-        {/* AÇÕES */}
         <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <button
             onClick={() => history.back()}

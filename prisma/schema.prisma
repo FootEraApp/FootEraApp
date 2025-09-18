@@ -114,8 +114,10 @@ model Olheiro {
   reputacaoScore  Int @default(0)
   totalIndicacoes Int @default(0)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  Indicacao       Indicacao[]
+  AtletaObservado AtletaObservado[]
 
   @@index([areaAtuacao])
   @@index([colaboracaoClubeId])
@@ -175,9 +177,9 @@ model Atleta {
   dataCriacao                  DateTime         @default(now())
   dataUltimaModificacao        DateTime?
   pontuacao                    PontuacaoAtleta?
-  perfilTipoTreino             String?
-  perfilTipoTreinoAtualizadoEm DateTime?
   pontosTotal                  Int?             @default(0)
+  perfilTipoTreino             TipoTreino?
+  perfilTipoTreinoAtualizadoEm DateTime?
 
   postagens           Postagem[]
   midias              Midia[]
@@ -195,6 +197,9 @@ model Atleta {
   mensagens           Mensagem[]                 @relation("AtletaMensagens")
   EstatisticaAtleta   EstatisticaAtleta[]
   AtletaElenco        AtletaElenco[]
+  Indicacao           Indicacao[]
+
+  @@index([perfilTipoTreino])
 }
 
 model TreinoProgramado {
@@ -305,21 +310,23 @@ model AtletaObservado {
   professorId String?
   escolinhaId String?
   clubeId     String?
+  olheiroId   String?
   atletaId    String
 
-  professor Professor? @relation("ObservacaoProfessor", fields: [professorId], references: [id])
-  escolinha Escolinha? @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id])
-  clube     Clube?     @relation("ObservacaoClube", fields: [clubeId], references: [id])
-  atleta    Atleta     @relation("ObservacaoAtleta", fields: [atletaId], references: [id])
+  professor    Professor? @relation("ObservacaoProfessor", fields: [professorId], references: [id])
+  escolinha    Escolinha? @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id])
+  clube        Clube?     @relation("ObservacaoClube", fields: [clubeId], references: [id])
+  atleta       Atleta     @relation("ObservacaoAtleta", fields: [atletaId], references: [id])
+  olheiro      Olheiro?   @relation(fields: [olheiroId], references: [id])
+  criadoEm     DateTime   @default(now())
+  atualizadoEm DateTime   @updatedAt
 
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
-
-  @@unique([professorId, escolinhaId, clubeId, atletaId])
+  @@unique([professorId, escolinhaId, clubeId, atletaId, olheiroId])
   @@index([atletaId])
   @@index([professorId])
   @@index([escolinhaId])
   @@index([clubeId])
+  @@index([olheiroId])
 }
 
 model Postagem {
@@ -459,6 +466,7 @@ model Clube {
   treinoProgramado    TreinoProgramado[]
   Olheiro             Olheiro[]
   Evento              Evento[]
+  Indicacao           Indicacao[]
 }
 
 model SolicitacaoVinculo {
@@ -885,6 +893,30 @@ model Evento {
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
+}
+
+model Indicacao {
+  id           String          @id @default(uuid())
+  olheiroId    String
+  atletaId     String
+  clubeId      String
+  status       IndicacaoStatus @default(PENDENTE)
+  criadoEm     DateTime        @default(now())
+  atualizadoEm DateTime        @updatedAt
+
+  olheiro Olheiro @relation(fields: [olheiroId], references: [id])
+  atleta  Atleta  @relation(fields: [atletaId], references: [id])
+  clube   Clube   @relation(fields: [clubeId], references: [id])
+
+  @@index([olheiroId, status])
+  @@index([clubeId])
+  @@index([atletaId])
+}
+
+enum IndicacaoStatus {
+  PENDENTE
+  APROVADA
+  REJEITADA
 }
 
 enum PosicaoCampo {

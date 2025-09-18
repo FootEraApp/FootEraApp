@@ -1,4 +1,3 @@
-// server/controllers/TreinoUnicoController.ts
 import { Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
@@ -75,7 +74,6 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
       return res.status(400).json({ message: "Informe agendadoId OU programadoId." });
     }
 
-    // A) Agendado
     if (agendadoId) {
       const ag = await prisma.treinoAgendado.findUnique({
         where: { id: agendadoId },
@@ -100,7 +98,6 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
       return res.json(montarPayloadFromAgendado(ag));
     }
 
-    // B) Programado
     const tp = await prisma.treinoProgramado.findUnique({
       where: { id: programadoId },
       include: {

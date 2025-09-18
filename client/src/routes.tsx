@@ -38,6 +38,9 @@ import PaginaEventosClube from "./pages/eventosClube.js";
 import PaginaNovoEventoClube from "./pages/eventosClubeNovo.js";
 import PaginaEventoDetalhe from "./pages/eventoDetalhe.js";
 import PaginaTreinoUnico from "./pages/TreinoUnico.js";
+import PaginaOlheiros from "./pages/olheiro/index.js";
+import PaginaDesempenho from "./pages/olheiro/desempenho.js";
+import PaginaIndicar from "./pages/olheiro/indicar.js";
 
 export function AppRoutes() {
   return (
@@ -71,6 +74,10 @@ export function AppRoutes() {
         <RequireAdmin>
           <AdminDashboard />
         </RequireAdmin>
+      </Route>
+
+      <Route path="/olheiros">
+        <PaginaOlheiros />
       </Route>
 
       <Route path="/perfil-olheiro/:id">

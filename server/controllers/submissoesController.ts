@@ -1,10 +1,27 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, $Enums } from "@prisma/client";
 import { Request, Response } from "express";
 import { aplicarEstatisticasPosSubmissao } from "./submissoes/utilsEstatistica.js";
 import { inferirTipoTreino } from "../utils/inferirTipoTreino.js";
 import { atualizarCachePontuacao } from "server/services/pontuacao.service.js";
 
 const prisma = new PrismaClient();
+
+function toPrismaTipoTreino(value?: string | null): $Enums.TipoTreino | null {
+  if (!value) return null;
+
+  const v = value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+
+  switch (v) {
+    case "fisico":  return $Enums.TipoTreino.Fisico;
+    case "tecnico": return $Enums.TipoTreino.Tecnico;
+    case "tatico":  return $Enums.TipoTreino.Tatico;
+    case "mental":  return $Enums.TipoTreino.Mental;
+    default:        return null;
+  }
+}
 
 export async function criarOuAprovarSubmissaoTreino(req: Request, res: Response) {
   const { atletaId, treinoAgendadoId, aprovado, duracaoMinutos } = req.body;
@@ -24,17 +41,19 @@ export async function criarOuAprovarSubmissaoTreino(req: Request, res: Response)
       include: { treinoProgramado: true },
     });
 
-    const tipo = inferirTipoTreino({
+    const tipoStr = inferirTipoTreino({
       nome: ag?.treinoProgramado?.nome ?? undefined,
       tipoTreino: ag?.treinoProgramado?.tipoTreino ?? null,
       categorias: ag?.treinoProgramado?.categoria ?? null,
     });
 
-    if (tipo) {
+    const tipoEnum = toPrismaTipoTreino(tipoStr);
+
+    if (tipoEnum) {
       await prisma.atleta.update({
         where: { id: atletaId },
         data: {
-          perfilTipoTreino: tipo,
+          perfilTipoTreino: tipoEnum,
           perfilTipoTreinoAtualizadoEm: new Date(),
         },
       });

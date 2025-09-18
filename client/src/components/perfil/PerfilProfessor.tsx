@@ -1,4 +1,3 @@
-// client/src/components/perfil/PerfilProfessor
 import { useEffect, useState } from "react";
 import axios from "axios";
 import {
@@ -397,9 +396,11 @@ async function fetchObservados() {
                 ) : (
                   <div>
                     <EmptyState text="Nenhum atleta vinculado ainda" />
+                    <Link href="/explorar">
                     <div className="flex justify-center">
                       <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">Ver atletas</button>
                     </div>
+                    </Link>
                   </div>
                 )}
               </SectionCard>

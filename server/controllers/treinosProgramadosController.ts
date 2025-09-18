@@ -10,7 +10,7 @@ function normalizarTipoUsuario(v?: string): Dono | null {
   const s = v.toLowerCase();
   if (s === "professor") return "Professor";
   if (s === "clube") return "Clube";
-  if (s === "escolinha" || s === "escola") return "Escolinha"; // frontend manda "escola"
+  if (s === "escolinha" || s === "escola") return "Escolinha";
   return null;
 }
 
@@ -21,7 +21,6 @@ function toRepeticoes(series?: any, repeticoes?: any): string {
   return r || s || "";
 }
 
-/** -------------------- CREATE -------------------- **/
 export const createTreinoProgramado = async (req: Request, res: Response) => {
   try {
     const {
@@ -41,13 +40,10 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       expiraEm,
       naoExpira,
       exercicios,
-
-      // novo dono
       tipoUsuario,
       tipoUsuarioId,
     } = req.body;
 
-    // validações básicas
     if (!nome || !codigo) {
       return res.status(400).json({ message: "Campos obrigatórios ausentes: 'nome' e/ou 'codigo'." });
     }
@@ -64,7 +60,6 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Todos os exercícios devem possuir 'exercicioId'." });
     }
 
-    // dono do treino
     const dono = normalizarTipoUsuario(tipoUsuario);
     if (!dono || !tipoUsuarioId) {
       return res
@@ -72,7 +67,6 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         .json({ message: "Informe 'tipoUsuario' (Professor/Clube/Escolinha) e 'tipoUsuarioId'." });
     }
 
-    // duplicidade
     const duplicado = await prisma.treinoProgramado.findFirst({
       where: { OR: [{ nome }, { codigo }] },
       select: { id: true, nome: true, codigo: true },
@@ -81,7 +75,6 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Treino com o mesmo nome ou código já existe.", duplicado });
     }
 
-    // checar dono existe
     if (dono === "Professor") {
       const ok = await prisma.professor.findUnique({ where: { id: tipoUsuarioId }, select: { id: true } });
       if (!ok) return res.status(400).json({ message: "Professor não encontrado para o tipoUsuarioId informado." });
@@ -93,13 +86,11 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       if (!ok) return res.status(400).json({ message: "Escolinha não encontrada para o tipoUsuarioId informado." });
     }
 
-    // relacionamento do dono
     const rel: any = {};
     if (dono === "Professor") rel.professor = { connect: { id: tipoUsuarioId } };
     if (dono === "Clube") rel.clube = { connect: { id: tipoUsuarioId } };
     if (dono === "Escolinha") rel.escolinha = { connect: { id: tipoUsuarioId } };
 
-    // exercícios
     const itens = (exercicios as any[]).map((e: any, i: number) => ({
       exercicioId: e.exercicioId,
       ordem: Number(e.ordem ?? i + 1),
@@ -141,7 +132,6 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
   }
 };
 
-/** -------------------- READ ONE -------------------- **/
 export const getTreinoById = async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
@@ -162,7 +152,6 @@ export const getTreinoById = async (req: Request, res: Response) => {
   }
 };
 
-/** -------------------- UPDATE -------------------- **/
 export async function updateTreino(req: Request, res: Response) {
   try {
     const { id } = req.params;
@@ -189,7 +178,6 @@ export async function updateTreino(req: Request, res: Response) {
       if (!dono || !tipoUsuarioId) {
         return res.status(400).json({ message: "Para trocar o dono, informe tipoUsuario e tipoUsuarioId." });
       }
-      // desconecta todos e conecta o novo
       dataDono.professor = { disconnect: true };
       dataDono.clube = { disconnect: true };
       dataDono.escolinha = { disconnect: true };
@@ -238,7 +226,6 @@ export async function updateTreino(req: Request, res: Response) {
   }
 }
 
-/** -------------------- DELETE -------------------- **/
 export const deleteTreino = async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
@@ -253,7 +240,6 @@ export const deleteTreino = async (req: Request, res: Response) => {
   }
 };
 
-/** -------------------- LIST -------------------- **/
 export const getAllTreinos = async (_req: Request, res: Response) => {
   try {
     const treinos = await prisma.treinoProgramado.findMany({
