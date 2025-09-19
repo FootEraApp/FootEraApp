@@ -453,10 +453,30 @@ export default function Cadastro() {
 
               <div className="mt-4 mb-3">
                 <label className="flex items-center text-sm">
-                  <input type="checkbox" className="mr-2" checked={aceitaTermos} onChange={(e) => setAceitaTermos(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    className="mr-2"
+                    checked={aceitaTermos}
+                    onChange={(e) => setAceitaTermos(e.target.checked)}
+                  />
                   Li e aceito os&nbsp;
-                  <a href="#" className="underline text-blue-700">Termos de Uso</a> e&nbsp;
-                  <a href="#" className="underline text-blue-700">Política de Privacidade</a>
+                  <a
+                    href="/termos?tab=termos"
+                    className="underline text-blue-700"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Termos de Uso
+                  </a>
+                  &nbsp;e&nbsp;
+                  <a
+                    href="/termos?tab=privacidade"
+                    className="underline text-blue-700"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Política de Privacidade
+                  </a>
                 </label>
               </div>
 
