@@ -6,7 +6,7 @@ import { FaHeart, FaRegHeart, FaTrash, FaShare } from "react-icons/fa";
 import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
-import { CircleX } from "lucide-react";
+import { CircleX, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 
 function PostUnico(): JSX.Element {
   const [match, params] = useRoute<{ id: string }>("/post/:id");
@@ -153,22 +153,22 @@ function PostUnico(): JSX.Element {
       </div>
 
     <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-      <Link href="/feed" className="hover:underline">
-        Feed
-      </Link>
-      <Link href="/search" className="hover:underline">
-        Explorar
-      </Link>
-      <Link href="/post" className="hover:underline">
-        Publicar
-      </Link>
-      <Link href="/treinos" className="hover:underline">
-        Treinos
-      </Link>
-      <Link href="/perfil" className="hover:underline">
-        Perfil
-      </Link>
-    </nav>
+              <Link href="/feed" className="hover:underline">
+                <House /> 
+              </Link>
+              <Link href="/explorar" className="hover:underline">
+                <Search /> 
+              </Link>
+              <Link href="/post" className="hover:underline">
+                <CirclePlus /> 
+              </Link>
+              <Link href="/treinos" className="hover:underline">
+                <Volleyball /> 
+              </Link>
+              <Link href="/perfil" className="hover:underline">
+                <User /> 
+              </Link>
+            </nav>
 
       {modalAberto && (
         <div className="fixed inset-0 z-50 bg-black bg-opacity-40 flex items-center justify-center">

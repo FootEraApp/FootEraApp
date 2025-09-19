@@ -678,7 +678,6 @@ useEffect(() => {
             <User /> 
           </Link>
         </nav>
-
     </div>
   );
 }

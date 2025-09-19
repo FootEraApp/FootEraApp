@@ -505,13 +505,12 @@ const toggleObservar = async () => {
     return;
   }
 
-  // otimista para criar
   const prev = observando;
   setObservando(true);
   const r = await observarAtleta();
   if (r === "auth") { setObservando(prev); alert("Faça login novamente."); }
   if (r === "err")  { setObservando(prev); alert("Não foi possível observar agora."); }
-  // "ok"/"dup" mantém true
+  if (r === "dup")  { setObservando(true); }
 };
 
   async function resolverAtletaIdObservadoAtual(): Promise<string | null> {

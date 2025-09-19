@@ -43,7 +43,7 @@ type PayloadOlheiro = {
 
 type AtletaItem = {
   id: string;
-  atletaId?: string;
+  atletaId: string;
   nome: string;
   foto?: string | null;
   posicao?: string | null;
@@ -51,6 +51,8 @@ type AtletaItem = {
   altura?: number | null;
   peso?: number | null;
   observadoEm?: string;
+  categoria?: string | null;
+  pontuacao?: number | null;
 };
 
 type IndicacaoItem = {

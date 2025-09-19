@@ -144,29 +144,32 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
 
   const atletaId = resolvedTipoUsuarioId || (Storage.tipoUsuarioId as string) || "";
 
+  const base = `${API.BASE_URL}/api/treinos/agendados`;
+  const url =
+    atletaId
+      ? `${base}?tipoUsuarioId=${encodeURIComponent(atletaId)}`
+      : `${base}?usuarioId=${encodeURIComponent(targetUserId)}`;
+
   const { data: treinosAgendados = [], isLoading: isLoadingTreinos } = useQuery<Training[]>({
-    queryKey: ["treinosAgendados", atletaId],
-    enabled: Boolean(token && atletaId),
+    queryKey: ["treinosAgendados", atletaId || targetUserId],
+    enabled: Boolean(token && (atletaId || targetUserId)),
     queryFn: async () => {
-      const r = await fetch(
-        `${API.BASE_URL}/api/treinos/agendados?usuarioId=${encodeURIComponent(targetUserId)}`, { headers });
-      if (!r.ok) {
-        const msg = await r.text();
-        throw new Error(msg || "Erro ao buscar treinos agendados");
-      }
+      const r = await fetch(url, { headers });
+      if (!r.ok) throw new Error((await r.text()) || "Erro ao buscar treinos agendados");
       const raw = await r.json();
 
       return (Array.isArray(raw) ? raw : []).map((t: any) => ({
         id: t.id,
         titulo: t.titulo ?? t?.treinoProgramado?.nome ?? "Treino",
         dataTreino: t.dataTreino ?? null,
-        prazoEnvio: t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t?.treinoProgramado?.dataAgendada ?? null,
+        prazoEnvio:
+          t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t?.treinoProgramado?.dataAgendada ?? null,
         duracaoMinutos: t?.treinoProgramado?.duracao ?? t.duracaoMinutos ?? null,
         tipo: normalizeTipoTreino(
           t?.treinoProgramado?.tipoTreino ??
-          t?.tipo ??
-          (Array.isArray(t?.categoria) ? t.categoria[0] : t?.categoria) ?? 
-          null
+            t?.tipo ??
+            (Array.isArray(t?.categoria) ? t.categoria[0] : t?.categoria) ??
+            null
         ),
         imagemUrl: t?.treinoProgramado?.imagemUrl ?? t?.imagemUrl ?? null,
       }));
@@ -174,11 +177,11 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
   });
 
   useEffect(() => {
-    const onAgendado = () =>
-      qc.invalidateQueries({ queryKey: ["treinosAgendados", targetUserId] });
+    const keyId = atletaId || targetUserId;
+    const onAgendado = () => qc.invalidateQueries({ queryKey: ["treinosAgendados", keyId] });
     window.addEventListener("treino:agendado", onAgendado);
     return () => window.removeEventListener("treino:agendado", onAgendado);
-  }, [qc, targetUserId]);
+  }, [qc, atletaId, targetUserId]);
 
   const { data: resumo, isLoading: isLoadingResumo } = useQuery({
     queryKey: ["perfilResumoTreinos", targetUserId],
