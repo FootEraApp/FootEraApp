@@ -4,6 +4,13 @@ import { formatarUrlFoto } from '@/utils/formatarFoto.js';
 import Storage from "../../../server/utils/storage.js";
 import { API } from '../config.js';
 
+type ResultadoBuscaClube = {
+  id: string;
+  nome: string;
+  username?: string;
+  fotoUrl?: string | null;
+};
+
 const EditarPerfil = () => {
   const usuarioId = Storage.usuarioId;
   const tipoUsuarioOriginal = Storage.tipoSalvo;
@@ -15,9 +22,13 @@ const EditarPerfil = () => {
   const [erro, setErro] = useState<string | null>(null);
   type TipoRender = 'atleta' | 'professor' | 'escola' | 'escolinha' | 'clube' | 'admin' | 'olheiro';
   const [tipoRender, setTipoRender] = useState<TipoRender | null>(null);
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
+  const [clubeQuery, setClubeQuery] = useState("");
+  const [clubes, setClubes] = useState<ResultadoBuscaClube[]>([]);
+  const [clubeSel, setClubeSel] = useState<ResultadoBuscaClube | null>(null);
+  
   useEffect(() => {
-
   if (!usuarioId || !token) {
     console.error("[EditarPerfil] Sem usuarioId ou token — verifique login.");
     setErro("Sessão expirada. Faça login novamente.");
@@ -41,6 +52,15 @@ const EditarPerfil = () => {
       if (dadosEsp.site && !dadosEsp.siteOficial) dadosEsp.siteOficial = dadosEsp.site;
       setDadosTipo(dadosEsp);
 
+      if (dadosEsp?.colaboracaoClube?.id && dadosEsp?.colaboracaoClube?.nome) {
+        setClubeSel({
+          id: String(dadosEsp.colaboracaoClube.id),
+          nome: String(dadosEsp.colaboracaoClube.nome),
+          fotoUrl: dadosEsp.colaboracaoClube.logo ?? null,
+          username: dadosEsp.colaboracaoClube.username ?? "",
+        });
+      }
+
       const tipoSrv = res.data?.tipo ?? tipoUsuarioOriginal ?? '';
       const t = String(tipoSrv).toLowerCase();
       setTipoRender((t === 'escolinha' ? 'escola' : (t as TipoRender)));
@@ -62,6 +82,33 @@ const EditarPerfil = () => {
 
   fetchDados();
 }, [usuarioId, token]);
+
+  useEffect(() => {
+  let cancelado = false;
+  (async () => {
+    const q = clubeQuery.trim();
+    if (q.length < 2) { setClubes([]); return; }
+    try {
+      const r = await axios.get<any[]>(
+        `${API.BASE_URL}/api/cadastro/buscar`,
+        { params: { query: q, tipo: "Clube" }, headers }
+      );
+      if (cancelado) return;
+      const arr: ResultadoBuscaClube[] = (Array.isArray(r.data) ? r.data : [])
+        .filter(x => x?.id && x?.nome && x?.tipo === "Clube")
+        .map(x => ({
+          id: String(x.id),
+          nome: String(x.nome),
+          username: String(x.username || ""),
+          fotoUrl: x.fotoUrl ?? null,
+        }));
+      setClubes(arr);
+    } catch {
+      if (!cancelado) setClubes([]);
+    }
+  })();
+  return () => { cancelado = true; };
+}, [clubeQuery, API?.BASE_URL, token]);
 
   if (loading) {
    return <div className="text-center text-gray-600 mt-10">Carregando perfil...</div>;
@@ -154,7 +201,71 @@ const EditarPerfil = () => {
             {renderInput("CEP", "cep")}
           </>
         );
-      
+      case 'olheiro':
+        return (
+          <>
+            <h2 className="text-lg font-semibold mt-2 mb-2">Informações do Olheiro</h2>
+            {renderInput("Headline", "headline")}
+            {renderInput("Área de atuação", "areaAtuacao")}
+            {renderInput("Anos de experiência", "anosExperiencia", "number")}
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium">Sobre</label>
+              <textarea
+                name="tipo_descricao"
+                value={dadosTipo["descricao"] ?? ""}
+                onChange={handleChange}
+                className="w-full border px-3 py-2 rounded"
+                rows={4}
+                placeholder="Conte resumidamente seu foco, experiência, regiões etc."
+              />
+            </div>
+
+            <h2 className="text-lg font-semibold mt-4 mb-2">Clube colaborador</h2>
+            {clubeSel ? (
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm">Selecionado:</span>
+                <span className="font-medium text-sm">{clubeSel.nome}</span>
+                <button
+                  type="button"
+                  className="text-green-700 underline text-sm"
+                  onClick={() => { setClubeSel(null); setClubeQuery(""); }}
+                >
+                  trocar/remover
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  className="w-full border rounded px-3 py-2 mb-2"
+                  placeholder="Buscar clube (mín. 2 letras)…"
+                  value={clubeQuery}
+                  onChange={(e) => setClubeQuery(e.target.value)}
+                />
+                {clubes.length > 0 && (
+                  <div className="max-h-48 overflow-auto border rounded">
+                    {clubes.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 border-b last:border-b-0 hover:bg-gray-50"
+                        onClick={() => { setClubeSel(c); setClubeQuery(""); setClubes([]); }}
+                      >
+                        <div className="text-sm font-medium">{c.nome}</div>
+                        {c.username && <div className="text-xs text-gray-500">@{c.username}</div>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            <h2 className="text-lg font-semibold mt-6 mb-2">Contatos</h2>
+            {renderInput("E-mail público", "emailPublico")}
+            {renderInput("Telefone público", "telefonePublico")}
+            {renderInput("Site/LinkedIn", "siteOuLinkedin")}
+          </>
+        );
+
       case 'clube':
         return (
           <>
@@ -194,6 +305,7 @@ const EditarPerfil = () => {
         );
       };
     }
+    
     return (
       <div className="p-6 max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">Editar Perfil</h1>
@@ -289,6 +401,9 @@ const EditarPerfil = () => {
             const tipo: any = { ...dadosTipo };
 
             if (tipo.siteOficial && !tipo.site) tipo.site = tipo.siteOficial;
+
+            tipo.colaboracaoClubeId = clubeSel?.id ?? tipo.colaboracaoClubeId ?? null;
+            if (tipo.colaboracaoClube) delete tipo.colaboracaoClube;
 
             if (typeof tipo.categorias === "string") {
               tipo.categorias = tipo.categorias

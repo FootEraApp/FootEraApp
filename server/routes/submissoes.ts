@@ -1,4 +1,3 @@
-// server/routes/submissoes.ts
 import { Router } from "express";
 import multer from "multer";
 import { authenticateToken, AuthenticatedRequest } from "../middlewares/auth.js";
@@ -17,10 +16,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-/** Resolve o usuarioId para AtividadeRecente:
- *  - prioriza req.userId
- *  - senão, pega via Atleta.usuarioId
- */
 async function resolveUsuarioIdForActivity(reqUserId: string | undefined, atletaId: string) {
   if (typeof reqUserId === "string" && reqUserId.length > 0) return reqUserId;
   const atleta = await prisma.atleta.findUnique({
@@ -30,7 +25,6 @@ async function resolveUsuarioIdForActivity(reqUserId: string | undefined, atleta
   return atleta?.usuarioId || null;
 }
 
-/** SUBMISSÃO DE TREINO */
 router.post(
   "/treino",
   authenticateToken,
@@ -53,7 +47,7 @@ router.post(
 
       const midia = {
         url: assetUrl,
-        tipo: isVideo ? TipoMidia.Video : TipoMidia.Imagem, // <-- enum correto
+        tipo: isVideo ? TipoMidia.Video : TipoMidia.Imagem,
         dataEnvio: new Date(),
         descricao: "",
         titulo: "",
@@ -61,7 +55,6 @@ router.post(
 
       const usuarioIdForActivity = await resolveUsuarioIdForActivity(req.userId, atletaId);
 
-      // Transação: cria submissão + cria atividade
       const [submissao] = await prisma.$transaction([
         prisma.submissaoTreino.create({
           data: {
@@ -71,7 +64,6 @@ router.post(
             usuarioId: req.userId ?? undefined,
             midias: { create: [midia] },
           },
-          // Removido createdAt (não existe no seu model)
           select: {
             id: true,
             treinoAgendadoId: true,
@@ -86,7 +78,7 @@ router.post(
                 data: {
                   usuarioId: usuarioIdForActivity,
                   tipo: "treino",
-                  imagemUrl: assetUrl, // filename já é único
+                  imagemUrl: assetUrl,
                 },
               }),
             ]
@@ -101,7 +93,6 @@ router.post(
   }
 );
 
-/** SUBMISSÃO DE DESAFIO */
 router.post(
   "/desafio",
   authenticateToken,
@@ -124,7 +115,7 @@ router.post(
 
       const midia = {
         url: assetUrl,
-        tipo: isVideo ? TipoMidia.Video : TipoMidia.Imagem, // <-- enum correto
+        tipo: isVideo ? TipoMidia.Video : TipoMidia.Imagem,
         dataEnvio: new Date(),
         descricao: "",
         titulo: "",
@@ -141,11 +132,9 @@ router.post(
 
       const usuarioIdForActivity = await resolveUsuarioIdForActivity(req.userId, atletaId);
 
-      // Transação: cria submissão + cria atividade
       const [submissao] = await prisma.$transaction([
         prisma.submissaoDesafio.create({
           data,
-          // Evita tocar em colunas que não existem (ex.: conteudo/createdAt)
           select: {
             id: true,
             desafioId: true,

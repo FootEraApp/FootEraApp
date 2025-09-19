@@ -1,4 +1,3 @@
-// client/src/components/perfil/PerfilProfessor
 import { useEffect, useState } from "react";
 import axios from "axios";
 import {
@@ -294,24 +293,26 @@ async function fetchObservados() {
           )}
 
          <SectionCard
-            title="Treinos"
-            right={
-              <div className="flex gap-2">
-                <Link href="/treinos">
-                  <a className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900">
-                    Ver todos
-                  </a>
-                </Link>
+          title="Treinos"
+          right={
+            <div className="flex gap-2">
+              <Link
+                href="/treinos"
+                className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
+              >
+                Ver todos
+              </Link>
 
-                <Link href="/treinos/novo">
-                  <a className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1">
-                    <PlusCircle className="w-4 h-4" />
-                    Criar novo treino
-                  </a>
-                </Link>
-              </div>
-            }
-          >
+              <Link
+                href="/treinos/novo"
+                className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Criar novo treino
+              </Link>
+            </div>
+          }
+        >
             <p className="text-sm text-green-900/90">
               Crie e gerencie treinos para seus atletas vinculados.
             </p>
@@ -362,8 +363,8 @@ async function fetchObservados() {
               <SectionCard
                 title="Atletas Vinculados"
                 right={
-                  <Link href="/perfil/GerenciarAtletas">
-                    <a className="text-sm text-green-800">Gerenciar Atletas</a>
+                  <Link href="/perfil/GerenciarAtletas" className="text-sm text-green-800">
+                    Gerenciar Atletas
                   </Link>
                 }
               >
@@ -384,22 +385,24 @@ async function fetchObservados() {
                             {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
                           </div>
                         </div>
-
-<Link href={`/perfil/${a.id}`}>
-  <a className="text-sm text-green-800 inline-flex items-center gap-1">
-    Ver perfil <ChevronRight className="w-4 h-4" />
-  </a>
-</Link>
-
+                          <Link
+                            href={`/perfil/${a.id}`}
+                            className="text-sm text-green-800 inline-flex items-center gap-1"
+                          >
+                            Ver perfil <ChevronRight className="w-4 h-4" />
+                          </Link>
                       </li>
                     ))}
                   </ul>
                 ) : (
                   <div>
                     <EmptyState text="Nenhum atleta vinculado ainda" />
-                    <div className="flex justify-center">
-                      <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">Ver atletas</button>
-                    </div>
+                    <Link
+                      href="/explorar"
+                      className="px-4 py-2 rounded-md border border-green-200 text-green-900 inline-block"
+                    >
+                      Ver atletas
+                    </Link>
                   </div>
                 )}
               </SectionCard>
@@ -430,13 +433,12 @@ async function fetchObservados() {
                           <div className="text-sm font-medium text-green-900">{a.nome}</div>
                           <div className="text-xs text-green-900/70">{a.posicao ?? "-"}</div>
                         </div>
-
-                        <Link href={`/perfil/${a.id}`}>
-                          <a className="text-sm text-green-800 inline-flex items-center gap-1">
-                            Ver perfil <ChevronRight className="w-4 h-4" />
-                          </a>
+                        <Link
+                          href={`/perfil/${a.id}`}
+                          className="text-sm text-green-800 inline-flex items-center gap-1"
+                        >
+                          Ver perfil <ChevronRight className="w-4 h-4" />
                         </Link>
-
                       </li>
                     ))}
                   </ul>
@@ -454,33 +456,42 @@ async function fetchObservados() {
             {subAba === "solicitacoes" && (
               <SectionCard
                 title="Solicitações de Atletas"
-                right={<Link href="/notificacoes"><a className="text-sm text-green-800">Abrir notificações</a></Link>}
+                right={
+                  <Link href="/notificacoes" className="text-sm text-green-800">
+                    Abrir notificações
+                  </Link>
+                }
               >
                 {solicitacoes && solicitacoes.length > 0 ? (
                   <ul className="grid grid-cols-1 gap-3">
                     {solicitacoes.map((s) => (
 
-                      <li key={s.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3 hover:bg-green-50">
-                        <Link href={`/perfil/${s.remetenteId}`}>
-                          <a className="flex items-center gap-3 flex-1">
-                            <Avatar
-                              foto={s.remetente.foto ?? null}
-                              alt={s.remetente.nomeDeUsuario}
-                              className="w-10 h-10"
-                            />
-                            <div className="flex-1">
-                              <div className="text-sm font-medium text-green-900">
-                                {s.remetente.nomeDeUsuario}
-                              </div>
-                              <div className="text-xs text-green-900/70">
-                                {s.criadaEm ? new Date(s.criadaEm).toLocaleString() : "—"}{s.status ? ` • ${s.status}` : ""}
-                              </div>
-                              <div className="text-xs text-green-900/80">
-                                quer treinar junto com você
-                              </div>
+                      <li
+                        key={s.id}
+                        className="flex items-center gap-3 rounded-xl border border-green-100 p-3 hover:bg-green-50"
+                      >
+                        <Link
+                          href={`/perfil/${s.remetenteId}`}
+                          className="flex items-center gap-3 flex-1"
+                        >
+                          <Avatar
+                            foto={s.remetente.foto ?? null}
+                            alt={s.remetente.nomeDeUsuario}
+                            className="w-10 h-10"
+                          />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-green-900">
+                              {s.remetente.nomeDeUsuario}
                             </div>
-                            <ChevronRight className="w-4 h-4 text-green-800" />
-                          </a>
+                            <div className="text-xs text-green-900/70">
+                              {s.criadaEm ? new Date(s.criadaEm).toLocaleString() : "—"}
+                              {s.status ? ` • ${s.status}` : ""}
+                            </div>
+                            <div className="text-xs text-green-900/80">
+                              quer treinar junto com você
+                            </div>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-green-800" />
                         </Link>
                       </li>
 

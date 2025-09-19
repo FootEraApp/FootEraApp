@@ -1,4 +1,3 @@
-// server/controllers/treinosController.ts
 import { Response, Request } from "express";
 import { PrismaClient, PosicaoCampo, Categoria, TipoTreino } from "@prisma/client";
 import { getIO } from "../socket.js";
