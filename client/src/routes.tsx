@@ -42,6 +42,8 @@ import PaginaTermosEPrivacidade from "./pages/TermosEPrivacidade.js"
 import PaginaOlheiros from "./pages/olheiro/index.js";
 import PaginaDesempenho from "./pages/olheiro/desempenho.js";
 import PaginaIndicar from "./pages/olheiro/indicar.js";
+import PaginaConquistas from "./pages/conquistas";
+
 
 export function AppRoutes() {
   return (
@@ -85,6 +87,8 @@ export function AppRoutes() {
       <Route path="/perfil-olheiro/:id">
         {({ id }: { id: string }) => <PaginaPerfilOlheiro idDaUrl={id} />}
       </Route>
+
+      <Route path="perfil/conquistas" ><PaginaConquistas /></Route>
 
       <Route path="/perfil/GerenciarAtletas">
         <PaginaGerenciarAtleta />

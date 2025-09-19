@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "../ui/button.js";
 import { Textarea } from "../ui/textarea.js";
 import { Share2 } from "lucide-react";
+import { Link } from "wouter";
 
 type Badge = {
   id: string;
@@ -52,8 +53,14 @@ export function BadgesList({ userId, badges = [] as Badge[] }: { userId?: string
 
   return (
     <>
-     <h1 className="text-green-900 text-xl p-4">Conquistas</h1>
-        
+      <h1 className="text-green-900 text-xl p-4">
+        <Link
+          href="/perfil/conquistas"
+          className="hover:underline underline-offset-4 decoration-2 focus:outline-none focus:ring-2 focus:ring-green-600 rounded"
+        >
+          Conquistas
+        </Link>
+      </h1>
       <div className="grid grid-cols-3 gap-3"> 
        {badges.map((b) => (
           <div key={b.id} className="rounded-lg border p-3 flex flex-col items-center text-center">
