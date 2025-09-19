@@ -31,3 +31,4 @@ ALTER TABLE "public"."Indicacao" ADD CONSTRAINT "Indicacao_atletaId_fkey" FOREIG
 
 -- AddForeignKey
 ALTER TABLE "public"."Indicacao" ADD CONSTRAINT "Indicacao_clubeId_fkey" FOREIGN KEY ("clubeId") REFERENCES "public"."Clube"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+

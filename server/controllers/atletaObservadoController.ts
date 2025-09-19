@@ -21,109 +21,142 @@ export async function observarAtleta(req: AuthenticatedRequest, res: Response) {
 
   const data: any = { atletaId: atleta.id };
 
-  switch (req.tipo) {
-    case TipoUsuario.Professor:
-    case "Professor":
-      data.professorId = req.tipoUsuarioId;
-      break;
-    case TipoUsuario.Clube:
-    case "Clube":
-      data.clubeId = req.tipoUsuarioId;
-      break;
-    case TipoUsuario.Escolinha:
-    case "Escolinha":
-      data.escolinhaId = req.tipoUsuarioId;
-      break;
-    case TipoUsuario.Olheiro:
-    case "Olheiro":
-      // AGORA usamos olheiroId (nada de todos nulos)
-      data.olheiroId = req.tipoUsuarioId;
-      break;
-    default:
-      return res.status(403).json({ error: "Este perfil não pode observar atletas" });
-  }
-
   try {
+    const data: any = { atletaId: atleta.id };
+
+    switch (req.tipo) {
+      case TipoUsuario.Professor:
+      case "Professor":
+        data.professorId = req.tipoUsuarioId;
+        break;
+      case TipoUsuario.Clube:
+      case "Clube":
+        data.clubeId = req.tipoUsuarioId;
+        break;
+      case TipoUsuario.Escolinha:
+      case "Escolinha":
+        data.escolinhaId = req.tipoUsuarioId;
+        break;
+      case TipoUsuario.Olheiro:
+      case "Olheiro":
+        data.olheiroId = req.tipoUsuarioId;   // ✅ ESSENCIAL
+        break;
+      default:
+        return res.status(403).json({ error: "Este perfil não pode observar atletas" });
+    }
+
+    // (opcional) log pra conferir
+    console.log("observarAtleta payload:", { tipo:req.tipo, tipoUsuarioId:req.tipoUsuarioId, data });
+
     await prisma.atletaObservado.create({ data });
     return res.status(201).json({ ok: true });
   } catch (e: any) {
-    if (e?.code === "P2002") return res.status(409).json({ ok: true, message: "Já observando" });
-    console.error(e);
-    return res.status(500).json({ error: "Falha ao observar atleta" });
+    if (e?.code === "P2002")
+      return res.status(409).json({ ok: true, message: "Já observando" });
+
+    console.error("observarAtleta error:", e); // 👈 coloque esse catch aqui
+    return res.status(500).json({ error: e?.message, code: e?.code });
   }
 }
 
 export async function listarObservados(req: AuthenticatedRequest, res: Response) {
-  if (!req.userId) return res.status(401).json({ error: "Não autenticado" });
+  try {
+    if (!req.userId) return res.status(401).json({ error: "Não autenticado" });
 
-  const where: any = {};
-  switch (req.tipo) {
-    case TipoUsuario.Professor:
-    case "Professor":
-      where.professorId = req.tipoUsuarioId;
-      break;
-    case TipoUsuario.Clube:
-    case "Clube":
-      where.clubeId = req.tipoUsuarioId;
-      break;
-    case TipoUsuario.Escolinha:
-    case "Escolinha":
-      where.escolinhaId = req.tipoUsuarioId;
-      break;
-    case TipoUsuario.Olheiro:
-    case "Olheiro":
-      where.olheiroId = req.tipoUsuarioId; // <-- aqui!
-      break;
-    default:
-      return res.json([]);
+    const where: any = {};
+    switch (req.tipo) {
+      case TipoUsuario.Professor:
+      case "Professor":
+        where.professorId = req.tipoUsuarioId;
+        break;
+      case TipoUsuario.Clube:
+      case "Clube":
+        where.clubeId = req.tipoUsuarioId;
+        break;
+      case TipoUsuario.Escolinha:
+      case "Escolinha":
+        where.escolinhaId = req.tipoUsuarioId;
+        break;
+      case TipoUsuario.Olheiro:
+      case "Olheiro":
+        where.olheiroId = req.tipoUsuarioId; // << usar o id do olheiro aqui
+        break;
+      default:
+        return res.json([]);
+    }
+
+    const rows = await prisma.atletaObservado.findMany({
+      where,
+      include: {
+        atleta: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
+      },
+      orderBy: { criadoEm: "desc" },
+    });
+
+    return res.json(
+      rows.map((r) => ({
+        id: r.atleta?.usuario?.id ?? r.atletaId,
+        atletaId: r.atletaId,
+        usuarioId: r.atleta?.usuario?.id ?? null,
+        nome: r.atleta?.usuario?.nome ?? null,
+        foto: r.atleta?.usuario?.foto ?? null,
+      }))
+    );
+  } catch (e) {
+    console.error("listarObservados ERROR:", e);
+    return res.json([]);
   }
-
-  const rows = await prisma.atletaObservado.findMany({
-    where,
-    include: {
-      atleta: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
-    },
-    orderBy: { criadoEm: "desc" }, // campo que existe no schema
-  });
-
-  res.json(
-    rows.map((r) => ({
-      id: r.atleta?.usuario?.id ?? r.atletaId,
-      atletaId: r.atletaId,
-      usuarioId: r.atleta?.usuario?.id ?? null,
-      nome: r.atleta?.usuario?.nome ?? null,
-      foto: r.atleta?.usuario?.foto ?? null,
-    }))
-  );
 }
 
 export async function pararDeObservar(req: AuthenticatedRequest, res: Response) {
-  if (!req.userId) return res.status(401).json({ error: "Não autenticado" });
+  try {
+    if (!req.userId) return res.status(401).json({ error: "Não autenticado" });
 
-  const { atletaId } = req.params;
-  const where: any = { atletaId };
+    const { atletaId } = req.params;
+    const where: any = { atletaId };
 
-  switch (req.tipo) {
-    case TipoUsuario.Professor:
-    case "Professor":
-      where.professorId = req.tipoUsuarioId;
-      break;
-    case TipoUsuario.Clube:
-    case "Clube":
-      where.clubeId = req.tipoUsuarioId;
-      break;
-    case TipoUsuario.Escolinha:
-    case "Escolinha":
-      where.escolinhaId = req.tipoUsuarioId;
-      break;
-    case TipoUsuario.Olheiro:
-    case "Olheiro":
-      where.olheiroId = req.tipoUsuarioId; // <-- aqui!
-      break;
-    default:
-      return res.status(403).json({ error: "Este perfil não pode parar observação" });
+    switch (req.tipo) {
+      case TipoUsuario.Professor:
+      case "Professor":
+        where.professorId = req.tipoUsuarioId;
+        break;
+      case TipoUsuario.Clube:
+      case "Clube":
+        where.clubeId = req.tipoUsuarioId;
+        break;
+      case TipoUsuario.Escolinha:
+      case "Escolinha":
+        where.escolinhaId = req.tipoUsuarioId;
+        break;
+      case TipoUsuario.Olheiro:
+      case "Olheiro":
+        where.olheiroId = req.tipoUsuarioId;
+        break;
+      default:
+        return res.status(403).json({ error: "Este perfil não pode parar observação" });
+    }
+
+    await prisma.atletaObservado.deleteMany({ where });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("pararDeObservar ERROR:", e);
+    return res.status(500).json({ error: "Falha ao parar observação" });
   }
+}
 
-  await prisma.atletaObservado.deleteMany({ where });
-  res.json({ ok: true });
+// controllers/atletaObservadoController.ts
+export async function listarObservadosPorOlheiro(req: AuthenticatedRequest, res: Response) {
+  const { olheiroId } = req.params;
+  const rows = await prisma.atletaObservado.findMany({
+    where: { olheiroId },
+    include: { atleta: { include: { usuario: { select: { id: true, nome: true, foto: true } } } } },
+    orderBy: { criadoEm: "desc" },
+  });
+  res.json(rows.map(r => ({
+    id: r.atleta?.usuario?.id ?? r.atletaId,
+    atletaId: r.atletaId,
+    usuarioId: r.atleta?.usuario?.id ?? null,
+    nome: r.atleta?.usuario?.nome ?? null,
+    foto: r.atleta?.usuario?.foto ?? null,
+  })));
 }
