@@ -46,8 +46,8 @@ type AbaTopo = "perfil" | "eventos" | "atletas";
 type SubAbaAtletas = "vinculados" | "observados" | "solicitacoes";
 
 type AtletaItem = {
-  id: string;
-  atletaId: string;
+  id: string;              
+  atletaId: string;       
   nome: string;
   foto?: string | null;
   posicao?: string | null;
@@ -57,6 +57,8 @@ type AtletaItem = {
   observadoEm?: string;
   categoria?: string | null;
   pontuacao?: number | null;
+  notaInterna?: string | null;
+  alertarMudancas?: boolean | null;
 };
 
 type Solicitacao = {
@@ -105,6 +107,12 @@ export default function PerfilClube({ idDaUrl }: Props) {
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[] | null>(null);
 
+  const [observadoEdits, setObservadoEdits] = useState<Record<string, { notaInterna: string; alertarMudancas: boolean }>>({});
+  const [savingById, setSavingById] = useState<Record<string, boolean>>({});
+  const [errorById, setErrorById] = useState<Record<string, string | null>>({});
+
+  const tipoIdDoClube = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
+
   useEffect(() => {
     if (!token) return;
     let cancel = false;
@@ -130,12 +138,12 @@ export default function PerfilClube({ idDaUrl }: Props) {
     const cancel = { v: false };
 
     async function fetchVinculados() {
-      const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
+      const tipoId = tipoIdDoClube;
       if (!tipoId) { if (!cancel.v) setVinculados([]); return; }
       try {
         const { data: lista } = await axios.get<AtletaItem[]>(
           `${API.BASE_URL}/api/treinos/atletas-vinculados`,
-          { headers, params: { tipoUsuarioId: tipoId, incluirPontuacao: 1} }
+          { headers, params: { tipoUsuarioId: tipoId, incluirPontuacao: 1 } }
         );
         if (!cancel.v) setVinculados(Array.isArray(lista) ? lista : []);
       } catch {
@@ -144,14 +152,24 @@ export default function PerfilClube({ idDaUrl }: Props) {
     }
 
     async function fetchObservados() {
-      const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
+      const tipoId = tipoIdDoClube;
       if (!tipoId) { if (!cancel.v) setObservados([]); return; }
       try {
         const { data: lista } = await axios.get<AtletaItem[]>(
           `${API.BASE_URL}/api/observados`,
-          { headers, params: { tipoUsuarioId: tipoId } }
+          { headers, params: { tipoUsuarioId: tipoId, incluirPontuacao: 1, incluirNotas: 1 } }
         );
-        if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
+        if (!cancel.v) {
+          setObservados(Array.isArray(lista) ? lista : []);
+          const seed: Record<string, { notaInterna: string; alertarMudancas: boolean }> = {};
+          (Array.isArray(lista) ? lista : []).forEach((a) => {
+            seed[a.atletaId] = {
+              notaInterna: a.notaInterna ?? "",
+              alertarMudancas: !!a.alertarMudancas,
+            };
+          });
+          setObservadoEdits(seed);
+        }
       } catch {
         if (!cancel.v) setObservados([]);
       }
@@ -175,7 +193,39 @@ export default function PerfilClube({ idDaUrl }: Props) {
       if (subAba === "solicitacoes" && solicitacoes == null) fetchSolicitacoes();
     }
     return () => { cancel.v = true; };
-  }, [aba, subAba, token, isOwn, data?.clube?.id, vinculados, observados, solicitacoes]);
+  }, [aba, subAba, token, tipoIdDoClube, vinculados, observados, solicitacoes]);
+
+  async function salvarObservado(atletaId: string) {
+    if (!token || !tipoIdDoClube) return;
+    const edit = observadoEdits[atletaId] || { notaInterna: "", alertarMudancas: false };
+
+    setSavingById((s) => ({ ...s, [atletaId]: true }));
+    setErrorById((e) => ({ ...e, [atletaId]: null }));
+    try {
+      await axios.patch(
+        `${API.BASE_URL}/api/observados/${atletaId}`,
+        { tipoUsuarioId: tipoIdDoClube, notaInterna: edit.notaInterna, alertarMudancas: edit.alertarMudancas },
+        { headers }
+      );
+      setObservados((prev) =>
+        (prev || []).map((a) =>
+          a.atletaId === atletaId
+            ? { ...a, notaInterna: edit.notaInterna, alertarMudancas: edit.alertarMudancas }
+            : a
+        )
+      );
+    } catch (err: any) {
+      setErrorById((e) => ({
+        ...e,
+        [atletaId]:
+          err?.response?.data?.message ||
+          err?.message ||
+          "Não foi possível salvar a nota/preferência agora.",
+      }));
+    } finally {
+      setSavingById((s) => ({ ...s, [atletaId]: false }));
+    }
+  }
 
   if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
   if (!data || !data.clube) return <div className="text-center p-10 text-red-600">Clube não encontrado.</div>;
@@ -357,12 +407,13 @@ export default function PerfilClube({ idDaUrl }: Props) {
               </button>
             ))}
           </div>
-           {subAba === "vinculados" && (
+
+          {subAba === "vinculados" && (
             <SectionCard
               title="Atletas Vinculados"
               right={
-                <Link href="/perfil/GerenciarAtletas">
-                  <a className="text-sm text-green-800">Gerenciar Atletas</a>
+                <Link href="/perfil/GerenciarAtletas" className="text-sm text-green-800">
+                  Gerenciar Atletas
                 </Link>
               }
             >
@@ -379,9 +430,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
                             a.idade ? `${a.idade} anos` : "",
                             a.categoria ? `Cat. ${a.categoria}` : "",
                             a.pontuacao != null ? `${a.pontuacao} pts` : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" • ")}
+                          ].filter(Boolean).join(" • ")}
                         </div>
                       </div>
                       <Link
@@ -400,26 +449,89 @@ export default function PerfilClube({ idDaUrl }: Props) {
           )}
 
           {subAba === "observados" && (
-            <SectionCard title="Atletas Observados">
+            <SectionCard
+              title="Atletas Observados"
+              right={<span className="text-xs text-green-900/60">Futuro: destacar mudanças e enviar alertas</span>}
+            >
               {observados && observados.length > 0 ? (
                 <ul className="grid grid-cols-1 gap-3">
-                  {observados.map((a) => (
-                    <li key={a.atletaId} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-                      <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-green-900">{a.nome}</div>
-                        <div className="text-xs text-green-900/70">
-                          {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
+                  {observados.map((a) => {
+                    const edit = observadoEdits[a.atletaId] || { notaInterna: a.notaInterna ?? "", alertarMudancas: !!a.alertarMudancas };
+                    const saving = !!savingById[a.atletaId];
+                    const errMsg = errorById[a.atletaId] || null;
+
+                    return (
+                      <li key={a.atletaId} className="rounded-xl border border-green-100 p-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-green-900">{a.nome}</div>
+                            <div className="text-xs text-green-900/70">
+                              {[
+                                a.posicao,
+                                a.idade ? `${a.idade} anos` : "",
+                                a.categoria ? `Cat. ${a.categoria}` : "",
+                                a.pontuacao != null ? `${a.pontuacao} pts` : "",
+                              ].filter(Boolean).join(" • ")}
+                            </div>
+                          </div>
+                          <Link
+                            href={`/perfil/${a.id}`}
+                            className="text-sm text-green-800 inline-flex items-center gap-1"
+                          >
+                            Ver perfil <ChevronRight className="w-4 h-4" />
+                          </Link>
                         </div>
-                      </div>
-                      <Link
-                        href={`/perfil/${a.id}`}
-                        className="text-sm text-green-800 inline-flex items-center gap-1"
-                      >
-                        Ver perfil <ChevronRight className="w-4 h-4" />
-                      </Link>
-                    </li>
-                  ))}
+
+                        <div className="mt-3 grid gap-2">
+                          <label className="text-xs font-medium text-green-900">
+                            Nota interna
+                            <input
+                              type="text"
+                              value={edit.notaInterna}
+                              onChange={(e) =>
+                                setObservadoEdits((old) => ({
+                                  ...old,
+                                  [a.atletaId]: { ...edit, notaInterna: e.target.value },
+                                }))
+                              }
+                              placeholder="ex.: 'Bom 1x1, precisa evoluir passe longo'"
+                              className="mt-1 w-full rounded-lg border border-green-200 px-3 py-2 text-sm text-green-900 placeholder:text-green-900/40 focus:outline-none focus:ring-2 focus:ring-green-300"
+                            />
+                          </label>
+
+                          <label className="inline-flex items-center gap-2 text-sm text-green-900">
+                            <input
+                              type="checkbox"
+                              checked={!!edit.alertarMudancas}
+                              onChange={(e) =>
+                                setObservadoEdits((old) => ({
+                                  ...old,
+                                  [a.atletaId]: { ...edit, alertarMudancas: e.target.checked },
+                                }))
+                              }
+                            />
+                            Notificar mudanças (pontuação, posição, idade, novos treinos/desafios)
+                          </label>
+
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => salvarObservado(a.atletaId)}
+                              disabled={saving}
+                              className={`px-4 py-2 rounded-lg text-sm font-semibold ${
+                                saving
+                                  ? "bg-green-200 text-green-700 cursor-not-allowed"
+                                  : "bg-green-600 text-white hover:bg-green-700"
+                              }`}
+                            >
+                              {saving ? "Salvando..." : "Salvar"}
+                            </button>
+                            {errMsg && <span className="text-xs text-red-600">{errMsg}</span>}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <EmptyState text="Você ainda não observa nenhum atleta" />

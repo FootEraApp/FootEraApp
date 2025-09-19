@@ -34,7 +34,10 @@ type PayloadOlheiro = {
   metrics: {
     atletasAcompanhados: number;
     indicacoesEnviadas: number;
-    reputacaoScore: number;
+    reputacaoScore?: number;
+    indicacoesAprovadas?: number;
+    taxaAprovacao?: number;     
+    atletasAssinados?: number;  
   };
 };
 
@@ -276,7 +279,24 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
     (typeof data.usuario?.foto === "string" && data.usuario.foto) ||
     (typeof data.olheiro.fotoUrl === "string" && data.olheiro.fotoUrl) ||
     undefined;
-  const time = data.olheiro.colaboracaoClube?.nome || "Olheiro";
+
+  const clubeColab = data.olheiro.colaboracaoClube || null;
+
+  const reputacaoScore =
+    (data.metrics?.reputacaoScore ??
+      data.olheiro.reputacaoScore ??
+      0);
+
+  const kpiIndicacoes =
+    data.metrics?.indicacoesEnviadas ??
+    data.olheiro.totalIndicacoes ??
+    0;
+
+  const time = clubeColab?.nome || "Olheiro";
+
+  const indicacoesAprovadas = data.metrics?.indicacoesAprovadas ?? undefined;
+  const taxaAprovacao = data.metrics?.taxaAprovacao ?? undefined;
+  const atletasAssinados = data.metrics?.atletasAssinados ?? undefined;
 
   return (
     <div className="max-w-md mx-auto">
@@ -288,10 +308,28 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
         perfilId={data.usuario?.id || data.olheiro.usuarioId || data.olheiro.id}
         kpis={[
           { label: "Atletas", value: data.metrics.atletasAcompanhados ?? 0 },
-          { label: "Indicações", value: data.metrics.indicacoesEnviadas ?? (data.olheiro.totalIndicacoes ?? 0) },
-          { label: "Reputação", value: data.metrics.reputacaoScore ?? (data.olheiro.reputacaoScore ?? 0) },
+          { label: "Indicações", value: kpiIndicacoes },
+          { label: "Reputação", value: reputacaoScore },
         ]}
       />
+
+      {clubeColab && (
+        <div className="px-4 mt-2">
+          <Link
+            href={`/perfil/${clubeColab.id}`}
+            className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-100 border border-green-200 text-green-900 hover:bg-green-200 transition"
+          >
+            {clubeColab.logo ? (
+              <img
+                src={clubeColab.logo}
+                className="w-4 h-4 rounded object-cover border"
+                onError={(e: any) => (e.currentTarget.style.display = "none")}
+              />
+            ) : null}
+            Colabora com <b className="ml-1">{clubeColab.nome}</b>
+          </Link>
+        </div>
+      )}
 
       <div className="mt-4 px-4">
         <div className="bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100">
@@ -315,32 +353,74 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
 
       {aba === "visao" && (
         <div className="mt-4 px-4 grid gap-4">
-          <SectionCard title="Informações do Olheiro">
+          <SectionCard title="Informações do Olheiro" right={handle ? <span className="text-xs text-green-900/60">{handle}</span> : null}>
             <ul className="text-sm text-green-900/90 space-y-2">
-              {handle && <li><b>Usuário:</b> {handle}</li>}
               {data.olheiro.headline && <li><b>Headline:</b> {data.olheiro.headline}</li>}
               {data.olheiro.areaAtuacao && <li><b>Área de atuação:</b> {data.olheiro.areaAtuacao}</li>}
               <li><b>Experiência:</b> {data.olheiro.anosExperiencia ?? 0} ano{(data.olheiro.anosExperiencia ?? 0) === 1 ? "" : "s"}</li>
-              {data.olheiro.colaboracaoClube && (
+              {clubeColab && (
                 <li className="flex items-center gap-2">
                   <b>Colaboração:</b>
-                  <img
-                    src={data.olheiro.colaboracaoClube.logo || ""}
-                    className="w-5 h-5 rounded object-cover border"
-                    onError={(e: any) => (e.currentTarget.style.display = "none")}
-                  />
-                  <span>{data.olheiro.colaboracaoClube.nome}</span>
+                  {clubeColab.logo ? (
+                    <img
+                      src={clubeColab.logo}
+                      className="w-5 h-5 rounded object-cover border"
+                      onError={(e: any) => (e.currentTarget.style.display = "none")}
+                    />
+                  ) : null}
+                  <Link
+                    href={`/perfil/${clubeColab.id}`}
+                    className="underline text-green-800"
+                  >
+                    {clubeColab.nome}
+                  </Link>
                 </li>
               )}
             </ul>
             {data.olheiro.descricao && (
               <div className="mt-3">
-                <div className="text-sm font-semibold text-green-900">Sobre</div>
+                <div className="text-sm font-semibold text-green-900">Sobre: </div>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-green-900/90">
                   {data.olheiro.descricao}
                 </p>
               </div>
             )}
+          </SectionCard>
+
+          <SectionCard
+            title="Reputação & Impacto"
+            right={<span className="text-xs text-green-900/60">Futuro: badges, tiers e ranking</span>}
+          >
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg border border-green-100 p-3">
+                <div className="text-xs text-green-900/70">Reputação</div>
+                <div className="text-xl font-bold text-green-900">{reputacaoScore}</div>
+              </div>
+              <div className="rounded-lg border border-green-100 p-3">
+                <div className="text-xs text-green-900/70">Indicações</div>
+                <div className="text-xl font-bold text-green-900">{kpiIndicacoes}</div>
+              </div>
+              <div className="rounded-lg border border-green-100 p-3">
+                <div className="text-xs text-green-900/70">Aprovadas</div>
+                <div className="text-xl font-bold text-green-900">{indicacoesAprovadas ?? "—"}</div>
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-xs text-green-900/70 mb-1">
+                <span>Taxa de aprovação</span>
+                <span>{typeof taxaAprovacao === "number" ? `${Math.round(taxaAprovacao * 100)}%` : "—"}</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-green-100 overflow-hidden">
+                <div
+                  className="h-2 bg-green-600"
+                  style={{ width: `${Math.max(0, Math.min(100, Math.round((taxaAprovacao ?? 0) * 100)))}%` }}
+                />
+              </div>
+              <div className="mt-2 text-xs text-green-900/70">
+                Atletas que assinaram após suas indicações: <b>{typeof atletasAssinados === "number" ? atletasAssinados : "—"}</b>
+              </div>
+            </div>
           </SectionCard>
 
           <SectionCard title="Contatos">
@@ -362,24 +442,6 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
               </li>
             </ul>
           </SectionCard>
-
-          <SectionCard title="Atividade Recente">
-            {atividades && atividades.length > 0 ? (
-              <ul className="space-y-3">
-                {atividades.slice(0, 6).map((a) => (
-                  <li key={a.id} className="flex items-center gap-3">
-                    <CalendarClock className="w-5 h-5 text-green-700" />
-                    <div className="text-sm">
-                      <div className="font-medium text-green-900">{a.titulo}</div>
-                      <div className="text-xs text-green-900/70">{new Date(a.criadoEm).toLocaleString()}</div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <EmptyState text="Nenhuma atividade recente" />
-            )}
-          </SectionCard>
         </div>
       )}
 
@@ -400,10 +462,13 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
             <SectionCard
               title="Atletas Observados"
               right={
-                <button className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-amber-500 text-white">
+                <Link
+                  href="/explorar"
+                  className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-amber-500 text-white"
+                >
                   <PlusCircle className="w-4 h-4" />
                   Descobrir atletas
-                </button>
+                </Link>
               }
             >
               {observados && observados.length > 0 ? (
@@ -417,10 +482,11 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
                           {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
                         </div>
                       </div>
-                      <Link href={`/perfil/${a.id}`}>
-                        <a className="text-sm text-green-800 inline-flex items-center gap-1">
-                          Ver perfil <ChevronRight className="w-4 h-4" />
-                        </a>
+                      <Link
+                        href={`/perfil/${a.id}`}
+                        className="text-sm text-green-800 inline-flex items-center gap-1"
+                      >
+                        Ver perfil <ChevronRight className="w-4 h-4" />
                       </Link>
                     </li>
                   ))}
@@ -429,9 +495,12 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
                 <div>
                   <EmptyState text="Você ainda não observa nenhum atleta" />
                   <div className="flex justify-center">
-                    <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">
+                    <Link
+                      href="/explorar"
+                      className="px-4 py-2 rounded-md border border-green-200 text-green-900 inline-block"
+                    >
                       Explorar atletas
-                    </button>
+                    </Link>
                   </div>
                 </div>
               )}

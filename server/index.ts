@@ -53,8 +53,11 @@ import treinoProgramadoRoutes from "./routes/treinoProgramado.js";
 import uploadRoutes from "./routes/upload.js";
 import usuarioRoutes from "./routes/usuario.js";
 import vinculoRoutes from "./routes/vinculo.js";
-import observadosRoutes from "./routes/observadosRoutes.js";
+import observadosRoutes from "./routes/observados.js";
 import gerenciarAtletasRoutes from "./routes/gerenciarAtletas.js";
+import indicacoesRouter from "./routes/indicacoes.js";
+import olheirosRouter from "./routes/olheiros.js";
+import desempenhoRoutes from "./routes/desempenho.js";
 
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 import { removerTreinosExpirados } from "./routes/removerTreinosExpirados.js";
@@ -88,6 +91,7 @@ app.use("/api/configuracoes", configuracoesRoutes);
 app.use("/api/conquistas", conquistaRoutes);
 app.use("/api/desafios", desafiosRoutes);
 app.use("/api/desafios/em-grupo", desafiosEmGrupoRoutes);
+app.use("/api/desempenho", desempenhoRoutes);
 app.use("/api/escolinhas", escolinhaRoutes);
 app.use("/api/eventos", eventosRoutes);
 app.use("/api/explorar", explorarRoutes);
@@ -120,7 +124,8 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
 app.use("/api/observados", observadosRoutes);
 app.use("/api/gerenciar", gerenciarAtletasRoutes);
-
+app.use("/api", indicacoesRouter); 
+app.use("/api", olheirosRouter);
 app.use(adminModeracaoRoutes);
 
 app.use("/uploads", express.static(path.join(process.cwd(), "public/uploads")));
