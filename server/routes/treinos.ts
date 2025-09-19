@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { authenticateToken } from "server/middlewares/auth.js";
 import {
-  // Treinos
   treinosDisponiveis,
   listarTodosTreinosProgramados,
   obterTreinoProgramadoPorId,
@@ -13,46 +12,37 @@ import {
   restaurarTreinos,
   atualizarTreinoProgramado,
   deletarTreinoProgramado,
-
-  // Exercícios / Métricas
   getExercicios,
   getPontuacoes,
-
-  // Elencos
   getEscalaPorElencoId,
   getEscalaPorDono,
   listarElencos,
   criarElenco,
   atualizarElenco,
-
-  // Perfil (atletas vinculados)
   atletasVinculados,
 } from "server/controllers/treinosController.js";
 
 const router = Router();
 
-/* ---- PERFIL / ATLETAS VINCULADOS ---- */
+router.get("/disponiveis", treinosDisponiveis);
+
 router.get("/atletas-vinculados", atletasVinculados);
 
-/* ---- TREINOS ---- */
-router.get("/disponiveis", treinosDisponiveis);
-router.get("/programados", listarTodosTreinosProgramados);
-router.get("/:id", authenticateToken, obterTreinoProgramadoPorId);
-router.put("/:id", authenticateToken, atualizarTreinoProgramado);
-router.delete("/:id", authenticateToken, deletarTreinoProgramado);
-
+router.get("/agendados", authenticateToken, getTreinosAgendados);
 router.post("/agendados", authenticateToken, agendarTreino);
 router.delete("/agendados/:id", authenticateToken, excluirTreinoAgendado);
-router.get("/agendados", authenticateToken, getTreinosAgendados);
 router.post("/concluir", authenticateToken, concluirTreino);
+
+router.get("/programados", listarTodosTreinosProgramados);
+router.get("/programados/:id", authenticateToken, obterTreinoProgramadoPorId);
+router.put("/programados/:id", authenticateToken, atualizarTreinoProgramado);
+router.delete("/programados/:id", authenticateToken, deletarTreinoProgramado);
 router.post("/restaurar", authenticateToken, restaurarTreinos);
 router.post("/", criarTreinoProgramado);
 
-/* ---- EXERCÍCIOS / PONTUAÇÕES ---- */
 router.get("/exercicios", getExercicios);
 router.get("/pontuacoes", authenticateToken, getPontuacoes);
 
-/* ---- ELENCOS ---- */
 router.get("/elencos/:id/escala", authenticateToken, getEscalaPorElencoId);
 router.get("/elencos/escala-por-dono", authenticateToken, getEscalaPorDono);
 router.get("/elencos", authenticateToken, listarElencos);

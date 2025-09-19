@@ -42,6 +42,8 @@ type AtletaItem = {
   altura?: number | null;
   peso?: number | null;
   observadoEm?: string;
+  categoria?: string | null;
+  pontuacao?: number | null;
 };
 
 type SolicitacaoItem = {
@@ -160,7 +162,7 @@ async function fetchVinculados() {
       `${API.BASE_URL}/api/treinos/atletas-vinculados`,
       {
         headers,
-        params: { tipoUsuarioId: tipoId },
+        params: { tipoUsuarioId: tipoId, incluirPontuacao: 1 },
       }
     );
     if (!cancel.v) setVinculados(Array.isArray(lista) ? lista : []);
@@ -182,7 +184,7 @@ async function fetchObservados() {
       `${API.BASE_URL}/api/observados`,
       {
         headers,
-        params: { tipoUsuarioId: tipoId }, 
+        params: { tipoUsuarioId: tipoId, incluirPontuacao: 1 }, 
       }
     );
     if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
@@ -382,7 +384,8 @@ async function fetchObservados() {
                         <div className="flex-1">
                           <div className="text-sm font-medium text-green-900">{a.nome}</div>
                           <div className="text-xs text-green-900/70">
-                            {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
+                            {[a.posicao, a.idade ? `${a.idade} anos` : "",  a.categoria ? `Cat. ${a.categoria}` : "",
+                              a.pontuacao != null ? `${a.pontuacao} pts` : ""].filter(Boolean).join(" • ")}
                           </div>
                         </div>
                           <Link
@@ -431,7 +434,10 @@ async function fetchObservados() {
 
                         <div className="flex-1">
                           <div className="text-sm font-medium text-green-900">{a.nome}</div>
-                          <div className="text-xs text-green-900/70">{a.posicao ?? "-"}</div>
+                          <div className="text-xs text-green-900/70">
+                            {[a.posicao, a.idade ? `${a.idade} anos` : "",  a.categoria ? `Cat. ${a.categoria}` : "",
+                              a.pontuacao != null ? `${a.pontuacao} pts` : ""].filter(Boolean).join(" • ")}
+                          </div>
                         </div>
                         <Link
                           href={`/perfil/${a.id}`}

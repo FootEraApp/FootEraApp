@@ -1,4 +1,3 @@
-// server/controllers/gerenciarAtletasController
 import { PrismaClient, Categoria } from "@prisma/client";
 import { Request, Response } from "express";
 
