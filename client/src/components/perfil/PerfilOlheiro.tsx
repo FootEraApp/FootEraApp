@@ -315,17 +315,18 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
 
       {clubeColab && (
         <div className="px-4 mt-2">
-          <Link href={`/perfil/${clubeColab.id}`}>
-            <a className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-100 border border-green-200 text-green-900 hover:bg-green-200 transition">
-              {clubeColab.logo ? (
-                <img
-                  src={clubeColab.logo}
-                  className="w-4 h-4 rounded object-cover border"
-                  onError={(e: any) => (e.currentTarget.style.display = "none")}
-                />
-              ) : null}
-              Colabora com <b className="ml-1">{clubeColab.nome}</b>
-            </a>
+          <Link
+            href={`/perfil/${clubeColab.id}`}
+            className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-100 border border-green-200 text-green-900 hover:bg-green-200 transition"
+          >
+            {clubeColab.logo ? (
+              <img
+                src={clubeColab.logo}
+                className="w-4 h-4 rounded object-cover border"
+                onError={(e: any) => (e.currentTarget.style.display = "none")}
+              />
+            ) : null}
+            Colabora com <b className="ml-1">{clubeColab.nome}</b>
           </Link>
         </div>
       )}
@@ -367,8 +368,11 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
                       onError={(e: any) => (e.currentTarget.style.display = "none")}
                     />
                   ) : null}
-                  <Link href={`/perfil/${clubeColab.id}`}>
-                    <a className="underline text-green-800">{clubeColab.nome}</a>
+                  <Link
+                    href={`/perfil/${clubeColab.id}`}
+                    className="underline text-green-800"
+                  >
+                    {clubeColab.nome}
                   </Link>
                 </li>
               )}
@@ -458,11 +462,12 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
             <SectionCard
               title="Atletas Observados"
               right={
-                <Link href="/explorar">
-                  <button className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-amber-500 text-white">
-                    <PlusCircle className="w-4 h-4" />
-                    Descobrir atletas
-                  </button>
+                <Link
+                  href="/explorar"
+                  className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-amber-500 text-white"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Descobrir atletas
                 </Link>
               }
             >
@@ -477,10 +482,11 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
                           {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
                         </div>
                       </div>
-                      <Link href={`/perfil/${a.id}`}>
-                        <a className="text-sm text-green-800 inline-flex items-center gap-1">
-                          Ver perfil <ChevronRight className="w-4 h-4" />
-                        </a>
+                      <Link
+                        href={`/perfil/${a.id}`}
+                        className="text-sm text-green-800 inline-flex items-center gap-1"
+                      >
+                        Ver perfil <ChevronRight className="w-4 h-4" />
                       </Link>
                     </li>
                   ))}
@@ -489,10 +495,11 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
                 <div>
                   <EmptyState text="Você ainda não observa nenhum atleta" />
                   <div className="flex justify-center">
-                    <Link href="/explorar">
-                      <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">
-                        Explorar atletas
-                      </button>
+                    <Link
+                      href="/explorar"
+                      className="px-4 py-2 rounded-md border border-green-200 text-green-900 inline-block"
+                    >
+                      Explorar atletas
                     </Link>
                   </div>
                 </div>

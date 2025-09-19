@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { authenticateToken } from "server/middlewares/auth.js";
+import { listarObservadosPorOlheiro } from "server/controllers/atletaObservadoController.js";
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -106,52 +107,6 @@ router.patch("/olheiros/:id", async (req, res) => {
   }
 });
 
-
-router.get("/olheiros/:id/observados", authenticateToken, async (req, res) => {
-  try {
-    let { id } = req.params;
-    if (id === "me" && (req.user as any)?.tipoUsuarioId) {
-      id = (req.user as any).tipoUsuarioId;
-    }
-
-    // ⚠️ para Olheiro você marcou professor/clube/escolinha = null
-    type Row = Prisma.AtletaObservadoGetPayload<{
-      include: {
-        atleta: {
-          include: {
-            usuario: { select: { id: true; nome: true; foto: true } };
-          };
-        };
-      };
-    }>;
-
-    const rows: Row[] = await prisma.atletaObservado.findMany({
-      where: { professorId: null, clubeId: null, escolinhaId: null },
-      include: {
-        atleta: {
-          include: {
-            usuario: { select: { id: true, nome: true, foto: true } },
-          },
-        },
-      },
-      // ✅ nome correto do campo no schema
-      orderBy: { criadoEm: "desc" },
-    });
-
-    const data = rows.map((r) => ({
-      id: r.atleta?.usuario?.id ?? r.atletaId,
-      nome: r.atleta?.usuario?.nome ?? "Atleta",
-      foto: r.atleta?.usuario?.foto ?? null,
-      // Como usamos include, os escalares de Atleta vêm tipados
-      posicao: r.atleta?.posicao ?? null,
-      idade: r.atleta?.idade ?? null,
-    }));
-
-    res.json(data);
-  } catch (e) {
-    console.error("GET /olheiros/:id/observados", e);
-    res.status(500).json({ error: "Falha ao listar observados." });
-  }
-});
+router.get("/olheiros/:olheiroId/observados", authenticateToken, listarObservadosPorOlheiro);
 
 export default router;
