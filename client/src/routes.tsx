@@ -38,6 +38,7 @@ import PaginaEventosClube from "./pages/eventosClube.js";
 import PaginaNovoEventoClube from "./pages/eventosClubeNovo.js";
 import PaginaEventoDetalhe from "./pages/eventoDetalhe.js";
 import PaginaTreinoUnico from "./pages/TreinoUnico.js";
+import PaginaTermosEPrivacidade from "./pages/TermosEPrivacidade.js"
 
 export function AppRoutes() {
   return (
@@ -46,6 +47,7 @@ export function AppRoutes() {
         <PublicOnly><PaginaLogin /></PublicOnly>
       </Route>
       <Route path="/cadastro"><PaginaCadastro /></Route>
+      <Route path="/termos"><PaginaTermosEPrivacidade /></Route>
       <Route path="/esqueci-senha">
         <PublicOnly><PaginaEsqueciSenha /></PublicOnly>
       </Route>
