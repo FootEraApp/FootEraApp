@@ -3,11 +3,9 @@ import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
-
-// >>> NOVOS IMPORTS (utils)
-import { TreinosApi } from "../utils/treinosApi";
-import { montarExerciciosParaPayload } from "../utils/treinos.helpers";
-import type { ExItemUI, TreinoCreatePayload } from "../utils/treinos.types";
+import { TreinosApi } from "../utils/treinosApi.js";
+import { montarExerciciosParaPayload } from "../utils/treinos.helpers.js";
+import type { ExItemUI, TreinoCreatePayload } from "../utils/treinos.types.js";
 
 interface UsuarioLogado {
   tipo: "atleta" | "escola" | "escolinha" | "clube" | "professor";
@@ -152,7 +150,6 @@ export default function NovoTreino() {
   const [objetivo, setObjetivo] = useState<string>("");
   const [iniciado, setIniciado] = useState<boolean>(false);
 
-  // >>>> trocado: agora usamos ExItemUI (idCatalogo para exercícios do banco; nome/descricao para temporários)
   const [exerciciosSelecionados, setExerciciosSelecionados] = useState<ExItemUI[]>([]);
   const [dicas, setDicas] = useState<string[]>([]);
   const [dicaAtual, setDicaAtual] = useState<string>("");
@@ -214,7 +211,6 @@ export default function NovoTreino() {
         setCategoria(saved.categoria ?? "Sub13");
         setTipoTreino(saved.tipoTreino ?? "Tecnico");
         setObjetivo(saved.objetivo ?? "");
-        // conversão de itens salvos antigos -> ExItemUI
         const exOld = Array.isArray(saved.exerciciosSelecionados) ? saved.exerciciosSelecionados : [];
         const exUi: ExItemUI[] = exOld.map((x: any, idx: number) => ({
           idCatalogo: x.exercicioId ?? null,
@@ -222,8 +218,6 @@ export default function NovoTreino() {
           descricao: x.descricao ?? null,
           repeticoes: x.repeticoes ?? "",
           ordem: x.ordem ?? idx + 1,
-          // series não vai ao payload, mas mantemos no estado se você quiser continuar exibindo
-          // @ts-ignore
           series: x.series ?? "",
         }));
         setExerciciosSelecionados(exUi);
@@ -279,7 +273,6 @@ export default function NovoTreino() {
 
     (async () => {
       try {
-        // >>> usa a rota do treinosController com auth
         const token =
           (Storage as any).token ||
           localStorage.getItem("token") ||
@@ -427,18 +420,15 @@ export default function NovoTreino() {
   }, [filtroEx, exerciciosDisponiveis]);
 
   const adicionarExercicio = () => {
-    // linha para EXERCÍCIO TEMPORÁRIO
     setExerciciosSelecionados((prev) => [
       ...prev,
-      { idCatalogo: null, nome: "", descricao: "", repeticoes: "", ordem: prev.length + 1, /* @ts-ignore */ series: "" },
+      { idCatalogo: null, nome: "", descricao: "", repeticoes: "", ordem: prev.length + 1,  series: "" },
     ]);
   };
 
   const atualizarExercicio = (index: number, campo: keyof ExItemUI | "series", valor: string) => {
     const copia = [...exerciciosSelecionados];
-    // @ts-ignore - mantemos "series" apenas no estado para UI; payload não usa diretamente
     (copia[index][campo] as string | undefined) = valor;
-    // ajuste de ordem se necessário
     if (campo === "ordem") {
       const n = parseInt(valor, 10);
       if (!isNaN(n)) copia[index].ordem = n;
@@ -449,22 +439,19 @@ export default function NovoTreino() {
   const removerExercicio = (index: number) => {
     const novaLista = [...exerciciosSelecionados];
     novaLista.splice(index, 1);
-    // re-normaliza ordem
     const renumerado = novaLista.map((x, i) => ({ ...x, ordem: i + 1 }));
     setExerciciosSelecionados(renumerado);
   };
 
   const adicionarExercicioExistente = (exercicio: Exercicio) => {
-    // linha para EXERCÍCIO DO BANCO (usa idCatalogo)
     setExerciciosSelecionados((prev) => [
       ...prev,
       {
         idCatalogo: exercicio.id,
-        nome: exercicio.nome, // só para exibição; payload usa idCatalogo
+        nome: exercicio.nome,
         descricao: "",
         repeticoes: "",
         ordem: prev.length + 1,
-        // @ts-ignore
         series: "",
       },
     ]);
@@ -531,7 +518,6 @@ const criarTreino = async () => {
 
     const exercicios = montarExerciciosParaPayload(exerciciosSelecionados);
 
-      // gerar um 'codigo' padrão (opcional; o treinosController não exige, mas não faz mal enviar)
       const codigo =
         `${nome}`.trim()
           ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) + "-" + Date.now().toString(36)
@@ -914,7 +900,6 @@ const criarTreino = async () => {
                               <input
                                 className="border w-full p-1 rounded"
                                 placeholder="ex.: 3"
-                                // @ts-ignore (series é só para UI)
                                 value={ex.series || ""}
                                 onChange={(e) => atualizarExercicio(i, "series", e.target.value)}
                               />

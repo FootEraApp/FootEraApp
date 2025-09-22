@@ -10,7 +10,6 @@ function getInitialTab(): TabKey {
     const q = (qs.get("tab") || "").toLowerCase();
     if (q === "privacidade") return "privacidade";
     if (q === "termos") return "termos";
-    // fallback para hash (ex.: /termos#privacidade)
     const hash = (window.location.hash || "").replace("#", "").toLowerCase();
     if (hash === "privacidade") return "privacidade";
     return "termos";
@@ -20,21 +19,18 @@ function getInitialTab(): TabKey {
 }
 
 export default function TermosEPrivacidade() {
-  const [location, setLocation] = useLocation(); // mantém compatibilidade com back/forward do navegador
+  const [location, setLocation] = useLocation();
   const [tab, setTab] = useState<TabKey>(getInitialTab());
 
-  // Mantém o estado quando o usuário navega entre histórico (back/forward)
   useEffect(() => {
     const onPopState = () => setTab(getInitialTab());
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  // Atualiza a URL sem recarregar quando o usuário troca de aba
-  const goTab = (t: TabKey) => {
+    const goTab = (t: TabKey) => {
     setTab(t);
     const url = `/termos?tab=${t}`;
-    // Atualiza a barra de endereço e histórico
     window.history.replaceState({}, "", url);
   };
 
@@ -52,7 +48,6 @@ export default function TermosEPrivacidade() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
-        {/* Abas */}
         <div className="inline-flex rounded-xl bg-white p-1 shadow-sm border">
           <button
             type="button"
@@ -86,7 +81,6 @@ export default function TermosEPrivacidade() {
           </button>
         </div>
 
-        {/* Conteúdo */}
         <section
           id="painel-termos"
           role="tabpanel"

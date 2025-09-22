@@ -23,7 +23,20 @@ type Escolinha = {
 type Metrics = { atletas: number; treinosProgramados: number; postagens: number; conquistas?: number };
 type PayloadEscola = { tipo: "Escolinha"; usuario: UsuarioMin | null; escolinha: Escolinha; metrics: Metrics; };
 
-type AtletaItem = { id: string; nome: string; foto?: string | null; posicao?: string | null; idade?: number | null; };
+type AtletaItem = {
+  id: string;
+  atletaId: string;
+  nome: string;
+  foto?: string | null;
+  posicao?: string | null;
+  idade?: number | null;
+  altura?: number | null;
+  peso?: number | null;
+  observadoEm?: string;
+  categoria?: string | null;
+  pontuacao?: number | null;
+};
+
 type SolicitacaoItem = {
   id: string; remetenteId: string;
   remetente: { id: string; nomeDeUsuario: string; foto: string | null; };
@@ -125,11 +138,11 @@ export default function PerfilEscola({ idDaUrl }: Props) {
 
     async function fetchVinculados() {
       const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
-      if (!tipoId) return; 
+      if (!tipoId) return;
       try {
         const { data: lista } = await axios.get<AtletaItem[]>(
           `${API.BASE_URL}/api/treinos/atletas-vinculados`,
-          { headers, params: { tipoUsuarioId: tipoId } }
+          { headers, params: { tipoUsuarioId: tipoId, incluirPontuacao: 1 } }
         );
         if (!cancel.v) setVinculados(Array.isArray(lista) ? lista : []);
       } catch {
@@ -143,7 +156,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
       try {
         const { data: lista } = await axios.get<AtletaItem[]>(
           `${API.BASE_URL}/api/observados`,
-          { headers, params: { tipoUsuarioId: tipoId } }
+          { headers, params: { incluirPontuacao: 1 } }
         );
         if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
       } catch {
@@ -270,8 +283,8 @@ export default function PerfilEscola({ idDaUrl }: Props) {
 
           <SectionCard title="Treinos">
             <div className="flex gap-2 justify-end">
-              <Link href="/treinos"><a className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900">Ver todos</a></Link>
-              <Link href="/treinos/novo"><a className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"><PlusCircle className="w-4 h-4" />Criar novo treino</a></Link>
+              <Link href="/treinos" className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900">Ver todos</Link>
+              <Link href="/treinos/novo" className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"><PlusCircle className="w-4 h-4" />Criar novo treino</Link>
             </div>
             <p className="text-sm text-green-900/90 mt-2">Crie e gerencie treinos para seus atletas vinculados.</p>
           </SectionCard>
@@ -319,8 +332,8 @@ export default function PerfilEscola({ idDaUrl }: Props) {
               <SectionCard
                 title="Atletas Vinculados"
                 right={
-                  <Link href="/perfil/GerenciarAtletas">
-                    <a className="text-sm text-green-800">Gerenciar Atletas</a>
+                  <Link href="/perfil/GerenciarAtletas"
+                    className="text-sm text-green-800">Gerenciar Atletas
                   </Link>
                 }
               >
@@ -331,12 +344,18 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                         <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
                         <div className="flex-1">
                           <div className="text-sm font-medium text-green-900">{a.nome}</div>
-                          <div className="text-xs text-green-900/70">{[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}</div>
+                          <div className="text-xs text-green-900/70">
+                            {[a.posicao, a.idade ? `${a.idade} anos` : null, a.categoria].filter(Boolean).join(" • ")}
+                          </div>
                         </div>
-                        <Link href={`/perfil/${a.id}`}>
-                          <a className="text-sm text-green-800 inline-flex items-center gap-1">
+                        {typeof a.pontuacao === "number" && (
+                          <span className="text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-800 border border-green-200">
+                            {a.pontuacao} pts
+                          </span>
+                        )}
+                        <Link href={`/perfil/${a.id}`}
+                          className="ml-2 text-sm text-green-800 inline-flex items-center gap-1">
                             Ver perfil <ChevronRight className="w-4 h-4" />
-                          </a>
                         </Link>
                       </li>
                     ))}
@@ -345,7 +364,9 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                   <div>
                     <EmptyState text="Nenhum atleta vinculado ainda" />
                     <div className="flex justify-center">
-                      <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">Ver atletas</button>
+                      <Link href="/explorar">
+                       <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">Ver atletas</button>
+                      </Link>
                     </div>
                   </div>
                 )}
@@ -369,12 +390,18 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                         <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
                         <div className="flex-1">
                           <div className="text-sm font-medium text-green-900">{a.nome}</div>
-                          <div className="text-xs text-green-900/70">{a.posicao ?? "-"}</div>
+                          <div className="text-xs text-green-900/70">
+                            {[a.posicao ?? "-", a.idade ? `${a.idade} anos` : null, a.categoria].filter(Boolean).join(" • ")}
+                          </div>
                         </div>
-                        <Link href={`/perfil/${a.id}`}>
-                          <a className="text-sm text-green-800 inline-flex items-center gap-1">
+                        {typeof a.pontuacao === "number" && (
+                          <span className="text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-800 border border-green-200">
+                            {a.pontuacao} pts
+                          </span>
+                        )}
+                        <Link href={`/perfil/${a.id}`}
+                           className="ml-2 text-sm text-green-800 inline-flex items-center gap-1">
                             Ver perfil <ChevronRight className="w-4 h-4" />
-                          </a>
                         </Link>
                       </li>
                     ))}
@@ -393,15 +420,15 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             {subAba === "solicitacoes" && (
               <SectionCard
                 title="Solicitações de Atletas"
-                right={<Link href="/notificacoes"><a className="text-sm text-green-800">Abrir notificações</a></Link>}
+                right={<Link href="/notificacoes" className="text-sm text-green-800">Abrir notificações</Link>}
               >
                 {solicitacoes && solicitacoes.length > 0 ? (
                   <div className="space-y-3">
                     <ul className="grid grid-cols-1 gap-3">
                       {solicitacoes.map((s) => (
                         <li key={s.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3 hover:bg-green-50">
-                          <Link href={`/perfil/${s.remetenteId}`}>
-                            <a className="flex items-center gap-3 flex-1">
+                          <Link href={`/perfil/${s.remetenteId}`}
+                             className="flex items-center gap-3 flex-1">
                               <Avatar foto={s.remetente.foto ?? null} alt={s.remetente.nomeDeUsuario} className="w-10 h-10" />
                               <div className="flex-1">
                                 <div className="text-sm font-medium text-green-900">{s.remetente.nomeDeUsuario}</div>
@@ -411,7 +438,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                                 <div className="text-xs text-green-900/80">quer treinar junto com você</div>
                               </div>
                               <ChevronRight className="w-4 h-4 text-green-800" />
-                            </a>
                           </Link>
                         </li>
                       ))}

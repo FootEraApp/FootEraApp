@@ -184,13 +184,12 @@ model Atleta {
 }
 
 model TreinoProgramado {
-  id        String  @id @default(uuid())
-  codigo    String  @unique
-  nome      String  @unique
-  descricao String?
-  nivel     Nivel
+  id           String      @id @default(uuid())
+  codigo       String      @unique
+  nome         String      @unique
+  descricao    String?
+  nivel        Nivel
 
-  // Metadados do treino
   categoria    Categoria[]
   tipoTreino   TipoTreino?
   dataAgendada DateTime?
@@ -203,23 +202,21 @@ model TreinoProgramado {
   expiraEm     DateTime?
   naoExpira    Boolean     @default(false)
 
-  // FKs
-  clubeId     String?
-  professorId String?
-  escolinhaId String?
+  clubeId      String?
+  professorId  String?
+  escolinhaId  String?
 
-  // Relações
-  clube     Clube?     @relation(fields: [clubeId], references: [id])
-  professor Professor? @relation(fields: [professorId], references: [id])
-  escolinha Escolinha? @relation(fields: [escolinhaId], references: [id])
+  clube        Clube?                       @relation(fields: [clubeId], references: [id])
+  professor    Professor?                   @relation(fields: [professorId], references: [id])
+  escolinha    Escolinha?                   @relation(fields: [escolinhaId], references: [id])
 
-  exercicios               TreinoProgramadoExercicio[]
-  temporarios              ExercicioTemporario[]
+  exercicios   TreinoProgramadoExercicio[]
+  temporarios  ExercicioTemporario[]
   treinoAgendado           TreinoAgendado[]
   TreinoProgramadoRecebido TreinoProgramadoRecebido[]
   realizados               TreinoRealizado[]
 
-  createdAt DateTime @default(now())
+  createdAt    DateTime    @default(now())
 }
 
 model TreinoProgramadoExercicio {

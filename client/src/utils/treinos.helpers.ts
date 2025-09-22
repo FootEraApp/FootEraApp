@@ -1,5 +1,4 @@
-// client/src/utils/treinos.helpers.ts
-import type { ExItemUI } from "./treinos.types";
+import type { ExItemUI } from "./treinos.types.js";
 
 export function montarExerciciosParaPayload(itensUI: ExItemUI[]) {
   return (itensUI || [])
@@ -7,7 +6,6 @@ export function montarExerciciosParaPayload(itensUI: ExItemUI[]) {
       const ordem = typeof it.ordem === "number" ? it.ordem : idx + 1;
 
       if (it.idCatalogo) {
-        // exercício do banco
         return {
           exercicioId: it.idCatalogo,
           repeticoes: it.repeticoes ?? null,
@@ -15,7 +13,6 @@ export function montarExerciciosParaPayload(itensUI: ExItemUI[]) {
         };
       }
 
-      // exercício temporário
       return {
         nome: (it.nome || "").trim(),
         descricao: it.descricao ?? null,
@@ -23,6 +20,5 @@ export function montarExerciciosParaPayload(itensUI: ExItemUI[]) {
         ordem,
       };
     })
-    // remove temporário sem nome
     .filter((e) => ("exercicioId" in e) || (typeof (e as any).nome === "string" && (e as any).nome.length > 0));
 }
