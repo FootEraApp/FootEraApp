@@ -1,12 +1,10 @@
-// client/src/pages/conquistas.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
   ALL_ACHIEVEMENTS,
   entityFromTipoUsuario,
   AchievementLite,
-} from "../lib/achievementsCatalog";
-import Storage from "../../../server/utils/storage"; // ajuste se o caminho for outro
-// import { API } from "../config.js"; // quando for ligar a API, descomente
+} from "../lib/achievementsCatalog.js";
+import Storage from "../../../server/utils/storage.js";
 
 type Earned = {
   id: string;
@@ -27,8 +25,6 @@ const groupOrder = [
   "Eventos",
 ] as const;
 
-// ———————————————————————————————————————————————
-// Helpers para ler sessão com robustez (Storage + local/sessionStorage)
 function pickFirst<T>(...vals: (T | null | undefined)[]) {
   for (const v of vals) {
     const s = v == null ? "" : String(v);
@@ -47,7 +43,6 @@ function readTipoUsuario(): string {
     sessionStorage.getItem("tipoUsuario")
   );
   const raw = String(v).trim();
-  // se vier serializado (ex.: '"atleta"'), tenta desserializar
   try {
     return typeof v === "string" && (raw.startsWith("{") || raw.startsWith("\""))
       ? JSON.parse(raw)
@@ -69,9 +64,7 @@ function readUsuarioId(): string | null {
   const raw = String(v).trim();
   return raw === "" ? null : raw;
 }
-// ———————————————————————————————————————————————
 
-// desligado por enquanto (sem backend)
 const USE_API = false;
 
 export default function ConquistasPage() {
@@ -80,15 +73,13 @@ export default function ConquistasPage() {
 
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-  const [earned, setEarned] = useState<Earned[]>([]); // offline: vazio = tudo cinza
+  const [earned, setEarned] = useState<Earned[]>([]);
 
-  // entity: case-insensitive + fallback para "Atleta" em dev
   const entity = useMemo(() => {
     const e = entityFromTipoUsuario(String(tipoRaw));
     return e ?? "Atleta";
   }, [tipoRaw]);
 
-  // catálogo filtrado
   const catalog: AchievementLite[] = useMemo(
     () => ALL_ACHIEVEMENTS.filter((a) => a.entity === entity),
     [entity]
@@ -108,16 +99,10 @@ export default function ConquistasPage() {
     const load = async () => {
       try {
         if (!USE_API) {
-          // Sem API: tudo cinza
           setEarned([]);
           setErro(null);
           return;
         }
-        // Quando ligar o backend:
-        // const r = await fetch(`${API.BASE_URL}/api/badges/${usuarioId}`);
-        // if (!r.ok) throw new Error(`Falha ao carregar conquistas (${r.status})`);
-        // const json = await r.json();
-        // setEarned(Array.isArray(json?.earned) ? json.earned : []);
       } catch (e: any) {
         setErro(e?.message || "Erro ao carregar conquistas.");
       } finally {

@@ -110,8 +110,28 @@ export default function PerfilClube({ idDaUrl }: Props) {
   const [observadoEdits, setObservadoEdits] = useState<Record<string, { notaInterna: string; alertarMudancas: boolean }>>({});
   const [savingById, setSavingById] = useState<Record<string, boolean>>({});
   const [errorById, setErrorById] = useState<Record<string, string | null>>({});
-
+  const [atletasHeaderCount, setAtletasHeaderCount] = useState<number | null>(null);
   const tipoIdDoClube = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
+
+  useEffect(() => {
+    if (!token) return;
+    const tipoId = tipoIdDoClube;
+    if (!tipoId) { setAtletasHeaderCount(0); return; }
+
+    let cancel = false;
+    (async () => {
+      try {
+        const { data: lista } = await axios.get(
+          `${API.BASE_URL}/api/treinos/atletas-vinculados`,
+          { headers, params: { tipoUsuarioId: tipoId, incluirPontuacao: 1 } }
+        );
+        if (!cancel) setAtletasHeaderCount(Array.isArray(lista) ? lista.length : 0);
+      } catch {
+        if (!cancel) setAtletasHeaderCount(null);
+      }
+    })();
+    return () => { cancel = true; };
+  }, [token, tipoIdDoClube]);
 
   useEffect(() => {
     if (!token) return;
@@ -240,9 +260,12 @@ export default function PerfilClube({ idDaUrl }: Props) {
     data.clube.cidade
       ? `${data.clube.cidade}${data.clube.estado ? " - " + data.clube.estado : ""}${data.clube.pais ? " - " + data.clube.pais : ""}`
       : undefined;
+  
+  const athletesCount =
+    vinculados?.length ?? data.metrics?.atletas ?? 0;
 
   const kpis = [
-    { label: "Atletas", value: data.metrics?.atletas ?? 0 },
+    { label: "Atletas", value: (atletasHeaderCount ?? athletesCount ?? data.metrics?.atletas ?? 0) },
     { label: "Eventos", value: data.metrics?.eventos ?? 0 },
     { label: "Conquistas", value: data.metrics?.conquistas ?? 0 },
   ];

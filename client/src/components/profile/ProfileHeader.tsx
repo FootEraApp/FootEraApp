@@ -86,6 +86,7 @@ export default function ProfileHeader({
 
   useEffect(() => {
     if (!isOwnProfile) return;
+
     const token = Storage.token;
     if (!token) return;
 
@@ -112,6 +113,7 @@ export default function ProfileHeader({
 
   useEffect(() => {
     if (!isOwnProfile) return;
+
     const token = Storage.token;
     if (!token) return;
 
@@ -144,6 +146,7 @@ export default function ProfileHeader({
 
     useEffect(() => {
     if (isOwnProfile || !perfilId) return;
+    
     const token = Storage.token;
     if (!token) return;
 
@@ -186,6 +189,36 @@ export default function ProfileHeader({
 
   useEffect(() => {
     if (isOwnProfile || !perfilId) return;
+
+    const token = Storage.token;
+    const meuTipoId = (Storage as any).tipoUsuarioId;
+    const tipoRaw = (
+      (Storage as any).tipoSalvo ??
+      localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario") ?? ""
+    ).toString().toLowerCase();
+
+    const donoOk = ["professor", "clube", "escola", "escolinha"].includes(tipoRaw);
+    if (!token || !meuTipoId || !donoOk) return;
+
+    (async () => {
+      try {
+        const r = await fetch(`${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(meuTipoId)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!r.ok) return;
+        const lista = await r.json();
+        const ids = new Set(
+          (Array.isArray(lista) ? lista : []).map((a: any) => a.id ?? a.atletaId ?? a.usuarioId)
+        );
+        if (ids.has(perfilId)) setTreinoJunto(true);
+      } catch {}
+    })();
+  }, [perfilId, isOwnProfile]);
+
+  useEffect(() => {
+    if (isOwnProfile || !perfilId) return;
+    
     const token = Storage.token;
     if (!token) return;
 
@@ -214,6 +247,7 @@ export default function ProfileHeader({
 
   useEffect(() => {
     if (!podeObservar || isOwnProfile) return;
+    
     const token = Storage.token;
     if (!token) return;
 
@@ -244,7 +278,7 @@ export default function ProfileHeader({
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setPodeObservar(data?.tipo === "Atleta"))
+      .then((data) => setPodeObservar(String(data?.tipo || "").toLowerCase() === "atleta"))
       .catch(() => setPodeObservar(false));
   }, [perfilId, isOwnProfile]);
 
@@ -375,7 +409,7 @@ export default function ProfileHeader({
 
   const imageSrc = formatarUrlFoto(foto ?? avatar, "usuarios");
 
-  const alvoUsuarioId = isOwnProfile ? (Storage.usuarioId as string) : (idDaUrl as string);
+  const alvoUsuarioId = isOwnProfile ? String(Storage.usuarioId ?? "") : perfilId;
 
   useEffect(() => {
     const token = Storage.token || localStorage.getItem("token") || sessionStorage.getItem("token") || "";
@@ -709,7 +743,10 @@ const toggleObservar = async () => {
                 )}
                 {usuariosMutuos.map((u) => {
                   const selecionado = selecionados.has(u.id);
-                  const fotoSrc = u.foto?.startsWith("http") ? u.foto : `${API.BASE_URL}${u.foto || "default-user.png"}`;
+                  const fotoSrc = u.foto?.startsWith("http")
+                    ? u.foto
+                    : `${API.BASE_URL}${u.foto?.startsWith("/") ? "" : "/"}${u.foto || "default-user.png"}`;
+
                   return (
                     <button
                       key={u.id}

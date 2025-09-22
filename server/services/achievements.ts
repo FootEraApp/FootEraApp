@@ -1,9 +1,3 @@
-// server/services/achievements.ts
-// Engine de Conquistas (Badges) para FootEra
-// - Prisma: consultas agregadas por papel (Atleta, Professor, Escolinha, Clube)
-// - ~50 conquistas iniciais (marcos de treinos, desafios, grupos, pontuação, gestão)
-// - Função pública: computeAchievementsForUser(prisma, usuarioId, tipo)
-
 import { PrismaClient, TipoUsuario } from "@prisma/client";
 
 export type Tier = "bronze" | "prata" | "ouro" | "platina";
@@ -17,25 +11,21 @@ export type Group =
   | "Eventos";
 
 export interface Achievement<TStats> {
-  id: string;                // chave estável ("ath_train_10", etc.)
-  entity: Entity;            // papel alvo
-  title: string;             // título visível
-  description: string;       // descrição curta
-  icon?: string;             // emoji/ícone (simples por enquanto)
-  tier?: Tier;               // bronze/prata/ouro/platina
-  group: Group;              // agrupamento visual
-  condition: (s: TStats) => boolean; // regra de validação
+  id: string;          
+  entity: Entity;      
+  title: string;          
+  description: string;     
+  icon?: string;         
+  tier?: Tier;            
+  group: Group;            
+  condition: (s: TStats) => boolean; 
 }
-
-/* =========================
- * Métricas por papel
- * ========================= */
 
 export interface AthleteStats {
   atletaId: string;
-  treinosConcluidos: number;             // SubmissaoTreino do atleta (qualquer, aprovado ou não)
-  desafiosConcluidos: number;            // SubmissaoDesafio.aprovado == true
-  desafiosGrupoConcluidos: number;       // SubmissaoDesafioEmGrupo.aprovado == true (usuarioId)
+  treinosConcluidos: number;      
+  desafiosConcluidos: number;         
+  desafiosGrupoConcluidos: number;   
   pontuacaoTotal: number;
   performance: number;
   disciplina: number;
@@ -44,32 +34,28 @@ export interface AthleteStats {
 
 export interface ProfessorStats {
   professorId: string;
-  treinosCriados: number;                // TreinoProgramado.professorId == professorId
-  atletasTreinados: number;              // RelacaoTreinamento.professorId (distintos)
-  submissoesRecebidas: number;           // SubmissaoTreino cujo TreinoAgendado -> TreinoProgramado.professorId
-  desafiosGrupoCriados: number;          // DesafioEmGrupo.criadoPorId == usuarioId
+  treinosCriados: number;           
+  atletasTreinados: number;            
+  submissoesRecebidas: number;         
+  desafiosGrupoCriados: number;        
   usuarioId: string;
 }
 
 export interface EscolinhaStats {
   escolinhaId: string;
-  atletasVinculados: number;             // Atleta.escolinhaId == escolinhaId
-  treinosCriados: number;                // TreinoProgramado.escolinhaId
-  submissoesAtletas: number;             // SubmissaoTreino de atletas dessa escolinha
-  desafiosAprovadosAtletas: number;      // SubmissaoDesafio.aprovado == true de atletas dessa escolinha
+  atletasVinculados: number;           
+  treinosCriados: number;               
+  submissoesAtletas: number;           
+  desafiosAprovadosAtletas: number;     
 }
 
 export interface ClubeStats {
   clubeId: string;
-  atletasVinculados: number;             // Atleta.clubeId == clubeId
-  treinosCriados: number;                // TreinoProgramado.clubeId
-  eventosOrganizados: number;            // Evento.clubeId
-  desafiosAprovadosAtletas: number;      // SubmissaoDesafio.aprovado == true de atletas desse clube
+  atletasVinculados: number;         
+  treinosCriados: number;         
+  eventosOrganizados: number;         
+  desafiosAprovadosAtletas: number;   
 }
-
-/* =========================
- * Coleta de métricas (Prisma)
- * ========================= */
 
 export async function getAthleteStatsByUsuarioId(
   prisma: PrismaClient,
@@ -209,13 +195,7 @@ export async function getClubeStatsByUsuarioId(
   };
 }
 
-/* =========================
- * Definições de Conquistas
- * ========================= */
-
-// --- ATLETA (30 conquistas) ---
 export const ATHLETE_ACHIEVEMENTS: Achievement<AthleteStats>[] = [
-  // Treinos concluídos (7)
   {
     id: "ath_train_1",
     entity: "Atleta",
@@ -287,7 +267,6 @@ export const ATHLETE_ACHIEVEMENTS: Achievement<AthleteStats>[] = [
     condition: s => s.treinosConcluidos >= 200,
   },
 
-  // Desafios concluídos (5)
   {
     id: "ath_chal_1",
     entity: "Atleta",
@@ -339,7 +318,6 @@ export const ATHLETE_ACHIEVEMENTS: Achievement<AthleteStats>[] = [
     condition: s => s.desafiosConcluidos >= 20,
   },
 
-  // Desafios em grupo (4)
   {
     id: "ath_grp_1",
     entity: "Atleta",
@@ -381,7 +359,6 @@ export const ATHLETE_ACHIEVEMENTS: Achievement<AthleteStats>[] = [
     condition: s => s.desafiosGrupoConcluidos >= 10,
   },
 
-  // Pontuação total (4)
   {
     id: "ath_pts_total_100",
     entity: "Atleta",
@@ -423,7 +400,6 @@ export const ATHLETE_ACHIEVEMENTS: Achievement<AthleteStats>[] = [
     condition: s => s.pontuacaoTotal >= 1000,
   },
 
-  // Performance (3)
   {
     id: "ath_pts_perf_50",
     entity: "Atleta",
@@ -455,7 +431,6 @@ export const ATHLETE_ACHIEVEMENTS: Achievement<AthleteStats>[] = [
     condition: s => s.performance >= 200,
   },
 
-  // Disciplina (3)
   {
     id: "ath_pts_disc_50",
     entity: "Atleta",
@@ -487,7 +462,6 @@ export const ATHLETE_ACHIEVEMENTS: Achievement<AthleteStats>[] = [
     condition: s => s.disciplina >= 200,
   },
 
-  // Responsabilidade (3)
   {
     id: "ath_pts_resp_50",
     entity: "Atleta",
@@ -519,7 +493,6 @@ export const ATHLETE_ACHIEVEMENTS: Achievement<AthleteStats>[] = [
     condition: s => s.responsabilidade >= 200,
   },
 
-  // Bônus “primeira submissão” (1)
   {
     id: "ath_first_submit",
     entity: "Atleta",
@@ -532,7 +505,6 @@ export const ATHLETE_ACHIEVEMENTS: Achievement<AthleteStats>[] = [
   },
 ];
 
-// --- PROFESSOR (8 conquistas) ---
 export const PROFESSOR_ACHIEVEMENTS: Achievement<ProfessorStats>[] = [
   {
     id: "prof_tp_1",
@@ -616,7 +588,6 @@ export const PROFESSOR_ACHIEVEMENTS: Achievement<ProfessorStats>[] = [
   },
 ];
 
-// --- ESCOLINHA (6 conquistas) ---
 export const ESCOLINHA_ACHIEVEMENTS: Achievement<EscolinhaStats>[] = [
   {
     id: "esc_atletas_10",
@@ -680,7 +651,6 @@ export const ESCOLINHA_ACHIEVEMENTS: Achievement<EscolinhaStats>[] = [
   },
 ];
 
-// --- CLUBE (6 conquistas) ---
 export const CLUBE_ACHIEVEMENTS: Achievement<ClubeStats>[] = [
   {
     id: "clu_atletas_10",
@@ -744,10 +714,6 @@ export const CLUBE_ACHIEVEMENTS: Achievement<ClubeStats>[] = [
   },
 ];
 
-/* =========================
- * Avaliação
- * ========================= */
-
 export type AnyStats = AthleteStats | ProfessorStats | EscolinhaStats | ClubeStats;
 
 export interface ComputeResult<TStats extends AnyStats> {
@@ -789,17 +755,9 @@ export async function computeAchievementsForUser(
     return { stats, earned, totalAvailable: CLUBE_ACHIEVEMENTS.length };
   }
 
-  // Admin / Olheiro não possuem conquistas por enquanto
   return null;
 }
 
-/* =========================
- * (Opcional) Exemplo de handler Express
- * ========================= */
-
-// Exemplo de uso: GET /api/badges/:usuarioId
-// Retorna as conquistas do usuário baseado no tipo do Usuario
-// (adicione nas suas rotas se quiser)
 export function makeBadgesHandler(prisma: PrismaClient) {
   return async (req: any, res: any) => {
     try {
@@ -823,22 +781,3 @@ export function makeBadgesHandler(prisma: PrismaClient) {
     }
   };
 }
-
-/* =========================
- * (Opcional) Persistência em banco
- * =========================
- * Se quiser gravar as conquistas cumpridas, sugiro um model:
- *
- * model BadgeEarned {
- *   id         String   @id @default(uuid())
- *   usuarioId  String
- *   badgeId    String
- *   earnedAt   DateTime @default(now())
- *
- *   usuario    Usuario  @relation(fields: [usuarioId], references: [id])
- *   @@unique([usuarioId, badgeId])
- * }
- *
- * Aí você criaria uma função syncEarnedBadges(prisma, usuarioId, tipo)
- * que compara o que já existe com o que está em "earned" e insere só as novas.
- */

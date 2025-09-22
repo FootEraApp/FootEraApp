@@ -39,6 +39,12 @@ interface TreinoProgramado {
   }[];
 }
 
+interface Elenco {
+  id: string;
+  nome: string;
+  atletasIds?: string[];
+}
+
 type TreinoAgendadoResp = {
   id: string;
   titulo: string;
@@ -138,6 +144,8 @@ export default function NovoTreino() {
   const [treinosDisponiveis, setTreinosDisponiveis] = useState<TreinoProgramado[]>([]);
   const [atletasVinculados, setAtletasVinculados] = useState<AtletaVinculado[]>([]);
   const [atletasSelecionados, setAtletasSelecionados] = useState<string[]>([]);
+  const [elencos, setElencos] = useState<Elenco[]>([]);
+  const [elencoSelecionado, setElencoSelecionado] = useState<string>("");
 
   const [etapa, setEtapa] = useState<number>(1);
   const [nome, setNome] = useState("");
@@ -157,6 +165,12 @@ export default function NovoTreino() {
   const [filtroEx, setFiltroEx] = useState("");
   const restoredRef = useRef(false);
 
+  const customSemId = exerciciosSelecionados.filter(x => !x.idCatalogo);
+    if (customSemId.length) {
+      alert("Por enquanto, só é possível salvar exercícios do catálogo. Remova os personalizados ou cadastre-os antes.");
+      return;
+    }
+
   function normalizaTreinos(raw: any[]): TreinoProgramado[] {
     return raw.map((t: any) => ({
       id: t.id,
@@ -170,6 +184,51 @@ export default function NovoTreino() {
       })),
     }));
   }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = (Storage as any).token ||
+          localStorage.getItem("token") ||
+          sessionStorage.getItem("token") || "";
+
+        const tipoUsuarioId =
+          (Storage as any).tipoUsuarioId ||
+          localStorage.getItem("tipoUsuarioId") ||
+          sessionStorage.getItem("tipoUsuarioId") || "";
+
+        if (!tipoUsuarioId) return;
+
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+        const tentativas = [
+          `${API.BASE_URL}/api/elencos?tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
+          `${API.BASE_URL}/api/elencos/minha`,
+          `${API.BASE_URL}/api/treinos/elencos?tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
+          `${API.BASE_URL}/api/elencos`,
+        ];
+
+        for (const url of tentativas) {
+          const r = await fetch(url, { headers });
+          if (!r.ok) continue;
+          const j = await r.json();
+          const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
+          if (Array.isArray(arr)) {
+            setElencos(
+              arr.map((e: any) => ({
+                id: e.id,
+                nome: e.nome ?? e.titulo ?? "Elenco",
+                atletasIds: e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
+              }))
+            );
+            return;
+          }
+        }
+        setElencos([]);
+      } catch {
+        setElencos([]);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const tipoPersistido = (
@@ -402,6 +461,18 @@ export default function NovoTreino() {
     atletasSelecionados,
   ]);
 
+  const incluirElencoNoTreino = () => {
+    if (!elencoSelecionado) return;
+    const el = elencos.find(e => e.id === elencoSelecionado);
+    if (!el || !el.atletasIds?.length) return;
+
+    setAtletasSelecionados(prev => {
+      const set = new Set(prev);
+      el.atletasIds!.forEach(id => set.add(id));
+      return Array.from(set);
+    });
+  };
+
   const [completedUntil, setCompletedUntil] = useState<number>(1);
   const goTo = (n: number) => {
     setEtapa(n);
@@ -518,27 +589,33 @@ const criarTreino = async () => {
 
     const exercicios = montarExerciciosParaPayload(exerciciosSelecionados);
 
-      const codigo =
-        `${nome}`.trim()
-          ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) + "-" + Date.now().toString(36)
-          : "TP-" + Date.now().toString(36);
+    const mapNivel = (s: string) => ({ Base: "Base", Avancado: "Avancado", Performance: "Performance" } as const)[s] ?? "Base";
+    const mapTipoTreino = (s: string) => ({ Tecnico: "Tecnico", Fisico: "Fisico", Tatico: "Tatico" } as const)[s] ?? null;
+    const mapCategoria = (s: string) => (s ? s.replace("-", "").toUpperCase() : "Sub13");
+
+    const codigo =
+    `${nome}`.trim()
+      ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) + "-" + Date.now().toString(36)
+      : "TP-" + Date.now().toString(36);
 
       const payload: TreinoCreatePayload = {
+        codigo,
         nome,
         descricao: descricao || null,
-        nivel, 
+        nivel: mapNivel(nivel), 
         usuarioId,                    
         tipoUsuario: tipoUsuarioNorm,  
         tipoUsuarioId,               
-        categoria: categoria ? [categoria] : [],
-        tipoTreino: tipoTreino || null,
+        categoria: categoria ? [mapCategoria(categoria)] : [],
+        tipoTreino: mapTipoTreino(tipoTreino),
         objetivo: objetivo || null,
         duracao: duracao ? Number(duracao) : null,
         dataTreino: dataTreino || null,
         dataAgendada: dataTreino || null,
         dicas,
         atletasIds: atletasSelecionados,
-        exercicios,
+        elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
+        exercicios: montarExerciciosParaPayload(exerciciosSelecionados),
       };
 
       await TreinosApi.criar(payload);
@@ -1040,6 +1117,7 @@ const criarTreino = async () => {
         )}
 
         {etapa === 4 && (
+          
           <StepCard title="Selecionar Atletas Vinculados">
             {atletasVinculados.length === 0 ? (
               <div className="bg-gray-100 text-gray-600 text-center py-6 rounded">
@@ -1072,6 +1150,28 @@ const criarTreino = async () => {
                 })}
               </div>
             )}
+
+            <div className="mb-4 flex items-end gap-2">
+              <div className="flex-1">
+                <label className="block text-sm text-gray-700 mb-1">Elenco</label>
+                <select
+                  className="border w-full p-2 rounded"
+                  value={elencoSelecionado}
+                  onChange={e => setElencoSelecionado(e.target.value)}
+                >
+                  <option value="">— Selecionar elenco —</option>
+                  {elencos.map(el => (
+                    <option key={el.id} value={el.id}>{el.nome}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={incluirElencoNoTreino}
+                className="bg-green-700 text-white px-3 py-2 rounded"
+              >
+                Incluir elenco
+              </button>
+            </div>
 
             <div className="flex flex-col sm:flex-row justify-between gap-2 mt-6">
               <button onClick={() => goTo(3)} className="bg-gray-200 px-4 py-2 rounded w-full sm:w-auto">

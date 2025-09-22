@@ -21,6 +21,27 @@ function toRepeticoes(series?: any, repeticoes?: any): string {
   return r || s || "";
 }
 
+function normNivel(v?: string): Nivel {
+  const s = String(v || "").toLowerCase();
+  if (s.startsWith("bas")) return "Base";
+  if (s.startsWith("av")) return "Avancado";
+  if (s.startsWith("perf")) return "Performance";
+  return "Base";
+}
+
+function normTipoTreino(v?: string): TipoTreino | null {
+  const s = String(v || "").toLowerCase();
+  if (s.startsWith("tec")) return "Tecnico";
+  if (s.startsWith("fis")) return "Fisico";
+  if (s.startsWith("tat")) return "Tatico";
+  return null;
+}
+function normCategoria(v?: string): Categoria {
+  const s = String(v || "").replace(/-/g, "").toUpperCase();
+  const ok = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"];
+  return (ok.includes(s) ? s : "Sub13") as Categoria;
+}
+
 export const createTreinoProgramado = async (req: Request, res: Response) => {
   try {
     const {
@@ -42,7 +63,18 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       exercicios,
       tipoUsuario,
       tipoUsuarioId,
-    } = req.body;
+      atletasIds = [],
+      elencoId,
+      elencosIds = [],
+    } = req.body as {
+      nome?: string; codigo?: string; nivel?: string; descricao?: string;
+      categoria?: string[]; tipoTreino?: string; dataAgendada?: string;
+      objetivo?: string; duracao?: number; dicas?: string[];
+      imagemUrl?: string; metas?: any; pontuacao?: number;
+      expiraEm?: string; naoExpira?: boolean; exercicios?: any[];
+      tipoUsuario?: string; tipoUsuarioId?: string;
+      atletasIds?: string[]; elencoId?: string; elencosIds?: string[];
+    };
 
     if (!nome || !codigo) {
       return res.status(400).json({ message: "Campos obrigatórios ausentes: 'nome' e/ou 'codigo'." });
@@ -50,21 +82,24 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
     if (!nivel) {
       return res.status(400).json({ message: "Campo obrigatório ausente: 'nivel'." });
     }
-    if (!Array.isArray(categoria) || categoria.length === 0) {
-      return res.status(400).json({ message: "Pelo menos uma categoria deve ser selecionada." });
-    }
     if (!Array.isArray(exercicios) || exercicios.length === 0) {
       return res.status(400).json({ message: "Informe ao menos um exercício no treino." });
     }
-    if (exercicios.some((e: any) => !e.exercicioId)) {
+    if (exercicios.some((e: any) => !(e.exercicioId || e.id))) {
       return res.status(400).json({ message: "Todos os exercícios devem possuir 'exercicioId'." });
     }
 
     const dono = normalizarTipoUsuario(tipoUsuario);
     if (!dono || !tipoUsuarioId) {
-      return res
-        .status(400)
-        .json({ message: "Informe 'tipoUsuario' (Professor/Clube/Escolinha) e 'tipoUsuarioId'." });
+      return res.status(400).json({ message: "Informe 'tipoUsuario' (Professor/Clube/Escolinha) e 'tipoUsuarioId'." });
+    }
+
+    const nivelNorm      = normNivel(nivel);
+    const tipoTreinoNorm = normTipoTreino(tipoTreino);
+    const categoriasNorm = Array.isArray(categoria) ? (categoria.map(normCategoria) as Categoria[]) : [];
+
+    if (categoriasNorm.length === 0) {
+      return res.status(400).json({ message: "Pelo menos uma categoria deve ser selecionada." });
     }
 
     const duplicado = await prisma.treinoProgramado.findFirst({
@@ -75,24 +110,8 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Treino com o mesmo nome ou código já existe.", duplicado });
     }
 
-    if (dono === "Professor") {
-      const ok = await prisma.professor.findUnique({ where: { id: tipoUsuarioId }, select: { id: true } });
-      if (!ok) return res.status(400).json({ message: "Professor não encontrado para o tipoUsuarioId informado." });
-    } else if (dono === "Clube") {
-      const ok = await prisma.clube.findUnique({ where: { id: tipoUsuarioId }, select: { id: true } });
-      if (!ok) return res.status(400).json({ message: "Clube não encontrado para o tipoUsuarioId informado." });
-    } else if (dono === "Escolinha") {
-      const ok = await prisma.escolinha.findUnique({ where: { id: tipoUsuarioId }, select: { id: true } });
-      if (!ok) return res.status(400).json({ message: "Escolinha não encontrada para o tipoUsuarioId informado." });
-    }
-
-    const rel: any = {};
-    if (dono === "Professor") rel.professor = { connect: { id: tipoUsuarioId } };
-    if (dono === "Clube") rel.clube = { connect: { id: tipoUsuarioId } };
-    if (dono === "Escolinha") rel.escolinha = { connect: { id: tipoUsuarioId } };
-
     const itens = (exercicios as any[]).map((e: any, i: number) => ({
-      exercicioId: e.exercicioId,
+      exercicioId: e.exercicioId ?? e.id,
       ordem: Number(e.ordem ?? i + 1),
       repeticoes: toRepeticoes(e.series, e.repeticoes),
     }));
@@ -101,20 +120,22 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       data: {
         nome,
         codigo,
-        nivel: nivel as Nivel,
+        nivel: nivelNorm,
         descricao: descricao ?? null,
-        categoria: (categoria ?? []) as Categoria[],
-        tipoTreino: (tipoTreino ?? null) as TipoTreino | null,
+        categoria: categoriasNorm,
+        tipoTreino: tipoTreinoNorm,
         dataAgendada: dataAgendada ? new Date(dataAgendada) : null,
         objetivo: objetivo ?? null,
-        duracao: duracao ? Number(duracao) : null,
+        duracao: duracao != null ? Number(duracao) : null,
         dicas: Array.isArray(dicas) ? dicas : [],
         imagemUrl: imagemUrl ?? null,
         metas: metas ?? null,
         pontuacao: pontuacao != null ? Number(pontuacao) : null,
         expiraEm: expiraEm ? new Date(expiraEm) : null,
         naoExpira: Boolean(naoExpira),
-        ...rel,
+        ...(dono === "Professor" ? { professor: { connect: { id: tipoUsuarioId } } } : {}),
+        ...(dono === "Clube"     ? { clube:     { connect: { id: tipoUsuarioId } } } : {}),
+        ...(dono === "Escolinha" ? { escolinha: { connect: { id: tipoUsuarioId } } } : {}),
         exercicios: { create: itens },
       },
       include: {
@@ -124,6 +145,40 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         exercicios: { select: { id: true, exercicioId: true, ordem: true, repeticoes: true } },
       },
     });
+
+    try {
+      const elencosParaBuscar = [
+        ...new Set([...(Array.isArray(elencosIds) ? elencosIds : []), ...(elencoId ? [elencoId] : [])]),
+      ];
+
+      let atletasDeElencos: string[] = [];
+      if (elencosParaBuscar.length) {
+        const rels = await prisma.atletaElenco.findMany({
+          where: { elencoId: { in: elencosParaBuscar } },
+          select: { atletaId: true },
+        });
+        atletasDeElencos = rels.map(r => r.atletaId);
+      }
+
+      const alvoAtletas = Array.from(new Set([...(Array.isArray(atletasIds) ? atletasIds : []), ...atletasDeElencos]))
+        .filter(Boolean);
+
+      if (alvoAtletas.length) {
+        const quando = req.body.dataAgendada ? new Date(req.body.dataAgendada) : new Date(Date.now() + 24*60*60*1000);
+        await prisma.treinoAgendado.createMany({
+          data: alvoAtletas.map(aid => ({
+            titulo: treinoCriado.nome,
+            atletaId: aid,
+            treinoProgramadoId: treinoCriado.id,
+            dataTreino: quando,
+            dataExpiracao: quando,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    } catch (e) {
+      console.warn("Agendamento em lote falhou (seguindo com 201):", e);
+    }
 
     return res.status(201).json(treinoCriado);
   } catch (error: any) {
