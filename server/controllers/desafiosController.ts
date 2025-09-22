@@ -1,3 +1,4 @@
+//server/controllers/desafiosController
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";

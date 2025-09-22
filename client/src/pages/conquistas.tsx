@@ -5,8 +5,10 @@ import {
   entityFromTipoUsuario,
   AchievementLite,
 } from "../lib/achievementsCatalog";
-import Storage from "../../../server/utils/storage"; // ajuste se o caminho for outro
-// import { API } from "../config.js"; // quando for ligar a API, descomente
+import Storage from "../../../server/utils/storage";
+import { API } from "../config.js"; // BASE_URL da sua API
+import { Volleyball, User, CirclePlus, Search, House, HelpCircle } from "lucide-react";
+import { Link } from "wouter";
 
 type Earned = {
   id: string;
@@ -47,7 +49,6 @@ function readTipoUsuario(): string {
     sessionStorage.getItem("tipoUsuario")
   );
   const raw = String(v).trim();
-  // se vier serializado (ex.: '"atleta"'), tenta desserializar
   try {
     return typeof v === "string" && (raw.startsWith("{") || raw.startsWith("\""))
       ? JSON.parse(raw)
@@ -71,8 +72,8 @@ function readUsuarioId(): string | null {
 }
 // ———————————————————————————————————————————————
 
-// desligado por enquanto (sem backend)
-const USE_API = false;
+// agora online
+const USE_API = true;
 
 export default function ConquistasPage() {
   const usuarioId = readUsuarioId();
@@ -80,13 +81,13 @@ export default function ConquistasPage() {
 
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-  const [earned, setEarned] = useState<Earned[]>([]); // offline: vazio = tudo cinza
+  const [earned, setEarned] = useState<Earned[]>([]);
+  const [serverEntity, setServerEntity] = useState<string | null>(null);
 
-  // entity: case-insensitive + fallback para "Atleta" em dev
+  // entity preferindo a retornada pelo backend
   const entity = useMemo(() => {
-    const e = entityFromTipoUsuario(String(tipoRaw));
-    return e ?? "Atleta";
-  }, [tipoRaw]);
+    return serverEntity || entityFromTipoUsuario(String(tipoRaw)) || "Atleta";
+  }, [serverEntity, tipoRaw]);
 
   // catálogo filtrado
   const catalog: AchievementLite[] = useMemo(
@@ -106,26 +107,42 @@ export default function ConquistasPage() {
 
   useEffect(() => {
     const load = async () => {
+      setLoading(true);
+      setErro(null);
+
+      // sem usuário logado: mostra catálogo, tudo cinza
+      if (!usuarioId || !USE_API) {
+        setEarned([]);
+        setServerEntity(entityFromTipoUsuario(String(tipoRaw)) ?? "Atleta");
+        setLoading(false);
+        return;
+      }
+
       try {
-        if (!USE_API) {
-          // Sem API: tudo cinza
-          setEarned([]);
-          setErro(null);
-          return;
+        const base =
+          (API?.BASE_URL ? String(API.BASE_URL).replace(/\/+$/, "") : "") || "";
+        const url = `${base}/api/conquistas/${usuarioId}`;
+        const r = await fetch(url, { credentials: "include" });
+
+        if (!r.ok) {
+          throw new Error(`Falha ao carregar conquistas (${r.status})`);
         }
-        // Quando ligar o backend:
-        // const r = await fetch(`${API.BASE_URL}/api/badges/${usuarioId}`);
-        // if (!r.ok) throw new Error(`Falha ao carregar conquistas (${r.status})`);
-        // const json = await r.json();
-        // setEarned(Array.isArray(json?.earned) ? json.earned : []);
+
+        const json = await r.json();
+        // json: { usuarioId, entity, totalAvailable, earned: EarnedDTO[] }
+        setServerEntity(json?.entity || null);
+        setEarned(Array.isArray(json?.earned) ? json.earned : []);
       } catch (e: any) {
         setErro(e?.message || "Erro ao carregar conquistas.");
+        // fallback: catálogo do tipo local, tudo cinza
+        setEarned([]);
+        setServerEntity(entityFromTipoUsuario(String(tipoRaw)) ?? "Atleta");
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [usuarioId]);
+  }, [usuarioId, tipoRaw]);
 
   const totalEarned = earnedIds.size;
   const totalCatalog = catalog.length;
@@ -179,6 +196,11 @@ export default function ConquistasPage() {
           </div>
 
           {erro && <p className="mt-3 text-sm text-red-600">{erro}</p>}
+          {!usuarioId && (
+            <p className="mt-2 text-sm text-gray-500">
+              Entre na sua conta para sincronizar suas conquistas.
+            </p>
+          )}
         </header>
 
         {groupOrder
@@ -186,8 +208,9 @@ export default function ConquistasPage() {
           .map((group) => (
             <section key={group} className="mb-8">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg md:text-xl font-semibold text-gray-900">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-900 flex items-center gap-2">
                   {group}
+                  {group === "Pontuação" && <PontuacaoHelp />}
                 </h2>
                 {!loading && (
                   <span className="text-sm text-gray-600">
@@ -259,6 +282,15 @@ export default function ConquistasPage() {
             </section>
           ))}
       </div>
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
+        <Link href="/feed"><House /></Link>
+        <Link href="/explorar"><Search /></Link>
+        <Link href="/post"><CirclePlus /></Link>
+        <Link href="/treinos"><Volleyball /></Link>
+        <Link href="/perfil"><User /></Link>
+      </nav>
+
     </div>
   );
 }
@@ -289,5 +321,50 @@ function TierPill({
     <span className={`text-xs px-2 py-0.5 rounded border ${map[tier] || ""}`}>
       {tier[0].toUpperCase() + tier.slice(1)}
     </span>
+  );
+}
+
+/** Popover de ajuda para o grupo "Pontuação" */
+function PontuacaoHelp() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative inline-flex items-center">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        onBlur={() => setOpen(false)}
+        className="inline-flex items-center justify-center rounded-full p-1 text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600"
+        aria-label="Como funciona a pontuação"
+        title="Como funciona a pontuação"
+      >
+        <HelpCircle className="h-5 w-5" />
+      </button>
+
+      {open && (
+        <div
+          className="absolute z-30 mt-2 w-80 -left-2 sm:left-6 top-6 rounded-lg border border-gray-200 bg-white p-3 shadow-lg text-sm"
+          onMouseDown={(e) => e.preventDefault()} // evita fechar ao clicar dentro
+        >
+          <p className="font-medium text-gray-900 mb-1">Como calculamos seus pontos</p>
+          <ul className="list-disc pl-4 space-y-1 text-gray-700">
+            <li>
+              <strong>PERFORMANCE</strong> = soma dos pontos que aparecem no seu Histórico
+              (treinos + desafios realizados).
+            </li>
+            <li>
+              <strong>DISCIPLINA</strong> = <em>nº de treinos</em> × <strong>2</strong>.
+            </li>
+            <li>
+              <strong>RESPONSABILIDADE</strong> = <em>nº de desafios</em> × <strong>2</strong>.
+            </li>
+          </ul>
+          <p className="text-gray-600 mt-2">
+            As badges de pontuação acendem quando você atinge os marcos definidos
+            (ex.: 50/100/200 pontos em cada categoria).
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
