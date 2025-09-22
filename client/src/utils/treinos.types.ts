@@ -1,14 +1,11 @@
-// client/src/utils/treinos.types.ts
-
 export type ExercicioDoBanco = {
-  exercicioId: string;        // id do catálogo
+  exercicioId: string;    
   repeticoes?: string | null;
   ordem?: number;
 };
 
 export type ExercicioTemporario = {
-  // sem exercicioId!
-  nome: string;               // obrigatório p/ temporário
+  nome: string;        
   descricao?: string | null;
   repeticoes?: string | null;
   ordem?: number;
@@ -17,7 +14,7 @@ export type ExercicioTemporario = {
 export type TreinoCreatePayload = {
   nome: string;
   descricao?: string | null;
-  nivel: string;              // mantenha coerente com enum do backend
+  nivel: string;          
   usuarioId: string;
   tipoUsuario: "professor" | "clube" | "escolinha";
   tipoUsuarioId: string;
@@ -28,14 +25,13 @@ export type TreinoCreatePayload = {
   dataTreino?: string | null;
   dataAgendada?: string | null;
   dicas?: string[];
-  atletasIds?: string[];      // agenda automaticamente p/ estes atletas
+  atletasIds?: string[];   
   exercicios: (ExercicioDoBanco | ExercicioTemporario)[];
 };
 
-// estado mínimo de item de exercício no formulário
 export type ExItemUI = {
-  idCatalogo?: string | null; // quando veio do select do catálogo
-  nome?: string;              // se for temporário
+  idCatalogo?: string | null;
+  nome?: string;        
   descricao?: string | null;
   repeticoes?: string | null;
   ordem?: number;

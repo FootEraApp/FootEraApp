@@ -1,8 +1,7 @@
-// client/src/utils/treinosApi.ts
 import axios from "axios";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
-import type { TreinoCreatePayload } from "./treinos.types";
+import type { TreinoCreatePayload } from "./treinos.types.js";
 
 const auth = () => ({ Authorization: `Bearer ${Storage.token}` });
 

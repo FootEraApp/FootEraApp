@@ -1,4 +1,3 @@
-// server/controllers/treinoProgramadosController
 import { Request, Response } from "express";
 import { PrismaClient, Categoria, Nivel, TipoTreino } from "@prisma/client";
 

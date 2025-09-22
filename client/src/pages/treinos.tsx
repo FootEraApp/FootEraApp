@@ -122,66 +122,137 @@ export default function PaginaTreinos() {
 
   useEffect(() => {
     const carregar = async () => {
-      const tipo =
+      const rawTipo =
         (Storage as any).tipoSalvo ??
         (Storage as any).tipoUsuario ??
         (Storage as any).tipo ??
         localStorage.getItem("tipoUsuario") ??
-        sessionStorage.getItem("tipoUsuario");
+        sessionStorage.getItem("tipoUsuario") ??
+        "";
+
+      const tipo = String(rawTipo).toLowerCase(); 
 
       const tipoUsuarioId = (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
       const token = (Storage as any).token ?? localStorage.getItem("token");
 
-      if (tipo === "atleta" && tipoUsuarioId && token) {
+     if (tipo === "atleta" && tipoUsuarioId && token) {
+      const [resTreinos, resDesafios] = await Promise.all([
+        fetch(`${API.BASE_URL}/api/treinos/agendados?usuarioId=${(Storage as any).usuarioId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      if (!resTreinos.ok) { console.error("/treinos/agendados", resTreinos.status, await resTreinos.text()); return; }
+      if (!resDesafios.ok) { console.error("/desafios", resDesafios.status, await resDesafios.text()); return; }
+
+      const treinosJson = await resTreinos.json();
+      const desafiosJson = await resDesafios.json();
+
+      const normalizados = (Array.isArray(treinosJson) ? treinosJson : []).map((t: any) => ({
+        id: t.id,
+        titulo: t.titulo,
+        dataTreino: t.dataTreino ?? null,
+        prazoEnvio: t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t.treinoProgramado?.dataAgendada ?? null,
+        nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
+        duracaoMinutos: t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
+        treinoProgramado: t.treinoProgramado ?? null,
+      }));
+
+      const agora = Date.now();
+      const apenasVigentes = normalizados.filter((t) => {
+        if (!t.prazoEnvio) return true;
+        const ts = Date.parse(t.prazoEnvio);
+        return Number.isFinite(ts) ? ts >= agora : true;
+      });
+
+      setTreinosAgendados(apenasVigentes);
+      setDesafios(desafiosJson ?? []);
+    } else if (tipo === "admin" && token) {
         const [resTreinos, resDesafios] = await Promise.all([
-          fetch(`${API.BASE_URL}/api/treinos/agendados?tipoUsuarioId=${tipoUsuarioId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ]);
-
-        const treinosJson = await resTreinos.json();
-        const desafiosJson = await resDesafios.json();
-
-        const normalizados = (Array.isArray(treinosJson) ? treinosJson : []).map((t: any) => ({
-          id: t.id,
-          titulo: t.titulo,
-          dataTreino: t.dataTreino ?? null,
-          prazoEnvio:
-            t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t.treinoProgramado?.dataAgendada ?? null,
-          nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
-          duracaoMinutos: t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
-          treinoProgramado: t.treinoProgramado ?? null,
-        }));
-
-        const agora = Date.now();
-        const apenasVigentes = normalizados.filter((t) => {
-          if (!t.prazoEnvio) return true;
-          const ts = Date.parse(t.prazoEnvio);
-          return Number.isFinite(ts) ? ts >= agora : true;
-        });
-
-        setTreinosAgendados(apenasVigentes);
-        setDesafios(desafiosJson || []);
-      } else if (tipo === "admin" && token) {
-        const [resTreinos, resDesafios] = await Promise.all([
-          fetch(`${API.BASE_URL}/api/treinos`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API.BASE_URL}/api/treinos/programados`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API.BASE_URL}/api/desafios`, { headers: { Authorization: `Bearer ${token}` } }),
         ]);
-        const jsonTreinos = await resTreinos.json();
-        const jsonDesafios = await resDesafios.json();
 
-        setTreinos(jsonTreinos?.treinosProgramados ?? jsonTreinos ?? []);
+        if (!resTreinos.ok) throw new Error(`Falha /treinos/programados: ${resTreinos.status}`);
+        const jsonTreinos = await resTreinos.json();
+        const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
+          id: t.id,
+          nome: t.nome,
+          descricao: t.descricao ?? undefined,
+          nivel: t.nivel,
+          dataAgendada: t.dataAgendada ?? undefined,
+          duracao: t.duracao ?? undefined,
+          objetivo: t.objetivo ?? undefined,
+          dicas: Array.isArray(t.dicas) ? t.dicas : [],
+          professorId: t.professorId ?? undefined,
+          escolinhaId: t.escolinhaId ?? undefined,
+          clubeId: t.clubeId ?? undefined,
+          exercicios: (t.exercicios ?? []).map((ex: any) => ({
+            id: ex.exercicio?.id ?? ex.id ?? "",
+            nome: ex.exercicio?.nome ?? ex.nome ?? "",
+            repeticoes: ex.repeticoes ?? undefined,
+          })),
+        }));
+
+        const jsonDesafios = await resDesafios.json();
+        setTreinos(normTreinos);
         setDesafios(jsonDesafios?.desafiosOficiais ?? jsonDesafios ?? []);
-        setTreinosAgendados([]);
-      } else {
-        const res = await fetch(`${API.BASE_URL}/api/treinos`);
-        const json = await res.json();
-        setTreinos(json.treinosProgramados || []);
-        setDesafios(json.desafiosOficiais || []);
-      }
+      } else if (["professor", "clube", "escolinha", "escola"].includes(String(tipo)) && token) {
+          const [resTreinos, resDesafios] = await Promise.all([
+            fetch(`${API.BASE_URL}/api/treinos/programados`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }),
+            fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }),
+          ]);
+
+          if (!resTreinos.ok) throw new Error(`/treinos/programados: ${resTreinos.status}`);
+          if (!resDesafios.ok) throw new Error(`/desafios: ${resDesafios.status}`);
+
+          const jsonTreinos = await resTreinos.json();
+          const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
+            id: t.id,
+            nome: t.nome,
+            descricao: t.descricao ?? undefined,
+            nivel: t.nivel,
+            dataAgendada: t.dataAgendada ?? undefined,
+            duracao: t.duracao ?? undefined,
+            objetivo: t.objetivo ?? undefined,
+            dicas: Array.isArray(t.dicas) ? t.dicas : [],
+            professorId: t.professorId ?? undefined,
+            escolinhaId: t.escolinhaId ?? undefined,
+            clubeId: t.clubeId ?? undefined,
+            exercicios: (t.exercicios ?? []).map((ex: any) => ({
+              id: ex.exercicio?.id ?? ex.id ?? "",
+              nome: ex.exercicio?.nome ?? ex.nome ?? "",
+              repeticoes: ex.repeticoes ?? undefined,
+            })),
+          }));
+
+          const jsonDesafios = await resDesafios.json();
+          setTreinos(normTreinos);
+          setDesafios(jsonDesafios ?? []);
+       } else {
+          const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/disponiveis`);
+          if (!resTreinos.ok) { console.error("/treinos/disponiveis", resTreinos.status, await resTreinos.text()); return; }
+
+          const jsonTreinos = await resTreinos.json();
+          const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
+            ...t,
+            exercicios: (t.exercicios ?? []).map((ex: any) => ({
+              id: ex.id ?? "",
+              nome: ex.nome ?? "",
+              repeticoes: ex.repeticoes ?? undefined,
+            })),
+          }));
+
+          setTreinos(normTreinos);
+          setDesafios([]);
+        }
     };
 
     const carregarUsuario = () => {
