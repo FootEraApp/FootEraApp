@@ -33,10 +33,10 @@ router.post("/agendados", authenticateToken, agendarTreino);
 router.delete("/agendados/:id", authenticateToken, excluirTreinoAgendado);
 router.post("/concluir", authenticateToken, concluirTreino);
 
-router.get("/programados", listarTodosTreinosProgramados);
 router.get("/programados/:id", authenticateToken, obterTreinoProgramadoPorId);
 router.put("/programados/:id", authenticateToken, atualizarTreinoProgramado);
 router.delete("/programados/:id", authenticateToken, deletarTreinoProgramado);
+router.get("/programados", listarTodosTreinosProgramados);
 router.post("/restaurar", authenticateToken, restaurarTreinos);
 router.post("/", criarTreinoProgramado);
 
@@ -48,5 +48,8 @@ router.get("/elencos/escala-por-dono", authenticateToken, getEscalaPorDono);
 router.get("/elencos", authenticateToken, listarElencos);
 router.post("/elencos", authenticateToken, criarElenco);
 router.put("/elencos/:id", authenticateToken, atualizarElenco);
+
+router.get("/", listarTodosTreinosProgramados);                 
+router.delete("/:id", authenticateToken, deletarTreinoProgramado);
 
 export default router;

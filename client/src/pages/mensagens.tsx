@@ -91,13 +91,21 @@ export default function PaginaMensagens() {
   );
 
   useEffect(() => {
-    if (isAtleta || !Storage.token) return;
+    if (!Storage.token) return;
+    const tipo = (Storage.tipoSalvo || "").toLowerCase();
+    setIsAtleta(tipo === "atleta");
+  }, []);
+
+  useEffect(() => {
+    const tipo = String(Storage?.tipoSalvo ?? "").toLowerCase();
+    if (tipo !== "atleta" || !Storage.token) return;
+
     fetch(`${API.BASE_URL}/api/perfil/me/posicao-atual`, {
       headers: { Authorization: `Bearer ${Storage.token}` },
     })
       .then(r => setIsAtleta(r.ok)) 
-      .catch(() => setIsAtleta(false));
-  }, [isAtleta]);
+      .catch(() => setIsAtleta(true));
+  }, []);
 
   function selecionarAlvo(novo: ChatTarget) {
   setAlvo(novo);
