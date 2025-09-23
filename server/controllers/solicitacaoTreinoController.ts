@@ -1,5 +1,6 @@
 import { Response, Request } from "express";
 import { PrismaClient } from "@prisma/client";
+import { resolveAtletaId, resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
 
 const prisma = new PrismaClient();
 
@@ -12,6 +13,66 @@ const absFoto = (req: Request, f?: string | null) =>
         ? f
         : `${getBase(req)}${f.startsWith("/") ? f : `/${f}`}`)
     : null;
+
+async function autoVincularAtleta(
+  atletaUsuarioId: string,
+  outroUsuarioId: string
+) {
+  const [uAtleta, uOutro] = await Promise.all([
+    prisma.usuario.findUnique({ where: { id: atletaUsuarioId }, select: { id: true, tipo: true } }),
+    prisma.usuario.findUnique({ where: { id: outroUsuarioId },  select: { id: true, tipo: true } }),
+  ]);
+  if (!uAtleta || !uOutro || uAtleta.tipo !== "Atleta") return;
+
+  const atleta = await prisma.atleta.findUnique({ where: { usuarioId: uAtleta.id }, select: { id: true } });
+  if (!atleta) return;
+
+  if (uOutro.tipo === "Clube") {
+    const clubeId = await resolveClubeId(uOutro.id);
+    if (!clubeId) return;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.atleta.update({ where: { id: atleta.id }, data: { clubeId } });
+
+      const existe = await tx.relacaoTreinamento.findFirst({ where: { atletaId: atleta.id, clubeId } });
+      if (!existe) {
+        await tx.relacaoTreinamento.deleteMany({ where: { atletaId: atleta.id, clubeId: { not: clubeId } } });
+        await tx.relacaoTreinamento.create({ data: { atletaId: atleta.id, clubeId } });
+      }
+
+      const jaTem = await tx.vinculoFormacao.findFirst({
+        where: { atletaId: atleta.id, origem: "Clube", origemId: clubeId },
+      });
+      if (!jaTem) {
+        await tx.vinculoFormacao.create({
+          data: { atletaId: atleta.id, origem: "Clube", origemId: clubeId },
+        });
+      }
+    });
+  } else if (uOutro.tipo === "Escolinha") {
+    const escolinhaId = await resolveEscolinhaId(uOutro.id);
+    if (!escolinhaId) return;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.atleta.update({ where: { id: atleta.id }, data: { escolinhaId } });
+
+      const existe = await tx.relacaoTreinamento.findFirst({ where: { atletaId: atleta.id, escolinhaId } });
+      if (!existe) {
+        await tx.relacaoTreinamento.deleteMany({ where: { atletaId: atleta.id, escolinhaId: { not: escolinhaId } } });
+        await tx.relacaoTreinamento.create({ data: { atletaId: atleta.id, escolinhaId } });
+      }
+
+      const jaTem = await tx.vinculoFormacao.findFirst({
+        where: { atletaId: atleta.id, origem: "Escolinha", origemId: escolinhaId },
+      });
+      if (!jaTem) {
+        await tx.vinculoFormacao.create({
+          data: { atletaId: atleta.id, origem: "Escolinha", origemId: escolinhaId },
+        });
+      }
+    });
+  }
+}
 
 export async function listarSolicitacoesMinhas(req: Request, res: Response) {
   const me: string | undefined = (req as any).user?.id || (req as any).userId;
@@ -83,15 +144,39 @@ export async function listarSolicitacoesRecebidas(req: Request, res: Response) {
   }
 }
 
+export const solicitacoesTreinoController = {
+  aceitar: async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const me = (req as any).user?.id || (req as any).userId;
+    if (!me) return res.status(401).json({ message: "Não autenticado." });
+
+    const s = await prisma.solicitacaoTreino.findUnique({ where: { id } });
+    if (!s || s.destinatarioId !== me) return res.status(404).json({ message: "Solicitação não encontrada" });
+
+    const [rem, des] = await prisma.usuario.findMany({
+      where: { id: { in: [s.remetenteId, s.destinatarioId] } },
+      select: { id: true, tipo: true },
+    });
+
+    const atletaUsuarioId = rem?.tipo === "Atleta" ? rem.id : des?.tipo === "Atleta" ? des!.id : null;
+    const outroUsuarioId  = rem?.tipo !== "Atleta" ? rem.id : des?.id;
+
+    if (atletaUsuarioId && outroUsuarioId) {
+      await autoVincularAtleta(atletaUsuarioId, outroUsuarioId);
+    }
+
+    const updated = await prisma.solicitacaoTreino.update({ where: { id }, data: { status: "ativa" } });
+    return res.json(updated);
+  },
+};
+
 export async function criarSolicitacao(req: Request, res: Response) {
   const remetenteId: string | undefined = (req as any).user?.id || (req as any).userId;
   const { destinatarioId } = (req.body ?? {}) as { destinatarioId?: string };
 
   if (!remetenteId) return res.status(401).json({ message: "Não autenticado." });
   if (!destinatarioId) return res.status(400).json({ message: "destinatarioId é obrigatório" });
-  if (remetenteId === destinatarioId) {
-    return res.status(400).json({ message: "Não é permitido enviar para si mesmo." });
-  }
+  if (remetenteId === destinatarioId) return res.status(400).json({ message: "Não é permitido enviar para si mesmo." });
 
   const existente = await prisma.solicitacaoTreino.findFirst({
     where: {
@@ -102,15 +187,28 @@ export async function criarSolicitacao(req: Request, res: Response) {
       ],
     },
   });
-
-  if (existente) {
-    return res.status(200).json({ id: existente.id, status: existente.status, ok: true, duplicated: true });
-  }
-
-  const nova = await prisma.solicitacaoTreino.create({
+  const row = existente ?? await prisma.solicitacaoTreino.create({
     data: { remetenteId, destinatarioId, status: "pendente" },
   });
-  return res.status(201).json(nova);
+
+  const pessoas = await prisma.usuario.findMany({
+    where: { id: { in: [remetenteId, destinatarioId] } },
+    select: { id: true, tipo: true },
+  });
+  const uRem = pessoas.find(p => p.id === remetenteId);
+  const uDes = pessoas.find(p => p.id === destinatarioId);
+  const temAtleta = [uRem?.tipo, uDes?.tipo].includes("Atleta");
+  const temEntidade = [uRem?.tipo, uDes?.tipo].some(t => t === "Clube" || t === "Escolinha");
+
+  if (temAtleta && temEntidade) {
+    const atletaUsuarioId = (uRem?.tipo === "Atleta" ? uRem!.id : uDes!.id);
+    const outroUsuarioId  = (uRem?.tipo === "Atleta" ? uDes!.id : uRem!.id);
+    await autoVincularAtleta(atletaUsuarioId, outroUsuarioId);
+
+    await prisma.solicitacaoTreino.update({ where: { id: row.id }, data: { status: "ativa" } });
+  }
+
+  return res.status(existente ? 200 : 201).json({ ...row, ok: true });
 }
 
 export async function cancelarSolicitacao(req: Request, res: Response) {

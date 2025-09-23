@@ -1,26 +1,20 @@
-import express from "express";
-import { authenticateToken } from "../middlewares/auth.js";
+import { Router } from "express";
 import {
   criarSolicitacao,
-  listarSolicitacoesRecebidas,
-  aceitarSolicitacao,
-  recusarSolicitacao,
   cancelarSolicitacao,
   listarSolicitacoesMinhas,
+  listarSolicitacoesRecebidas,
+  recusarSolicitacao,
+  solicitacoesTreinoController
 } from "../controllers/solicitacaoTreinoController.js";
 
-const router = express.Router();
+const router = Router();
 
-router.use(authenticateToken);
-
-router.get("/minhas", listarSolicitacoesMinhas);
-router.post("/cancelar", cancelarSolicitacao);
-router.delete("/:destinatarioId", cancelarSolicitacao);
-router.put("/:id", (req, res) => {
-  const { aceitar } = (req.body ?? {}) as { aceitar?: boolean };
-  return aceitar ? aceitarSolicitacao(req, res) : recusarSolicitacao(req, res);
-});
+router.post("/:id/aceitar", solicitacoesTreinoController.aceitar);
+router.post("/:id/recusar", recusarSolicitacao);
 router.post("/", criarSolicitacao);
+router.get("/minhas", listarSolicitacoesMinhas);
 router.get("/", listarSolicitacoesRecebidas);
+router.delete("/:destinatarioId?", cancelarSolicitacao);
 
 export default router;
