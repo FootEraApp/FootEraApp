@@ -572,16 +572,17 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
 export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const userIdFromToken = req.userId;
-
   if (!userIdFromToken || id !== userIdFromToken) {
     return res.status(403).json({ error: "Você só pode editar o seu próprio perfil." });
   }
 
   const { usuario, tipo, tipoUsuario } = req.body;
-
   if (!usuario || !tipoUsuario || !tipo) {
     return res.status(400).json({ error: "Dados incompletos." });
   }
+
+  const file = (req as any).file as Express.Multer.File | undefined;
+  const fotoFinal: string | null = file ? `/uploads/${file.filename}` : (usuario.foto ?? null);
 
   try {
     await prisma.usuario.update({
@@ -589,11 +590,11 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
       data: {
         nome: usuario.nome,
         email: usuario.email,
-        foto: usuario.foto,
+        foto: fotoFinal,    
         cidade: usuario.cidade,
         estado: usuario.estado,
         pais: usuario.pais,
-        bairro: usuario.bairro
+        bairro: usuario.bairro,
       }
     });
 
@@ -613,7 +614,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             altura: isNaN(parseInt(tipo.altura)) ? undefined : parseInt(tipo.altura),
             peso: isNaN(parseInt(tipo.peso)) ? undefined : parseInt(tipo.peso),
             seloQualidade: tipo.seloQualidade,
-            foto: usuario.foto
+            foto: fotoFinal,     
           }
         });
         break;
@@ -626,40 +627,39 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             cref: tipo.cref,
             areaFormacao: tipo.areaFormacao,
             escola: tipo.escola,
-            qualificacoes: Array.isArray(tipo.qualificacoes)
-              ? tipo.qualificacoes
-              : tipo.qualificacoes?.split(',').map((q: string) => q.trim()),
-            certificacoes: Array.isArray(tipo.certificacoes)
-              ? tipo.certificacoes
-              : tipo.certificacoes?.split(',').map((c: string) => c.trim()),
-            fotoUrl: usuario.foto
+            qualificacoes: Array.isArray(tipo.qualificacoes) ? tipo.qualificacoes : tipo.qualificacoes?.split(',').map((q: string) => q.trim()),
+            certificacoes: Array.isArray(tipo.certificacoes) ? tipo.certificacoes : tipo.certificacoes?.split(',').map((c: string) => c.trim()),
+            fotoUrl: fotoFinal,    
           }
         });
         break;
 
-      case "clube":
-        await prisma.clube.update({
-          where: { usuarioId: id },
-          data: {
-            nome: tipo.nome,
-            telefone1: tipo.telefone1,
-            telefone2: tipo.telefone2,
-            email: tipo.email,
-            siteOficial: tipo.siteOficial,
-            sede: tipo.sede,
-            estadio: tipo.estadio,
-            logradouro: tipo.logradouro,
-            numero: tipo.numero,
-            complemento: tipo.complemento,
-            bairro: tipo.bairro,
-            cidade: tipo.cidade,
-            estado: tipo.estado,
-            pais: tipo.pais,
-            cep: tipo.cep,
-            logo: usuario.foto
-          }
-        });
+      case "clube": {
+        const data: any = {
+          nome: tipo.nome,
+          telefone1: tipo.telefone1 ?? null,
+          telefone2: tipo.telefone2 ?? null,
+          email: tipo.email ?? null,
+          siteOficial: tipo.siteOficial ?? null,
+          sede: tipo.sede ?? null,
+          estadio: tipo.estadio ?? null,
+          logradouro: tipo.logradouro ?? null,
+          numero: tipo.numero ?? null,
+          complemento: tipo.complemento ?? null,
+          bairro: tipo.bairro ?? null,
+          cidade: tipo.cidade ?? null,
+          estado: tipo.estado ?? null,
+          pais: tipo.pais ?? null,
+          cep: tipo.cep ?? null,
+          descricao: tipo.descricao ?? null,
+          responsavel: tipo.responsavel ?? null,
+          logo: fotoFinal,        
+        };
+        if (Array.isArray(tipo.categorias)) data.categorias = { set: tipo.categorias };
+
+        await prisma.clube.update({ where: { usuarioId: id }, data });
         break;
+      }
 
       case "escola":
         await prisma.escolinha.update({
@@ -679,7 +679,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             estado: tipo.estado,
             pais: tipo.pais,
             cep: tipo.cep,
-            logo: usuario.foto
+            logo: fotoFinal,      
           }
         });
         break;
@@ -989,18 +989,32 @@ export async function getPerfilClube(req: Request, res: Response) {
         cep: true,
         logo: true,
         dataCriacao: true,
-        atletas: { select: { id: true } },
-        treinoProgramado: { select: { id: true } },
-        postagens: { select: { id: true } },
+        descricao: true,
+        responsavel: true,
+        categorias: true,
       },
     });
 
     if (!clube) return res.status(404).json({ error: "Clube não encontrado" });
 
-    const usuarioMin:
-      | { id: string; nome: string; email: string; foto?: string | null }
-      | null = (clube as any).usuario ?? null;
+    const [diretos, relacoes, elencos, aceitos] = await Promise.all([
+      prisma.atleta.findMany({ where: { clubeId: clube.id }, select: { id: true } }),
+      prisma.relacaoTreinamento.findMany({ where: { clubeId: clube.id, atletaId: { not: null } }, select: { atletaId: true } }),
+      prisma.atletaElenco.findMany({ where: { elenco: { clubeId: clube.id } }, select: { atletaId: true } }),
+      prisma.solicitacaoVinculo.findMany({
+        where: { tipoEntidade: "clube", entidadeId: clube.id, status: "aceito" },
+        select: { atletaId: true },
+      }),
+    ]);
 
+    const ids = new Set<string>([
+      ...diretos.map(a => a.id),
+      ...relacoes.map(r => r.atletaId!),
+      ...elencos.map(e => e.atletaId),
+      ...aceitos.map(s => s.atletaId),
+    ]);
+
+    const usuarioMin = (clube as any).usuario ?? null;
     const logoOuFoto: string | null = (clube as any).logo ?? (usuarioMin?.foto ?? null);
 
     return res.json({
@@ -1027,11 +1041,14 @@ export async function getPerfilClube(req: Request, res: Response) {
         cep: clube.cep,
         logo: logoOuFoto,
         dataCriacao: clube.dataCriacao,
+        descricao: (clube as any).descricao ?? null,
+        responsavel: (clube as any).responsavel ?? null,
+        categorias: (clube as any).categorias ?? [],
       },
       metrics: {
-        atletas: (clube as any).atletas?.length ?? 0,
-        treinosProgramados: (clube as any).treinoProgramado?.length ?? 0,
-        postagens: (clube as any).postagens?.length ?? 0,
+        atletas: ids.size,
+        eventos: 0,
+        conquistas: 0,
       },
     });
   } catch (e) {

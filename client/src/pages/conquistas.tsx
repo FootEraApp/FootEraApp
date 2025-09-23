@@ -1,4 +1,3 @@
-// client/src/pages/conquistas.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
   ALL_ACHIEVEMENTS,
@@ -29,8 +28,6 @@ const groupOrder = [
   "Eventos",
 ] as const;
 
-// ———————————————————————————————————————————————
-// Helpers para ler sessão com robustez (Storage + local/sessionStorage)
 function pickFirst<T>(...vals: (T | null | undefined)[]) {
   for (const v of vals) {
     const s = v == null ? "" : String(v);
@@ -70,7 +67,6 @@ function readUsuarioId(): string | null {
   const raw = String(v).trim();
   return raw === "" ? null : raw;
 }
-// ———————————————————————————————————————————————
 
 // agora online
 const USE_API = true;
@@ -89,7 +85,6 @@ export default function ConquistasPage() {
     return serverEntity || entityFromTipoUsuario(String(tipoRaw)) || "Atleta";
   }, [serverEntity, tipoRaw]);
 
-  // catálogo filtrado
   const catalog: AchievementLite[] = useMemo(
     () => ALL_ACHIEVEMENTS.filter((a) => a.entity === entity),
     [entity]

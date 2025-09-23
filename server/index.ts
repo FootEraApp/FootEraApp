@@ -59,6 +59,8 @@ import indicacoesRouter from "./routes/indicacoes.js";
 import olheirosRouter from "./routes/olheiros.js";
 import desempenhoRoutes from "./routes/desempenho.js";
 import conquistasRouter from "./routes/conquistas.js";
+import relacoesRoutes from "./routes/relacoes.js";
+import elencosRoutes from "./routes/elencos.js";
 
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 import { removerTreinosExpirados } from "./routes/removerTreinosExpirados.js";
@@ -128,9 +130,9 @@ app.use("/api/gerenciar", gerenciarAtletasRoutes);
 app.use("/api/conquistas", conquistasRouter);
 app.use("/api", indicacoesRouter); 
 app.use("/api", olheirosRouter);
-
-app.use(adminModeracaoRoutes);
-
+app.use("/api/relacoes", relacoesRoutes);
+app.use("/api/elencos", elencosRoutes);
+app.use("/api/admin/moderacao", adminModeracaoRoutes);
 app.use("/uploads", express.static(path.join(process.cwd(), "public/uploads")));
 
 app.use("/exercicios", express.static(path.join(process.cwd(), "public", "exercicios"), {

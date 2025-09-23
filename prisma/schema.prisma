@@ -144,7 +144,7 @@ model Atleta {
   telefone2                    String?
   nacionalidade                String?
   naturalidade                 String?
-  posicao                      String?
+  posicao                      PosicaoCampo?
   altura                       Decimal?
   peso                         Decimal?
   seloQualidade                String?
@@ -156,9 +156,9 @@ model Atleta {
   statusConexao                StatusConexao              @default(Pendente)
   dataCriacao                  DateTime                   @default(now())
   dataUltimaModificacao        DateTime?
+  perfilTipoTreinoAtualizadoEm DateTime?
   pontosTotal                  Int?                       @default(0)
   perfilTipoTreino             TipoTreino?
-  perfilTipoTreinoAtualizadoEm DateTime?
   clube                        Clube?                     @relation(fields: [clubeId], references: [id])
   escolinha                    Escolinha?                 @relation(fields: [escolinhaId], references: [id])
   usuario                      Usuario                    @relation(fields: [usuarioId], references: [id])
@@ -184,52 +184,46 @@ model Atleta {
 }
 
 model TreinoProgramado {
-  id           String      @id @default(uuid())
-  codigo       String      @unique
-  nome         String      @unique
-  descricao    String?
-  nivel        Nivel
-
-  categoria    Categoria[]
-  tipoTreino   TipoTreino?
-  dataAgendada DateTime?
-  objetivo     String?
-  duracao      Int?
-  dicas        String[]
-  imagemUrl    String?
-  metas        String?
-  pontuacao    Int?
-  expiraEm     DateTime?
-  naoExpira    Boolean     @default(false)
-
-  clubeId      String?
-  professorId  String?
-  escolinhaId  String?
-
-  clube        Clube?                       @relation(fields: [clubeId], references: [id])
-  professor    Professor?                   @relation(fields: [professorId], references: [id])
-  escolinha    Escolinha?                   @relation(fields: [escolinhaId], references: [id])
-
-  exercicios   TreinoProgramadoExercicio[]
-  temporarios  ExercicioTemporario[]
+  id                       String                      @id @default(uuid())
+  codigo                   String                      @unique
+  nome                     String                      @unique
+  descricao                String?
+  nivel                    Nivel
+  dataAgendada             DateTime?
+  professorId              String?
+  createdAt                DateTime                    @default(now())
+  categoria                Categoria[]
+  dicas                    String[]
+  duracao                  Int?
+  escolinhaId              String?
+  objetivo                 String?
+  clubeId                  String?
+  expiraEm                 DateTime?
+  imagemUrl                String?
+  metas                    String?
+  naoExpira                Boolean                     @default(false)
+  pontuacao                Int?
+  tipoTreino               TipoTreino?
+  temporarios              ExercicioTemporario[]
   treinoAgendado           TreinoAgendado[]
+  clube                    Clube?                      @relation(fields: [clubeId], references: [id])
+  escolinha                Escolinha?                  @relation(fields: [escolinhaId], references: [id])
+  professor                Professor?                  @relation(fields: [professorId], references: [id])
+  exercicios               TreinoProgramadoExercicio[]
   TreinoProgramadoRecebido TreinoProgramadoRecebido[]
   realizados               TreinoRealizado[]
-
-  createdAt    DateTime    @default(now())
 }
 
 model TreinoProgramadoExercicio {
-  id                    String  @id @default(uuid())
+  id                    String               @id @default(uuid())
   treinoProgramadoId    String
   exercicioId           String?
-  exercicioTemporarioId String?
   ordem                 Int
   repeticoes            String
-
-  treinoProgramado    TreinoProgramado     @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
-  exercicio           Exercicio?           @relation(fields: [exercicioId], references: [id])
-  exercicioTemporario ExercicioTemporario? @relation(fields: [exercicioTemporarioId], references: [id], onDelete: SetNull)
+  exercicioTemporarioId String?
+  exercicio             Exercicio?           @relation(fields: [exercicioId], references: [id])
+  exercicioTemporario   ExercicioTemporario? @relation(fields: [exercicioTemporarioId], references: [id])
+  treinoProgramado      TreinoProgramado     @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
 
   @@index([treinoProgramadoId])
   @@index([exercicioId])
@@ -248,17 +242,15 @@ model Exercicio {
 }
 
 model ExercicioTemporario {
-  id                 String      @id @default(uuid())
+  id                 String                      @id @default(uuid())
   treinoProgramadoId String
   codigo             String?
   nome               String
   descricao          String?
   nivel              Nivel
   categorias         Categoria[]
-
-  treinoProgramado TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
-
-  treinos TreinoProgramadoExercicio[]
+  treinoProgramado   TreinoProgramado            @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+  treinos            TreinoProgramadoExercicio[]
 
   @@index([treinoProgramadoId])
 }
@@ -441,6 +433,10 @@ model Clube {
   cep                 String?
   logo                String?
   dataCriacao         DateTime             @default(now())
+  descricao           String?
+  responsavel         String?
+
+  categorias          Categoria[]
   atletas             Atleta[]
   observacoes         AtletaObservado[]    @relation("ObservacaoClube")
   usuario             Usuario              @relation(fields: [usuarioId], references: [id])
