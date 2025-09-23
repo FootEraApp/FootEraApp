@@ -40,10 +40,8 @@ import PaginaEventoDetalhe from "./pages/eventoDetalhe.js";
 import PaginaTreinoUnico from "./pages/TreinoUnico.js";
 import PaginaTermosEPrivacidade from "./pages/TermosEPrivacidade.js"
 import PaginaOlheiros from "./pages/olheiro/index.js";
-import PaginaDesempenho from "./pages/olheiro/desempenho.js";
-import PaginaIndicar from "./pages/olheiro/indicar.js";
-import PaginaConquistas from "./pages/conquistas";
-
+import PaginaConquistas from "./pages/conquistas.js";
+import PaginaRanking from "./pages/ranking.js";
 
 export function AppRoutes() {
   return (
@@ -88,7 +86,9 @@ export function AppRoutes() {
         {({ id }: { id: string }) => <PaginaPerfilOlheiro idDaUrl={id} />}
       </Route>
 
-      <Route path="perfil/conquistas" ><PaginaConquistas /></Route>
+      <Route path="/ranking" ><PaginaRanking /></Route>
+      
+      <Route path="/perfil/conquistas" ><PaginaConquistas /></Route>
 
       <Route path="/perfil/GerenciarAtletas">
         <PaginaGerenciarAtleta />

@@ -1,14 +1,18 @@
 import { Router } from "express";
+import { authenticateToken } from "../middlewares/auth.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
 import {
-  listPendentesDesafio,
-  aprovarSubmissao,
-  invalidarSubmissao,
-} from "../controllers/moderacaoDesafioController.js";
+  listModeracaoDesafios,
+  aprovarSubmissaoDesafio,
+  invalidarSubmissaoDesafio,
+} from "../controllers/adminModeracaoController.js";
 
-const r = Router();
-r.get("/api/admin/moderacao/desafios", requireAdmin, listPendentesDesafio);
-r.post("/api/admin/moderacao/desafios/:id/aprovar", requireAdmin, aprovarSubmissao);
-r.post("/api/admin/moderacao/desafios/:id/invalidar", requireAdmin, invalidarSubmissao);
+const router = Router();
 
-export default r;
+router.use(authenticateToken, requireAdmin);
+
+router.get("/desafios", listModeracaoDesafios);
+router.post("/desafios/:id/aprovar", aprovarSubmissaoDesafio);
+router.post("/desafios/:id/invalidar", invalidarSubmissaoDesafio);
+
+export default router;

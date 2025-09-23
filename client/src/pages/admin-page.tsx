@@ -682,7 +682,7 @@ async function invalidarDesafio(id: string) {
                         ) : (
                           treinos.map((t: any) => {
                             const nome = t.nome ?? t.titulo ?? "(sem nome)";
-                            const codigo = t.codigo ?? t.slug ?? (t.id ? String(t.id).slice(0, 6) : "-");
+                            const codigo = t.codigo;
                             const nivel = t.nivel ?? t.dificuldade ?? "-";
                             const descricao = t.descricao ?? t.resumo ?? "";
 

@@ -12,6 +12,7 @@ export type ExercicioTemporario = {
 };
 
 export type TreinoCreatePayload = {
+  codigo?: string;
   nome: string;
   descricao?: string | null;
   nivel: string;          
@@ -26,6 +27,7 @@ export type TreinoCreatePayload = {
   dataAgendada?: string | null;
   dicas?: string[];
   atletasIds?: string[];   
+  elencosIds?: string[];
   exercicios: (ExercicioDoBanco | ExercicioTemporario)[];
 };
 

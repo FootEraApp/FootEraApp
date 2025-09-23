@@ -299,7 +299,7 @@ const EditarPerfil = () => {
 
             {renderInput("Categorias de Base (separadas por vírgula)", "categorias")}
             <p className="text-xs text-gray-500 -mt-3 mb-2">
-              Ex.: Sub-9, Sub-11, Sub-13, Sub-15, Sub-17, Sub-20
+              Ex.: Sub9, Sub11, Sub13, Sub15, Sub17, Sub20, Livre
             </p>
           </>
         );
