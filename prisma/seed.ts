@@ -1,4 +1,4 @@
-import { PrismaClient, TipoUsuario, TipoTreino, Nivel, Categoria } from '@prisma/client';
+import { PrismaClient, TipoUsuario, TipoTreino, Nivel, Categoria, OrigemFormador } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -261,6 +261,10 @@ await prisma.usuario.upsert({
 
   const clube2Db = await prisma.clube.findFirst({
     where: { usuario: { nomeDeUsuario: "clube_teste" } }
+  });
+
+  const escolinhaEstrelasDb = await prisma.escolinha.findFirst({
+    where: { usuario: { nomeDeUsuario: "escola_estrelas" } },
   });
 
   const olheiroJoao = await prisma.usuario.upsert({
@@ -649,6 +653,68 @@ if (professorMateus && ex1 && ex2 && ex3 && ex4 && ex5) {
       }
     }
   });
+}
+
+const senhaFormado = await hash('atleta123');
+
+const usuarioFormado = await prisma.usuario.upsert({
+  where: { nomeDeUsuario: 'atleta.formadores' },
+  update: {},
+  create: {
+    nomeDeUsuario: 'atleta.formadores',
+    nome: 'Mauro Formado',
+    email: 'atleta.formadores@example.com',
+    senhaHash: senhaFormado,
+    tipo: TipoUsuario.Atleta,
+    cidade: 'São Paulo',
+    estado: 'SP',
+    pais: 'Brasil',
+    foto: '/assets/usuarios/atleta-formadores.png',
+    atleta: {
+      create: {
+        nome: 'Mauro',
+        sobrenome: 'Formado',
+        email: 'atleta.formadores@example.com',
+        idade: 17,
+        posicao: 'MEI',
+        altura: 1.77,
+        peso: 66,
+        nacionalidade: 'Brasileira',
+        naturalidade: 'São Paulo - SP',
+        telefone1: '11999990022',
+        seloQualidade: 'Prata',
+        categoria: [Categoria.Sub17],
+        foto: '/assets/usuarios/atleta-formadores.png',
+        clubeId: clube1Db?.id || null,
+      },
+    },
+  },
+});
+
+const atletaFormado = await prisma.atleta.findUnique({
+  where: { usuarioId: usuarioFormado.id },
+});
+
+if (atletaFormado && escolinhaEstrelasDb) {
+  const jaTem = await prisma.vinculoFormacao.findFirst({
+    where: {
+      atletaId: atletaFormado.id,
+      origem: OrigemFormador.Escolinha,
+      origemId: escolinhaEstrelasDb.id,
+    },
+  });
+
+  if (!jaTem) {
+    await prisma.vinculoFormacao.create({
+      data: {
+        atletaId: atletaFormado.id,
+        origem: OrigemFormador.Escolinha,
+        origemId: escolinhaEstrelasDb.id,
+        inicio: new Date(new Date().getFullYear() - 2, 0, 15),
+        observacoes: 'Vínculo criado no seed para demo do módulo Formadores.',
+      },
+    });
+  }
 }
 
   const desafios = [

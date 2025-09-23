@@ -371,20 +371,25 @@ useEffect(() => {
         foto ? `${API.BASE_URL}${String(foto).startsWith("/assets/") ? foto : `/assets/usuarios/${foto}`}`
         : `${API.BASE_URL}/assets/usuarios/menina.png`);
 
-      let fotoForCard = foto;
-        if (fotoForCard && !fotoForCard.startsWith("data:")) {
-          try { 
-            const abs = /^https?:\/\//i.test(fotoForCard)
-              ? fotoForCard
-              : (fotoForCard.startsWith("/") ? `${API.BASE_URL}${fotoForCard}` : `${API.BASE_URL}/assets/usuarios/${fotoForCard}`);
-            fotoForCard = await toDataUrlWithAuth(abs);
-          } catch {}
+      let fotoForCard: string | null | undefined = foto;
+      if (fotoForCard && !fotoForCard.startsWith("data:")) {
+        try {
+          const abs =
+            publicImgUrl(fotoForCard) ??
+            (fotoForCard.startsWith("/")
+              ? `${API.BASE_URL}${fotoForCard}`
+              : `${API.BASE_URL}/assets/usuarios/${fotoForCard}`);
+
+          fotoForCard = await toDataUrlWithAuth(abs);
+        } catch {
+          fotoForCard = null;
         }
+      }
 
       setPerfil({
         atletaId,
         nome: nomeBase,
-        foto,
+        foto: fotoForCard ?? foto,
         posicao: posicaoVigente ?? posicaoPerfil ?? undefined,
       });
 

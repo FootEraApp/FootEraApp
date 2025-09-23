@@ -3,9 +3,9 @@ import {
   ALL_ACHIEVEMENTS,
   entityFromTipoUsuario,
   AchievementLite,
-} from "../lib/achievementsCatalog";
-import Storage from "../../../server/utils/storage";
-import { API } from "../config.js"; // BASE_URL da sua API
+} from "../lib/achievementsCatalog.js";
+import Storage from "../../../server/utils/storage.js";
+import { API } from "../config.js";
 import { Volleyball, User, CirclePlus, Search, House, HelpCircle } from "lucide-react";
 import { Link } from "wouter";
 
@@ -68,7 +68,6 @@ function readUsuarioId(): string | null {
   return raw === "" ? null : raw;
 }
 
-// agora online
 const USE_API = true;
 
 export default function ConquistasPage() {
@@ -80,13 +79,12 @@ export default function ConquistasPage() {
   const [earned, setEarned] = useState<Earned[]>([]);
   const [serverEntity, setServerEntity] = useState<string | null>(null);
 
-  // entity preferindo a retornada pelo backend
   const entity = useMemo(() => {
     return serverEntity || entityFromTipoUsuario(String(tipoRaw)) || "Atleta";
   }, [serverEntity, tipoRaw]);
 
   const catalog: AchievementLite[] = useMemo(
-    () => ALL_ACHIEVEMENTS.filter((a) => a.entity === entity),
+    () => ALL_ACHIEVEMENTS.filter((a: AchievementLite) => a.entity === entity),
     [entity]
   );
 
@@ -105,7 +103,6 @@ export default function ConquistasPage() {
       setLoading(true);
       setErro(null);
 
-      // sem usuário logado: mostra catálogo, tudo cinza
       if (!usuarioId || !USE_API) {
         setEarned([]);
         setServerEntity(entityFromTipoUsuario(String(tipoRaw)) ?? "Atleta");
@@ -124,12 +121,10 @@ export default function ConquistasPage() {
         }
 
         const json = await r.json();
-        // json: { usuarioId, entity, totalAvailable, earned: EarnedDTO[] }
         setServerEntity(json?.entity || null);
         setEarned(Array.isArray(json?.earned) ? json.earned : []);
       } catch (e: any) {
         setErro(e?.message || "Erro ao carregar conquistas.");
-        // fallback: catálogo do tipo local, tudo cinza
         setEarned([]);
         setServerEntity(entityFromTipoUsuario(String(tipoRaw)) ?? "Atleta");
       } finally {
@@ -319,7 +314,6 @@ function TierPill({
   );
 }
 
-/** Popover de ajuda para o grupo "Pontuação" */
 function PontuacaoHelp() {
   const [open, setOpen] = useState(false);
 
@@ -339,7 +333,7 @@ function PontuacaoHelp() {
       {open && (
         <div
           className="absolute z-30 mt-2 w-80 -left-2 sm:left-6 top-6 rounded-lg border border-gray-200 bg-white p-3 shadow-lg text-sm"
-          onMouseDown={(e) => e.preventDefault()} // evita fechar ao clicar dentro
+          onMouseDown={(e) => e.preventDefault()}
         >
           <p className="font-medium text-gray-900 mb-1">Como calculamos seus pontos</p>
           <ul className="list-disc pl-4 space-y-1 text-gray-700">

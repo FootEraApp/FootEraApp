@@ -7,9 +7,6 @@ import { atualizarCachePontuacao } from "server/services/pontuacao.service.js";
 
 const prisma = new PrismaClient();
 
-/**
- * Resolve o usuarioId para registrar AtividadeRecente quando só temos atletaId.
- */
 async function resolveUsuarioIdForActivity(reqUserId: string | undefined, atletaId: string) {
   if (typeof reqUserId === "string" && reqUserId.length > 0) return reqUserId;
   const atleta = await prisma.atleta.findUnique({
@@ -19,12 +16,6 @@ async function resolveUsuarioIdForActivity(reqUserId: string | undefined, atleta
   return atleta?.usuarioId || null;
 }
 
-/**
- * POST /api/submissoes/treino  (com upload)
- * - mantém a mesma assinatura de body/arquivo usada na rota antiga
- * - cria SubmissaoTreino + Midia + AtividadeRecente
- * - se vier aprovado=true, aplica estatísticas e atualiza cache de pontuação
- */
 export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
   try {
     const { observacao, treinoAgendadoId, atletaId, aprovado, duracaoMinutos } = req.body as {
@@ -60,20 +51,18 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
         observacao,
         usuarioId: typeof (req as any).userId === "string" ? (req as any).userId : undefined,
         duracaoMinutos: duracaoMinutos ? Number(duracaoMinutos) : undefined,
-        aprovado: String(aprovado) === "true", // opcional: aprova já no post
+        aprovado: String(aprovado) === "true",
         midias: { create: [midia] },
       },
       select: { id: true, aprovado: true },
     });
 
     if (usuarioIdForActivity) {
-      // feed
       await prisma.atividadeRecente.create({
         data: { usuarioId: usuarioIdForActivity, tipo: "treino", imagemUrl: assetUrl },
       }).catch(() => {});
     }
 
-    // Atualiza “perfilTipoTreino” com base no treino agendado
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id: treinoAgendadoId },
       include: { treinoProgramado: true },
@@ -86,7 +75,6 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
     });
 
     if (tipoStr) {
-      // normaliza acentos -> enum
       const v = tipoStr.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
       const map: Record<string, any> = {
         fisico: "Fisico",
@@ -103,7 +91,6 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
       }
     }
 
-    // Se aprovado, aplica estatísticas e atualiza cache de pontuação
     if (created.aprovado) {
       await aplicarEstatisticasPosSubmissao(
         created.id,
@@ -122,14 +109,6 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
   }
 }
 
-/**
- * POST /api/submissoes/desafio  (com upload OU videoUrl no body)
- * - alinha com o desafiosController.criarSubmissaoDesafio:
- *   * valida desafio/atleta
- *   * cria com aprovado: true
- *   * chama recomputePontuacaoAtleta(atletaId)
- * - também registra Midia + AtividadeRecente quando vier arquivo
- */
 export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
   try {
     const { desafioId, atletaId, observacao, videoUrl: rawVideoUrl } = req.body as {
@@ -150,7 +129,6 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
     const atleta = await prisma.atleta.findUnique({ where: { id: atletaId } });
     if (!atleta) return res.status(400).json({ message: "Atleta inválido ou não encontrado." });
 
-    // url do upload (se houver) OU videoUrl vindo no body
     const uploadedUrl = file ? `/uploads/${file.filename}` : undefined;
     const finalVideoUrl = (uploadedUrl ?? (rawVideoUrl && String(rawVideoUrl).trim())) || null;
 
@@ -158,13 +136,13 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
       return res.status(400).json({ message: "Envie um vídeo (arquivo ou videoUrl)." });
     }
 
-    const isVideo = file ? file.mimetype?.startsWith("video") : true; // assume URL externa é vídeo
+    const isVideo = file ? file.mimetype?.startsWith("video") : true;
 
     const created = await prisma.submissaoDesafio.create({
       data: {
         atletaId,
         desafioId,
-        videoUrl: finalVideoUrl, // <— agora é sempre string
+        videoUrl: finalVideoUrl,
         observacao,
         aprovado: true,
         ...(uploadedUrl
