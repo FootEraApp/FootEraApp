@@ -1,13 +1,43 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { FaHeart, FaRegHeart, FaRegCommentDots, FaShare, FaPaperPlane, FaTrash, FaLink } from "react-icons/fa";
-import { Volleyball, User, CirclePlus, Search, House, CircleX, Send, CircleCheck, Trophy } from "lucide-react";
-import { getFeedPosts, likePost, comentarPost, compartilharPost, PostagemComUsuario, deletarPost } from "../services/feedService.js";
+// client/src/pages/feed
+import React, { useEffect, useState } from "react";
+import {
+  FaHeart,
+  FaRegHeart,
+  FaRegCommentDots,
+  FaShare,
+  FaPaperPlane,
+  FaTrash,
+} from "react-icons/fa";
+import {
+  Volleyball,
+  User,
+  CirclePlus,
+  Search,
+  House,
+  Send,
+  CircleCheck,
+  Trophy,
+} from "lucide-react";
+import {
+  getFeedPosts,
+  likePost,
+  comentarPost,
+  PostagemComUsuario,
+  deletarPost,
+} from "../services/feedService.js";
 import { format } from "date-fns";
 import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 import { publicImgUrl } from "@/utils/publicUrl.js";
+
+// catálogo de conquistas
+import {
+  ALL_ACHIEVEMENTS,
+  type AchievementLite,
+  type Tier,
+} from "../lib/achievementsCatalog";
 
 interface Usuario {
   id: string;
@@ -25,23 +55,6 @@ async function getUsuariosMutuos(token: string): Promise<Usuario[]> {
   return await res.json();
 }
 
-function normalizeMediaUrl(raw?: string | null): string {
-  let s = (raw || "").trim();
-  if (!s) return "";
-
-  if (/^(https?:)?\/\//i.test(s) || s.startsWith("data:") || s.startsWith("blob:")) {
-    return s.replace(/\/assets\/usuarios\//, "/uploads/").replace(/\/assets\//, "/uploads/");
-  }
-
-  s = s.replace(/^\/?assets\/usuarios\//, "/uploads/").replace(/^\/?assets\//, "/uploads/");
-
-  if (s.startsWith("/uploads/")) return `${API.BASE_URL}${s}`;
-  if (s.startsWith("uploads/")) return `${API.BASE_URL}/${s}`;
-  
-  if (!s.startsWith("/")) s = `/${s}`;
-  return `${API.BASE_URL}/uploads${s}`;
-}
-
 function BottomSheet({
   open,
   onClose,
@@ -51,7 +64,7 @@ function BottomSheet({
 }: {
   open: boolean;
   onClose: () => void;
-  heightPct?: number; 
+  heightPct?: number;
   children: React.ReactNode;
   ariaLabel?: string;
 }) {
@@ -71,10 +84,7 @@ function BottomSheet({
 
   return (
     <div className="fixed inset-0 z-50">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={onClose} />
       <div
         role="dialog"
         aria-label={ariaLabel}
@@ -100,6 +110,93 @@ function BottomSheet({
   );
 }
 
+/** --- helpers para detectar/renderizar conquista --- */
+type ParsedAchievement = {
+  ach?: AchievementLite;
+  headTitle?: string;
+  headDesc?: string;
+  userMsg?: string;
+};
+
+function parseAchievement(conteudo: string): ParsedAchievement | null {
+  if (!conteudo) return null;
+
+  const lines = conteudo.split(/\n+/);
+  const head = (lines[0] || "").trim();
+  const rest = (lines.slice(1).join("\n") || "").trim();
+
+  const isHeadAchievement = /^🏆\s*Conquista:/i.test(head);
+
+  // [id] mensagem...
+  const idMatch = rest.match(/\[([^\]]+)\]/);
+  const achId = idMatch?.[1]?.trim();
+
+  if (!isHeadAchievement && !achId) return null;
+
+  // extrai título/descrição da 1ª linha se tiver no padrão
+  let headTitle: string | undefined;
+  let headDesc: string | undefined;
+  const m = head.match(/^🏆\s*Conquista:\s*(.+?)\s+—\s+(.+)$/);
+  if (m) {
+    headTitle = m[1];
+    headDesc = m[2];
+  }
+
+  const ach = achId ? ALL_ACHIEVEMENTS.find((a) => a.id === achId) : undefined;
+  const userMsg = achId ? rest.replace(/\[[^\]]+\]\s*/, "").trim() : rest;
+
+  return { ach, headTitle, headDesc, userMsg };
+}
+
+function TierPill({ tier }: { tier?: Tier }) {
+  if (!tier) return null;
+  const map: Record<Tier, string> = {
+    bronze: "bg-amber-100 text-amber-800 border-amber-200",
+    prata: "bg-gray-100 text-gray-700 border-gray-300",
+    ouro: "bg-yellow-100 text-yellow-800 border-yellow-200",
+    platina: "bg-blue-100 text-blue-800 border-blue-200",
+  };
+  return (
+    <span className={`text-[11px] px-2 py-0.5 rounded border ${map[tier] || ""}`}>
+      {tier[0].toUpperCase() + tier.slice(1)}
+    </span>
+  );
+}
+
+function AchievementShareCard({
+  parsed,
+}: {
+  parsed: ParsedAchievement;
+}) {
+  const icon = parsed.ach?.icon || "🏆";
+  const title = parsed.ach?.title || parsed.headTitle || "Conquista";
+  const desc = parsed.ach?.description || parsed.headDesc || "";
+  const tier = parsed.ach?.tier;
+
+  return (
+    <div className="mt-1 rounded-xl border border-yellow-200 bg-yellow-50/60 p-3">
+      <div className="flex gap-3 items-start">
+        <div className="w-10 h-10 rounded-lg bg-white border flex items-center justify-center text-xl">
+          <span aria-hidden>{icon}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h4 className="font-semibold text-yellow-900 truncate">
+              Conquista: {title}
+            </h4>
+            <TierPill tier={tier} />
+          </div>
+          {!!desc && <p className="text-sm text-yellow-900/90 mt-0.5">{desc}</p>}
+          {!!parsed.userMsg && (
+            <p className="text-sm text-gray-700 mt-2 italic">“{parsed.userMsg}”</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+/** --- fim helpers de conquista --- */
+
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
@@ -117,7 +214,7 @@ function PaginaFeed(): JSX.Element {
   const [enviandoDM, setEnviandoDM] = useState(false);
 
   const [idCompartilhado, setIdCompartilhado] = useState<string | null>(null);
-  const [filtro, setFiltro] = useState<"todos"|"seguindo"|"favoritos"| "meus">("todos");
+  const [filtro, setFiltro] = useState<"todos" | "seguindo" | "favoritos" | "meus">("todos");
 
   useEffect(() => {
     async function carregar() {
@@ -129,14 +226,14 @@ function PaginaFeed(): JSX.Element {
   }, [filtro]);
 
   const handleLike = async (postId: string) => {
-      if(!userId) {
-        alert("Sessão expirada. Faça login novamente.");
-        return;
-      }
-      try {
-        await likePost(postId);
-        setPosts((prev) =>
-         prev.map((p) =>
+    if (!userId) {
+      alert("Sessão expirada. Faça login novamente.");
+      return;
+    }
+    try {
+      await likePost(postId);
+      setPosts((prev) =>
+        prev.map((p) =>
           p.id === postId
             ? {
                 ...p,
@@ -191,18 +288,6 @@ function PaginaFeed(): JSX.Element {
     }
   };
 
-  const handleLogout = () => {
-    const keys = ["token", "usuarioId", "nomeUsuario", "tipoUsuario", "tipoUsuarioId"];
-    keys.forEach((k) => {
-      localStorage.removeItem(k);
-      sessionStorage.removeItem(k);
-    });
-
-    try { (Storage as any)?.clear?.(); } catch {}
-
-    window.location.href = "/login";
-  };
-
   const abrirModalComentarios = (post: PostagemComUsuario) => {
     setPostSelecionado(post);
     setComentariosModalAberto(true);
@@ -255,53 +340,48 @@ function PaginaFeed(): JSX.Element {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-green-800">Feed de Postagens</h1>
         <Link href="/feed/desafios">
-          <button
-            className="p-2 rounded-full hover:bg-green-100 transition"
-            title="Ranking e Desafios"
-          >
+          <button className="p-2 rounded-full hover:bg-green-100 transition" title="Ranking e Desafios">
             <Trophy className="w-6 h-6 text-yellow-600" />
           </button>
         </Link>
       </div>
-       <div className="flex gap-2 justify-center mb-4">
-        {(["todos","seguindo","favoritos", "meus"] as const).map(f => (
+
+      <div className="flex gap-2 justify-center mb-4">
+        {(["todos", "seguindo", "favoritos", "meus"] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFiltro(f)}
             className={`px-3 py-1 rounded-full text-sm border ${
-              filtro === f ? "bg-green-700 text-white border-green-700"
-                          : "bg-white text-green-700 border-green-700"
+              filtro === f ? "bg-green-700 text-white border-green-700" : "bg-white text-green-700 border-green-700"
             }`}
           >
-            {f === "todos" ? "Todos" :
-             f === "seguindo" ? "Seguindo" :
-             f === "favoritos" ? "Favoritos" : "Meus"}
+            {f === "todos" ? "Todos" : f === "seguindo" ? "Seguindo" : f === "favoritos" ? "Favoritos" : "Meus"}
           </button>
         ))}
       </div>
 
       {posts.length === 0 && (
-      <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">
-        <p>
-          {{
-            todos: "Nenhuma postagem encontrada.",
-            seguindo: "Você ainda não segue ninguém — ou ninguém que você segue postou ainda.",
-            favoritos: "Você não tem nenhum usuário favoritado.",
-            meus: "Você ainda não postou nada.",
-          }[filtro]}
-        </p>
+        <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">
+          <p>
+            {{
+              todos: "Nenhuma postagem encontrada.",
+              seguindo: "Você ainda não segue ninguém — ou ninguém que você segue postou ainda.",
+              favoritos: "Você não tem nenhum usuário favoritado.",
+              meus: "Você ainda não postou nada.",
+            }[filtro]}
+          </p>
 
-        {filtro === "seguindo" || filtro === "favoritos" ? (
-          <Link href="/explorar" className="text-green-700 underline mt-2 inline-block">
-            Explorar perfis
-          </Link>
-        ) : filtro === "meus" ? (
-          <Link href="/post" className="text-green-700 underline mt-2 inline-block">
-            Criar minha primeira postagem
-          </Link>
-        ) : null}
-      </div>
-    )}
+          {filtro === "seguindo" || filtro === "favoritos" ? (
+            <Link href="/explorar" className="text-green-700 underline mt-2 inline-block">
+              Explorar perfis
+            </Link>
+          ) : filtro === "meus" ? (
+            <Link href="/post" className="text-green-700 underline mt-2 inline-block">
+              Criar minha primeira postagem
+            </Link>
+          ) : null}
+        </div>
+      )}
 
       {posts.map((post) => {
         const curtidas = post.curtidas || [];
@@ -309,64 +389,63 @@ function PaginaFeed(): JSX.Element {
         const mostrarInput = mostrarInputPorPost[post.id] || false;
         const comentarioTexto = comentarioTextoPorPost[post.id] || "";
 
-        const imgSrc   = publicImgUrl(post.imagemUrl) ?? undefined;
-        const videoSrc = publicImgUrl(post.videoUrl)  ?? undefined;
+        const imgSrc = publicImgUrl(post.imagemUrl) ?? undefined;
+        const videoSrc = publicImgUrl(post.videoUrl) ?? undefined;
+
+        // detecta se é um post de conquista
+        const parsed = parseAchievement(post.conteudo);
+        const isAchievement = !!parsed;
+
         return (
           <div key={post.id} className="max-w-xl mx-auto bg-white rounded-2xl shadow-md p-4 space-y-3">
-           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <img
-                src={publicImgUrl(post.usuario.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
-                alt="avatar"
-                className="w-10 h-10 rounded-full object-cover"
-              />
-              <div>
-                <p className="font-semibold">{post.usuario.nome}</p>
-                <p className="text-xs text-gray-500">
-                  {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
-                </p>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <img
+                  src={publicImgUrl(post.usuario.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
+                  alt="avatar"
+                  className="w-10 h-10 rounded-full object-cover"
+                />
+                <div>
+                  <p className="font-semibold">{post.usuario.nome}</p>
+                  <p className="text-xs text-gray-500">{format(new Date(post.dataCriacao), "dd/MM, HH:mm")}</p>
+                </div>
               </div>
+              {((post as any).usuarioId === userId || post?.usuario?.id === userId) && (
+                <button
+                  onClick={() => handleApagar(post.id)}
+                  title="Apagar postagem"
+                  className="text-red-600 hover:text-red-800 p-2"
+                >
+                  <FaTrash />
+                </button>
+              )}
             </div>
-            {((post as any).usuarioId === userId || post?.usuario?.id === userId) && (
-             <button
-               onClick={() => handleApagar(post.id)}
-               title="Apagar postagem"
-               className="text-red-600 hover:text-red-800 p-2"
-             >
-               <FaTrash />
-             </button>
-            )}
-           </div>
 
             <div>
-              <p className="text-gray-800 font-medium">{post.conteudo}</p>
+              {/* Para post normal, mostra o texto bruto */}
+              {!isAchievement && <p className="text-gray-800 font-medium whitespace-pre-line">{post.conteudo}</p>}
 
+              {/* Para conquista, renderiza um card bonitão */}
+              {isAchievement && parsed && <AchievementShareCard parsed={parsed} />}
+
+              {/* mídias (apenas se não for o caso de conquista sem mídia) */}
               {imgSrc && (
-                <img
-                  src={imgSrc}
-                  alt="Post"
-                  className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
-                />
+                <img src={imgSrc} alt="Post" className="mt-2 rounded-lg max-h-72 w-auto mx-auto" />
               )}
-
               {videoSrc && (
                 <video controls className="w-full mt-2 rounded-lg">
                   <source src={videoSrc} type="video/mp4" />
                   Seu navegador não suporta vídeo.
                 </video>
               )}
-
             </div>
+
             <div className="flex justify-between text-gray-600 mt-2 px-2">
               <button className="flex items-center gap-1" onClick={() => handleLike(post.id)}>
-                {jaCurtiu ? <FaHeart className="text-black" /> : <FaRegHeart />}{" "}
-                <span>{curtidas.length}</span>
+                {jaCurtiu ? <FaHeart className="text-black" /> : <FaRegHeart />} <span>{curtidas.length}</span>
               </button>
 
-              <button
-                className="flex items-center gap-1"
-                onClick={() => abrirModalComentarios(post)}
-              >
+              <button className="flex items-center gap-1" onClick={() => abrirModalComentarios(post)}>
                 <FaRegCommentDots /> <span>{post.comentarios?.length || 0}</span>
               </button>
 
@@ -400,7 +479,10 @@ function PaginaFeed(): JSX.Element {
                     {post.comentarios.map((comentario) => (
                       <div key={comentario.id} className="flex gap-2 items-start">
                         <img
-                          src={publicImgUrl(comentario.usuario?.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
+                          src={
+                            publicImgUrl(comentario.usuario?.foto) ||
+                            `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
+                          }
                           alt="avatar"
                           className="w-8 h-8 rounded-full object-cover"
                         />
@@ -422,188 +504,196 @@ function PaginaFeed(): JSX.Element {
       })}
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed" className="hover:underline"><House /></Link>
-        <Link href="/explorar" className="hover:underline"><Search /></Link>
-        <Link href="/post" className="hover:underline"><CirclePlus /></Link>
-        <Link href="/treinos" className="hover:underline"><Volleyball /></Link>
-        <Link href="/perfil" className="hover:underline"><User /></Link>
+        <Link href="/feed" className="hover:underline">
+          <House />
+        </Link>
+        <Link href="/explorar" className="hover:underline">
+          <Search />
+        </Link>
+        <Link href="/post" className="hover:underline">
+          <CirclePlus />
+        </Link>
+        <Link href="/treinos" className="hover:underline">
+          <Volleyball />
+        </Link>
+        <Link href="/perfil" className="hover:underline">
+          <User />
+        </Link>
       </nav>
 
-<BottomSheet open={modalAberto} onClose={() => setModalAberto(false)} heightPct={40} ariaLabel="Compartilhar postagem">
-  <h2 className="text-base font-bold mb-3 text-center">Compartilhar Postagem</h2>
+      {/* === Modal de Compartilhamento === */}
+      <BottomSheet open={modalAberto} onClose={() => setModalAberto(false)} heightPct={40} ariaLabel="Compartilhar postagem">
+        <h2 className="text-base font-bold mb-3 text-center">Compartilhar Postagem</h2>
 
-  <div className="mb-3">
-    <p className="text-sm text-gray-700 mb-2">Enviar por mensagem:</p>
+        <div className="mb-3">
+          <p className="text-sm text-gray-700 mb-2">Enviar por mensagem:</p>
 
-    <div className="flex gap-3 overflow-x-auto pb-1">
-      {carregandoMutuos && (
-        <span className="text-sm text-gray-500">Carregando contatos...</span>
-      )}
-      {!carregandoMutuos && usuariosMutuos.length === 0 && (
-        <span className="text-sm text-gray-500">Você ainda não tem contatos mútuos.</span>
-      )}
-      {usuariosMutuos.map((u) => {
-        const selecionado = selecionados.has(u.id);
-        const fotoSrc = formatarUrlFoto(u.foto);
-        return (
-          <button
-            key={u.id}
-            onClick={() => toggleSelecionado(u.id)}
-            title={u.nome}
-            className={`relative shrink-0 rounded-full border-2 ${
-              selecionado ? "border-green-600" : "border-transparent"
-            }`}
-          >
-            <img src={fotoSrc} alt={u.nome} className="w-14 h-14 rounded-full object-cover" />
-            {selecionado && (
-              <span className="absolute -bottom-1 -right-1 bg-white rounded-full">
-                <CircleCheck className="w-5 h-5 text-green-600" />
-              </span>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {carregandoMutuos && <span className="text-sm text-gray-500">Carregando contatos...</span>}
+            {!carregandoMutuos && usuariosMutuos.length === 0 && (
+              <span className="text-sm text-gray-500">Você ainda não tem contatos mútuos.</span>
             )}
-          </button>
-        );
-      })}
-    </div>
+            {usuariosMutuos.map((u) => {
+              const selecionado = selecionados.has(u.id);
+              const fotoSrc = formatarUrlFoto(u.foto);
+              return (
+                <button
+                  key={u.id}
+                  onClick={() => toggleSelecionado(u.id)}
+                  title={u.nome}
+                  className={`relative shrink-0 rounded-full border-2 ${
+                    selecionado ? "border-green-600" : "border-transparent"
+                  }`}
+                >
+                  <img src={fotoSrc} alt={u.nome} className="w-14 h-14 rounded-full object-cover" />
+                  {selecionado && (
+                    <span className="absolute -bottom-1 -right-1 bg-white rounded-full">
+                      <CircleCheck className="w-5 h-5 text-green-600" />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
-    <button
-      disabled={selecionados.size === 0 || enviandoDM}
-      onClick={enviarCompartilhamentoPorDM}
-      className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded 
-        ${selecionados.size === 0 || enviandoDM ? "bg-gray-300 text-gray-600" : "bg-green-700 text-white hover:bg-green-800"}`}
-    >
-      <Send className="w-4 h-4" />
-      {enviandoDM ? "Enviando..." : `Enviar para ${selecionados.size} contato(s)`}
-    </button>
-  </div>
-
-  <div className="border-t my-3" />
-
-  <input
-    type="text"
-    value={linkCompartilhado}
-    readOnly
-    onFocus={(e) => e.target.select()}
-    className="w-full border rounded px-3 py-2 text-sm mb-3"
-  />
-
-  <button
-    className="w-full bg-green-700 text-white py-2 rounded mb-3 hover:bg-green-800"
-    onClick={() => {
-      navigator.clipboard.writeText(linkCompartilhado);
-      alert("Link copiado!");
-    }}
-  >
-    Copiar Link
-  </button>
-
-  <div className="flex justify-between items-center gap-2">
-    <a
-      href={`https://wa.me/?text=${encodeURIComponent(linkCompartilhado)}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 text-sm text-center flex-1"
-    >
-      WhatsApp
-    </a>
-
-    <a
-      href={`mailto:?subject=Veja esta postagem&body=${encodeURIComponent(linkCompartilhado)}`}
-      className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 text-sm text-center flex-1"
-    >
-      Email
-    </a>
-
-    <button
-      onClick={() => (window.location.href = linkCompartilhado)}
-      className="bg-gray-800 text-white py-2 px-4 rounded hover:bg-gray-900 text-sm text-center flex-1"
-    >
-      FootEra
-    </button>
-  </div>
-</BottomSheet>
-
-<BottomSheet
-  open={comentariosModalAberto && !!postSelecionado}
-  onClose={() => setComentariosModalAberto(false)}
-  heightPct={50}
-  ariaLabel="Comentários da postagem"
->
-  {postSelecionado && (
-    <div className="mx-auto w-full h-full max-w-[1110px]">
-      <div className="bg-white border rounded-2xl shadow-md h-full flex flex-col overflow-hidden">
-        <div className="px-4 py-3 border-b flex items-center justify-between shrink-0">
-          <h2 className="text-base font-bold">Comentários</h2>
           <button
-            onClick={() => setComentariosModalAberto(false)}
-            className="text-gray-500 hover:text-gray-800"
-            aria-label="Fechar"
-            title="Fechar"
+            disabled={selecionados.size === 0 || enviandoDM}
+            onClick={enviarCompartilhamentoPorDM}
+            className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded 
+              ${selecionados.size === 0 || enviandoDM ? "bg-gray-300 text-gray-600" : "bg-green-700 text-white hover:bg-green-800"}`}
           >
-            ✕
+            <Send className="w-4 h-4" />
+            {enviandoDM ? "Enviando..." : `Enviar para ${selecionados.size} contato(s)`}
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-white">
-          {postSelecionado.comentarios.length === 0 && (
-            <p className="text-sm text-gray-500">Seja o primeiro a comentar!</p>
-          )}
+        <div className="border-t my-3" />
 
-          {postSelecionado.comentarios.map((comentario) => (
-            <div key={comentario.id} className="flex gap-3">
-              <img
-                src={formatarUrlFoto(comentario.usuario?.foto)}
-                alt={comentario.usuario?.nome || "avatar"}
-                className="w-9 h-9 rounded-full object-cover flex-shrink-0"
-              />
-              <div className="flex-1 bg-gray-50 border rounded-xl px-3 py-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-800">
-                    {comentario.usuario?.nome}
-                  </span>
-                  <span className="text-[11px] text-gray-500">
-                    {format(new Date(comentario.dataCriacao), "dd/MM, HH:mm")}
-                  </span>
+        <input
+          type="text"
+          value={linkCompartilhado}
+          readOnly
+          onFocus={(e) => e.target.select()}
+          className="w-full border rounded px-3 py-2 text-sm mb-3"
+        />
+
+        <button
+          className="w-full bg-green-700 text-white py-2 rounded mb-3 hover:bg-green-800"
+          onClick={() => {
+            navigator.clipboard.writeText(linkCompartilhado);
+            alert("Link copiado!");
+          }}
+        >
+          Copiar Link
+        </button>
+
+        <div className="flex justify-between items-center gap-2">
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(linkCompartilhado)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 text-sm text-center flex-1"
+          >
+            WhatsApp
+          </a>
+
+          <a
+            href={`mailto:?subject=Veja esta postagem&body=${encodeURIComponent(linkCompartilhado)}`}
+            className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 text-sm text-center flex-1"
+          >
+            Email
+          </a>
+
+          <button
+            onClick={() => (window.location.href = linkCompartilhado)}
+            className="bg-gray-800 text-white py-2 px-4 rounded hover:bg-gray-900 text-sm text-center flex-1"
+          >
+            FootEra
+          </button>
+        </div>
+      </BottomSheet>
+
+      {/* === Modal de Comentários === */}
+      <BottomSheet
+        open={comentariosModalAberto && !!postSelecionado}
+        onClose={() => setComentariosModalAberto(false)}
+        heightPct={50}
+        ariaLabel="Comentários da postagem"
+      >
+        {postSelecionado && (
+          <div className="mx-auto w-full h-full max-w-[1110px]">
+            <div className="bg-white border rounded-2xl shadow-md h-full flex flex-col overflow-hidden">
+              <div className="px-4 py-3 border-b flex items-center justify-between shrink-0">
+                <h2 className="text-base font-bold">Comentários</h2>
+                <button
+                  onClick={() => setComentariosModalAberto(false)}
+                  className="text-gray-500 hover:text-gray-800"
+                  aria-label="Fechar"
+                  title="Fechar"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-white">
+                {postSelecionado.comentarios.length === 0 && (
+                  <p className="text-sm text-gray-500">Seja o primeiro a comentar!</p>
+                )}
+
+                {postSelecionado.comentarios.map((comentario) => (
+                  <div key={comentario.id} className="flex gap-3">
+                    <img
+                      src={formatarUrlFoto(comentario.usuario?.foto)}
+                      alt={comentario.usuario?.nome || "avatar"}
+                      className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                    />
+                    <div className="flex-1 bg-gray-50 border rounded-xl px-3 py-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-gray-800">
+                          {comentario.usuario?.nome}
+                        </span>
+                        <span className="text-[11px] text-gray-500">
+                          {format(new Date(comentario.dataCriacao), "dd/MM, HH:mm")}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-800 mt-1">{comentario.conteudo}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t bg-gray-50 px-3 py-3 shrink-0 sticky bottom-0">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={comentarioTextoPorPost[postSelecionado.id] || ""}
+                    onChange={(e) =>
+                      setComentarioTextoPorPost((prev) => ({
+                        ...prev,
+                        [postSelecionado.id]: e.target.value,
+                      }))
+                    }
+                    placeholder="Adicione um comentário..."
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-600"
+                  />
+                  <button
+                    onClick={() =>
+                      handleComentario(
+                        postSelecionado.id,
+                        comentarioTextoPorPost[postSelecionado.id] || ""
+                      )
+                    }
+                    className="inline-flex items-center justify-center rounded-lg px-3 py-2 bg-green-700 text-white hover:bg-green-800"
+                    title="Enviar"
+                  >
+                    <FaPaperPlane />
+                  </button>
                 </div>
-                <p className="text-sm text-gray-800 mt-1">{comentario.conteudo}</p>
               </div>
             </div>
-          ))}
-        </div>
-
-        <div className="border-t bg-gray-50 px-3 py-3 shrink-0 sticky bottom-0">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={comentarioTextoPorPost[postSelecionado.id] || ""}
-              onChange={(e) =>
-                setComentarioTextoPorPost((prev) => ({
-                  ...prev,
-                  [postSelecionado.id]: e.target.value,
-                }))
-              }
-              placeholder="Adicione um comentário..."
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-600"
-            />
-            <button
-              onClick={() =>
-                handleComentario(
-                  postSelecionado.id,
-                  comentarioTextoPorPost[postSelecionado.id] || ""
-                )
-              }
-              className="inline-flex items-center justify-center rounded-lg px-3 py-2 bg-green-700 text-white hover:bg-green-800"
-              title="Enviar"
-            >
-              <FaPaperPlane />
-            </button>
           </div>
-        </div>
-      </div>
-    </div>
-  )}
-</BottomSheet>
-
-
+        )}
+      </BottomSheet>
     </div>
   );
 }
