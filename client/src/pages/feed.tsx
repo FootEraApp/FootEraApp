@@ -25,23 +25,6 @@ async function getUsuariosMutuos(token: string): Promise<Usuario[]> {
   return await res.json();
 }
 
-function normalizeMediaUrl(raw?: string | null): string {
-  let s = (raw || "").trim();
-  if (!s) return "";
-
-  if (/^(https?:)?\/\//i.test(s) || s.startsWith("data:") || s.startsWith("blob:")) {
-    return s.replace(/\/assets\/usuarios\//, "/uploads/").replace(/\/assets\//, "/uploads/");
-  }
-
-  s = s.replace(/^\/?assets\/usuarios\//, "/uploads/").replace(/^\/?assets\//, "/uploads/");
-
-  if (s.startsWith("/uploads/")) return `${API.BASE_URL}${s}`;
-  if (s.startsWith("uploads/")) return `${API.BASE_URL}/${s}`;
-  
-  if (!s.startsWith("/")) s = `/${s}`;
-  return `${API.BASE_URL}/uploads${s}`;
-}
-
 function BottomSheet({
   open,
   onClose,
@@ -97,6 +80,26 @@ function BottomSheet({
         </div>
       </div>
     </div>
+  );
+}
+
+function PostImage({ src }: { src?: string }) {
+  const [url, setUrl] = React.useState(src);
+  if (!url) return null;
+  return (
+    <img
+      src={url}
+      alt="Post"
+      className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
+      onError={(e) => {
+        const cur = e.currentTarget.src;
+        if (cur.includes("/uploads/") && !cur.includes("/uploads/cards/")) {
+          setUrl(cur.replace("/uploads/", "/uploads/cards/"));
+        } else {
+          setUrl("");
+        }
+      }}
+    />
   );
 }
 
@@ -316,7 +319,7 @@ function PaginaFeed(): JSX.Element {
            <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <img
-                src={publicImgUrl(post.usuario.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
+                src={formatarUrlFoto(post.usuario.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
                 alt="avatar"
                 className="w-10 h-10 rounded-full object-cover"
               />
@@ -341,18 +344,10 @@ function PaginaFeed(): JSX.Element {
             <div>
               <p className="text-gray-800 font-medium">{post.conteudo}</p>
 
-              {imgSrc && (
-                <img
-                  src={imgSrc}
-                  alt="Post"
-                  className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
-                />
-              )}
-
-              {videoSrc && (
+             <PostImage src={imgSrc} />  
+             {videoSrc && (
                 <video controls className="w-full mt-2 rounded-lg">
                   <source src={videoSrc} type="video/mp4" />
-                  Seu navegador não suporta vídeo.
                 </video>
               )}
 

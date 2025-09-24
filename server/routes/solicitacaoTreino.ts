@@ -7,8 +7,10 @@ import {
   recusarSolicitacao,
   solicitacoesTreinoController
 } from "../controllers/solicitacaoTreinoController.js";
+import { authenticateToken } from "server/middlewares/auth.js";
 
 const router = Router();
+router.use(authenticateToken);
 
 router.post("/:id/aceitar", solicitacoesTreinoController.aceitar);
 router.post("/:id/recusar", recusarSolicitacao);
