@@ -15,6 +15,40 @@ async function salvarDataUrlComoPng(dataUrl: string, sub = "cards") {
   return `/uploads/${sub}/${filename}`;
 }
 
+export async function getUnreadByUser(req: any, res: Response) {
+  try {
+    const userId = req.userId as string;
+    const buckets = await prisma.mensagem.groupBy({
+      by: ["deId"],
+      where: { paraId: userId, lida: false },
+      _count: { _all: true },
+    });
+
+    const out = buckets.map(b => ({ userId: b.deId, count: b._count._all }));
+    res.json(out);
+  } catch (e) {
+    console.error("getUnreadByUser error:", e);
+    res.status(500).json({ error: "Erro ao calcular não lidas." });
+  }
+}
+
+export async function markReadFromUser(req: any, res: Response) {
+  try {
+    const userId = req.userId as string;
+    const { otherId } = req.params as { otherId: string };
+
+    await prisma.mensagem.updateMany({
+      where: { paraId: userId, deId: otherId, lida: false },
+      data: { lida: true },
+    });
+
+    res.sendStatus(204);
+  } catch (e) {
+    console.error("markReadFromUser error:", e);
+    res.status(500).json({ error: "Erro ao marcar mensagens como lidas." });
+  }
+}
+
 export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
   try {
     const { tipo, conteudo, paraId, clientMsgId } = req.body as {
@@ -53,20 +87,31 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
   }
 }
 
-export const buscarMensagens = async (req: Request, res: Response) => {
+export const buscarMensagens = async (req: any, res: Response) => {
   try {
-    const { deId, paraId, cursor, limit = 20 } = req.query;
+    const me = req.user?.id || req.userId;
+    if (!me) return res.status(401).json({ error: "Não autenticado." });
+
+    const q = req.query as any;
+    // compat: aceita ?deId=&paraId= ou o novo ?otherId=
+    let otherId: string | undefined = q.otherId;
+    if (!otherId && (q.deId || q.paraId)) {
+      otherId = q.deId === me ? String(q.paraId) : String(q.deId);
+    }
+    if (!otherId) return res.status(400).json({ error: "otherId é obrigatório" });
+
+    const { cursor, limit = 20 } = q;
 
     const mensagens = await prisma.mensagem.findMany({
       where: {
         OR: [
-          { deId: deId as string, paraId: paraId as string },
-          { deId: paraId as string, paraId: deId as string },
+          { deId: me,      paraId: otherId },
+          { deId: otherId, paraId: me      },
         ],
       },
       orderBy: { criadaEm: "desc" },
       take: Number(limit),
-      ...(cursor && { skip: 1, cursor: { id: cursor as string } }),
+      ...(cursor ? { skip: 1, cursor: { id: String(cursor) } } : {}),
     });
 
     res.json(mensagens);
@@ -74,6 +119,57 @@ export const buscarMensagens = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Erro ao buscar mensagens" });
   }
 };
+
+export async function listarConversas(req: any, res: Response) {
+  const me: string | undefined = req.user?.id || req.userId;
+  if (!me) return res.status(401).json({ error: "Não autenticado." });
+
+  const msgs = await prisma.mensagem.findMany({
+    where: { OR: [{ deId: me }, { paraId: me }] },
+    orderBy: { criadaEm: "desc" },
+    select: { deId: true, paraId: true, criadaEm: true, conteudo: true },
+  });
+
+  const partnerIds = Array.from(
+    new Set(msgs.map(m => (m.deId === me ? m.paraId : m.deId)))
+  );
+
+  if (partnerIds.length === 0) {
+    return res.json({ totalNaoLidas: 0, conversas: [] });
+  }
+
+  const unread = await prisma.mensagem.groupBy({
+    by: ["deId"],
+    where: { paraId: me, lida: false },
+    _count: { _all: true },
+  });
+  const unreadMap = Object.fromEntries(unread.map(r => [r.deId, r._count._all]));
+
+  const users = await prisma.usuario.findMany({
+    where: { id: { in: partnerIds } },
+    select: { id: true, nome: true, nomeDeUsuario: true, foto: true },
+  });
+
+  const lastByPartner = new Map<string, { criadoEm: Date; conteudo: string | null }>();
+  for (const m of msgs) {
+    const pid = m.deId === me ? m.paraId : m.deId;
+    if (!lastByPartner.has(pid)) lastByPartner.set(pid, { criadoEm: m.criadaEm, conteudo: m.conteudo ?? null });
+  }
+
+  const conversas = users
+    .map(u => ({
+      id: u.id,
+      nome: u.nome || u.nomeDeUsuario,
+      foto: u.foto,
+      naoLidas: unreadMap[u.id] ?? 0,
+      ultimaMensagemEm: lastByPartner.get(u.id)?.criadoEm ?? null,
+      ultimaMensagem: lastByPartner.get(u.id)?.conteudo ?? null,
+    }))
+    .sort((a, b) => (b.ultimaMensagemEm?.getTime() ?? 0) - (a.ultimaMensagemEm?.getTime() ?? 0));
+
+  const totalNaoLidas = unread.reduce((s, r) => s + r._count._all, 0);
+  return res.json({ totalNaoLidas, conversas });
+}
 
 export const listarMensagensGrupo = async (req: AuthenticatedRequest, res: Response) => {
   try {

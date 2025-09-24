@@ -2,6 +2,8 @@ import { Response, RequestHandler } from "express";
 import { Request } from "express";
 import { TipoMidia, Prisma } from "@prisma/client";
 import { PrismaClient } from "@prisma/client";
+import path from "path";
+import fs from "fs-extra"
 
 const prisma = new PrismaClient;
 
@@ -150,7 +152,6 @@ export const seguirUsuario: RequestHandler = async (req, res) => {
   res.sendStatus(201);
 };
 
-
 export const postar: RequestHandler = async (req, res) => {
   const usuarioId = req.userId;
   if (!usuarioId) return res.status(401).json({ message: "Usuário não autenticado." });
@@ -164,13 +165,20 @@ export const postar: RequestHandler = async (req, res) => {
     let imagemUrl: string | undefined = undefined;
     let videoUrl: string | undefined = undefined;
 
+    const isCard = /Meu Card FOOTERA/i.test(texto);
+
     if (file) {
-      if (file.mimetype.startsWith("video")) {
+      const isVideo = file.mimetype?.startsWith("video");
+
+      const dest = (file.destination || "").replace(/\\/g, "/");
+      const leaf = dest.split("/").filter(Boolean).pop() || "";
+
+      if (isVideo) {
         tipoMidia = "Video";
-        videoUrl = `/uploads/${file.filename}`;
+        videoUrl = `/uploads/${leaf}/${file.filename}`;
       } else {
         tipoMidia = "Imagem";
-        imagemUrl = `/uploads/${file.filename}`;
+        imagemUrl = `/uploads/${leaf}/${file.filename}`;
       }
     }
 

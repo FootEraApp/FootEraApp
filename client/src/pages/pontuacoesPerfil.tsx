@@ -485,7 +485,7 @@ useEffect(() => {
       await preloadImgs(node);
       await new Promise(r => requestAnimationFrame(r as any));
 
-      const dataUrl = await htmlToImage.toPng(node, { pixelRatio: 2 });
+      const dataUrl = await htmlToImage.toPng(node, { pixelRatio: 3 });
       const blob = await (await fetch(dataUrl)).blob();
 
       const fd = new FormData();

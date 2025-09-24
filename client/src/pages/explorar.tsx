@@ -114,7 +114,7 @@ function Explorar() {
   );
 
   useEffect(() => {
-    const token = Storage?.token ?? "";
+    const token = Storage?.token || "";
     axios.get(`${API.BASE_URL}/api/ranking/weekly`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
@@ -458,7 +458,6 @@ function Explorar() {
                 );
               })}
             </div>
-
           </>
         )}
 
