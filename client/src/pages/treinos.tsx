@@ -1,5 +1,5 @@
 // client/src/pages/treinos
-import { useEffect, useState } from "react";
+import { useEffect, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
   CalendarClock,
@@ -23,10 +23,10 @@ import { Badge } from "@/components/ui/badge.js";
 const tipoUser =
   String(
     (Storage as any)?.tipoSalvo ??
-    (Storage as any)?.tipoUsuario ??
-    localStorage.getItem("tipoUsuario") ??
-    sessionStorage.getItem("tipoUsuario") ??
-    ""
+      (Storage as any)?.tipoUsuario ??
+      localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario") ??
+      ""
   ).toLowerCase();
 
 const isOlheiro = tipoUser === "olheiro";
@@ -68,10 +68,7 @@ interface TreinoAgendado {
     duracao?: number;
     dataAgendada?: string | null;
     exercicios: {
-      exercicio: {
-        id: string;
-        nome: string;
-      };
+      exercicio: { id: string; nome: string };
       repeticoes: string;
     }[];
   };
@@ -92,7 +89,6 @@ interface UsuarioLogado {
   tipoUsuarioId: string;
 }
 
-// ====== NOVO: tipos p/ validação ======
 interface SubmissaoParaValidacao {
   id: string;
   criadoEm: string;
@@ -101,6 +97,7 @@ interface SubmissaoParaValidacao {
   atleta: { id: string; usuarioId: string; nome: string; foto?: string | null };
   treino: { agendadoId: string; titulo: string; programadoId?: string | null };
   midias: string[];
+  observacao?: string | null;
 }
 
 const PLACEHOLDER_USER = "/assets/default-user.png";
@@ -111,6 +108,32 @@ function resolveUploadUrl(raw?: string | null) {
   if (raw.startsWith("/assets/") || raw.startsWith("/attached_assets/")) return raw;
   if (raw.startsWith("/uploads/")) return `${API.BASE_URL}${raw}`;
   return `${API.BASE_URL}/uploads/${raw.replace(/^\/+/, "")}`;
+}
+
+function isVideoUrl(url: string) {
+  const clean = url.split("?")[0].toLowerCase();
+  return /\.(mp4|webm|ogg|mov|m4v)$/i.test(clean);
+}
+
+/** Ícone de campo de futebol (SVG leve e responsivo) */
+function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <line x1="12" y1="4" x2="12" y2="20" />
+      <circle cx="12" cy="12" r="2.25" />
+      <rect x="3" y="8.5" width="4" height="7" rx="0.5" />
+      <rect x="17" y="8.5" width="4" height="7" rx="0.5" />
+    </svg>
+  );
 }
 
 export default function PaginaTreinos() {
@@ -128,7 +151,6 @@ export default function PaginaTreinos() {
   const [carregandoMutuos, setCarregandoMutuos] = useState(false);
   const [desafioParaCompartilhar, setDesafioParaCompartilhar] = useState<string | null>(null);
 
-  // ====== NOVO: estado para validações ======
   const [submissoesPendentes, setSubmissoesPendentes] = useState<SubmissaoParaValidacao[]>([]);
   const [carregandoSubmissoes, setCarregandoSubmissoes] = useState(false);
 
@@ -163,8 +185,14 @@ export default function PaginaTreinos() {
           }),
         ]);
 
-        if (!resTreinos.ok) { console.error("/treinos/agendados", resTreinos.status, await resTreinos.text()); return; }
-        if (!resDesafios.ok) { console.error("/desafios", resDesafios.status, await resDesafios.text()); return; }
+        if (!resTreinos.ok) {
+          console.error("/treinos/agendados", resTreinos.status, await resTreinos.text());
+          return;
+        }
+        if (!resDesafios.ok) {
+          console.error("/desafios", resDesafios.status, await resDesafios.text());
+          return;
+        }
 
         const treinosJson = await resTreinos.json();
         const desafiosJson = await resDesafios.json();
@@ -220,9 +248,7 @@ export default function PaginaTreinos() {
         setDesafios(jsonDesafios?.desafiosOficiais ?? jsonDesafios ?? []);
       } else if (["professor", "clube", "escolinha", "escola"].includes(String(tipo)) && token) {
         const [resTreinos, resDesafios] = await Promise.all([
-          fetch(`${API.BASE_URL}/api/treinos/programados`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+          fetch(`${API.BASE_URL}/api/treinos/programados`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
@@ -256,7 +282,10 @@ export default function PaginaTreinos() {
         setDesafios(jsonDesafios ?? []);
       } else {
         const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/disponiveis`);
-        if (!resTreinos.ok) { console.error("/treinos/disponiveis", resTreinos.status, await resTreinos.text()); return; }
+        if (!resTreinos.ok) {
+          console.error("/treinos/disponiveis", resTreinos.status, await resTreinos.text());
+          return;
+        }
 
         const jsonTreinos = await resTreinos.json();
         const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
@@ -313,10 +342,15 @@ export default function PaginaTreinos() {
     }
   }, [isOlheiro]);
 
-  // ====== NOVO: carregar submissões pendentes quando abrir aba "avaliar"
   useEffect(() => {
     if (!usuario) return;
-    if (usuario.tipo === "professor" || usuario.tipo === "clube" || usuario.tipo === "escolinha" || usuario.tipo === "escola" || usuario.tipo === "admin") {
+    if (
+      usuario.tipo === "professor" ||
+      usuario.tipo === "clube" ||
+      usuario.tipo === "escolinha" ||
+      usuario.tipo === "escola" ||
+      usuario.tipo === "admin"
+    ) {
       if (abaProfessor === "avaliar") carregarSubmissoes();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -348,7 +382,7 @@ export default function PaginaTreinos() {
     if (!token || !usuario) return;
 
     let pontos = 0;
-    if (aprovar) {
+    if (aprovado) {
       const inp = prompt("Pontos a creditar para este treino:", String(pontosSug ?? 0));
       if (inp === null) return;
       const n = Number(inp);
@@ -356,19 +390,21 @@ export default function PaginaTreinos() {
     }
 
     try {
-      const res = await fetch(`${API.BASE_URL}/api/treinos/submissoes/${id}/validar?tipoUsuarioId=${usuario.tipoUsuarioId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ aprovado, pontos }),
-      });
+      const res = await fetch(
+        `${API.BASE_URL}/api/treinos/submissoes/${id}/validar?tipoUsuarioId=${usuario.tipoUsuarioId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ aprovado, pontos }),
+        }
+      );
       if (!res.ok) {
         const txt = await res.text();
         console.error("Falha ao validar:", res.status, txt);
         return alert("Não foi possível validar a submissão.");
       }
-      // remove do estado local
       setSubmissoesPendentes((prev) => prev.filter((s) => s.id !== id));
-      alert(aprovar ? "Submissão aprovada e pontos creditados!" : "Submissão reprovada.");
+      alert(aprovado ? "Submissão aprovada e pontos creditados!" : "Submissão reprovada.");
     } catch (e) {
       console.error(e);
       alert("Erro inesperado ao validar.");
@@ -381,54 +417,59 @@ export default function PaginaTreinos() {
   const formatarDataHora = (iso?: string | null) =>
     iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
 
-  const formatarData = (data?: string) => {
-    if (!data) return "";
-    return new Date(data).toLocaleDateString("pt-BR");
-  };
+  const formatarData = (data?: string) => (data ? new Date(data).toLocaleDateString("pt-BR") : "");
 
-  const renderDesafioCard = (desafio: Desafio) => {
-    return (
-      <div key={desafio.id} className="bg-white p-4 rounded shadow border border-yellow-400 mb-3">
-        <h4 className="font-bold text-yellow-700 text-lg mb-1">
-          <Link href={`/desafios/${desafio.id}`} className="hover:underline">
-            {desafio.titulo}
-          </Link>
-        </h4>
+  const renderDesafioCard = (desafio: Desafio) => (
+    <div key={desafio.id} className="bg-white p-4 rounded-xl shadow-sm border border-yellow-300/60 mb-3">
+      <h4 className="font-bold text-yellow-700 text-lg mb-1">
+        <Link href={`/desafios/${desafio.id}`} className="hover:underline">
+          {desafio.titulo}
+        </Link>
+      </h4>
 
-        <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
-        <p className="text-sm text-gray-500">Nível: {desafio.nivel}</p>
-        <p className="text-sm text-gray-500">Pontos: {desafio.pontuacao}</p>
-
-        <div className="mt-3 flex justify-between">
-          <button
-            onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
-            className="bg-green-800 hover:bg-green-900 text-white px-4 py-2 rounded text-sm"
-          >
-            Fazer Submissão
-          </button>
-          <button
-            onClick={() => abrirModalCompartilhar(desafio.id)}
-            className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded flex items-center gap-1 text-sm"
-          >
-            <Share2 className="w-4 h-4" /> Compartilhar
-          </button>
-        </div>
+      <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
+      <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+        <span>Nível: {desafio.nivel}</span>
+        <span className="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs">
+          {desafio.pontuacao} pts
+        </span>
       </div>
-    );
-  };
+
+      <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:justify-between">
+        <button
+          onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
+          className="bg-green-800 hover:bg-green-900 text-white px-4 py-2 rounded-lg text-sm"
+        >
+          Fazer Submissão
+        </button>
+        <button
+          onClick={() => abrirModalCompartilhar(desafio.id)}
+          className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg flex items-center gap-1 text-sm"
+        >
+          <Share2 className="w-4 h-4" /> Compartilhar
+        </button>
+      </div>
+    </div>
+  );
 
   if (!usuario) return <p className="text-center p-4">Carregando...</p>;
+  const isGestor =
+    ["professor", "admin", "escola", "escolinha", "clube"].includes(usuario.tipo);
 
   const renderTreinoCard = (treino: TreinoProgramado) => (
-    <div key={treino.id} className="bg-white p-4 rounded shadow border mb-4">
-      <h4
-        className="font-bold text-lg text-green-800 cursor-pointer hover:underline"
-        onClick={() => navigate(`/treinos/unico?programadoId=${treino.id}`)}
-      >
-        {treino.nome}
-      </h4>
-      {treino.descricao && <p className="text-sm text-gray-700 mb-1">{treino.descricao}</p>}
-      <div className="text-sm text-gray-600 space-y-1">
+    <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
+      <div className="flex items-start justify-between gap-3">
+        <h4
+          className="font-bold text-lg text-green-800 cursor-pointer hover:underline"
+          onClick={() => navigate(`/treinos/unico?programadoId=${treino.id}`)}
+        >
+          {treino.nome}
+        </h4>
+      </div>
+
+      {treino.descricao && <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>}
+
+      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700">
         <p>
           <strong>Nível:</strong> {treino.nivel}
         </p>
@@ -443,28 +484,29 @@ export default function PaginaTreinos() {
           </p>
         )}
         {treino.objetivo && (
-          <p>
+          <p className="sm:col-span-2">
             <strong>Objetivo:</strong> {treino.objetivo}
           </p>
         )}
-        {Array.isArray(treino.dicas) && treino.dicas.length > 0 && (
-          <div>
-            <strong>Dicas:</strong>
-            <ul className="list-disc list-inside pl-4">
-              {treino.dicas.map((dica, idx) => (
-                <li key={idx}>{dica}</li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
+
+      {Array.isArray(treino.dicas) && treino.dicas.length > 0 && (
+        <div className="mt-3">
+          <strong className="text-sm text-gray-800">Dicas:</strong>
+          <ul className="mt-1 list-disc list-inside pl-4 space-y-0.5 text-sm text-gray-600">
+            {treino.dicas.map((dica, idx) => (
+              <li key={idx}>{dica}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {treino.exercicios?.length > 0 && (
         <div className="mt-3">
           <strong className="text-sm text-gray-800">Exercícios:</strong>
-          <div className="max-h-32 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
+          <div className="max-h-40 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
             {treino.exercicios.map((ex, i) => (
-              <div key={ex.id} className="border-b pb-1">
+              <div key={ex.id} className="border-b pb-1 last:border-b-0">
                 <strong>{i + 1}.</strong> {ex.nome}{" "}
                 {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
               </div>
@@ -482,30 +524,15 @@ export default function PaginaTreinos() {
     const exercicios = programado?.exercicios ?? [];
 
     return (
-      <div key={treino.id} className="bg-white p-4 rounded shadow border mb-4">
-        <h4
-          className="font-bold text-lg text-green-800 cursor-pointer hover:underline"
-          onClick={() => navigate(`/treinos/unico?agendadoId=${treino.id}`)}
-        >
-          {treino.titulo}
-        </h4>
-        {programado?.descricao && <p className="text-sm text-gray-700 mb-1">{programado.descricao}</p>}
-        <div className="text-sm text-gray-600 space-y-1">
-          <p>
-            <strong>Nível:</strong> {nivel}
-          </p>
-          {prazoIso && (
-            <div className="flex items-center">
-              <CalendarClock className="h-4 w-4 mr-1" />
-              Prazo para envio:
-              <Badge
-                variant="outline"
-                className="ml-1 text-[10px] bg-green-100 text-green-700 border-green-200"
-              >
-                {formatarDataHora(prazoIso)}
-              </Badge>
-            </div>
-          )}
+      <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
+        <div className="flex items-start justify-between gap-3">
+          <h4
+            className="font-bold text-lg text-green-800 cursor-pointer hover:underline"
+            onClick={() => navigate(`/treinos/unico?agendadoId=${treino.id}`)}
+          >
+            {treino.titulo}
+          </h4>
+
           <button
             onClick={() => removerTreinoAgendado(treino.id)}
             title="Remover"
@@ -513,25 +540,34 @@ export default function PaginaTreinos() {
           >
             <Trash2 className="w-4 h-4" />
           </button>
+        </div>
+
+        {programado?.descricao && <p className="text-sm text-gray-700 mt-1">{programado.descricao}</p>}
+
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700">
+          <p>
+            <strong>Nível:</strong> {nivel}
+          </p>
 
           {programado?.duracao && (
             <p>
               <strong>Duração:</strong> {programado.duracao} min
             </p>
           )}
+
           {programado?.objetivo && (
-            <p>
+            <p className="sm:col-span-2">
               <strong>Objetivo:</strong> {programado.objetivo}
             </p>
           )}
-          {Array.isArray(programado?.dicas) && programado.dicas.length > 0 && (
-            <div>
-              <strong>Dicas:</strong>
-              <ul className="list-disc list-inside pl-4">
-                {programado.dicas.map((dica, idx) => (
-                  <li key={idx}>{dica}</li>
-                ))}
-              </ul>
+
+          {prazoIso && (
+            <div className="sm:col-span-2 flex items-center text-gray-700">
+              <CalendarClock className="h-4 w-4 mr-1" />
+              Prazo para envio:
+              <Badge variant="outline" className="ml-2 text-[11px] bg-green-100 text-green-700 border-green-200">
+                {formatarDataHora(prazoIso)}
+              </Badge>
             </div>
           )}
         </div>
@@ -539,9 +575,9 @@ export default function PaginaTreinos() {
         {exercicios.length > 0 && (
           <div className="mt-3">
             <strong className="text-sm text-gray-800">Exercícios:</strong>
-            <div className="max-h-32 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
+            <div className="max-h-40 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
               {exercicios.map((ex, i) => (
-                <div key={ex.exercicio.id} className="border-b pb-1">
+                <div key={ex.exercicio.id} className="border-b pb-1 last:border-b-0">
                   <strong>{i + 1}.</strong> {ex.exercicio.nome}{" "}
                   {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
                 </div>
@@ -550,10 +586,10 @@ export default function PaginaTreinos() {
           </div>
         )}
 
-        <div className="mt-4 text-right">
+        <div className="mt-4 flex justify-end">
           <button
             onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
-            className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded"
+            className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg"
           >
             Fazer Submissão
           </button>
@@ -612,11 +648,8 @@ export default function PaginaTreinos() {
   function toggleSelecionado(idUsuario: string) {
     setSelecionados((prev) => {
       const novo = new Set(prev);
-      if (novo.has(idUsuario)) {
-        novo.delete(idUsuario);
-      } else {
-        novo.add(idUsuario);
-      }
+      if (novo.has(idUsuario)) novo.delete(idUsuario);
+      else novo.add(idUsuario);
       return novo;
     });
   }
@@ -634,15 +667,8 @@ export default function PaginaTreinos() {
         Array.from(selecionados).map((paraId) =>
           fetch(`${API.BASE_URL}/api/mensagem`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              paraId,
-              conteudo: desafioParaCompartilhar,
-              tipo: "DESAFIO",
-            }),
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ paraId, conteudo: desafioParaCompartilhar, tipo: "DESAFIO" }),
           })
         )
       );
@@ -657,18 +683,60 @@ export default function PaginaTreinos() {
     }
   }
 
-  // ====== RENDER ======
   return (
-    <div className="min-h-screen bg-transparent pb-20">
-      <div className="p-4 max-w-2xl mx-auto">
+    <div className="min-h-screen bg-neutral-50 pb-24">
+      <div className="mx-auto w-full max-w-3xl lg:max-w-4xl px-3 sm:px-4">
+
+        {/* HEADER: Abas (se gestor) à esquerda + botão de Elenco à direita */}
+        <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
+          <div className="flex items-center justify-between gap-2">
+            {isGestor ? (
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full max-w-[420px]">
+                <button
+                  onClick={() => setAbaProfessor("avaliar")}
+                  className={`px-4 py-2 rounded-lg border text-sm ${
+                    abaProfessor === "avaliar"
+                      ? "bg-green-800 text-white border-green-900"
+                      : "bg-white text-gray-800 border-gray-200"
+                  }`}
+                >
+                  Avaliar Treinos
+                </button>
+                <button
+                  onClick={() => setAbaProfessor("criar")}
+                  className={`px-4 py-2 rounded-lg border text-sm ${
+                    abaProfessor === "criar"
+                      ? "bg-green-800 text-white border-green-900"
+                      : "bg-white text-gray-800 border-gray-200"
+                  }`}
+                >
+                  Meus Treinos
+                </button>
+              </div>
+            ) : (
+              <div className="text-base font-semibold text-green-900">Treinos</div>
+            )}
+
+            <Link
+              href="/treinos/elenco"
+              aria-label="Ir para o elenco (campo)"
+              title="Elenco (campo)"
+              className="flex-shrink-0 inline-flex items-center justify-center p-2.5 rounded-full bg-white text-green-800 border border-green-200 shadow hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600"
+            >
+              <SoccerFieldIcon className="w-5 h-5" />
+            </Link>
+          </div>
+        </div>
+
+        {/* CONTEÚDO */}
         <>
           {usuario.tipo === "atleta" && (
             <div className="space-y-6">
-              <div className="bg-white rounded shadow p-4">
-                <div className="flex justify-between items-center mb-3">
+              <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
                   <h3 className="text-lg font-semibold">Meus Treinos</h3>
                   <button
-                    className="bg-green-800 text-white px-4 py-2 rounded text-sm"
+                    className="bg-green-800 text-white px-4 py-2 rounded-lg text-sm"
                     onClick={() => navigate("/treinos/novo")}
                   >
                     Agendar novo treino
@@ -676,16 +744,18 @@ export default function PaginaTreinos() {
                 </div>
 
                 {treinosAgendados.length > 0 ? (
-                  treinosAgendados.map(renderTreinoAgendadoCard)
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {treinosAgendados.map(renderTreinoAgendadoCard)}
+                  </div>
                 ) : (
                   <p className="text-gray-500">Nenhum treino disponível ainda.</p>
                 )}
               </div>
 
-              <div className="bg-white rounded shadow p-4">
+              <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
                 <h3 className="text-lg font-semibold mb-2">Desafios</h3>
                 {desafios.length > 0 ? (
-                  desafios.map(renderDesafioCard)
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{desafios.map(renderDesafioCard)}</div>
                 ) : (
                   <p className="text-gray-500">Nenhum desafio disponível no momento.</p>
                 )}
@@ -693,29 +763,10 @@ export default function PaginaTreinos() {
             </div>
           )}
 
-          {(usuario.tipo === "professor" ||
-            usuario.tipo === "admin" ||
-            usuario.tipo === "escola" ||
-            usuario.tipo === "escolinha" ||
-            usuario.tipo === "clube") && (
+          {isGestor && (
             <div className="space-y-6">
-              <div className="flex space-x-4 mb-4">
-                <button
-                  onClick={() => setAbaProfessor("avaliar")}
-                  className={`px-4 py-2 rounded ${abaProfessor === "avaliar" ? "bg-green-800 text-white" : "bg-gray-200 text-gray-800"}`}
-                >
-                  Avaliar Treinos
-                </button>
-                <button
-                  onClick={() => setAbaProfessor("criar")}
-                  className={`px-4 py-2 rounded ${abaProfessor === "criar" ? "bg-green-800 text-white" : "bg-gray-200 text-gray-800"}`}
-                >
-                  Meus Treinos
-                </button>
-              </div>
-
               {abaProfessor === "avaliar" && (
-                <div className="bg-white rounded shadow p-4">
+                <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
                   <h3 className="text-lg font-semibold mb-3">Treinos dos atletas afiliados</h3>
 
                   {carregandoSubmissoes ? (
@@ -726,55 +777,101 @@ export default function PaginaTreinos() {
                     <ul className="space-y-3">
                       {submissoesPendentes.map((s) => {
                         const foto = s.atleta?.foto ? resolveUploadUrl(s.atleta.foto) : PLACEHOLDER_USER;
+                        const midias = (Array.isArray(s.midias) ? s.midias : []).map(resolveUploadUrl);
+
                         return (
-                          <li key={s.id} className="border rounded-xl p-3 flex items-center gap-3">
-                            <img
-                              src={foto}
-                              alt={s.atleta?.nome}
-                              className="w-12 h-12 rounded-full object-cover border"
-                              onError={(e) => {
-                                const el = e.currentTarget as HTMLImageElement;
-                                (el as any).onerror = null;
-                                el.src = PLACEHOLDER_USER;
-                              }}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="font-medium text-green-900 truncate">{s.treino.titulo}</div>
-                              <div className="text-sm text-gray-600 truncate">{s.atleta?.nome}</div>
-                              <div className="text-xs text-gray-500">{formatarDataHora(s.criadoEm)}</div>
-                              {s.midias?.length > 0 && (
-                                <div className="mt-1 flex flex-wrap gap-2">
-                                  {s.midias.slice(0, 3).map((url) => (
-                                    <a
-                                      key={url}
-                                      href={resolveUploadUrl(url)}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-xs underline text-gray-700"
+                          <li
+                            key={s.id}
+                            className="rounded-xl border bg-white shadow-sm hover:shadow-md transition p-3 sm:p-4"
+                          >
+                            <div className="flex items-start gap-3 sm:gap-4">
+                              <img
+                                src={foto}
+                                alt={s.atleta?.nome}
+                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border"
+                                onError={(e) => {
+                                  const el = e.currentTarget as HTMLImageElement;
+                                  (el as any).onerror = null;
+                                  el.src = PLACEHOLDER_USER;
+                                }}
+                              />
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="font-semibold text-green-900 truncate">{s.treino.titulo}</div>
+                                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                    +{s.pontosSugeridos ?? 0} pts
+                                  </span>
+
+                                  <div className="ml-auto flex items-center gap-2 w-full sm:w-auto">
+                                    <button
+                                      onClick={() => aprovar(s.id, s.pontosSugeridos)}
+                                      className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                                      title="Aprovar e creditar pontos"
                                     >
-                                      Ver mídia
-                                    </a>
-                                  ))}
+                                      <Check className="w-4 h-4" /> Aprovar
+                                    </button>
+                                    <button
+                                      onClick={() => reprovar(s.id)}
+                                      className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200"
+                                      title="Reprovar"
+                                    >
+                                      <X className="w-4 h-4" /> Reprovar
+                                    </button>
+                                  </div>
                                 </div>
-                              )}
+
+                                <div className="text-sm text-gray-600 truncate">{s.atleta?.nome}</div>
+                                <div className="text-xs text-gray-500">{formatarDataHora(s.criadoEm)}</div>
+
+                                {!!s.observacao && (
+                                  <p className="mt-1 text-[13px] italic text-gray-700 leading-snug">“{s.observacao}”</p>
+                                )}
+                              </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => aprovar(s.id, s.pontosSugeridos)}
-                                className="inline-flex items-center gap-1 px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700"
-                                title="Aprovar e creditar pontos"
-                              >
-                                <Check className="w-4 h-4" /> Aprovar
-                              </button>
-                              <button
-                                onClick={() => reprovar(s.id)}
-                                className="inline-flex items-center gap-1 px-3 py-2 rounded bg-red-100 text-red-700 hover:bg-red-200"
-                                title="Reprovar"
-                              >
-                                <X className="w-4 h-4" /> Reprovar
-                              </button>
-                            </div>
+                            {!!midias.length && (
+                              <div className="mt-3 sm:mt-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+                                  {midias.map((src, idx) => {
+                                    const isVid = isVideoUrl(src);
+                                    return isVid ? (
+                                      <div
+                                        key={`${src}-${idx}`}
+                                        className="relative w-full overflow-hidden rounded-lg bg-black border pt-[56.25%]"
+                                      >
+                                        <video
+                                          src={src}
+                                          controls
+                                          preload="metadata"
+                                          playsInline
+                                          className="absolute inset-0 h-full w-full object-contain"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <a
+                                        key={`${src}-${idx}`}
+                                        href={src}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="block group"
+                                        title="Abrir imagem"
+                                      >
+                                        <div className="relative w-full overflow-hidden rounded-lg border bg-gray-50 pt-[56.25%]">
+                                          <img
+                                            src={src}
+                                            alt={`mídia ${idx + 1}`}
+                                            className="absolute inset-0 h-full w-full object-cover group-hover:scale-[1.02] transition"
+                                            loading="lazy"
+                                            decoding="async"
+                                          />
+                                        </div>
+                                      </a>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </li>
                         );
                       })}
@@ -784,19 +881,18 @@ export default function PaginaTreinos() {
               )}
 
               {abaProfessor === "criar" && (
-                <div>
-                  <div className="text-right mb-4">
+                <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                    <h3 className="text-lg font-semibold">
+                      {usuario.tipo === "admin" ? "Todos os Treinos" : "Treinos que você criou"}
+                    </h3>
                     <button
-                      className="bg-green-800 text-white px-4 py-2 rounded"
+                      className="bg-green-800 text-white px-4 py-2 rounded-lg"
                       onClick={() => navigate("/treinos/novo")}
                     >
                       Criar novo treino
                     </button>
                   </div>
-
-                  <h3 className="text-lg font-semibold mb-2">
-                    {usuario.tipo === "admin" ? "Todos os Treinos" : "Treinos que você criou"}
-                  </h3>
 
                   {(usuario.tipo === "admin"
                     ? treinos
@@ -807,20 +903,20 @@ export default function PaginaTreinos() {
                           t.clubeId === usuario.tipoUsuarioId
                       )
                   ).length > 0 ? (
-                    (usuario.tipo === "admin"
-                      ? treinos
-                      : treinos.filter(
-                          (t) =>
-                            t.professorId === usuario.tipoUsuarioId ||
-                            t.escolinhaId === usuario.tipoUsuarioId ||
-                            t.clubeId === usuario.tipoUsuarioId
-                        )
-                    ).map(renderTreinoCard)
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {(usuario.tipo === "admin"
+                        ? treinos
+                        : treinos.filter(
+                            (t) =>
+                              t.professorId === usuario.tipoUsuarioId ||
+                              t.escolinhaId === usuario.tipoUsuarioId ||
+                              t.clubeId === usuario.tipoUsuarioId
+                          )
+                      ).map(renderTreinoCard)}
+                    </div>
                   ) : (
                     <p className="text-gray-500">
-                      {usuario.tipo === "admin"
-                        ? "Nenhum treino cadastrado."
-                        : "Você ainda não criou nenhum treino."}
+                      {usuario.tipo === "admin" ? "Nenhum treino cadastrado." : "Você ainda não criou nenhum treino."}
                     </p>
                   )}
                 </div>
@@ -830,35 +926,35 @@ export default function PaginaTreinos() {
         </>
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed" className="hover:underline">
+      {/* Bottom Nav */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-[0_-4px_12px_-6px_rgba(0,0,0,0.3)]">
+        <Link href="/feed" className="hover:opacity-90" aria-label="Feed">
           <House />
         </Link>
-        <Link href="/explorar" className="hover:underline">
+        <Link href="/explorar" className="hover:opacity-90" aria-label="Explorar">
           <Search />
         </Link>
-        <Link href="/post" className="hover:underline">
+        <Link href="/post" className="hover:opacity-90" aria-label="Novo post">
           <CirclePlus />
         </Link>
-        <Link href={isOlheiro ? "/olheiros" : "/treinos"} className="hover:underline">
+        <Link href={isOlheiro ? "/olheiros" : "/treinos"} className="hover:opacity-90" aria-label="Treinos">
           <Volleyball />
         </Link>
-        <Link href="/perfil" className="hover:underline">
+        <Link href="/perfil" className="hover:opacity-90" aria-label="Perfil">
           <User />
         </Link>
       </nav>
 
+      {/* Modal Compartilhar */}
       {modalAberto && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-40 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-xl w-96 shadow-lg relative">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-lg relative">
             <h2 className="text-lg font-bold mb-4 text-center">Compartilhar Desafio</h2>
 
             <div className="mb-4">
               <p className="text-sm text-gray-700 mb-2">Enviar por mensagem:</p>
               <div className="flex gap-3 overflow-x-auto pb-2">
-                {carregandoMutuos && (
-                  <span className="text-sm text-gray-500">Carregando contatos...</span>
-                )}
+                {carregandoMutuos && <span className="text-sm text-gray-500">Carregando contatos...</span>}
 
                 {!carregandoMutuos && usuariosMutuos.length === 0 && (
                   <span className="text-sm text-gray-500">Você ainda não tem contatos mútuos.</span>
@@ -872,7 +968,9 @@ export default function PaginaTreinos() {
                       key={u.id}
                       onClick={() => toggleSelecionado(u.id)}
                       title={u.nome}
-                      className={`relative shrink-0 rounded-full border-2 ${selecionado ? "border-green-600" : "border-transparent"}`}
+                      className={`relative shrink-0 rounded-full border-2 ${
+                        selecionado ? "border-green-600" : "border-transparent"
+                      }`}
                     >
                       <img
                         src={fotoSrc}
@@ -899,8 +997,12 @@ export default function PaginaTreinos() {
               <button
                 disabled={selecionados.size === 0 || enviandoDM}
                 onClick={enviarCompartilhamentoPorDM}
-                className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded 
-                    ${selecionados.size === 0 || enviandoDM ? "bg-gray-300 text-gray-600" : "bg-green-700 text-white hover:bg-green-800"}`}
+                className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded-lg 
+                    ${
+                      selecionados.size === 0 || enviandoDM
+                        ? "bg-gray-300 text-gray-600"
+                        : "bg-green-700 text-white hover:bg-green-800"
+                    }`}
               >
                 <Send className="w-4 h-4" />
                 {enviandoDM ? "Enviando..." : `Enviar para ${selecionados.size} contato(s)`}
