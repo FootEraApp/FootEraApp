@@ -1,3 +1,4 @@
+// server/routes/treinos
 import { Router } from "express";
 import { authenticateToken } from "server/middlewares/auth.js";
 import {
@@ -19,8 +20,11 @@ import {
   listarElencos,
   criarElenco,
   atualizarElenco,
-  atletasVinculados,
+  atletasVinculados, 
+  listarSubmissoesParaValidacao, 
+  validarSubmissaoTreino,
 } from "server/controllers/treinosController.js";
+
 
 const router = Router();
 
@@ -42,6 +46,9 @@ router.post("/", criarTreinoProgramado);
 
 router.get("/exercicios", getExercicios);
 router.get("/pontuacoes", authenticateToken, getPontuacoes);
+
+router.get("/submissoes", authenticateToken, listarSubmissoesParaValidacao);
+router.post("/submissoes/:id/validar", authenticateToken, validarSubmissaoTreino);
 
 router.get("/elencos/:id/escala", authenticateToken, getEscalaPorElencoId);
 router.get("/elencos/escala-por-dono", authenticateToken, getEscalaPorDono);

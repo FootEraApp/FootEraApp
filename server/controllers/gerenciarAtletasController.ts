@@ -1,3 +1,4 @@
+// server/controllers/gerenciarAtletasController
 import { PrismaClient, Categoria } from "@prisma/client";
 import { Request, Response } from "express";
 
@@ -450,35 +451,40 @@ export const gerenciarAtletasController = {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-      const [treinosMes, desafiosMes, ultTreinos, ultDesafios] = await Promise.all([
-        prisma.submissaoTreino.count({
-          where: { atletaId: atleta.id, criadoEm: { gte: startOfMonth, lt: startOfNextMonth } },
-        }),
-        prisma.submissaoDesafio.count({
-          where: { atletaId: atleta.id, createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
-        }),
-        prisma.submissaoTreino.findMany({
-          where: { atletaId: atleta.id },
-          select: {
-            id: true,
-            criadoEm: true,
-            aprovado: true,
-            pontuacaoSnapshot: true,
-            treinoTituloSnapshot: true,
-            treinoAgendado: { select: { titulo: true } },
-          },
-          orderBy: { criadoEm: "desc" },
-          take: 5,
-        }),
-        prisma.submissaoDesafio.findMany({
-          where: { atletaId: atleta.id },
-          include: {
-            desafio: { select: { titulo: true } },
-          },
-          orderBy: { createdAt: "desc" },
-          take: 5,
-        }),
-      ]);
+const [treinosMes, desafiosMes, ultTreinos, ultDesafios] = await Promise.all([
+  prisma.submissaoTreino.count({
+    where: { atletaId: atleta.id, criadoEm: { gte: startOfMonth, lt: startOfNextMonth } },
+  }),
+  prisma.submissaoDesafio.count({
+    where: { atletaId: atleta.id, createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
+  }),
+  prisma.submissaoTreino.findMany({
+    where: { atletaId: atleta.id },
+    select: {
+      id: true,
+      criadoEm: true,
+      aprovado: true,
+      pontuacaoSnapshot: true,
+      treinoTituloSnapshot: true,
+      treinoAgendado: { select: { titulo: true } },
+    },
+    orderBy: { criadoEm: "desc" },
+    take: 5,
+  }),
+  prisma.submissaoDesafio.findMany({
+    where: { atletaId: atleta.id },
+    include: {
+      desafio: { select: { titulo: true, pontuacao: true } },
+      submissaoEmGrupo: {
+        select: { pontosGanhos: true, dataEnvio: true },
+        orderBy: { dataEnvio: "desc" },
+        take: 1,
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+  }),
+]);
 
       const totalTreinosMes = treinosMes + desafiosMes;
       const concluidosMes = treinosMes;
@@ -500,13 +506,19 @@ export const gerenciarAtletasController = {
             pontos: t.pontuacaoSnapshot ?? null,
             titulo: t.treinoTituloSnapshot || t.treinoAgendado?.titulo || "Treino",
           })),
-          desafios: ultDesafios.map((d) => ({
-            id: d.id,
-            tipo: "desafio" as const,
-            criadoEm: d.createdAt,
-            aprovado: (d as any).aprovado ?? null,
-            titulo: d.desafio?.titulo || "Desafio",
-          })),
+          desafios: ultDesafios.map((d) => {
+            const pontosGrupo = d.submissaoEmGrupo?.[0]?.pontosGanhos ?? null;
+            const pontosBase  = d.desafio?.pontuacao ?? null;
+            const pontosEfetivos = d.aprovado ? (pontosGrupo ?? pontosBase ?? null) : null;
+            return {
+              id: d.id,
+              tipo: "desafio" as const,
+              criadoEm: d.createdAt,
+              aprovado: (d as any).aprovado ?? null,
+              titulo: d.desafio?.titulo || "Desafio",
+              pontos: pontosEfetivos,
+            };
+          }),
         },
       });
     } catch (e: any) {
@@ -559,7 +571,12 @@ export const gerenciarAtletasController = {
           ? prisma.submissaoDesafio.findMany({
               where: { atletaId: atleta.id, ...(dateFilterDesafio ? { createdAt: dateFilterDesafio } : {}) },
               include: {
-                desafio: { select: { titulo: true } },
+                desafio: { select: { titulo: true, pontuacao: true } },
+                submissaoEmGrupo: {
+                  select: { pontosGanhos: true, dataEnvio: true },
+                  orderBy: { dataEnvio: "desc" },
+                  take: 1,
+                },
               },
               orderBy: { createdAt: "desc" },
               take,
@@ -569,7 +586,7 @@ export const gerenciarAtletasController = {
 
       type Row =
         | { id: string; tipo: "treino"; data: Date; aprovado: boolean | null; titulo: string; pontos?: number | null }
-        | { id: string; tipo: "desafio"; data: Date; aprovado: boolean | null; titulo: string };
+        | { id: string; tipo: "desafio"; data: Date; aprovado: boolean | null; titulo: string; pontos?: number | null };
 
       const rows: Row[] = [
         ...treinos.map((t) => ({
@@ -580,19 +597,23 @@ export const gerenciarAtletasController = {
           titulo: t.treinoTituloSnapshot || t.treinoAgendado?.titulo || "Treino",
           pontos: t.pontuacaoSnapshot ?? null,
         })),
-        ...desafios.map((d) => ({
-          id: d.id,
-          tipo: "desafio" as const,
-          data: (d as any).createdAt,
-          aprovado: (d as any).aprovado ?? null,
-          titulo: (d as any).desafio?.titulo || "Desafio",
-        })),
+        ...desafios.map((d) => {
+          const pontosGrupo = d.submissaoEmGrupo?.[0]?.pontosGanhos ?? null;
+          const pontosBase  = d.desafio?.pontuacao ?? null;
+          const pontosEfetivos = d.aprovado ? (pontosGrupo ?? pontosBase ?? null) : null;
+          return {
+            id: d.id,
+            tipo: "desafio" as const,
+            data: (d as any).createdAt,
+            aprovado: (d as any).aprovado ?? null,
+            titulo: (d as any).desafio?.titulo || "Desafio",
+            pontos: pontosEfetivos,
+          };
+        }),
       ].sort((a, b) => b.data.getTime() - a.data.getTime());
 
-      return res.json({
-        total: rows.length,
-        items: rows.slice(0, take),
-      });
+      return res.json({ total: rows.length, items: rows.slice(0, take) });
+
     } catch (e: any) {
       console.error("[gerenciarAtletas.submissoesAtleta]", e);
       return res.status(500).json({ message: e?.message || "Erro ao listar submissões" });

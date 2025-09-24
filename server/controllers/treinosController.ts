@@ -1,3 +1,4 @@
+// server/controllers/treinosController
 import { Response, Request } from "express";
 import { PrismaClient, PosicaoCampo, Categoria, TipoTreino } from "@prisma/client";
 import { getIO } from "../socket.js";
@@ -5,6 +6,40 @@ import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
 
 const prisma = new PrismaClient();
+
+function normalizeCategorias(input: any): Categoria[] {
+  if (!input) return [];
+  const arr = Array.isArray(input) ? input : [input];
+
+  // mapeia "Sub-9", "sub 15", "sub15" -> "Sub9" etc
+  const mapOne = (raw: any): string => {
+    const s = String(raw).trim();
+    const m = s.match(/^sub[\s-]?(\d{1,2})$/i);
+    if (m) return `Sub${m[1]}`;
+    if (/^livre$/i.test(s)) return "Livre";
+    return s; // já pode vir "Sub9"
+  };
+
+  const mapped = arr.map(mapOne);
+  // valida todas
+  const valid = mapped.filter((c) => (Object.values(Categoria) as string[]).includes(c));
+  if (valid.length !== mapped.length) {
+    // tem algum valor inválido
+    throw new Error("Categoria(s) inválida(s)");
+  }
+  return valid as Categoria[];
+}
+
+function normalizeTipoTreino(input: any): TipoTreino | undefined {
+  if (!input) return undefined;
+  const s = String(input).toLowerCase();
+  if (s === "fisico" || s === "físico") return "Fisico";
+  if (s === "tecnico" || s === "técnico") return "Tecnico";
+  if (s === "tatico" || s === "tático") return "Tatico";
+  if (s === "mental") return "Mental";
+  // já pode vir correto do front
+  return (Object.values(TipoTreino) as string[]).includes(String(input)) ? (input as TipoTreino) : undefined;
+}
 
 async function notificarNovoTreino(deUsuarioId: string, atletaId: string, treinoId: string, titulo: string) {
   const atleta = await prisma.atleta.findUnique({
@@ -674,17 +709,17 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
     const {
       nome,
       descricao,
-      nivel,                 
-      exercicios,            
+      nivel,                  // "Base" | "Avancado" | "Performance"
+      exercicios,             // [{ exercicioId? | nome, repeticoes?, ordem? }, ...]
       usuarioId,
-      categoria,            
-      tipoTreino,           
+      categoria,              // ["Sub-9", "Sub-11", "Livre"] ou ["Sub9", ...]
+      tipoTreino,             // "Fisico" | "Físico" | "Tecnico" | "Tático" | ...
       objetivo,
       duracao,
-      dataTreino,           
-      dataAgendada,         
+      dataTreino,
+      dataAgendada,
       dicas,
-      tipoUsuario,           
+      tipoUsuario,            // "professor" | "escolinha" | "clube"
       tipoUsuarioId,
       atletasIds,
     } = req.body as any;
@@ -693,11 +728,16 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
       return res.status(400).json({ error: "Dados inválidos" });
     }
 
-    if (categoria && (!Array.isArray(categoria) || !categoria.every((cat: any) => Object.values(Categoria).includes(cat)))) {
+    // 🔧 Normalizações amigáveis
+    let categorias: Categoria[] = [];
+    try {
+      categorias = normalizeCategorias(categoria);
+    } catch {
       return res.status(400).json({ error: "Categoria(s) inválida(s)" });
     }
 
-    if (tipoTreino && !Object.values(TipoTreino).includes(tipoTreino as TipoTreino)) {
+    const tipoTreinoNorm = normalizeTipoTreino(tipoTreino);
+    if (tipoTreino && !tipoTreinoNorm) {
       return res.status(400).json({ error: "TipoTreino inválido" });
     }
 
@@ -714,16 +754,20 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
         objetivo,
         duracao,
         dicas,
-        categoria: Array.isArray(categoria) ? (categoria as any[]) : [],
-        tipoTreino: tipoTreino as TipoTreino,
-        ...(tipoNorm === "professor"  ? { professorId: tipoUsuarioId } :
-          tipoNorm === "escolinha"    ? { escolinhaId: tipoUsuarioId } :
-          tipoNorm === "clube"        ? { clubeId: tipoUsuarioId } : {}),
+        categoria: categorias,                 // ✅ já normalizado
+        tipoTreino: tipoTreinoNorm,            // ✅ já normalizado
+        ...(tipoNorm === "professor"
+          ? { professorId: tipoUsuarioId }
+          : tipoNorm === "escolinha"
+          ? { escolinhaId: tipoUsuarioId }
+          : tipoNorm === "clube"
+          ? { clubeId: tipoUsuarioId }
+          : {}),
       },
     });
 
-    const exsBanco = (exercicios as any[]).filter(e => e.exercicioId);
-    const exsTemp  = (exercicios as any[]).filter(e => !e.exercicioId && e.nome);
+    const exsBanco = (exercicios as any[]).filter((e) => e.exercicioId);
+    const exsTemp = (exercicios as any[]).filter((e) => !e.exercicioId && e.nome);
 
     if (exsBanco.length) {
       await prisma.treinoProgramadoExercicio.createMany({
@@ -740,11 +784,11 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
       const temp = await prisma.exercicioTemporario.create({
         data: {
           treinoProgramadoId: treino.id,
-          codigo: null,   
+          codigo: null,
           nome: e.nome,
           descricao: e.descricao ?? null,
-          nivel,                 
-          categorias: Array.isArray(categoria) ? (categoria as any[]) : [],
+          nivel,
+          categorias, // ✅ usa as mesmas categorias normalizadas
         },
       });
 
@@ -759,14 +803,14 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
     }
 
     if (Array.isArray(atletasIds) && atletasIds.length > 0) {
-      const dataAgendada = treino.dataAgendada ?? new Date();
+      const whenDate = treino.dataAgendada ?? new Date();
       await Promise.all(
         (atletasIds as string[]).map((atletaId) =>
           prisma.treinoAgendado.create({
             data: {
               titulo: treino.nome,
-              dataExpiracao: dataAgendada,
-              dataTreino: dataAgendada,
+              dataExpiracao: whenDate,
+              dataTreino: whenDate,
               atletaId,
               treinoProgramadoId: treino.id,
             },
@@ -785,7 +829,7 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
 export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: Response) {
   try {
     const { id } = req.params;
-    const {
+    let {
       nome, codigo, descricao, nivel, categoria, tipoTreino, dataAgendada, objetivo,
       duracao, dicas, imagemUrl, metas, pontuacao, expiraEm, naoExpira,
       exercicios = [],
@@ -800,6 +844,20 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
       if (dup) {
         return res.status(400).json({ message: "Já existe treino com esse nome ou código.", duplicado: dup });
       }
+    }
+
+    let categoriasNorm: Categoria[] | undefined = undefined;
+    if (categoria !== undefined) {
+      try {
+        categoriasNorm = normalizeCategorias(categoria);
+      } catch {
+        return res.status(400).json({ message: "Categoria(s) inválida(s)" });
+      }
+    }
+
+    const tipoTreinoNorm = tipoTreino !== undefined ? normalizeTipoTreino(tipoTreino) : undefined;
+    if (tipoTreino !== undefined && !tipoTreinoNorm) {
+      return res.status(400).json({ message: "TipoTreino inválido" });
     }
 
     const donoUpdate: any = {};
@@ -828,8 +886,8 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           ...(codigo !== undefined ? { codigo } : {}),
           ...(descricao !== undefined ? { descricao } : {}),
           ...(nivel !== undefined ? { nivel } : {}),
-          ...(categoria !== undefined ? { categoria: Array.isArray(categoria) ? categoria : [] } : {}),
-          ...(tipoTreino !== undefined ? { tipoTreino } : {}),
+          ...(categoriasNorm !== undefined ? { categoria: categoriasNorm } : {}),
+          ...(tipoTreinoNorm !== undefined ? { tipoTreino: tipoTreinoNorm } : {}),
           ...(dataAgendada !== undefined ? { dataAgendada: dataAgendada ? new Date(dataAgendada) : null } : {}),
           ...(objetivo !== undefined ? { objetivo } : {}),
           ...(duracao !== undefined ? { duracao: duracao != null ? Number(duracao) : null } : {}),
@@ -861,8 +919,8 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
             codigo: null,
             nome: e.nome,
             descricao: e.descricao ?? null,
-            nivel: nivel,
-            categorias: Array.isArray(categoria) ? categoria : [],
+            nivel: nivel, // mantém o mesmo comportamento anterior
+            categorias: categoriasNorm ?? [], // ✅ usa categorias normalizadas
           },
         });
 
@@ -900,4 +958,205 @@ export const deletarTreinoProgramado = async (req: AuthenticatedRequest, res: Re
     return res.status(500).json({ message: "Erro ao excluir treino.", error: e.message });
   }
 };
+
+// ===== Validação de Submissões de Treino =====
+
+/**
+ * Lista submissões de treino para validação, filtrando por vínculo (professor/clube/escolinha -> atletas).
+ * GET /treinos/submissoes?tipoUsuarioId=...&status=pendente|todos
+ */
+export async function listarSubmissoesParaValidacao(req: AuthenticatedRequest, res: Response) {
+  try {
+    const tipoUsuarioId = String((req.query.tipoUsuarioId ?? "") as string).trim();
+    const status = String((req.query.status ?? "pendente") as string).toLowerCase();
+
+    // Resolve entidade (professor/clube/escolinha) a partir do tipoUsuarioId ou do usuário logado
+    const resolved = await resolveEntidade(tipoUsuarioId || req.userId!);
+    if (!resolved) return res.json([]);
+
+    // Coleta atletas vinculados (mesma lógica do atletasVinculados)
+    const atletaIds = new Set<string>();
+    const whereRel =
+      resolved.tipo === "professor" ? { professorId: resolved.id } :
+      resolved.tipo === "clube"     ? { clubeId: resolved.id } :
+                                      { escolinhaId: resolved.id };
+
+    const rels = await prisma.relacaoTreinamento.findMany({
+      where: { ...whereRel, atletaId: { not: null } },
+      select: { atletaId: true },
+    });
+    rels.forEach(r => r.atletaId && atletaIds.add(r.atletaId));
+
+    if (resolved.tipo === "clube") {
+      const diretos = await prisma.atleta.findMany({ where: { clubeId: resolved.id }, select: { id: true } });
+      diretos.forEach(a => atletaIds.add(a.id));
+    }
+    if (resolved.tipo === "escolinha") {
+      const diretos = await prisma.atleta.findMany({ where: { escolinhaId: resolved.id }, select: { id: true } });
+      diretos.forEach(a => atletaIds.add(a.id));
+    }
+
+    if (atletaIds.size === 0) return res.json([]);
+
+    // Filtro por status
+    const where: any = { atletaId: { in: Array.from(atletaIds) } };
+    switch (status) {
+      case "pendente":
+        // considerar pendente tudo que NÃO está aprovado ainda
+        // (pega aprovado = null ou false; se quiser ignorar reprovados antigos, usa a segunda condição)
+        where.OR = [
+          { aprovado: { equals: null } },
+          { AND: [{ aprovado: false }, { OR: [{ pontosCreditados: null }, { pontosCreditados: 0 }] }] },
+        ];
+        break;
+      case "aprovados":
+      case "aprovadas":
+        where.aprovado = true;
+        break;
+      case "reprovados":
+      case "reprovadas":
+        where.aprovado = false;
+        break;
+      // "todos" = sem filtro extra
+    }
+
+    const subs = await prisma.submissaoTreino.findMany({
+      where,
+      include: {
+        atleta: { select: { id: true, nome: true, foto: true, usuarioId: true } },
+        treinoAgendado: {
+          select: {
+            id: true,
+            titulo: true,
+            treinoProgramado: { select: { id: true, nome: true, pontuacao: true } },
+          },
+        },
+        midias: { select: { url: true } },
+      },
+      orderBy: { criadoEm: "desc" },
+    });
+
+    const payload = subs.map(s => {
+      const pontosBase = s.pontuacaoSnapshot ?? s.treinoAgendado?.treinoProgramado?.pontuacao ?? 0;
+      return {
+        id: s.id,
+        criadoEm: s.criadoEm instanceof Date ? s.criadoEm.toISOString() : (s as any).criadoEm,
+        aprovado: s.aprovado,
+        pontosSugeridos: pontosBase || 0,
+        atleta: {
+          id: s.atleta?.id,
+          usuarioId: s.atleta?.usuarioId,
+          nome: s.atleta?.nome ?? "",
+          foto: s.atleta?.foto ?? null,
+        },
+        treino: {
+          agendadoId: s.treinoAgendado?.id,
+          titulo: s.treinoAgendado?.titulo ?? s.treinoAgendado?.treinoProgramado?.nome ?? "Treino",
+          programadoId: s.treinoAgendado?.treinoProgramado?.id ?? null,
+        },
+        midias: s.midias?.map(m => m.url) ?? [],
+      };
+    });
+
+    return res.json(payload);
+  } catch (err) {
+    console.error("Erro em listarSubmissoesParaValidacao:", err);
+    return res.status(500).json({ message: "Erro ao buscar submissões" });
+  }
+}
+
+
+/**
+ * Valida uma submissão (aprovar/reprovar) e credita pontos em PontuacaoAtleta (upsert).
+ * POST /treinos/submissoes/:id/validar  { aprovado: boolean, pontos?: number }
+ */
+export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Response) {
+  try {
+    const { id } = req.params;
+    const { aprovado, pontos } = req.body as { aprovado: boolean; pontos?: number };
+    const tipoUsuarioId = String((req.query.tipoUsuarioId ?? "") as string).trim();
+
+    const sub = await prisma.submissaoTreino.findUnique({
+      where: { id },
+      include: {
+        atleta: true,
+        treinoAgendado: {
+          include: {
+            treinoProgramado: { select: { pontuacao: true, nome: true, tipoTreino: true, duracao: true, professorId: true, clubeId: true, escolinhaId: true } },
+          },
+        },
+      },
+    });
+    if (!sub) return res.status(404).json({ message: "Submissão não encontrada" });
+
+    // Checagem de autorização: precisa ser entidade vinculada ao atleta OU dona do treino programado
+    const resolved = await resolveEntidade(tipoUsuarioId || req.userId!);
+    if (!resolved) return res.status(403).json({ message: "Sem permissão" });
+
+    // Vinculo direto com atleta?
+    const vinculo = await prisma.relacaoTreinamento.findFirst({
+      where: {
+        atletaId: sub.atletaId,
+        ...(resolved.tipo === "professor" ? { professorId: resolved.id } :
+           resolved.tipo === "clube"     ? { clubeId: resolved.id } :
+                                          { escolinhaId: resolved.id }),
+      },
+      select: { id: true },
+    });
+
+    // Ou dono do treino?
+    const donoTreino = sub.treinoAgendado?.treinoProgramado && (
+      sub.treinoAgendado.treinoProgramado.professorId === resolved.id ||
+      sub.treinoAgendado.treinoProgramado.clubeId === resolved.id ||
+      sub.treinoAgendado.treinoProgramado.escolinhaId === resolved.id
+    );
+
+    if (!vinculo && !donoTreino) {
+      return res.status(403).json({ message: "Você não possui vínculo/direito para validar esta submissão." });
+    }
+
+    const pontosBase = sub.pontuacaoSnapshot ?? sub.treinoAgendado?.treinoProgramado?.pontuacao ?? 0;
+    const pontosFinais = aprovado ? Math.max(0, Number.isFinite(Number(pontos)) ? Number(pontos) : (pontosBase || 0)) : 0;
+
+    // Atualiza submissão
+    const atualizado = await prisma.submissaoTreino.update({
+      where: { id: sub.id },
+      data: {
+        aprovado,
+        pontosCreditados: pontosFinais || null,
+        pontuacaoSnapshot: pontosFinais || null,
+        treinoTituloSnapshot: sub.treinoAgendado?.treinoProgramado?.nome ?? sub.treinoAgendado?.titulo ?? undefined,
+        tipoTreinoSnapshot: sub.treinoAgendado?.treinoProgramado?.tipoTreino ?? undefined,
+        duracaoMinutos: sub.treinoAgendado?.treinoProgramado?.duracao ?? undefined,
+        usuarioId: req.userId!, // quem validou
+      },
+    });
+
+    // Upsert em PontuacaoAtleta (garante criação caso não exista)
+    await prisma.pontuacaoAtleta.upsert({
+      where: { atletaId: sub.atletaId },
+      create: {
+        atletaId: sub.atletaId,
+        pontuacaoTotal: pontosFinais,
+        ultimaAtualizacao: new Date(),
+      },
+      update: {
+        pontuacaoTotal: { increment: pontosFinais },
+        ultimaAtualizacao: new Date(),
+      },
+    });
+
+    // Recalcula agregados (seu serviço atual já contempla isso)
+    try {
+      await recomputePontuacaoAtleta(sub.atletaId);
+    } catch (e) {
+      console.warn("recomputePontuacaoAtleta falhou (não é crítico para a aprovação):", e);
+    }
+
+    return res.json({ ok: true, aprovado, pontos: pontosFinais, id: atualizado.id });
+  } catch (err) {
+    console.error("Erro em validarSubmissaoTreino:", err);
+    return res.status(500).json({ message: "Erro ao validar submissão" });
+  }
+}
 

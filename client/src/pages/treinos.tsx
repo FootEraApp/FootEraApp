@@ -1,3 +1,4 @@
+// client/src/pages/treinos
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -12,6 +13,8 @@ import {
   Send,
   Share2,
   Trash2,
+  Check,
+  X,
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
@@ -89,8 +92,19 @@ interface UsuarioLogado {
   tipoUsuarioId: string;
 }
 
+// ====== NOVO: tipos p/ validação ======
+interface SubmissaoParaValidacao {
+  id: string;
+  criadoEm: string;
+  aprovado: boolean | null;
+  pontosSugeridos: number;
+  atleta: { id: string; usuarioId: string; nome: string; foto?: string | null };
+  treino: { agendadoId: string; titulo: string; programadoId?: string | null };
+  midias: string[];
+}
+
 const PLACEHOLDER_USER = "/assets/default-user.png";
- 
+
 function resolveUploadUrl(raw?: string | null) {
   if (!raw) return "";
   if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
@@ -114,6 +128,10 @@ export default function PaginaTreinos() {
   const [carregandoMutuos, setCarregandoMutuos] = useState(false);
   const [desafioParaCompartilhar, setDesafioParaCompartilhar] = useState<string | null>(null);
 
+  // ====== NOVO: estado para validações ======
+  const [submissoesPendentes, setSubmissoesPendentes] = useState<SubmissaoParaValidacao[]>([]);
+  const [carregandoSubmissoes, setCarregandoSubmissoes] = useState(false);
+
   useEffect(() => {
     const handler = (e: any) => setTreinosAgendados((prev) => [e.detail, ...prev]);
     window.addEventListener("treino:agendado", handler as EventListener);
@@ -130,47 +148,47 @@ export default function PaginaTreinos() {
         sessionStorage.getItem("tipoUsuario") ??
         "";
 
-      const tipo = String(rawTipo).toLowerCase(); 
+      const tipo = String(rawTipo).toLowerCase();
 
       const tipoUsuarioId = (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
       const token = (Storage as any).token ?? localStorage.getItem("token");
 
-     if (tipo === "atleta" && tipoUsuarioId && token) {
-      const [resTreinos, resDesafios] = await Promise.all([
-        fetch(`${API.BASE_URL}/api/treinos/agendados?usuarioId=${(Storage as any).usuarioId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
+      if (tipo === "atleta" && tipoUsuarioId && token) {
+        const [resTreinos, resDesafios] = await Promise.all([
+          fetch(`${API.BASE_URL}/api/treinos/agendados?usuarioId=${(Storage as any).usuarioId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
 
-      if (!resTreinos.ok) { console.error("/treinos/agendados", resTreinos.status, await resTreinos.text()); return; }
-      if (!resDesafios.ok) { console.error("/desafios", resDesafios.status, await resDesafios.text()); return; }
+        if (!resTreinos.ok) { console.error("/treinos/agendados", resTreinos.status, await resTreinos.text()); return; }
+        if (!resDesafios.ok) { console.error("/desafios", resDesafios.status, await resDesafios.text()); return; }
 
-      const treinosJson = await resTreinos.json();
-      const desafiosJson = await resDesafios.json();
+        const treinosJson = await resTreinos.json();
+        const desafiosJson = await resDesafios.json();
 
-      const normalizados = (Array.isArray(treinosJson) ? treinosJson : []).map((t: any) => ({
-        id: t.id,
-        titulo: t.titulo,
-        dataTreino: t.dataTreino ?? null,
-        prazoEnvio: t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t.treinoProgramado?.dataAgendada ?? null,
-        nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
-        duracaoMinutos: t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
-        treinoProgramado: t.treinoProgramado ?? null,
-      }));
+        const normalizados = (Array.isArray(treinosJson) ? treinosJson : []).map((t: any) => ({
+          id: t.id,
+          titulo: t.titulo,
+          dataTreino: t.dataTreino ?? null,
+          prazoEnvio: t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t.treinoProgramado?.dataAgendada ?? null,
+          nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
+          duracaoMinutos: t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
+          treinoProgramado: t.treinoProgramado ?? null,
+        }));
 
-      const agora = Date.now();
-      const apenasVigentes = normalizados.filter((t) => {
-        if (!t.prazoEnvio) return true;
-        const ts = Date.parse(t.prazoEnvio);
-        return Number.isFinite(ts) ? ts >= agora : true;
-      });
+        const agora = Date.now();
+        const apenasVigentes = normalizados.filter((t) => {
+          if (!t.prazoEnvio) return true;
+          const ts = Date.parse(t.prazoEnvio);
+          return Number.isFinite(ts) ? ts >= agora : true;
+        });
 
-      setTreinosAgendados(apenasVigentes);
-      setDesafios(desafiosJson ?? []);
-    } else if (tipo === "admin" && token) {
+        setTreinosAgendados(apenasVigentes);
+        setDesafios(desafiosJson ?? []);
+      } else if (tipo === "admin" && token) {
         const [resTreinos, resDesafios] = await Promise.all([
           fetch(`${API.BASE_URL}/api/treinos/programados`, { headers: { Authorization: `Bearer ${token}` } }),
           fetch(`${API.BASE_URL}/api/desafios`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -201,58 +219,58 @@ export default function PaginaTreinos() {
         setTreinos(normTreinos);
         setDesafios(jsonDesafios?.desafiosOficiais ?? jsonDesafios ?? []);
       } else if (["professor", "clube", "escolinha", "escola"].includes(String(tipo)) && token) {
-          const [resTreinos, resDesafios] = await Promise.all([
-            fetch(`${API.BASE_URL}/api/treinos/programados`, {
-              headers: { Authorization: `Bearer ${token}` },
-            }),
-            fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
-              headers: { Authorization: `Bearer ${token}` },
-            }),
-          ]);
+        const [resTreinos, resDesafios] = await Promise.all([
+          fetch(`${API.BASE_URL}/api/treinos/programados`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
 
-          if (!resTreinos.ok) throw new Error(`/treinos/programados: ${resTreinos.status}`);
-          if (!resDesafios.ok) throw new Error(`/desafios: ${resDesafios.status}`);
+        if (!resTreinos.ok) throw new Error(`/treinos/programados: ${resTreinos.status}`);
+        if (!resDesafios.ok) throw new Error(`/desafios: ${resDesafios.status}`);
 
-          const jsonTreinos = await resTreinos.json();
-          const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
-            id: t.id,
-            nome: t.nome,
-            descricao: t.descricao ?? undefined,
-            nivel: t.nivel,
-            dataAgendada: t.dataAgendada ?? undefined,
-            duracao: t.duracao ?? undefined,
-            objetivo: t.objetivo ?? undefined,
-            dicas: Array.isArray(t.dicas) ? t.dicas : [],
-            professorId: t.professorId ?? undefined,
-            escolinhaId: t.escolinhaId ?? undefined,
-            clubeId: t.clubeId ?? undefined,
-            exercicios: (t.exercicios ?? []).map((ex: any) => ({
-              id: ex.exercicio?.id ?? ex.id ?? "",
-              nome: ex.exercicio?.nome ?? ex.nome ?? "",
-              repeticoes: ex.repeticoes ?? undefined,
-            })),
-          }));
+        const jsonTreinos = await resTreinos.json();
+        const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
+          id: t.id,
+          nome: t.nome,
+          descricao: t.descricao ?? undefined,
+          nivel: t.nivel,
+          dataAgendada: t.dataAgendada ?? undefined,
+          duracao: t.duracao ?? undefined,
+          objetivo: t.objetivo ?? undefined,
+          dicas: Array.isArray(t.dicas) ? t.dicas : [],
+          professorId: t.professorId ?? undefined,
+          escolinhaId: t.escolinhaId ?? undefined,
+          clubeId: t.clubeId ?? undefined,
+          exercicios: (t.exercicios ?? []).map((ex: any) => ({
+            id: ex.exercicio?.id ?? ex.id ?? "",
+            nome: ex.exercicio?.nome ?? ex.nome ?? "",
+            repeticoes: ex.repeticoes ?? undefined,
+          })),
+        }));
 
-          const jsonDesafios = await resDesafios.json();
-          setTreinos(normTreinos);
-          setDesafios(jsonDesafios ?? []);
-       } else {
-          const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/disponiveis`);
-          if (!resTreinos.ok) { console.error("/treinos/disponiveis", resTreinos.status, await resTreinos.text()); return; }
+        const jsonDesafios = await resDesafios.json();
+        setTreinos(normTreinos);
+        setDesafios(jsonDesafios ?? []);
+      } else {
+        const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/disponiveis`);
+        if (!resTreinos.ok) { console.error("/treinos/disponiveis", resTreinos.status, await resTreinos.text()); return; }
 
-          const jsonTreinos = await resTreinos.json();
-          const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
-            ...t,
-            exercicios: (t.exercicios ?? []).map((ex: any) => ({
-              id: ex.id ?? "",
-              nome: ex.nome ?? "",
-              repeticoes: ex.repeticoes ?? undefined,
-            })),
-          }));
+        const jsonTreinos = await resTreinos.json();
+        const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
+          ...t,
+          exercicios: (t.exercicios ?? []).map((ex: any) => ({
+            id: ex.id ?? "",
+            nome: ex.nome ?? "",
+            repeticoes: ex.repeticoes ?? undefined,
+          })),
+        }));
 
-          setTreinos(normTreinos);
-          setDesafios([]);
-        }
+        setTreinos(normTreinos);
+        setDesafios([]);
+      }
     };
 
     const carregarUsuario = () => {
@@ -289,11 +307,76 @@ export default function PaginaTreinos() {
     carregarUsuario();
   }, []);
 
-    useEffect(() => {
-      if (isOlheiro) {
-        window.location.replace("/olheiros");
+  useEffect(() => {
+    if (isOlheiro) {
+      window.location.replace("/olheiros");
+    }
+  }, [isOlheiro]);
+
+  // ====== NOVO: carregar submissões pendentes quando abrir aba "avaliar"
+  useEffect(() => {
+    if (!usuario) return;
+    if (usuario.tipo === "professor" || usuario.tipo === "clube" || usuario.tipo === "escolinha" || usuario.tipo === "escola" || usuario.tipo === "admin") {
+      if (abaProfessor === "avaliar") carregarSubmissoes();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abaProfessor, usuario?.tipoUsuarioId]);
+
+  async function carregarSubmissoes() {
+    const token = (Storage as any).token ?? localStorage.getItem("token");
+    if (!token || !usuario) return;
+
+    setCarregandoSubmissoes(true);
+    try {
+      const res = await fetch(
+        `${API.BASE_URL}/api/treinos/submissoes?tipoUsuarioId=${usuario.tipoUsuarioId}&status=pendente`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) throw new Error(`Falha /treinos/submissoes: ${res.status}`);
+      const data = await res.json();
+      setSubmissoesPendentes(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error(e);
+      setSubmissoesPendentes([]);
+    } finally {
+      setCarregandoSubmissoes(false);
+    }
+  }
+
+  async function validarSubmissao(id: string, aprovado: boolean, pontosSug?: number) {
+    const token = (Storage as any).token ?? localStorage.getItem("token");
+    if (!token || !usuario) return;
+
+    let pontos = 0;
+    if (aprovar) {
+      const inp = prompt("Pontos a creditar para este treino:", String(pontosSug ?? 0));
+      if (inp === null) return;
+      const n = Number(inp);
+      pontos = Number.isFinite(n) && n >= 0 ? n : 0;
+    }
+
+    try {
+      const res = await fetch(`${API.BASE_URL}/api/treinos/submissoes/${id}/validar?tipoUsuarioId=${usuario.tipoUsuarioId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ aprovado, pontos }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Falha ao validar:", res.status, txt);
+        return alert("Não foi possível validar a submissão.");
       }
-    }, [isOlheiro]);
+      // remove do estado local
+      setSubmissoesPendentes((prev) => prev.filter((s) => s.id !== id));
+      alert(aprovar ? "Submissão aprovada e pontos creditados!" : "Submissão reprovada.");
+    } catch (e) {
+      console.error(e);
+      alert("Erro inesperado ao validar.");
+    }
+  }
+
+  const aprovar = (id: string, pontos?: number) => validarSubmissao(id, true, pontos);
+  const reprovar = (id: string) => validarSubmissao(id, false, 0);
 
   const formatarDataHora = (iso?: string | null) =>
     iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
@@ -574,6 +657,7 @@ export default function PaginaTreinos() {
     }
   }
 
+  // ====== RENDER ======
   return (
     <div className="min-h-screen bg-transparent pb-20">
       <div className="p-4 max-w-2xl mx-auto">
@@ -618,26 +702,84 @@ export default function PaginaTreinos() {
               <div className="flex space-x-4 mb-4">
                 <button
                   onClick={() => setAbaProfessor("avaliar")}
-                  className={`px-4 py-2 rounded ${
-                    abaProfessor === "avaliar" ? "bg-green-800 text-white" : "bg-gray-200 text-gray-800"
-                  }`}
+                  className={`px-4 py-2 rounded ${abaProfessor === "avaliar" ? "bg-green-800 text-white" : "bg-gray-200 text-gray-800"}`}
                 >
                   Avaliar Treinos
                 </button>
                 <button
                   onClick={() => setAbaProfessor("criar")}
-                  className={`px-4 py-2 rounded ${
-                    abaProfessor === "criar" ? "bg-green-800 text-white" : "bg-gray-200 text-gray-800"
-                  }`}
+                  className={`px-4 py-2 rounded ${abaProfessor === "criar" ? "bg-green-800 text-white" : "bg-gray-200 text-gray-800"}`}
                 >
                   Meus Treinos
                 </button>
               </div>
 
               {abaProfessor === "avaliar" && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-2">Treinos dos atletas afiliados</h3>
-                  <p className="text-gray-500">Nenhum treino pendente para avaliação no momento.</p>
+                <div className="bg-white rounded shadow p-4">
+                  <h3 className="text-lg font-semibold mb-3">Treinos dos atletas afiliados</h3>
+
+                  {carregandoSubmissoes ? (
+                    <p className="text-gray-500">Carregando submissões pendentes...</p>
+                  ) : submissoesPendentes.length === 0 ? (
+                    <p className="text-gray-500">Nenhum treino pendente para avaliação no momento.</p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {submissoesPendentes.map((s) => {
+                        const foto = s.atleta?.foto ? resolveUploadUrl(s.atleta.foto) : PLACEHOLDER_USER;
+                        return (
+                          <li key={s.id} className="border rounded-xl p-3 flex items-center gap-3">
+                            <img
+                              src={foto}
+                              alt={s.atleta?.nome}
+                              className="w-12 h-12 rounded-full object-cover border"
+                              onError={(e) => {
+                                const el = e.currentTarget as HTMLImageElement;
+                                (el as any).onerror = null;
+                                el.src = PLACEHOLDER_USER;
+                              }}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-green-900 truncate">{s.treino.titulo}</div>
+                              <div className="text-sm text-gray-600 truncate">{s.atleta?.nome}</div>
+                              <div className="text-xs text-gray-500">{formatarDataHora(s.criadoEm)}</div>
+                              {s.midias?.length > 0 && (
+                                <div className="mt-1 flex flex-wrap gap-2">
+                                  {s.midias.slice(0, 3).map((url) => (
+                                    <a
+                                      key={url}
+                                      href={resolveUploadUrl(url)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-xs underline text-gray-700"
+                                    >
+                                      Ver mídia
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => aprovar(s.id, s.pontosSugeridos)}
+                                className="inline-flex items-center gap-1 px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                                title="Aprovar e creditar pontos"
+                              >
+                                <Check className="w-4 h-4" /> Aprovar
+                              </button>
+                              <button
+                                onClick={() => reprovar(s.id)}
+                                className="inline-flex items-center gap-1 px-3 py-2 rounded bg-red-100 text-red-700 hover:bg-red-200"
+                                title="Reprovar"
+                              >
+                                <X className="w-4 h-4" /> Reprovar
+                              </button>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
               )}
 
@@ -730,9 +872,7 @@ export default function PaginaTreinos() {
                       key={u.id}
                       onClick={() => toggleSelecionado(u.id)}
                       title={u.nome}
-                      className={`relative shrink-0 rounded-full border-2 ${
-                        selecionado ? "border-green-600" : "border-transparent"
-                      }`}
+                      className={`relative shrink-0 rounded-full border-2 ${selecionado ? "border-green-600" : "border-transparent"}`}
                     >
                       <img
                         src={fotoSrc}
@@ -760,11 +900,7 @@ export default function PaginaTreinos() {
                 disabled={selecionados.size === 0 || enviandoDM}
                 onClick={enviarCompartilhamentoPorDM}
                 className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded 
-                    ${
-                      selecionados.size === 0 || enviandoDM
-                        ? "bg-gray-300 text-gray-600"
-                        : "bg-green-700 text-white hover:bg-green-800"
-                    }`}
+                    ${selecionados.size === 0 || enviandoDM ? "bg-gray-300 text-gray-600" : "bg-green-700 text-white hover:bg-green-800"}`}
               >
                 <Send className="w-4 h-4" />
                 {enviandoDM ? "Enviando..." : `Enviar para ${selecionados.size} contato(s)`}

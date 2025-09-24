@@ -1,24 +1,15 @@
+// client/src/pages/GerenciarAtletas
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, House } from "lucide-react";
 import axios from "axios";
 import {
-  Users,
-  Search,
-  Filter,
-  ChevronRight,
-  ChevronDown,
-  ArrowUpAZ,
-  ArrowDownZA,
-  Shield,
-  Activity,
-  Trophy,
-  Loader2,
-  X,
-  CalendarClock,
-  ListChecks,
-  Send,
+  Users, Search, Filter, ChevronRight, ChevronDown, ArrowUpAZ, ArrowDownZA,
+  Shield, Activity, Trophy, Loader2, X, CalendarClock, ListChecks, Send,
 } from "lucide-react";
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+} from "recharts";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 
@@ -69,6 +60,15 @@ type TreinoProgramadoMin = {
   naoExpira?: boolean | null;
 };
 
+type SubmissaoItem = {
+  id: string;
+  tipo: "treino" | "desafio";
+  data: string;
+  titulo: string;
+  aprovado: boolean | null;
+  pontos?: number | null;
+};
+
 const getFoto = (f?: string | null) => {
   if (!f || f === "" || f === "null") return "/assets/usuarios/default-user.png";
   if (f.startsWith("http")) return f;
@@ -77,11 +77,31 @@ const getFoto = (f?: string | null) => {
 
 const numberOrDash = (n?: number | null) => (typeof n === "number" ? n : "–");
 
+const formatRelativo = (iso: string) => {
+  const d = new Date(iso), now = new Date();
+  const ms = now.getTime() - d.getTime();
+  const min = Math.floor(ms / 60000), h = Math.floor(min / 60), dias = Math.floor(h / 24);
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
+  if (h < 24) return `há ${h} h`;
+  if (dias === 1) return "ontem";
+  return `há ${dias} d`;
+};
+
+const AprovacaoPill: React.FC<{ value: boolean | null }> = ({ value }) => {
+  const cls = value === true
+    ? "bg-emerald-100 text-emerald-700"
+    : value === false
+      ? "bg-red-100 text-red-700"
+      : "bg-zinc-100 text-zinc-600";
+  const label = value === true ? "aprovado" : value === false ? "reprovado" : "pendente";
+  return <span className={`rounded-full px-2 py-0.5 text-[11px] ${cls}`}>{label}</span>;
+};
+
 const StatusBadge: React.FC<{ ativo?: boolean }> = ({ ativo }) => (
   <span
-    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-      ativo ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-600"
-    }`}
+    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${ativo ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-600"
+      }`}
   >
     <span className={`h-2 w-2 rounded-full ${ativo ? "bg-green-500" : "bg-zinc-400"}`} />
     {ativo ? "ativo" : "inativo"}
@@ -119,7 +139,7 @@ const GerenciarAtletas: React.FC = () => {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   const [tipo, setTipo] = useState<"Escola" | "Clube" | "Professor" | null>(null);
-  const [entidadeUsuarioId, setEntidadeUsuarioId] = useState<string | null>(null); 
+  const [entidadeUsuarioId, setEntidadeUsuarioId] = useState<string | null>(null);
   const [atletas, setAtletas] = useState<AtletaMin[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -148,6 +168,10 @@ const GerenciarAtletas: React.FC = () => {
   const [categoriaFiltroDesignacao, setCategoriaFiltroDesignacao] = useState<"" | CategoriaBase>("");
   const [salvandoDesignacao, setSalvandoDesignacao] = useState(false);
 
+  const [submissoes, setSubmissoes] = useState<SubmissaoItem[]>([]);
+  const [subsLoading, setSubsLoading] = useState(false);
+  const pollingSubsRef = useRef<NodeJS.Timeout | null>(null);
+
   const tipoParaVinculo = (t: "Escola" | "Clube" | "Professor") =>
     t === "Escola" ? "escolinha" : t.toLowerCase();
 
@@ -158,8 +182,8 @@ const GerenciarAtletas: React.FC = () => {
       const perfilTipo: string = data?.tipo;
       const normalizado =
         perfilTipo === "Escolinha" ? "Escola" :
-        perfilTipo === "Clube" ? "Clube" :
-        perfilTipo === "Professor" ? "Professor" : null;
+          perfilTipo === "Clube" ? "Clube" :
+            perfilTipo === "Professor" ? "Professor" : null;
 
       if (!normalizado) throw new Error("Perfil institucional inválido para Gerenciar Atletas.");
 
@@ -257,10 +281,33 @@ const GerenciarAtletas: React.FC = () => {
     }
   };
 
+  const carregarSubmissoesAtleta = async (atletaUsuarioId: string) => {
+    setSubsLoading(true);
+    try {
+      const { data } = await axios.get(
+        `${API.BASE_URL}/api/gerenciar/atletas/${atletaUsuarioId}/submissoes`,
+        { headers, params: { type: "all", period: "month", limit: 8 } }
+      );
+      const items = (data?.items || []) as any[];
+      setSubmissoes(items.map((row) => ({
+        id: row.id,
+        tipo: row.tipo, // "treino" | "desafio"
+        data: new Date(row.data || row.criadoEm || Date.now()).toISOString(),
+        titulo: row.titulo || (row.tipo === "treino" ? "Treino" : "Desafio"),
+        aprovado: (row.aprovado ?? null),
+        pontos: row.pontos ?? null,
+      })));
+    } catch {
+      setSubmissoes([]);
+    } finally {
+      setSubsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
     descobrirPerfil();
-    }, [token]);
+  }, [token]);
 
   useEffect(() => {
     if (!tipo || !entidadeUsuarioId) return;
@@ -302,21 +349,53 @@ const GerenciarAtletas: React.FC = () => {
   useEffect(() => {
     if (!focado) {
       setStats(null);
+      setSubmissoes([]);
       if (pollingStatsRef.current) clearInterval(pollingStatsRef.current);
+      if (pollingSubsRef.current) clearInterval(pollingSubsRef.current);
       return;
     }
     const uid = focado.usuarioId || focado.id;
     carregarStatsAtleta(uid);
+    carregarSubmissoesAtleta(uid);
 
     if (pollingStatsRef.current) clearInterval(pollingStatsRef.current);
-    pollingStatsRef.current = setInterval(() => {
-      carregarStatsAtleta(uid);
-    }, 15000);
+    if (pollingSubsRef.current) clearInterval(pollingSubsRef.current);
+
+    pollingStatsRef.current = setInterval(() => carregarStatsAtleta(uid), 15000);
+    pollingSubsRef.current = setInterval(() => carregarSubmissoesAtleta(uid), 15000);
 
     return () => {
       if (pollingStatsRef.current) clearInterval(pollingStatsRef.current);
+      if (pollingSubsRef.current) clearInterval(pollingSubsRef.current);
     };
   }, [focado?.usuarioId, focado?.id]);
+
+  // ======= DADOS DO GRÁFICO (4 semanas) =======
+  const chartData = useMemo(() => {
+    // Semana 1 = 21–27 dias atrás, ... Semana 4 = 0–6 dias (mais recente)
+    const bins = [
+      { semana: "Semana 1", treinos: 0, desafios: 0 },
+      { semana: "Semana 2", treinos: 0, desafios: 0 },
+      { semana: "Semana 3", treinos: 0, desafios: 0 },
+      { semana: "Semana 4", treinos: 0, desafios: 0 },
+    ];
+    const now = Date.now();
+    for (const s of submissoes) {
+      if (s.aprovado !== true) continue; // conta apenas concluídos (aprovados)
+      const t = new Date(s.data).getTime();
+      const diffDays = Math.floor((now - t) / 86_400_000);
+      let idx = -1;
+      if (diffDays <= 6) idx = 3;
+      else if (diffDays <= 13) idx = 2;
+      else if (diffDays <= 20) idx = 1;
+      else if (diffDays <= 27) idx = 0;
+      if (idx >= 0) {
+        if (s.tipo === "treino") bins[idx].treinos += 1;
+        else bins[idx].desafios += 1;
+      }
+    }
+    return bins;
+  }, [submissoes]);
 
   const idsDestino = useMemo(() => {
     if (alcance === "todos") return filtrados.map((a) => a.usuarioId || a.id);
@@ -333,7 +412,7 @@ const GerenciarAtletas: React.FC = () => {
         atletasSelecionados: Array.from(new Set(idsDestino.length ? idsDestino : filtrados.map((a) => a.usuarioId || a.id))),
       };
       sessionStorage.setItem("novoTreinoState", JSON.stringify(next));
-    } catch {}
+    } catch { }
     window.location.href = "/treinos/novo";
   };
 
@@ -639,6 +718,89 @@ const GerenciarAtletas: React.FC = () => {
                       {statsLoading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : (stats?.desafiosFeitosMes ?? "–")}
                     </div>
                   </div>
+                </div>
+
+                {/* === Gráfico semanal (torres) === */}
+                <div className="mt-4 rounded-xl border border-zinc-200 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-medium text-zinc-900">
+                      <Trophy className="h-4 w-4" />
+                      Atividade por semana
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="inline-flex items-center gap-1 text-zinc-600">
+                        <span className="inline-block h-2 w-2 rounded-sm" style={{ background: "#10b981" }} />
+                        Treinos
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-zinc-600">
+                        <span className="inline-block h-2 w-2 rounded-sm" style={{ background: "#f59e0b" }} />
+                        Desafios
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="h-40 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="semana" tick={{ fontSize: 12 }} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                        <Tooltip
+                          formatter={(value: any, name: any) =>
+                            [value as number, name === "treinos" ? "Treinos" : "Desafios"]
+                          }
+                          labelFormatter={(label) => label}
+                        />
+                        <Bar dataKey="treinos" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="desafios" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Lista simples de treinos/desafios concluídos */}
+                <div className="mt-4 rounded-xl border border-zinc-200">
+                  <div className="flex items-center gap-2 border-b border-zinc-100 p-3 text-sm font-medium text-zinc-900">
+                    <ListChecks className="h-4 w-4" /> Concluídos recentemente
+                    <span className="ml-auto text-xs font-normal text-zinc-500">
+                      {subsLoading ? "atualizando..." : `${submissoes.length} item(ns)`}
+                    </span>
+                  </div>
+
+                  {subsLoading ? (
+                    <div className="p-4 text-center text-zinc-600">
+                      <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                    </div>
+                  ) : submissoes.length === 0 ? (
+                    <div className="p-4 text-center text-zinc-500">Sem registros neste período.</div>
+                  ) : (
+                    <ul className="divide-y divide-zinc-100">
+                      {submissoes.map((s) => (
+                        <li key={s.id} className="flex items-center justify-between p-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`rounded-full px-2 py-0.5 text-[11px] ${s.tipo === "treino" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
+                                }`}>
+                                {s.tipo === "treino" ? "Treino" : "Desafio"}
+                              </span>
+                              <AprovacaoPill value={s.aprovado} />
+                              <span className="truncate text-sm font-medium text-zinc-900">{s.titulo}</span>
+                            </div>
+                            <div className="mt-0.5 text-xs text-zinc-500">
+                              <CalendarClock className="mr-1 inline h-3 w-3" />
+                              {formatRelativo(s.data)}
+                            </div>
+                          </div>
+
+                          <div className="ml-3 shrink-0 text-right">
+                            <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                              {typeof s.pontos === "number" ? `${s.pontos} pts` : "—"}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
 
                 <div className="mt-4 flex items-center justify-end gap-2">
