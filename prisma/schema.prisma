@@ -179,6 +179,9 @@ model Atleta {
   treinosLivres                TreinoLivre[]
   treinosRecebidos             TreinoProgramadoRecebido[]
   Video                        Video[]
+  VinculoFormacao              VinculoFormacao[]
+  TransferenciaFormador        TransferenciaFormador[]
+  DocumentoFormador            DocumentoFormador[]
 
   @@index([perfilTipoTreino])
 }
@@ -413,28 +416,28 @@ model Comentario {
 }
 
 model Clube {
-  id                  String               @id @default(uuid())
-  usuarioId           String               @unique
-  nome                String               @unique
-  cnpj                String?              @unique
-  telefone1           String?
-  telefone2           String?
-  email               String?              @unique
-  siteOficial         String?              @unique
-  sede                String?
-  estadio             String?
-  logradouro          String?
-  numero              String?
-  complemento         String?
-  bairro              String?
-  cidade              String?
-  estado              String?
-  pais                String?
-  cep                 String?
-  logo                String?
-  dataCriacao         DateTime             @default(now())
-  descricao           String?
-  responsavel         String?
+  id          String   @id @default(uuid())
+  usuarioId   String   @unique
+  nome        String   @unique
+  cnpj        String?  @unique
+  telefone1   String?
+  telefone2   String?
+  email       String?  @unique
+  siteOficial String?  @unique
+  sede        String?
+  estadio     String?
+  logradouro  String?
+  numero      String?
+  complemento String?
+  bairro      String?
+  cidade      String?
+  estado      String?
+  pais        String?
+  cep         String?
+  logo        String?
+  dataCriacao DateTime @default(now())
+  descricao   String?
+  responsavel String?
 
   categorias          Categoria[]
   atletas             Atleta[]
@@ -849,6 +852,66 @@ model Indicacao {
   @@index([olheiroId, status])
   @@index([clubeId])
   @@index([atletaId])
+}
+
+model VinculoFormacao {
+  id          String         @id @default(uuid())
+  atletaId    String
+  origem      OrigemFormador
+  origemId    String
+  inicio      DateTime?
+  fim         DateTime?
+  documentos  String[]
+  observacoes String?
+  createdAt   DateTime       @default(now())
+
+  atleta            Atleta              @relation(fields: [atletaId], references: [id])
+  DocumentoFormador DocumentoFormador[]
+}
+
+model TransferenciaFormador {
+  id                 String    @id @default(uuid())
+  atletaId           String
+  deClubeId          String?
+  paraClubeId        String?
+  data               DateTime?
+  valorTransferencia Decimal   @default(0)
+  gerouSolidariedade Boolean   @default(false)
+  valorSolidariedade Decimal   @default(0)
+  createdAt          DateTime  @default(now())
+
+  atleta Atleta @relation(fields: [atletaId], references: [id])
+}
+
+model BadgeFormador {
+  id            String    @id @default(uuid())
+  nome          String
+  descricao     String?
+  icon          String?
+  iconUrl       String?
+  conquistadoEm DateTime?
+  createdAt     DateTime  @default(now())
+}
+
+model DocumentoFormador {
+  id           String   @id @default(uuid())
+  atletaId     String
+  descricao    String?
+  fileName     String
+  originalName String
+  mimeType     String
+  size         Int
+  path         String
+  createdAt    DateTime @default(now())
+
+  atleta            Atleta           @relation(fields: [atletaId], references: [id])
+  vinculoFormacao   VinculoFormacao? @relation(fields: [vinculoFormacaoId], references: [id])
+  vinculoFormacaoId String?
+}
+
+enum OrigemFormador {
+  Escolinha
+  Clube
 }
 
 enum IndicacaoStatus {

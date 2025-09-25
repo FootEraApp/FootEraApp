@@ -33,25 +33,27 @@ export default function PaginaNotificacoes() {
 
   const responderSolicitacao = async (id: string, aceitar: boolean) => {
   const token = Storage.token;
-
   if (!token) {
     alert("Você precisa estar logado para responder a solicitação.");
     return;
   }
 
   try {
-    await fetch(`${API.BASE_URL}/api/solicitacoes-treino/${id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ aceitar }),
+    const url = `${API.BASE_URL}/api/solicitacoes-treino/${id}/${aceitar ? "aceitar" : "recusar"}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
     });
 
-    setSolicitacoes((prev) => prev.filter((s) => s.id !== id));
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(`Falha ao ${aceitar ? "aceitar" : "recusar"} (HTTP ${resp.status}): ${txt}`);
+    }
+
+    setSolicitacoes(prev => prev.filter(s => s.id !== id));
   } catch (err) {
     console.error("Erro ao responder solicitação:", err);
+    alert("Não foi possível processar a solicitação agora.");
   }
 };
 

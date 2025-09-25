@@ -1,4 +1,3 @@
-// client/src/components/profile/BadgesList.tsx
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { API } from "../../config.js";
@@ -15,15 +14,12 @@ import { Textarea } from "../ui/textarea.js";
 import { Share2, Pencil, Check, Star, StarOff } from "lucide-react";
 import { Link } from "wouter";
 
-/* =========================
- * Tipos
- * ========================= */
 type Earned = {
   id: string;
   entity: string;
   title: string;
   description: string;
-  icon?: string; // emoji
+  icon?: string;
   tier?: "bronze" | "prata" | "ouro" | "platina";
   group: string;
 };
@@ -35,9 +31,6 @@ type LegacyBadge = {
   iconUrl?: string;
 };
 
-/* =========================
- * Utils de exibição/ordenção
- * ========================= */
 const HIDE_PATTERNS = [
   /disciplina/i,
   /responsabilidade/i,
@@ -73,9 +66,6 @@ function chooseHardest(list: Earned[], k = 6) {
     .slice(0, k);
 }
 
-/* =========================
- * Ícone de badge (emoji ou imagem legada)
- * ========================= */
 function BadgeIcon({
   emoji,
   img,
@@ -99,9 +89,6 @@ function BadgeIcon({
   return <span className="text-2xl mb-2">{emoji || "🏆"}</span>;
 }
 
-/* =========================
- * Componente principal
- * ========================= */
 export function BadgesList({
   userId,
   badges = [],
@@ -119,7 +106,6 @@ export function BadgesList({
   const [mensagem, setMensagem] = useState("");
   const [editMode, setEditMode] = useState(false);
 
-  // seleção de destaques salva no localStorage por usuário
   const LOCAL_KEY = useMemo(
     () => `profile.badgeHighlights:${ownerId || "me"}`,
     [ownerId]
@@ -135,7 +121,6 @@ export function BadgesList({
     localStorage.setItem(LOCAL_KEY, JSON.stringify(highlightIds));
   }, [LOCAL_KEY, highlightIds]);
 
-  // buscar conquistas ganhas do backend
   useEffect(() => {
     let cancelled = false;
     async function fetchEarned() {
@@ -156,7 +141,6 @@ export function BadgesList({
         if (cancelled) return;
 
         const data = r.data?.earned || [];
-        // backend já retorna Earned no formato certo
         setEarned(
           data.map((e: any) => ({
             id: e.id,
@@ -169,7 +153,6 @@ export function BadgesList({
           }))
         );
       } catch (e) {
-        // fallback: nada
         setEarned([]);
       } finally {
         if (!cancelled) setLoading(false);
@@ -181,9 +164,6 @@ export function BadgesList({
     };
   }, [ownerId]);
 
-  // lista final a exibir:
-  // 1) se usuário escolheu destaques, mostrar esses (e somente os que ainda possui)
-  // 2) senão, mostrar automaticamente as 6 mais difíceis
   const earnedFiltered = useMemo(
     () => earned.filter((b) => !isHiddenTitle(b.title)),
     [earned]
@@ -193,7 +173,6 @@ export function BadgesList({
     if (highlightIds.length > 0) {
       const map = new Set(highlightIds);
       const onlyOwned = earnedFiltered.filter((b) => map.has(b.id));
-      // se usuário removeu/trocou badges e ficaram < 6, completa com as mais difíceis
       const need = Math.max(0, 6 - onlyOwned.length);
       if (need === 0) return onlyOwned;
       const extra = chooseHardest(
@@ -204,7 +183,6 @@ export function BadgesList({
     return chooseHardest(earnedFiltered, 6);
   }, [highlightIds, earnedFiltered]);
 
-  // grid usado no modo edição (mostrar todas conquistadas para escolher)
   const allOwnedSorted = useMemo(
     () => chooseHardest(earnedFiltered, Number.MAX_SAFE_INTEGER),
     [earnedFiltered]
@@ -235,7 +213,6 @@ export function BadgesList({
     );
   }
 
-  // fallback de compatibilidade com badges legados, caso o backend não retorne nada
   const usingLegacy = !loading && earnedFiltered.length === 0 && badges.length;
   const legacyToShow = useMemo(() => badges.slice(0, 6), [badges]);
 
@@ -273,7 +250,6 @@ export function BadgesList({
         )}
       </div>
 
-      {/* Lista principal (destaques) */}
       {!editMode && (
         <div className="p-4">
           {loading ? (
@@ -339,7 +315,6 @@ export function BadgesList({
         </div>
       )}
 
-      {/* Modo edição: mostrar TODAS conquistadas (sem as ocultas) para escolher destaques */}
       {editMode && (
         <div className="p-4">
           <p className="text-xs text-gray-600 mb-2">
@@ -397,7 +372,6 @@ export function BadgesList({
         </Link>
       </div>
 
-      {/* Dialog compartilhar */}
       <Dialog open={openShare} onOpenChange={setOpenShare}>
         <DialogContent>
           <DialogHeader>

@@ -42,6 +42,7 @@ import PaginaTermosEPrivacidade from "./pages/TermosEPrivacidade.js"
 import PaginaOlheiros from "./pages/olheiro/index.js";
 import PaginaConquistas from "./pages/conquistas.js";
 import PaginaRanking from "./pages/ranking.js";
+import PaginaFormadores from "./pages/formadores.js";
 
 export function AppRoutes() {
   return (
@@ -93,6 +94,8 @@ export function AppRoutes() {
       <Route path="/perfil/GerenciarAtletas">
         <PaginaGerenciarAtleta />
       </Route>
+
+      <Route path="/formadores" component={PaginaFormadores} />
 
       <Route path="/eventos/clubes/:id/novo">
         {(params?: { id: string }) =>

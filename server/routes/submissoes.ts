@@ -17,7 +17,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// === Treino ===
 router.post(
   "/treino",
   authenticateToken,
@@ -25,7 +24,6 @@ router.post(
   (req: AuthenticatedRequest, res) => criarSubmissaoTreinoUpload(req, res)
 );
 
-// === Desafio (agora igual ao desafiosController: aprovado=true + recompute) ===
 router.post(
   "/desafio",
   authenticateToken,

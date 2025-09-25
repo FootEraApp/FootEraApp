@@ -10,7 +10,6 @@ import {
 
 const prisma = new PrismaClient();
 
-// tipos utilitários iguais aos do front
 type Tier = "bronze" | "prata" | "ouro" | "platina";
 type Entity = "Atleta" | "Professor" | "Escolinha" | "Clube";
 type Group = "Treinos" | "Desafios" | "Desafios em Grupo" | "Pontuação" | "Gestão" | "Eventos";
@@ -30,7 +29,7 @@ function entityFromTipoUsuario(tipo: TipoUsuario): Entity | null {
   if (tipo === "Professor") return "Professor";
   if (tipo === "Escolinha") return "Escolinha";
   if (tipo === "Clube") return "Clube";
-  return null; // Admin/Olheiro: sem catálogo por enquanto
+  return null;
 }
 
 function serializeAchievements(list: any[]): EarnedDTO[] {
@@ -45,17 +44,6 @@ function serializeAchievements(list: any[]): EarnedDTO[] {
   }));
 }
 
-/**
- * GET /api/conquistas/:usuarioId
- * Retorna as conquistas conquistadas pelo usuário + metadados básicos.
- * Resposta:
- * {
- *   usuarioId: string,
- *   entity: "Atleta" | ...,
- *   totalAvailable: number,
- *   earned: EarnedDTO[]
- * }
- */
 export async function getEarnedByUsuarioId(req: Request, res: Response) {
   try {
     const { usuarioId } = req.params as { usuarioId: string };
@@ -71,7 +59,6 @@ export async function getEarnedByUsuarioId(req: Request, res: Response) {
 
     const entity = entityFromTipoUsuario(user.tipo);
     if (!entity) {
-      // Não tem catálogo para Admin/Olheiro
       return res.json({
         usuarioId,
         entity: null,
@@ -103,12 +90,6 @@ export async function getEarnedByUsuarioId(req: Request, res: Response) {
   }
 }
 
-/**
- * GET /api/conquistas/catalog/:entity?
- * Devolve o catálogo completo para a entity informada.
- * - :entity pode ser Atleta|Professor|Escolinha|Clube (case-insensitive)
- * - se omitir, retorna todos.
- */
 export async function getCatalog(req: Request, res: Response) {
   try {
     const raw = (req.params.entity || req.query.entity || "").toString().toLowerCase().trim();
@@ -143,5 +124,4 @@ export async function getCatalog(req: Request, res: Response) {
   }
 }
 
-/** opcional: expor prisma para testes */
 export const __prisma = prisma;

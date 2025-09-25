@@ -10,6 +10,7 @@ import { setupSocket } from "./socket.js";
 import qrcode from "qrcode-terminal";
 import { APP } from "./config.js";
 import * as fs from "fs";
+import { UPLOADS_ROOT, ensureUploadDirs } from "./utils/uploads.js";
 
 import adminRoutes from "./routes/admin.js";
 import adminModeracaoRoutes from "./routes/adminModeracao.js";
@@ -61,6 +62,7 @@ import desempenhoRoutes from "./routes/desempenho.js";
 import conquistasRouter from "./routes/conquistas.js";
 import relacoesRoutes from "./routes/relacoes.js";
 import elencosRoutes from "./routes/elencos.js";
+import formadoresRoutes from "./routes/formadores.js";
 
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 import { removerTreinosExpirados } from "./routes/removerTreinosExpirados.js";
@@ -72,6 +74,7 @@ const __dirname = dirname(__filename);
 const server = http.createServer(app);
 const io = setupSocket(server);
 
+ensureUploadDirs();
 dotenv.config();
 startExpiredTrainingsJob();
 
@@ -82,6 +85,10 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
+
+app.use("/uploads", express.static(path.join(process.cwd(), "public","uploads")));
+app.use("/uploads", express.static(UPLOADS_ROOT, { maxAge: "1d" }));
+app.use('/assets', express.static(path.join(__dirname, 'public/assets')));
 
 app.use("/api/admin", adminRoutes);
 app.use("/api/atletas", atletaRoutes);
@@ -128,17 +135,16 @@ app.use("/api/vinculo", vinculoRoutes);
 app.use("/api/observados", observadosRoutes);
 app.use("/api/gerenciar", gerenciarAtletasRoutes);
 app.use("/api/conquistas", conquistasRouter);
-app.use("/api", indicacoesRouter); 
-app.use("/api", olheirosRouter);
 app.use("/api/relacoes", relacoesRoutes);
 app.use("/api/elencos", elencosRoutes);
 app.use("/api/admin/moderacao", adminModeracaoRoutes);
-app.use("/uploads", express.static(path.join(process.cwd(), "public/uploads")));
+app.use("/api/formadores", formadoresRoutes);
+app.use("/api", indicacoesRouter); 
+app.use("/api", olheirosRouter);
 
 app.use("/exercicios", express.static(path.join(process.cwd(), "public", "exercicios"), {
   setHeaders: (res) => res.setHeader("Accept-Ranges", "bytes"),
 }));
-
 
 const candidates = [
   path.join(process.cwd(), "client/public/assets"),
