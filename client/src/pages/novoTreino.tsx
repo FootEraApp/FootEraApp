@@ -85,6 +85,7 @@ interface TreinoProgramado {
     nome: string;
     repeticoes?: string;
   }[];
+  pontuacao?: number | null;
 }
 
 interface Elenco {
@@ -226,6 +227,7 @@ export default function NovoTreino() {
       nome: t.nome ?? t.titulo ?? "(sem nome)",
       descricao: t.descricao ?? t.resumo ?? "",
       nivel: t.nivel ?? t.dificuldade ?? "-",
+      pontuacao: t.pontuacao ?? null,
       exercicios: (t.exercicios ?? t.exs ?? []).map((ex: any, i: number) => ({
         id: ex.id ?? ex.exercicioId ?? String(i),
         nome: ex.nome ?? ex.titulo ?? ex?.exercicio?.nome ?? ex?.exercicioTemporario?.nome ?? "",
@@ -749,13 +751,21 @@ export default function NovoTreino() {
         ) : (
           treinosDisponiveis.map((t) => (
             <div key={t.id} className="bg-white border p-4 rounded shadow mb-4">
-              <h3
-                className="text-green-800 text-lg font-semibold cursor-pointer hover:underline"
-                onClick={() => navigate(`/treinos/unico?programadoId=${t.id}`)}
-                title="Ver detalhes do treino"
-              >
-                {t.nome}
-              </h3>
+              <div className="flex items-start justify-between gap-2">
+                <h3
+                  className="text-green-800 text-lg font-semibold cursor-pointer hover:underline"
+                  onClick={() => navigate(`/treinos/unico?programadoId=${t.id}`)}
+                  title="Ver detalhes do treino"
+                >
+                  {t.nome}
+                </h3>
+
+                {typeof t.pontuacao === "number" && t.pontuacao > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                    +{t.pontuacao} pts
+                  </span>
+                )}
+              </div>
 
               <p className="text-sm">
                 <strong>Descrição:</strong> {t.descricao}
