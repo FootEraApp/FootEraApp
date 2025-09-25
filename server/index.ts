@@ -88,6 +88,7 @@ app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
 app.use("/uploads", express.static(path.join(process.cwd(), "public","uploads")));
 app.use("/uploads", express.static(UPLOADS_ROOT, { maxAge: "1d" }));
+app.use('/assets', express.static(path.join(__dirname, 'public/assets')));
 
 app.use("/api/admin", adminRoutes);
 app.use("/api/atletas", atletaRoutes);

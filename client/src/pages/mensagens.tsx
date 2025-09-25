@@ -117,20 +117,30 @@ const markReadFromUser = async (otherId: string) => {
   setUnreadByUser(prev => ({ ...prev, [otherId]: 0 }));
 };
 
+  const lastGroupRef = useRef<string | null>(null);
+
   useEffect(() => {
-  if (!alvo) return;
-  if (alvo.tipo === "usuario") {
-    setMensagensPrivadas([]);     // limpa imediatamente
-    setTemMaisPriv(true);
-    carregarMensagensPrivadas(alvo.usuario.id, false).catch(() => {});
-  } else {
-    setMensagensGrupo([]);
-    setTemMaisGrupo(true);
-    carregarMensagensDoGrupo(alvo.grupo.id, false).catch(() => {});
-    socket.emit("joinGroup", alvo.grupo.id);
-  }
-  setNovaMensagem("");
-}, [alvo]);
+    if (!alvo) return;
+
+    if (alvo.tipo === "usuario") {
+      const key = `conversa_${usuarioId}_${alvo.usuario.id}`;
+      setMensagensPrivadas(safeLoad<Mensagem>(key));
+      setTemMaisPriv(true);
+      carregarMensagensPrivadas(alvo.usuario.id, false);
+      markReadFromUser(alvo.usuario.id);
+    } else {
+        if (lastGroupRef.current && lastGroupRef.current !== alvo.grupo.id) {
+        socket.emit("leaveGroup", lastGroupRef.current);
+      }
+      lastGroupRef.current = alvo.grupo.id;
+      socket.emit("joinGroup", alvo.grupo.id);
+      const key = `conversa_grupo_${alvo.grupo.id}`;
+      setMensagensGrupo(safeLoad<MensagemGrupo>(key));
+      setTemMaisGrupo(true);
+      carregarMensagensDoGrupo(alvo.grupo.id, false);
+    }
+    setNovaMensagem("");
+  }, [alvo, usuarioId, token]);
 
   useEffect(() => {
     if (!token) return;
@@ -301,7 +311,16 @@ const markReadFromUser = async (otherId: string) => {
 
   const cardRef = useRef<HTMLDivElement | null>(null);
   const alvoRef = useRef<ChatTarget | null>(null);
+  
   useEffect(() => { alvoRef.current = alvo; }, [alvo]);
+
+  useEffect(() => {
+    return () => {
+      if (lastGroupRef.current) {
+        socket.emit("leaveGroup", lastGroupRef.current);
+      }
+    };
+  }, []);
 
   const recarregarMensagensDoGrupoAtual = async () => {
     const current = alvoRef.current;
@@ -413,12 +432,20 @@ const markReadFromUser = async (otherId: string) => {
     const encoded = "CARD_JSON:" + btoa(encodeURIComponent(JSON.stringify(payload)));
 
     const clientMsgId = genClientId();
-    setMensagensPrivadas(prev => [...prev, {
-      id: clientMsgId, clientMsgId, pending: true,
-      criadaEm: new Date().toISOString(),
-      conteudo: encoded,
-      deId: usuarioId!, paraId: alvo.usuario.id, tipo: "CARD",
-    }]);
+
+    setMensagensPrivadas(prev => [
+      ...prev,
+      {
+        id: clientMsgId,
+        clientMsgId,
+        pending: true,
+        criadaEm: new Date().toISOString(),
+        conteudo: encoded,
+        deId: usuarioId!, 
+        paraId: alvo.usuario.id,
+        tipo: "CARD",
+      }
+    ]);
 
     const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
       method: "POST",
@@ -477,7 +504,12 @@ const markReadFromUser = async (otherId: string) => {
 
   useEffect(() => {
     socket.connect();
-    socket.on("connect", () => { if (usuarioId) socket.emit("join", usuarioId); });
+
+    socket.on("connect", () => {
+      if (usuarioId) socket.emit("join", usuarioId);
+      const cur = alvoRef.current;
+      if (cur?.tipo === "grupo") socket.emit("joinGroup", cur.grupo.id);
+    });
 
     socket.on("novaMensagem", (mensagem: Mensagem) => {
       const current = alvoRef.current;
@@ -536,6 +568,7 @@ const markReadFromUser = async (otherId: string) => {
     });
 
     return () => {
+      socket.off("connect");
       socket.off("novaMensagem");
       socket.off("novaMensagemGrupo");
       socket.off("mensagemDeletada");
@@ -567,7 +600,6 @@ const markReadFromUser = async (otherId: string) => {
         setUsuariosMutuos(mergeUnique(mergeUnique(recentes, fromConversas), mutuos));
         setGrupos(meusGrupos);
 
-        // Preenche o mapa de não lidas com o que veio do servidor
         setUnreadByUser(prev => ({
           ...prev,
           ...Object.fromEntries(conv.conversas.map(c => [c.id, c.naoLidas])),
@@ -577,28 +609,6 @@ const markReadFromUser = async (otherId: string) => {
       }
     })();
   }, [token]);
-
-  useEffect(() => {
-    if (!alvo) return;
-
-    if (alvo.tipo === "usuario") {
-      const key = `conversa_${usuarioId}_${alvo.usuario.id}`;
-      const cache = safeLoad<Mensagem>(key);
-      const uid = alvo.usuario.id;
-      setMensagensPrivadas(cache);
-      setTemMaisPriv(true);
-      carregarMensagensPrivadas(alvo.usuario.id, false).catch(() => {});
-      markReadFromUser(uid); 
-    } else {
-      const key = `conversa_grupo_${alvo.grupo.id}`;
-      const cache = safeLoad<MensagemGrupo>(key);
-      setMensagensGrupo(cache);
-      setTemMaisGrupo(true);
-      carregarMensagensDoGrupo(alvo.grupo.id, false).catch(() => {});
-      socket.emit("joinGroup", alvo.grupo.id);
-    }
-    setNovaMensagem("");
-  }, [alvo, usuarioId, token]);
 
   const carregarPostPorId = async (postId: string) => {
     if (postsCache[postId]) return;
@@ -708,49 +718,41 @@ useEffect(() => {
   } catch {}
 }, [usuariosMutuos, grupos, token]);
 
-  async function carregarMensagensPrivadas(usuarioIdAlvo: string, append: boolean) {
-    // incrementa o “id” desta rodada de fetch
-    const mySeq = ++fetchPrivSeqRef.current;
+  async function carregarMensagensPrivadas(otherId: string, append: boolean) {
+  const mySeq = ++fetchPrivSeqRef.current;
+  try {
+    const base = append ? mensagensPrivadas : [];
+    const ultimoId = append && base.length > 0 ? base[0].id : undefined;
 
-    try {
-      const base = append ? mensagensPrivadas : [];
-      const ultimoId = append && base.length > 0 ? base[0].id : undefined;
+    const query = new URLSearchParams({
+      otherId,
+      limit: String(limite),
+      ...(ultimoId ? { cursor: ultimoId } : {}),
+    });
 
-      const params: Record<string, string> = { paraId: usuarioIdAlvo, limit: String(limite) };
-      if (usuarioId) params.deId = usuarioId;
-      if (ultimoId) params.cursor = ultimoId;
+    const res = await fetch(`${API.BASE_URL}/api/mensagem?${query}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const novas: Mensagem[] = await res.json();
 
-      const query = new URLSearchParams(params);
-      const res = await fetch(`${API.BASE_URL}/api/mensagem?${query.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const novas: Mensagem[] = await res.json();
+    const stillSame =
+      mySeq === fetchPrivSeqRef.current &&
+      alvoRef.current?.tipo === "usuario" &&
+      alvoRef.current.usuario.id === otherId;
+    if (!stillSame) return;
 
-      // 🔒 se o alvo mudou ou outra busca mais nova já começou, ignora este resultado
-      const stillSame =
-        mySeq === fetchPrivSeqRef.current &&
-        alvoRef.current?.tipo === "usuario" &&
-        alvoRef.current.usuario.id === usuarioIdAlvo;
-      if (!stillSame) return;
+    if (novas.length < limite) setTemMaisPriv(false);
 
-      if (novas.length < limite) setTemMaisPriv(false);
-
-      const novasOrdenadas = [...novas].reverse();
-      setMensagensPrivadas((prev) => {
-        const combined = append ? [...novasOrdenadas, ...prev] : [...prev, ...novasOrdenadas];
-        const map = new Map<string, Mensagem>();
-        combined.forEach((m) => map.set(m.id, m));
-        const next = Array.from(map.values()).sort(
-          (a, b) => new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime()
-        );
-        const key = `conversa_${usuarioId}_${usuarioIdAlvo}`;
-        safeSave(key, next);
-        return next;
-      });
-    } catch (err) {
-      console.error("Erro ao carregar mensagens privadas:", err);
-    }
-  }
+    const novasOrdenadas = [...novas].reverse();
+    setMensagensPrivadas(prev => {
+      const combined = append ? [...novasOrdenadas, ...prev] : [...novasOrdenadas];
+      const next = Array.from(new Map(combined.map(m => [m.id, m])).values())
+        .sort((a,b)=> new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime());
+      safeSave(`conversa_${usuarioId}_${otherId}`, next);
+      return next;
+    });
+  } catch (e) { console.error(e); }
+}
 
   async function carregarMensagensDoGrupo(grupoId: string, append: boolean) {
     const mySeq = ++fetchGrupoSeqRef.current;
@@ -993,7 +995,7 @@ useEffect(() => {
     if (msg.tipo === "GRUPO_DESAFIO" || msg.tipo === "GRUPO_DESAFIO_BONUS" || msg.tipo === "DESAFIO" || msg.tipo === "POST" || msg.tipo === "USUARIO") {
       return Shell(
         <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
-          <MensagemItemGrupo msg={msg} meId={usuarioId} baseUrl={API.BASE_URL} />
+          <MensagemItemGrupo msg={msg} meId={usuarioId} />
         </div>
       );
     }
@@ -1096,7 +1098,7 @@ useEffect(() => {
     if (msg.tipo === "DESAFIO") {
       const d = desafiosCache[msg.conteudo];
       if (!d) return Shell(<div className="text-sm">Carregando desafio...</div>);
-      const imagemSrc = d.imagemUrl && (d.imagemUrl.startsWith("http") ? d.imagemUrl : `${API.BASE_URL}${d.imagemUrl}`);
+      const imagemSrc = d.imagemUrl ? publicImgUrl(d.imagemUrl) : undefined;
       return Shell(
         <div onClick={() => navigate(`/desafios/${d.id}`)} className="cursor-pointer">
           <div className="flex items-center justify-between mb-2 gap-3">
