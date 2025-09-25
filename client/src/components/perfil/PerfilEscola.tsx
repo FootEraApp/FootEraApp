@@ -267,13 +267,15 @@ export default function PerfilEscola({ idDaUrl }: Props) {
           <SectionCard
             title="FootEra Formadores"
             right={
-              <button
-                className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-green-600 text-white"
-                onClick={() => alert("Abrir módulo Formadores")}
-              >
-                <Shield className="w-4 h-4" />
-                Acessar Módulo Formadores
-              </button>
+              <Link href="/formadores">
+                <button
+                  className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-green-600 text-white"
+                  onClick={() => alert("Abrir módulo Formadores")}
+                >
+                  <Shield className="w-4 h-4" />
+                  Acessar Módulo Formadores
+                </button>
+              </Link>
             }
           >
             <p className="text-sm text-green-900/90">

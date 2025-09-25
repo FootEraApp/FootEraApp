@@ -90,6 +90,63 @@ export default function PaginaMensagens() {
     String(Storage?.tipoSalvo ?? "").toLowerCase() === "atleta"
   );
 
+  const [unreadByUser, setUnreadByUser] = useState<Record<string, number>>({});
+  const totalUnread = Object.values(unreadByUser).reduce((a, b) => a + b, 0);
+  const fetchPrivSeqRef = useRef(0);
+  const fetchGrupoSeqRef = useRef(0);
+
+  const fetchUnreadByUser = async () => {
+  try {
+    const r = await fetch(`${API.BASE_URL}/api/mensagem/unread-by-user`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return;
+    const arr: { userId: string; count: number }[] = await r.json();
+    const map = Object.fromEntries(arr.map(x => [x.userId, x.count]));
+    setUnreadByUser(map);
+  } catch {}
+};
+
+const markReadFromUser = async (otherId: string) => {
+  try {
+    await fetch(`${API.BASE_URL}/api/mensagem/mark-read/${otherId}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {}
+  setUnreadByUser(prev => ({ ...prev, [otherId]: 0 }));
+};
+
+  const lastGroupRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!alvo) return;
+
+    if (alvo.tipo === "usuario") {
+      const key = `conversa_${usuarioId}_${alvo.usuario.id}`;
+      setMensagensPrivadas(safeLoad<Mensagem>(key));
+      setTemMaisPriv(true);
+      carregarMensagensPrivadas(alvo.usuario.id, false);
+      markReadFromUser(alvo.usuario.id);
+    } else {
+        if (lastGroupRef.current && lastGroupRef.current !== alvo.grupo.id) {
+        socket.emit("leaveGroup", lastGroupRef.current);
+      }
+      lastGroupRef.current = alvo.grupo.id;
+      socket.emit("joinGroup", alvo.grupo.id);
+      const key = `conversa_grupo_${alvo.grupo.id}`;
+      setMensagensGrupo(safeLoad<MensagemGrupo>(key));
+      setTemMaisGrupo(true);
+      carregarMensagensDoGrupo(alvo.grupo.id, false);
+    }
+    setNovaMensagem("");
+  }, [alvo, usuarioId, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetchUnreadByUser();
+  }, [token]);
+
   useEffect(() => {
     if (!Storage.token) return;
     const tipo = (Storage.tipoSalvo || "").toLowerCase();
@@ -108,19 +165,21 @@ export default function PaginaMensagens() {
   }, []);
 
   function selecionarAlvo(novo: ChatTarget) {
-  setAlvo(novo);
-  localStorage.setItem(
-    "mensagens_last_target",
-    JSON.stringify(
-      novo.tipo === "usuario"
-        ? { tipo: "usuario", id: novo.usuario.id }
-        : { tipo: "grupo", id: novo.grupo.id }
-    )
-  );
-  if (novo.tipo === "usuario") saveRecentUser(novo.usuario);
-
-  setShowSidebar(false);
-}
+    setAlvo(novo);
+    localStorage.setItem(
+      "mensagens_last_target",
+      JSON.stringify(
+        novo.tipo === "usuario"
+          ? { tipo: "usuario", id: novo.usuario.id }
+          : { tipo: "grupo", id: novo.grupo.id }
+      )
+    );
+    if (novo.tipo === "usuario") {
+      saveRecentUser(novo.usuario);
+      markReadFromUser(novo.usuario.id);
+    }
+    setShowSidebar(false);
+  }
 
   const [mensagensPrivadas, setMensagensPrivadas] = useState<Mensagem[]>([]);
   const [temMaisPriv, setTemMaisPriv] = useState(true);
@@ -252,7 +311,16 @@ export default function PaginaMensagens() {
 
   const cardRef = useRef<HTMLDivElement | null>(null);
   const alvoRef = useRef<ChatTarget | null>(null);
+  
   useEffect(() => { alvoRef.current = alvo; }, [alvo]);
+
+  useEffect(() => {
+    return () => {
+      if (lastGroupRef.current) {
+        socket.emit("leaveGroup", lastGroupRef.current);
+      }
+    };
+  }, []);
 
   const recarregarMensagensDoGrupoAtual = async () => {
     const current = alvoRef.current;
@@ -305,20 +373,35 @@ export default function PaginaMensagens() {
       <div>
         <div className="flex items-center gap-2 text-gray-700 mb-2">
           <User size={16} /> <span className="text-sm font-semibold">Usuários</span>
+          {totalUnread > 0 && (
+            <span className="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-green-800 text-white">
+              {totalUnread}
+            </span>
+          )}
         </div>
         {usuariosMutuos.map((u) => {
           const selecionado = alvo?.tipo === "usuario" && alvo.usuario.id === u.id;
+          const unread = unreadByUser[u.id] || 0;
+
           return (
             <div
               key={u.id}
-              className={`flex items-center gap-3 p-3 mb-3 rounded-lg cursor-pointer border shadow-sm transition ${selecionado ? "bg-green-50 border-green-300" : "hover:bg-gray-50 bg-white"}`}
+              className={`flex items-center gap-3 p-3 mb-3 rounded-lg cursor-pointer border shadow-sm transition ${
+                selecionado ? "bg-green-50 border-green-300" : "hover:bg-gray-50 bg-white"
+              }`}
               onClick={() => selecionarAlvo({ tipo: "usuario", usuario: u })}
             >
               <Avatar src={u.foto} name={u.nome} className="w-12 h-12" />
-              <div className="flex flex-col">
-                <span className="font-medium text-sm">{u.nome}</span>
+              <div className="flex flex-col flex-1 min-w-0">
+                <span className="font-medium text-sm truncate">{u.nome}</span>
                 <span className="text-xs text-gray-500">Clique para conversar</span>
               </div>
+
+              {unread > 0 && (
+                <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-green-700 text-white shrink-0">
+                  {unread}
+                </span>
+              )}
             </div>
           );
         })}
@@ -349,12 +432,20 @@ export default function PaginaMensagens() {
     const encoded = "CARD_JSON:" + btoa(encodeURIComponent(JSON.stringify(payload)));
 
     const clientMsgId = genClientId();
-    setMensagensPrivadas(prev => [...prev, {
-      id: clientMsgId, clientMsgId, pending: true,
-      criadaEm: new Date().toISOString(),
-      conteudo: encoded,
-      deId: usuarioId!, paraId: alvo.usuario.id, tipo: "CARD",
-    }]);
+
+    setMensagensPrivadas(prev => [
+      ...prev,
+      {
+        id: clientMsgId,
+        clientMsgId,
+        pending: true,
+        criadaEm: new Date().toISOString(),
+        conteudo: encoded,
+        deId: usuarioId!, 
+        paraId: alvo.usuario.id,
+        tipo: "CARD",
+      }
+    ]);
 
     const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
       method: "POST",
@@ -400,15 +491,6 @@ export default function PaginaMensagens() {
 };
 
   useEffect(() => {
-    const token = Storage.token;
-    if (!token) return;
-    fetch(`${API.BASE_URL}/api/mensagem/mark-all-read`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
     if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
     const key = `conversa_${usuarioId}_${alvo.usuario.id}`;
     safeSave(key, mensagensPrivadas);
@@ -422,12 +504,30 @@ export default function PaginaMensagens() {
 
   useEffect(() => {
     socket.connect();
-    socket.on("connect", () => { if (usuarioId) socket.emit("join", usuarioId); });
+
+    socket.on("connect", () => {
+      if (usuarioId) socket.emit("join", usuarioId);
+      const cur = alvoRef.current;
+      if (cur?.tipo === "grupo") socket.emit("joinGroup", cur.grupo.id);
+    });
 
     socket.on("novaMensagem", (mensagem: Mensagem) => {
       const current = alvoRef.current;
-      if (current?.tipo !== "usuario") return;
 
+      if (mensagem.paraId === usuarioId) {
+        const abertoComEsse = current?.tipo === "usuario" && current.usuario.id === mensagem.deId;
+
+        if (!abertoComEsse) {
+          setUnreadByUser(prev => ({
+            ...prev,
+            [mensagem.deId]: (prev[mensagem.deId] || 0) + 1,
+          }));
+        } else {
+          markReadFromUser(mensagem.deId);
+        }
+      }
+
+      if (current?.tipo !== "usuario") return;
       const curId = current.usuario.id;
       const relevante =
         (mensagem.deId === curId && mensagem.paraId === usuarioId) ||
@@ -468,6 +568,7 @@ export default function PaginaMensagens() {
     });
 
     return () => {
+      socket.off("connect");
       socket.off("novaMensagem");
       socket.off("novaMensagemGrupo");
       socket.off("mensagemDeletada");
@@ -477,42 +578,37 @@ export default function PaginaMensagens() {
   useEffect(() => {
     (async () => {
       try {
-        const gruposRes = await fetch(`${API.BASE_URL}/api/grupos/me`, { headers: { Authorization: `Bearer ${token}` } });
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const [gruposRes, convRes, mutuosRes] = await Promise.all([
+          fetch(`${API.BASE_URL}/api/grupos/me`, { headers }),
+          fetch(`${API.BASE_URL}/api/mensagem/conversas`, { headers }),
+          fetch(`${API.BASE_URL}/api/seguidores/mutuos`, { headers }),
+        ]);
+
         if (!gruposRes.ok) throw new Error(await gruposRes.text());
         const meusGrupos: Grupo[] = await gruposRes.json();
 
-        const mutuosRes = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, { headers: { Authorization: `Bearer ${token}` } });
+        let conv = { totalNaoLidas: 0, conversas: [] as Array<{id:string; nome:string; foto?:string|null; naoLidas:number}> };
+        if (convRes.ok) conv = await convRes.json();
+
         if (!mutuosRes.ok) throw new Error(await mutuosRes.text());
         const mutuos: Usuario[] = await mutuosRes.json();
 
         const recentes = loadRecentUsers();
-        setUsuariosMutuos(mergeUnique(recentes, mutuos));
+        const fromConversas: Usuario[] = conv.conversas.map(c => ({ id: c.id, nome: c.nome, foto: c.foto }));
+        setUsuariosMutuos(mergeUnique(mergeUnique(recentes, fromConversas), mutuos));
         setGrupos(meusGrupos);
+
+        setUnreadByUser(prev => ({
+          ...prev,
+          ...Object.fromEntries(conv.conversas.map(c => [c.id, c.naoLidas])),
+        }));
       } catch (e) {
         console.error("Erro ao carregar sidebar:", e);
       }
     })();
   }, [token]);
-
-  useEffect(() => {
-    if (!alvo) return;
-
-    if (alvo.tipo === "usuario") {
-      const key = `conversa_${usuarioId}_${alvo.usuario.id}`;
-      const cache = safeLoad<Mensagem>(key);
-      setMensagensPrivadas(cache);
-      setTemMaisPriv(true);
-      carregarMensagensPrivadas(alvo.usuario.id, false).catch(() => {});
-    } else {
-      const key = `conversa_grupo_${alvo.grupo.id}`;
-      const cache = safeLoad<MensagemGrupo>(key);
-      setMensagensGrupo(cache);
-      setTemMaisGrupo(true);
-      carregarMensagensDoGrupo(alvo.grupo.id, false).catch(() => {});
-      socket.emit("joinGroup", alvo.grupo.id);
-    }
-    setNovaMensagem("");
-  }, [alvo, usuarioId, token]);
 
   const carregarPostPorId = async (postId: string) => {
     if (postsCache[postId]) return;
@@ -622,59 +718,75 @@ useEffect(() => {
   } catch {}
 }, [usuariosMutuos, grupos, token]);
 
-  async function carregarMensagensPrivadas(usuarioIdAlvo: string, append: boolean) {
-    try {
-      const base = append ? mensagensPrivadas : [];
-      const ultimoId = append && base.length > 0 ? base[0].id : undefined;
+  async function carregarMensagensPrivadas(otherId: string, append: boolean) {
+  const mySeq = ++fetchPrivSeqRef.current;
+  try {
+    const base = append ? mensagensPrivadas : [];
+    const ultimoId = append && base.length > 0 ? base[0].id : undefined;
 
-      const params: Record<string, string> = { paraId: usuarioIdAlvo, limit: String(limite) };
-      if (usuarioId) params.deId = usuarioId;
-      if (ultimoId) params.cursor = ultimoId;
+    const query = new URLSearchParams({
+      otherId,
+      limit: String(limite),
+      ...(ultimoId ? { cursor: ultimoId } : {}),
+    });
 
-      const query = new URLSearchParams(params);
-      const res = await fetch(`${API.BASE_URL}/api/mensagem?${query.toString()}`, { headers: { Authorization: `Bearer ${token}` } });
-      const novas: Mensagem[] = await res.json();
-      if (novas.length < limite) setTemMaisPriv(false);
+    const res = await fetch(`${API.BASE_URL}/api/mensagem?${query}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const novas: Mensagem[] = await res.json();
 
-      const novasOrdenadas = [...novas].reverse();
-      setMensagensPrivadas((prev) => {
-        const combined = append ? [...novasOrdenadas, ...prev] : [...prev, ...novasOrdenadas];
-        const map = new Map<string, Mensagem>();
-        combined.forEach((m) => map.set(m.id, m));
-        const next = Array.from(map.values()).sort(
-          (a, b) => new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime()
-        );
-        const key = `conversa_${usuarioId}_${usuarioIdAlvo}`;
-        safeSave(key, next);
-        return next;
-      });
-    } catch (err) {
-      console.error("Erro ao carregar mensagens privadas:", err);
-    }
-  }
+    const stillSame =
+      mySeq === fetchPrivSeqRef.current &&
+      alvoRef.current?.tipo === "usuario" &&
+      alvoRef.current.usuario.id === otherId;
+    if (!stillSame) return;
+
+    if (novas.length < limite) setTemMaisPriv(false);
+
+    const novasOrdenadas = [...novas].reverse();
+    setMensagensPrivadas(prev => {
+      const combined = append ? [...novasOrdenadas, ...prev] : [...novasOrdenadas];
+      const next = Array.from(new Map(combined.map(m => [m.id, m])).values())
+        .sort((a,b)=> new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime());
+      safeSave(`conversa_${usuarioId}_${otherId}`, next);
+      return next;
+    });
+  } catch (e) { console.error(e); }
+}
 
   async function carregarMensagensDoGrupo(grupoId: string, append: boolean) {
+    const mySeq = ++fetchGrupoSeqRef.current;
+
     try {
       const base = append ? mensagensGrupo : [];
       const ultimoId = append && base.length > 0 ? base[0].id : undefined;
       const query = new URLSearchParams({ limit: String(limite), ...(ultimoId ? { cursor: ultimoId } : {}) });
 
-      const res = await fetch(`${API.BASE_URL}/api/mensagem/grupos/${grupoId}?${query.toString()}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API.BASE_URL}/api/mensagem/grupos/${grupoId}?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const novas: MensagemGrupo[] = await res.json();
+
+      const stillSame =
+        mySeq === fetchGrupoSeqRef.current &&
+        alvoRef.current?.tipo === "grupo" &&
+        alvoRef.current.grupo.id === grupoId;
+      if (!stillSame) return;
+
       if (novas.length < limite) setTemMaisGrupo(false);
 
       const novasOrdenadas = [...novas].reverse();
-        setMensagensGrupo((prev) => {
-          const combined = append ? [...novasOrdenadas, ...prev] : [...prev, ...novasOrdenadas];
-          const map = new Map<string, MensagemGrupo>();
-          combined.forEach((m) => map.set(m.id, m));
-          const next = Array.from(map.values()).sort(
-            (a, b) => new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime()
-          );
-          const key = `conversa_grupo_${grupoId}`;
-          safeSave(key, next);
-          return next;
-        });
+      setMensagensGrupo((prev) => {
+        const combined = append ? [...novasOrdenadas, ...prev] : [...prev, ...novasOrdenadas];
+        const map = new Map<string, MensagemGrupo>();
+        combined.forEach((m) => map.set(m.id, m));
+        const next = Array.from(map.values()).sort(
+          (a, b) => new Date(a.criadaEm).getTime() - new Date(b.criadaEm).getTime()
+        );
+        const key = `conversa_grupo_${grupoId}`;
+        safeSave(key, next);
+        return next;
+      });
     } catch (err) {
       console.error("Erro ao carregar mensagens do grupo:", err);
     }
@@ -883,7 +995,7 @@ useEffect(() => {
     if (msg.tipo === "GRUPO_DESAFIO" || msg.tipo === "GRUPO_DESAFIO_BONUS" || msg.tipo === "DESAFIO" || msg.tipo === "POST" || msg.tipo === "USUARIO") {
       return Shell(
         <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
-          <MensagemItemGrupo msg={msg} meId={usuarioId} baseUrl={API.BASE_URL} />
+          <MensagemItemGrupo msg={msg} meId={usuarioId} />
         </div>
       );
     }
@@ -986,7 +1098,7 @@ useEffect(() => {
     if (msg.tipo === "DESAFIO") {
       const d = desafiosCache[msg.conteudo];
       if (!d) return Shell(<div className="text-sm">Carregando desafio...</div>);
-      const imagemSrc = d.imagemUrl && (d.imagemUrl.startsWith("http") ? d.imagemUrl : `${API.BASE_URL}${d.imagemUrl}`);
+      const imagemSrc = d.imagemUrl ? publicImgUrl(d.imagemUrl) : undefined;
       return Shell(
         <div onClick={() => navigate(`/desafios/${d.id}`)} className="cursor-pointer">
           <div className="flex items-center justify-between mb-2 gap-3">
@@ -1076,21 +1188,26 @@ useEffect(() => {
             className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 pb-15"
             onScroll={handleScroll}
           >
-            <div className="mx-auto w-full sm:max-w-3xl space-y-3">
-              {alvo ? (
-                <>
-                  {alvo?.tipo === "usuario" &&
-                    mensagensPrivadas.map((m) => <div key={m.id}>{renderizarMensagemPrivadaWhats(m)}</div>)}
-                  {alvo?.tipo === "grupo" &&
-                    mensagensGrupo.map((m) => <div key={m.id}>{renderizarMensagemGrupoWhats(m)}</div>)}
-                  {(carregandoMaisPriv || carregandoMaisGrupo) && (
-                    <p className="text-center text-sm text-gray-400">Carregando mais...</p>
-                  )}
-                </>
-              ) : (
-                <p className="text-center text-sm text-gray-500">Selecione uma conversa para começar</p>
-              )}
-            </div>
+            <div
+            key={alvo ? (alvo.tipo === "usuario" ? `u-${alvo.usuario.id}` : `g-${alvo.grupo.id}`) : "none"}
+            className="mx-auto w-full sm:max-w-3xl space-y-3"
+          >
+            {alvo ? (
+              <>
+                {alvo.tipo === "usuario" &&
+                  mensagensPrivadas.map((m) => <div key={m.id}>{renderizarMensagemPrivadaWhats(m)}</div>)}
+
+                {alvo.tipo === "grupo" &&
+                  mensagensGrupo.map((m) => <div key={m.id}>{renderizarMensagemGrupoWhats(m)}</div>)}
+
+                {(carregandoMaisPriv || carregandoMaisGrupo) && (
+                  <p className="text-center text-sm text-gray-400">Carregando mais...</p>
+                )}
+              </>
+            ) : (
+              <p className="text-center text-sm text-gray-500">Selecione uma conversa para começar</p>
+            )}
+          </div>
           </div>
 
           <div className="sticky bottom-[64px] md:bottom-0 bg-transparent border-green-100 mb-10">

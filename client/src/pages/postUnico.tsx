@@ -5,8 +5,10 @@ import { format } from "date-fns";
 import { FaHeart, FaRegHeart, FaTrash, FaShare } from "react-icons/fa";
 import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
-import { API } from "../config.js";
+import { API, APP } from "../config.js";
 import { CircleX, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import PostImage from "@/components/PostImage.js";
+import { publicImgUrl } from "@/utils/publicUrl.js";
 
 function PostUnico(): JSX.Element {
   const [match, params] = useRoute<{ id: string }>("/post/:id");
@@ -88,7 +90,15 @@ function PostUnico(): JSX.Element {
   if (!match) return <p className="text-center mt-10">Post não encontrado na URL.</p>;
   if (!post) return <p className="text-center mt-10">Carregando postagem...</p>;
 
-  const linkCompartilhado = `${API.BASE_URL}/post/${post.id}`;
+  const imgSrc   = publicImgUrl(post.imagemUrl ?? null);
+  const videoSrc = publicImgUrl(post.videoUrl ?? null);
+
+  console.log("[PostUnico] imagemUrl bruto:", post.imagemUrl);
+  console.log("[PostUnico] imagemUrl normalizado:", imgSrc);
+  console.log("[PostUnico] videoUrl bruto:", post.videoUrl);
+  console.log("[PostUnico] videoUrl normalizado:", videoSrc);
+
+  const linkCompartilhado = `${APP.FRONTEND_BASE_URL}/post/${post.id}`;
   const jaCurtiu = post.curtidas.some((c) => c.usuarioId === usuarioId);
 
   return (
@@ -98,16 +108,16 @@ function PostUnico(): JSX.Element {
         {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
       </p>
       <p className="mb-4">{post.conteudo}</p>
-
+      
       {post.tipoMidia === "Imagem" && post.imagemUrl && (
-        <img src={`${API.BASE_URL}${post.imagemUrl}`} className="rounded-lg max-h-80 mx-auto" />
+        <PostImage src={publicImgUrl(post.imagemUrl) ?? undefined} />
       )}
       {post.tipoMidia === "Video" && post.videoUrl && (
         <video controls className="w-full rounded-lg">
-          <source src={`${API.BASE_URL}${post.videoUrl}`} type="video/mp4" />
+          <source src={publicImgUrl(post.videoUrl) ?? ""} type="video/mp4" />
         </video>
       )}
-
+      
       <div className="mt-4 flex items-center gap-4 text-xl">
         <button onClick={handleCurtir} className="text-black-500 hover:text-black-600">
           {jaCurtiu ? <FaHeart /> : <FaRegHeart />}

@@ -131,7 +131,7 @@ router.post("/em-grupo", authenticateToken, async (req, res) => {
         desafioEmGrupo.pontosSnapshot ??
         desafioEmGrupo.desafioOficial.pontuacao ??
         0,
-      linkSubmissao: `/desafios/grupo/${grupoId}/${desafioOficialId}/submeter`,
+      linkSubmissao: `/desafios/grupo/${grupoId}/${desafioOficialId}`,
     };
 
     await prisma.mensagemGrupo.create({
