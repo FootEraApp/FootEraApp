@@ -110,7 +110,6 @@ function BottomSheet({
   );
 }
 
-<<<<<<< HEAD
 /** --- helpers para detectar/renderizar conquista --- */
 type ParsedAchievement = {
   ach?: AchievementLite;
@@ -198,28 +197,6 @@ function AchievementShareCard({
 }
 /** --- fim helpers de conquista --- */
 
-=======
-function PostImage({ src }: { src?: string }) {
-  const [url, setUrl] = React.useState(src);
-  if (!url) return null;
-  return (
-    <img
-      src={url}
-      alt="Post"
-      className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
-      onError={(e) => {
-        const cur = e.currentTarget.src;
-        if (cur.includes("/uploads/") && !cur.includes("/uploads/cards/")) {
-          setUrl(cur.replace("/uploads/", "/uploads/cards/"));
-        } else {
-          setUrl("");
-        }
-      }}
-    />
-  );
-}
-
->>>>>>> b5509f31735125e82bb1d941a373f10194f00913
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
@@ -421,7 +398,6 @@ function PaginaFeed(): JSX.Element {
 
         return (
           <div key={post.id} className="max-w-xl mx-auto bg-white rounded-2xl shadow-md p-4 space-y-3">
-<<<<<<< HEAD
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <img
@@ -433,20 +409,6 @@ function PaginaFeed(): JSX.Element {
                   <p className="font-semibold">{post.usuario.nome}</p>
                   <p className="text-xs text-gray-500">{format(new Date(post.dataCriacao), "dd/MM, HH:mm")}</p>
                 </div>
-=======
-           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <img
-                src={formatarUrlFoto(post.usuario.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
-                alt="avatar"
-                className="w-10 h-10 rounded-full object-cover"
-              />
-              <div>
-                <p className="font-semibold">{post.usuario.nome}</p>
-                <p className="text-xs text-gray-500">
-                  {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
-                </p>
->>>>>>> b5509f31735125e82bb1d941a373f10194f00913
               </div>
               {((post as any).usuarioId === userId || post?.usuario?.id === userId) && (
                 <button
@@ -463,7 +425,6 @@ function PaginaFeed(): JSX.Element {
               {/* Para post normal, mostra o texto bruto */}
               {!isAchievement && <p className="text-gray-800 font-medium whitespace-pre-line">{post.conteudo}</p>}
 
-<<<<<<< HEAD
               {/* Para conquista, renderiza um card bonitão */}
               {isAchievement && parsed && <AchievementShareCard parsed={parsed} />}
 
@@ -472,10 +433,6 @@ function PaginaFeed(): JSX.Element {
                 <img src={imgSrc} alt="Post" className="mt-2 rounded-lg max-h-72 w-auto mx-auto" />
               )}
               {videoSrc && (
-=======
-             <PostImage src={imgSrc} />  
-             {videoSrc && (
->>>>>>> b5509f31735125e82bb1d941a373f10194f00913
                 <video controls className="w-full mt-2 rounded-lg">
                   <source src={videoSrc} type="video/mp4" />
                 </video>
