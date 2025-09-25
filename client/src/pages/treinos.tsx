@@ -50,6 +50,7 @@ interface TreinoProgramado {
   professorId?: string;
   escolinhaId?: string;
   clubeId?: string;
+  pontuacao?: number | null;
 }
 
 interface TreinoAgendado {
@@ -67,6 +68,7 @@ interface TreinoAgendado {
     objetivo?: string;
     duracao?: number;
     dataAgendada?: string | null;
+    pontuacao?: number | null;
     exercicios: {
       exercicio: { id: string; nome: string };
       repeticoes: string;
@@ -236,6 +238,7 @@ export default function PaginaTreinos() {
           professorId: t.professorId ?? undefined,
           escolinhaId: t.escolinhaId ?? undefined,
           clubeId: t.clubeId ?? undefined,
+          pontuacao: t.pontuacao ?? undefined,
           exercicios: (t.exercicios ?? []).map((ex: any) => ({
             id: ex.exercicio?.id ?? ex.id ?? "",
             nome: ex.exercicio?.nome ?? ex.nome ?? "",
@@ -270,6 +273,7 @@ export default function PaginaTreinos() {
           professorId: t.professorId ?? undefined,
           escolinhaId: t.escolinhaId ?? undefined,
           clubeId: t.clubeId ?? undefined,
+          pontuacao: t.pontuacao ?? undefined,
           exercicios: (t.exercicios ?? []).map((ex: any) => ({
             id: ex.exercicio?.id ?? ex.id ?? "",
             nome: ex.exercicio?.nome ?? ex.nome ?? "",
@@ -290,6 +294,7 @@ export default function PaginaTreinos() {
         const jsonTreinos = await resTreinos.json();
         const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
           ...t,
+          pontuacao: t.pontuacao ?? undefined,
           exercicios: (t.exercicios ?? []).map((ex: any) => ({
             id: ex.id ?? "",
             nome: ex.nome ?? "",
@@ -457,6 +462,7 @@ export default function PaginaTreinos() {
     ["professor", "admin", "escola", "escolinha", "clube"].includes(usuario.tipo);
 
   const renderTreinoCard = (treino: TreinoProgramado) => (
+
     <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
       <div className="flex items-start justify-between gap-3">
         <h4
@@ -465,8 +471,13 @@ export default function PaginaTreinos() {
         >
           {treino.nome}
         </h4>
-      </div>
 
+        {typeof treino.pontuacao === "number" && (
+          <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+            +{treino.pontuacao} pts
+          </span>
+        )}
+      </div>
       {treino.descricao && <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>}
 
       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700">
@@ -522,7 +533,8 @@ export default function PaginaTreinos() {
     const nivel = treino.nivel ?? treino.treinoProgramado?.nivel ?? "-";
     const prazoIso = treino.prazoEnvio ?? treino.dataTreino ?? treino.treinoProgramado?.dataAgendada ?? null;
     const exercicios = programado?.exercicios ?? [];
-
+    const pontos = programado?.pontuacao ?? null;
+    
     return (
       <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
         <div className="flex items-start justify-between gap-3">
@@ -533,13 +545,20 @@ export default function PaginaTreinos() {
             {treino.titulo}
           </h4>
 
-          <button
-            onClick={() => removerTreinoAgendado(treino.id)}
-            title="Remover"
-            className="shrink-0 p-2 rounded-full bg-red-100 text-red-700 hover:bg-red-200"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {typeof pontos === "number" && pontos > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                +{pontos} pts
+              </span>
+            )}
+            <button
+              onClick={() => removerTreinoAgendado(treino.id)}
+              title="Remover"
+              className="shrink-0 p-2 rounded-full bg-red-100 text-red-700 hover:bg-red-200"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {programado?.descricao && <p className="text-sm text-gray-700 mt-1">{programado.descricao}</p>}

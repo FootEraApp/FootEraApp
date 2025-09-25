@@ -29,6 +29,7 @@ export type TreinoCreatePayload = {
   atletasIds?: string[];   
   elencosIds?: string[];
   exercicios: (ExercicioDoBanco | ExercicioTemporario)[];
+  pontuacao?: number;
 };
 
 export type ExItemUI = {

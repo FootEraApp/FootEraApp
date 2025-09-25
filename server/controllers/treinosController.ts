@@ -95,6 +95,7 @@ export async function treinosDisponiveis(req: AuthenticatedRequest, res: Respons
       duracao: t.duracao,
       objetivo: t.objetivo,
       dicas: t.dicas,
+      pontuacao: t.pontuacao ?? null,
       exercicios: t.exercicios.map(e => ({
         id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
         nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
@@ -722,6 +723,7 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
       tipoUsuario,            // "professor" | "escolinha" | "clube"
       tipoUsuarioId,
       atletasIds,
+      pontuacao,
     } = req.body as any;
 
     if (!nome || !nivel || !Array.isArray(exercicios) || !usuarioId || !tipoUsuarioId) {
@@ -744,6 +746,10 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
     const when = dataTreino || dataAgendada || null;
     const tipoNorm = typeof tipoUsuario === "string" ? (tipoUsuario as string).toLowerCase() : null;
 
+    // saneia pontuacao recebida (int >= 0) — se vier vazio, fica null/undefined
+    const pontuacaoNum =
+      Number.isFinite(Number(pontuacao)) ? Math.max(0, Math.floor(Number(pontuacao))) : null;
+
     const treino = await prisma.treinoProgramado.create({
       data: {
         nome,
@@ -754,8 +760,9 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
         objetivo,
         duracao,
         dicas,
-        categoria: categorias,                 // ✅ já normalizado
-        tipoTreino: tipoTreinoNorm,            // ✅ já normalizado
+        categoria: categorias,
+        tipoTreino: tipoTreinoNorm,
+        pontuacao: pontuacaoNum ?? undefined,
         ...(tipoNorm === "professor"
           ? { professorId: tipoUsuarioId }
           : tipoNorm === "escolinha"

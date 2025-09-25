@@ -1,3 +1,4 @@
+// client/src/pages/novoTreino.tsx
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from "lucide-react";
@@ -6,6 +7,53 @@ import { API } from "../config.js";
 import { TreinosApi } from "../utils/treinosApi.js";
 import { montarExerciciosParaPayload } from "../utils/treinos.helpers.js";
 import type { ExItemUI, TreinoCreatePayload } from "../utils/treinos.types.js";
+
+/* =========================================================
+   Regras de Pontuação (ajuste livre) NÂO APAGAR
+   ========================================================= */
+type PontuacaoDetalhe = {
+  total: number;
+  nivel: number;
+  tipo: number;
+  exercicios: number;
+  duracao: number;
+  dicas: number;
+  exCount: number;
+};
+
+const PONTOS = {
+  NIVEL: { Base: 0, Avancado: 10, Performance: 20 } as Record<string, number>,
+  TIPO: { Tecnico: 5, Fisico: 6, Tatico: 8 } as Record<string, number>,
+  POR_EXERCICIO: 4, // cada exercício
+  POR_15_MIN: 1, // a cada 15min de duração
+  POR_DICA: 1, // por dica
+  DICAS_MAX: 5, // máximo de dicas que contam
+};
+
+function calcularPontuacaoTreino(
+  nivel: string,
+  tipoTreino: string,
+  duracaoMin: number,
+  exercicios: ExItemUI[],
+  dicas: string[],
+): PontuacaoDetalhe {
+  const exCount = exercicios.filter(e => e.idCatalogo || (e.nome && e.nome.trim())).length;
+  const ptsEx = exCount * PONTOS.POR_EXERCICIO;
+
+  const ptsNivel = PONTOS.NIVEL[nivel as keyof typeof PONTOS.NIVEL] ?? 0;
+  const ptsTipo = PONTOS.TIPO[tipoTreino as keyof typeof PONTOS.TIPO] ?? 0;
+
+  const dur = Number.isFinite(Number(duracaoMin)) ? Number(duracaoMin) : 0;
+  const ptsDur = Math.max(0, Math.floor(dur / 15) * PONTOS.POR_15_MIN);
+
+  const dicasValidas = Math.min(PONTOS.DICAS_MAX, Math.max(0, (dicas?.length ?? 0)));
+  const ptsDicas = dicasValidas * PONTOS.POR_DICA;
+
+  const total = ptsEx + ptsNivel + ptsTipo + ptsDur + ptsDicas;
+  return { total, nivel: ptsNivel, tipo: ptsTipo, exercicios: ptsEx, duracao: ptsDur, dicas: ptsDicas, exCount };
+}
+
+/* ========================================================= */
 
 interface UsuarioLogado {
   tipo: "atleta" | "escola" | "escolinha" | "clube" | "professor";
@@ -165,11 +213,12 @@ export default function NovoTreino() {
   const [filtroEx, setFiltroEx] = useState("");
   const restoredRef = useRef(false);
 
-  const customSemId = exerciciosSelecionados.filter(x => !x.idCatalogo);
-    if (customSemId.length) {
-      alert("Por enquanto, só é possível salvar exercícios do catálogo. Remova os personalizados ou cadastre-os antes.");
-      return;
-    }
+  /* ===== Pontuação dinâmica ===== */
+  const score = useMemo(
+    () => calcularPontuacaoTreino(nivel, tipoTreino, duracao, exerciciosSelecionados, dicas),
+    [nivel, tipoTreino, duracao, exerciciosSelecionados, dicas]
+  );
+  /* ============================== */
 
   function normalizaTreinos(raw: any[]): TreinoProgramado[] {
     return raw.map((t: any) => ({
@@ -413,7 +462,7 @@ export default function NovoTreino() {
 
         const lista: AtletaVinculado[] = (raw ?? [])
           .map((a: any) => ({
-            id: a.id ?? a.atletaId ?? a.usuarioId ?? a?.atleta?.id ?? a?.usuario?.id ?? "",
+            id: a.usuarioId ?? a.id ?? a.atletaId ?? a?.atleta?.id ?? a?.usuario?.id ?? "",
             nome: a.nome ?? a?.atleta?.usuario?.nome ?? a?.usuario?.nome ?? a?.atleta?.nome ?? "Atleta",
             foto: a.foto ?? a?.atleta?.usuario?.foto ?? a?.usuario?.foto ?? a?.fotoUrl ?? undefined,
           }))
@@ -493,7 +542,7 @@ export default function NovoTreino() {
   const adicionarExercicio = () => {
     setExerciciosSelecionados((prev) => [
       ...prev,
-      { idCatalogo: null, nome: "", descricao: "", repeticoes: "", ordem: prev.length + 1,  series: "" },
+      { idCatalogo: null, nome: "", descricao: "", repeticoes: "", ordem: prev.length + 1, series: "" },
     ]);
   };
 
@@ -565,47 +614,46 @@ export default function NovoTreino() {
     return v === "professor" || v === "clube" || v === "escolinha";
   }
 
+  const criarTreino = async () => {
+    try {
+      const { tipoUsuario, tipoUsuarioId } = getDono();
+      const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
 
-const criarTreino = async () => {
-  try {
-    const { tipoUsuario, tipoUsuarioId } = getDono();
-    const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
+      if (!tipoUsuario || !tipoUsuarioId) {
+        alert("Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).");
+        return;
+      }
 
-    if (!tipoUsuario || !tipoUsuarioId) {
-      alert("Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).");
-      return;
-    }
+      if (!isDono(tipoUsuarioNormRaw)) {
+        alert("Erro: tipo de usuário inválido.");
+        return;
+      }
+      const tipoUsuarioNorm: DonoLiteral = tipoUsuarioNormRaw;
 
-    if (!isDono(tipoUsuarioNormRaw)) {
-      alert("Erro: tipo de usuário inválido.");
-      return;
-    }
-    const tipoUsuarioNorm: DonoLiteral = tipoUsuarioNormRaw;
+      if (!usuarioId) {
+        alert("Erro: usuário não autenticado.");
+        return;
+      }
 
-    if (!usuarioId) {
-      alert("Erro: usuário não autenticado.");
-      return;
-    }
+      const exercicios = montarExerciciosParaPayload(exerciciosSelecionados);
 
-    const exercicios = montarExerciciosParaPayload(exerciciosSelecionados);
+      const mapNivel = (s: string) => ({ Base: "Base", Avancado: "Avancado", Performance: "Performance" } as const)[s] ?? "Base";
+      const mapTipoTreino = (s: string) => ({ Tecnico: "Tecnico", Fisico: "Fisico", Tatico: "Tatico" } as const)[s] ?? null;
+      const mapCategoria = (s: string) => (s ? s.replace("-", "").toUpperCase() : "Sub13");
 
-    const mapNivel = (s: string) => ({ Base: "Base", Avancado: "Avancado", Performance: "Performance" } as const)[s] ?? "Base";
-    const mapTipoTreino = (s: string) => ({ Tecnico: "Tecnico", Fisico: "Fisico", Tatico: "Tatico" } as const)[s] ?? null;
-    const mapCategoria = (s: string) => (s ? s.replace("-", "").toUpperCase() : "Sub13");
-
-    const codigo =
-    `${nome}`.trim()
-      ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) + "-" + Date.now().toString(36)
-      : "TP-" + Date.now().toString(36);
+      const codigo =
+        `${nome}`.trim()
+          ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) + "-" + Date.now().toString(36)
+          : "TP-" + Date.now().toString(36);
 
       const payload: TreinoCreatePayload = {
         codigo,
         nome,
         descricao: descricao || null,
-        nivel: mapNivel(nivel), 
-        usuarioId,                    
-        tipoUsuario: tipoUsuarioNorm,  
-        tipoUsuarioId,               
+        nivel: mapNivel(nivel),
+        usuarioId,
+        tipoUsuario: tipoUsuarioNorm,
+        tipoUsuarioId,
         categoria: categoria ? [mapCategoria(categoria)] : [],
         tipoTreino: mapTipoTreino(tipoTreino),
         objetivo: objetivo || null,
@@ -615,7 +663,8 @@ const criarTreino = async () => {
         dicas,
         atletasIds: atletasSelecionados,
         elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
-        exercicios: montarExerciciosParaPayload(exerciciosSelecionados),
+        exercicios,
+        pontuacao: Math.max(0, Math.floor(score.total)),
       };
 
       await TreinosApi.criar(payload);
@@ -770,8 +819,26 @@ const criarTreino = async () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="p-4 sm:p-6 max-w-3xl mx-auto">
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <h2 className="text-lg sm:text-xl font-bold">Criar Novo Treino</h2>
+        {/* Cabeçalho com badge de pontos central */}
+        <div className="grid grid-cols-3 items-center mb-3 sm:mb-4">
+          <h2 className="text-lg sm:text-xl font-bold col-start-1">Criar Novo Treino</h2>
+
+          <div
+            className="justify-self-center col-start-2"
+            title={
+              `Nível: +${score.nivel} • Tipo: +${score.tipo} • ` +
+              `Exercícios (${score.exCount}): +${score.exercicios} • ` +
+              `Duração: +${score.duracao} • Dicas: +${score.dicas}`
+            }
+          >
+            <span className="
+              inline-flex items-center gap-1 rounded-full px-3 py-1
+              text-sm font-semibold bg-amber-100 text-amber-900 border border-amber-300
+            ">
+              {score.total} pts
+            </span>
+          </div>
+
           <button
             onClick={() => {
               if (confirm("Deseja limpar o progresso deste treino?")) {
@@ -792,7 +859,7 @@ const criarTreino = async () => {
                 setAtletasSelecionados([]);
               }
             }}
-            className="text-sm text-red-700 underline"
+            className="text-sm text-red-700 underline justify-self-end col-start-3"
           >
             Limpar progresso
           </button>
@@ -940,7 +1007,7 @@ const criarTreino = async () => {
                           </div>
                         )}
 
-                       <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             {ehDoBanco ? (
                               <div className="font-semibold">{nomeFinal}</div>
@@ -1117,7 +1184,6 @@ const criarTreino = async () => {
         )}
 
         {etapa === 4 && (
-          
           <StepCard title="Selecionar Atletas Vinculados">
             {atletasVinculados.length === 0 ? (
               <div className="bg-gray-100 text-gray-600 text-center py-6 rounded">
