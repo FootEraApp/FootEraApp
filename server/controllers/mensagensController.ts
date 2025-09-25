@@ -76,8 +76,8 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
 
     const io = getIO();
     if (io) {
-      io.to(paraId).emit("novaMensagem", payload);
-      io.to(req.userId!).emit("novaMensagem", payload);
+     io.to(`u:${paraId}`).emit("novaMensagem", payload);
+     io.to(`u:${req.userId!}`).emit("novaMensagem", payload);
     }
 
     return res.json(payload);
@@ -89,18 +89,13 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
 
 export const buscarMensagens = async (req: any, res: Response) => {
   try {
-    const me = req.user?.id || req.userId;
-    if (!me) return res.status(401).json({ error: "Não autenticado." });
+    const me = req.userId;
+    const otherId = String(
+      req.query.otherId ?? req.query.paraId ?? req.query.deId ?? ""
+    );
+    if (!me || !otherId) return res.status(400).json({ error: "otherId é obrigatório" });
 
-    const q = req.query as any;
-    // compat: aceita ?deId=&paraId= ou o novo ?otherId=
-    let otherId: string | undefined = q.otherId;
-    if (!otherId && (q.deId || q.paraId)) {
-      otherId = q.deId === me ? String(q.paraId) : String(q.deId);
-    }
-    if (!otherId) return res.status(400).json({ error: "otherId é obrigatório" });
-
-    const { cursor, limit = 20 } = q;
+    const { cursor, limit = 20 } = req.query;
 
     const mensagens = await prisma.mensagem.findMany({
       where: {
@@ -119,6 +114,7 @@ export const buscarMensagens = async (req: any, res: Response) => {
     res.status(500).json({ error: "Erro ao buscar mensagens" });
   }
 };
+
 
 export async function listarConversas(req: any, res: Response) {
   const me: string | undefined = req.user?.id || req.userId;
@@ -252,7 +248,7 @@ export const enviarMensagemGrupo = async (req: AuthenticatedRequest, res: Respon
 
     const io = getIO();
     if (io) {
-      io.to(grupoId).emit("novaMensagemGrupo", payload);
+      io.to(`g:${grupoId}`).emit("novaMensagemGrupo", payload);
     }
 
     return res.status(201).json(payload);

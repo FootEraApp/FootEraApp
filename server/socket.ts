@@ -1,39 +1,37 @@
 import { Server } from "socket.io";
 import http from "http";
 
-let io: Server; 
+let io: Server;
 
 export function setupSocket(server: http.Server) {
-  io = new Server(server, {
-    cors: { origin: "*" },
-  });
+  io = new Server(server, { cors: { origin: "*" } });
 
   io.on("connection", (socket) => {
-    
     socket.on("join", (usuarioId: string) => {
-      socket.join(usuarioId);
+      if (!usuarioId) return;
+      socket.join(`u:${usuarioId}`);
     });
 
     socket.on("joinGroup", (grupoId: string) => {
-      socket.join(grupoId);
+      if (!grupoId) return;
+      socket.join(`g:${grupoId}`);
+    });
+
+    socket.on("leaveGroup", (grupoId: string) => {
+      if (!grupoId) return;
+      socket.leave(`g:${grupoId}`);
     });
 
     socket.on("sendMessage", (mensagem) => {
-      io.to(mensagem.paraId).emit("novaMensagem", mensagem);
-      io.to(mensagem.deId).emit("novaMensagem", mensagem);
+      io.to(`u:${mensagem.paraId}`).emit("novaMensagem", mensagem);
+      io.to(`u:${mensagem.deId}`).emit("novaMensagem", mensagem);
     });
-
     socket.on("sendGroupMessage", (mensagem) => {
-      io.to(mensagem.grupoId).emit("novaMensagemGrupo", mensagem);
-    });
-
-    socket.on("disconnect", () => {
+      io.to(`g:${mensagem.grupoId}`).emit("novaMensagemGrupo", mensagem);
     });
   });
 
   return io;
 }
 
-export function getIO() {
-  return io;
-}
+export function getIO() { return io; }

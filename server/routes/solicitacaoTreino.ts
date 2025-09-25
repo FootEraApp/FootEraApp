@@ -18,5 +18,12 @@ router.post("/", criarSolicitacao);
 router.get("/minhas", listarSolicitacoesMinhas);
 router.get("/", listarSolicitacoesRecebidas);
 router.delete("/:destinatarioId?", cancelarSolicitacao);
+router.put("/:id", async (req, res) => {
+  const { aceitar } = req.body ?? {};
+  if (aceitar === true) {
+    return solicitacoesTreinoController.aceitar(req, res);
+  }
+  return recusarSolicitacao(req, res);
+});
 
 export default router;
