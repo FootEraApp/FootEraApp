@@ -113,6 +113,7 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   const [professor, setProfessor] = useState<{ id?: string; nome: string } | null>(null);
   const [escolaNome, setEscolaNome] = useState<string | null>(null);
   const [clubeNome, setClubeNome] = useState<string | null>(null);
+  const [scoreDelta, setScoreDelta] = useState(0);
 
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -190,6 +191,14 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
             pontuacaoDisciplina: disciplina,
             pontuacaoResponsabilidade: responsabilidade,
           });
+
+            const totalAtual = performance + disciplina + responsabilidade;
+            const viewerId = String(Storage?.usuarioId ?? "");
+            const key = `lastSeenScore:${viewerId}:${uid}`;
+            const last = Number(localStorage.getItem(key) ?? 0);
+            const d = Math.max(0, totalAtual - last);
+             setScoreDelta(d);
+             setTimeout(() => { try { localStorage.setItem(key, String(totalAtual)); } catch {} }, 2000);
         } else {
           setPontuacao(null);
         }
@@ -256,6 +265,7 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
           posicao={perfil.dadosEspecificos.posicao}
           time={undefined}
           pontuacao={total}
+          scoreDelta={scoreDelta}
           isOwnProfile={isOwnProfile}
           foto={perfil.usuario.foto || perfil.dadosEspecificos.foto || undefined}
           perfilId={idDaUrl || perfil.usuario.id}

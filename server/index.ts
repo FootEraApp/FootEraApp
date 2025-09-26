@@ -11,6 +11,7 @@ import qrcode from "qrcode-terminal";
 import { APP } from "./config.js";
 import * as fs from "fs";
 import { UPLOADS_ROOT, ensureUploadDirs } from "./utils/uploads.js";
+import { gerarSnapshotRanking } from "./jobs/rankingSnapshot.js";
 
 import adminRoutes from "./routes/admin.js";
 import adminModeracaoRoutes from "./routes/adminModeracao.js";
@@ -63,6 +64,8 @@ import conquistasRouter from "./routes/conquistas.js";
 import relacoesRoutes from "./routes/relacoes.js";
 import elencosRoutes from "./routes/elencos.js";
 import formadoresRoutes from "./routes/formadores.js";
+import scoutNotesRoutes from "./routes/scoutNotes.js";
+import checklistRoutes from "./routes/checklists.js";
 
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 import { removerTreinosExpirados } from "./routes/removerTreinosExpirados.js";
@@ -140,7 +143,9 @@ app.use("/api/elencos", elencosRoutes);
 app.use("/api/admin/moderacao", adminModeracaoRoutes);
 app.use("/api/formadores", formadoresRoutes);
 app.use("/api", indicacoesRouter); 
-app.use("/api", olheirosRouter);
+app.use("/api/olheiros", olheirosRouter);
+app.use("/api/checklists", checklistRoutes);
+app.use("/api", scoutNotesRoutes);
 
 app.use("/exercicios", express.static(path.join(process.cwd(), "public", "exercicios"), {
   setHeaders: (res) => res.setHeader("Accept-Ranges", "bytes"),
@@ -181,7 +186,7 @@ server.listen({port: PORT, host: "0.0.0.0"}, () => {
   console.log(`QR Code para acessar o front-end: ${frontendURL}`);
 });
 
-cron.schedule("*/10 * * * *", async () => {
-  console.log("Verificando treinos expirados...");
-  await removerTreinosExpirados();
+cron.schedule("0 2 * * *", async () => { 
+  try { await gerarSnapshotRanking(); console.log("Snapshot de ranking gerado"); }
+  catch (e) { console.error("Falha snapshot ranking", e); }
 });

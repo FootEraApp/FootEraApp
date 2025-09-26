@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
+import AcoesTreino from "../components/treinos/acoestreino.js";
 
 type ExercicioItem = {
   id: string;
@@ -270,14 +271,15 @@ export default function TreinoUnico() {
           </button>
 
           {isAgendado && (
-            <button
-              onClick={() => {
-                window.location.href = `/submissao?treinoAgendadoId=${treino.id}`;
-              }}
-              className="px-4 py-2 rounded bg-green-800 hover:bg-green-900 text-white"
-            >
-              Fazer Submissão
-            </button>
+            <div className="flex items-center justify-between gap-3">
+              <AcoesTreino treinoId={treino.id} />
+              <button
+                onClick={() => { window.location.href = `/submissao?treinoAgendadoId=${treino.id}`; }}
+                className="px-4 py-2 rounded bg-green-800 hover:bg-green-900 text-white"
+              >
+                Fazer Submissão
+              </button>
+            </div>
           )}
         </div>
       </main>

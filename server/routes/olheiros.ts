@@ -79,7 +79,7 @@ router.get("/perfil/olheiro/:id", async (req, res) => {
   }
 });
 
-router.patch("/olheiros/:id", async (req, res) => {
+router.patch("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { colaboracaoClubeId } = req.body || {};
@@ -107,6 +107,39 @@ router.patch("/olheiros/:id", async (req, res) => {
   }
 });
 
-router.get("/olheiros/:olheiroId/observados", authenticateToken, listarObservadosPorOlheiro);
+router.get("/:olheiroId/observados", authenticateToken, listarObservadosPorOlheiro);
+
+router.get("/notas/:atletaId", authenticateToken, async (req, res) => {
+  try {
+    const usuarioId = (req as any).userId as string;
+    const olheiro = await prisma.olheiro.findUnique({ where: { usuarioId }, select: { id: true } });
+    if (!olheiro) return res.status(403).json({ error: "Somente olheiros podem usar notas" });
+
+    const nota = await prisma.scoutNote.findUnique({
+      where: { olheiroId_atletaId: { olheiroId: olheiro.id, atletaId: req.params.atletaId } },
+    });
+    res.json(nota ?? { texto: "", lastScoreSeen: null });
+  } catch (e) {
+    console.error(e); res.status(500).json({ error: "Falha ao carregar nota" });
+  }
+});
+
+router.put("/notas/:atletaId", authenticateToken, async (req, res) => {
+  try {
+    const usuarioId = (req as any).userId as string;
+    const { texto, lastScoreSeen } = req.body ?? {};
+    const olheiro = await prisma.olheiro.findUnique({ where: { usuarioId }, select: { id: true } });
+    if (!olheiro) return res.status(403).json({ error: "Somente olheiros podem usar notas" });
+
+    const saved = await prisma.scoutNote.upsert({
+      where: { olheiroId_atletaId: { olheiroId: olheiro.id, atletaId: req.params.atletaId } },
+      create: { olheiroId: olheiro.id, atletaId: req.params.atletaId, texto: texto ?? "", lastScoreSeen: lastScoreSeen ?? null },
+      update: { texto: texto ?? "", lastScoreSeen: lastScoreSeen ?? undefined },
+    });
+    res.json(saved);
+  } catch (e) {
+    console.error(e); res.status(500).json({ error: "Falha ao salvar nota" });
+  }
+});
 
 export default router;
