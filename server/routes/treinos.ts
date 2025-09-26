@@ -23,6 +23,7 @@ import {
   atletasVinculados, 
   listarSubmissoesParaValidacao, 
   validarSubmissaoTreino,
+  listarMinhasSubmissoesTreino,
 } from "server/controllers/treinosController.js";
 
 
@@ -36,6 +37,8 @@ router.get("/agendados", authenticateToken, getTreinosAgendados);
 router.post("/agendados", authenticateToken, agendarTreino);
 router.delete("/agendados/:id", authenticateToken, excluirTreinoAgendado);
 router.post("/concluir", authenticateToken, concluirTreino);
+
+router.get("/minhas-submissoes", authenticateToken, listarMinhasSubmissoesTreino);
 
 router.get("/programados/:id", authenticateToken, obterTreinoProgramadoPorId);
 router.put("/programados/:id", authenticateToken, atualizarTreinoProgramado);

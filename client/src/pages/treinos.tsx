@@ -102,6 +102,14 @@ interface SubmissaoParaValidacao {
   observacao?: string | null;
 }
 
+/** NOVO: submissões do próprio atleta (para filtragem) */
+type MinhasSubTreino = {
+  id: string;
+  treinoAgendadoId: string | null;
+  treinoProgramadoId: string | null;
+  aprovado: boolean | null;
+};
+
 const PLACEHOLDER_USER = "/assets/default-user.png";
 
 function resolveUploadUrl(raw?: string | null) {
@@ -156,11 +164,64 @@ export default function PaginaTreinos() {
   const [submissoesPendentes, setSubmissoesPendentes] = useState<SubmissaoParaValidacao[]>([]);
   const [carregandoSubmissoes, setCarregandoSubmissoes] = useState(false);
 
+  /** NOVO: conjuntos para filtrar tudo que já tem submissão */
+  const [idsAgendadosSubmetidos, setIdsAgendadosSubmetidos] = useState<Set<string>>(new Set());
+  const [idsProgramadosSubmetidos, setIdsProgramadosSubmetidos] = useState<Set<string>>(new Set());
+  const [idsDesafiosSubmetidos, setIdsDesafiosSubmetidos] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     const handler = (e: any) => setTreinosAgendados((prev) => [e.detail, ...prev]);
     window.addEventListener("treino:agendado", handler as EventListener);
     return () => window.removeEventListener("treino:agendado", handler as EventListener);
   }, []);
+
+  /** NOVO: carrega submissões do atleta para filtrar */
+  async function carregarMinhasSubmissoes(atletaId: string) {
+    try {
+      const token = (Storage as any).token ?? localStorage.getItem("token");
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+      // Treinos
+      const r = await fetch(
+        `${API.BASE_URL}/api/treinos/minhas-submissoes?atletaId=${encodeURIComponent(atletaId)}`,
+        { headers }
+      );
+      if (r.ok) {
+        const arr: MinhasSubTreino[] = await r.json();
+        const setAg = new Set<string>();
+        const setPg = new Set<string>();
+        for (const s of arr) {
+          if (s.treinoAgendadoId) setAg.add(s.treinoAgendadoId);
+          if (s.treinoProgramadoId) setPg.add(s.treinoProgramadoId);
+        }
+        setIdsAgendadosSubmetidos(setAg);
+        setIdsProgramadosSubmetidos(setPg);
+      } else {
+        setIdsAgendadosSubmetidos(new Set());
+        setIdsProgramadosSubmetidos(new Set());
+      }
+
+      // Desafios (opcional; ignora se não houver endpoint)
+      try {
+        const r2 = await fetch(
+          `${API.BASE_URL}/api/desafios/minhas-submissoes?atletaId=${encodeURIComponent(atletaId)}`,
+          { headers }
+        );
+        if (r2.ok) {
+          const arr2: { desafioId: string }[] = await r2.json();
+          setIdsDesafiosSubmetidos(new Set(arr2.map((x) => x.desafioId)));
+        } else {
+          setIdsDesafiosSubmetidos(new Set());
+        }
+      } catch {
+        setIdsDesafiosSubmetidos(new Set());
+      }
+    } catch {
+      setIdsAgendadosSubmetidos(new Set());
+      setIdsProgramadosSubmetidos(new Set());
+      setIdsDesafiosSubmetidos(new Set());
+    }
+  }
 
   useEffect(() => {
     const carregar = async () => {
@@ -178,6 +239,9 @@ export default function PaginaTreinos() {
       const token = (Storage as any).token ?? localStorage.getItem("token");
 
       if (tipo === "atleta" && tipoUsuarioId && token) {
+        // NOVO: carrega submissões do atleta
+        carregarMinhasSubmissoes(tipoUsuarioId);
+
         const [resTreinos, resDesafios] = await Promise.all([
           fetch(`${API.BASE_URL}/api/treinos/agendados?usuarioId=${(Storage as any).usuarioId}`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -252,7 +316,7 @@ export default function PaginaTreinos() {
       } else if (["professor", "clube", "escolinha", "escola"].includes(String(tipo)) && token) {
         const [resTreinos, resDesafios] = await Promise.all([
           fetch(`${API.BASE_URL}/api/treinos/programados`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
+          fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${(Storage as any).tipoUsuarioId}`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ]);
@@ -424,6 +488,14 @@ export default function PaginaTreinos() {
 
   const formatarData = (data?: string) => (data ? new Date(data).toLocaleDateString("pt-BR") : "");
 
+  /** NOVO: filtros com submissões */
+  const treinosAgendadosVisiveis = treinosAgendados.filter(
+    (t) => !idsAgendadosSubmetidos.has(t.id)
+  );
+  const desafiosVisiveis = desafios.filter(
+    (d) => !idsDesafiosSubmetidos.has(d.id)
+  );
+
   const renderDesafioCard = (desafio: Desafio) => (
     <div key={desafio.id} className="bg-white p-4 rounded-xl shadow-sm border border-yellow-300/60 mb-3">
       <h4 className="font-bold text-yellow-700 text-lg mb-1">
@@ -462,7 +534,6 @@ export default function PaginaTreinos() {
     ["professor", "admin", "escola", "escolinha", "clube"].includes(usuario.tipo);
 
   const renderTreinoCard = (treino: TreinoProgramado) => (
-
     <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
       <div className="flex items-start justify-between gap-3">
         <h4
@@ -501,17 +572,6 @@ export default function PaginaTreinos() {
         )}
       </div>
 
-      {Array.isArray(treino.dicas) && treino.dicas.length > 0 && (
-        <div className="mt-3">
-          <strong className="text-sm text-gray-800">Dicas:</strong>
-          <ul className="mt-1 list-disc list-inside pl-4 space-y-0.5 text-sm text-gray-600">
-            {treino.dicas.map((dica, idx) => (
-              <li key={idx}>{dica}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {treino.exercicios?.length > 0 && (
         <div className="mt-3">
           <strong className="text-sm text-gray-800">Exercícios:</strong>
@@ -534,7 +594,9 @@ export default function PaginaTreinos() {
     const prazoIso = treino.prazoEnvio ?? treino.dataTreino ?? treino.treinoProgramado?.dataAgendada ?? null;
     const exercicios = programado?.exercicios ?? [];
     const pontos = programado?.pontuacao ?? null;
-    
+
+    const jaSubmetido = idsAgendadosSubmetidos.has(treino.id);
+
     return (
       <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
         <div className="flex items-start justify-between gap-3">
@@ -606,12 +668,17 @@ export default function PaginaTreinos() {
         )}
 
         <div className="mt-4 flex justify-end">
-          <button
-            onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
-            className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg"
-          >
-            Fazer Submissão
-          </button>
+          {!jaSubmetido && (
+            <button
+              onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
+              className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg"
+            >
+              Fazer Submissão
+            </button>
+          )}
+          {jaSubmetido && (
+            <span className="text-xs text-gray-500">Você já enviou submissão para este treino.</span>
+          )}
         </div>
       </div>
     );
@@ -706,7 +773,7 @@ export default function PaginaTreinos() {
     <div className="min-h-screen bg-neutral-50 pb-24">
       <div className="mx-auto w-full max-w-3xl lg:max-w-4xl px-3 sm:px-4">
 
-        {/* HEADER: Abas (se gestor) à esquerda + botão de Elenco à direita */}
+        {/* HEADER */}
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
           <div className="flex items-center justify-between gap-2">
             {isGestor ? (
@@ -762,9 +829,9 @@ export default function PaginaTreinos() {
                   </button>
                 </div>
 
-                {treinosAgendados.length > 0 ? (
+                {treinosAgendadosVisiveis.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {treinosAgendados.map(renderTreinoAgendadoCard)}
+                    {treinosAgendadosVisiveis.map(renderTreinoAgendadoCard)}
                   </div>
                 ) : (
                   <p className="text-gray-500">Nenhum treino disponível ainda.</p>
@@ -773,8 +840,8 @@ export default function PaginaTreinos() {
 
               <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
                 <h3 className="text-lg font-semibold mb-2">Desafios</h3>
-                {desafios.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{desafios.map(renderDesafioCard)}</div>
+                {desafiosVisiveis.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{desafiosVisiveis.map(renderDesafioCard)}</div>
                 ) : (
                   <p className="text-gray-500">Nenhum desafio disponível no momento.</p>
                 )}
@@ -881,8 +948,6 @@ export default function PaginaTreinos() {
                                             src={src}
                                             alt={`mídia ${idx + 1}`}
                                             className="absolute inset-0 h-full w-full object-cover group-hover:scale-[1.02] transition"
-                                            loading="lazy"
-                                            decoding="async"
                                           />
                                         </div>
                                       </a>
