@@ -5,6 +5,7 @@ import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import ScoreDeltaBadge from "./ScoreDeltaBadge.js";
 
 interface Usuario {
   id: string;
@@ -20,6 +21,7 @@ interface ProfileHeaderProps {
   posicao?: string;
   time?: string;
   pontuacao?: number;
+  scoreDelta?: number;
   scoreTitle?: string;
   kpis?: Kpi[];
   avatar?: string | null;
@@ -49,6 +51,7 @@ export default function ProfileHeader({
   avatar,
   foto,
   isOwnProfile = false,
+  scoreDelta,
 }: ProfileHeaderProps) {
   const [modalAberto, setModalAberto] = useState(false);
   const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
@@ -636,8 +639,14 @@ const toggleObservar = async () => {
         ) : (
           <>
             <h2 className="footera-text-cream text-center mb-2">{scoreTitle}</h2>
-            <div className="footera-bg-green border border-footera-cream rounded-lg p-3 flex justify-center">
-              <span className="footera-text-cream text-3xl font-bold">{pontosTotal} pts</span>
+            <div className="footera-bg-green border border-footera-cream rounded-lg p-3 flex items-center justify-center gap-2">
+            <span className="footera-text-cream text-3xl font-bold">{pontosTotal} pts</span>
+              {typeof scoreDelta === "number" && scoreDelta > 0 && (
+                <span title={`+${scoreDelta} desde a última visita`} className="ml-2 text-xs font-bold text-green-200 bg-green-900/30 border border-green-200/30 rounded px-2 py-0.5">
+                  ↑ +{scoreDelta}
+                </span>
+              )}
+              <ScoreDeltaBadge usuarioId={perfilId} />
             </div>
           </>
         )}

@@ -124,7 +124,7 @@ export function AppRoutes() {
       <Route path="/perfil"><Private><PaginaPerfil /></Private></Route>
       <Route path="/post/:id"><Private><PaginaPostUnico /></Private></Route>
       <Route path="/post"><Private><PaginaCreatePost /></Private></Route>
-      <Route path="/submissao/grupo/:grupoId/:desafioId"><PaginaSubmissaoDesafioEmGrupo /></Route>
+      <Route path="/submissao/grupo/:desafioEmGrupoId/:desafioId"><PaginaSubmissaoDesafioEmGrupo /></Route>
       <Route path="/submissao"><PaginaSubmissao /></Route>
       <Route path="/explorar"><Private><PaginaExplorar /></Private></Route>
       <Route path="/minha-rede"><Private><PaginaMinhaRede /></Private></Route>

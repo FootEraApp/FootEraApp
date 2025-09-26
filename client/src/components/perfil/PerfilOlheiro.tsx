@@ -13,6 +13,8 @@ type Props = { idDaUrl?: string };
 
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null; nomeDeUsuario?: string };
 
+type Note = { texto: string; saving: boolean; dirty: boolean };
+
 type PayloadOlheiro = {
   tipo: "Olheiro";
   usuario: UsuarioMin | null;
@@ -136,7 +138,8 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
   const [clubeSel, setClubeSel] = useState<ResultadoBuscaClube | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [feedback, setFeedback] = useState<{ tipo: "ok" | "erro"; msg: string } | null>(null);
-
+  const [notes, setNotes] = useState<Record<string, Note>>({});
+  const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   useEffect(() => {
     if (!token) return;
     let cancel = false;
@@ -158,6 +161,7 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
     return () => { cancel = true; };
   }, [targetId, token]);
 
+  
   useEffect(() => {
     if (!token) return;
     const cancel = { v: false };
@@ -237,6 +241,39 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
           setClubes([]);
         }
       }, 400),
+    [headers]
+  );
+
+  async function fetchNota(atletaId: string) {
+    try {
+      const { data } = await axios.get(
+        `${API.BASE_URL}/api/observados/${encodeURIComponent(atletaId)}/nota`,
+        { headers }
+      );
+      setNotes(p => ({ ...p, [atletaId]: { texto: data?.texto ?? "", saving: false, dirty: false } }));
+    } catch {
+      setNotes(p => ({ ...p, [atletaId]: { texto: "", saving: false, dirty: false } }));
+    }
+  }
+
+  const saveNotaDebounced = useMemo(
+    () =>
+      debounce(async (atletaId: string, texto: string) => {
+        setNotes(p => {
+          const prev = p[atletaId] ?? { texto: "", saving: false, dirty: true };
+          return { ...p, [atletaId]: { ...prev, saving: true } };
+        });
+        try {
+          await axios.put(
+            `${API.BASE_URL}/api/observados/${encodeURIComponent(atletaId)}/nota`,
+            { texto },
+            { headers: { "Content-Type": "application/json", ...(headers || {}) } }
+          );
+          setNotes(p => ({ ...p, [atletaId]: { texto, saving: false, dirty: false } }));
+        } catch {
+          setNotes(p => ({ ...p, [atletaId]: { texto, saving: false, dirty: true } }));
+        }
+      }, 600),
     [headers]
   );
 
@@ -475,23 +512,67 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
             >
               {observados && observados.length > 0 ? (
                 <ul className="grid grid-cols-1 gap-3">
-                  {observados.map((a) => (
-                    <li key={a.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-                      <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-green-900">{a.nome}</div>
-                        <div className="text-xs text-green-900/70">
-                          {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
+                  {observados.map((a) => {
+                    const atletaKey = a.atletaId || a.id;
+
+                    return (
+                      <li key={a.id} className="flex flex-col gap-2 rounded-xl border border-green-100 p-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-green-900">{a.nome}</div>
+                            <div className="text-xs text-green-900/70">
+                              {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
+                            </div>
+                          </div>
+                          <Link href={`/perfil/${a.id}`} className="text-sm text-green-800 inline-flex items-center gap-1">
+                            Ver perfil <ChevronRight className="w-4 h-4" />
+                          </Link>
                         </div>
-                      </div>
-                      <Link
-                        href={`/perfil/${a.id}`}
-                        className="text-sm text-green-800 inline-flex items-center gap-1"
-                      >
-                        Ver perfil <ChevronRight className="w-4 h-4" />
-                      </Link>
-                    </li>
-                  ))}
+
+                        {isOwn && (
+                          <div>
+                            <button
+                              onClick={() => {
+                                const willOpen = openNoteId !== atletaKey;
+                                setOpenNoteId(willOpen ? atletaKey : null);
+                                if (willOpen && notes[atletaKey] === undefined) fetchNota(atletaKey);
+                              }}
+                              className="text-xs px-2 py-1 rounded-md border border-green-200 text-green-900 hover:bg-green-50"
+                            >
+                              {openNoteId === atletaKey ? "Ocultar anotações" : "Anotações do atleta"}
+                            </button>
+
+                            {openNoteId === atletaKey && (
+                              <div className="mt-2">
+                                <textarea
+                                  rows={4}
+                                  className="ws-full border rounded p-2 text-sm"
+                                  placeholder="Suas observações (visível somente para você)"
+                                  value={notes[atletaKey]?.texto ?? ""}
+                                  onChange={(e) => {
+                                    const texto = e.target.value;
+                                    setNotes(p => {
+                                      const prev = p[atletaKey] ?? { texto: "", saving: false, dirty: false };
+                                      return { ...p, [atletaKey]: { ...prev, texto, dirty: true } };
+                                    });
+                                    saveNotaDebounced(atletaKey, texto);
+                                  }}
+                                />
+                                <div className="mt-1 text-[11px] text-green-900/60">
+                                  {notes[atletaKey]?.saving
+                                    ? "Salvando…"
+                                    : notes[atletaKey]?.dirty
+                                    ? "Alterações pendentes"
+                                    : "Salvo"}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <div>

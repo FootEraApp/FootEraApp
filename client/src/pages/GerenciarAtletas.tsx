@@ -1,4 +1,3 @@
-// client/src/pages/GerenciarAtletas
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, House } from "lucide-react";
@@ -291,7 +290,7 @@ const GerenciarAtletas: React.FC = () => {
       const items = (data?.items || []) as any[];
       setSubmissoes(items.map((row) => ({
         id: row.id,
-        tipo: row.tipo, // "treino" | "desafio"
+        tipo: row.tipo,
         data: new Date(row.data || row.criadoEm || Date.now()).toISOString(),
         titulo: row.titulo || (row.tipo === "treino" ? "Treino" : "Desafio"),
         aprovado: (row.aprovado ?? null),
@@ -370,9 +369,7 @@ const GerenciarAtletas: React.FC = () => {
     };
   }, [focado?.usuarioId, focado?.id]);
 
-  // ======= DADOS DO GRÁFICO (4 semanas) =======
   const chartData = useMemo(() => {
-    // Semana 1 = 21–27 dias atrás, ... Semana 4 = 0–6 dias (mais recente)
     const bins = [
       { semana: "Semana 1", treinos: 0, desafios: 0 },
       { semana: "Semana 2", treinos: 0, desafios: 0 },
@@ -381,7 +378,7 @@ const GerenciarAtletas: React.FC = () => {
     ];
     const now = Date.now();
     for (const s of submissoes) {
-      if (s.aprovado !== true) continue; // conta apenas concluídos (aprovados)
+      if (s.aprovado !== true) continue;
       const t = new Date(s.data).getTime();
       const diffDays = Math.floor((now - t) / 86_400_000);
       let idx = -1;
@@ -720,7 +717,6 @@ const GerenciarAtletas: React.FC = () => {
                   </div>
                 </div>
 
-                {/* === Gráfico semanal (torres) === */}
                 <div className="mt-4 rounded-xl border border-zinc-200 p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm font-medium text-zinc-900">
@@ -758,7 +754,6 @@ const GerenciarAtletas: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Lista simples de treinos/desafios concluídos */}
                 <div className="mt-4 rounded-xl border border-zinc-200">
                   <div className="flex items-center gap-2 border-b border-zinc-100 p-3 text-sm font-medium text-zinc-900">
                     <ListChecks className="h-4 w-4" /> Concluídos recentemente

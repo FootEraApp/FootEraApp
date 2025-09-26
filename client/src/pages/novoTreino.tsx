@@ -1,4 +1,3 @@
-// client/src/pages/novoTreino.tsx
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from "lucide-react";
@@ -8,9 +7,6 @@ import { TreinosApi } from "../utils/treinosApi.js";
 import { montarExerciciosParaPayload } from "../utils/treinos.helpers.js";
 import type { ExItemUI, TreinoCreatePayload } from "../utils/treinos.types.js";
 
-/* =========================================================
-   Regras de Pontuação (ajuste livre) NÂO APAGAR
-   ========================================================= */
 type PontuacaoDetalhe = {
   total: number;
   nivel: number;
@@ -24,10 +20,10 @@ type PontuacaoDetalhe = {
 const PONTOS = {
   NIVEL: { Base: 0, Avancado: 10, Performance: 20 } as Record<string, number>,
   TIPO: { Tecnico: 5, Fisico: 6, Tatico: 8 } as Record<string, number>,
-  POR_EXERCICIO: 4, // cada exercício
-  POR_15_MIN: 1, // a cada 15min de duração
-  POR_DICA: 1, // por dica
-  DICAS_MAX: 5, // máximo de dicas que contam
+  POR_EXERCICIO: 4,
+  POR_15_MIN: 1,
+  POR_DICA: 1,
+  DICAS_MAX: 5,
 };
 
 function calcularPontuacaoTreino(
@@ -52,8 +48,6 @@ function calcularPontuacaoTreino(
   const total = ptsEx + ptsNivel + ptsTipo + ptsDur + ptsDicas;
   return { total, nivel: ptsNivel, tipo: ptsTipo, exercicios: ptsEx, duracao: ptsDur, dicas: ptsDicas, exCount };
 }
-
-/* ========================================================= */
 
 interface UsuarioLogado {
   tipo: "atleta" | "escola" | "escolinha" | "clube" | "professor";
@@ -213,13 +207,11 @@ export default function NovoTreino() {
   const [filtroEx, setFiltroEx] = useState("");
   const restoredRef = useRef(false);
 
-  /* ===== Pontuação dinâmica ===== */
   const score = useMemo(
     () => calcularPontuacaoTreino(nivel, tipoTreino, duracao, exerciciosSelecionados, dicas),
     [nivel, tipoTreino, duracao, exerciciosSelecionados, dicas]
   );
-  /* ============================== */
-
+  
   function normalizaTreinos(raw: any[]): TreinoProgramado[] {
     return raw.map((t: any) => ({
       id: t.id,
@@ -819,7 +811,6 @@ export default function NovoTreino() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="p-4 sm:p-6 max-w-3xl mx-auto">
-        {/* Cabeçalho com badge de pontos central */}
         <div className="grid grid-cols-3 items-center mb-3 sm:mb-4">
           <h2 className="text-lg sm:text-xl font-bold col-start-1">Criar Novo Treino</h2>
 

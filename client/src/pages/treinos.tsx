@@ -1,4 +1,3 @@
-// client/src/pages/treinos
 import { useEffect, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -19,6 +18,7 @@ import {
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { Badge } from "@/components/ui/badge.js";
+import AcoesTreino from "../components/treinos/acoestreino.js"
 
 const tipoUser =
   String(
@@ -117,7 +117,6 @@ function isVideoUrl(url: string) {
   return /\.(mp4|webm|ogg|mov|m4v)$/i.test(clean);
 }
 
-/** Ícone de campo de futebol (SVG leve e responsivo) */
 function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
@@ -155,6 +154,7 @@ export default function PaginaTreinos() {
 
   const [submissoesPendentes, setSubmissoesPendentes] = useState<SubmissaoParaValidacao[]>([]);
   const [carregandoSubmissoes, setCarregandoSubmissoes] = useState(false);
+  const [page, setPage] = useState({ total: 0, limit: 20, offset: 0 });
 
   useEffect(() => {
     const handler = (e: any) => setTreinosAgendados((prev) => [e.detail, ...prev]);
@@ -358,29 +358,38 @@ export default function PaginaTreinos() {
     ) {
       if (abaProfessor === "avaliar") carregarSubmissoes();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abaProfessor, usuario?.tipoUsuarioId]);
 
-  async function carregarSubmissoes() {
-    const token = (Storage as any).token ?? localStorage.getItem("token");
-    if (!token || !usuario) return;
+  async function carregarSubmissoes(append = false) {
+  const token = (Storage as any).token ?? localStorage.getItem("token");
+  if (!token || !usuario) return;
 
-    setCarregandoSubmissoes(true);
-    try {
-      const res = await fetch(
-        `${API.BASE_URL}/api/treinos/submissoes?tipoUsuarioId=${usuario.tipoUsuarioId}&status=pendente`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!res.ok) throw new Error(`Falha /treinos/submissoes: ${res.status}`);
-      const data = await res.json();
-      setSubmissoesPendentes(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error(e);
-      setSubmissoesPendentes([]);
-    } finally {
-      setCarregandoSubmissoes(false);
-    }
+  const limit = page.limit;
+  const offset = append ? (page.offset + page.limit) : 0;
+
+  setCarregandoSubmissoes(true);
+  try {
+    const res = await fetch(
+      `${API.BASE_URL}/api/treinos/submissoes?tipoUsuarioId=${usuario.tipoUsuarioId}&status=pendente&limit=${limit}&offset=${offset}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error(`Falha /treinos/submissoes: ${res.status}`);
+    const data = await res.json();
+    const items = Array.isArray(data) ? data : (data.items ?? []);
+
+    setSubmissoesPendentes(prev => append ? [...prev, ...items] : items);
+    setPage({
+      total: data.total ?? items.length,
+      limit: data.limit ?? limit,
+      offset,
+    });
+  } catch (e) {
+    console.error(e);
+    if (!append) setSubmissoesPendentes([]);
+  } finally {
+    setCarregandoSubmissoes(false);
   }
+}
 
   async function validarSubmissao(id: string, aprovado: boolean, pontosSug?: number) {
     const token = (Storage as any).token ?? localStorage.getItem("token");
@@ -440,12 +449,12 @@ export default function PaginaTreinos() {
         </span>
       </div>
 
-      <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:justify-between">
+       <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:justify-between">
         <button
-          onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
-          className="bg-green-800 hover:bg-green-900 text-white px-4 py-2 rounded-lg text-sm"
+          onClick={() => navigate(`/desafios/${desafio.id}`)}
+          className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg"
         >
-          Fazer Submissão
+          Ver desafio
         </button>
         <button
           onClick={() => abrirModalCompartilhar(desafio.id)}
@@ -605,7 +614,8 @@ export default function PaginaTreinos() {
           </div>
         )}
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <AcoesTreino treinoId={treino.id} />
           <button
             onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
             className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg"
@@ -706,7 +716,6 @@ export default function PaginaTreinos() {
     <div className="min-h-screen bg-neutral-50 pb-24">
       <div className="mx-auto w-full max-w-3xl lg:max-w-4xl px-3 sm:px-4">
 
-        {/* HEADER: Abas (se gestor) à esquerda + botão de Elenco à direita */}
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
           <div className="flex items-center justify-between gap-2">
             {isGestor ? (
@@ -747,7 +756,6 @@ export default function PaginaTreinos() {
           </div>
         </div>
 
-        {/* CONTEÚDO */}
         <>
           {usuario.tipo === "atleta" && (
             <div className="space-y-6">
@@ -793,108 +801,121 @@ export default function PaginaTreinos() {
                   ) : submissoesPendentes.length === 0 ? (
                     <p className="text-gray-500">Nenhum treino pendente para avaliação no momento.</p>
                   ) : (
-                    <ul className="space-y-3">
-                      {submissoesPendentes.map((s) => {
-                        const foto = s.atleta?.foto ? resolveUploadUrl(s.atleta.foto) : PLACEHOLDER_USER;
-                        const midias = (Array.isArray(s.midias) ? s.midias : []).map(resolveUploadUrl);
+                    <>
+                      <ul className="space-y-3">
+                        {submissoesPendentes.map((s) => {
+                          const foto = s.atleta?.foto ? resolveUploadUrl(s.atleta.foto) : PLACEHOLDER_USER;
+                          const midias = (Array.isArray(s.midias) ? s.midias : []).map(resolveUploadUrl);
 
-                        return (
-                          <li
-                            key={s.id}
-                            className="rounded-xl border bg-white shadow-sm hover:shadow-md transition p-3 sm:p-4"
-                          >
-                            <div className="flex items-start gap-3 sm:gap-4">
-                              <img
-                                src={foto}
-                                alt={s.atleta?.nome}
-                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border"
-                                onError={(e) => {
-                                  const el = e.currentTarget as HTMLImageElement;
-                                  (el as any).onerror = null;
-                                  el.src = PLACEHOLDER_USER;
-                                }}
-                              />
+                          return (
+                            <li
+                              key={s.id}
+                              className="rounded-xl border bg-white shadow-sm hover:shadow-md transition p-3 sm:p-4"
+                            >
+                              <div className="flex items-start gap-3 sm:gap-4">
+                                <img
+                                  src={foto}
+                                  alt={s.atleta?.nome}
+                                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border"
+                                  onError={(e) => {
+                                    const el = e.currentTarget as HTMLImageElement;
+                                    (el as any).onerror = null;
+                                    el.src = PLACEHOLDER_USER;
+                                  }}
+                                />
 
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <div className="font-semibold text-green-900 truncate">{s.treino.titulo}</div>
-                                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                    +{s.pontosSugeridos ?? 0} pts
-                                  </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="font-semibold text-green-900 truncate">{s.treino.titulo}</div>
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                      +{s.pontosSugeridos ?? 0} pts
+                                    </span>
 
-                                  <div className="ml-auto flex items-center gap-2 w-full sm:w-auto">
-                                    <button
-                                      onClick={() => aprovar(s.id, s.pontosSugeridos)}
-                                      className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
-                                      title="Aprovar e creditar pontos"
-                                    >
-                                      <Check className="w-4 h-4" /> Aprovar
-                                    </button>
-                                    <button
-                                      onClick={() => reprovar(s.id)}
-                                      className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200"
-                                      title="Reprovar"
-                                    >
-                                      <X className="w-4 h-4" /> Reprovar
-                                    </button>
+                                    <div className="ml-auto flex items-center gap-2 w-full sm:w-auto">
+                                      <button
+                                        onClick={() => aprovar(s.id, s.pontosSugeridos)}
+                                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                                        title="Aprovar e creditar pontos"
+                                      >
+                                        <Check className="w-4 h-4" /> Aprovar
+                                      </button>
+                                      <button
+                                        onClick={() => reprovar(s.id)}
+                                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200"
+                                        title="Reprovar"
+                                      >
+                                        <X className="w-4 h-4" /> Reprovar
+                                      </button>
+                                    </div>
                                   </div>
+
+                                  <div className="text-sm text-gray-600 truncate">{s.atleta?.nome}</div>
+                                  <div className="text-xs text-gray-500">{formatarDataHora(s.criadoEm)}</div>
+
+                                  {!!s.observacao && (
+                                    <p className="mt-1 text-[13px] italic text-gray-700 leading-snug">“{s.observacao}”</p>
+                                  )}
                                 </div>
-
-                                <div className="text-sm text-gray-600 truncate">{s.atleta?.nome}</div>
-                                <div className="text-xs text-gray-500">{formatarDataHora(s.criadoEm)}</div>
-
-                                {!!s.observacao && (
-                                  <p className="mt-1 text-[13px] italic text-gray-700 leading-snug">“{s.observacao}”</p>
-                                )}
                               </div>
-                            </div>
 
-                            {!!midias.length && (
-                              <div className="mt-3 sm:mt-4">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                                  {midias.map((src, idx) => {
-                                    const isVid = isVideoUrl(src);
-                                    return isVid ? (
-                                      <div
-                                        key={`${src}-${idx}`}
-                                        className="relative w-full overflow-hidden rounded-lg bg-black border pt-[56.25%]"
-                                      >
-                                        <video
-                                          src={src}
-                                          controls
-                                          preload="metadata"
-                                          playsInline
-                                          className="absolute inset-0 h-full w-full object-contain"
-                                        />
-                                      </div>
-                                    ) : (
-                                      <a
-                                        key={`${src}-${idx}`}
-                                        href={src}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="block group"
-                                        title="Abrir imagem"
-                                      >
-                                        <div className="relative w-full overflow-hidden rounded-lg border bg-gray-50 pt-[56.25%]">
-                                          <img
+                              {!!midias.length && (
+                                <div className="mt-3 sm:mt-4">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+                                    {midias.map((src, idx) => {
+                                      const isVid = isVideoUrl(src);
+                                      return isVid ? (
+                                        <div
+                                          key={`${src}-${idx}`}
+                                          className="relative w-full overflow-hidden rounded-lg bg-black border pt-[56.25%]"
+                                        >
+                                          <video
                                             src={src}
-                                            alt={`mídia ${idx + 1}`}
-                                            className="absolute inset-0 h-full w-full object-cover group-hover:scale-[1.02] transition"
-                                            loading="lazy"
-                                            decoding="async"
+                                            controls
+                                            preload="metadata"
+                                            playsInline
+                                            className="absolute inset-0 h-full w-full object-contain"
                                           />
                                         </div>
-                                      </a>
-                                    );
-                                  })}
+                                      ) : (
+                                        <a
+                                          key={`${src}-${idx}`}
+                                          href={src}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="block group"
+                                          title="Abrir imagem"
+                                        >
+                                          <div className="relative w-full overflow-hidden rounded-lg border bg-gray-50 pt-[56.25%]">
+                                            <img
+                                              src={src}
+                                              alt={`mídia ${idx + 1}`}
+                                              className="absolute inset-0 h-full w-full object-cover group-hover:scale-[1.02] transition"
+                                              loading="lazy"
+                                              decoding="async"
+                                            />
+                                          </div>
+                                        </a>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+
+                      {submissoesPendentes.length < page.total && (
+                        <div className="mt-3 flex justify-center">
+                          <button
+                            onClick={() => carregarSubmissoes(true)}
+                            className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                          >
+                            Carregar mais
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -942,10 +963,10 @@ export default function PaginaTreinos() {
               )}
             </div>
           )}
-        </>
+          </>
+
       </div>
 
-      {/* Bottom Nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-[0_-4px_12px_-6px_rgba(0,0,0,0.3)]">
         <Link href="/feed" className="hover:opacity-90" aria-label="Feed">
           <House />
@@ -964,7 +985,6 @@ export default function PaginaTreinos() {
         </Link>
       </nav>
 
-      {/* Modal Compartilhar */}
       {modalAberto && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-lg relative">

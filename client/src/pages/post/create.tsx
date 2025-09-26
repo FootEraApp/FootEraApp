@@ -1,4 +1,3 @@
-// client/src/pages/post/create.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House, Award } from "lucide-react";
@@ -6,7 +5,7 @@ import { criarPost } from "@/services/feedService.js";
 import { API } from "../../config.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 import Storage from "../../../../server/utils/storage.js";
-import { ALL_ACHIEVEMENTS, type AchievementLite } from "../../lib/achievementsCatalog";
+import { ALL_ACHIEVEMENTS, type AchievementLite } from "../../lib/achievementsCatalog.js";
 
 function normalizeMediaUrl(raw: string): string {
   let s = (raw || "").trim();
@@ -52,18 +51,22 @@ export default function PaginaPostagem() {
   const [videoUrl, setVideoUrl] = useState("");
   const [arquivo, setArquivo] = useState<File | null>(null);
 
-  // conquistas
   const [earned, setEarned] = useState<EarnedFromApi[]>([]);
   const [selectedAchId, setSelectedAchId] = useState<string>("");
 
   const [carregando, setCarregando] = useState(false);
   const [mensagem, setMensagem] = useState("");
 
-  // catálogo para completar ícone quando a API vier sem
-  const catalogMap = useMemo(() => new Map(ALL_ACHIEVEMENTS.map((a) => [a.id, a])), []);
+  const catalogMap = useMemo(
+    () =>
+      new Map<string, AchievementLite>(
+        (ALL_ACHIEVEMENTS as AchievementLite[]).map((a: AchievementLite) => [a.id, a])
+      ),
+    []
+  );
+
   const selectedAch: AchievementLite | null = useMemo(() => {
     if (!selectedAchId) return null;
-    // preferir catálogo (tem o emoji), e cair para o que vier da API se faltar algo
     const fromCat = catalogMap.get(selectedAchId);
     if (fromCat) return fromCat;
     const fromApi = earned.find((e) => e.id === selectedAchId);
@@ -85,8 +88,11 @@ export default function PaginaPostagem() {
   const temConquista = !!selectedAch;
   const temDescricao = !!descricao.trim();
 
-  // carregar conquistas concluídas do usuário (para popular o select)
-  useEffect(() => {
+  const ach = selectedAchId
+    ? (ALL_ACHIEVEMENTS as AchievementLite[]).find((a: AchievementLite) => a.id === selectedAchId)
+    : undefined;
+
+   useEffect(() => {
     const usuarioId = getUsuarioId();
     if (!usuarioId) return;
 
@@ -108,13 +114,11 @@ export default function PaginaPostagem() {
   async function handleEnviar() {
     setMensagem("");
 
-    // ✅ validação: pode publicar se tiver descrição OU conquista OU alguma mídia
     if (!temDescricao && !temConquista && !temUrl && !temArquivo) {
       setMensagem("Escreva algo, selecione uma conquista ou anexe uma mídia (URL/arquivo).");
       return;
     }
 
-    // ainda impedimos URL + arquivo ao mesmo tempo
     if (temUrl && temArquivo) {
       setMensagem("Use URL ou arquivo, não os dois ao mesmo tempo.");
       return;
@@ -125,7 +129,6 @@ export default function PaginaPostagem() {
       const img = imagemUrl.trim() ? normalizeMediaUrl(imagemUrl) : undefined;
       const vid = videoUrl.trim() ? normalizeMediaUrl(videoUrl) : undefined;
 
-      // Monta a descrição final, incluindo a linha da conquista se selecionada
       const partes: string[] = [];
       if (selectedAch) {
         const icon = selectedAch.icon || "🏆";
@@ -201,7 +204,6 @@ export default function PaginaPostagem() {
       <div className="p-6 max-w-xl mx-auto">
         <h1 className="text-2xl font-bold mb-4 text-green-900">Nova Postagem</h1>
 
-        {/* descrição */}
         <textarea
           className="w-full border rounded p-3 mb-4"
           rows={4}
@@ -210,7 +212,6 @@ export default function PaginaPostagem() {
           onChange={(e) => setDescricao(e.target.value)}
         />
 
-        {/* conquista opcional */}
         <div className="mb-2 text-sm text-gray-700 flex items-center gap-2">
           <Award className="h-4 w-4 text-amber-600" />
           Compartilhar conquista concluída (opcional)
@@ -222,7 +223,7 @@ export default function PaginaPostagem() {
         >
           <option value="">— Selecionar conquista —</option>
           {earned.map((e) => {
-            const meta = catalogMap.get(e.id);
+            const meta: AchievementLite | undefined = catalogMap.get(e.id);
             const label = meta ? `${meta.title}` : e.title || e.id;
             return (
               <option key={e.id} value={e.id}>
@@ -233,7 +234,6 @@ export default function PaginaPostagem() {
         </select>
         {previewConquista}
 
-        {/* mídias */}
         <input
           type="text"
           className="w-full border rounded p-3 mt-4 mb-2"
@@ -289,7 +289,6 @@ export default function PaginaPostagem() {
         </button>
       </div>
 
-      {/* bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
           <House />
