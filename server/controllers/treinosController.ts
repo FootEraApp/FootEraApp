@@ -1167,3 +1167,47 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
   }
 }
 
+
+export async function listarMinhasSubmissoesTreino(req: AuthenticatedRequest, res: Response) {
+  try {
+    // Pode vir via query (?atletaId=...) ou deduzido pelo usuário logado
+    const qAtletaId = String((req.query.atletaId ?? "") as string).trim();
+
+    let atletaId = qAtletaId;
+    if (!atletaId) {
+      // resolve a partir do userId autenticado
+      const u = await prisma.usuario.findUnique({
+        where: { id: req.userId! },
+        include: { atleta: true },
+      });
+      atletaId = u?.atleta?.id ?? "";
+    }
+
+    if (!atletaId) {
+      return res.json([]); // não é atleta, ou não resolveu
+    }
+
+    const subs = await prisma.submissaoTreino.findMany({
+      where: { atletaId },
+      select: {
+        id: true,
+        aprovado: true,
+        treinoAgendadoId: true,
+        treinoAgendado: { select: { treinoProgramadoId: true } },
+      },
+      orderBy: { criadoEm: "desc" },
+    });
+
+    const payload = subs.map((s) => ({
+      id: s.id,
+      aprovado: s.aprovado,
+      treinoAgendadoId: s.treinoAgendadoId,
+      treinoProgramadoId: s.treinoAgendado?.treinoProgramadoId ?? null,
+    }));
+
+    return res.json(payload);
+  } catch (e) {
+    console.error("Erro em listarMinhasSubmissoesTreino:", e);
+    return res.status(500).json({ message: "Erro ao buscar submissões do atleta" });
+  }
+}

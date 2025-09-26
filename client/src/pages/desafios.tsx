@@ -1,3 +1,4 @@
+// client/src/pages/desafios
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -12,12 +13,14 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  Medal,
 } from "lucide-react";
 import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 
 const TODAS_CATEGORIAS = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"] as const;
+const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"] as const;
 
 interface Midia {
   id: string;
@@ -75,6 +78,275 @@ function fullUrl(possiblyRelative?: string) {
   return `${API.BASE_URL}${possiblyRelative}`;
 }
 
+/* ===================== RANKING GLOBAL (Top 100) ===================== */
+type RankItem = {
+  rank: number;
+  atletaId: string;
+  nome: string;
+  foto?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  pais?: string | null;
+  categoria: string[];
+  pontuacaoTotal: number;
+  performance: number;
+  disciplina: number;
+  responsabilidade: number;
+  isViewer: boolean;
+};
+type RankListResp = { total: number; items: RankItem[] };
+type PosicaoResp = {
+  atletaId: string;
+  nome: string;
+  foto?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  pais?: string | null;
+  categoria: string[];
+  pontuacaoTotal: number;
+  posicao: number;
+  total: number;
+  inTop100: boolean;
+  isViewer: boolean;
+};
+
+const RankingGlobalTab: React.FC = () => {
+  const token =
+    Storage.token || localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+
+  const [uf, setUf] = useState<string>("");
+  const [categoria, setCategoria] = useState<string>("");
+  const [qTop, setQTop] = useState<string>(""); // busca local no Top100
+  const [lista, setLista] = useState<RankItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const [buscaNome, setBuscaNome] = useState("");
+  const [minhaPosicao, setMinhaPosicao] = useState<PosicaoResp | null>(null);
+  const [buscandoPos, setBuscandoPos] = useState(false);
+
+  const carregar = async () => {
+    setLoading(true);
+    try {
+      const params: any = {};
+      if (uf) params.estado = uf;
+      if (categoria) params.categoria = categoria;
+
+      const { data } = await axios.get<RankListResp>(`${API.BASE_URL}/api/ranking/global`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+      });
+
+      setLista(Array.isArray(data.items) ? data.items : []);
+      setTotal(Number(data.total ?? 0));
+    } catch (e) {
+      console.error(e);
+      setLista([]);
+      setTotal(0);
+      alert("Não foi possível carregar o ranking global.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const aplicarFiltros = async () => {
+    await carregar();
+    setMinhaPosicao(null);
+  };
+
+  const limparFiltros = async () => {
+    setUf("");
+    setCategoria("");
+    await carregar();
+    setMinhaPosicao(null);
+  };
+
+  const listaFiltradaTop = useMemo(() => {
+    const q = qTop.trim().toLowerCase();
+    if (!q) return lista;
+    return lista.filter((x) => x.nome.toLowerCase().includes(q));
+  }, [lista, qTop]);
+
+  const buscarMinhaPosicao = async () => {
+    try {
+      if (!buscaNome.trim()) {
+        alert("Digite seu nome para procurar sua posição.");
+        return;
+      }
+      setBuscandoPos(true);
+      const params: any = {};
+      if (buscaNome.trim()) params.q = buscaNome.trim();
+      if (uf) params.estado = uf;
+      if (categoria) params.categoria = categoria;
+
+      const { data } = await axios.get<PosicaoResp>(`${API.BASE_URL}/api/ranking/posicao`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+      });
+
+      setMinhaPosicao(data || null);
+      if (data?.inTop100) setQTop(data.nome);
+    } catch (e: any) {
+      console.error(e?.response?.data || e);
+      setMinhaPosicao(null);
+      alert(e?.response?.data?.error || "Não foi possível encontrar a posição.");
+    } finally {
+      setBuscandoPos(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white border rounded-xl p-3 sm:p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Medal className="text-amber-600" />
+          <div className="font-semibold">Ranking global (Top 100)</div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Estado (UF)</label>
+            <select className="w-full border rounded px-3 py-2" value={uf} onChange={(e) => setUf(e.target.value)}>
+              <option value="">Todos</option>
+              {UFS_BR.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Categoria</label>
+            <select className="w-full border rounded px-3 py-2" value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+              <option value="">Todas</option>
+              {TODAS_CATEGORIAS.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+          <div className="self-end flex gap-2">
+            <button onClick={aplicarFiltros} className="px-4 py-2 bg-green-700 text-white rounded">Aplicar</button>
+            <button onClick={limparFiltros} className="px-4 py-2 bg-gray-200 rounded">Limpar</button>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-col sm:flex-row gap-2">
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              className="w-full border rounded pl-9 pr-3 py-2"
+              placeholder="Buscar no Top 100…"
+              value={qTop}
+              onChange={(e) => setQTop(e.target.value)}
+            />
+          </div>
+          <div className="flex-1" />
+          <div className="flex gap-2 w-full sm:w-auto">
+            <input
+              className="flex-1 border rounded px-3 py-2"
+              placeholder="Seu nome (ex.: João Silva)"
+              value={buscaNome}
+              onChange={(e) => setBuscaNome(e.target.value)}
+            />
+            <button
+              onClick={buscarMinhaPosicao}
+              disabled={buscandoPos}
+              className="px-4 py-2 bg-green-700 text-white rounded disabled:opacity-60"
+            >
+              {buscandoPos ? "Buscando..." : "Ver minha posição"}
+            </button>
+          </div>
+        </div>
+
+        {minhaPosicao && (
+          <div className="mt-4 border rounded-lg p-3 flex items-center gap-3">
+            <div className="w-12 text-center">
+              <div className="font-bold text-lg">#{minhaPosicao.posicao}</div>
+              <div className="text-xs text-gray-500">de {minhaPosicao.total}</div>
+            </div>
+            <img
+              src={minhaPosicao.foto ? fullUrl(minhaPosicao.foto) : "/default-profile.png"}
+              className="w-12 h-12 rounded-full object-cover"
+              alt={minhaPosicao.nome}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold truncate">{minhaPosicao.nome}</div>
+              <div className="text-xs text-gray-500">
+                {minhaPosicao.cidade ? `${minhaPosicao.cidade} • ` : ""}
+                {minhaPosicao.estado || ""} {minhaPosicao.pais ? `• ${minhaPosicao.pais}` : ""}
+              </div>
+              {!!minhaPosicao.categoria?.length && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {minhaPosicao.categoria.map((c) => (
+                    <span key={c} className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-800 border border-green-200">
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="text-right">
+              <div className="text-sm">Pontos</div>
+              <div className="font-bold">{minhaPosicao.pontuacaoTotal}</div>
+              {!minhaPosicao.inTop100 && (
+                <div className="text-[11px] text-gray-500 mt-1">fora do Top 100</div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <h3 className="text-lg font-bold">
+        {loading ? "Carregando Top 100..." : `Top 100 ${uf ? `• ${uf}` : ""} ${categoria ? `• ${categoria}` : ""}`}
+      </h3>
+      {loading ? (
+        <div className="text-gray-600">Aguarde…</div>
+      ) : (listaFiltradaTop.length === 0 ? (
+        <div className="text-gray-600">Nenhum atleta encontrado para os filtros.</div>
+      ) : (
+        <div className="space-y-2">
+          {listaFiltradaTop.map((r) => {
+            const foto = r.foto ? fullUrl(r.foto) : "/default-profile.png";
+            return (
+              <div
+                key={r.atletaId}
+                className={`bg-white border rounded-xl p-3 flex items-center gap-3 ${r.isViewer ? "ring-2 ring-green-600" : ""}`}
+              >
+                <div className="w-10 text-center font-bold text-gray-800">#{r.rank}</div>
+                <img src={foto} className="w-10 h-10 rounded-full object-cover" alt={r.nome} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold truncate">
+                    {r.nome} {r.isViewer && <span className="text-xs text-green-700">(você)</span>}
+                  </div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {r.cidade ? `${r.cidade} • ` : ""}{r.estado || ""}{r.pais ? ` • ${r.pais}` : ""}
+                  </div>
+                  {!!r.categoria?.length && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {r.categoria.map((c) => (
+                        <span key={c} className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 border">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="text-right">
+                  <div className="text-[11px] uppercase tracking-wide text-gray-500">Pontos</div>
+                  <div className="font-bold text-base">{r.pontuacaoTotal}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
+/* =================== FIM RANKING GLOBAL (Top 100) =================== */
+
 const DesafiosPage: React.FC = () => {
   const [submissoes, setSubmissoes] = useState<Submissao[]>([]);
   const [filtroSeguindo, setFiltroSeguindo] = useState(false);
@@ -83,7 +355,7 @@ const DesafiosPage: React.FC = () => {
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const [seguindoIds, setSeguindoIds] = useState<string[]>([]);
   const [comentarioTexto, setComentarioTexto] = useState<Record<string, string>>({});
-  const [aba, setAba] = useState<"feed" | "ranking">("feed");
+  const [aba, setAba] = useState<"feed" | "ranking" | "rankingGlobal">("feed");
 
   const [modalSub, setModalSub] = useState<Submissao | null>(null);
   const [commentModalSub, setCommentModalSub] = useState<Submissao | null>(null);
@@ -325,6 +597,17 @@ const DesafiosPage: React.FC = () => {
         >
           Ranking semanal
         </button>
+        <button
+          onClick={() => setAba("rankingGlobal")}
+          className={`px-3 py-1 rounded-full border ${
+            aba === "rankingGlobal"
+              ? "bg-green-700 text-white border-green-700"
+              : "bg-white text-green-700 border-green-700"
+          }`}
+        >
+          Ranking global
+        </button>
+
       </div>
 
       {aba === "feed" && (
@@ -376,6 +659,7 @@ const DesafiosPage: React.FC = () => {
         </>
       )}
 
+      {/* Conteúdo principal por aba */}
       {aba === "ranking" ? (
         <div className="space-y-3">
           {rankingSemanal.length === 0 ? (
@@ -431,6 +715,8 @@ const DesafiosPage: React.FC = () => {
             </>
           )}
         </div>
+      ) : aba === "rankingGlobal" ? (
+        <RankingGlobalTab />
       ) : submissoesFiltradas.length === 0 ? (
         <p className="text-gray-500">Nenhuma submissão encontrada.</p>
       ) : (

@@ -214,6 +214,9 @@ export default function NovoTreino() {
   const [filtroEx, setFiltroEx] = useState("");
   const restoredRef = useRef(false);
 
+  // 🔒 ids de treinos programados que o atleta já tem agendados (logo, não pode agendar/submeter de novo)
+  const [idsProgramadosBloqueados, setIdsProgramadosBloqueados] = useState<Set<string>>(new Set());
+
   /* ===== Pontuação dinâmica ===== */
   const score = useMemo(
     () => calcularPontuacaoTreino(nivel, tipoTreino, duracao, exerciciosSelecionados, dicas),
@@ -377,6 +380,55 @@ export default function NovoTreino() {
       }
     })();
   }, [iniciado]);
+
+  // 🔎 Busca os treinos agendados do atleta para bloquear repetição de agendamento/submissão
+  useEffect(() => {
+    (async () => {
+      try {
+        const tipo = String(
+          (Storage as any).tipoSalvo ??
+          localStorage.getItem("tipoUsuario") ??
+          sessionStorage.getItem("tipoUsuario") ??
+          ""
+        ).toLowerCase();
+
+        if (tipo !== "atleta") return;
+
+        const token =
+          (Storage as any).token ||
+          localStorage.getItem("token") ||
+          sessionStorage.getItem("token") ||
+          "";
+
+        if (!token) return;
+
+        const usuarioIdLocal =
+          (Storage as any).usuarioId ||
+          localStorage.getItem("usuarioId") ||
+          sessionStorage.getItem("usuarioId") ||
+          "";
+
+        const res = await fetch(
+          `${API.BASE_URL}/api/treinos/agendados?usuarioId=${encodeURIComponent(usuarioIdLocal)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        if (!res.ok) return;
+
+        const itens = await res.json();
+        // Pega os IDs de treinoProgramado já relacionados a este atleta
+        const programadoIds = new Set<string>();
+        (Array.isArray(itens) ? itens : []).forEach((t: any) => {
+          const idProg = t.treinoProgramadoId || t?.treinoProgramado?.id;
+          if (idProg) programadoIds.add(String(idProg));
+        });
+        setIdsProgramadosBloqueados(programadoIds);
+      } catch (e) {
+        console.warn("Falha ao checar treinos já agendados:", e);
+        setIdsProgramadosBloqueados(new Set());
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     let cancel = { v: false };
@@ -719,6 +771,8 @@ export default function NovoTreino() {
 
       const novo: TreinoAgendadoResp = await res.json();
       sessionStorage.setItem("lastAgendamento", JSON.stringify(novo));
+      // Atualiza bloqueio local imediatamente
+      setIdsProgramadosBloqueados(prev => new Set(prev).add(novo.treinoProgramadoId));
       navigate("/treinos");
 
       setTimeout(() => {
@@ -742,14 +796,17 @@ export default function NovoTreino() {
     );
 
   if (usuario.tipo === "atleta") {
+    // 🔎 filtra fora treinos programados já agendados/submetidos pelo atleta
+    const treinosParaAgendar = treinosDisponiveis.filter(t => !idsProgramadosBloqueados.has(t.id));
+
     return (
       <div className="p-4 max-w-xl mx-auto mb-5">
         <h2 className="text-lg font-bold mb-4">Treinos Disponíveis</h2>
 
-        {treinosDisponiveis.length === 0 ? (
-          <p className="text-gray-600">Nenhum treino disponível no momento.</p>
+        {treinosParaAgendar.length === 0 ? (
+          <p className="text-gray-600">Nenhum treino disponível para agendar no momento.</p>
         ) : (
-          treinosDisponiveis.map((t) => (
+          treinosParaAgendar.map((t) => (
             <div key={t.id} className="bg-white border p-4 rounded shadow mb-4">
               <div className="flex items-start justify-between gap-2">
                 <h3

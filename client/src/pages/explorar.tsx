@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+// client/src/pages/explorar
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
@@ -18,9 +19,9 @@ type AtletaItem = {
   cidade?: string | null;
   estado?: string | null;
   independente?: boolean | null;
-  pontuacao?: number | null;  
-  categoriaBase?: string | null;  
-  idade?: number | null;        
+  pontuacao?: number | null;
+  categoriaBase?: string | null;
+  idade?: number | null;
 };
 
 type ProfessorItem = { id: string; usuario: UsuarioBasic; foto?: string | null };
@@ -52,11 +53,11 @@ type DadosExplorar = {
 };
 
 type Filtros = {
-  categoria?: string;         
+  categoria?: string;
   posicao?: string;
   estado?: string;
   cidade?: string;
-  independente?: boolean | null; 
+  independente?: boolean | null;
   pontuacaoMin?: number | null;
   pontuacaoMax?: number | null;
 };
@@ -99,6 +100,82 @@ function Explorar() {
   const [topGeral, setTopGeral] = useState<RankItem[]>([]);
   const [topPorCategoria, setTopPorCategoria] = useState<Record<string, RankItem[]>>({});
 
+  // ====== Infinite scroll / Renderização paginada (todas as abas) ======
+  const [pageSize, setPageSize] = useState(12); // mobile default
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const [showCountAtletas, setShowCountAtletas] = useState(12);
+  const [showCountEscolas, setShowCountEscolas] = useState(12);
+  const [showCountClubes, setShowCountClubes] = useState(12);
+  const [showCountProfs, setShowCountProfs] = useState(12);
+
+  // Responsivo: 12 (mobile), 16 (sm), 24 (lg+)
+  useEffect(() => {
+    const compute = () => {
+      const w = window.innerWidth;
+      if (w >= 1024) setPageSize(24);
+      else if (w >= 640) setPageSize(16);
+      else setPageSize(12);
+    };
+    compute();
+    window.addEventListener("resize", compute);
+    return () => window.removeEventListener("resize", compute);
+  }, []);
+
+  // Ajusta quantidades mínimas exibidas quando muda pageSize
+  useEffect(() => {
+    setShowCountAtletas((c) => Math.max(c, pageSize));
+    setShowCountEscolas((c) => Math.max(c, pageSize));
+    setShowCountClubes((c) => Math.max(c, pageSize));
+    setShowCountProfs((c) => Math.max(c, pageSize));
+  }, [pageSize]);
+
+  const filtrosKey = JSON.stringify(filtros);
+
+  // Reset de contadores ao mudar busca/filtros/dados
+  useEffect(() => {
+    setShowCountAtletas(pageSize);
+  }, [pageSize, busca, filtrosKey, dados.atletas.length]);
+
+  useEffect(() => {
+    setShowCountEscolas(pageSize);
+  }, [pageSize, busca, filtrosKey, dados.escolas.length]);
+
+  useEffect(() => {
+    setShowCountClubes(pageSize);
+  }, [pageSize, busca, filtrosKey, dados.clubes.length]);
+
+  // Profissionais é derivado (professores + olheiros); reset quando qualquer base muda
+  useEffect(() => {
+    setShowCountProfs(pageSize);
+  }, [pageSize, busca, filtrosKey, dados.professores.length, dados.olheiros.length]);
+
+  // IntersectionObserver (carrega mais do que estiver na aba ativa)
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (!entry.isIntersecting) return;
+
+        if (aba === "atletas") {
+          setShowCountAtletas((c) => Math.min(c + pageSize, atletasFiltrados.length));
+        } else if (aba === "escolas") {
+          setShowCountEscolas((c) => Math.min(c + pageSize, dados.escolas.length));
+        } else if (aba === "clubes") {
+          setShowCountClubes((c) => Math.min(c + pageSize, dados.clubes.length));
+        } else if (aba === "profissionais") {
+          setShowCountProfs((c) => Math.min(c + pageSize, profissionais.length));
+        }
+      },
+      { root: null, rootMargin: "400px", threshold: 0 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, pageSize, dados.escolas.length, dados.clubes.length, dados.professores.length, dados.olheiros.length]);
+
   const loggedUserId = useMemo(
     () => (Storage?.usuarioId ?? (typeof window !== "undefined" ? Storage.usuarioId : "") ?? "") as string,
     []
@@ -113,6 +190,7 @@ function Explorar() {
     [loggedUserId]
   );
 
+  // Ranking semanal (inalterado)
   useEffect(() => {
     const token = Storage?.token || "";
     axios.get(`${API.BASE_URL}/api/ranking/weekly`, {
@@ -127,6 +205,7 @@ function Explorar() {
     });
   }, []);
 
+  // Busca principal (sem paginação de rede – renderização progressiva no front)
   useEffect(() => {
     const token = Storage?.token ?? (typeof window !== "undefined" ? Storage.token : "");
     const params: any = {
@@ -161,7 +240,7 @@ function Explorar() {
         console.error(e);
         setDados({ atletas: [], professores: [], olheiros: [], clubes: [], escolas: [] });
       });
-  }, [busca, loggedUserId, filtrarEu, filtros]);
+  }, [busca, loggedUserId, filtrosKey, filtrarEu]);
 
   const abas: Array<["atletas" | "escolas" | "clubes" |  "profissionais", string]> = [
     ["atletas", "Atletas"],
@@ -170,6 +249,7 @@ function Explorar() {
     ["profissionais", "Profissionais"],
   ];
 
+  // Profissionais (derivado)
   const profissionais = useMemo(
     () =>
       [
@@ -189,6 +269,7 @@ function Explorar() {
     [dados.professores, dados.olheiros]
   );
 
+  // Atletas – filtro local extra (compat com back que não tratar tudo)
   const atletasFiltrados = useMemo(() => {
     const f = filtros;
     const norm = (s?: string | null) => (s || "").toLowerCase();
@@ -214,12 +295,19 @@ function Explorar() {
     });
   }, [dados.atletas, filtros]);
 
+  // Helpers de UI
   const abrirFiltros = () => { setDraft(filtros); setShowFilters(true); };
   const aplicarFiltros = () => { setFiltros(draft); setShowFilters(false); };
   const limparFiltros = () => {
     const base = { independente: null, pontuacaoMin: null, pontuacaoMax: null } as Filtros;
     setDraft(base); setFiltros(base); setShowFilters(false);
   };
+
+  // hasMore por aba (frente)
+  const hasMoreAtletas = showCountAtletas < atletasFiltrados.length;
+  const hasMoreEscolas = showCountEscolas < dados.escolas.length;
+  const hasMoreClubes  = showCountClubes  < dados.clubes.length;
+  const hasMoreProfs   = showCountProfs   < profissionais.length;
 
   return (
     <div className="min-h-screen bg-cream text-green-900">
@@ -380,12 +468,12 @@ function Explorar() {
           <>
             <h2 className="text-xl font-bold my-2">Atletas em Destaque</h2>
             <div className="grid grid-cols-2 gap-3">
-              {atletasFiltrados.map((a) => {
+              {atletasFiltrados.slice(0, showCountAtletas).map((a) => {
                 const foto = formatarUrlFoto(a.foto ?? a.usuario?.foto, "usuarios");
                 const nome = a?.usuario?.nome ?? "profile";
                 const uid  = a?.usuario?.id ?? a?.usuarioId ?? a.id;
                 return (
-                  <Link href={`/perfil/${uid}`} key={a.id}>
+                  <Link href={`/perfil/${uid}`} key={`${a.id}-${uid}`}>
                     <div className="bg-white rounded shadow p-2 flex flex-col items-center">
                       <img
                         src={foto}
@@ -395,7 +483,7 @@ function Explorar() {
                           (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`;
                         }}
                       />
-                      <p className="mt-2 font-medium">{nome}</p>
+                      <p className="mt-2 font-medium text-center">{nome}</p>
                       {a.tipoTreino && (
                         <span className="mt-1 text-[10px] px-2 py-0.5 rounded bg-green-100 text-green-800">
                           {a.tipoTreino}
@@ -406,6 +494,27 @@ function Explorar() {
                 );
               })}
             </div>
+
+            <div className="mt-3 flex flex-col items-center">
+              {hasMoreAtletas && (
+                <button
+                  onClick={() => setShowCountAtletas((c) => Math.min(c + pageSize, atletasFiltrados.length))}
+                  className="mt-2 px-4 py-2 rounded border bg-white text-sm"
+                >
+                  Carregar mais
+                </button>
+              )}
+              {/* Sentinel para infinite scroll desta aba */}
+              <div ref={sentinelRef} className="h-1 w-full" />
+              {!hasMoreAtletas && atletasFiltrados.length > 0 && (
+                <div className="text-xs text-gray-500 mt-2">Fim dos resultados</div>
+              )}
+              {atletasFiltrados.length === 0 && (
+                <div className="text-sm text-gray-500 mt-2">Nenhum atleta encontrado</div>
+              )}
+            </div>
+
+            {/* Ranking e líderes por categoria (inalterado) */}
             <h2 className="text-xl font-bold my-2">Top da semana (geral)</h2>
             {topGeral.length === 0 ? (
               <p className="text-gray-600 mb-4">Sem dados desta semana.</p>
@@ -465,7 +574,7 @@ function Explorar() {
           <>
             <h2 className="text-xl font-bold my-4">Escolas de Futebol</h2>
             <div className="space-y-3">
-              {dados.escolas.map((e) => {
+              {dados.escolas.slice(0, showCountEscolas).map((e) => {
                 const logo = formatarUrlFoto(e.logo) || "/placeholder.png";
                 const href = e.usuarioId ? `/perfil/${e.usuarioId}` : undefined;
                 const Card = (
@@ -487,6 +596,24 @@ function Explorar() {
                 );
               })}
             </div>
+
+            <div className="mt-3 flex flex-col items-center">
+              {hasMoreEscolas && (
+                <button
+                  onClick={() => setShowCountEscolas((c) => Math.min(c + pageSize, dados.escolas.length))}
+                  className="mt-2 px-4 py-2 rounded border bg-white text-sm"
+                >
+                  Carregar mais
+                </button>
+              )}
+              <div ref={sentinelRef} className="h-1 w-full" />
+              {!hasMoreEscolas && dados.escolas.length > 0 && (
+                <div className="text-xs text-gray-500 mt-2">Fim dos resultados</div>
+              )}
+              {dados.escolas.length === 0 && (
+                <div className="text-sm text-gray-500 mt-2">Nenhuma escola encontrada</div>
+              )}
+            </div>
           </>
         )}
 
@@ -494,7 +621,7 @@ function Explorar() {
           <>
             <h2 className="text-xl font-bold my-4">Clubes</h2>
             <div className="space-y-3">
-              {dados.clubes.map((c) => {
+              {dados.clubes.slice(0, showCountClubes).map((c) => {
                 const logo = formatarUrlFoto(c.logo) || "/placeholder.png";
                 const href = c.usuarioId ? `/perfil/${c.usuarioId}` : undefined;
                 const Card = (
@@ -516,6 +643,24 @@ function Explorar() {
                 );
               })}
             </div>
+
+            <div className="mt-3 flex flex-col items-center">
+              {hasMoreClubes && (
+                <button
+                  onClick={() => setShowCountClubes((c) => Math.min(c + pageSize, dados.clubes.length))}
+                  className="mt-2 px-4 py-2 rounded border bg-white text-sm"
+                >
+                  Carregar mais
+                </button>
+              )}
+              <div ref={sentinelRef} className="h-1 w-full" />
+              {!hasMoreClubes && dados.clubes.length > 0 && (
+                <div className="text-xs text-gray-500 mt-2">Fim dos resultados</div>
+              )}
+              {dados.clubes.length === 0 && (
+                <div className="text-sm text-gray-500 mt-2">Nenhum clube encontrado</div>
+              )}
+            </div>
           </>
         )}
 
@@ -524,7 +669,7 @@ function Explorar() {
             <h2 className="text-xl font-bold my-4">Profissionais</h2>
             {profissionais.length > 0 ? (
               <div className="grid grid-cols-2 gap-3">
-                {profissionais.map((p) => {
+                {profissionais.slice(0, showCountProfs).map((p) => {
                   const foto = formatarUrlFoto(p.foto, "usuarios");
                   const uid = p.usuario.id;
                   const href =
@@ -553,6 +698,21 @@ function Explorar() {
             ) : (
               <p className="text-center text-gray-600">Nenhum profissional encontrado</p>
             )}
+
+            <div className="mt-3 flex flex-col items-center">
+              {hasMoreProfs && (
+                <button
+                  onClick={() => setShowCountProfs((c) => Math.min(c + pageSize, profissionais.length))}
+                  className="mt-2 px-4 py-2 rounded border bg-white text-sm"
+                >
+                  Carregar mais
+                </button>
+              )}
+              <div ref={sentinelRef} className="h-1 w-full" />
+              {!hasMoreProfs && profissionais.length > 0 && (
+                <div className="text-xs text-gray-500 mt-2">Fim dos resultados</div>
+              )}
+            </div>
           </>
         )}
       </div>
