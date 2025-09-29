@@ -43,6 +43,8 @@ import PaginaOlheiros from "./pages/olheiro/index.js";
 import PaginaConquistas from "./pages/conquistas.js";
 import PaginaRanking from "./pages/ranking.js";
 import PaginaFormadores from "./pages/formadores.js";
+import PaginaDesempenhoAtleta from "./pages/olheiro/desempenho.js";
+import PaginaIndicarClube from "./pages/olheiro/indicar.js";
 
 export function AppRoutes() {
   return (
@@ -77,6 +79,14 @@ export function AppRoutes() {
         <RequireAdmin>
           <AdminDashboard />
         </RequireAdmin>
+      </Route>
+
+      <Route path="/olheiros/desempenho">
+        <PaginaDesempenhoAtleta />
+      </Route>
+
+      <Route path="/olheiros/indicar">
+        <PaginaIndicarClube />
       </Route>
 
       <Route path="/olheiros">

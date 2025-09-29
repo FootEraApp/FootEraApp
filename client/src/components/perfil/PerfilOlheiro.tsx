@@ -29,17 +29,20 @@ type PayloadOlheiro = {
     emailPublico?: string | null;
     telefonePublico?: string | null;
     siteOuLinkedin?: string | null;
-    colaboracaoClube?: { id: string; nome: string; logo?: string | null } | null;
+    colaboracaoClube?: { id: string; usuarioId?: string | null; nome: string; logo?: string | null } | null;
     reputacaoScore?: number;
     totalIndicacoes?: number;
   };
   metrics: {
-    atletasAcompanhados: number;
-    indicacoesEnviadas: number;
+    atletasAcompanhados?: number; // opcional
+    observados?: number;          // alias possível do back
+    indicacoesEnviadas?: number;
+    indicacoes?: number;          // alias possível do back
     reputacaoScore?: number;
+    reputacao?: number;           // alias possível do back
     indicacoesAprovadas?: number;
-    taxaAprovacao?: number;     
-    atletasAssinados?: number;  
+    taxaAprovacao?: number;
+    atletasAssinados?: number;
   };
 };
 
@@ -322,21 +325,29 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
   const clubeColab = data.olheiro.colaboracaoClube || null;
 
   const reputacaoScore =
-    (data.metrics?.reputacaoScore ??
-      data.olheiro.reputacaoScore ??
-      0);
+    data.metrics?.reputacaoScore ??
+    data.metrics?.reputacao ??
+    data.olheiro.reputacaoScore ??
+    0;
 
   const kpiIndicacoes =
     data.metrics?.indicacoesEnviadas ??
+    data.metrics?.indicacoes ??
     data.olheiro.totalIndicacoes ??
     0;
+
+  const atletasCount =
+    data.metrics?.atletasAcompanhados ??
+    data.metrics?.observados ??
+    0;
+
 
   const time = clubeColab?.nome || "Olheiro";
 
   const indicacoesAprovadas = data.metrics?.indicacoesAprovadas ?? undefined;
   const taxaAprovacao = data.metrics?.taxaAprovacao ?? undefined;
   const atletasAssinados = data.metrics?.atletasAssinados ?? undefined;
-
+  
   return (
     <div className="max-w-md mx-auto">
       <ProfileHeader
@@ -346,16 +357,16 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
         foto={headerFoto}
         perfilId={data.usuario?.id || data.olheiro.usuarioId || data.olheiro.id}
         kpis={[
-          { label: "Atletas", value: data.metrics.atletasAcompanhados ?? 0 },
+          { label: "Atletas", value: atletasCount },
           { label: "Indicações", value: kpiIndicacoes },
           { label: "Reputação", value: reputacaoScore },
         ]}
       />
-
+  
       {clubeColab && (
         <div className="px-4 mt-2">
           <Link
-            href={`/perfil/${clubeColab.id}`}
+            href={`/perfil/${clubeColab.usuarioId ?? clubeColab.id}`}
             className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-green-100 border border-green-200 text-green-900 hover:bg-green-200 transition"
           >
             {clubeColab.logo ? (
@@ -408,7 +419,7 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
                     />
                   ) : null}
                   <Link
-                    href={`/perfil/${clubeColab.id}`}
+                    href={`/perfil/${clubeColab.usuarioId ?? clubeColab.id}`}
                     className="underline text-green-800"
                   >
                     {clubeColab.nome}
@@ -547,7 +558,7 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
                               <div className="mt-2">
                                 <textarea
                                   rows={4}
-                                  className="ws-full border rounded p-2 text-sm"
+                                  className="w-full border rounded p-2 text-sm"
                                   placeholder="Suas observações (visível somente para você)"
                                   value={notes[atletaKey]?.texto ?? ""}
                                   onChange={(e) => {
