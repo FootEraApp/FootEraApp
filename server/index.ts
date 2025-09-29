@@ -190,3 +190,10 @@ cron.schedule("0 2 * * *", async () => {
   try { await gerarSnapshotRanking(); console.log("Snapshot de ranking gerado"); }
   catch (e) { console.error("Falha snapshot ranking", e); }
 });
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+});

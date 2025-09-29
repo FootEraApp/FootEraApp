@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { PrismaClient, Prisma } from "@prisma/client";
-import { authenticateToken } from "server/middlewares/auth.js";
-import { listarObservadosPorOlheiro } from "server/controllers/atletaObservadoController.js";
+import { PrismaClient } from "@prisma/client";
+import { authenticateToken } from "../middlewares/auth.js";
+import { listarObservadosPorOlheiro } from "../controllers/atletaObservadoController.js";
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -16,7 +16,7 @@ router.get("/perfil/olheiro/:id", async (req, res) => {
       where: { id },
       include: {
         usuario: { select: { id: true, nome: true, email: true, foto: true, nomeDeUsuario: true } },
-        colaboracaoClube: { select: { id: true, nome: true, logo: true } },
+        colaboracaoClube: { select: { id: true, usuarioId: true, nome: true, logo: true } }, // <- aqui
       },
     });
     if (!olheiro) return res.status(404).json({ error: "Olheiro não encontrado." });
@@ -57,7 +57,7 @@ router.get("/perfil/olheiro/:id", async (req, res) => {
         telefonePublico: olheiro.telefonePublico,
         siteOuLinkedin: olheiro.siteOuLinkedin,
         colaboracaoClube: olheiro.colaboracaoClube
-          ? { id: olheiro.colaboracaoClube.id, nome: olheiro.colaboracaoClube.nome, logo: olheiro.colaboracaoClube.logo }
+          ? { id: olheiro.colaboracaoClube.id, usuarioId: olheiro.colaboracaoClube.usuarioId, nome: olheiro.colaboracaoClube.nome, logo: olheiro.colaboracaoClube.logo }
           : null,
         reputacaoScore: reputacaoPersistida,
         totalIndicacoes: olheiro.totalIndicacoes,
@@ -92,14 +92,19 @@ router.patch("/:id", async (req, res) => {
     const updated = await prisma.olheiro.update({
       where: { id },
       data: { colaboracaoClubeId: colaboracaoClubeId ?? null },
-      include: { colaboracaoClube: { select: { id: true, nome: true, logo: true } } },
+      include: { colaboracaoClube: { select: { id: true, usuarioId: true, nome: true, logo: true } } }, // <- aqui
     });
 
-    return res.json({
-      id: updated.id,
-      colaboracaoClube: updated.colaboracaoClube
-        ? { id: updated.colaboracaoClube.id, nome: updated.colaboracaoClube.nome, logo: updated.colaboracaoClube.logo }
-        : null,
+  return res.json({
+    id: updated.id,
+    colaboracaoClube: updated.colaboracaoClube
+      ? {
+          id: updated.colaboracaoClube.id,
+          usuarioId: updated.colaboracaoClube.usuarioId, // <- aqui
+          nome: updated.colaboracaoClube.nome,
+          logo: updated.colaboracaoClube.logo,
+        }
+      : null,
     });
   } catch (e: any) {
     console.error("PATCH /api/olheiros/:id", e);
