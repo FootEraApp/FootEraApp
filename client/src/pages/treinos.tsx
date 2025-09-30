@@ -937,8 +937,12 @@ export default function PaginaTreinos() {
                                         >
                                           <video
                                             src={src}
-                                            alt={`mídia ${idx + 1}`}
                                             className="absolute inset-0 h-full w-full object-cover group-hover:scale-[1.02] transition"
+                                            controls
+                                            playsInline
+                                            muted
+                                            aria-label={`mídia ${idx + 1}`}
+                                            preload="metadata"
                                           />
                                         </div>
                                       ) : (
