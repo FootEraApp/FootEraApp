@@ -603,7 +603,327 @@ await prisma.usuario.upsert({
     nivel: Nivel.Avancado,
     categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
     videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-lateral-bola.mp4'
-  }
+  },
+  {
+    codigo: 'EX031',
+    nome: 'Coordenação na Escada 1',
+    descricao: 'Sequência simples na escada para ritmo de pés e coordenação.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-1.mp4',
+  },
+  {
+    codigo: 'EX032',
+    nome: 'Coordenação na Escada 2',
+    descricao: 'Variação in-in-out com entradas e saídas rápidas para controle lateral.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-2.mp4',
+  },
+  {
+    codigo: 'EX033',
+    nome: 'Coordenação na Escada 3',
+    descricao: 'Variação diagonal/crossover com trocas rápidas de apoio.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-3.mp4',
+  },
+  {
+    codigo: 'EX034',
+    nome: 'Coordenação na Escada 4',
+    descricao: 'Sequência hopscotch (um-dois-um) com saltos rápidos e estabilidade.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-4.mp4',
+  },
+  {
+    codigo: 'EX035',
+    nome: 'Coordenação na Escada 5',
+    descricao: 'Padrão Ickey shuffle lateral contínuo para ritmo e controle de tronco.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-5.mp4',
+  },
+  {
+    codigo: 'EX036',
+    nome: 'Coordenação na Escada 6',
+    descricao: 'Padrão lateral com pivô de 180° ao final, focando reatividade.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-6.mp4',
+  },
+  {
+    codigo: 'EX037',
+    nome: 'Coordenação na Escada 7',
+    descricao: 'Sequência unipodal em alta cadência para equilíbrio e força reativa.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-7.mp4',
+  },
+  {
+    codigo: 'EX038',
+    nome: 'Coordenação na Escada 8',
+    descricao: 'Padrão carioquinha/grapevine com cruzados e mobilidade de quadril.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-8.mp4',
+  },
+  {
+    codigo: 'EX039',
+    nome: 'Coordenação na Escada 9',
+    descricao: 'Progressão frente-trás (avança dois, recua um) para mudança de direção.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-9.mp4',
+  },
+  {
+    codigo: 'EX040',
+    nome: 'Coordenação na Escada 10',
+    descricao: 'Ali shuffle alternando entradas e saídas no mesmo quadrado.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-10.mp4',
+  },
+  {
+    codigo: 'EX041',
+    nome: 'Coordenação na Escada 11',
+    descricao: 'Padrão 2-in/2-out à frente, focando rapidez e core estável.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-11.mp4',
+  },
+  {
+    codigo: 'EX042',
+    nome: 'Movimento Zig-Zag',
+    descricao: 'Cortes curtos alternando lados em sequência para agilidade.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/movimento-zig-zag.mp4',
+  },
+  {
+    codigo: 'EX043',
+    nome: 'Movimento Zig-Zag para Trás',
+    descricao: 'Backpedal em zigue-zague com cortes e desaceleração controlada.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/movimento-zig-zag-para-tras.mp4',
+  },
+  {
+    codigo: 'EX044',
+    nome: 'Salto Unipodal',
+    descricao: 'Saltos em um pé com aterrissagem controlada para potência elástica.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/salto-unipodal.mp4',
+  },
+  {
+    codigo: 'EX045',
+    nome: 'Salto Unipodal + Coordenação',
+    descricao: 'Saltos em um pé integrados a padrão de pés/escada.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: "/assets/videos/exercicios/salto-unipodal-coordenacao.mp4",
+  },
+  {
+    codigo: 'EX046',
+    nome: 'Salto Unipodal + Pliometria',
+    descricao: 'Saltos unipodais com estímulos pliométricos (altura/distância).',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/salto-unipodal-poliometria.mp4',
+  },
+  {
+    codigo: 'EX047',
+    nome: 'Salto Pliometria + Coordenação',
+    descricao: 'Saltos reativos combinados com padrão de pés para ritmo e potência.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: "/assets/videos/exercicios/salto-poliometria-coordenacao.mp4",
+  },
+  {
+    codigo: 'EX048',
+    nome: 'Agachamento',
+    descricao: 'Flexão de quadris e joelhos mantendo calcanhares no chão.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento.mp4',
+  },
+  {
+    codigo: 'EX049',
+    nome: 'Agachamento em Isometria',
+    descricao: 'Manter o agachamento a ~90° por tempo para força e estabilidade.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento-em-isometria.mp4',
+  },
+  {
+    codigo: 'EX050',
+    nome: 'Agachamento Sumo',
+    descricao: 'Base afastada, pés abertos e joelhos alinhados para adutores e glúteos.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento-sumo.mp4',
+  },
+  {
+    codigo: 'EX051',
+    nome: 'Agachamento Lateral Alternado',
+    descricao: 'Desloca o peso lateralmente mantendo quadril para trás.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento-lateral-alternado.mp4',
+  },
+  {
+    codigo: 'EX052',
+    nome: 'Agachamento com Deslocamento Lateral',
+    descricao: 'Agache enquanto se desloca de lado com tronco erguido.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento-com-deslocamento-lateral.mp4',
+  },
+  {
+    codigo: 'EX053',
+    nome: 'Afundo',
+    descricao: 'Passo à frente/atrás com tronco erguido e joelho alinhado.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/afundo.mp4',
+  },
+  {
+    codigo: 'EX054',
+    nome: 'Afundo Isométrico',
+    descricao: 'Sustentar a posição de afundo com quadril estável.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/afundo-isometrico.mp4',
+  },
+  {
+    codigo: 'EX055',
+    nome: 'Afundo Explosivo',
+    descricao: 'Afundo com salto trocando as pernas no ar, aterrissando estável.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/afundo-explosivo.mp4',
+  },
+  {
+    codigo: 'EX056',
+    nome: 'Avanço',
+    descricao: 'Walking lunge alternando passos com controle e equilíbrio.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/avanco.mp4',
+  },
+  {
+    codigo: 'EX057',
+    nome: 'Salto Explosivo',
+    descricao: 'Saltos verticais a partir do agachamento com aterrissagem controlada.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/salto-explosivo.mp4',
+  },
+  {
+    codigo: 'EX058',
+    nome: 'Suicídio (Shuttle Run)',
+    descricao: 'Sprints de ida e volta tocando marcas progressivas.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/suicidio.mp4',
+  },
+  {
+    codigo: 'EX059',
+    nome: 'Mudança de Direção 1',
+    descricao: 'Acelera, freia e corta em ângulos curtos com apoio firme.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/mudanca-de-direcao-1.mp4',
+  },
+  {
+    codigo: 'EX060',
+    nome: 'Mudança de Direção 2',
+    descricao: 'Cortes de 90°/180° com desaceleração e reaceleração rápidas.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/mudanca-de-direcao-2.mp4',
+  },
+  {
+    codigo: 'EX061',
+    nome: 'Deslocamento Lateral',
+    descricao: 'Shuffles laterais com base baixa e apoio na ponta dos pés.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/deslocamento-lateral.mp4',
+  },
+  {
+    codigo: 'EX062',
+    nome: 'Deslocamento Lateral (Voltando)',
+    descricao: 'Shuffles de ida e volta com paradas rápidas.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/deslocamento-lateral-voltando.mp4',
+  },
+  {
+    codigo: 'EX063',
+    nome: 'Frente - Costas',
+    descricao: 'Alterna corrida à frente e recuo com transições rápidas.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas.mp4',
+  },
+  {
+    codigo: 'EX064',
+    nome: 'Elevação Pélvica',
+    descricao: 'Eleve o quadril alinhando ombros-quadris-joelhos contraindo glúteos.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/elevacao-pelvica.mp4',
+  },
+  {
+    codigo: 'EX065',
+    nome: 'Elevação Pélvica Unilateral',
+    descricao: 'Eleve o quadril apoiando apenas um pé, mantendo alinhamento.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/elevacao-pelvica-unilateral.mp4',
+  },
+  {
+    codigo: 'EX066',
+    nome: 'Abdominal',
+    descricao: 'Flexione o tronco tirando as omoplatas do chão com controle.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/abdominal.mp4',
+  },
+  {
+    codigo: 'EX067',
+    nome: 'Abdominal Remador',
+    descricao: 'Estenda e flexione tronco e joelhos em sincronia (remo no solo).',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/adominal-remador.mp4',
+  },
+  {
+    codigo: 'EX068',
+    nome: 'Prancha Isométrica',
+    descricao: 'Apoio em antebraços e ponta dos pés com corpo alinhado.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/prancha-isometrica.mp4',
+  },
+  {
+    codigo: 'EX069',
+    nome: 'Prancha Lateral Isométrica',
+    descricao: 'Apoio lateral elevando o quadril e mantendo alinhamento.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/prancha-lateral-isometrica.mp4',
+  },
+  {
+    codigo: 'EX070',
+    nome: 'Prancha Alternada',
+    descricao: 'Transições antebraço-mão ou toques no ombro com quadril estável.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/prancha-alternada.mp4',
+  },
   ];
   for (const ex of exercicios) {
     await prisma.exercicio.upsert({
@@ -652,6 +972,66 @@ if (professorMateus && ex1 && ex2 && ex3 && ex4 && ex5) {
         ]
       }
     }
+  });
+}
+
+const ex031 = await prisma.exercicio.findUnique({ where: { codigo: 'EX031' } }); 
+const ex032 = await prisma.exercicio.findUnique({ where: { codigo: 'EX032' } }); 
+const ex035 = await prisma.exercicio.findUnique({ where: { codigo: 'EX035' } }); 
+const ex041 = await prisma.exercicio.findUnique({ where: { codigo: 'EX041' } }); 
+const ex042 = await prisma.exercicio.findUnique({ where: { codigo: 'EX042' } });
+const ex057 = await prisma.exercicio.findUnique({ where: { codigo: 'EX057' } });
+const ex061 = await prisma.exercicio.findUnique({ where: { codigo: 'EX061' } });
+const ex068 = await prisma.exercicio.findUnique({ where: { codigo: 'EX068' } }); 
+
+if (
+  professorMateus &&
+  ex031 && ex032 && ex035 && ex041 && ex042 && ex057 && ex061 && ex068
+) {
+  await prisma.treinoProgramado.upsert({
+    where: { codigo: 'TR003' },
+    update: {
+      tipoTreino: TipoTreino.Fisico,
+      dataAgendada: prazo25Out,
+      exercicios: {
+        deleteMany: {},
+        create: [
+          { exercicioId: ex031.id, ordem: 1, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex032.id, ordem: 2, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex041.id, ordem: 3, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex042.id, ordem: 4, repeticoes: '4x 15m (zig-zag)' },
+          { exercicioId: ex057.id, ordem: 5, repeticoes: '4x 6 saltos' },
+          { exercicioId: ex061.id, ordem: 6, repeticoes: '3x 20s (shuffle)' },
+          { exercicioId: ex035.id, ordem: 7, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex068.id, ordem: 8, repeticoes: '3x 40s (isometria)' },
+        ],
+      },
+    },
+    create: {
+      codigo: 'TR003',
+      nome: 'Agilidade & Core (Escada + Pliometria)',
+      descricao: 'Circuito integrado de escada, mudanças de direção, pliometria e core.',
+      nivel: Nivel.Avancado,
+      categoria: [Categoria.Livre],
+      duracao: 50,
+      tipoTreino: TipoTreino.Fisico,
+      professorId: professorMateus.id,
+      dataAgendada: prazo25Out,
+      imagemUrl: '/assets/treinos/agilidade.jpg',
+      pontuacao: 14,
+      exercicios: {
+        create: [
+          { exercicioId: ex031.id, ordem: 1, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex032.id, ordem: 2, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex041.id, ordem: 3, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex042.id, ordem: 4, repeticoes: '4x 15m (zig-zag)' },
+          { exercicioId: ex057.id, ordem: 5, repeticoes: '4x 6 saltos' },
+          { exercicioId: ex061.id, ordem: 6, repeticoes: '3x 20s (shuffle)' },
+          { exercicioId: ex035.id, ordem: 7, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex068.id, ordem: 8, repeticoes: '3x 40s (isometria)' },
+        ],
+      },
+    },
   });
 }
 
@@ -877,14 +1257,16 @@ if (atletaFormado && escolinhaEstrelasDb) {
     }
   });
 
-  await prisma.submissaoDesafio.create({
-    data: {
-      atletaId: atletaTeste.id,
-      desafioId: desafioExtra.id,
-      videoUrl: "https://www.google.com/imgres?q=desafio%20velocidade%20futebol&imgurl=https%3A%2F%2Fwww.tiktok.com%2Fapi%2Fimg%2F%3FitemId%3D7358856354527857926%26location%3D0%26aid%3D1988&imgrefurl=https%3A%2F%2Fwww.tiktok.com%2F%40adonias%2Fvideo%2F7358856354527857926&docid=Q3i_9CrrR3OQFM&tbnid=3SL_XXb6IEl1zM&vet=12ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA..i&w=1080&h=1920&hcb=2&ved=2ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA",
-      aprovado: true,
-    }
-  });
+  await prisma.submissaoDesafio.upsert({
+  where: { videoUrl: "https://www.google.com/imgres?q=desafio%20velocidade%20futebol&imgurl=https%3A%2F%2Fwww.tiktok.com%2Fapi%2Fimg%2F%3FitemId%3D7358856354527857926%26location%3D0%26aid%3D1988&imgrefurl=https%3A%2F%2Fwww.tiktok.com%2F%40adonias%2Fvideo%2F7358856354527857926&docid=Q3i_9CrrR3OQFM&tbnid=3SL_XXb6IEl1zM&vet=12ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA..i&w=1080&h=1920&hcb=2&ved=2ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA" },
+  update: {},
+  create: {
+    atletaId: atletaTeste.id,
+    desafioId: desafioExtra.id,
+    videoUrl: "https://www.google.com/imgres?q=desafio%20velocidade%20futebol&imgurl=https%3A%2F%2Fwww.tiktok.com%2Fapi%2Fimg%2F%3FitemId%3D7358856354527857926%26location%3D0%26aid%3D1988&imgrefurl=https%3A%2F%2Fwww.tiktok.com%2F%40adonias%2Fvideo%2F7358856354527857926&docid=Q3i_9CrrR3OQFM&tbnid=3SL_XXb6IEl1zM&vet=12ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA..i&w=1080&h=1920&hcb=2&ved=2ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA",
+    aprovado: true,
+  },
+});
 
 const desafioTeste2 = await prisma.desafioOficial.upsert({
   where: { titulo: "Desafio de Controle Avançado" },
@@ -899,8 +1281,10 @@ const desafioTeste2 = await prisma.desafioOficial.upsert({
   },
 });
 
-await prisma.submissaoDesafio.create({
-  data: {
+await prisma.submissaoDesafio.upsert({
+  where: { videoUrl: "https://www.youtube.com/watch?v=controle_avancado" },
+  update: {},
+  create: {
     atletaId: atletaTeste!.id,
     desafioId: desafioTeste2.id,
     videoUrl: "https://www.youtube.com/watch?v=controle_avancado",

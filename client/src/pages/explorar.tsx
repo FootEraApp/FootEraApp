@@ -1,4 +1,3 @@
-// client/src/pages/explorar
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";
@@ -100,8 +99,7 @@ function Explorar() {
   const [topGeral, setTopGeral] = useState<RankItem[]>([]);
   const [topPorCategoria, setTopPorCategoria] = useState<Record<string, RankItem[]>>({});
 
-  // ====== Infinite scroll / Renderização paginada (todas as abas) ======
-  const [pageSize, setPageSize] = useState(12); // mobile default
+  const [pageSize, setPageSize] = useState(12);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const [showCountAtletas, setShowCountAtletas] = useState(12);
@@ -109,7 +107,6 @@ function Explorar() {
   const [showCountClubes, setShowCountClubes] = useState(12);
   const [showCountProfs, setShowCountProfs] = useState(12);
 
-  // Responsivo: 12 (mobile), 16 (sm), 24 (lg+)
   useEffect(() => {
     const compute = () => {
       const w = window.innerWidth;
@@ -122,7 +119,6 @@ function Explorar() {
     return () => window.removeEventListener("resize", compute);
   }, []);
 
-  // Ajusta quantidades mínimas exibidas quando muda pageSize
   useEffect(() => {
     setShowCountAtletas((c) => Math.max(c, pageSize));
     setShowCountEscolas((c) => Math.max(c, pageSize));
@@ -132,7 +128,6 @@ function Explorar() {
 
   const filtrosKey = JSON.stringify(filtros);
 
-  // Reset de contadores ao mudar busca/filtros/dados
   useEffect(() => {
     setShowCountAtletas(pageSize);
   }, [pageSize, busca, filtrosKey, dados.atletas.length]);
@@ -145,12 +140,10 @@ function Explorar() {
     setShowCountClubes(pageSize);
   }, [pageSize, busca, filtrosKey, dados.clubes.length]);
 
-  // Profissionais é derivado (professores + olheiros); reset quando qualquer base muda
   useEffect(() => {
     setShowCountProfs(pageSize);
   }, [pageSize, busca, filtrosKey, dados.professores.length, dados.olheiros.length]);
 
-  // IntersectionObserver (carrega mais do que estiver na aba ativa)
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
@@ -173,7 +166,6 @@ function Explorar() {
     );
     io.observe(el);
     return () => io.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, pageSize, dados.escolas.length, dados.clubes.length, dados.professores.length, dados.olheiros.length]);
 
   const loggedUserId = useMemo(
@@ -190,7 +182,6 @@ function Explorar() {
     [loggedUserId]
   );
 
-  // Ranking semanal (inalterado)
   useEffect(() => {
     const token = Storage?.token || "";
     axios.get(`${API.BASE_URL}/api/ranking/weekly`, {
@@ -205,7 +196,6 @@ function Explorar() {
     });
   }, []);
 
-  // Busca principal (sem paginação de rede – renderização progressiva no front)
   useEffect(() => {
     const token = Storage?.token ?? (typeof window !== "undefined" ? Storage.token : "");
     const params: any = {
@@ -249,7 +239,6 @@ function Explorar() {
     ["profissionais", "Profissionais"],
   ];
 
-  // Profissionais (derivado)
   const profissionais = useMemo(
     () =>
       [
@@ -269,7 +258,6 @@ function Explorar() {
     [dados.professores, dados.olheiros]
   );
 
-  // Atletas – filtro local extra (compat com back que não tratar tudo)
   const atletasFiltrados = useMemo(() => {
     const f = filtros;
     const norm = (s?: string | null) => (s || "").toLowerCase();
@@ -295,7 +283,6 @@ function Explorar() {
     });
   }, [dados.atletas, filtros]);
 
-  // Helpers de UI
   const abrirFiltros = () => { setDraft(filtros); setShowFilters(true); };
   const aplicarFiltros = () => { setFiltros(draft); setShowFilters(false); };
   const limparFiltros = () => {
@@ -303,7 +290,6 @@ function Explorar() {
     setDraft(base); setFiltros(base); setShowFilters(false);
   };
 
-  // hasMore por aba (frente)
   const hasMoreAtletas = showCountAtletas < atletasFiltrados.length;
   const hasMoreEscolas = showCountEscolas < dados.escolas.length;
   const hasMoreClubes  = showCountClubes  < dados.clubes.length;
@@ -504,7 +490,6 @@ function Explorar() {
                   Carregar mais
                 </button>
               )}
-              {/* Sentinel para infinite scroll desta aba */}
               <div ref={sentinelRef} className="h-1 w-full" />
               {!hasMoreAtletas && atletasFiltrados.length > 0 && (
                 <div className="text-xs text-gray-500 mt-2">Fim dos resultados</div>
@@ -514,7 +499,6 @@ function Explorar() {
               )}
             </div>
 
-            {/* Ranking e líderes por categoria (inalterado) */}
             <h2 className="text-xl font-bold my-2">Top da semana (geral)</h2>
             {topGeral.length === 0 ? (
               <p className="text-gray-600 mb-4">Sem dados desta semana.</p>

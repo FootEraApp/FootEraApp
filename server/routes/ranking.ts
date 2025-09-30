@@ -1,4 +1,3 @@
-// server/routes/ranking
 import { Router } from "express";
 import { rankingController, getRanking} from "../controllers/rankingController.js";
 import { rankingSemanal } from "../controllers/rankingSemanalController.js";
