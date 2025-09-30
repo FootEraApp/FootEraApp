@@ -1,4 +1,3 @@
-// server/routes/desafios
 import express from "express";
 import { authenticateToken } from "server/middlewares/auth.js";
 import { prisma } from "server/lib/prisma.js";

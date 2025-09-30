@@ -1,4 +1,3 @@
-// client/src/components/card/CardAtletaShield
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { publicImgUrl } from "@/utils/publicUrl.js";
 import { API } from "@/config.js";

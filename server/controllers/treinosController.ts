@@ -1267,12 +1267,10 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
 
 export async function listarMinhasSubmissoesTreino(req: AuthenticatedRequest, res: Response) {
   try {
-    // Pode vir via query (?atletaId=...) ou deduzido pelo usuário logado
     const qAtletaId = String((req.query.atletaId ?? "") as string).trim();
 
     let atletaId = qAtletaId;
     if (!atletaId) {
-      // resolve a partir do userId autenticado
       const u = await prisma.usuario.findUnique({
         where: { id: req.userId! },
         include: { atleta: true },
@@ -1281,7 +1279,7 @@ export async function listarMinhasSubmissoesTreino(req: AuthenticatedRequest, re
     }
 
     if (!atletaId) {
-      return res.json([]); // não é atleta, ou não resolveu
+      return res.json([]);
     }
 
     const subs = await prisma.submissaoTreino.findMany({

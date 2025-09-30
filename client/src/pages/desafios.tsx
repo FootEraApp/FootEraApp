@@ -1,4 +1,3 @@
-// client/src/pages/desafios
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -72,7 +71,6 @@ function fullUrl(possiblyRelative?: string) {
   return `${API.BASE_URL}${possiblyRelative}`;
 }
 
-/* ===================== RANKING GLOBAL (Top 100) ===================== */
 type RankItem = {
   rank: number;
   atletaId: string;
@@ -124,7 +122,6 @@ const RankingGlobalTab: React.FC = () => {
   const [minhaPosicao, setMinhaPosicao] = useState<PosicaoResp | null>(null);
   const [buscandoPos, setBuscandoPos] = useState(false);
 
-  // modal da carta (ampliada)
   const [cardModal, setCardModal] = useState<RankItem | null>(null);
   const openCardModal = (r: RankItem) => {
     setCardModal(r);
@@ -166,7 +163,6 @@ const RankingGlobalTab: React.FC = () => {
 
   useEffect(() => {
     carregar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const aplicarFiltros = async () => {
@@ -313,7 +309,6 @@ const RankingGlobalTab: React.FC = () => {
         )}
       </div>
 
-      {/* Lista completa do Top 100 — Top 10 com CARTA do tamanho do avatar */}
       <h3 className="text-lg font-bold">
         {loading ? "Carregando Top 100..." : `Top 100${uf ? ` • ${uf}` : ""}${categoria ? ` • ${categoria}` : ""}`}
       </h3>
@@ -339,7 +334,6 @@ const RankingGlobalTab: React.FC = () => {
                     className="shrink-0"
                     title="Ver carta em detalhe"
                   >
-                    {/* carta no tamanho do avatar (~40px) */}
                     <CardAtletaShield
                       atleta={{ id: r.atletaId, nome: r.nome, foto: r.foto || undefined, posicao: `#${r.rank}` }}
                       ovr={calcOVR(r)}
@@ -347,7 +341,7 @@ const RankingGlobalTab: React.FC = () => {
                       disc={r.disciplina}
                       resp={r.responsabilidade}
                       goldenMinOVR={88}
-                      size={{ w: 44, h: 62 }} // ~icone
+                      size={{ w: 44, h: 62 }}
                     />
                   </button>
                 ) : (
@@ -381,7 +375,6 @@ const RankingGlobalTab: React.FC = () => {
         </div>
       ))}
 
-      {/* Modal de carta ampliada — sem fundo branco (transparente) */}
       {cardModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-3"
@@ -430,7 +423,6 @@ const RankingGlobalTab: React.FC = () => {
     </div>
   );
 };
-/* =================== FIM RANKING GLOBAL (Top 100) =================== */
 
 const DesafiosPage: React.FC = () => {
   const [submissoes, setSubmissoes] = useState<Submissao[]>([]);
@@ -744,11 +736,8 @@ const DesafiosPage: React.FC = () => {
         </>
       )}
 
-      {/* Conteúdo por aba */}
-      {aba === "ranking" ? (
+       {aba === "ranking" ? (
         <div className="space-y-3">
-          {/* Ranking semanal (inalterado) */}
-          {/* ... (seu conteúdo do ranking semanal permanece igual) */}
           <p className="text-gray-500">Sem submissões nesta semana.</p>
         </div>
       ) : aba === "rankingGlobal" ? (

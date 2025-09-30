@@ -102,7 +102,6 @@ interface SubmissaoParaValidacao {
   observacao?: string | null;
 }
 
-/** NOVO: submissões do próprio atleta (para filtragem) */
 type MinhasSubTreino = {
   id: string;
   treinoAgendadoId: string | null;
@@ -164,7 +163,6 @@ export default function PaginaTreinos() {
   const [carregandoSubmissoes, setCarregandoSubmissoes] = useState(false);
   const [page, setPage] = useState({ total: 0, limit: 20, offset: 0 });
 
-  /** NOVO: conjuntos para filtrar tudo que já tem submissão */
   const [idsAgendadosSubmetidos, setIdsAgendadosSubmetidos] = useState<Set<string>>(new Set());
   const [idsProgramadosSubmetidos, setIdsProgramadosSubmetidos] = useState<Set<string>>(new Set());
   const [idsDesafiosSubmetidos, setIdsDesafiosSubmetidos] = useState<Set<string>>(new Set());
@@ -175,13 +173,10 @@ export default function PaginaTreinos() {
     return () => window.removeEventListener("treino:agendado", handler as EventListener);
   }, []);
 
-  /** NOVO: carrega submissões do atleta para filtrar */
   async function carregarMinhasSubmissoes(atletaId: string) {
     try {
       const token = (Storage as any).token ?? localStorage.getItem("token");
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
-      // Treinos
       const r = await fetch(
         `${API.BASE_URL}/api/treinos/minhas-submissoes?atletaId=${encodeURIComponent(atletaId)}`,
         { headers }
@@ -201,7 +196,6 @@ export default function PaginaTreinos() {
         setIdsProgramadosSubmetidos(new Set());
       }
 
-      // Desafios (opcional; ignora se não houver endpoint)
       try {
         const r2 = await fetch(
           `${API.BASE_URL}/api/desafios/minhas-submissoes?atletaId=${encodeURIComponent(atletaId)}`,
@@ -239,7 +233,6 @@ export default function PaginaTreinos() {
       const token = (Storage as any).token ?? localStorage.getItem("token");
 
       if (tipo === "atleta" && tipoUsuarioId && token) {
-        // NOVO: carrega submissões do atleta
         carregarMinhasSubmissoes(tipoUsuarioId);
 
         const [resTreinos, resDesafios] = await Promise.all([
@@ -497,7 +490,6 @@ export default function PaginaTreinos() {
 
   const formatarData = (data?: string) => (data ? new Date(data).toLocaleDateString("pt-BR") : "");
 
-  /** NOVO: filtros com submissões */
   const treinosAgendadosVisiveis = treinosAgendados.filter(
     (t) => !idsAgendadosSubmetidos.has(t.id)
   );
@@ -782,7 +774,6 @@ export default function PaginaTreinos() {
     <div className="min-h-screen bg-neutral-50 pb-24">
       <div className="mx-auto w-full max-w-3xl lg:max-w-4xl px-3 sm:px-4">
 
-        {/* HEADER */}
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
           <div className="flex items-center justify-between gap-2">
             {isGestor ? (
