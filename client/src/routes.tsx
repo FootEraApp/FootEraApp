@@ -43,6 +43,8 @@ import PaginaOlheiros from "./pages/olheiro/index.js";
 import PaginaConquistas from "./pages/conquistas.js";
 import PaginaRanking from "./pages/ranking.js";
 import PaginaFormadores from "./pages/formadores.js";
+import PaginaDesempenhoAtleta from "./pages/olheiro/desempenho.js";
+import PaginaIndicarClube from "./pages/olheiro/indicar.js";
 
 export function AppRoutes() {
   return (
@@ -77,6 +79,14 @@ export function AppRoutes() {
         <RequireAdmin>
           <AdminDashboard />
         </RequireAdmin>
+      </Route>
+
+      <Route path="/olheiros/desempenho">
+        <PaginaDesempenhoAtleta />
+      </Route>
+
+      <Route path="/olheiros/indicar">
+        <PaginaIndicarClube />
       </Route>
 
       <Route path="/olheiros">
@@ -124,7 +134,7 @@ export function AppRoutes() {
       <Route path="/perfil"><Private><PaginaPerfil /></Private></Route>
       <Route path="/post/:id"><Private><PaginaPostUnico /></Private></Route>
       <Route path="/post"><Private><PaginaCreatePost /></Private></Route>
-      <Route path="/submissao/grupo/:grupoId/:desafioId"><PaginaSubmissaoDesafioEmGrupo /></Route>
+      <Route path="/submissao/grupo/:desafioEmGrupoId/:desafioId"><PaginaSubmissaoDesafioEmGrupo /></Route>
       <Route path="/submissao"><PaginaSubmissao /></Route>
       <Route path="/explorar"><Private><PaginaExplorar /></Private></Route>
       <Route path="/minha-rede"><Private><PaginaMinhaRede /></Private></Route>

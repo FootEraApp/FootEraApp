@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Link, useParams } from "wouter";
+import { Link } from "wouter";
 import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send, Eye, UserPlus, Share2 } from "lucide-react";
 import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import ScoreDeltaBadge from "./ScoreDeltaBadge.js";
 
 interface Usuario {
   id: string;
@@ -20,12 +21,24 @@ interface ProfileHeaderProps {
   posicao?: string;
   time?: string;
   pontuacao?: number;
+  scoreDelta?: number;
   scoreTitle?: string;
   kpis?: Kpi[];
   avatar?: string | null;
   foto?: string | null;
   isOwnProfile?: boolean;
   perfilId: string;
+}
+
+function pickAtletaId(payload: any, perfilId: string): string | null {
+  return (
+    payload?.atleta?.id ??
+    payload?.atletaId ??
+    payload?.tipoUsuarioId ??
+    payload?.usuario?.tipoUsuarioId ??
+    payload?.usuario?.atletaId ??
+    null
+  );
 }
 
 function Badge({ count }: { count?: number }) {
@@ -49,6 +62,7 @@ export default function ProfileHeader({
   avatar,
   foto,
   isOwnProfile = false,
+  scoreDelta,
 }: ProfileHeaderProps) {
   const [modalAberto, setModalAberto] = useState(false);
   const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
@@ -57,13 +71,14 @@ export default function ProfileHeader({
   const [carregandoMutuos, setCarregandoMutuos] = useState(false);
   const [pontosTotal, setPontosTotal] = useState<number>(pontuacao ?? 0);
   const [ehFavorito, setEhFavorito] = useState(false);
-  const { id: idDaUrl } = useParams<{ id?: string }>();
   const [seguindo, setSeguindo] = useState<boolean | null>(null);
   const [treinoJunto, setTreinoJunto] = useState<boolean | null>(null);
   const [observando, setObservando] = useState<boolean | null>(null);
-  const [notifCount, setNotifCount] = useState<number>(0);
   const [unreadDM, setUnreadDM] = useState<number>(0);
   const [badgeCount, setBadgeCount] = useState(0);
+  const [alvoAtletaId, setAlvoAtletaId] = useState<string | null>(null);
+  const [carregandoObs, setCarregandoObs] = useState(false);
+  const [podeObservar, setPodeObservar] = useState(false);
 
   const storageKey = `tj_${Storage.usuarioId}_${perfilId}`;
 
@@ -72,8 +87,6 @@ export default function ProfileHeader({
     text: string;
     onYes: () => Promise<void> | void;
   } | null>(null);
-
-  const [podeObservar, setPodeObservar] = useState(false);
 
   useEffect(() => {
     const onBadge = (e: Event) => {
@@ -85,31 +98,61 @@ export default function ProfileHeader({
   }, []);
 
   useEffect(() => {
-    if (!isOwnProfile) return;
+    if (isOwnProfile || !perfilId) { setPodeObservar(false); setAlvoAtletaId(null); return; }
+    const token = Storage.token; if (!token) return;
 
-    const token = Storage.token;
-    if (!token) return;
+    fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(perfilId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then((data) => {
+        const id = pickAtletaId(data, perfilId);
+        const isAtleta = id || String(data?.tipo || "").toLowerCase() === "atleta";
+        setPodeObservar(!!isAtleta);
+        setAlvoAtletaId(id ?? null);
+      })
 
-    (async () => {
-      try {
-        const r = await fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!r.ok) throw 0;
-        const arr = await r.json();
-        const me = Storage.usuarioId;
-        const pend = (arr || []).filter((x: any) => {
-          const s = String(x.status || "").toLowerCase();
-          const isPend = !s || /pend|solic|aguard|nov/i.test(s);
-          const destIsMe = [x.destinatarioId, x.usuarioId, x.userId].includes(me);
-          return isPend && destIsMe;
-        }).length;
-        setNotifCount(pend);
-      } catch {
-        setNotifCount(0);
+      .catch(() => { setPodeObservar(false); setAlvoAtletaId(null); });
+  }, [perfilId, isOwnProfile]);
+
+  useEffect(() => {
+  if (isOwnProfile || !perfilId) return;
+
+  const token = Storage.token;
+  if (!token) { setSeguindo(false); return; }
+
+  (async () => {
+    try {
+      const r1 = await fetch(
+        `${API.BASE_URL}/api/seguidores/status?seguidoUsuarioId=${encodeURIComponent(perfilId)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (r1.ok) {
+        const j = await r1.json();
+        setSeguindo(!!(j?.seguindo || j?.isFollowing));
+        return;
       }
-    })();
-  }, [isOwnProfile]);
+
+      const r2 = await fetch(`${API.BASE_URL}/api/seguidores/seguindo`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r2.ok) {
+        const lista = await r2.json();
+        const ids = new Set(
+          (Array.isArray(lista) ? lista : []).map(
+            (x: any) => x.seguidoUsuarioId ?? x.id ?? x.usuarioId ?? x.userId
+          )
+        );
+        setSeguindo(ids.has(perfilId));
+        return;
+      }
+
+      setSeguindo(false);
+    } catch {
+      setSeguindo(false);
+    }
+  })();
+}, [perfilId, isOwnProfile]);
 
   useEffect(() => {
     if (!isOwnProfile) return;
@@ -143,49 +186,6 @@ export default function ProfileHeader({
       setUnreadDM(0);
     })();
   }, [isOwnProfile]);
-
-    useEffect(() => {
-    if (isOwnProfile || !perfilId) return;
-    
-    const token = Storage.token;
-    if (!token) return;
-
-    (async () => {
-      try {
-        let done = false;
-
-        const r1 = await fetch(
-          `${API.BASE_URL}/api/seguidores/status?seguidoUsuarioId=${encodeURIComponent(perfilId)}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (r1.ok) {
-          const j = await r1.json();
-          setSeguindo(!!(j?.seguindo || j?.isFollowing));
-          done = true;
-        }
-
-        if (!done) {
-          const r2 = await fetch(`${API.BASE_URL}/api/seguidores/seguindo`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (r2.ok) {
-            const lista = await r2.json();
-            const ids = new Set(
-              (Array.isArray(lista) ? lista : []).map(
-                (x: any) => x.seguidoUsuarioId ?? x.id ?? x.usuarioId ?? x.userId
-              )
-            );
-            setSeguindo(ids.has(perfilId));
-            done = true;
-          }
-        }
-
-        if (!done) setSeguindo(false);
-      } catch {
-        setSeguindo(false);
-      }
-    })();
-  }, [perfilId, isOwnProfile]);
 
   useEffect(() => {
     if (isOwnProfile || !perfilId) return;
@@ -246,41 +246,18 @@ export default function ProfileHeader({
   }, [perfilId, isOwnProfile]);
 
   useEffect(() => {
-    if (!podeObservar || isOwnProfile) return;
-    
-    const token = Storage.token;
-    if (!token) return;
+  if (!podeObservar || isOwnProfile || !alvoAtletaId) return;
+  const token = Storage.token; if (!token) return;
 
-    (async () => {
-      try {
-        const r = await fetch(`${API.BASE_URL}/api/observados`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const lista = r.ok ? await r.json() : [];
-        setObservando(Array.isArray(lista) && lista.some((x: any) =>
-          x?.id === perfilId || x?.usuarioId === perfilId
-        ));
-      } catch {
-        setObservando(false);
-      }
-    })();
-  }, [perfilId, podeObservar, isOwnProfile]);
-
-  useEffect(() => {
-    if (isOwnProfile || !perfilId) {
-      setPodeObservar(false);
-      return;
-    }
-    const token = Storage.token;
-    if (!token) return;
-
-    fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(perfilId)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setPodeObservar(String(data?.tipo || "").toLowerCase() === "atleta"))
-      .catch(() => setPodeObservar(false));
-  }, [perfilId, isOwnProfile]);
+  setCarregandoObs(true);
+  fetch(`${API.BASE_URL}/api/observados/status/${encodeURIComponent(alvoAtletaId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(r => (r.ok ? r.json() : null))
+    .then(j => setObservando(!!j?.observando))
+    .catch(() => setObservando(false))
+    .finally(() => setCarregandoObs(false));
+}, [podeObservar, isOwnProfile, alvoAtletaId]);
 
   const iniciarChat = () => {
     const me = Storage.usuarioId;
@@ -316,9 +293,36 @@ export default function ProfileHeader({
       .catch(() => {});
   }, [perfilId, kpis]);
 
-  function pedirConfirmacao(text: string, onYes: () => Promise<void> | void) {
-    setConfirmBox({ open: true, text, onYes });
-  }
+  async function resolverAtletaIdSePreciso(): Promise<string | null> {
+  if (alvoAtletaId) return alvoAtletaId;
+  const token = Storage.token; if (!token) return null;
+
+  try {
+    const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(perfilId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (r.ok) {
+      const data = await r.json();
+      const id1 = pickAtletaId(data, perfilId);
+      if (id1) { setAlvoAtletaId(id1); return id1; }
+    }
+  } catch {}
+
+  try {
+    const r = await fetch(`${API.BASE_URL}/api/observados/resolve/${encodeURIComponent(perfilId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (r.status === 404) { alert("Este perfil não tem cadastro de atleta."); return null; }
+    if (!r.ok) return null;
+    if (r.ok) {
+      const j = await r.json();
+      const id2 = j?.atletaId || j?.id || null;
+      if (id2) { setAlvoAtletaId(id2); return id2; }
+    }
+  } catch {}
+
+  return null;
+}
 
   async function readBodySafe(r: Response) {
     try { return await r.json(); } catch { return null; }
@@ -509,61 +513,51 @@ const toggleTreino = async () => {
   }
 };
 
-const observarAtleta = async (): Promise<"ok"|"dup"|"auth"|"err"> => {
-  const token = Storage.token;
-  if (!token) return "auth";
-
-  const resp = await fetch(`${API.BASE_URL}/api/observados`, {
+const observarAtleta = async (id: string): Promise<"ok"|"dup"|"auth"|"err"> => {
+  try {
+    const token = Storage.token;
+    if (!token || !id) return "auth";
+    const resp = await fetch(`${API.BASE_URL}/api/observados`,{
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ atletaUsuarioId: perfilId }),
+    body: JSON.stringify({ atletaId: id }),
   });
 
-  if (resp.status === 201) return "ok";
+  if (resp.ok) return "ok";
   if (resp.status === 409) return "dup";
   if (resp.status === 401) return "auth";
   return "err";
+} catch {
+  return "err";
+}
 };
 
 const toggleObservar = async () => {
-  if (observando) {
-    const prev = observando;
-    setObservando(false);
-    const atletaId = await resolverAtletaIdObservadoAtual();
-    if (!atletaId) { setObservando(prev); alert("Não foi possível identificar o vínculo."); return; }
-    const del = await fetch(`${API.BASE_URL}/api/observados/${atletaId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${Storage.token}` },
-    });
-    if (!del.ok) setObservando(prev);
-    return;
-  }
+  setCarregandoObs(true);
+  try {
+    const id = await resolverAtletaIdSePreciso();
+    if (!id) { alert("Não foi possível identificar o atleta."); return; }
 
-  const prev = observando;
-  setObservando(true);
-  const r = await observarAtleta();
-  if (r === "auth") { setObservando(prev); alert("Faça login novamente."); }
-  if (r === "err")  { setObservando(prev); alert("Não foi possível observar agora."); }
-  if (r === "dup")  { setObservando(true); }
+    if (observando) {
+      const prev = observando;
+      setObservando(false);
+      const del = await fetch(`${API.BASE_URL}/api/observados/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${Storage.token || ""}` },
+      });
+      if (!del.ok) setObservando(prev);
+      return;
+    }
+
+    const r = await observarAtleta(id);
+    if (r === "auth") { alert("Faça login novamente."); return; }
+    if (r === "err")  { alert("Não foi possível observar agora."); return; }
+    setObservando(true);
+  } finally {
+    setCarregandoObs(false);
+  }
 };
 
-  async function resolverAtletaIdObservadoAtual(): Promise<string | null> {
-    const token = Storage.token;
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/observados`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const lista = r.ok ? await r.json() : [];
-
-      const item = (Array.isArray(lista) ? lista : []).find((x: any) =>
-        [x?.id, x?.usuarioId, x?.atletaUsuarioId].includes(perfilId)
-      );
-
-      return item?.atletaId ?? item?.idAtleta ?? item?.atleta?.id ?? null;
-    } catch {
-      return null;
-    }
-  }
 
   const btnBase =
   "rounded-full font-semibold focus:outline-none focus:ring-2 focus:ring-white/40 transition " +
@@ -636,8 +630,14 @@ const toggleObservar = async () => {
         ) : (
           <>
             <h2 className="footera-text-cream text-center mb-2">{scoreTitle}</h2>
-            <div className="footera-bg-green border border-footera-cream rounded-lg p-3 flex justify-center">
-              <span className="footera-text-cream text-3xl font-bold">{pontosTotal} pts</span>
+            <div className="footera-bg-green border border-footera-cream rounded-lg p-3 flex items-center justify-center gap-2">
+            <span className="footera-text-cream text-3xl font-bold">{pontosTotal} pts</span>
+              {typeof scoreDelta === "number" && scoreDelta > 0 && (
+                <span title={`+${scoreDelta} desde a última visita`} className="ml-2 text-xs font-bold text-green-200 bg-green-900/30 border border-green-200/30 rounded px-2 py-0.5">
+                  ↑ +{scoreDelta}
+                </span>
+              )}
+              <ScoreDeltaBadge usuarioId={perfilId} />
             </div>
           </>
         )}
@@ -654,16 +654,18 @@ const toggleObservar = async () => {
       >
         ★
       </button>
+
       <button
         disabled={seguindo === null}
         aria-pressed={!!seguindo}
         onClick={toggleSeguir}
-        className={`${btnBase} ${seguindo ? "bg-white/10 text-white border border-white/40" : "bg-green-600 text-green-900"}
+        className={`${btnBase} ${seguindo ? "bg-white/10 text-white border border-white/40" : "bg-green-600 text-green-900"} 
+                    disabled:opacity-60 disabled:cursor-not-allowed
                     px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
-        title={seguindo ? "Deixar de seguir" : "Seguir"}
+        title={seguindo === null ? "Carregando..." : (seguindo ? "Deixar de seguir" : "Seguir")}
       >
         <UserPlus size={16} />
-        <span className="truncate">{seguindo ? "Seguindo" : "Seguir"}</span>
+        <span className="truncate">{seguindo === null ? "..." : (seguindo ? "Seguindo" : "Seguir")}</span>
       </button>
 
       <button
@@ -673,30 +675,34 @@ const toggleObservar = async () => {
         <Send size={16} />
         <span className="truncate">Enviar mensagem</span>
       </button>
-      
+
       <button
         disabled={treinoJunto === null}
         aria-pressed={!!treinoJunto}
         onClick={toggleTreino}
-        className={`${btnBase} ${treinoJunto ? "bg-white/10 text-white border border-white/40" : "bg-green-400 text-green-900"}
+        className={`${btnBase} ${treinoJunto ? "bg-white/10 text-white border border-white/40" : "bg-green-400 text-green-900"} 
+                    disabled:opacity-60 disabled:cursor-not-allowed
                     px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
-        title={treinoJunto ? "Cancelar treino em conjunto" : "Solicitar treino em conjunto"}
+        title={treinoJunto === null ? "Carregando..." : (treinoJunto ? "Cancelar treino em conjunto" : "Solicitar treino em conjunto")}
       >
         <Users size={16} />
-        <span className="truncate">{treinoJunto ? "Já treino junto" : "Treinar juntos"}</span>
+        <span className="truncate">{treinoJunto === null ? "..." : (treinoJunto ? "Já treino junto" : "Treinar juntos")}</span>
       </button>
 
       {podeObservar && (
         <button
-          disabled={observando === null}
+          disabled={carregandoObs}
           aria-pressed={!!observando}
           onClick={toggleObservar}
-          className={`${btnBase} ${observando ? "bg-white/10 text-white border border-white/40" : "bg-green-300 text-green-900"}
+          className={`${btnBase} ${observando ? "bg-white/10 text-white border border-white/40" : "bg-green-300 text-green-900"} 
+                      disabled:opacity-60 disabled:cursor-not-allowed
                       px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
-          title={observando ? "Parar de observar" : "Observar este atleta"}
+          title={carregandoObs ? "Carregando..." : (observando ? "Parar de observar" : "Observar este atleta")}
         >
           <Eye size={16} />
-          <span className="truncate">{observando ? "Observando" : "Observar"}</span>
+          <span className="truncate">
+            {carregandoObs ? "..." : (observando ? "Observando" : "Observar")}
+          </span>
         </button>
       )}
 
@@ -711,7 +717,6 @@ const toggleObservar = async () => {
     </div>
   </div>
 )}
-
 
       {isOwnProfile && (
         <div className="mt-4 w-full grid grid-cols-2 gap-2">

@@ -1,4 +1,3 @@
-// client/src/pages/feed
 import React, { useEffect, useState } from "react";
 import {
   FaHeart,
@@ -32,12 +31,11 @@ import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 import { publicImgUrl } from "@/utils/publicUrl.js";
 
-// catálogo de conquistas
 import {
   ALL_ACHIEVEMENTS,
   type AchievementLite,
   type Tier,
-} from "../lib/achievementsCatalog";
+} from "../lib/achievementsCatalog.js";
 
 interface Usuario {
   id: string;
@@ -110,7 +108,6 @@ function BottomSheet({
   );
 }
 
-/** --- helpers para detectar/renderizar conquista --- */
 type ParsedAchievement = {
   ach?: AchievementLite;
   headTitle?: string;
@@ -127,13 +124,14 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
 
   const isHeadAchievement = /^🏆\s*Conquista:/i.test(head);
 
-  // [id] mensagem...
   const idMatch = rest.match(/\[([^\]]+)\]/);
   const achId = idMatch?.[1]?.trim();
+  const ach: AchievementLite | undefined = achId
+    ? (ALL_ACHIEVEMENTS as AchievementLite[]).find((a: AchievementLite) => a.id === achId)
+    : undefined;
 
   if (!isHeadAchievement && !achId) return null;
 
-  // extrai título/descrição da 1ª linha se tiver no padrão
   let headTitle: string | undefined;
   let headDesc: string | undefined;
   const m = head.match(/^🏆\s*Conquista:\s*(.+?)\s+—\s+(.+)$/);
@@ -142,7 +140,6 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
     headDesc = m[2];
   }
 
-  const ach = achId ? ALL_ACHIEVEMENTS.find((a) => a.id === achId) : undefined;
   const userMsg = achId ? rest.replace(/\[[^\]]+\]\s*/, "").trim() : rest;
 
   return { ach, headTitle, headDesc, userMsg };
@@ -195,7 +192,6 @@ function AchievementShareCard({
     </div>
   );
 }
-/** --- fim helpers de conquista --- */
 
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
@@ -392,7 +388,6 @@ function PaginaFeed(): JSX.Element {
         const imgSrc = publicImgUrl(post.imagemUrl) ?? undefined;
         const videoSrc = publicImgUrl(post.videoUrl) ?? undefined;
 
-        // detecta se é um post de conquista
         const parsed = parseAchievement(post.conteudo);
         const isAchievement = !!parsed;
 
@@ -422,16 +417,14 @@ function PaginaFeed(): JSX.Element {
             </div>
 
             <div>
-              {/* Para post normal, mostra o texto bruto */}
               {!isAchievement && <p className="text-gray-800 font-medium whitespace-pre-line">{post.conteudo}</p>}
 
-              {/* Para conquista, renderiza um card bonitão */}
               {isAchievement && parsed && <AchievementShareCard parsed={parsed} />}
 
-              {/* mídias (apenas se não for o caso de conquista sem mídia) */}
               {imgSrc && (
                 <img src={imgSrc} alt="Post" className="mt-2 rounded-lg max-h-72 w-auto mx-auto" />
               )}
+
               {videoSrc && (
                 <video controls className="w-full mt-2 rounded-lg">
                   <source src={videoSrc} type="video/mp4" />
@@ -520,7 +513,6 @@ function PaginaFeed(): JSX.Element {
         </Link>
       </nav>
 
-      {/* === Modal de Compartilhamento === */}
       <BottomSheet open={modalAberto} onClose={() => setModalAberto(false)} heightPct={40} ariaLabel="Compartilhar postagem">
         <h2 className="text-base font-bold mb-3 text-center">Compartilhar Postagem</h2>
 
@@ -612,7 +604,6 @@ function PaginaFeed(): JSX.Element {
         </div>
       </BottomSheet>
 
-      {/* === Modal de Comentários === */}
       <BottomSheet
         open={comentariosModalAberto && !!postSelecionado}
         onClose={() => setComentariosModalAberto(false)}

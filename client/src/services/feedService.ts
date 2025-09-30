@@ -1,4 +1,3 @@
-// client/src/services/feedService.ts
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { apiGet } from "./api.js";
@@ -130,13 +129,6 @@ export async function deletarPost(postId: PostId): Promise<boolean> {
   return true;
 }
 
-/**
- * Agora aceita:
- * - Apenas descrição (texto e/ou texto com conquista);
- * - Descrição + URLs de mídia;
- * - Apenas URLs de mídia;
- * - Upload de arquivo (imagem/vídeo).
- */
 export async function criarPost({
   descricao = "",
   imagemUrl,
@@ -150,7 +142,6 @@ export async function criarPost({
   const hasImagem = !!imagemUrl && imagemUrl.trim().length > 0;
   const hasVideo  = !!videoUrl && videoUrl.trim().length > 0;
 
-  // 1) Upload de arquivo (tem prioridade sobre URLs)
   if (arquivo instanceof File) {
     const fd = new FormData();
     if (hasDescricao) fd.append("descricao", descricao.trim());
@@ -167,7 +158,6 @@ export async function criarPost({
     return res.json();
   }
 
-  // 2) JSON: funciona com só descrição, só URLs ou ambos
   if (hasDescricao || hasImagem || hasVideo) {
     const payload: any = {};
     if (hasDescricao) payload.descricao = descricao.trim();
@@ -189,6 +179,5 @@ export async function criarPost({
     return res.json();
   }
 
-  // 3) Nada informado
   throw new Error("Escreva algo, selecione uma conquista ou anexe uma mídia (URL/arquivo).");
 }

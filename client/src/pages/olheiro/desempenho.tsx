@@ -2,8 +2,13 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
+  BarChart, Bar, PieChart, Pie, Cell, Legend
+} from "recharts";
 import { ArrowLeft } from "lucide-react";
+
+const COLORS = ["#22c55e", "#0ea5e9", "#f59e0b", "#ef4444", "#8b5cf6"];
 
 type Serie = { label: string; value: number };
 type Dia = { dia: string; curtidas: number; comentarios: number; submissoes: number };
@@ -12,8 +17,8 @@ type Payload = {
   atleta: { id: string; nome: string; foto?: string|null };
   kpis: { curtidas7d: number; submissoes7d: number; pontos7d: number };
   porDia30d: Dia[];
-  porTipo: Serie[];     
-  porCategoria: Serie[]; 
+  porTipo: Serie[];
+  porCategoria: Serie[];
 };
 
 export default function DesempenhoAtleta() {
@@ -35,7 +40,7 @@ export default function DesempenhoAtleta() {
         });
         const json = await r.json();
         if(!cancel) setData(json);
-      } finally{ if(!cancel) setLoading(false); }
+      } finally { if(!cancel) setLoading(false); }
     })();
     return ()=>{ cancel=true; };
   }, [atletaId, token]);
@@ -92,10 +97,19 @@ export default function DesempenhoAtleta() {
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={data.porCategoria} nameKey="label" dataKey="value" outerRadius={100}>
-                  {data.porCategoria.map((_, i) => <Cell key={i} />)}
+                <Pie
+                  data={data.porCategoria}
+                  nameKey="label"
+                  dataKey="value"
+                  outerRadius={100}
+                  label={(e: any) => `${e.name} (${Math.round(e.percent * 100)}%)`}
+                >
+                  {data.porCategoria.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
                 </Pie>
-                <Tooltip/>
+                <Tooltip />
+                <Legend verticalAlign="bottom" height={24} />
               </PieChart>
             </ResponsiveContainer>
           </div>

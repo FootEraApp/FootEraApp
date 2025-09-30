@@ -171,30 +171,19 @@ router.post("/submissoes-grupo", authenticateToken, async (req, res) => {
   }
 
   try {
-    const submissao = await prisma.submissaoDesafio.create({
-      data: {
-        atletaId: tipoUsuarioId,  
-        usuarioId: userId,        
-        desafioId,
-        videoUrl,
-        observacao,
-        aprovado: false,
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      const submissao = await tx.submissaoDesafio.create({
+        data: { atletaId: tipoUsuarioId, usuarioId: userId, desafioId, videoUrl, observacao, aprovado: false },
+      });
+
+      const submissaoEmGrupo = await tx.submissaoDesafioEmGrupo.create({
+        data: { submissaoDesafioId: submissao.id, desafioEmGrupoId, usuarioId: userId },
+      });
+
+      return { submissao, submissaoEmGrupo };
     });
 
-    const submissaoEmGrupo = await prisma.submissaoDesafioEmGrupo.create({
-      data: {
-        submissaoDesafioId: submissao.id,
-        desafioEmGrupoId,
-        usuarioId: userId,
-      },
-    });
-
-    return res.status(201).json({
-      message: "Submissão em grupo criada com sucesso",
-      submissao,
-      submissaoEmGrupo,
-    });
+    return res.status(201).json({ message: "Submissão em grupo criada com sucesso", ...result });
   } catch (err) {
     console.error("Erro ao criar submissão em grupo:", err);
     return res.status(500).json({ error: "Erro interno ao criar submissão em grupo" });
