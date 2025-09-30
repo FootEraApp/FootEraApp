@@ -1,10 +1,60 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import axios from "axios";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
 
-type Atleta = { id:string; nome:string; foto?:string|null; posicao?:string|null; idade?:number|null };
+type Atleta = {
+  id: string;     
+  nome: string;
+  foto?: string | null;
+  posicao?: string | null;
+  idade?: number | null;
+  altura?: number | null;
+  peso?: number | null;
+  observadoEm?: string | null;
+  pontuacao?: number | null;
+  categoria?: string | null;
+};
+
+function resolveUploadUrl(raw?: string | null) {
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("/assets/") || raw.startsWith("/attached_assets/")) return `${API.BASE_URL}${raw}`;
+  if (raw.startsWith("/uploads/")) return `${API.BASE_URL}${raw}`;
+  return `${API.BASE_URL}/uploads/${raw.replace(/^\/+/, "")}`;
+}
+
+function initials(nome: string) {
+  return nome
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function AvatarCircle({ src, nome, size = 40 }: { src?: string; nome: string; size?: number }) {
+  const [hidden, setHidden] = useState(false);
+  const style = { width: size, height: size };
+
+  return (
+    <div className="relative rounded-full bg-green-100 text-green-800 grid place-items-center font-semibold border"
+         style={style}
+        >
+      <span className="text-sm select-none">{initials(nome) || "?"}</span>
+
+      {!!src && !hidden && (
+        <img
+          src={src}
+          alt={nome}
+          className="absolute inset-0 w-full h-full rounded-full object-cover"
+          onError={() => setHidden(true)}
+        />
+      )}
+    </div>
+  );
+}
 
 export default function PainelOlheiro() {
   const token = Storage.token;
@@ -12,34 +62,120 @@ export default function PainelOlheiro() {
   const tipoId = Storage.tipoUsuarioId;
 
   const [obs, setObs] = useState<Atleta[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(()=> {
-    (async ()=>{
-      try{
-        const r = await axios.get(`${API.BASE_URL}/api/observados`, { headers });
-        setObs(Array.isArray(r.data) ? r.data : []);
-      } catch { setObs([]); }
+  useEffect(() => {
+    if (!token || !tipoId) return;
+
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await axios.get(`${API.BASE_URL}/api/olheiros/${tipoId}/observados`, { headers });
+
+        const arr: Atleta[] = (Array.isArray(r.data) ? r.data : []).map((x: any) => {
+          const id = x.atletaId || x.id;
+          const nome = x.nome || x.atleta?.nome || x.usuario?.nome || "";
+          const fotoRaw = x.foto ?? x.atleta?.foto ?? x.usuario?.foto ?? null;
+
+          return {
+            id: String(id),
+            nome: String(nome),
+            foto: resolveUploadUrl(fotoRaw),
+            posicao: x.posicao ?? x.atleta?.posicao ?? null,
+            idade: x.idade ?? x.atleta?.idade ?? null,
+            altura: x.altura ?? x.atleta?.altura ?? null,
+            peso: x.peso ?? x.atleta?.peso ?? null,
+            observadoEm: x.observadoEm ?? null,
+            categoria: x.categoria ?? null,
+            pontuacao: typeof x.pontuacao === "number" ? x.pontuacao : null,
+          };
+        });
+
+        setObs(arr.filter((a) => a.id && a.nome));
+      } catch (e) {
+        console.error("Falha ao carregar observados:", e);
+        setObs([]);
+      } finally {
+        setLoading(false);
+      }
     })();
-  }, [tipoId]);
+  }, [tipoId, token]);
+
+  const total = obs.length;
 
   return (
-    <div className="max-w-md mx-auto p-4">
-      <h1 className="text-xl font-bold mb-3">Painel do Olheiro</h1>
-      {obs.length===0 ? <p className="text-gray-600">Você ainda não observa atletas.</p> : (
-        <ul className="grid gap-3">
-          {obs.map(a=>(
-            <li key={a.id} className="rounded-lg border p-3 bg-white flex items-center gap-3">
-              <img src={a.foto || `${API.BASE_URL}/assets/default-user.png`} className="w-10 h-10 rounded-full object-cover"/>
-              <div className="flex-1">
-                <div className="font-medium">{a.nome}</div>
-                <div className="text-xs text-gray-600">{[a.posicao, a.idade?`${a.idade} anos`: null].filter(Boolean).join(" • ")}</div>
-              </div>
-              <div className="flex gap-2">
-                <Link href={`/olheiro/desempenho?atletaId=${a.id}`}><a className="text-green-700 underline">Desempenho</a></Link>
-                <Link href={`/olheiro/indicar?atletaId=${a.id}`}><a className="underline">Indicar</a></Link>
-              </div>
-            </li>
+    <div className="mx-auto max-w-2xl p-4">
+      <div className="mb-3 flex items-end justify-between">
+        <h1 className="text-xl font-bold text-green-900">Painel do Olheiro</h1>
+        <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800 border border-green-200">
+          {total} observado{total === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-20 rounded-xl bg-white border animate-pulse" />
           ))}
+        </div>
+      ) : total === 0 ? (
+        <div className="rounded-xl border bg-white/90 p-6 text-center text-green-900/70">
+          Você ainda não observa atletas.
+        </div>
+      ) : (
+        <ul className="grid gap-3">
+          {obs.map((a) => {
+            const bullets = [
+              a.posicao || null,
+              typeof a.idade === "number" ? `${a.idade} anos` : null,
+              a.categoria || null,
+            ].filter(Boolean);
+
+            return (
+              <li
+                key={a.id}
+                className="rounded-xl border bg-white/90 p-3 shadow-sm hover:shadow transition flex items-start gap-3"
+              >
+                <AvatarCircle src={a.foto || undefined} nome={a.nome} size={44} />
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="font-semibold text-green-900 truncate">{a.nome}</div>
+                    {typeof a.pontuacao === "number" && (
+                      <span className="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                        {a.pontuacao} pts
+                      </span>
+                    )}
+                  </div>
+
+                  {bullets.length > 0 && (
+                    <div className="text-xs text-green-900/70">{bullets.join(" • ")}</div>
+                  )}
+
+                  {a.observadoEm && (
+                    <div className="mt-1 text-[11px] text-green-900/60">
+                      Observando desde {new Date(a.observadoEm).toLocaleDateString("pt-BR")}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                  <Link
+                    href={`/olheiros/desempenho?atletaId=${a.id}`}
+                    className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg border text-green-800 border-green-200 hover:bg-green-50 text-sm"
+                  >
+                    Desempenho
+                  </Link>
+                  <Link
+                    href={`/olheiros/indicar?atletaId=${a.id}`}
+                    className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-green-700 text-white hover:bg-green-800 text-sm"
+                  >
+                    Indicar
+                  </Link>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

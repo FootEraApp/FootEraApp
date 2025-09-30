@@ -1,145 +1,111 @@
-import { PrismaClient, TipoUsuario } from "@prisma/client";
-import { Response } from "express";
-import { AuthenticatedRequest } from "../middlewares/auth.js";
+import { Request, Response } from "express";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-export async function observarAtleta(req: AuthenticatedRequest, res: Response) {
-  if (!req.userId) return res.status(401).json({ error: "Não autenticado" });
+function ownerFrom(req: Request) {
+  const u: any = (req as any).user || {};
+  const id = u?.tipoUsuarioId;
+  const tipo = String(u?.tipo || "").toLowerCase();
 
-  const { atletaUsuarioId } = req.body || {};
-  if (!atletaUsuarioId) return res.status(400).json({ error: "atletaUsuarioId é obrigatório" });
-
-  const atleta = await prisma.atleta.findUnique({
-    where: { usuarioId: String(atletaUsuarioId) },
-    select: { id: true },
-  });
-  if (!atleta) return res.status(404).json({ error: "Atleta não encontrado" });
-
-  const data: any = { atletaId: atleta.id };
-  switch (req.tipo) {
-    case TipoUsuario.Professor:
-    case "Professor":  data.professorId = req.tipoUsuarioId; break;
-    case TipoUsuario.Clube:
-    case "Clube":      data.clubeId     = req.tipoUsuarioId; break;
-    case TipoUsuario.Escolinha:
-    case "Escolinha":  data.escolinhaId = req.tipoUsuarioId; break;
-    case TipoUsuario.Olheiro:
-    case "Olheiro":    data.olheiroId   = req.tipoUsuarioId; break;
-    default: return res.status(403).json({ error: "Este perfil não pode observar atletas" });
-  }
-
-  try {
-    const jaExiste = await prisma.atletaObservado.findFirst({ where: data });
-    if (jaExiste) return res.status(409).json({ ok: true, message: "Já observando" });
-
-    await prisma.atletaObservado.create({ data });
-    return res.status(201).json({ ok: true });
-  } catch (e: any) {
-    if (e?.code === "P2002") return res.status(409).json({ ok: true, message: "Já observando" });
-    console.error("observarAtleta error:", e);
-    return res.status(500).json({ error: e?.message, code: e?.code });
-  }
+  if (tipo === "professor")  return { professorId: id };
+  if (tipo === "clube")      return { clubeId: id };
+  if (tipo === "escolinha")  return { escolinhaId: id };
+  if (tipo === "olheiro")    return { olheiroId: id };
+  return {}; 
 }
 
-export async function listarObservados(req: AuthenticatedRequest, res: Response) {
-  try {
-    if (!req.userId) return res.status(401).json({ error: "Não autenticado" });
+export async function statusObservacao(req: Request, res: Response) {
+  const { atletaId } = req.params;
+  if (!atletaId) return res.status(400).json({ message: "atletaId é obrigatório" });
 
-    const where: any = {};
-    switch (req.tipo) {
-      case TipoUsuario.Professor:
-      case "Professor":  where.professorId = req.tipoUsuarioId; break;
-      case TipoUsuario.Clube:
-      case "Clube":      where.clubeId     = req.tipoUsuarioId; break;
-      case TipoUsuario.Escolinha:
-      case "Escolinha":  where.escolinhaId = req.tipoUsuarioId; break;
-      case TipoUsuario.Olheiro:
-      case "Olheiro":    where.olheiroId   = req.tipoUsuarioId; break;
-      default: return res.json([]);
+  const where = { atletaId, ...ownerFrom(req) };
+  const existe = await prisma.atletaObservado.findFirst({ where });
+  return res.json({ observando: !!existe });
+}
+
+export async function listarObservados(req: Request, res: Response) {
+  const whereOwner = ownerFrom(req);
+  const lista = await prisma.atletaObservado.findMany({
+    where: whereOwner,
+    include: { atleta: { include: { usuario: true } } },
+    orderBy: { criadoEm: "desc" },
+  });
+  res.json(lista);
+}
+
+export async function observarAtleta(req: Request, res: Response) {
+  const { atletaId } = req.body as { atletaId?: string };
+  if (!atletaId) return res.status(400).json({ message: "atletaId é obrigatório" });
+
+  const owner = ownerFrom(req);
+  const keys = ["professorId","escolinhaId","clubeId","olheiroId"];
+  if (keys.filter(k => (owner as any)[k]).length !== 1) {
+    return res.status(403).json({ error: "Seu tipo de usuário não pode observar atletas" });
+  }
+  const count = keys.filter(k => (owner as any)[k]).length;
+  if (count !== 1)
+    return res.status(403).json({ error: "Seu tipo de usuário não pode observar atletas" });
+
+  const data = { atletaId, ...owner };
+
+  const jaExiste = await prisma.atletaObservado.findFirst({ where: data });
+  if (jaExiste) return res.status(409).json({ ok: true, message: "Já observando" });
+
+  await prisma.atletaObservado.create({ data });
+  return res.status(201).json({ ok: true });
+}
+
+export async function pararDeObservar(req: Request, res: Response) {
+  const { atletaId } = req.params;
+  if (!atletaId) return res.status(400).json({ message: "atletaId é obrigatório" });
+
+  const where = { atletaId, ...ownerFrom(req) };
+  const item = await prisma.atletaObservado.findFirst({ where });
+  if (!item) return res.status(404).json({ message: "Não encontrado" });
+
+  await prisma.atletaObservado.deleteMany({ where: { atletaId, ...ownerFrom(req) } });
+  res.json({ ok: true });
+}
+
+export async function listarObservadosPorOlheiro(req: Request, res: Response) {
+  try {
+    let { olheiroId } = req.params as { olheiroId?: string };
+    if (!olheiroId || olheiroId === "me") {
+      const u: any = (req as any).user || {};
+      olheiroId = u?.tipoUsuarioId || null;
     }
+    if (!olheiroId) return res.status(400).json({ error: "olheiroId é obrigatório" });
 
     const rows = await prisma.atletaObservado.findMany({
-      where,
+      where: { olheiroId },
       include: {
         atleta: {
           include: {
-            usuario:   { select: { id: true, nome: true, foto: true } },
-            pontuacao: { select: { pontuacaoTotal: true } }, 
+            usuario: true,
           },
         },
       },
       orderBy: { criadoEm: "desc" },
     });
 
-    return res.json(rows.map(r => ({
-      id: r.atleta?.usuario?.id ?? r.atletaId,
+    const lista = rows.map((r) => ({
+      id: r.atleta?.usuario?.id ?? r.atletaId,        
       atletaId: r.atletaId,
-      usuarioId: r.atleta?.usuario?.id ?? null,
-      nome: r.atleta?.usuario?.nome ?? null,
+      nome: r.atleta?.usuario?.nome ?? "Atleta",
       foto: r.atleta?.usuario?.foto ?? null,
-      posicao: r.atleta?.posicao ?? null,
-      idade: r.atleta?.idade ?? null,
-      categoria: Array.isArray((r.atleta as any)?.categoria) && (r.atleta as any).categoria.length
-        ? (r.atleta as any).categoria[(r.atleta as any).categoria.length - 1]
-        : null,
-      pontuacao: (r.atleta as any)?.pontuacao?.pontuacaoTotal ?? (r.atleta as any)?.pontosTotal ?? null,
-      observadoEm: r.criadoEm,
-    })));
+      posicao: (r as any).atleta?.posicao ?? null,
+      idade: (r as any).atleta?.idade ?? null,
+      altura: (r as any).atleta?.altura ?? null,
+      peso: (r as any).atleta?.peso ?? null,
+      observadoEm: r.criadoEm?.toISOString?.() ?? null,
+      categoria: (r as any).atleta?.categoria ?? null,
+      pontuacao: (r as any).atleta?.pontuacao ?? null,
+    }));
+
+    return res.json(lista);
   } catch (e) {
-    console.error("listarObservados ERROR:", e);
-    return res.json([]);
+    console.error("listarObservadosPorOlheiro", e);
+    return res.status(500).json({ error: "Falha ao listar observados do olheiro" });
   }
-}
-
-export async function pararDeObservar(req: AuthenticatedRequest, res: Response) {
-  try {
-    if (!req.userId) return res.status(401).json({ error: "Não autenticado" });
-
-    const { atletaId } = req.params;
-    const where: any = { atletaId };
-
-    switch (req.tipo) {
-      case TipoUsuario.Professor:
-      case "Professor":
-        where.professorId = req.tipoUsuarioId;
-        break;
-      case TipoUsuario.Clube:
-      case "Clube":
-        where.clubeId = req.tipoUsuarioId;
-        break;
-      case TipoUsuario.Escolinha:
-      case "Escolinha":
-        where.escolinhaId = req.tipoUsuarioId;
-        break;
-      case TipoUsuario.Olheiro:
-      case "Olheiro":
-        where.olheiroId = req.tipoUsuarioId;
-        break;
-      default:
-        return res.status(403).json({ error: "Este perfil não pode parar observação" });
-    }
-
-    await prisma.atletaObservado.deleteMany({ where });
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error("pararDeObservar ERROR:", e);
-    return res.status(500).json({ error: "Falha ao parar observação" });
-  }
-}
-
-export async function listarObservadosPorOlheiro(req: AuthenticatedRequest, res: Response) {
-  const { olheiroId } = req.params;
-  const rows = await prisma.atletaObservado.findMany({
-    where: { olheiroId },
-    include: { atleta: { include: { usuario: { select: { id: true, nome: true, foto: true } } } } },
-    orderBy: { criadoEm: "desc" },
-  });
-  res.json(rows.map(r => ({
-    id: r.atleta?.usuario?.id ?? r.atletaId,
-    atletaId: r.atletaId,
-    usuarioId: r.atleta?.usuario?.id ?? null,
-    nome: r.atleta?.usuario?.nome ?? null,
-    foto: r.atleta?.usuario?.foto ?? null,
-  })));
 }

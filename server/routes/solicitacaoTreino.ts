@@ -19,11 +19,14 @@ router.get("/minhas", listarSolicitacoesMinhas);
 router.get("/", listarSolicitacoesRecebidas);
 router.delete("/:destinatarioId?", cancelarSolicitacao);
 router.put("/:id", async (req, res) => {
-  const { aceitar } = req.body ?? {};
-  if (aceitar === true) {
-    return solicitacoesTreinoController.aceitar(req, res);
+  try {
+    const aceitar = !!req.body?.aceitar;
+    if (aceitar) return solicitacoesTreinoController.aceitar(req, res);
+    return recusarSolicitacao(req, res);
+  } catch (e) {
+    console.error("PUT /solicitacoes-treino/:id", e);
+    res.status(500).json({ error: "Falha ao responder solicitação" });
   }
-  return recusarSolicitacao(req, res);
 });
 
 export default router;

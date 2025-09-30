@@ -229,10 +229,8 @@ function computeFromHistorico(wire?: any) {
     /treino/i.test(String(t?.tipo ?? t?.categoria ?? ""));
   const isDesafio = (t: any) =>
     /desaf/i.test(String(t?.tipo ?? t?.categoria ?? ""));
-  const isConcluido = (t: any) => {
-    const s = String(t?.status ?? t?.situacao ?? "").toLowerCase();
-    return !s || s.includes("conclu");
-  };
+  const isConcluido = (t: any) => /conclu|aprov|finaliz|valid|ok|encerr/i
+  .test(String(t?.status ?? t?.situacao ?? ""));
 
   const treinos  = hist.filter((t) => isTreino(t)  && isConcluido(t));
   const desafios = hist.filter((t) => isDesafio(t) && isConcluido(t));

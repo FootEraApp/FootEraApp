@@ -3,6 +3,42 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 const router = Router();
 
+router.get("/atleta/:id/historico", async (req, res) => {
+  try {
+    const atletaId = String(req.params.id);
+    const page = Math.max(1, Number(req.query.page ?? 1));
+    const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize ?? 20)));
+
+    const [desafios, treinos, totalDesafios, totalTreinos] = await Promise.all([
+      prisma.submissaoDesafio.findMany({
+        where: { atletaId },
+        select: { id: true, createdAt: true, aprovado: true, desafioId: true, videoUrl: true },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.submissaoTreino.findMany({
+        where: { atletaId },
+        select: { id: true, criadoEm: true, aprovado: true, pontosCreditados: true, treinoTituloSnapshot: true },
+        orderBy: { criadoEm: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.submissaoDesafio.count({ where: { atletaId } }),
+      prisma.submissaoTreino.count({ where: { atletaId } }),
+    ]);
+
+    res.json({
+      page, pageSize,
+      total: totalDesafios + totalTreinos,
+      desafios, treinos,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Erro ao buscar histórico" });
+  }
+});
+
 router.get("/atleta/:id", async (req, res) => {
   try {
     const atletaId = String(req.params.id);

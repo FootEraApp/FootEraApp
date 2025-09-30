@@ -81,30 +81,25 @@ function computeFromHistorico(wire?: any) {
     /treino/i.test(String(t?.tipo ?? t?.categoria ?? ""));
   const isDesafio = (t: any) =>
     /desaf/i.test(String(t?.tipo ?? t?.categoria ?? ""));
-  const isConcluido = (t: any) => {
-    const s = String(t?.status ?? t?.situacao ?? "").toLowerCase();
-    return !s || s.includes("conclu");
-  };
+  const isConcluido = (t: any) =>
+    /conclu|aprov|finaliz|valid|ok|encerr/i
+      .test(String(t?.status ?? t?.situacao ?? ""));
 
   const treinos  = hist.filter((t) => isTreino(t)  && isConcluido(t));
   const desafios = hist.filter((t) => isDesafio(t) && isConcluido(t));
 
-  const perfHist = [...treinos, ...desafios].reduce((acc, ev) => acc + pontosDoEvento(ev), 0);
-
+  const perfHist = [...treinos, ...desafios].reduce(
+    (acc, ev) => acc + pontosDoEvento(ev), 0
+  );
   const perfCats = sumPointsFromCategories(wire?.categorias);
-
   const perfApi  = Number(wire?.performance ?? 0);
+  
   const performance = Math.max(perfHist, perfCats, perfApi);
-
   const disciplina       = treinos.length  * 2;
   const responsabilidade = desafios.length * 2;
 
-  return {
-    performance,
-    disciplina,
-    responsabilidade,
-    total: performance + disciplina + responsabilidade,
-  };
+  return { performance, disciplina, responsabilidade,
+           total: performance + disciplina + responsabilidade };
 }
 
 export default function ScorePanel({
@@ -132,37 +127,33 @@ export default function ScorePanel({
     });
   }, [performance, disciplina, responsabilidade]);
 
-    useEffect(() => {
-      if (!targetId) return;
-      const token = Storage?.token || "";
-      const url = API.BASE_URL + `/api/perfil/${encodeURIComponent(targetId)}/pontuacao`;
+  useEffect(() => {
+  if (!targetId) return;
+  const token = Storage?.token || "";
+  const url = API.BASE_URL + `/api/perfil/${encodeURIComponent(targetId)}/pontuacao`;
 
-      (async () => {
-        try {
-          const r = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
-          if (r.status !== 200) return;
-          const data = await r.json();
+  (async () => {
+    try {
+      const r = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+      if (r.status !== 200) return;
+      const data = await r.json();
 
-          const perfApi = Number(data?.performance) || 0;
-          const discApi = Number(data?.disciplina) || 0;
-          const respApi = Number(data?.responsabilidade) || 0;
+      const perfApi = Number(data?.performance) || 0;
+      const discApi = Number(data?.disciplina) || 0;
+      const respApi = Number(data?.responsabilidade) || 0;
 
-          if (perfApi || discApi || respApi) {
-            setVals({ performance: perfApi, disciplina: discApi, responsabilidade: respApi });
-            return;
-          }
+      const calc = computeFromHistorico(data);
 
-          const calc = computeFromHistorico(data);
-          setVals({
-            performance: calc.performance,
-            disciplina: calc.disciplina,
-            responsabilidade: calc.responsabilidade,
-          });
-        } catch (e) {
-          console.error(e);
-        }
-      })();
-    }, [targetId]);
+      setVals({
+        performance: Math.max(perfApi, calc.performance),
+        disciplina: Math.max(discApi, calc.disciplina),
+        responsabilidade: Math.max(respApi, calc.responsabilidade),
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  })();
+}, [targetId]);
 
   const hrefPontuacao = `/perfil/pontuacao`;
   const content = (

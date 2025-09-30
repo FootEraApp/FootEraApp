@@ -513,6 +513,8 @@ model SubmissaoTreino {
   atleta               Atleta         @relation(fields: [atletaId], references: [id])
   treinoAgendado       TreinoAgendado @relation(fields: [treinoAgendadoId], references: [id])
   Usuario              Usuario?       @relation(fields: [usuarioId], references: [id])
+  tempoSeg             Int?
+  repeticoes           Int?
 }
 
 model Grupo {
@@ -907,6 +909,123 @@ model DocumentoFormador {
   atleta            Atleta           @relation(fields: [atletaId], references: [id])
   vinculoFormacao   VinculoFormacao? @relation(fields: [vinculoFormacaoId], references: [id])
   vinculoFormacaoId String?
+}
+
+model ScoutNote {
+  id            String   @id @default(uuid())
+  olheiroId     String
+  atletaId      String
+  texto         String   @default("")
+  lastScoreSeen Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([olheiroId, atletaId], name: "olheiroId_atletaId")
+}
+
+model TreinoUsuario {
+  id          String       @id @default(uuid())
+  treinoId    String
+  usuarioId   String
+  status      TreinoStatus @default(PENDING)
+  startedAt   DateTime?
+  completedAt DateTime?
+  tempoSeg    Int?
+  repeticoes  Int?
+  observacao  String?
+
+  @@unique([treinoId, usuarioId])
+}
+
+model ChecklistTemplate {
+  id          String           @id @default(uuid())
+  context     ChecklistContext
+  nome        String
+  ativo       Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  items       ChecklistItem[]
+  professorId String?
+  clubeId     String?
+  escolinhaId String?
+}
+
+model ChecklistItem {
+  id         String            @id @default(uuid())
+  templateId String
+  ordem      Int               @default(0)
+  label      String
+  key        String
+  type       ChecklistItemType
+  required   Boolean           @default(false)
+  weight     Int               @default(1)
+  options    String[]
+  template   ChecklistTemplate @relation(fields: [templateId], references: [id])
+}
+
+model SubmissionChecklist {
+  id                 String           @id @default(uuid())
+  templateId         String
+  context            ChecklistContext
+  submissaoTreinoId  String?
+  submissaoDesafioId String?
+  postagemId         String?
+  totalScore         Int?
+  aprovado           Boolean?
+  finalizedByUserId  String?
+  finalizedAt        DateTime?
+  createdAt          DateTime         @default(now())
+
+  answers ChecklistAnswer[]
+}
+
+model ChecklistAnswer {
+  id                  String              @id @default(uuid())
+  checklistId         String
+  itemId              String
+  value               Json?
+  comment             String?
+  SubmissionChecklist SubmissionChecklist @relation(fields: [checklistId], references: [id])
+}
+
+model RankingSnapshot {
+  id          String       @id @default(uuid())
+  kind        String
+  ref         String?
+  generatedAt DateTime     @default(now())
+  rows        RankingRow[]
+}
+
+model RankingRow {
+  id                String           @id @default(uuid())
+  snapshotId        String
+  atletaId          String
+  posicao           Int
+  pontuacao         Int
+  estado            String?
+  categoria         String?
+  RankingSnapshot   RankingSnapshot? @relation(fields: [rankingSnapshotId], references: [id])
+  rankingSnapshotId String?
+}
+
+enum TreinoStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+}
+
+enum ChecklistContext {
+  SUBMISSAO_TREINO
+  SUBMISSAO_DESAFIO
+  POSTAGEM
+  PENEIRA
+}
+
+enum ChecklistItemType {
+  BOOLEAN
+  SELECT
+  SCORE
 }
 
 enum OrigemFormador {
