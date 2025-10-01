@@ -15,6 +15,8 @@ import {
   repostarPost,
 } from "../controllers/postController.js";
 import { curtirPostagem } from "server/controllers/feedController.js";
+import rateLimit from "express-rate-limit";
+import { isAllowedMime } from "../utils/moderation.js";
 
 const router = Router();
 
@@ -31,11 +33,31 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 200 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB p/ post (reducei pra algo mais seguro)
+  fileFilter: (_req, file, cb) => {
+    if (isAllowedMime(file.mimetype)) return cb(null, true);
+    cb(new Error("Tipo de arquivo não permitido (somente imagens JPEG/PNG/WEBP/GIF ou vídeo MP4/WEBM)."));
+  },
+});
+
+// 10 posts / hora / usuário | 60 comentários / hora / usuário
+const postLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.userId || req.ip,
+});
+const commentLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.userId || req.ip,
 });
 
 router.get("/visualizar/:id", authenticateToken, buscarPostagemPorId);
-router.post("/:postId/comentario", authenticateToken, adicionarComentario);
+router.post("/:postId/comentario", authenticateToken, commentLimiter, adicionarComentario);
 router.post("/:postId/like", authenticateToken, curtirPostagem);
 router.post("/:postId/compartilhar", authenticateToken, registrarCompartilhamento);
 router.post("/:postId/compartilhar/mensagem", authenticateToken, compartilharPostPorMensagem);
@@ -44,6 +66,6 @@ router.delete("/:id", authenticateToken, deletarPost);
 router.get("/editar/:id", authenticateToken, editarPostagemGet);
 router.post("/editar/:id", authenticateToken, editarPostagemPost);
 
-router.post(["/", "/postar"], authenticateToken, upload.single("arquivo"), postarConteudo);
+router.post(["/", "/postar"], authenticateToken, postLimiter, upload.single("arquivo"), postarConteudo);
 
 export default router;

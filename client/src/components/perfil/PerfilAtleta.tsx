@@ -123,126 +123,98 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   const alvoUsuarioId = isOwnProfile ? (Storage.usuarioId as string) : (idDaUrl as string);
 
   useEffect(() => {
-    if (!token) return;
+  if (!token) return;
 
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const [{ data: meOuOutro }, { data: atividades }, { data: badgesData }] = await Promise.all([
-          axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}`, { headers }),
-          axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}/atividades`, { headers }),
-          axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}/badges`, { headers }),
-        ]);
+  let alive = true; // evita setState depois do unmount
+  (async () => {
+    setLoading(true);
+    try {
+      const [{ data: meOuOutro }, { data: atividades }, { data: badgesData }] = await Promise.all([
+        axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}`, { headers }),
+        axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}/atividades`, { headers }),
+        axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}/badges`, { headers }),
+      ]);
+      if (!alive) return;
 
-        if (cancelled) return;
+      setPerfil(meOuOutro);
+      const uid = (meOuOutro?.usuario?.id as string) || alvoUsuarioId || null;
+      setUsuarioId(uid);
 
-        setPerfil(meOuOutro);
-        const uid = (meOuOutro?.usuario?.id as string) || alvoUsuarioId || null;
-        setUsuarioId(uid);
+      // valores inline (fallback inicial)
+      let escola = meOuOutro?.dadosEspecificos?.escola ?? null;
+      let clube  = meOuOutro?.dadosEspecificos?.clube  ?? null;
+      let prof   = meOuOutro?.dadosEspecificos?.professor ?? null;
 
-        setEscolaNome(meOuOutro?.dadosEspecificos?.escola ?? null);
-        setClubeNome(meOuOutro?.dadosEspecificos?.clube ?? null);
-        
-        if (meOuOutro?.tipo === "Atleta") {
-          const idParaConsulta =
-            meOuOutro?.atleta?.id ??
-            meOuOutro?.dadosEspecificos?.id ??
-            meOuOutro?.usuario?.id ??
-            alvoUsuarioId;
+      if (meOuOutro?.tipo === "Atleta") {
+        const idParaConsulta =
+          meOuOutro?.dadosEspecificos?.atletaId ??
+          meOuOutro?.atleta?.id ??
+          meOuOutro?.usuario?.id ??
+          alvoUsuarioId;
 
-          const nomeInline =
-            pickProfessorNome(meOuOutro?.professor) ||
-            pickProfessorNome(meOuOutro?.vinculos?.professor) ||
-            pickProfessorNome(meOuOutro?.dadosEspecificos);
+        try {
+          // >>> preferir SEMPRE o que vem do vinculos-basic
+          const { data: vinc } = await axios.get(
+            `${API.BASE_URL}/api/atletas/${idParaConsulta}/vinculos-basic`,
+            { headers }
+          );
+          if (!alive) return;
 
-          if (nomeInline && !professor) setProfessor({ nome: nomeInline });
-
-          try {
-            const { data: vinc } = await axios.get(
-              `${API.BASE_URL}/api/atletas/${idParaConsulta}/vinculos-basic`,
-              { headers }
-            );
-
-            if (!professor && vinc?.professor?.nome) setProfessor({ nome: vinc.professor.nome });
-            if (!escolaNome && vinc?.escolinha?.nome) setEscolaNome(vinc.escolinha.nome);
-            if (!clubeNome && vinc?.clube?.nome) setClubeNome(vinc.clube.nome);
-          } catch {}
+          escola = vinc?.escolinha?.nome ?? escola;
+          clube  = vinc?.clube?.nome     ?? clube;
+          prof   = vinc?.professor?.nome ?? prof;
+        } catch (e) {
+          // fica com os inline se der erro
         }
-        setActivities((atividades || []).map((a: any) => ({
-          id: a.id,
-          tipo: a.tipo as TipoAtividade,
-          imagemUrl: a.imagemUrl || "",
-          nome: a.nome || a.tipo,
-        })));
-        setBadges(badgesData || []);
-
-        if (uid) {
-          const { data: p } = await axios.get(`${API.BASE_URL}/api/perfil/${uid}/pontuacao`, { headers });
-          if (cancelled) return;
-
-          const performance = Number(p?.performance) || 0;
-          const disciplina = Number(p?.disciplina) || 0;
-          const responsabilidade = Number(p?.responsabilidade) || 0;
-
-          setPontuacao({
-            pontuacaoTotal: performance + disciplina + responsabilidade,
-            pontuacaoPerformance: performance,
-            pontuacaoDisciplina: disciplina,
-            pontuacaoResponsabilidade: responsabilidade,
-          });
-
-            const totalAtual = performance + disciplina + responsabilidade;
-            const viewerId = String(Storage?.usuarioId ?? "");
-            const key = `lastSeenScore:${viewerId}:${uid}`;
-            const last = Number(localStorage.getItem(key) ?? 0);
-            const d = Math.max(0, totalAtual - last);
-             setScoreDelta(d);
-             setTimeout(() => { try { localStorage.setItem(key, String(totalAtual)); } catch {} }, 2000);
-        } else {
-          setPontuacao(null);
-        }
-      } catch (err) {
-        console.error("Erro ao carregar dados do perfil do atleta:", err);
-        setPerfil(null);
-      } finally {
-        if (!cancelled) setLoading(false);
       }
-    })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [idDaUrl, token]);
+      // 🔒 aplica tudo de uma vez, sem duplas escritas que brigam entre si
+      setEscolaNome(escola);
+      setClubeNome(clube);
+      setProfessor(prof ? { nome: prof } : null);
 
-  const handleSeguir = async () => {
-    if (!perfil?.usuario?.id) return;
-    try {
-      await fetch(`${API.BASE_URL}/api/seguidores/seguir/${perfil.usuario.id}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${Storage.token}` },
-      });
-      alert("Você passou a seguir este atleta!");
-    } catch {
-      alert("Não foi possível seguir agora.");
+      setActivities((atividades || []).map((a: any) => ({
+        id: a.id,
+        tipo: a.tipo as TipoAtividade,
+        imagemUrl: a.imagemUrl || "",
+        nome: a.nome || a.tipo,
+      })));
+      setBadges(badgesData || []);
+
+      if (uid) {
+        const { data: p } = await axios.get(`${API.BASE_URL}/api/perfil/${uid}/pontuacao`, { headers });
+        if (!alive) return;
+        const performance = Number(p?.performance) || 0;
+        const disciplina = Number(p?.disciplina) || 0;
+        const responsabilidade = Number(p?.responsabilidade) || 0;
+
+        setPontuacao({
+          pontuacaoTotal: performance + disciplina + responsabilidade,
+          pontuacaoPerformance: performance,
+          pontuacaoDisciplina: disciplina,
+          pontuacaoResponsabilidade: responsabilidade,
+        });
+
+        const totalAtual = performance + disciplina + responsabilidade;
+        const viewerId = String(Storage?.usuarioId ?? "");
+        const key = `lastSeenScore:${viewerId}:${uid}`;
+        const last = Number(localStorage.getItem(key) ?? 0);
+        const d = Math.max(0, totalAtual - last);
+        setScoreDelta(d);
+        setTimeout(() => { try { localStorage.setItem(key, String(totalAtual)); } catch {} }, 2000);
+      } else {
+        setPontuacao(null);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar dados do perfil do atleta:", err);
+      setPerfil(null);
+    } finally {
+      if (alive) setLoading(false);
     }
-  };
+  })();
 
-  const handleTreinarJuntos = () => {
-    if (!perfil?.usuario?.id) return;
-    window.location.href = `/treinar-juntos/${perfil.usuario.id}`;
-  };
-
-  const handleCompartilhar = async () => {
-    if (!perfil?.usuario?.id) return;
-    const url = `${window.location.origin}/perfil/${perfil.usuario.id}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      alert("Link do perfil copiado!");
-    } catch {
-      alert(url);
-    }
-  };
+  return () => { alive = false; };
+}, [idDaUrl, token]); // deps ok
 
   if (loading) {
     return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
@@ -288,10 +260,7 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
         <TrainingProgress
           userId={perfil.usuario.id}
           tipoUsuarioId={
-            perfil.tipoUsuarioId ??
-            perfil.atleta?.id ??
-            perfil.dadosEspecificos?.id ??
-            null
+            perfil.tipoUsuarioId ?? perfil.dadosEspecificos?.id ?? perfil.atleta?.id ?? null
           }
         />
 

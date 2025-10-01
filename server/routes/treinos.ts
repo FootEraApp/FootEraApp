@@ -27,6 +27,7 @@ import {
 } from "server/controllers/treinosController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
 import { PrismaClient, TreinoStatus } from "@prisma/client";
+import { sanitizeText, basicModerationFails } from "../utils/moderation.js"; // ajuste o caminho se necessário
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -91,9 +92,26 @@ router.post("/:treinoId/complete", async (req: any, res) => {
   const { tempoSeg, repeticoes, duracaoMinutos, observacao } = req.body || {};
 
   try {
+    // 1) segurança: só o dono pode concluir
+    const ag = await prisma.treinoAgendado.findUnique({
+      where: { id: treinoId },
+      select: { atleta: { select: { usuarioId: true } } },
+    });
+    if (!ag || ag.atleta?.usuarioId !== usuarioId) {
+      return res.status(403).json({ error: "Você não pode concluir este treino." });
+    }
+
+    // 2) sanitizar/moderar observação
+    const obs = observacao ? sanitizeText(observacao, 800) : null;
+    if (obs) {
+      const fail = basicModerationFails(obs);
+      if (fail) return res.status(422).json({ message: fail });
+    }
+
+    // 3) marcar status
     await prisma.treinoUsuario.update({
       where: { treinoId_usuarioId: { treinoId, usuarioId } },
-      data: { status: TreinoStatus.COMPLETED, completedAt: new Date(), tempoSeg, repeticoes, observacao },
+      data: { status: TreinoStatus.COMPLETED, completedAt: new Date(), tempoSeg, repeticoes, observacao: obs ?? null },
     }).catch(async () => {
       await prisma.treinoUsuario.create({
         data: {
@@ -102,23 +120,24 @@ router.post("/:treinoId/complete", async (req: any, res) => {
           status: TreinoStatus.COMPLETED,
           startedAt: new Date(),
           completedAt: new Date(),
-          tempoSeg, repeticoes, observacao,
+          tempoSeg, repeticoes, observacao: obs ?? null,
         },
       });
     });
 
+    // 4) registrar submissão (idempotente "best effort")
     await prisma.submissaoTreino.create({
       data: {
-        atletaId: usuarioId,              
-        treinoAgendadoId: treinoId,      
+        atletaId: ag.atleta!.usuarioId,   // se seu schema espera atletaId (id da tabela Atleta), ajuste aqui!
+        treinoAgendadoId: treinoId,
         duracaoMinutos: duracaoMinutos ?? null,
-        tempoSeg: typeof tempoSeg === "number" ? tempoSeg : null,
-        repeticoes: typeof repeticoes === "number" ? repeticoes : null,
-        observacao: observacao ?? null,
-        pontosCreditados: null,          
+        tempoSeg: Number.isFinite(tempoSeg) ? Number(tempoSeg) : null,
+        repeticoes: Number.isFinite(repeticoes) ? Number(repeticoes) : null,
+        observacao: obs ?? null,
+        pontosCreditados: null,
         pontuacaoSnapshot: null,
       },
-    }).catch(() => { });
+    }).catch(() => {});
 
     res.json({ ok: true });
   } catch (e) {
