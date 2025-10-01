@@ -3,6 +3,7 @@ import { PrismaClient, PosicaoCampo, Categoria, TipoTreino } from "@prisma/clien
 import { getIO } from "../socket.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
+import { sanitizeText, basicModerationFails } from "../utils/moderation.js";
 
 const prisma = new PrismaClient();
 
@@ -334,6 +335,13 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
       ? await prisma.submissaoTreino.update({ where: { id: existente.id }, data: dataCommon })
       : await prisma.submissaoTreino.create({ data: { atletaId, treinoAgendadoId, ...dataCommon } });
 
+    const obs = req.body?.observacao ? sanitizeText(req.body.observacao, 800) : null;
+    if (obs) {
+      const fail = basicModerationFails(obs);
+      if (fail) return res.status(422).json({ message: fail });
+    }
+// persista `obs`
+ 
     await recomputePontuacaoAtleta(atletaId);
     res.json({ ok: true, pontos: pontosFinais, submissao: sub });
   } catch (e) {

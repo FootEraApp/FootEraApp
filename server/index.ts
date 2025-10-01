@@ -66,9 +66,9 @@ import elencosRoutes from "./routes/elencos.js";
 import formadoresRoutes from "./routes/formadores.js";
 import scoutNotesRoutes from "./routes/scoutNotes.js";
 import checklistRoutes from "./routes/checklists.js";
+import catalogoRoutes from "./routes/catalogo.js";
 
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
-import { removerTreinosExpirados } from "./routes/removerTreinosExpirados.js";
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
@@ -142,14 +142,20 @@ app.use("/api/relacoes", relacoesRoutes);
 app.use("/api/elencos", elencosRoutes);
 app.use("/api/admin/moderacao", adminModeracaoRoutes);
 app.use("/api/formadores", formadoresRoutes);
-app.use("/api", indicacoesRouter); 
 app.use("/api/olheiros", olheirosRouter);
 app.use("/api/checklists", checklistRoutes);
+app.use("/api/catalogo", catalogoRoutes);
 app.use("/api", scoutNotesRoutes);
+app.use("/api", indicacoesRouter); 
 
 app.use("/exercicios", express.static(path.join(process.cwd(), "public", "exercicios"), {
   setHeaders: (res) => res.setHeader("Accept-Ranges", "bytes"),
 }));
+
+app.use((req, _res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 const candidates = [
   path.join(process.cwd(), "client/public/assets"),

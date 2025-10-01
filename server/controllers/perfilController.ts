@@ -4,12 +4,13 @@ import { AuthenticatedRequest } from "server/middlewares/auth.js";
 
 const prisma = new PrismaClient();
 
-function pickId(raw: any): string | null {
-  if (!raw) return null;
-  if (typeof raw === "string") return /^[0-9a-f-]{36}$/i.test(raw) ? raw : null;
-  if (raw?.id && typeof raw.id === "string") return raw.id;
-  if (Array.isArray(raw) && raw[0]?.id) return raw[0].id;
-  return null;
+function pickId(raw: any): string | undefined {
+  if (!raw) return undefined;
+  if (typeof raw === "string") return raw.trim() || undefined;
+  if (raw?.id) return String(raw.id);
+  if (raw?.value) return String(raw.value);
+  if (Array.isArray(raw) && raw[0]?.id) return String(raw[0].id);
+  return undefined;
 }
 
 function pontosDesafioInd(s: any) {
@@ -566,17 +567,36 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         telefone1: true, telefone2: true,
         nacionalidade: true, naturalidade: true,
         posicao: true, altura: true, peso: true,
-        seloQualidade: true, foto: true,
+        seloQualidade: true, foto: true, escolinhaId: true, clubeId: true
       }
     });
 
     if (atleta) {
+      const [escolaMin, clubeMin, relProf] = await Promise.all([
+        atleta.escolinhaId
+          ? prisma.escolinha.findUnique({
+              where: { id: atleta.escolinhaId },
+              select: { id: true, nome: true },
+            })
+          : null,
+        atleta.clubeId
+          ? prisma.clube.findUnique({
+              where: { id: atleta.clubeId },
+              select: { id: true, nome: true },
+            })
+          : null,
+        prisma.relacaoTreinamento.findFirst({
+          where: { atletaId: atleta.id, professorId: { not: null } },
+          include: { professor: { select: { id: true, nome: true } } },
+          orderBy: { criadoEm: "desc" },
+        }),
+      ]);
+
       dadosEspecificos = {
-        atletaId: atleta.id,
+        atletaId: atleta.id,        
         nome: atleta.nome,
         sobrenome: atleta.sobrenome,
         idade: atleta.idade,
-        cpf: atleta.cpf,
         telefone1: atleta.telefone1,
         telefone2: atleta.telefone2,
         nacionalidade: atleta.nacionalidade,
@@ -586,6 +606,11 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         peso: atleta.peso,
         seloQualidade: atleta.seloQualidade,
         foto: atleta.foto,
+        escolinhaId: atleta.escolinhaId,
+        clubeId: atleta.clubeId,
+        escola: escolaMin?.nome ?? null,
+        clube:  clubeMin?.nome  ?? null,
+        professor: relProf?.professor?.nome ?? null,
       };
       tipoPerfil = "Atleta";
     }
@@ -711,37 +736,78 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
 
     switch (tipoUsuario) {
       case "atleta": {
-        const escolinhaId =
+        let escolinhaId =
           pickId(tipo.escolinhaId) ??
           pickId(tipo.escolaId) ??
           pickId(tipo.escolinha) ??
           pickId(tipo.escola);
 
-        const clubeId = pickId(tipo.clubeId) ?? pickId(tipo.clube);
+        let clubeId = pickId(tipo.clubeId) ?? pickId(tipo.clube);
 
         console.log("[perfil.update] escolinhaId:", escolinhaId, "clubeId:", clubeId);
 
-        await prisma.atleta.update({
-          where: { usuarioId: id },
-          data: {
-            nome: tipo.nome,
-            sobrenome: tipo.sobrenome,
-            idade: isNaN(parseInt(tipo.idade)) ? undefined : parseInt(tipo.idade),
-            telefone1: tipo.telefone1,
-            telefone2: tipo.telefone2,
-            nacionalidade: tipo.nacionalidade,
-            naturalidade: tipo.naturalidade,
-            posicao: tipo.posicao,
-            altura: isNaN(parseInt(tipo.altura)) ? undefined : parseInt(tipo.altura),
-            peso: isNaN(parseInt(tipo.peso)) ? undefined : parseInt(tipo.peso),
-            seloQualidade: tipo.seloQualidade,
-            foto: fotoFinal,
-            escolinhaId,
-            clubeId,     
+        const data: any = {
+          nome: tipo.nome,
+          sobrenome: tipo.sobrenome,
+          idade: isNaN(parseInt(tipo.idade)) ? undefined : parseInt(tipo.idade),
+          telefone1: tipo.telefone1,
+          telefone2: tipo.telefone2,
+          nacionalidade: tipo.nacionalidade,
+          naturalidade: tipo.naturalidade,
+          posicao: tipo.posicao,
+          altura: isNaN(parseInt(tipo.altura)) ? undefined : parseInt(tipo.altura),
+          peso: isNaN(parseInt(tipo.peso)) ? undefined : parseInt(tipo.peso),
+          seloQualidade: tipo.seloQualidade,
+          foto: fotoFinal,
+        };
+
+        if (typeof escolinhaId !== "undefined") data.escolinhaId = escolinhaId;
+        if (typeof clubeId !== "undefined") data.clubeId = clubeId;
+
+          const atletaRow = await prisma.atleta.findUnique({
+            where: { usuarioId: id },
+            select: { id: true },
+          });
+          if (!atletaRow) {
+            return res.status(404).json({ error: "Atleta não encontrado para este usuário." });
           }
-        });
-        break;
-      }
+          const atletaId = atletaRow.id;
+
+          await prisma.$transaction(async (tx) => {
+            await tx.atleta.update({ where: { usuarioId: id }, data });
+
+            if (typeof escolinhaId !== "undefined") {
+              await tx.relacaoTreinamento.deleteMany({
+                where: { atletaId, escolinhaId: { not: escolinhaId } },
+              });
+              if (escolinhaId) {
+                const existe = await tx.relacaoTreinamento.findFirst({
+                  where: { atletaId, escolinhaId },
+                });
+                if (!existe) {
+                  await tx.relacaoTreinamento.create({ data: { atletaId, escolinhaId } });
+                }
+              }
+            }
+
+            if (typeof clubeId !== "undefined") {
+              await tx.relacaoTreinamento.deleteMany({
+                where: { atletaId, clubeId: { not: clubeId } },
+              });
+              if (clubeId) {
+                const existe = await tx.relacaoTreinamento.findFirst({
+                  where: { atletaId, clubeId },
+                });
+                if (!existe) {
+                  await tx.relacaoTreinamento.create({ data: { atletaId, clubeId } });
+                }
+              }
+            }
+          });
+
+          break;
+        }
+
       case "professor":
         await prisma.professor.update({
           where: { usuarioId: id },
@@ -821,6 +887,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
 export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   console.log("[HIT] GET /progresso", req.params);
+  
   try {
     const atleta = await prisma.atleta.findUnique({
       where: { usuarioId: id },
