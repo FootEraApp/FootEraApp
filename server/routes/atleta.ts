@@ -22,7 +22,6 @@ router.get("/:id/vinculos-basic", async (req, res) => {
   try {
     const id = req.params.id;
 
-    // pega o atleta + FKs resolvidos
     const atleta = await prisma.atleta.findFirst({
       where: { OR: [{ id }, { usuarioId: id }] },
       select: {
@@ -33,7 +32,6 @@ router.get("/:id/vinculos-basic", async (req, res) => {
     });
     if (!atleta) return res.json({ professor: null, clube: null, escolinha: null });
 
-    // relações (para professor continua valendo a mais recente)
     const [profRel, clubeRel, escolinhaRel] = await Promise.all([
       prisma.relacaoTreinamento.findFirst({
         where: { atletaId: atleta.id, NOT: { professorId: null } },
@@ -52,7 +50,6 @@ router.get("/:id/vinculos-basic", async (req, res) => {
       }),
     ]);
 
-    // ✅ prioriza o FK do atleta; se não houver, cai para a relação
     const escolaFinal = atleta.escolinha ?? escolinhaRel?.escolinha ?? null;
     const clubeFinal  = atleta.clube     ?? clubeRel?.clube     ?? null;
 

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { sanitizeText, basicModerationFails, normalizeIncomingMediaUrl, MOD, isAllowedMime } from "../utils/moderation.js";
+import { getIO } from "../socket.js"
 
 type AuthedReq = Request & { userId?: string };
 
@@ -48,24 +49,20 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
     const body = req.body as any;
     const file = (req as any).file as Express.Multer.File | undefined;
 
-    // 1) Sanitizar e limitar texto
     const rawDescricao: string | undefined = body.descricao ?? body.conteudo;
     const descricao = rawDescricao ? sanitizeText(rawDescricao, MOD.MAX_DESC_LEN) : undefined;
 
-    // 2) Regras de moderação de texto
     if (descricao) {
       const fail = basicModerationFails(descricao);
       if (fail) return res.status(422).json({ message: fail });
     }
 
-    // 3) Resolver URLs de mídia somente se whitelisted
     const reqHost = String(req.headers.host || "");
     let finalImagemUrl: string | null =
       body.imagemUrl ? normalizeIncomingMediaUrl(body.imagemUrl, reqHost) || null : null;
     let finalVideoUrl: string | null =
       body.videoUrl ? normalizeIncomingMediaUrl(body.videoUrl, reqHost) || null : null;
 
-    // 4) Upload local (já filtrado pelo multer.fileFilter)
     if (!finalImagemUrl && !finalVideoUrl && file) {
       if (!isAllowedMime(file.mimetype)) {
         return res.status(400).json({ message: "Arquivo com tipo não permitido." });
@@ -80,7 +77,6 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
       const fail = basicModerationFails(conteudo);
       if (fail) return res.status(422).json({ message: fail });
     }
-    // 5) Regras de composição: precisa de texto OU mídia
     if (!descricao && !finalImagemUrl && !finalVideoUrl) {
       return res.status(400).json({ message: "Descrição ou mídia obrigatória." });
     }
@@ -97,12 +93,23 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
         compartilhamentos: 0,
       },
       include: {
-        usuario: { select: { id: true, nome: true, foto: true } },
+        usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
         curtidas: true,
         comentarios: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
       },
     });
 
+    try {
+      const segs = await prisma.seguidor.findMany({
+        where: { seguidoUsuarioId: req.userId! },
+        select: { seguidorUsuarioId: true },
+      });
+      const rooms = [req.userId!, ...segs.map(s => s.seguidorUsuarioId)].map(id => `u:${id}`);
+      const io = getIO();
+      io?.to(rooms).emit("feed:novoPost", post);
+    } catch (e) {
+      console.warn("emit feed:novoPost falhou (não crítico):", e);
+    }
     return res.status(201).json(post);
   } catch (err: any) {
     if (err?.code === "P2002") {

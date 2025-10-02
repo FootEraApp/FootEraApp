@@ -9,7 +9,7 @@ router.get("/vinculos", authenticateToken, formadoresController.listarAtletas);
 router.post("/vinculos", authenticateToken, formadoresController.criarVinculo);
 
 router.get("/transferencias", authenticateToken, formadoresController.listarTransferencias);
-router.post("/transferencias", authenticateToken, formadoresController.criarTransferencia); // 👈 aqui!
+router.post("/transferencias", authenticateToken, formadoresController.criarTransferencia);
 
 router.post("/solidariedade/calc", authenticateToken, formadoresController.calcularSolidariedade);
 router.get("/badges", authenticateToken, formadoresController.listarBadges);

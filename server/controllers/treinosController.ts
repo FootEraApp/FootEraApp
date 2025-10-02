@@ -306,19 +306,61 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
     const { treinoAgendadoId, atletaId, pontos, tempoSeg, repeticoes } = req.body as {
       treinoAgendadoId: string; atletaId: string; pontos?: number; tempoSeg?: number; repeticoes?: number;
     };
+
     const agendado = await prisma.treinoAgendado.findUnique({
       where: { id: treinoAgendadoId },
-      include: { treinoProgramado: { select: { pontuacao: true, duracao: true, tipoTreino: true, nome: true } } },
+      include: {
+        treinoProgramado: {
+          select: { pontuacao: true, duracao: true, tipoTreino: true, nome: true }
+        }
+      },
     });
     if (!agendado) return res.status(404).json({ error: "Treino agendado não encontrado" });
 
-    const pontosFinais = (typeof pontos === "number" && pontos >= 0)
-      ? pontos
-      : (agendado.treinoProgramado?.pontuacao ?? 0);
+    const usuarioId = req.userId!;
+    const titulo = agendado.treinoProgramado?.nome ?? agendado.titulo ?? "Treino";
+
+    const conteudo = `🏅 Concluí o treino: ${titulo}${
+      Number.isFinite(Number(repeticoes)) ? ` — ${repeticoes} rep.` : ""
+    }${Number.isFinite(Number(tempoSeg)) ? ` — ${Math.round(Number(tempoSeg))}s` : ""}`;
+
+    const post = await prisma.postagem.create({
+      data: {
+        usuarioId,
+        conteudo,
+        tipoMidia: "Documento" as any,
+        imagemUrl: null,
+        videoUrl: null
+      },
+      include: {
+        usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
+        curtidas: true,
+        comentarios: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
+      },
+    });
+
+    const segs = await prisma.seguidor.findMany({
+      where: { seguidoUsuarioId: usuarioId },
+      select: { seguidorUsuarioId: true },
+    });
+    getIO()
+      ?.to([`u:${usuarioId}`, ...segs.map(s => `u:${s.seguidorUsuarioId}`)])
+      .emit("feed:novoPost", post);
+
+    const pontosFinais =
+      typeof pontos === "number" && pontos >= 0
+        ? pontos
+        : (agendado.treinoProgramado?.pontuacao ?? 0);
 
     const existente = await prisma.submissaoTreino.findFirst({
       where: { treinoAgendadoId, atletaId },
     });
+
+    const obs = req.body?.observacao ? sanitizeText(req.body.observacao, 800) : null;
+    if (obs) {
+      const fail = basicModerationFails(obs);
+      if (fail) return res.status(422).json({ message: fail });
+    }
 
     const dataCommon = {
       aprovado: true as any,
@@ -329,19 +371,13 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
       tipoTreinoSnapshot: agendado.treinoProgramado?.tipoTreino ?? undefined,
       tempoSeg: Number.isFinite(Number(tempoSeg)) ? Number(tempoSeg) : undefined,
       repeticoes: Number.isFinite(Number(repeticoes)) ? Number(repeticoes) : undefined,
+      observacao: obs ?? undefined,
     };
 
     const sub = existente
       ? await prisma.submissaoTreino.update({ where: { id: existente.id }, data: dataCommon })
       : await prisma.submissaoTreino.create({ data: { atletaId, treinoAgendadoId, ...dataCommon } });
 
-    const obs = req.body?.observacao ? sanitizeText(req.body.observacao, 800) : null;
-    if (obs) {
-      const fail = basicModerationFails(obs);
-      if (fail) return res.status(422).json({ message: fail });
-    }
-// persista `obs`
- 
     await recomputePontuacaoAtleta(atletaId);
     res.json({ ok: true, pontos: pontosFinais, submissao: sub });
   } catch (e) {

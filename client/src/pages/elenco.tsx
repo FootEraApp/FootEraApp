@@ -24,7 +24,7 @@ type PontuacaoDTO = {
 };
 
 interface Atleta {
-  id: string;    
+  id: string;       
   atletaId: string; 
   nome: string;
   foto?: string | null;
@@ -38,17 +38,17 @@ type PosicaoCampo =
   | "PD" | "CA" | "PE";
 
 const POSICOES: { id: PosicaoCampo; label: string }[] = [
-  { id: "PD", label: "Atacante (PD)" },
-  { id: "CA", label: "Atacante (CA)" },
-  { id: "PE", label: "Atacante (PE)" },
+  { id: "PD",   label: "Atacante (PD)" },
+  { id: "CA",   label: "Atacante (CA)" },
+  { id: "PE",   label: "Atacante (PE)" },
   { id: "VOL1", label: "Volante" },
-  { id: "MEI", label: "Meia" },
+  { id: "MEI",  label: "Meia" },
   { id: "VOL2", label: "Volante" },
-  { id: "LE", label: "Lateral Esq." },
-  { id: "ZE", label: "Zagueiro Esq." },
-  { id: "ZD", label: "Zagueiro Dir." },
-  { id: "LD", label: "Lateral Dir." },
-  { id: "GOL", label: "Goleiro" },
+  { id: "LE",   label: "Lateral Esq." },
+  { id: "ZE",   label: "Zagueiro Esq." },
+  { id: "ZD",   label: "Zagueiro Dir." },
+  { id: "LD",   label: "Lateral Dir." },
+  { id: "GOL",  label: "Goleiro" },
 ];
 
 interface ElencoSalvarPayload {
@@ -134,13 +134,7 @@ type CardAtletaShieldProps = {
 };
 
 const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
-  atleta,
-  ovr,
-  perf,
-  disc,
-  resp,
-  size,
-  goldenMinOVR,
+  atleta, ovr, perf, disc, resp, size, goldenMinOVR,
 }) => {
   const W = size?.w ?? SHIELD_W_DESK;
   const H = size?.h ?? SHIELD_H_DESK;
@@ -174,54 +168,33 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
           <stop offset="55%" stopColor="#daa520" stopOpacity="0.25" />
           <stop offset="100%" stopColor="#daa520" stopOpacity="0.10" />
         </linearGradient>
-
-        <linearGradient id="goldShimmer" gradientUnits="userSpaceOnUse" x1="-184" y1="0" x2="0" y2="0">
-          <stop offset="0%"   stopColor="#ffffff" stopOpacity="0" />
-          <stop offset="50%"  stopColor="#fff8dc" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-          <animate attributeName="x1" values="-184; 184" dur="2.4s" repeatCount="indefinite" />
-          <animate attributeName="x2" values="0; 368"  dur="2.4s" repeatCount="indefinite" />
-        </linearGradient>
-
-        <filter id="goldGlow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
       </defs>
 
       <g clipPath={`url(#${clipId})`}>
         <image href={fotoUrl} x="0" y="-10" width="184" height="280" preserveAspectRatio="xMidYMid slice" />
         <rect x="0" y="0" width="184" height="260" fill="url(#cardGrad)" />
-        {golden && (
-          <>
-            <rect x="0" y="0" width="184" height="260" fill="url(#goldOverlay)" />
-            <rect x="0" y="0" width="184" height="260" fill="url(#goldShimmer)" opacity="0.35" pointerEvents="none" />
-          </>
-        )}
+        {golden && <rect x="0" y="0" width="184" height="260" fill="url(#goldOverlay)" />}
       </g>
 
-      {golden && <path d={SHIELD_PATH} fill="none" stroke="#daa520" strokeWidth="3.5" filter="url(#goldGlow)" />}
+      {golden && <path d={SHIELD_PATH} fill="none" stroke="#daa520" strokeWidth="3.5" />}
       <path d={SHIELD_PATH} fill="none" stroke="url(#gold)" strokeWidth="3" />
       <path d={SHIELD_PATH} fill="none" stroke="#13244b" strokeWidth="1" />
 
-      <text x="18" y="50" fontSize="28" fontWeight={800} fill="#F7D87C" style={{ textShadow: "0 1px 2px rgba(0,0,0,.35)" }}>{ovrShow}</text>
+      <text x="18" y="50" fontSize="28" fontWeight={800} fill="#F7D87C">{ovrShow}</text>
       <text x={184 - 18} y="50" textAnchor="end" fontSize="14" fontWeight={700} fill="#d8e6ff">{atleta.posicao ?? ""}</text>
 
       <g>
         <rect x={24} y={160} rx="8" ry="8" width="44" height="28" fill="rgba(10,18,40,0.55)" stroke="#d7b46a" strokeWidth="0.6" />
         <text x={34} y={178} fontSize="12" fontWeight={800} fill="#F7D87C">P</text>
-        <text x={62} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{perfShow}</text>
+        <text x={62} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{Math.round(perf ?? 0)}</text>
 
         <rect x={70} y={160} rx="8" ry="8" width="44" height="28" fill="rgba(10,18,40,0.55)" stroke="#d7b46a" strokeWidth="0.6" />
         <text x={80} y={178} fontSize="12" fontWeight={800} fill="#F7D87C">D</text>
-        <text x={108} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{discShow}</text>
+        <text x={108} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{Math.round(disc ?? 0)}</text>
 
         <rect x={116} y={160} rx="8" ry="8" width="44" height="28" fill="rgba(10,18,40,0.55)" stroke="#d7b46a" strokeWidth="0.6" />
         <text x={126} y={178} fontSize="12" fontWeight={800} fill="#F7D87C">R</text>
-        <text x={154} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{respShow}</text>
+        <text x={154} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{Math.round(resp ?? 0)}</text>
       </g>
 
       <text x={92} y={204} textAnchor="middle" fontSize="13" fontWeight={700} fill="#ffffff">
@@ -247,6 +220,28 @@ const CardAtleta: React.FC<{ atleta: Atleta }> = ({ atleta }) => (
   </div>
 );
 
+const safeUUID = () =>
+  (globalThis.crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+
+function normalizeAtletas(raw: any): Atleta[] {
+  const list = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw?.items)
+    ? raw.items
+    : Array.isArray(raw?.atletas)
+    ? raw.atletas
+    : [];
+
+  return list.map((a: any) => ({
+    id: String(a.id ?? a.usuarioId ?? a.atletaId ?? safeUUID()),
+    atletaId: String(a.atletaId ?? a.usuarioId ?? a.id ?? ""),
+    nome: a.nome ?? a.usuario?.nome ?? a.atleta?.nome ?? "",
+    foto: a.foto ?? a.usuario?.foto ?? a.atleta?.foto ?? null,
+    idade: a.idade ?? a.usuario?.idade ?? a.atleta?.idade ?? null,
+    posicao: a.posicao ?? a.usuario?.posicao ?? a.atleta?.posicao ?? null,
+  }));
+}
+
 export default function PaginaElenco() {
   const isMobile = useIsMobile();
 
@@ -267,7 +262,6 @@ export default function PaginaElenco() {
 
   const fetchPontuacoes = async (ids: string[]) => {
     const token = Storage.token;
-    
     if (!ids.length || !token) return;
     try {
       const res = await axios.get<PontuacaoDTO[]>(PONTOS_BASE, {
@@ -351,14 +345,13 @@ export default function PaginaElenco() {
           `${API.BASE_URL}/api/treinos/atletas-vinculados`,
           { params: { tipoUsuarioId }, headers: { Authorization: `Bearer ${token}` } }
         );
-        const lista = resAtletas.data as Atleta[];
+        const lista = normalizeAtletas(resAtletas.data);
+        setAtletas(lista);
 
         const resEscala = await axios.get(`${ELENCOS_BASE}/escala-por-dono`, {
           params: { tipoUsuarioId },
           headers: { Authorization: `Bearer ${token}` },
         });
-
-        setAtletas(lista);
 
         if (resEscala.data) {
           const { id, nome, maxJogadores, escala } = resEscala.data as {
@@ -426,18 +419,18 @@ export default function PaginaElenco() {
 
   const fieldBox = useSize<HTMLDivElement>();
 
-  const rowsHeights = 4;        
-  const maxCols = 4;           
-  const gapY = 20;             
-  const gapX = 12;                 
+  const rowsHeights = 4;
+  const maxCols = 4;
+  const gapY = 20;
+  const gapX = 12;
 
   const BASE_W = isMobile ? SHIELD_W_MOB : SHIELD_W_DESK;
   const BASE_H = isMobile ? SHIELD_H_MOB : SHIELD_H_DESK;
 
   const BASE_SLOT_EXTRA = isMobile ? 48 : 64;
 
-  const baseSlotW = BASE_W + 12;               
-  const baseSlotH = BASE_H + BASE_SLOT_EXTRA;     
+  const baseSlotW = BASE_W + 12;
+  const baseSlotH = BASE_H + BASE_SLOT_EXTRA;
 
   const needW = maxCols * baseSlotW + (maxCols - 1) * gapX;
   const needH = rowsHeights * baseSlotH + (rowsHeights - 1) * gapY;
@@ -599,7 +592,7 @@ export default function PaginaElenco() {
             <span className="text-[10px] sm:text-xs font-semibold opacity-80">{label}</span>
 
             {a ? (
-              <Draggable draggableId={a.id} index={0}>
+              <Draggable draggableId={String(a.id)} index={0}>
                 {(provided2, snapshot2) => (
                   <div
                     ref={provided2.innerRef}
@@ -691,20 +684,20 @@ export default function PaginaElenco() {
               <Slot pos="PE" label="Atacante (PE)" />
             </div>
 
-            <div className="grid grid-cols-3 gap-3 md:gap-4 place-items-center" style={{ marginTop: gapY * scale }}>
+            <div className="grid grid-cols-3 gap-3 md:gap-4 place-items-center" style={{ marginTop: 20 * scale }}>
               <Slot pos="VOL1" label="Volante" />
-              <Slot pos="MEI" label="Meia" />
+              <Slot pos="MEI"  label="Meia" />
               <Slot pos="VOL2" label="Volante" />
             </div>
 
-            <div className="grid grid-cols-4 gap-2 md:gap-3 place-items-center" style={{ marginTop: gapY * scale }}>
+            <div className="grid grid-cols-4 gap-2 md:gap-3 place-items-center" style={{ marginTop: 20 * scale }}>
               <Slot pos="LE" label="Lateral Esq." />
               <Slot pos="ZE" label="Zagueiro Esq." />
               <Slot pos="ZD" label="Zagueiro Dir." />
               <Slot pos="LD" label="Lateral Dir." />
             </div>
 
-            <div className="grid grid-cols-1 place-items-center" style={{ marginTop: gapY * scale }}>
+            <div className="grid grid-cols-1 place-items-center" style={{ marginTop: 20 * scale }}>
               <Slot pos="GOL" label="Goleiro" />
             </div>
           </div>
@@ -715,8 +708,12 @@ export default function PaginaElenco() {
           <Droppable droppableId="atletas" type="ATLETA" direction={direction}>
             {(provided) => (
               <div ref={provided.innerRef} {...provided.droppableProps} className={listaClasses}>
-                {atletas.map((atleta, index) => (
-                  <Draggable key={atleta.id} draggableId={atleta.id} index={index}>
+                {(Array.isArray(atletas) ? atletas : []).map((atleta, index) => (
+                  <Draggable
+                    key={String(atleta.id ?? atleta.atletaId)}
+                    draggableId={String(atleta.id ?? atleta.atletaId)}
+                    index={index}
+                  >
                     {(provided2, snapshot) => (
                       <div
                         ref={provided2.innerRef}

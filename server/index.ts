@@ -131,7 +131,6 @@ app.use("/api/submissoes", submissoesRoutes);
 app.use("/api/termos", termoRoutes);
 app.use("/api/treinos", treinoRoutes);
 app.use("/api/treino-unico", treinoUnicoRoutes);
-app.use("/api/treinoslivres", treinoLivreRoutes);
 app.use("/api/treinosprogramados", treinoProgramadoRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
@@ -145,6 +144,7 @@ app.use("/api/formadores", formadoresRoutes);
 app.use("/api/olheiros", olheirosRouter);
 app.use("/api/checklists", checklistRoutes);
 app.use("/api/catalogo", catalogoRoutes);
+app.use("/api", treinoLivreRoutes);
 app.use("/api", scoutNotesRoutes);
 app.use("/api", indicacoesRouter); 
 

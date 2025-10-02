@@ -2,8 +2,7 @@ import { Response, RequestHandler } from "express";
 import { Request } from "express";
 import { TipoMidia, Prisma } from "@prisma/client";
 import { PrismaClient } from "@prisma/client";
-import path from "path";
-import fs from "fs-extra"
+import { getIO } from "../socket.js";
 
 const prisma = new PrismaClient;
 
@@ -197,7 +196,19 @@ export const postar: RequestHandler = async (req, res) => {
           videoUrl,
         },
       });
-
+      const postForEmit = await prisma.postagem.findUnique({
+        where: { id: postagem.id },
+        include: {
+          usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
+          curtidas: true,
+          comentarios: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
+        },
+      });
+      const segs = await prisma.seguidor.findMany({
+        where: { seguidoUsuarioId: usuarioId! },
+        select: { seguidorUsuarioId: true },
+      });
+      getIO()?.to([`u:${usuarioId}`, ...segs.map(s => `u:${s.seguidorUsuarioId}`)]).emit("feed:novoPost", postForEmit);
       return res.status(201).json(postagem);
     } catch (err: any) {
       if (err?.code === "P2002") {

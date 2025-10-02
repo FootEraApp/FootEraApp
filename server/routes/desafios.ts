@@ -51,6 +51,30 @@ router.get("/", authenticateToken, async (req, res) => {
   }
 });
 
+router.get("/minhas-submissoes", authenticateToken, async (req, res) => {
+  try {
+    const atletaId =
+      typeof req.query.atletaId === "string"
+        ? req.query.atletaId
+        : (req as any).tipoUsuarioId;
+
+    if (!atletaId) {
+      return res.status(400).json({ error: "atletaId obrigatório" });
+    }
+
+    const list = await prisma.submissaoDesafio.findMany({
+      where: { atletaId },
+      select: { desafioId: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return res.json(list);
+  } catch (err) {
+    console.error("Erro ao buscar minhas submissões de desafio:", err);
+    return res.status(500).json({ error: "Erro interno" });
+  }
+});
+
 router.get("/submissoes", authenticateToken, async (req, res) => {
   try {
     const viewerId = (req as any).userId as string;
