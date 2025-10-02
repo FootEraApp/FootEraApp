@@ -1,4 +1,4 @@
-import { useEffect, useState, type SVGProps } from "react";
+import React, { useEffect, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
   CalendarClock,
@@ -18,7 +18,6 @@ import {
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { Badge } from "@/components/ui/badge.js";
-import AcoesTreino from "../components/treinos/acoestreino.js"
 
 const tipoUser =
   String(
@@ -144,6 +143,14 @@ function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+type TreinoStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "EXPIRED";
+
+const getToken = () =>
+  (Storage as any).token ??
+  localStorage.getItem("token") ??
+  sessionStorage.getItem("token") ??
+  "";
+
 export default function PaginaTreinos() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
@@ -166,11 +173,83 @@ export default function PaginaTreinos() {
   const [idsAgendadosSubmetidos, setIdsAgendadosSubmetidos] = useState<Set<string>>(new Set());
   const [idsProgramadosSubmetidos, setIdsProgramadosSubmetidos] = useState<Set<string>>(new Set());
   const [idsDesafiosSubmetidos, setIdsDesafiosSubmetidos] = useState<Set<string>>(new Set());
+ 
+  const [statusPorTreino, setStatusPorTreino] =
+    useState<Record<string, { status: string; startedAt?: string|null; completedAt?: string|null }>>({});
+
+  async function carregarStatus(id: string) {
+    const token = getToken();
+    if (!token) return;
+    const r = await fetch(`${API.BASE_URL}/api/treinos/${id}/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (r.ok) {
+      const js = await r.json();
+      setStatusPorTreino((prev) => ({ ...prev, [id]: js }));
+    }
+  }
+
+  useEffect(() => {
+    treinosAgendados.forEach(t => carregarStatus(t.id));
+  }, [treinosAgendados]);
 
   useEffect(() => {
     const handler = (e: any) => setTreinosAgendados((prev) => [e.detail, ...prev]);
     window.addEventListener("treino:agendado", handler as EventListener);
     return () => window.removeEventListener("treino:agendado", handler as EventListener);
+  }, []);
+
+  async function iniciar(treinoAgendadoId: string) {
+    const token = getToken();
+    if (!token) {
+      alert("Sessão expirada. Faça login novamente.");
+      return;
+    }
+
+    const r = await fetch(
+      `${API.BASE_URL}/api/treinos/agendados/${treinoAgendadoId}/iniciar`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      console.error("Falha ao iniciar treino:", r.status, txt);
+      alert(r.status === 401
+        ? "Sessão expirada. Faça login novamente."
+        : "Não foi possível iniciar o treino.");
+      return;
+    }
+
+    setStatusPorTreino((prev) => ({
+      ...prev,
+      [treinoAgendadoId]: {
+        ...(prev[treinoAgendadoId] ?? {}),
+        status: "IN_PROGRESS",
+      },
+    }));
+  }
+
+  useEffect(() => {
+    const token =
+      (Storage as any).token ?? localStorage.getItem("token") ?? undefined;
+    if (!token) return;
+
+    (async () => {
+      const res = await fetch(`${API.BASE_URL}/api/treinos/minhas-submissoes`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const rows: Array<{ treinoAgendadoId: string }> = await res.json();
+      setIdsAgendadosSubmetidos(
+        new Set(rows.map((r) => r.treinoAgendadoId).filter(Boolean))
+      );
+    })();
   }, []);
 
   async function carregarMinhasSubmissoes(atletaId: string) {
@@ -595,8 +674,8 @@ export default function PaginaTreinos() {
     const prazoIso = treino.prazoEnvio ?? treino.dataTreino ?? treino.treinoProgramado?.dataAgendada ?? null;
     const exercicios = programado?.exercicios ?? [];
     const pontos = programado?.pontuacao ?? null;
-
     const jaSubmetido = idsAgendadosSubmetidos.has(treino.id);
+    const st = statusPorTreino[treino.id]?.status as TreinoStatus | undefined;
 
     return (
       <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
@@ -668,7 +747,22 @@ export default function PaginaTreinos() {
           </div>
         )}
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex gap-2 justify-end">
+          {(st === undefined || st === "PENDING") && (
+            <button
+              onClick={() => iniciar(treino.id)}
+              className="bg-green-700 text-white px-3 py-2 rounded-lg"
+            >
+              Iniciar
+            </button>
+          )}
+
+          {st === "IN_PROGRESS" && (
+            <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Em andamento
+            </span>
+          )}
+
           {!jaSubmetido && (
             <button
               onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
@@ -676,9 +770,6 @@ export default function PaginaTreinos() {
             >
               Fazer Submissão
             </button>
-          )}
-          {jaSubmetido && (
-            <span className="text-xs text-gray-500">Você já enviou submissão para este treino.</span>
           )}
         </div>
       </div>
@@ -818,16 +909,31 @@ export default function PaginaTreinos() {
           {usuario.tipo === "atleta" && (
             <div className="space-y-6">
               <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3">
                   <h3 className="text-lg font-semibold">Meus Treinos</h3>
-                  <button
-                    className="bg-green-800 text-white px-4 py-2 rounded-lg text-sm"
-                    onClick={() => navigate("/treinos/novo")}
-                  >
-                    Agendar novo treino
-                  </button>
-                </div>
+                  <div className="flex gap-2">
+                    <button
+                      className="bg-green-800 text-white px-4 py-2 rounded-lg text-sm"
+                      onClick={() => navigate("/treinos/novo")}
+                    >
+                      Agendar novo treino
+                    </button>
 
+                    <button
+                      className="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm"
+                      onClick={() => navigate("/treinos/livre/novo")}
+                    >
+                      Registrar treino livre
+                    </button>
+
+                    <button
+                      className="bg-white border border-emerald-300 text-emerald-800 px-4 py-2 rounded-lg text-sm"
+                      onClick={() => navigate("/treinos/livre/historico")}
+                    >
+                      Histórico de treinos livres
+                    </button>
+                  </div>
+                </div>
                 {treinosAgendadosVisiveis.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {treinosAgendadosVisiveis.map(renderTreinoAgendadoCard)}

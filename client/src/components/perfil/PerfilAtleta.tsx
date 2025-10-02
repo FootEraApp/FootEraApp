@@ -125,7 +125,7 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   useEffect(() => {
   if (!token) return;
 
-  let alive = true; // evita setState depois do unmount
+  let alive = true;
   (async () => {
     setLoading(true);
     try {
@@ -140,7 +140,6 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
       const uid = (meOuOutro?.usuario?.id as string) || alvoUsuarioId || null;
       setUsuarioId(uid);
 
-      // valores inline (fallback inicial)
       let escola = meOuOutro?.dadosEspecificos?.escola ?? null;
       let clube  = meOuOutro?.dadosEspecificos?.clube  ?? null;
       let prof   = meOuOutro?.dadosEspecificos?.professor ?? null;
@@ -153,7 +152,6 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
           alvoUsuarioId;
 
         try {
-          // >>> preferir SEMPRE o que vem do vinculos-basic
           const { data: vinc } = await axios.get(
             `${API.BASE_URL}/api/atletas/${idParaConsulta}/vinculos-basic`,
             { headers }
@@ -164,11 +162,9 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
           clube  = vinc?.clube?.nome     ?? clube;
           prof   = vinc?.professor?.nome ?? prof;
         } catch (e) {
-          // fica com os inline se der erro
-        }
+       }
       }
 
-      // 🔒 aplica tudo de uma vez, sem duplas escritas que brigam entre si
       setEscolaNome(escola);
       setClubeNome(clube);
       setProfessor(prof ? { nome: prof } : null);
@@ -214,7 +210,7 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   })();
 
   return () => { alive = false; };
-}, [idDaUrl, token]); // deps ok
+}, [idDaUrl, token]);
 
   if (loading) {
     return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;

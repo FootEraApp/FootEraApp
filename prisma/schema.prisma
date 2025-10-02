@@ -623,13 +623,17 @@ model TreinoAgendado {
 }
 
 model TreinoLivre {
-  id         String           @id @default(uuid())
-  atletaId   String
-  data       DateTime
-  descricao  String?
-  duracaoMin Int?
-  registros  RegistroTreino[]
-  atleta     Atleta           @relation(fields: [atletaId], references: [id])
+  id             String           @id @default(cuid())
+  atletaId       String
+  atleta         Atleta           @relation(fields: [atletaId], references: [id])
+  data           DateTime
+  descricao      String
+  duracaoMin     Int
+  tipoAtividade  String?
+  categoria      String?
+  urlEvidencia   String?
+  createdAt      DateTime         @default(now())
+  RegistroTreino RegistroTreino[]
 }
 
 model RegistroTreino {

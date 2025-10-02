@@ -33,14 +33,13 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB p/ post (reducei pra algo mais seguro)
+  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (isAllowedMime(file.mimetype)) return cb(null, true);
     cb(new Error("Tipo de arquivo não permitido (somente imagens JPEG/PNG/WEBP/GIF ou vídeo MP4/WEBM)."));
   },
 });
 
-// 10 posts / hora / usuário | 60 comentários / hora / usuário
 const postLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 10,

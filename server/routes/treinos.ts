@@ -27,7 +27,7 @@ import {
 } from "server/controllers/treinosController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
 import { PrismaClient, TreinoStatus } from "@prisma/client";
-import { sanitizeText, basicModerationFails } from "../utils/moderation.js"; // ajuste o caminho se necessário
+import { sanitizeText, basicModerationFails } from "../utils/moderation.js";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -92,7 +92,6 @@ router.post("/:treinoId/complete", async (req: any, res) => {
   const { tempoSeg, repeticoes, duracaoMinutos, observacao } = req.body || {};
 
   try {
-    // 1) segurança: só o dono pode concluir
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id: treinoId },
       select: { atleta: { select: { usuarioId: true } } },
@@ -101,14 +100,12 @@ router.post("/:treinoId/complete", async (req: any, res) => {
       return res.status(403).json({ error: "Você não pode concluir este treino." });
     }
 
-    // 2) sanitizar/moderar observação
     const obs = observacao ? sanitizeText(observacao, 800) : null;
     if (obs) {
       const fail = basicModerationFails(obs);
       if (fail) return res.status(422).json({ message: fail });
     }
 
-    // 3) marcar status
     await prisma.treinoUsuario.update({
       where: { treinoId_usuarioId: { treinoId, usuarioId } },
       data: { status: TreinoStatus.COMPLETED, completedAt: new Date(), tempoSeg, repeticoes, observacao: obs ?? null },
@@ -125,10 +122,9 @@ router.post("/:treinoId/complete", async (req: any, res) => {
       });
     });
 
-    // 4) registrar submissão (idempotente "best effort")
     await prisma.submissaoTreino.create({
       data: {
-        atletaId: ag.atleta!.usuarioId,   // se seu schema espera atletaId (id da tabela Atleta), ajuste aqui!
+        atletaId: ag.atleta!.usuarioId,  
         treinoAgendadoId: treinoId,
         duracaoMinutos: duracaoMinutos ?? null,
         tempoSeg: Number.isFinite(tempoSeg) ? Number(tempoSeg) : null,
