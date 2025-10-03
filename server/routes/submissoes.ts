@@ -4,6 +4,7 @@ import { authenticateToken, AuthenticatedRequest } from "../middlewares/auth.js"
 import {
   criarSubmissaoTreinoUpload,
   criarSubmissaoDesafioUpload,
+  getUltimaSubmissaoTreino
 } from "../controllers/submissoesController.js";
 
 const router = Router();
@@ -29,6 +30,12 @@ router.post(
   authenticateToken,
   upload.single("arquivo"),
   (req: AuthenticatedRequest, res) => criarSubmissaoDesafioUpload(req, res)
+);
+
+router.get(
+  "/treino/ultima",
+  authenticateToken,
+  (req: AuthenticatedRequest, res) => getUltimaSubmissaoTreino(req, res)
 );
 
 export default router;

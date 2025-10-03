@@ -18,15 +18,25 @@ async function resolveUsuarioIdForActivity(reqUserId: string | undefined, atleta
 
 export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
   try {
-    const { observacao, treinoAgendadoId, atletaId, aprovado, duracaoMinutos } = req.body as {
+    const {
+      observacao,
+      treinoAgendadoId,
+      atletaId,
+      aprovado,
+      duracaoMinutos,
+      tempoSeg,
+      repeticoes,
+    } = req.body as {
       observacao?: string;
       treinoAgendadoId: string;
       atletaId: string;
       aprovado?: boolean | string;
       duracaoMinutos?: number | string;
+      tempoSeg?: number | string;    
+      repeticoes?: number | string;  
     };
-    const file = (req as any).file as Express.Multer.File | undefined;
 
+    const file = (req as any).file as Express.Multer.File | undefined;
     if (!treinoAgendadoId || !atletaId || !file) {
       return res.status(400).json({ error: "Dados obrigatórios ausentes." });
     }
@@ -44,6 +54,13 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
 
     const usuarioIdForActivity = await resolveUsuarioIdForActivity((req as any).userId, atletaId);
 
+    const tempoSegNum =
+      tempoSeg != null ? Number(tempoSeg)
+      : duracaoMinutos != null ? Math.round(Number(duracaoMinutos) * 60)
+      : undefined;
+
+    const repeticoesNum = repeticoes != null ? Number(repeticoes) : undefined;
+
     const created = await prisma.submissaoTreino.create({
       data: {
         treinoAgendadoId,
@@ -52,6 +69,8 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
         usuarioId: typeof (req as any).userId === "string" ? (req as any).userId : undefined,
         duracaoMinutos: duracaoMinutos ? Number(duracaoMinutos) : undefined,
         aprovado: String(aprovado) === "true",
+        tempoSeg: tempoSegNum,
+        repeticoes: repeticoesNum,
         midias: { create: [midia] },
       },
       select: { id: true, aprovado: true },
@@ -96,7 +115,9 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
         created.id,
         atletaId,
         treinoAgendadoId,
-        duracaoMinutos ? Number(duracaoMinutos) : undefined
+        duracaoMinutos ? Number(duracaoMinutos) :
+        tempoSegNum != null ? Math.round(tempoSegNum / 60) :
+        undefined
       ).catch(() => {});
       const atleta = await prisma.atleta.findUnique({ where: { id: atletaId }, select: { usuarioId: true } });
       if (atleta?.usuarioId) atualizarCachePontuacao(atleta.usuarioId).catch(() => {});
@@ -111,12 +132,24 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
 
 export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
   try {
-    const { desafioId, atletaId, observacao, videoUrl: rawVideoUrl } = req.body as {
+    const {
+      desafioId,
+      atletaId,
+      observacao,
+      videoUrl: rawVideoUrl,
+      tempoMs,
+      tempoSeg,
+      repeticoes,
+    } = req.body as {
       desafioId: string;
       atletaId: string;
       observacao?: string;
       videoUrl?: string;
+      tempoMs?: number | string;
+      tempoSeg?: number | string;
+      repeticoes?: number | string;
     };
+
     const file = (req as any).file as Express.Multer.File | undefined;
 
     if (!desafioId || !atletaId) {
@@ -131,12 +164,18 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
 
     const uploadedUrl = file ? `/uploads/${file.filename}` : undefined;
     const finalVideoUrl = (uploadedUrl ?? (rawVideoUrl && String(rawVideoUrl).trim())) || null;
-
     if (!finalVideoUrl) {
       return res.status(400).json({ message: "Envie um vídeo (arquivo ou videoUrl)." });
     }
 
     const isVideo = file ? file.mimetype?.startsWith("video") : true;
+
+    const tempoMsNum =
+      tempoMs != null ? Number(tempoMs)
+      : tempoSeg != null ? Math.round(Number(tempoSeg) * 1000)
+      : undefined;
+
+    const repeticoesNum = repeticoes != null ? Number(repeticoes) : undefined;
 
     const created = await prisma.submissaoDesafio.create({
       data: {
@@ -145,6 +184,8 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
         videoUrl: finalVideoUrl,
         observacao,
         aprovado: true,
+        tempoMs: tempoMsNum,
+        repeticoes: repeticoesNum,
         ...(uploadedUrl
           ? {
               midias: {
@@ -179,3 +220,25 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
   }
 }
 
+export async function getUltimaSubmissaoTreino(req: Request, res: Response) {
+  try {
+    const { atletaId, treinoAgendadoId } = req.query as {
+      atletaId?: string;
+      treinoAgendadoId?: string;
+    };
+    if (!atletaId || !treinoAgendadoId) {
+      return res.status(400).json({ message: "Informe atletaId e treinoAgendadoId" });
+    }
+
+    const s = await prisma.submissaoTreino.findFirst({
+      where: { atletaId, treinoAgendadoId },
+      orderBy: { criadoEm: "desc" },
+      select: { tempoSeg: true, repeticoes: true, aprovado: true, criadoEm: true },
+    });
+
+    return res.json(s);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ message: "Erro ao buscar submissão." });
+  }
+}

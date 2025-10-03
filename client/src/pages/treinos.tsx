@@ -800,7 +800,14 @@ export default function PaginaTreinos() {
 
           {st === "IN_PROGRESS" && (
             <button
-              onClick={() => concluir(treino.id)}
+              onClick={() => {
+                const t = prompt("Tempo em segundos (opcional):") ?? "";
+                const r = prompt("Repetições (opcional):") ?? "";
+                concluir(treino.id, {
+                  tempoSeg: t ? Number(t) : undefined,
+                  repeticoes: r ? Number(r) : undefined,
+                });
+              }}
               className="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg"
             >
               Concluir agora
