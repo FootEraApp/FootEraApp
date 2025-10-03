@@ -41,7 +41,8 @@ router.post("/agendados/:id/iniciar", authenticateToken, iniciarTreino);
 router.get("/agendados", authenticateToken, getTreinosAgendados);
 router.post("/agendados", authenticateToken, agendarTreino);
 router.delete("/agendados/:id", authenticateToken, excluirTreinoAgendado);
-router.post("/concluir", authenticateToken, concluirTreino);
+router.post("/agendados/:id/complete", authenticateToken, concluirTreino);
+
 
 router.get("/minhas-submissoes", authenticateToken, listarMinhasSubmissoesTreino);
 

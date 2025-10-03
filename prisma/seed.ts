@@ -924,6 +924,110 @@ await prisma.usuario.upsert({
     categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
     videoDemonstrativoUrl: '/assets/videos/exercicios/prancha-alternada.mp4',
   },
+    {
+    codigo: 'EX071',
+    nome: 'Coordenação + Salto + Mudança de Direção',
+    descricao: 'Sequência que combina escada de agilidade, salto sobre obstáculo e corte rápido para trocar de direção, finalizando com aceleração curta. Trabalha coordenação motora, potência de salto e reatividade nas transições.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-salto-mudanca-direcao.mp4'
+  },
+  {
+    codigo: 'EX072',
+    nome: 'Passe + Movimentação em V',
+    descricao: 'Troca de passes com “toca e sai” formando um V, recebendo de frente com primeiro toque orientado para acelerar a próxima ação. Desenvolve criação de ângulo, tempo de desmarque e controle/passe rápido sob pressão.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/passe-movimentacao-em-V.mp4'
+  },
+  {
+    codigo: 'EX073',
+    nome: 'Coordenação + Domínio Orientado 001',
+    descricao: 'Sequência com escada/cones para ritmo de pés e troca de apoios, seguida de recepção com primeiro toque orientado para o espaço livre e passe/saída. Desenvolve coordenação fina, orientação corporal e decisão rápida ao receber a bola.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-dominio-orientado-001.mp4'
+  },
+  {
+    codigo: 'EX074',
+    nome: 'Coordenação + Passe Alto 001',
+    descricao: 'Combina ritmo de pés em escada/cones com recepção de bola aérea (amortecer no peito ou cabecear suave) e devolução em passe alto dirigido. Desenvolve coordenação, leitura de trajetória e timing de apoio, além do gesto técnico do passe alto com precisão.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-passe-alto-001.mp4'
+  },
+  {
+    codigo: 'EX075',
+    nome: 'Salto Unilateral + Passe Alto + Cabeceio',
+    descricao: 'Sequência com salto em um apoio para estabilizar e atacar a bola alta, recebendo passe levantado e finalizando de cabeça ao alvo. Trabalha potência unilateral, equilíbrio, timing de impulsão/cabeceio e aterrissagem segura.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/salto-unilateral-passe-alto-cabeceio.mp4'
+  },
+  {
+    codigo: 'EX076',
+    nome: 'Passe Curto + Longo + Domínio Orientado',
+    descricao: 'Alterna passe curto para apoio, virada de corpo e passe longo diagonal; recebe e orienta o primeiro toque para o espaço antes de devolver. Melhora leitura de jogo, perfil corporal, qualidade do primeiro toque e variação de distância do passe.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/passe-curto-longo-dominio-orientado.mp4'
+  },
+  {
+    codigo: 'EX077',
+    nome: 'Passe + Domínio Orientado no Quadrante',
+    descricao: 'Recepção dentro do quadrante, primeiro toque para sair da zona pressionada e passe de progressão alternando lados. Desenvolve leitura espacial, perfil corporal e precisão/tempo de passe ao mudar rapidamente de corredor.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/passe-dominio-orientado-no-quadrante.mp4'
+  },
+  {
+    codigo: 'EX078',
+    nome: 'Coordenativo Podal',
+    descricao: 'Sequência de ritmo de pés com alternância direita–esquerda, toques curtos e variações (dentro/fora, frente/trás) em escada ou cones mantendo cadência alta. Trabalha coordenação neuromuscular, agilidade de tornozelo e precisão de apoios para acelerar mudanças de direção.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-podal.mp4'
+  },
+  {
+    codigo: 'EX079',
+    nome: 'Coordenação + Passe Alto',
+    descricao: 'Ritmo de pés em escada/cones seguido de recepção/controle da bola alta e devolução em passe elevado ao alvo. Trabalha coordenação de apoios, leitura de trajetória e gesto técnico do passe alto com precisão e timing.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-passe-alto.mp4'
+  },
+  {
+    codigo: 'EX080',
+    nome: 'Frente–Costas em V + Passe 001',
+    descricao: 'Deslocamentos frente–costas formando um V, com variação de ritmo e giro de quadril para receber e tocar de primeira no apoio. Desenvolve coordenação de apoios, aceleração após a mudança de direção e qualidade do passe em movimento.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas-em-V-passe-001.mp4'
+  },
+  {
+    codigo: 'EX081',
+    nome: 'Frente–Costas em V + Passe Alto + Cabeceio',
+    descricao: 'Deslocamentos frente–costas em V para criar tempo/ângulo, seguido de passe levantado e finalização de cabeça ao alvo. Trabalha coordenação de apoios, timing de impulsão/cabeceio e estabilidade na aterrissagem.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas-em-V-passe-alto-cabeceio.mp4'
+  },
+  {
+    codigo: 'EX082',
+    nome: 'Frente–Costas em V + Passe + Domínio Orientado',
+    descricao: 'Alterna deslocamentos frente–costas em V para criar ângulo; ao receber, orienta o primeiro toque para sair da pressão e devolve com precisão. Desenvolve coordenação de apoios, perfil corporal, leitura espacial e progressão rápida sob pressão.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas-em-V-passe-dominio-orientado.mp4'
+  },
+  {
+    codigo: 'EX083',
+    nome: 'Passe + Domínio',
+    descricao: 'Troca de passes curtos com recepção limpa e primeiro toque orientado para preparar a próxima ação. Desenvolve controle de bola, perfil corporal e precisão/tempo do passe sob ritmo.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/passe-dominio.mp4'
+  },
   ];
   for (const ex of exercicios) {
     await prisma.exercicio.upsert({

@@ -1,5 +1,5 @@
 import { Response, Request } from "express";
-import { PrismaClient, PosicaoCampo, Categoria, TipoTreino } from "@prisma/client";
+import { PrismaClient, PosicaoCampo, Categoria, TipoTreino, TreinoStatus } from "@prisma/client";
 import { getIO } from "../socket.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
@@ -303,21 +303,32 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
 
 export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
   try {
-    const { treinoAgendadoId, atletaId, pontos, tempoSeg, repeticoes } = req.body as {
-      treinoAgendadoId: string; atletaId: string; pontos?: number; tempoSeg?: number; repeticoes?: number;
+    const usuarioId = req.userId!;
+    const treinoAgendadoId = String((req.body?.treinoAgendadoId ?? req.params?.id) || "");
+    let { atletaId, pontos, tempoSeg, repeticoes, duracaoMinutos } = (req.body ?? {}) as {
+      atletaId?: string; pontos?: number; tempoSeg?: number; repeticoes?: number; duracaoMinutos?: number;
     };
+
+    if (!atletaId) {
+      const at = await prisma.atleta.findUnique({ where: { usuarioId }, select: { id: true } });
+      atletaId = at?.id || "";
+    }
+    if (!treinoAgendadoId || !atletaId) {
+      return res.status(400).json({ error: "treinoAgendadoId e atletaId são obrigatórios" });
+    }
 
     const agendado = await prisma.treinoAgendado.findUnique({
       where: { id: treinoAgendadoId },
       include: {
-        treinoProgramado: {
-          select: { pontuacao: true, duracao: true, tipoTreino: true, nome: true }
-        }
+        atleta: { select: { usuarioId: true } },
+        treinoProgramado: { select: { pontuacao: true, duracao: true, tipoTreino: true, nome: true } },
       },
     });
     if (!agendado) return res.status(404).json({ error: "Treino agendado não encontrado" });
+    if (agendado.atleta?.usuarioId !== usuarioId) {
+      return res.status(403).json({ error: "Você não pode concluir este treino" });
+    }
 
-    const usuarioId = req.userId!;
     const titulo = agendado.treinoProgramado?.nome ?? agendado.titulo ?? "Treino";
 
     const conteudo = `🏅 Concluí o treino: ${titulo}${
@@ -325,13 +336,7 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
     }${Number.isFinite(Number(tempoSeg)) ? ` — ${Math.round(Number(tempoSeg))}s` : ""}`;
 
     const post = await prisma.postagem.create({
-      data: {
-        usuarioId,
-        conteudo,
-        tipoMidia: "Documento" as any,
-        imagemUrl: null,
-        videoUrl: null
-      },
+      data: { usuarioId, conteudo, tipoMidia: "Documento" as any, imagemUrl: null, videoUrl: null },
       include: {
         usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
         curtidas: true,
@@ -343,18 +348,10 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
       where: { seguidoUsuarioId: usuarioId },
       select: { seguidorUsuarioId: true },
     });
-    getIO()
-      ?.to([`u:${usuarioId}`, ...segs.map(s => `u:${s.seguidorUsuarioId}`)])
-      .emit("feed:novoPost", post);
+    getIO()?.to([`u:${usuarioId}`, ...segs.map(s => `u:${s.seguidorUsuarioId}`)]).emit("feed:novoPost", post);
 
     const pontosFinais =
-      typeof pontos === "number" && pontos >= 0
-        ? pontos
-        : (agendado.treinoProgramado?.pontuacao ?? 0);
-
-    const existente = await prisma.submissaoTreino.findFirst({
-      where: { treinoAgendadoId, atletaId },
-    });
+      typeof pontos === "number" && pontos >= 0 ? pontos : (agendado.treinoProgramado?.pontuacao ?? 0);
 
     const obs = req.body?.observacao ? sanitizeText(req.body.observacao, 800) : null;
     if (obs) {
@@ -362,11 +359,16 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
       if (fail) return res.status(422).json({ message: fail });
     }
 
+    const duracaoFinal =
+      Number.isFinite(Number(duracaoMinutos)) ? Number(duracaoMinutos) : (agendado.treinoProgramado?.duracao ?? undefined);
+
+    const existente = await prisma.submissaoTreino.findFirst({ where: { treinoAgendadoId, atletaId } });
+
     const dataCommon = {
       aprovado: true as any,
       pontuacaoSnapshot: pontosFinais > 0 ? pontosFinais : undefined,
       pontosCreditados:  pontosFinais > 0 ? pontosFinais : undefined,
-      duracaoMinutos: agendado.treinoProgramado?.duracao ?? undefined,
+      duracaoMinutos: duracaoFinal,
       treinoTituloSnapshot: agendado.treinoProgramado?.nome ?? agendado.titulo ?? undefined,
       tipoTreinoSnapshot: agendado.treinoProgramado?.tipoTreino ?? undefined,
       tempoSeg: Number.isFinite(Number(tempoSeg)) ? Number(tempoSeg) : undefined,
@@ -377,6 +379,18 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
     const sub = existente
       ? await prisma.submissaoTreino.update({ where: { id: existente.id }, data: dataCommon })
       : await prisma.submissaoTreino.create({ data: { atletaId, treinoAgendadoId, ...dataCommon } });
+
+    await prisma.treinoUsuario.upsert({
+      where: { treinoId_usuarioId: { treinoId: treinoAgendadoId, usuarioId } },
+      update: { status: TreinoStatus.COMPLETED, completedAt: new Date() },
+      create: {
+        treinoId: treinoAgendadoId,
+        usuarioId,
+        status: TreinoStatus.COMPLETED,
+        startedAt: new Date(),
+        completedAt: new Date(),
+      },
+    });
 
     await recomputePontuacaoAtleta(atletaId);
     res.json({ ok: true, pontos: pontosFinais, submissao: sub });
@@ -397,8 +411,8 @@ export async function iniciarTreino(req: AuthenticatedRequest, res: Response) {
 
     const started = await prisma.treinoUsuario.upsert({
       where: { treinoId_usuarioId: { treinoId: treinoAgendadoId, usuarioId } },
-      create: { treinoId: treinoAgendadoId, usuarioId, status: "IN_PROGRESS", startedAt: new Date() },
-      update: { status: "IN_PROGRESS", startedAt: new Date() },
+      create: { treinoId: treinoAgendadoId, usuarioId, status: TreinoStatus.IN_PROGRESS, startedAt: new Date() },
+      update: { status: TreinoStatus.IN_PROGRESS, startedAt: new Date() },
     });
 
     res.json({ ok: true, started });
@@ -778,13 +792,6 @@ export async function atualizarElenco(req: AuthenticatedRequest, res: Response) 
           skipDuplicates: true,
         });
       }
-
-    if (vinculos.length) {
-      await prisma.atletaElenco.createMany({
-        data: vinculos.map(v => ({ elencoId: id, atletaId: v.atletaId, posicao: v.posicao })),
-        skipDuplicates: true,
-      });
-    }
 
     const setNovos = new Set(vinculos.map(v => v.atletaId));
     const removidos = vinculadosAtuais.map(v => v.atletaId).filter(a => !setNovos.has(a));
@@ -1263,6 +1270,24 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
       }
     }
 
+    const treinoIdForKey =
+      (sub as any).treinoAgendadoId || sub.treinoAgendado?.id || null;
+    const usuarioIdDoAtleta = sub.atleta?.usuarioId || null;
+
+    if (treinoIdForKey && usuarioIdDoAtleta) {
+      await prisma.treinoUsuario.upsert({
+        where: { treinoId_usuarioId: { treinoId: treinoIdForKey, usuarioId: usuarioIdDoAtleta } },
+        update: { status: TreinoStatus.COMPLETED, completedAt: new Date() },
+        create: {
+          treinoId: treinoIdForKey,
+          usuarioId: usuarioIdDoAtleta,
+          status: TreinoStatus.COMPLETED,
+          startedAt: new Date(),
+          completedAt: new Date(),
+        },
+      });
+    }
+    
     const pontosBase  = sub.pontuacaoSnapshot ?? sub.treinoAgendado?.treinoProgramado?.pontuacao ?? 0;
     const pontosFinais = aprovado
       ? (Number.isFinite(Number(req.body?.pontos)) ? Number(req.body.pontos)
