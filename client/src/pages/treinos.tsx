@@ -199,6 +199,47 @@ export default function PaginaTreinos() {
     return () => window.removeEventListener("treino:agendado", handler as EventListener);
   }, []);
 
+  async function concluir(
+  treinoAgendadoId: string,
+  payload?: { observacao?: string; duracaoMinutos?: number; tempoSeg?: number; repeticoes?: number }
+) {
+  const token = getToken();
+  if (!token) return alert("Sessão expirada. Faça login novamente.");
+
+  try {
+    const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${treinoAgendadoId}/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ treinoAgendadoId, ...(payload || {}) }),
+    });
+
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      console.error("Falha ao concluir treino:", r.status, txt);
+      return alert("Não foi possível concluir o treino.");
+    }
+
+    setStatusPorTreino(prev => ({
+      ...prev,
+      [treinoAgendadoId]: {
+        ...(prev[treinoAgendadoId] ?? {}),
+        status: "COMPLETED",
+        completedAt: new Date().toISOString(),
+      },
+    }));
+    setIdsAgendadosSubmetidos(prev => {
+      const s = new Set(prev);
+      s.add(treinoAgendadoId);
+      return s;
+    });
+
+    alert("Treino concluído!");
+  } catch (e) {
+    console.error(e);
+    alert("Erro inesperado ao concluir o treino.");
+  }
+}
+
   async function iniciar(treinoAgendadoId: string) {
     const token = getToken();
     if (!token) {
@@ -758,8 +799,17 @@ export default function PaginaTreinos() {
           )}
 
           {st === "IN_PROGRESS" && (
+            <button
+              onClick={() => concluir(treino.id)}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg"
+            >
+              Concluir agora
+            </button>
+          )}
+
+          {st === "COMPLETED" && (
             <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-              Em andamento
+              Concluído
             </span>
           )}
 

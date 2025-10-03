@@ -220,8 +220,15 @@ const CardAtleta: React.FC<{ atleta: Atleta }> = ({ atleta }) => (
   </div>
 );
 
-const safeUUID = () =>
-  (globalThis.crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+const safeUUID = () => {
+  try {
+    const c: any = (globalThis as any).crypto;
+    if (c && typeof c.randomUUID === "function") {
+      return c.randomUUID();
+    }
+  } catch {}
+   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`;
+};
 
 function normalizeAtletas(raw: any): Atleta[] {
   const list = Array.isArray(raw)
