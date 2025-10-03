@@ -486,6 +486,7 @@ model SubmissaoDesafio {
   resultadoDeclarado Float?
   tempoMs            Int?
   unidadeResultado   String?
+  repeticoes         Int?
   comentarios        Comentario[]
   curtidas           Curtida[]
   midias             Midia[]                   @relation("Midias_SubmissaoDesafio")

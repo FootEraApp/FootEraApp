@@ -11,8 +11,22 @@ export default function PaginaSubmissao() {
   const [treinoAgendadoId, setTreinoAgendadoId] = useState<string | null>(null);
   const [desafioId, setDesafioId] = useState<string | null>(null);
   const [atletaId, setAtletaId] = useState<string | null>(null);
+  const [tempoTexto, setTempoTexto] = useState("");
+  const [reps, setReps] = useState<string>("");
 
   const [location] = useLocation();
+
+  function parseTempoToSeconds(v: string): number | undefined {
+    const s = v.trim();
+    if (!s) return undefined;
+    if (s.includes(":")) {
+      const [m, sec] = s.split(":").map(Number);
+      if (Number.isFinite(m) && Number.isFinite(sec)) return m * 60 + sec;
+      return undefined;
+    }
+    const n = Number(s);
+    return Number.isFinite(n) ? n : undefined;
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -46,6 +60,13 @@ export default function PaginaSubmissao() {
     formData.append("observacao", observacao);
     formData.append("arquivo", arquivo);
     formData.append("atletaId", atletaId);
+
+    const tempoSeg = parseTempoToSeconds(tempoTexto);
+      if (tempoSeg != null) {
+        if (treinoAgendadoId) formData.append("tempoSeg", String(tempoSeg));
+        if (desafioId) formData.append("tempoMs", String(tempoSeg * 1000));
+      }
+      if (reps) formData.append("repeticoes", String(Number(reps)));
 
     let url = "";
 
@@ -117,6 +138,23 @@ export default function PaginaSubmissao() {
             )}
           </div>
         )}
+
+        <label className="block text-sm font-medium mb-1 text-gray-700">Tempo (mm:ss ou segundos)</label>
+          <input
+            type="text"
+            value={tempoTexto}
+            onChange={(e) => setTempoTexto(e.target.value)}
+            className="w-full border p-2 mb-4 rounded"
+          />
+
+          <label className="block text-sm font-medium mb-1 text-gray-700">Repetições</label>
+          <input
+            type="number"
+            min={0}
+            value={reps}
+            onChange={(e) => setReps(e.target.value)}
+            className="w-full border p-2 mb-4 rounded"
+          />
 
         <button
           onClick={handleEnviar}
