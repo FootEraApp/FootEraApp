@@ -43,20 +43,18 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
     const clipId = `shieldClip-${atleta.atletaId || atleta.id || atleta.nome || "x"}`;
 
    function buildFotoCandidates(raw?: string | null): string[] {
-    const v = (raw || "").trim();
-    if (!v) return [];
-    if (v.startsWith("data:")) return [v];
-    if (/^https?:\/\//i.test(v)) return [v];
-    if (v.startsWith("/")) return [`${API.BASE_URL}${v}`];
-    return [
-      `${API.BASE_URL}/uploads/usuarios/${v}`,
-      `${API.BASE_URL}/uploads/${v}`,
-    ];
-  }
+      const v = (raw || "").trim();
+      if (!v) return [];
+      if (v.startsWith("data:") || /^https?:\/\//i.test(v)) return [v];
+      if (v.startsWith("/assets/"))      return [v];
+      if (v.startsWith("usuarios/"))     return [`/assets/${v}`];
+      if (v.startsWith("/uploads/"))     return [`${API.BASE_URL}${v}`];
+      return [`/assets/usuarios/${v}`];
+    }
 
   const [fotoIdx, setFotoIdx] = useState(0);
   const fotoCandidates = useMemo(() => buildFotoCandidates(atleta.foto), [atleta.foto]);
-  const fotoSrc = fotoCandidates[Math.min(fotoIdx, fotoCandidates.length - 1)];
+  const fotoSrc = fotoCandidates[fotoIdx] ?? "";
   const imgRef = useRef<SVGImageElement | null>(null);
 
   useEffect(() => {
@@ -195,17 +193,18 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
         </defs>
 
         <g clipPath={`url(#${clipId})`}>
-          <image
-            ref={imgRef}
-            href={fotoSrc}
-            x="0"
-            y="-10"
-            width="184"
-            height="280"
-            preserveAspectRatio="xMidYMid slice"
-            onError={() => setFotoIdx((i) => i + 1)}
-          />
-
+          {fotoSrc && (
+            <image
+              ref={imgRef}
+              href={fotoSrc}
+              x="0"
+              y="-10"
+              width="184"
+              height="280"
+              preserveAspectRatio="xMidYMid slice"
+              onError={() => setFotoIdx((i) => i + 1)}
+            />
+          )}
           <rect x="0" y="0" width="184" height="260" fill="url(#cardGrad)" />
           {golden && (
             <>

@@ -45,7 +45,6 @@ export default function TreinoLivreNovo() {
   return (
     <div className="p-4 max-w-md mx-auto">
       <h2 className="text-lg font-bold mb-4">Registrar Treino Livre</h2>
-
       <label className="block text-sm mb-1">Descrição da atividade</label>
       <input
         className="border w-full p-2 rounded mb-3"

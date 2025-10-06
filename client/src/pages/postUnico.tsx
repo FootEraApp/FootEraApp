@@ -93,11 +93,6 @@ function PostUnico(): JSX.Element {
   const imgSrc   = publicImgUrl(post.imagemUrl ?? null);
   const videoSrc = publicImgUrl(post.videoUrl ?? null);
 
-  console.log("[PostUnico] imagemUrl bruto:", post.imagemUrl);
-  console.log("[PostUnico] imagemUrl normalizado:", imgSrc);
-  console.log("[PostUnico] videoUrl bruto:", post.videoUrl);
-  console.log("[PostUnico] videoUrl normalizado:", videoSrc);
-
   const linkCompartilhado = `${APP.FRONTEND_BASE_URL}/post/${post.id}`;
   const jaCurtiu = post.curtidas.some((c) => c.usuarioId === usuarioId);
 

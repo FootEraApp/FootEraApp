@@ -216,7 +216,6 @@ export async function getPontuacaoDetalhada(req: Request, res: Response) {
       const parts = await getParticipacoesGrupo(req.params.id, atleta.id);
       historicoGrupo = parts.map(mapGrupoToHistorico);
        const ptsGrupo = historicoGrupo.reduce((a, b:any) => a + (Number(b.pontuacao) || 0), 0);
-      console.log("[pontuacaoDetalhada] grupos:", parts.length, "pts:", ptsGrupo);
     } catch (e) {
       console.warn("[pontuacaoDetalhada] erro ao ler grupos", e);
     }
@@ -744,8 +743,6 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
 
         let clubeId = pickId(tipo.clubeId) ?? pickId(tipo.clube);
 
-        console.log("[perfil.update] escolinhaId:", escolinhaId, "clubeId:", clubeId);
-
         const data: any = {
           nome: tipo.nome,
           sobrenome: tipo.sobrenome,
@@ -886,8 +883,6 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
 
 export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
-  console.log("[HIT] GET /progresso", req.params);
-  
   try {
     const atleta = await prisma.atleta.findUnique({
       where: { usuarioId: id },
@@ -924,8 +919,6 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
     const partsGrupo = await getParticipacoesGrupo(id, atleta.id);
     const totalPontosGrupo = partsGrupo.reduce((acc: number, item: any) => acc + pontosGrupo(item), 0);
 
-    console.log("[progresso] partesGrupo:", partsGrupo.length, "pontosGrupo:", totalPontosGrupo);
-
     const pontuacao = await prisma.pontuacaoAtleta.findUnique({ where: { atletaId: atleta.id } });
     const pontosConquistadosBase = pontuacao
       ? pontuacao.pontuacaoDisciplina + pontuacao.pontuacaoPerformance + pontuacao.pontuacaoResponsabilidade
@@ -935,7 +928,6 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
 
     const desafiosGrupo = partsGrupo.length;
     const desafiosCompletos = desafiosIndividuais + desafiosGrupo;
-    console.log("[progresso] indiv:", desafiosIndividuais, "grupo:", desafiosGrupo, "total:", desafiosCompletos);
 
     for (const recebido of atleta.treinosRecebidos) {
       for (const ex of recebido.treino.exercicios) {

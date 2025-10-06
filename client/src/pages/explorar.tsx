@@ -465,9 +465,6 @@ function Explorar() {
                         src={foto}
                         alt={`${nome} profile`}
                         className="w-24 h-24 rounded-full object-cover"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`;
-                        }}
                       />
                       <p className="mt-2 font-medium text-center">{nome}</p>
                       {a.tipoTreino && (

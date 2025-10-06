@@ -1,17 +1,17 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
-import dotenv from "dotenv";
 import cron from "node-cron";
 import http from "http";
 import { setupSocket } from "./socket.js";
 import qrcode from "qrcode-terminal";
 import { APP } from "./config.js";
-import * as fs from "fs";
 import { UPLOADS_ROOT, ensureUploadDirs } from "./utils/uploads.js";
 import { gerarSnapshotRanking } from "./jobs/rankingSnapshot.js";
+import helmet from "helmet";
 
 import adminRoutes from "./routes/admin.js";
 import adminModeracaoRoutes from "./routes/adminModeracao.js";
@@ -21,7 +21,7 @@ import amigosRoutes from "./routes/amigos.js";
 import cadastroRoutes from "./routes/cadastro.js";
 import clubeRoutes from "./routes/clube.js";
 import configuracoesRoutes from "./routes/configuracoes.js";
-import conquistaRoutes from "./routes/conquista.js";
+import conquistasRoutes from "./routes/conquistas.js";
 import categoriasRoutes from "./routes/categorias.js"
 import desafiosRoutes from "./routes/desafios.js";
 import desafiosEmGrupoRoutes from "./routes/desafiosEmGrupo.js";
@@ -60,38 +60,55 @@ import gerenciarAtletasRoutes from "./routes/gerenciarAtletas.js";
 import indicacoesRouter from "./routes/indicacoes.js";
 import olheirosRouter from "./routes/olheiros.js";
 import desempenhoRoutes from "./routes/desempenho.js";
-import conquistasRouter from "./routes/conquistas.js";
 import relacoesRoutes from "./routes/relacoes.js";
 import elencosRoutes from "./routes/elencos.js";
 import formadoresRoutes from "./routes/formadores.js";
 import scoutNotesRoutes from "./routes/scoutNotes.js";
 import checklistRoutes from "./routes/checklists.js";
 import catalogoRoutes from "./routes/catalogo.js";
+import legalRoutes from "./routes/legal.js";
 
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+app.set("trust proxy", true);     
 
 const server = http.createServer(app);
 const io = setupSocket(server);
 
 ensureUploadDirs();
-dotenv.config();
 startExpiredTrainingsJob();
 
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false,
+}));
+
 app.use(cors({
-  origin: true,
+  origin: [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://192.168.18.8:5173"
+  ],
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
-app.use(express.json({ limit: "20mb" }));
-app.use(express.urlencoded({ limit: "20mb", extended: true }));
+
+app.use("/exercicios", express.static(path.join(process.cwd(), "public", "exercicios"), {
+  setHeaders(res) {
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    res.setHeader("Accept-Ranges", "bytes");
+  },
+}));
 
 app.use("/uploads", express.static(path.join(process.cwd(), "public","uploads")));
 app.use("/uploads", express.static(UPLOADS_ROOT, { maxAge: "1d" }));
 app.use('/assets', express.static(path.join(__dirname, 'public/assets')));
+
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
 app.use("/api/admin", adminRoutes);
 app.use("/api/atletas", atletaRoutes);
@@ -101,7 +118,7 @@ app.use("/api/cadastro", cadastroRoutes);
 app.use("/api/categorias", categoriasRoutes)
 app.use("/api/clubes", clubeRoutes);
 app.use("/api/configuracoes", configuracoesRoutes);
-app.use("/api/conquistas", conquistaRoutes);
+app.use("/api/conquistas", conquistasRoutes);
 app.use("/api/desafios", desafiosRoutes);
 app.use("/api/desafios/em-grupo", desafiosEmGrupoRoutes);
 app.use("/api/desempenho", desempenhoRoutes);
@@ -136,7 +153,6 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
 app.use("/api/observados", observadosRoutes);
 app.use("/api/gerenciar", gerenciarAtletasRoutes);
-app.use("/api/conquistas", conquistasRouter);
 app.use("/api/relacoes", relacoesRoutes);
 app.use("/api/elencos", elencosRoutes);
 app.use("/api/admin/moderacao", adminModeracaoRoutes);
@@ -144,31 +160,16 @@ app.use("/api/formadores", formadoresRoutes);
 app.use("/api/olheiros", olheirosRouter);
 app.use("/api/checklists", checklistRoutes);
 app.use("/api/catalogo", catalogoRoutes);
+app.use("/api/legal", legalRoutes);
 app.use("/api", treinoLivreRoutes);
 app.use("/api", scoutNotesRoutes);
 app.use("/api", indicacoesRouter); 
 
-app.use("/exercicios", express.static(path.join(process.cwd(), "public", "exercicios"), {
-  setHeaders: (res) => res.setHeader("Accept-Ranges", "bytes"),
-}));
 
 app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
   next();
 });
-
-const candidates = [
-  path.join(process.cwd(), "client/public/assets"),
-  path.join(process.cwd(), "public/assets"),
-  path.join(__dirname, "public/assets"),
-];
-
-const found = candidates.find((dir) => fs.existsSync(dir));
-if (found) {
-  app.use("/assets", express.static(found));
-} else {
-  console.warn("⚠️ Pasta de assets não encontrada. Tentado:", candidates);
-}
 
 app.get("/", (req, res) => {
   res.send("FootEra API está ativa!");
@@ -184,7 +185,6 @@ const FRONT_PORT = 5173;
 const LOCAL_IP = "192.168.18.8";
 
 server.listen({port: PORT, host: "0.0.0.0"}, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
   console.log(`Servidor acessível na rede: http://192.168.18.8:${PORT}`);
 
   const frontendURL = `http://${LOCAL_IP}:${FRONT_PORT}`;

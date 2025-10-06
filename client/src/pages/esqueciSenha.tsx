@@ -1,7 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
 import { API } from "../config.js";
-import logo from "/assets/usuarios/footera-logo.png";
 
 export default function EsqueciSenha() {
   const [email, setEmail] = useState("");
@@ -32,7 +31,7 @@ export default function EsqueciSenha() {
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-cream">
       <div className="md:w-1/2 bg-green-800 text-white flex flex-col justify-center items-center p-10">
-        <img src={logo} alt="Logo FootEra" className="w-24 mb-6" />
+         <img src="/assets/usuarios/footera-logo.png" alt="Logo FootEra" className="w-24 mb-6" />
         <h1 className="text-3xl md:text-4xl font-bold text-center mb-4">
           Bem-vindo à FootEra
         </h1>

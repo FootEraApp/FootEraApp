@@ -75,12 +75,23 @@ export default function DesafioUnico() {
 
   if (!desafio) return null;
 
-  const imagemSrc =
-    desafio.imagemUrl && desafio.imagemUrl.startsWith("http")
-      ? desafio.imagemUrl
-      : desafio.imagemUrl
-      ? `${API.BASE_URL}${desafio.imagemUrl}`
-      : null;
+ function resolveImg(url?: string | null) {
+  if (!url) return null;
+  const s = url.trim();
+  if (/^https?:\/\//i.test(s) || s.startsWith("data:")) return s;   
+  if (s.startsWith("/uploads/")) return `${API.BASE_URL}${s}`;       
+  if (s.startsWith("/assets/")) return s;                          
+  if (s.startsWith("desafios/")) return `/assets/${s}`;             
+  return `/assets/desafios/${s}`;                                    
+}
+
+ const imagemSrc =
+  !desafio.imagemUrl ? null
+  : desafio.imagemUrl.startsWith("http") || desafio.imagemUrl.startsWith("data:")
+    ? desafio.imagemUrl
+    : desafio.imagemUrl.startsWith("/assets/")
+      ? desafio.imagemUrl         
+      : `${API.BASE_URL}${desafio.imagemUrl}`; 
 
   return (
     <main className="max-w-3xl mx-auto p-6">
