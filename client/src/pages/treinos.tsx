@@ -18,6 +18,7 @@ import {
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { Badge } from "@/components/ui/badge.js";
+import HealthBanner from "@/components/legal/HealthBanner.js";
 
 const tipoUser =
   String(
@@ -921,7 +922,9 @@ export default function PaginaTreinos() {
   return (
     <div className="min-h-screen bg-neutral-50 pb-24">
       <div className="mx-auto w-full max-w-3xl lg:max-w-4xl px-3 sm:px-4">
-
+        <div className="max-w-3xl mx-auto px-4 pt-3">
+         <HealthBanner />
+        </div>
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
           <div className="flex items-center justify-between gap-2">
             {isGestor ? (
@@ -948,7 +951,7 @@ export default function PaginaTreinos() {
                 </button>
               </div>
             ) : (
-              <div className="text-base font-semibold text-green-900">Treinos</div>
+              <div className="text-lg font-semibold text-green-900">Treinos</div>
             )}
 
             <Link
@@ -961,7 +964,6 @@ export default function PaginaTreinos() {
             </Link>
           </div>
         </div>
-
         <>
           {usuario.tipo === "atleta" && (
             <div className="space-y-6">

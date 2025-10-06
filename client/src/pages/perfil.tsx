@@ -11,6 +11,7 @@ import PerfilProfessor from "../components/perfil/PerfilProfessor.js";
 import PerfilClube from "../components/perfil/PerfilClube.js";
 import PerfilEscola from "../components/perfil/PerfilEscola.js";
 import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
+import HealthBanner from "@/components/legal/HealthBanner.js";
 
 type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha" | "Admin" | "Olheiro";
 
@@ -72,6 +73,9 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-transparent pb-20">
+     <div className="max-w-3xl mx-auto px-4 pt-3">
+      <HealthBanner />
+     </div>
       {tipo === "Atleta" && <PerfilAtleta idDaUrl={idDaUrl} />}
       {tipo === "Professor" && <PerfilProfessor idDaUrl={idDaUrl} />}
       {tipo === "Clube" && <PerfilClube idDaUrl={idDaUrl} />}

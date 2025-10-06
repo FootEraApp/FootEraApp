@@ -15,7 +15,7 @@ import {
   repostarPost,
 } from "../controllers/postController.js";
 import { curtirPostagem } from "server/controllers/feedController.js";
-import rateLimit from "express-rate-limit";
+import rateLimit, {ipKeyGenerator} from "express-rate-limit";
 import { isAllowedMime } from "../utils/moderation.js";
 
 const router = Router();
@@ -41,18 +41,22 @@ const upload = multer({
 });
 
 const postLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
+  windowMs: 15 * 60 * 1000,
+  limit: 50,
+  standardHeaders: "draft-7",
   legacyHeaders: false,
-  keyGenerator: (req: any) => req.userId || req.ip,
+  keyGenerator: (req, _res) => ipKeyGenerator(req as any),
 });
+
 const commentLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 60,
-  standardHeaders: true,
+  limit: 60,
+  standardHeaders: "draft-7",
   legacyHeaders: false,
-  keyGenerator: (req: any) => req.userId || req.ip,
+  keyGenerator: (req) => {
+    const r = req as any;
+    return r.userId ? `u:${r.userId}` : ipKeyGenerator(r);
+  },
 });
 
 router.get("/visualizar/:id", authenticateToken, buscarPostagemPorId);

@@ -69,10 +69,7 @@ async function run() {
     }
     ok++;
   }
-
-  console.log(`✔️ Normalizados: ${ok} | Ignorados: ${skipped}`);
   if (unknown.length) {
-    console.log("⚠️ Valores não mapeados (revise/amplie o mapeamento):");
     console.table(unknown.slice(0, 50));
   }
 }

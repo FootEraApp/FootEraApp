@@ -4,7 +4,7 @@ import logo from "/assets/usuarios/footera-logo.png";
 import { API } from "../config.js";
 import { Eye, EyeOff } from "lucide-react";
 
-type TipoPerfil = "Atleta" | "Professor" | "Escolinha" | "Clube" | "Admin" | "Olheiro";
+type TipoPerfil = "Atleta" | "Professor" | "Escolinha" | "Clube" | "Olheiro";
 type Etapa = 1 | 2 | 3;
 
 type UsuarioBase = {
@@ -66,9 +66,18 @@ type ResultadoBusca = {
   fotoUrl: string | null;
 };
 
+type Responsavel = {
+  nome: string;
+  email: string;
+  telefone?: string;
+};
+
+type DadosMenor = {
+  dataNascimento: string;
+  responsavel?: Responsavel;
+};
 
 const PLACEHOLDER_AVATAR = logo;
-
 
 function debounce<T extends (...args: any[]) => void>(fn: T, ms = 400) {
   let t: any;
@@ -125,6 +134,17 @@ export default function Cadastro() {
   const [userDisp, setUserDisp] = useState<null | boolean>(null);
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [mostrarConfirmar, setMostrarConfirmar] = useState(false);
+  const [dataNascimento, setDataNascimento] = useState<string>("");
+  const [responsavel, setResponsavel] = useState<Responsavel>({ nome: "", email: "", telefone: "" });
+
+  function calcIdade(iso: string) {
+    if (!iso) return null;
+    const [y,m,d] = iso.split("-").map(Number);
+    const hoje = new Date();
+    let idade = hoje.getFullYear() - y - ( (hoje.getMonth()+1 < m) || ( (hoje.getMonth()+1===m) && hoje.getDate() < d) ? 1 : 0 );
+    return Math.max(0, idade);
+  }
+  const idade = useMemo(() => calcIdade(dataNascimento), [dataNascimento]);
 
   const verificarEmail = useMemo(
     () =>
@@ -165,13 +185,15 @@ export default function Cadastro() {
     if (senha !== confirmarSenha) return setErro("As senhas não coincidem."), false;
     if (emailDisp === false) return setErro("E-mail já cadastrado."), false;
     if (userDisp === false) return setErro("Nome de usuário indisponível."), false;
+    if (!dataNascimento) return setErro("Informe a data de nascimento."), false;
+
     setErro("");
     return true;
   };
 
   const podeIrParaEtapa3 = () => {
     if (tipoPerfil === "Atleta") {
-      if (atleta.idade === "" || Number.isNaN(atleta.idade)) return setErro("Informe a idade do atleta."), false;
+      if (idade === null) return setErro("Informe a data de nascimento do atleta."), false;
       if (!atleta.categoria) return setErro("Selecione a categoria do atleta."), false;
     }
     if (tipoPerfil === "Professor") {
@@ -189,6 +211,13 @@ export default function Cadastro() {
         return setErro("Anos de experiência inválido."), false;
       }
     }
+
+    if (idade !== null && idade < 12) {
+      if (!responsavel.nome || !responsavel.email) {
+        return setErro("Preencha nome e e-mail do responsável."), false;
+      }
+    }
+
     setErro("");
     return true;
   };
@@ -207,7 +236,7 @@ export default function Cadastro() {
       };
 
       if (tipoPerfil === "Atleta") {
-        payload.idade = atleta.idade;
+        payload.idade = idade ?? 0;
         payload.categoria = atleta.categoria ? [atleta.categoria] : [];
         payload.treinaEscolinha = atleta.treinaEscolinha || "nao";
       }
@@ -236,6 +265,11 @@ export default function Cadastro() {
         payload.colaboracaoClubeId = olheiro.colaboracaoClubeId || undefined;
       }
 
+      payload.dataNascimento = dataNascimento;
+      if (idade !== null && idade < 18) {
+        payload.responsavel = responsavel;
+      }
+
       const res = await fetch(`${API.BASE_URL}/api/cadastro/cadastro`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -250,6 +284,24 @@ export default function Cadastro() {
       const data = await res.json();
       setSucesso("Cadastro realizado com sucesso!");
 
+      try {
+        await fetch(`${API.BASE_URL}/api/legal/consentimentos`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(data?.token ? { Authorization: `Bearer ${data.token}` } : {}),
+          },
+          body: JSON.stringify({
+            doc: (idade !== null && idade < 18) ? "Termos e Privacidade (menor)" : "Termos e Privacidade",
+            versao: { termos: "2025-10-06", privacidade: "2025-10-06" },
+            hashes: { termosHash: "<opcional: envie do front se tiver>", privHash: "<opcional>" },
+            metodo: "click-wrap",
+          }),
+        });
+      } catch (e) {
+        console.warn("Falha ao registrar consentimento:", e);
+      }
+      
       if (tipoPerfil === "Atleta" && vinculo.desejaVinculo && vinculo.destinatarioId) {
         try {
           await fetch(`${API.BASE_URL}/api/solicitacoes`, {
@@ -323,7 +375,7 @@ export default function Cadastro() {
   return (
     <div className="flex flex-col lg:flex-row min-h-screen">
       <div className="w-full lg:w-1/2 bg-green-800 text-white flex flex-col justify-center items-center p-10">
-        <img src={logo} alt="Logo FootEra" className="w-20 mb-4" />
+        <img src="/assets/usuarios/footera-logo.png" className="w-8 h-8" alt="FootEra" />
         <h1 className="text-3xl font-bold mb-4">Bem-vindo à FootEra</h1>
         <p className="text-center max-w-md text-lg">
           Se você sonha em conquistar uma oportunidade, joga por amor ou quer se superar... aqui é o seu lugar.
@@ -355,7 +407,7 @@ export default function Cadastro() {
 
               <label className="block mb-2 font-medium">Tipo de Perfil</label>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                {(["Atleta","Escolinha","Clube","Professor","Olheiro","Admin"] as TipoPerfil[]).map((t) => (
+                {(["Atleta","Escolinha","Clube","Professor","Olheiro",] as TipoPerfil[]).map((t) => (
                   <label className="flex items-center text-sm" key={t}>
                     <input
                       type="radio"
@@ -451,6 +503,13 @@ export default function Cadastro() {
                 </div>
               </div>
 
+              <div className="mt-3">
+                <label className="block text-sm font-medium mb-1">Data de nascimento</label>
+                <input type="date" className="w-full border rounded px-3 py-2"
+                  value={dataNascimento} onChange={(e)=>setDataNascimento(e.target.value)} />
+                {idade !== null && <p className="text-xs text-gray-500 mt-1">Idade estimada: {idade} anos</p>}
+              </div>
+
               <div className="mt-4 mb-3">
                 <label className="flex items-center text-sm">
                   <input
@@ -544,14 +603,38 @@ export default function Cadastro() {
 
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Idade</label>
+                     <label className="block text-sm font-medium mb-1">Idade (calculada)</label>
                       <input
-                        type="number"
-                        className="w-full border rounded px-3 py-2"
-                        value={atleta.idade}
-                        onChange={(e) => setAtleta(p => ({ ...p, idade: e.target.value ? parseInt(e.target.value) : "" }))}
+                        className="w-full border rounded px-3 py-2 bg-gray-100"
+                        value={idade ?? ""} readOnly
                       />
                     </div>
+                    {idade !== null && idade < 18 && (
+                      <div className="border rounded-md p-3 mt-3">
+                        <p className="text-sm font-medium mb-2">{idade < 12 ? "Dados do responsável (obrigatório)" : "Dados do responsável (recomendado)"}</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-sm font-medium mb-1">Nome do responsável</label>
+                            <input className="w-full border rounded px-3 py-2"
+                              value={responsavel.nome} onChange={e => setResponsavel(p=>({ ...p, nome: e.target.value }))}/>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">E-mail do responsável</label>
+                            <input type="email" className="w-full border rounded px-3 py-2"
+                              value={responsavel.email} onChange={e => setResponsavel(p=>({ ...p, email: e.target.value }))}/>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-sm font-medium mb-1">Telefone (opcional)</label>
+                            <input className="w-full border rounded px-3 py-2"
+                              value={responsavel.telefone || ""} onChange={e => setResponsavel(p=>({ ...p, telefone: e.target.value }))}/>
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          O uso por menores exige consentimento e supervisão do responsável. Os dados serão tratados no melhor interesse do menor.
+                        </p>
+                      </div>
+                    )}
+
                     <div>
                       <label className="block text-sm font-medium mb-1">Categoria</label>
                       <select
@@ -783,10 +866,6 @@ export default function Cadastro() {
                 </>
               )}
 
-              {tipoPerfil === "Admin" && (
-                <p className="text-sm text-gray-600">Nenhuma informação adicional é necessária para Admin.</p>
-              )}
-
               {erro && <p className="text-sm text-red-600 mt-3">{erro}</p>}
 
               <div className="mt-6 flex justify-between">
@@ -930,9 +1009,16 @@ export default function Cadastro() {
                 <div><span className="font-medium">Nome:</span> {nome}</div>
                 <div><span className="font-medium">Email:</span> {email}</div>
                 <div><span className="font-medium">Username:</span> @{nomeDeUsuario}</div>
+                <div><span className="font-medium">Nascimento:</span> {dataNascimento || "-"}</div>
+                  {idade !== null && idade < 18 && (
+                    <div className="mt-2">
+                      <div><span className="font-medium">Responsável:</span> {responsavel.nome || "-"}</div>
+                      <div><span className="font-medium">Email Resp.:</span> {responsavel.email || "-"}</div>
+                    </div>
+                  )}
                 {tipoPerfil === "Atleta" && (
                   <div className="mt-2">
-                    <div><span className="font-medium">Idade:</span> {atleta.idade || "-"}</div>
+                    <div><span className="font-medium">Idade:</span> {idade ?? "-"}</div>
                     <div><span className="font-medium">Categoria:</span> {atleta.categoria || "-"}</div>
                   </div>
                 )}

@@ -18,6 +18,7 @@ import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import CardAtletaShield from "../components/cards/CardAtletaShield.js";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 
 const TODAS_CATEGORIAS = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"] as const;
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"] as const;
@@ -135,12 +136,12 @@ interface Submissao {
   tipo: "TREINO" | "DESAFIO";
 }
 
-function fullUrl(possiblyRelative?: string) {
-  if (!possiblyRelative) return "";
-  if (possiblyRelative.startsWith("http") || possiblyRelative.startsWith("data:"))
-    return possiblyRelative;
-  return `${API.BASE_URL}${possiblyRelative}`;
-}
+  function fullUrl(possiblyRelative?: string) {  
+   if (!possiblyRelative) return "";
+   if (possiblyRelative.startsWith("http") || possiblyRelative.startsWith("data:"))
+     return possiblyRelative;
+   return `${API.BASE_URL}${possiblyRelative}`;
+ }
 
 type RankItem = {
   rank: number;
@@ -348,8 +349,7 @@ const RankingGlobalTab: React.FC = () => {
               <div className="font-bold text-lg">#{minhaPosicao.posicao}</div>
               <div className="text-xs text-gray-500">de {minhaPosicao.total}</div>
             </div>
-            <img
-              src={minhaPosicao.foto ? fullUrl(minhaPosicao.foto) : "/default-profile.png"}
+            <img src={formatarUrlFoto(minhaPosicao.foto, "usuarios")}
               className="w-12 h-12 rounded-full object-cover"
               alt={minhaPosicao.nome}
             />
@@ -390,7 +390,7 @@ const RankingGlobalTab: React.FC = () => {
       ) : (
         <div className="space-y-2">
           {listaFiltradaTop.map((r) => {
-            const foto = r.foto ? fullUrl(r.foto) : "/default-profile.png";
+            const foto = formatarUrlFoto(r.foto, "usuarios");
             const isTop10 = r.rank <= 10;
             return (
               <div
@@ -696,7 +696,6 @@ const DesafiosPage: React.FC = () => {
   return (
     <div className="max-w-3xl mx-auto p-4 pb-24">
       <h1 className="text-2xl font-bold mb-4">Desafios dos Atletas</h1>
-
       <div className="flex gap-2 mb-3">
         <button
           onClick={() => setAba("feed")}
@@ -796,12 +795,7 @@ const DesafiosPage: React.FC = () => {
           return (
             <div key={sub.id} className="bg-white shadow rounded-lg p-4 mb-6">
               <div className="flex items-center mb-2">
-                <img
-                  src={
-                    sub.atleta.usuario.foto
-                      ? fullUrl(sub.atleta.usuario.foto)
-                      : "/default-profile.png"
-                  }
+                <img src={ formatarUrlFoto(sub.atleta.usuario.foto, "usuarios") }
                   alt="Perfil"
                   className="w-10 h-10 rounded-full mr-3 object-cover"
                 />
