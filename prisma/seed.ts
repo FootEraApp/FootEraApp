@@ -363,6 +363,10 @@ await prisma.usuario.upsert({
     }
   });
 
+  const TODAS_CATEGORIAS_SEED: Categoria[] = [
+    Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre
+  ];
+
   const exercicios = [
     {
       codigo: 'EX001',
@@ -1028,6 +1032,268 @@ await prisma.usuario.upsert({
     categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
     videoDemonstrativoUrl: '/assets/videos/exercicios/passe-dominio.mp4'
   },
+  {
+    codigo: "EX084",
+    nome: "Coordenativo com Bola 001",
+    descricao: "Conduções curtas com alternância de pés e mudanças rápidas de direção mantendo a bola próxima. Foco em coordenação, ritmo e controle em espaço reduzido.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/coordenativo-bola.mp4",
+  },
+  {
+    codigo: "EX085",
+    nome: "Coordenativo com Bola 002",
+    descricao: "Condução em zigue-zague alternando pés e ritmos, mantendo a bola próxima. Trabalho de coordenação, equilíbrio e mudanças rápidas de direção em espaço curto.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/coordenativo-bola-002.mp4",
+  },
+  {
+    codigo: "EX086",
+    nome: "Coordenativo (Pé Não Dominante)",
+    descricao: "Condução e toques curtos somente com o pé não dominante, alternando interno/externo e mudando de direção. Foco em coordenação, precisão e confiança do pé fraco em espaço reduzido.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/coordenativo-bola-pe-nao-dominante.mp4",
+  },
+  {
+    codigo: "EX087",
+    nome: "Coordenativo Alternado",
+    descricao: "Conduções curtas alternando pé direito/esquerdo e faces do pé (interno/externo) a cada toque. Foco em coordenação bilateral, ritmo e controle próximo da bola em mudanças rápidas de direção.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/coordenativo-bola-alternado.mp4",
+  },
+  {
+    codigo: "EX088",
+    nome: "Tic-Tac Central",
+    descricao: "Toques rápidos “tic-tac” com o interno dos pés, alternando direita/esquerda e mantendo a bola centralizada. Foco em ritmo, coordenação bilateral e controle próximo em espaço curto.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/tictac.mp4",
+  },
+  {
+    codigo: "EX089",
+    nome: "Tic-Tac Lateral (Perna Dominante)",
+    descricao: "Sequência “tic-tac” lateral usando só a perna dominante, conduzindo a bola ao lado do corpo com toques curtos (interno/externo). Foco em ritmo, controle próximo e deslocamento lateral rápido mantendo a bola colada.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/tictac-lateral-perna-dominante.mp4",
+  },
+
+  // Conduções (penteando/pisando/alternadas)
+  {
+    codigo: "EX090",
+    nome: "Condução Pisando na Bola",
+    descricao: "Condução usando a sola, “pisando” e arrastando a bola à frente e de lado. Foco em ritmo, proteção e controle fino sob pressão em espaço curto.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-pisando-na-bola.mp4",
+  },
+  {
+    codigo: "EX091",
+    nome: "Condução Penteando (Pé Não Dominante)",
+    descricao: "Condução “penteando” a bola com a sola do pé não dominante em toques contínuos. Foco em coordenação do pé fraco, sensibilidade e mudança de direção suave.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-penteando-nao-dominante.mp4",
+  },
+  {
+    codigo: "EX092",
+    nome: "Condução Penteando (Pé Dominante)",
+    descricao: "Condução “penteando” com a sola do pé dominante, mantendo a bola colada. Ênfase em ritmo, aceleração curta e domínio no arraste frontal/lateral.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-penteando-dominante.mp4",
+  },
+  {
+    codigo: "EX093",
+    nome: "Condução Perna Alternada",
+    descricao: "Condução alternando pés a cada toque, variando interno/externo. Foco em coordenação bilateral, ritmo e mudanças rápidas de direção.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-perna-alternada.mp4",
+  },
+  {
+    codigo: "EX094",
+    nome: "Condução (Pé Não Dominante)",
+    descricao: "Condução apenas com o pé não dominante em toques curtos e controlados. Ênfase em precisão, confiança e condução em linhas retas e curvas.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-perna-nao-dominante.mp4",
+  },
+  {
+    codigo: "EX095",
+    nome: "Condução (Pé Dominante)",
+    descricao: "Condução apenas com o pé dominante, mantendo a bola próxima do corpo. Foco em ritmo, aceleração curta e controle em espaço reduzido.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-perna-dominante.mp4",
+  },
+  {
+    codigo: "EX096",
+    nome: "Tic-Tac Lateral (Pé Não Dominante)",
+    descricao: "Sequência “tic-tac” lateral usando só o pé não dominante (interno/externo). Foco em ritmo, estabilidade e deslocamento lateral mantendo a bola colada.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/tictac-lateral-perna-nao-dominante.mp4",
+  },
+
+  // Zigue-zague + “8”
+  {
+    codigo: "EX097",
+    nome: "Zigue-Zague Costurando",
+    descricao: "Condução em zigue-zague “costurando” entre marcadores com toques curtos. Foco em mudanças de direção ágeis, ritmo contínuo e controle próximo.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/zigzag-costurando.mp4",
+  },
+  {
+    codigo: "EX098",
+    nome: "Zigue-Zague Sobre a Bola",
+    descricao: "Deslocamento em zigue-zague com passadas por cima da bola a cada mudança. Foco em coordenação, equilíbrio e fluidez na variação de direção.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/zigzag-sobre-bola.mp4",
+  },
+  {
+    codigo: "EX099",
+    nome: "Zigue-Zague Parte Interna",
+    descricao: "Condução em zigue-zague usando apenas a parte interna dos pés. Ênfase em precisão do toque, corpo baixo e ângulos curtos.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/zigzag-parte-interna.mp4",
+  },
+  {
+    codigo: "EX100",
+    nome: "Zigue-Zague Alternado",
+    descricao: "Zigue-zague alternando pés e faces do pé a cada toque. Foco em coordenação bilateral, ritmo e acelerações curtas.",
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/zigzag-alternado.mp4",
+  },
+  {
+    codigo: "EX101",
+    nome: "Zigue-Zague (Perna Esquerda)",
+    descricao: "Condução em zigue-zague usando somente a perna esquerda (interno/externo). Ênfase em controle, equilíbrio e mudanças rápidas de direção.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/zigzag-perna-esquerda.mp4",
+  },
+  {
+    codigo: "EX102",
+    nome: "Zigue-Zague (Perna Direita)",
+    descricao: "Condução em zigue-zague usando apenas a perna direita (interno/externo). Foco em controle próximo, estabilidade e cortes rápidos.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/zigzag-perna-direita.mp4",
+  },
+  {
+    codigo: "EX103",
+    nome: "Trajetória em 8 (Perna Alternada)",
+    descricao: "Trajetória em “8” conduzindo e alternando as pernas em cada curva. Foco em leitura de trajetória, controle fino e transições rápidas.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/consumacao-em-8-perna-alternada.mp4",
+  },
+  {
+    codigo: "EX104",
+    nome: "Trajetória em 8 (Perna Esquerda)",
+    descricao: "Trajetória em “8” conduzindo só com a perna esquerda. Ênfase em precisão no arco, equilíbrio e domínio do pé.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/consumacao-em-8-perna-esquerda.mp4",
+  },
+  {
+    codigo: "EX105",
+    nome: "Trajetória em 8 (Perna Direita)",
+    descricao: "Trajetória em “8” conduzindo apenas com a perna direita. Foco em controle direcional, estabilidade e cadência constante.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/consumacao-em-8-perna-direita.mp4",
+  },
+
+  // Sequências com drible/passe/mudança de direção
+  {
+    codigo: "EX106",
+    nome: "Condução + Drible + Passe",
+    descricao: "Condução com finta e passe final, variando o ritmo antes da execução. Foco em desequilíbrio do marcador, mudança de direção e precisão no passe.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-drible-passe.mp4",
+  },
+  {
+    codigo: "EX107",
+    nome: "Condução com Step-Over",
+    descricao: "Condução com passadas por cima da bola (step-overs) durante o deslocamento. Ênfase em coordenação, sincronização tronco-pernas e controle fino.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/coordenativo-conducao-por-cima-bola.mp4",
+  },
+  {
+    codigo: "EX108",
+    nome: "Condução em X + Passe",
+    descricao: "Trajeto em “X” conduzindo até os vértices e finalizando com passe. Foco em orientação corporal, ângulos de passe e tempo de execução.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-em-X-mais-passe.mp4",
+  },
+  {
+    codigo: "EX109",
+    nome: "Pisando + Tic-Tac",
+    descricao: "Combina “pisar” com a sola e sequência tic-tac (interno/externo) mantendo a bola próxima. Ênfase em ritmo, coordenação e controle sob pressão.",
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-pisando-tictac.mp4",
+  },
+  {
+    codigo: "EX110",
+    nome: "Mudança de Direção 002",
+    descricao: "Condução com cortes e mudanças bruscas de direção em pontos marcados. Foco em acelera/desacelera, centro de gravidade baixo e primeiro toque.",
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-com-mudança-direcao-002.mp4",
+  },
+  {
+    codigo: "EX111",
+    nome: "Condução Velocidade (Esquerda, Alternada)",
+    descricao: "Condução só com a esquerda alternando velocidades (lento/rápido) por trechos. Ênfase em controle do pé fraco, cadência e explosões curtas.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-alternando-velocidade-perna-esquerda.mp4",
+  },
+  {
+    codigo: "EX112",
+    nome: "Condução com Mudança de Direção",
+    descricao: "Condução com mudanças de direção usando interno/externo e proteção do corpo. Foco em leitura de espaço, corte eficiente e retomada rápida.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-com-mudança-direcao.mp4",
+  },
+  {
+    codigo: "EX113",
+    nome: "Condução Velocidade (Direita, Alternada)",
+    descricao: "Condução só com a direita alternando tempos de passada e intensidade. Ênfase em controle próximo, variação de ritmo e arranques curtos.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-alternando-velocidade-perna-direita.mp4",
+  },
+  {
+    codigo: "EX114",
+    nome: "Condução em Velocidade (Esquerda)",
+    descricao: "Condução contínua com a perna esquerda, progredindo de velocidade moderada a alta. Foco em estabilidade, passada eficiente e controle em aceleração.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-velocidade-perna-esquerda.mp4",
+  },
+  {
+    codigo: "EX115",
+    nome: "Condução em Velocidade (Direita)",
+    descricao: "Condução contínua com a perna direita, elevando gradualmente a velocidade. Ênfase em controle sob velocidade, precisão do toque e equilíbrio.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-velocidade-perna-direita.mp4",
+  },
   ];
   for (const ex of exercicios) {
     await prisma.exercicio.upsert({
@@ -1036,7 +1302,6 @@ await prisma.usuario.upsert({
       create: ex
     });
   }
-
   
 const professorMateus = await prisma.professor.findFirst({
   where: { usuario: { nomeDeUsuario: 'mateus.furieri' } }
