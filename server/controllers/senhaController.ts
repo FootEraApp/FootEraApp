@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
-import { sendPasswordResetEmail } from "@/utils/mailer.js";
+import { sendPasswordResetEmail } from "../utils/mailer.js";
 import { APP } from "server/config.js";
 
 const prisma = new PrismaClient();

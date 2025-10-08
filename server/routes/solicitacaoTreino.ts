@@ -17,7 +17,10 @@ router.post("/:id/recusar", recusarSolicitacao);
 router.post("/", criarSolicitacao);
 router.get("/minhas", listarSolicitacoesMinhas);
 router.get("/", listarSolicitacoesRecebidas);
-router.delete("/:destinatarioId?", cancelarSolicitacao);
+
+router.delete("/", cancelarSolicitacao);
+router.delete("/:destinatarioId", cancelarSolicitacao);
+
 router.put("/:id", async (req, res) => {
   try {
     const aceitar = !!req.body?.aceitar;

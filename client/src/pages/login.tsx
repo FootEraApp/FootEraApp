@@ -1,3 +1,4 @@
+// client/src/pages/login
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
