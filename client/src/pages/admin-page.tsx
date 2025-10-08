@@ -1,5 +1,6 @@
 import { useEffect, useState} from "react";
 import { API } from "../config.js";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 
 type Tab =
   | "dashboard"
@@ -74,16 +75,24 @@ function authHeaders(extra: Record<string, string> = {}) {
 
 function toAbsoluteUrl(raw?: string | null) {
   if (!raw) return null;
-  if (raw.startsWith("http")) return raw;
-  if (/^[\w-]{11}$/.test(raw)) return `https://www.youtube.com/watch?v=${raw}`;
-  return `${API.BASE_URL}${raw.startsWith("/") ? raw : `/${raw}`}`;
+  const v = String(raw).trim();
+  if (v.startsWith("http") || v.startsWith("data:")) return v;
+  if (v.startsWith("/assets/") || v.startsWith("/videos/") || v.startsWith("/exercicios/"))
+    return v;
+  if (v.startsWith("assets/") || v.startsWith("videos/") || v.startsWith("exercicios/"))
+    return `/${v}`;
+  if (v.startsWith("/uploads/")) return `${API.BASE_URL}${v}`;
+  if (v.startsWith("uploads/"))   return `${API.BASE_URL}/${v}`;
+  if (/^[\w-]{11}$/.test(v)) return `https://www.youtube.com/watch?v=${v}`;
+
+  return `${API.BASE_URL}${v.startsWith("/") ? v : `/${v}`}`;
 }
 
 function resolveVideoUrl(ex: any) {
   const raw =
-    ex.videoDemonstrativoUrl ?? 
-    ex.videoDemonstrativoURL ??  
-    ex.videoDemonstrativo ??   
+    ex.videoDemonstrativoUrl ??
+    ex.videoDemonstrativoURL ??
+    ex.videoDemonstrativo ??
     ex.videoUrl ??
     ex.video ??
     ex.urlVideo ??
@@ -535,7 +544,7 @@ async function invalidarDesafio(id: string) {
                     <th className="px-3 py-2 text-left">Usuário</th>
                     <th className="px-3 py-2 text-left">Email</th>
                     <th className="px-3 py-2 text-left">Tipo</th>
-                                        <th className="px-3 py-2 text-left">Criado em</th>
+                    <th className="px-3 py-2 text-left">Criado em</th>
                     <th className="px-3 py-2 text-left">Última atv.</th>
                     <th className="px-3 py-2"></th>
                   </tr>
@@ -543,9 +552,7 @@ async function invalidarDesafio(id: string) {
                 <tbody>
                   {usuarios.map((u) => {
                     const nome = u.nome ?? u.nomeDeUsuario ?? "(sem nome)";
-                    const foto = u.foto
-                      ? (u.foto.startsWith("http") ? u.foto : `${API.BASE_URL}${u.foto}`)
-                      : `${API.BASE_URL}/assets/default-user.png`;
+                    const foto = formatarUrlFoto(u.foto, "usuarios") || "/default-profile.png";
                     return (
                       <tr key={u.id} className="border-t">
                         <td className="px-3 py-2">
@@ -846,15 +853,13 @@ async function invalidarDesafio(id: string) {
                         </thead>
 
                         <tbody>
-                          {modPendentes.map((it) => {
-                            const foto = it.atleta.foto
-                              ? (it.atleta.foto.startsWith("http") ? it.atleta.foto : `${API.BASE_URL}${it.atleta.foto}`)
-                              : `${API.BASE_URL}/assets/default-user.png`;
+                           {modPendentes.map((it) => {
+                            const fotoAtleta = formatarUrlFoto(it.atleta.foto, "usuarios") || "/default-profile.png";
                             return (
                               <tr key={it.id} className="border-t">
                                 <td className="px-3 py-2">
                                   <div className="flex items-center gap-2">
-                                    <img src={foto} className="w-8 h-8 rounded-full object-cover border" />
+                                    <img src={fotoAtleta} className="w-8 h-8 rounded-full object-cover border" />
                                     <div className="font-medium">{it.atleta.nome}</div>
                                   </div>
                                 </td>
@@ -1051,11 +1056,7 @@ async function invalidarDesafio(id: string) {
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <img
-                      src={
-                        u.foto
-                          ? (u.foto.startsWith("http") ? u.foto : `${API.BASE_URL}${u.foto}`)
-                          : `${API.BASE_URL}/assets/default-user.png`
-                      }
+                      src={formatarUrlFoto(userSelecionado?.foto, "usuarios")}
                       className="w-14 h-14 rounded-full object-cover border"
                     />
                     <div>

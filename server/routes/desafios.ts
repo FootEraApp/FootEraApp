@@ -1,4 +1,3 @@
-// server/routes/desafios
 import express from "express";
 import { authenticateToken } from "server/middlewares/auth.js";
 import { prisma } from "server/lib/prisma.js";
@@ -49,6 +48,30 @@ router.get("/", authenticateToken, async (req, res) => {
   } catch (err) {
     console.error("Erro ao buscar desafios:", err);
     return res.status(500).json({ error: "Erro interno ao buscar desafios" });
+  }
+});
+
+router.get("/minhas-submissoes", authenticateToken, async (req, res) => {
+  try {
+    const atletaId =
+      typeof req.query.atletaId === "string"
+        ? req.query.atletaId
+        : (req as any).tipoUsuarioId;
+
+    if (!atletaId) {
+      return res.status(400).json({ error: "atletaId obrigatório" });
+    }
+
+    const list = await prisma.submissaoDesafio.findMany({
+      where: { atletaId },
+      select: { desafioId: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return res.json(list);
+  } catch (err) {
+    console.error("Erro ao buscar minhas submissões de desafio:", err);
+    return res.status(500).json({ error: "Erro interno" });
   }
 });
 

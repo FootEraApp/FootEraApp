@@ -200,26 +200,22 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
   const {
     nome, email, senha, tipo,
     nomeDeUsuario, cidade, estado, pais, bairro, cpf,
-
     idade,
     categoria,
-
     areaFormacao,
     cref,
     statusCref,
-
     nomeClube,
     cnpjClube, telefone1Clube, telefone2Clube, emailClube,
     siteOficialClube, sedeClube, logradouroClube, numeroClube,
     complementoClube, bairroClube, cidadeClube, estadoClube, paisClube, cepClube, estadio,
-
     nomeEscolinha,
     cnpjEscolinha, telefone1Escolinha, telefone2Escolinha, emailEscolinha,
     siteOficialEscolinha, sedeEscolinha, logradouroEscolinha, numeroEscolinha,
     complementoEscolinha, bairroEscolinha, cidadeEscolinha, estadoEscolinha, paisEscolinha, cepEscolinha,
-
     areaAtuacao, anosExperiencia, headline, siteOuLinkedin,
     telefonePublico, emailPublico, descricao, colaboracaoClubeId,
+    dataNascimento, responsavel,
   } = req.body ?? {};
 
   if (!nome || !email || !senha || !tipo) {
@@ -255,6 +251,10 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         pais:   pais ?? null,
         bairro: bairro ?? null,
         cpf:    cpf ?? null,
+        dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
+        responsavelNome: responsavel?.nome ?? null,
+        responsavelEmail: responsavel?.email ?? null,
+        responsavelTelefone: responsavel?.telefone ?? null,
       },
       select: { id: true, tipo: true, nome: true, email: true },
     });
@@ -381,6 +381,33 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         tipoUsuarioId = admin.id;
         break;
       }
+    }
+
+    try {
+      let idadeCalc: number | null = null;
+      if (dataNascimento) {
+        const d = new Date(dataNascimento);
+        const hoje = new Date();
+        idadeCalc =
+          hoje.getFullYear()
+          - d.getFullYear()
+          - ((hoje.getMonth() < d.getMonth()
+              || (hoje.getMonth() === d.getMonth() && hoje.getDate() < d.getDate())) ? 1 : 0);
+      }
+
+      const privacidadeDefault =
+        idadeCalc !== null && idadeCalc < 12
+          ? { perfil: "private",    dms: "closed",         geoloc: false, videosAudience: "private" }
+          : idadeCalc !== null && idadeCalc < 18
+          ? { perfil: "restricted", dms: "verified_only",  geoloc: false, videosAudience: "followers" }
+          : { perfil: "public",     dms: "open",           geoloc: false, videosAudience: "public" };
+
+      await prisma.usuario.update({
+        where: { id: usuario.id },
+        data: { configuracoesPrivacidade: privacidadeDefault as any },
+      });
+    } catch (e) {
+      console.error("Falha ao setar privacidade default:", e);
     }
 
     let token: string | null = null;

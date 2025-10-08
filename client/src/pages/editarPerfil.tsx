@@ -4,12 +4,8 @@ import { formatarUrlFoto } from '@/utils/formatarFoto.js';
 import Storage from "../../../server/utils/storage.js";
 import { API } from '../config.js';
 
-type ResultadoBuscaClube = {
-  id: string;
-  nome: string;
-  username?: string;
-  fotoUrl?: string | null;
-};
+type ResultadoBuscaClube = { id: string; nome: string; username?: string; fotoUrl?: string | null; };
+type OptionMin = { id: string; nome: string };
 
 const EditarPerfil = () => {
   const usuarioId = Storage.usuarioId;
@@ -27,7 +23,11 @@ const EditarPerfil = () => {
   const [clubeQuery, setClubeQuery] = useState("");
   const [clubes, setClubes] = useState<ResultadoBuscaClube[]>([]);
   const [clubeSel, setClubeSel] = useState<ResultadoBuscaClube | null>(null);
-  
+  const [listaClubes, setListaClubes] = useState<OptionMin[]>([]);       
+  const [listaEscolinhas, setListaEscolinhas] = useState<OptionMin[]>([]);
+  const [clubeSelId, setClubeSelId] = useState<string | null>(null);      
+  const [escolinhaSelId, setEscolinhaSelId] = useState<string | null>(null); 
+
   useEffect(() => {
   if (!usuarioId || !token) {
     console.error("[EditarPerfil] Sem usuarioId ou token — verifique login.");
@@ -60,6 +60,9 @@ const EditarPerfil = () => {
           username: dadosEsp.colaboracaoClube.username ?? "",
         });
       }
+
+      if (dadosEsp?.escolinhaId) setEscolinhaSelId(String(dadosEsp.escolinhaId));
+      if (dadosEsp?.clubeId) setClubeSelId(String(dadosEsp.clubeId));           
 
       const tipoSrv = res.data?.tipo ?? tipoUsuarioOriginal ?? '';
       const t = String(tipoSrv).toLowerCase();
@@ -109,6 +112,24 @@ const EditarPerfil = () => {
   })();
   return () => { cancelado = true; };
 }, [clubeQuery, API?.BASE_URL, token]);
+
+useEffect(() => {
+    let cancel = false;
+    (async () => {
+      try {
+        const [clubesRes, escolasRes] = await Promise.all([
+        axios.get<OptionMin[]>(`${API.BASE_URL}/api/catalogo/clubes`,     { headers }),
+        axios.get<OptionMin[]>(`${API.BASE_URL}/api/catalogo/escolinhas`, { headers }),
+      ])
+        if (cancel) return;
+        setListaClubes(clubesRes.data || []);
+        setListaEscolinhas(escolasRes.data || []);
+      } catch {
+        if (!cancel) { setListaClubes([]); setListaEscolinhas([]); }
+      }
+    })();
+    return () => { cancel = true; };
+  }, [API?.BASE_URL, token]);
 
   if (loading) {
    return <div className="text-center text-gray-600 mt-10">Carregando perfil...</div>;
@@ -168,8 +189,39 @@ const EditarPerfil = () => {
             {renderInput("Altura (cm)", "altura", "number")}
             {renderInput("Peso (kg)", "peso", "number")}
             {renderInput("Selo de Qualidade", "seloQualidade")}
-            {renderInput("Escola (nome)", "escola")}
-            {renderInput("Clube (nome)", "clube")}
+            <div className="mb-4">
+              <label className="block text-sm font-medium">Escolinha</label>
+              <select
+                className="w-full border px-3 py-2 rounded"
+                value={escolinhaSelId ?? ""}                 
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setEscolinhaSelId(v === "" ? null : v);      
+                }}
+              >
+                <option value="">Nenhuma</option>
+                {listaEscolinhas.map(op => (
+                  <option key={op.id} value={op.id}>{op.nome}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium">Clube</label>
+              <select
+                className="w-full border px-3 py-2 rounded"
+                value={clubeSelId ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setClubeSelId(v === "" ? null : v);
+                }}
+              >
+                <option value="">Nenhum</option>
+                {listaClubes.map(op => (
+                  <option key={op.id} value={op.id}>{op.nome}</option>
+                ))}
+              </select>
+            </div>
           </>
         );
       case 'professor':
@@ -405,6 +457,15 @@ const EditarPerfil = () => {
             tipo.colaboracaoClubeId = clubeSel?.id ?? tipo.colaboracaoClubeId ?? null;
             if (tipo.colaboracaoClube) delete tipo.colaboracaoClube;
 
+            delete tipo.escola;
+            delete tipo.clube;
+
+            if (escolinhaSelId === null)       tipo.escolinhaId = null; 
+            else if (typeof escolinhaSelId === "string") tipo.escolinhaId = escolinhaSelId;
+
+            if (clubeSelId === null)           tipo.clubeId = null;
+            else if (typeof clubeSelId === "string")     tipo.clubeId = clubeSelId;
+
             if (typeof tipo.categorias === "string") {
               tipo.categorias = tipo.categorias
                 .split(",")
@@ -428,7 +489,7 @@ const EditarPerfil = () => {
             await axios.put(`${API.BASE_URL}/api/perfil/${usuarioId}`, {
               usuario: { ...dadosUsuario, foto: fotoUrl },
               tipo,
-              tipoUsuario: tipoUsuarioOriginal,
+              tipoUsuario: String(tipoUsuarioOriginal).toLowerCase(),
             }, { headers: { Authorization: `Bearer ${token}` } });
 
             alert("Dados atualizados com sucesso!");

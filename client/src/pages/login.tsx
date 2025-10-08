@@ -1,7 +1,6 @@
 // client/src/pages/login
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import logo from "/assets/usuarios/footera-logo.png";
 import axios from "axios";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
@@ -111,7 +110,7 @@ export default function PaginaLogin() {
   return (
     <div className="flex flex-col md:flex-row h-screen">
       <div className="md:w-1/2 bg-green-800 text-white flex flex-col justify-center items-center p-10">
-        <img src={logo} alt="Logo FootEra" className="w-20 mb-4" />
+        <img src="/assets/usuarios/footera-logo.png" alt="Logo FootEra" className="w-20 mb-4" />
         <h1 className="text-3xl font-bold mb-4">Bem-vindo à FootEra</h1>
         <p className="text-center text-lg max-w-md">
           Se você sonha em conquistar uma oportunidade, joga por amor ou quer se superar... aqui é o seu lugar.

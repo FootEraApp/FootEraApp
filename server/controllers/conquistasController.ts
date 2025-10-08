@@ -13,8 +13,7 @@ const prisma = new PrismaClient();
 type Tier = "bronze" | "prata" | "ouro" | "platina";
 type Entity = "Atleta" | "Professor" | "Escolinha" | "Clube";
 type Group = "Treinos" | "Desafios" | "Desafios em Grupo" | "Pontuação" | "Gestão" | "Eventos";
-
-export type EarnedDTO = {
+type EarnedDTO = {
   id: string;
   entity: Entity;
   title: string;
@@ -23,6 +22,7 @@ export type EarnedDTO = {
   tier?: Tier;
   group: Group;
 };
+type AuthReq = Request & { userId?: string };
 
 function entityFromTipoUsuario(tipo: TipoUsuario): Entity | null {
   if (tipo === "Atleta") return "Atleta";
@@ -44,6 +44,12 @@ function serializeAchievements(list: any[]): EarnedDTO[] {
   }));
 }
 
+const BADGES: Record<string, { nome: string; iconUrl?: string }> = {
+  "1": { nome: "Disciplina",   iconUrl: "/assets/badges/disciplina.png" },
+  "2": { nome: "Pontualidade", iconUrl: "/assets/badges/pontualidade.png" },
+  "3": { nome: "Liderança",    iconUrl: "/assets/badges/lideranca.png" },
+};
+
 export async function getEarnedByUsuarioId(req: Request, res: Response) {
   try {
     const { usuarioId } = req.params as { usuarioId: string };
@@ -52,44 +58,27 @@ export async function getEarnedByUsuarioId(req: Request, res: Response) {
       where: { id: usuarioId },
       select: { tipo: true },
     });
-
-    if (!user) {
-      return res.status(404).json({ error: "Usuário não encontrado" });
-    }
+    if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
 
     const entity = entityFromTipoUsuario(user.tipo);
     if (!entity) {
-      return res.json({
-        usuarioId,
-        entity: null,
-        totalAvailable: 0,
-        earned: [] as EarnedDTO[],
-      });
+      return res.json({ usuarioId, entity: null, totalAvailable: 0, earned: [] as EarnedDTO[] });
     }
 
     const result = await computeAchievementsForUser(prisma, usuarioId, user.tipo);
     if (!result) {
-      return res.json({
-        usuarioId,
-        entity,
-        totalAvailable: 0,
-        earned: [] as EarnedDTO[],
-      });
+      return res.json({ usuarioId, entity, totalAvailable: 0, earned: [] as EarnedDTO[] });
     }
 
     const earned = serializeAchievements(result.earned);
-    return res.json({
-      usuarioId,
-      entity,
-      totalAvailable: result.totalAvailable,
-      earned,
-    });
+    return res.json({ usuarioId, entity, totalAvailable: result.totalAvailable, earned });
   } catch (e: any) {
     console.error("getEarnedByUsuarioId error:", e);
     return res.status(500).json({ error: e?.message || "Erro ao calcular conquistas" });
   }
 }
 
+/** GET /api/conquistas/catalog/:entity?   (entity opcional: atleta|professor|escolinha|clube) */
 export async function getCatalog(req: Request, res: Response) {
   try {
     const raw = (req.params.entity || req.query.entity || "").toString().toLowerCase().trim();
@@ -121,6 +110,44 @@ export async function getCatalog(req: Request, res: Response) {
   } catch (e: any) {
     console.error("getCatalog error:", e);
     return res.status(500).json({ error: e?.message || "Erro ao obter catálogo" });
+  }
+}
+
+/** POST /api/conquistas/compartilhar  (auth) */
+export async function compartilharConquista(req: AuthReq, res: Response) {
+  const userId = req.userId;
+  if (!userId) return res.status(401).json({ message: "Sem autenticação." });
+
+  const { badgeId, mensagem } = req.body as { badgeId?: string; mensagem?: string };
+  if (!badgeId) return res.status(400).json({ message: "badgeId é obrigatório." });
+
+  const badge = BADGES[badgeId];
+  if (!badge) return res.status(404).json({ message: "Badge não encontrada." });
+
+  const conteudo = (mensagem?.trim() || `Conquista desbloqueada: ${badge.nome}! 💪`);
+
+  try {
+    const post = await prisma.postagem.create({
+      data: {
+        usuarioId: userId,
+        conteudo,
+        tipo: "CONQUISTA" as any,
+        badgeId: badgeId as any,
+        imagemUrl: badge.iconUrl || null,
+        dataCriacao: new Date(),
+      } as any,
+    });
+    return res.status(201).json({ ok: true, post });
+  } catch (e) {
+    const post = await prisma.postagem.create({
+      data: {
+        usuarioId: userId,
+        conteudo,
+        imagemUrl: badge.iconUrl || null,
+        dataCriacao: new Date(),
+      } as any,
+    });
+    return res.status(201).json({ ok: true, post });
   }
 }
 

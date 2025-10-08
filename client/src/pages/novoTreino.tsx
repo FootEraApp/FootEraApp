@@ -372,7 +372,6 @@ export default function NovoTreino() {
     })();
   }, [iniciado]);
 
-  // 🔎 Busca os treinos agendados do atleta para bloquear repetição de agendamento/submissão
   useEffect(() => {
     (async () => {
       try {
@@ -407,7 +406,6 @@ export default function NovoTreino() {
         if (!res.ok) return;
 
         const itens = await res.json();
-        // Pega os IDs de treinoProgramado já relacionados a este atleta
         const programadoIds = new Set<string>();
         (Array.isArray(itens) ? itens : []).forEach((t: any) => {
           const idProg = t.treinoProgramadoId || t?.treinoProgramado?.id;
@@ -762,7 +760,6 @@ export default function NovoTreino() {
 
       const novo: TreinoAgendadoResp = await res.json();
       sessionStorage.setItem("lastAgendamento", JSON.stringify(novo));
-      // Atualiza bloqueio local imediatamente
       setIdsProgramadosBloqueados(prev => new Set(prev).add(novo.treinoProgramadoId));
       navigate("/treinos");
 
@@ -787,7 +784,6 @@ export default function NovoTreino() {
     );
 
   if (usuario.tipo === "atleta") {
-    // 🔎 filtra fora treinos programados já agendados/submetidos pelo atleta
     const treinosParaAgendar = treinosDisponiveis.filter(t => !idsProgramadosBloqueados.has(t.id));
 
     return (

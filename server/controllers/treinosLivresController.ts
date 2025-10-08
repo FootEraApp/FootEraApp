@@ -6,10 +6,24 @@ const prisma = new PrismaClient;;
 export const treinosLivresController = {
   async index(req: Request, res: Response) {
     try {
-      const atletaId = req.query.atletaId as string | undefined;
+      const { atletaId: atletaIdQuery, tipoAtividade, categoria } = req.query as any;
+
+      const tipo = (req as any).user?.tipo;
+      const tipoUsuarioId = (req as any).user?.tipoUsuarioId;
+      const atletaId = tipo === "atleta" ? tipoUsuarioId : atletaIdQuery;
+
+      const where: any = {
+        ...(atletaId ? { atletaId } : {}),
+        ...(tipoAtividade
+          ? { tipoAtividade: { equals: String(tipoAtividade), mode: "insensitive" } }
+          : {}),
+        ...(categoria
+          ? { categoria: { equals: String(categoria), mode: "insensitive" } }
+          : {}),
+      };
 
       const treinos = await prisma.treinoLivre.findMany({
-        where: atletaId ? { atletaId } : undefined,
+        where,
         include: { atleta: true },
         orderBy: { data: "desc" },
       });
@@ -39,17 +53,31 @@ export const treinosLivresController = {
 
   async create(req: Request, res: Response) {
     try {
-      const { atletaId, data, descricao, duracaoMin, tipoAtividade, urlEvidencia } = req.body;
+      const { atletaId, data, descricao, duracaoMin, tipoAtividade, categoria, urlEvidencia } = req.body;
 
+      const userId = (req as any).user?.id;
+      const tipo = (req as any).user?.tipo;           
+      const tipoUsuarioId = (req as any).user?.tipoUsuarioId;
+
+      if (tipo === "atleta" && tipoUsuarioId !== atletaId) {
+        return res.status(403).json({ message: "Sem permissão para registrar treino para outro atleta." });
+      }
       const atletaExiste = await prisma.atleta.findUnique({ where: { id: atletaId } });
       if (!atletaExiste) return res.status(400).json({ message: "Atleta inválido" });
+
+      if (!data || !duracaoMin || !(tipoAtividade ?? descricao)?.trim()) {
+        return res.status(400).json({ message: "Campos obrigatórios: data, duração e atividade/descrição." });
+      }
 
       const novo = await prisma.treinoLivre.create({
         data: {
           atletaId,
           data: new Date(data),
-          descricao,
-          duracaoMin
+          descricao: (descricao ?? "").trim(),
+          duracaoMin: Number(duracaoMin) || 0,
+          tipoAtividade: tipoAtividade ?? null,
+          categoria: categoria ?? null,
+          urlEvidencia: urlEvidencia ?? null,
         },
       });
 

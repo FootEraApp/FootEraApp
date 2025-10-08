@@ -30,7 +30,7 @@ import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 import { publicImgUrl } from "@/utils/publicUrl.js";
-
+import socket from "@/services/socket.js";
 import {
   ALL_ACHIEVEMENTS,
   type AchievementLite,
@@ -219,6 +219,21 @@ function PaginaFeed(): JSX.Element {
       setPosts(dados);
     }
     carregar();
+  }, [filtro]);
+
+  useEffect(() => {
+    const onNovoPost = (novo: PostagemComUsuario) => {
+      setPosts((prev) => {
+        if (filtro === "meus" && novo.usuario?.id !== Storage.usuarioId) return prev;
+        if (filtro === "todos" && novo.usuario?.id === Storage.usuarioId) return prev;
+        return [novo, ...prev];
+      });
+    };
+
+    socket.on("feed:novoPost", onNovoPost as any);
+    return () => { 
+      socket.off("feed:novoPost", onNovoPost as any);
+    };
   }, [filtro]);
 
   const handleLike = async (postId: string) => {

@@ -14,7 +14,6 @@ function buildWhere(estado?: string, categoria?: string): Prisma.PontuacaoAtleta
     atletaWhere.usuario = { estado: normalizeUF(estado) };
   }
   if (categoria) {
-    // categoria é um enum[] no Atleta
     atletaWhere.categoria = { has: categoria as unknown as Categoria };
   }
 
@@ -33,11 +32,6 @@ const orderBy: Prisma.PontuacaoAtletaOrderByWithRelationInput[] = [
   { ultimaAtualizacao: "asc" },
 ];
 
-/**
- * GET /api/ranking/global
- * Query: estado?, categoria?
- * Retorna Top 100 (filtrado) e total de atletas no filtro.
- */
 export async function rankingGlobal(req: Request, res: Response) {
   try {
     const estado = typeof req.query.estado === "string" ? req.query.estado : "";
@@ -106,12 +100,6 @@ export async function rankingGlobal(req: Request, res: Response) {
   }
 }
 
-/**
- * GET /api/ranking/posicao
- * Query: q? (nome), estado?, categoria?
- * Retorna a posição do atleta (por nome buscado ou do viewer se não informado),
- * considerando os filtros.
- */
 export async function rankingPosicao(req: Request, res: Response) {
   try {
     const estado = typeof req.query.estado === "string" ? req.query.estado : "";
@@ -120,12 +108,10 @@ export async function rankingPosicao(req: Request, res: Response) {
 
     const where = buildWhere(estado || undefined, categoria || undefined);
 
-    // 1) Descobrir o atleta alvo
     let alvoAtletaId: string | null = null;
 
     if (q) {
-      // procura usuários pelo nome e pega um atleta que se encaixe no filtro
-      const candUsers = await prisma.usuario.findMany({
+     const candUsers = await prisma.usuario.findMany({
         where: { nome: { contains: q, mode: "insensitive" } },
         select: { id: true },
         take: 10,
@@ -144,7 +130,6 @@ export async function rankingPosicao(req: Request, res: Response) {
       }
     }
 
-    // fallback: se não passou q ou não encontrou, tenta o viewer
     if (!alvoAtletaId) {
       const viewerUsuarioId = (req as any).userId as string | undefined;
       if (viewerUsuarioId) {
@@ -160,7 +145,6 @@ export async function rankingPosicao(req: Request, res: Response) {
       return res.status(404).json({ error: "Atleta não encontrado para esta busca/filtro." });
     }
 
-    // 2) Ordena todo o conjunto filtrado para achar a posição com os tie-breakers
     const all = await prisma.pontuacaoAtleta.findMany({
       where,
       orderBy,
@@ -184,7 +168,6 @@ export async function rankingPosicao(req: Request, res: Response) {
 
     const p = all[idx];
 
-    // marca se o viewer é o próprio atleta retornado
     let isViewer = false;
     const viewerUsuarioId = (req as any).userId as string | undefined;
     if (viewerUsuarioId) {

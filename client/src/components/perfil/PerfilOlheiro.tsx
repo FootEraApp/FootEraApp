@@ -34,12 +34,12 @@ type PayloadOlheiro = {
     totalIndicacoes?: number;
   };
   metrics: {
-    atletasAcompanhados?: number; // opcional
-    observados?: number;          // alias possível do back
+    atletasAcompanhados?: number;
+    observados?: number;          
     indicacoesEnviadas?: number;
-    indicacoes?: number;          // alias possível do back
+    indicacoes?: number;          
     reputacaoScore?: number;
-    reputacao?: number;           // alias possível do back
+    reputacao?: number;          
     indicacoesAprovadas?: number;
     taxaAprovacao?: number;
     atletasAssinados?: number;
