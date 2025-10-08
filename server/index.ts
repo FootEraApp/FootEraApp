@@ -12,6 +12,7 @@ import * as fs from "fs";
 import { setupSocket } from "./socket.js";
 import { UPLOADS_ROOT, ensureUploadDirs } from "./utils/uploads.js";
 import { gerarSnapshotRanking } from "./jobs/rankingSnapshot.js";
+import helmet from "helmet";
 
 // rotas
 import adminRoutes from "./routes/admin.js";
@@ -22,8 +23,8 @@ import amigosRoutes from "./routes/amigos.js";
 import cadastroRoutes from "./routes/cadastro.js";
 import clubeRoutes from "./routes/clube.js";
 import configuracoesRoutes from "./routes/configuracoes.js";
-import conquistaRoutes from "./routes/conquista.js";
-import categoriasRoutes from "./routes/categorias.js";
+import conquistasRoutes from "./routes/conquistas.js";
+import categoriasRoutes from "./routes/categorias.js"
 import desafiosRoutes from "./routes/desafios.js";
 import desafiosEmGrupoRoutes from "./routes/desafiosEmGrupo.js";
 import escolinhaRoutes from "./routes/escolinha.js";
@@ -35,7 +36,6 @@ import feedRoutes from "./routes/feed.js";
 import gruposRoutes from "./routes/grupos.js";
 import homeRoutes from "./routes/home.js";
 import logErroRoutes from "./routes/logErro.js";
-// import loginRoutes from "./routes/login.js"; // (evite; use /api/auth)
 import mensagemRoutes from "./routes/mensagem.js";
 import midiaRoutes from "./routes/midia.js";
 import notificacoesRoutes from "./routes/notificacoes.js";
@@ -61,19 +61,20 @@ import gerenciarAtletasRoutes from "./routes/gerenciarAtletas.js";
 import indicacoesRouter from "./routes/indicacoes.js";
 import olheirosRouter from "./routes/olheiros.js";
 import desempenhoRoutes from "./routes/desempenho.js";
-// import conquistasRouter from "./routes/conquistas.js"; // duplicava /api/conquistas
 import relacoesRoutes from "./routes/relacoes.js";
 import elencosRoutes from "./routes/elencos.js";
 import formadoresRoutes from "./routes/formadores.js";
 import scoutNotesRoutes from "./routes/scoutNotes.js";
 import checklistRoutes from "./routes/checklists.js";
+import catalogoRoutes from "./routes/catalogo.js";
+import legalRoutes from "./routes/legal.js";
 
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 import { authenticateToken } from "./middlewares/auth.js"; // ⬅️ IMPORTANTE
 
 // ---------------- ENV ----------------
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = dirname(__filename);     
 
 const envCandidates = [
   path.resolve(__dirname, "../.env"),
@@ -104,6 +105,8 @@ const LOCAL_IP = process.env.LOCAL_IP || "192.168.18.8";
 const FRONT_PORT = Number(process.env.FRONT_PORT) || 5173;
 
 // ---------- Middlewares ----------
+app.use(helmet({ crossOriginResourcePolicy: false }));
+
 app.use(
   cors({
     origin: [FRONTEND_URL, "http://localhost:5173"],
@@ -155,7 +158,7 @@ app.use("/api/amigos", amigosRoutes);
 app.use("/api/categorias", categoriasRoutes);
 app.use("/api/clubes", clubeRoutes);
 app.use("/api/configuracoes", configuracoesRoutes);
-app.use("/api/conquistas", conquistaRoutes);
+app.use("/api/conquistas", conquistasRoutes);
 app.use("/api/desafios", desafiosRoutes);
 app.use("/api/desafios/em-grupo", desafiosEmGrupoRoutes);
 app.use("/api/desempenho", desempenhoRoutes);
@@ -184,7 +187,6 @@ app.use("/api/submissoes", submissoesRoutes);
 // app.use("/api/termos", termoRoutes);  // já está nas públicas
 app.use("/api/treinos", treinoRoutes);
 app.use("/api/treino-unico", treinoUnicoRoutes);
-app.use("/api/treinoslivres", treinoLivreRoutes);
 app.use("/api/treinosprogramados", treinoProgramadoRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);

@@ -24,7 +24,11 @@ router.get("/:id/vinculos-basic", async (req, res) => {
 
     const atleta = await prisma.atleta.findFirst({
       where: { OR: [{ id }, { usuarioId: id }] },
-      select: { id: true },
+      select: {
+        id: true,
+        escolinha: { select: { id: true, nome: true } },
+        clube:     { select: { id: true, nome: true } },
+      },
     });
     if (!atleta) return res.json({ professor: null, clube: null, escolinha: null });
 
@@ -46,10 +50,19 @@ router.get("/:id/vinculos-basic", async (req, res) => {
       }),
     ]);
 
+    const escolaFinal = atleta.escolinha ?? escolinhaRel?.escolinha ?? null;
+    const clubeFinal  = atleta.clube     ?? clubeRel?.clube     ?? null;
+
     res.json({
-      professor: profRel?.professor ? { id: profRel.professor.id, nome: profRel.professor.nome } : null,
-      clube: clubeRel?.clube ? { id: clubeRel.clube.id, nome: clubeRel.clube.nome } : null,
-      escolinha: escolinhaRel?.escolinha ? { id: escolinhaRel.escolinha.id, nome: escolinhaRel.escolinha.nome } : null,
+      professor: profRel?.professor
+        ? { id: profRel.professor.id, nome: profRel.professor.nome }
+        : null,
+      escolinha: escolaFinal
+        ? { id: escolaFinal.id, nome: escolaFinal.nome }
+        : null,
+      clube: clubeFinal
+        ? { id: clubeFinal.id, nome: clubeFinal.nome }
+        : null,
     });
   } catch (e) {
     console.error(e);

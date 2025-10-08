@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 
 type Usuario = { id: string; nome: string; foto?: string | null };
 type Seguidor = Usuario & { isSeguindo?: boolean };
@@ -108,11 +109,7 @@ export default function MinhaRede() {
             >
               <div className="flex items-center gap-3">
                 <img
-                  src={
-                    u.foto?.startsWith("http")
-                      ? (u.foto as string)
-                      : `${API.BASE_URL}${u.foto ?? ""}`
-                  }
+                  src={ formatarUrlFoto(u.foto, "usuarios") }
                   className="w-10 h-10 rounded-full object-cover"
                 />
                 <span className="font-medium">{u.nome || "Usuário"}</span>
@@ -139,11 +136,7 @@ export default function MinhaRede() {
               >
                 <div className="flex items-center gap-3">
                   <img
-                    src={
-                      u.foto?.startsWith("http")
-                        ? (u.foto as string)
-                        : `${API.BASE_URL}${u.foto ?? ""}`
-                    }
+                    src={ formatarUrlFoto(u.foto, "usuarios") }
                     className="w-10 h-10 rounded-full object-cover"
                   />
                   <span className="font-medium">{u.nome || "Usuário"}</span>

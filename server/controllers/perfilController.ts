@@ -4,15 +4,54 @@ import { AuthenticatedRequest } from "server/middlewares/auth.js";
 
 const prisma = new PrismaClient();
 
+function pickId(raw: any): string | undefined {
+  if (!raw) return undefined;
+  if (typeof raw === "string") return raw.trim() || undefined;
+  if (raw?.id) return String(raw.id);
+  if (raw?.value) return String(raw.value);
+  if (Array.isArray(raw) && raw[0]?.id) return String(raw[0].id);
+  return undefined;
+}
+
+function pontosDesafioInd(s: any) {
+  const cand = [
+    s?.pontosCreditados,   
+    s?.pontuacaoSnapshot,   
+    s?.pontuacao,           
+    s?.desafio?.pontuacao, 
+  ];
+  const n = cand
+    .map(v => Number(v))
+    .find(v => Number.isFinite(v) && v > 0);
+  return n ?? 0;
+}
+
 function pontosGrupo(p: any): number {
-  return Number(
-    p?.pontosCreditados ??
-    p?.pontuacao ??
-    p?.pontosSnapshot ??   // usado nos seus registros
-    p?.bonus ??            // se bônus conta como pontos; remova se não for para somar
-    p?.grupo?.desafio?.pontuacao ??
-    0
-  ) || 0;
+  const baseCandidates = [
+    p?.pontosCreditados,
+    p?.pontosAcumulados,
+    p?.pontuacao,
+    p?.pontosSnapshot,
+    p?.grupo?.pontosCreditados,
+    p?.grupo?.pontosAcumulados,
+    p?.grupo?.pontuacao,
+    p?.grupo?.desafio?.pontuacao,
+  ];
+  const base =
+    baseCandidates
+      .map((v) => Number(v))
+      .find((v) => Number.isFinite(v) && v > 0) ?? 0;
+
+  const bonusCandidates = [p?.bonus, p?.bonusPoints, p?.grupo?.bonus, p?.grupo?.bonusPoints];
+  const bonusVal =
+    bonusCandidates
+      .map((v) => Number(v))
+      .find((v) => Number.isFinite(v)) ?? 0;
+
+  const bonusFlag = p?.bonusAplicado ?? p?.bonusFlag ?? p?.grupo?.bonusAplicado ?? p?.grupo?.bonusFlag;
+  const aplicarBonus = bonusFlag !== false;
+
+  return base + (aplicarBonus ? bonusVal : 0);
 }
 
 async function getParticipacoesGrupo(usuarioId: string, atletaId: string) {
@@ -143,7 +182,8 @@ export async function getPontuacaoDetalhada(req: Request, res: Response) {
         s.pontosCreditados ??
         s.pontuacaoSnapshot ??
         s.treinoAgendado?.treinoProgramado?.pontuacao ??
-        s.treinoAgendado?.treinoProgramado?.exercicios?.length ?? 0;
+        s.treinoAgendado?.treinoProgramado?.exercicios?.length ??
+        0;
 
       return {
         tipo: "Treino" as const,
@@ -152,7 +192,7 @@ export async function getPontuacaoDetalhada(req: Request, res: Response) {
         data: new Date(s.criadoEm).toLocaleDateString("pt-BR"),
         ts: +new Date(s.criadoEm),
         duracao: typeof dur === "number" && dur > 0 ? `${dur} min` : undefined,
-        pontuacao: Number(pts) || 0,  // <-- aqui!
+        pontuacao: Number(pts) || 0,
       };
     });
 
@@ -168,26 +208,17 @@ export async function getPontuacaoDetalhada(req: Request, res: Response) {
       data: new Date(s.createdAt).toLocaleDateString("pt-BR"),
       ts: +new Date(s.createdAt),
       titulo: s.desafio?.titulo ?? "Desafio",
-      pontuacao: Number(s.desafio?.pontuacao ?? 0),
+      pontuacao: pontosDesafioInd(s as any),
     }));
-   
+
     let historicoGrupo: any[] = [];
     try {
-      const parts = await (prisma as any).desafioGrupoParticipacao?.findMany({
-        where: { atletaId: atleta.id },
-        include: { grupo: { include: { desafio: true } } },
-        orderBy: { updatedAt: "desc" },
-      }) ?? [];
-
-      historicoGrupo = parts.map((p: any) => ({
-        tipo: "Desafio" as const,
-        status: "Concluído (grupo)",
-        data: new Date(p.updatedAt ?? p.createdAt ?? Date.now()).toLocaleDateString("pt-BR"),
-        ts: +new Date(p.updatedAt ?? p.createdAt ?? Date.now()),
-        titulo: p.grupo?.desafio?.titulo ?? p.grupo?.nome ?? "Desafio em grupo",
-        pontuacao: Number(p.pontosCreditados ?? p.pontuacao ?? p.grupo?.desafio?.pontuacao ?? 0),
-      }));
-    } catch {}
+      const parts = await getParticipacoesGrupo(req.params.id, atleta.id);
+      historicoGrupo = parts.map(mapGrupoToHistorico);
+       const ptsGrupo = historicoGrupo.reduce((a, b:any) => a + (Number(b.pontuacao) || 0), 0);
+    } catch (e) {
+      console.warn("[pontuacaoDetalhada] erro ao ler grupos", e);
+    }
 
     const historico = [...historicoTreinos, ...historicoDesafios, ...historicoGrupo]
       .sort((a, b) => b.ts - a.ts)
@@ -535,17 +566,36 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         telefone1: true, telefone2: true,
         nacionalidade: true, naturalidade: true,
         posicao: true, altura: true, peso: true,
-        seloQualidade: true, foto: true,
+        seloQualidade: true, foto: true, escolinhaId: true, clubeId: true
       }
     });
 
     if (atleta) {
+      const [escolaMin, clubeMin, relProf] = await Promise.all([
+        atleta.escolinhaId
+          ? prisma.escolinha.findUnique({
+              where: { id: atleta.escolinhaId },
+              select: { id: true, nome: true },
+            })
+          : null,
+        atleta.clubeId
+          ? prisma.clube.findUnique({
+              where: { id: atleta.clubeId },
+              select: { id: true, nome: true },
+            })
+          : null,
+        prisma.relacaoTreinamento.findFirst({
+          where: { atletaId: atleta.id, professorId: { not: null } },
+          include: { professor: { select: { id: true, nome: true } } },
+          orderBy: { criadoEm: "desc" },
+        }),
+      ]);
+
       dadosEspecificos = {
-        atletaId: atleta.id,
+        atletaId: atleta.id,        
         nome: atleta.nome,
         sobrenome: atleta.sobrenome,
         idade: atleta.idade,
-        cpf: atleta.cpf,
         telefone1: atleta.telefone1,
         telefone2: atleta.telefone2,
         nacionalidade: atleta.nacionalidade,
@@ -555,6 +605,11 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         peso: atleta.peso,
         seloQualidade: atleta.seloQualidade,
         foto: atleta.foto,
+        escolinhaId: atleta.escolinhaId,
+        clubeId: atleta.clubeId,
+        escola: escolaMin?.nome ?? null,
+        clube:  clubeMin?.nome  ?? null,
+        professor: relProf?.professor?.nome ?? null,
       };
       tipoPerfil = "Atleta";
     }
@@ -679,25 +734,76 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
     });
 
     switch (tipoUsuario) {
-      case "atleta":
-        await prisma.atleta.update({
-          where: { usuarioId: id },
-          data: {
-            nome: tipo.nome,
-            sobrenome: tipo.sobrenome,
-            idade: isNaN(parseInt(tipo.idade)) ? undefined : parseInt(tipo.idade),
-            telefone1: tipo.telefone1,
-            telefone2: tipo.telefone2,
-            nacionalidade: tipo.nacionalidade,
-            naturalidade: tipo.naturalidade,
-            posicao: tipo.posicao,
-            altura: isNaN(parseInt(tipo.altura)) ? undefined : parseInt(tipo.altura),
-            peso: isNaN(parseInt(tipo.peso)) ? undefined : parseInt(tipo.peso),
-            seloQualidade: tipo.seloQualidade,
-            foto: fotoFinal,     
+      case "atleta": {
+        let escolinhaId =
+          pickId(tipo.escolinhaId) ??
+          pickId(tipo.escolaId) ??
+          pickId(tipo.escolinha) ??
+          pickId(tipo.escola);
+
+        let clubeId = pickId(tipo.clubeId) ?? pickId(tipo.clube);
+
+        const data: any = {
+          nome: tipo.nome,
+          sobrenome: tipo.sobrenome,
+          idade: isNaN(parseInt(tipo.idade)) ? undefined : parseInt(tipo.idade),
+          telefone1: tipo.telefone1,
+          telefone2: tipo.telefone2,
+          nacionalidade: tipo.nacionalidade,
+          naturalidade: tipo.naturalidade,
+          posicao: tipo.posicao,
+          altura: isNaN(parseInt(tipo.altura)) ? undefined : parseInt(tipo.altura),
+          peso: isNaN(parseInt(tipo.peso)) ? undefined : parseInt(tipo.peso),
+          seloQualidade: tipo.seloQualidade,
+          foto: fotoFinal,
+        };
+
+        if (typeof escolinhaId !== "undefined") data.escolinhaId = escolinhaId;
+        if (typeof clubeId !== "undefined") data.clubeId = clubeId;
+
+          const atletaRow = await prisma.atleta.findUnique({
+            where: { usuarioId: id },
+            select: { id: true },
+          });
+          if (!atletaRow) {
+            return res.status(404).json({ error: "Atleta não encontrado para este usuário." });
           }
-        });
-        break;
+          const atletaId = atletaRow.id;
+
+          await prisma.$transaction(async (tx) => {
+            await tx.atleta.update({ where: { usuarioId: id }, data });
+
+            if (typeof escolinhaId !== "undefined") {
+              await tx.relacaoTreinamento.deleteMany({
+                where: { atletaId, escolinhaId: { not: escolinhaId } },
+              });
+              if (escolinhaId) {
+                const existe = await tx.relacaoTreinamento.findFirst({
+                  where: { atletaId, escolinhaId },
+                });
+                if (!existe) {
+                  await tx.relacaoTreinamento.create({ data: { atletaId, escolinhaId } });
+                }
+              }
+            }
+
+            if (typeof clubeId !== "undefined") {
+              await tx.relacaoTreinamento.deleteMany({
+                where: { atletaId, clubeId: { not: clubeId } },
+              });
+              if (clubeId) {
+                const existe = await tx.relacaoTreinamento.findFirst({
+                  where: { atletaId, clubeId },
+                });
+                if (!existe) {
+                  await tx.relacaoTreinamento.create({ data: { atletaId, clubeId } });
+                }
+              }
+            }
+          });
+
+          break;
+        }
 
       case "professor":
         await prisma.professor.update({
@@ -777,7 +883,6 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
 
 export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
-
   try {
     const atleta = await prisma.atleta.findUnique({
       where: { usuarioId: id },
@@ -812,20 +917,17 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
     });
 
     const partsGrupo = await getParticipacoesGrupo(id, atleta.id);
-    const desafiosGrupo = partsGrupo.length;
+    const totalPontosGrupo = partsGrupo.reduce((acc: number, item: any) => acc + pontosGrupo(item), 0);
 
-    const desafiosCompletos = desafiosIndividuais + desafiosGrupo;
-
-    const pontosGrupoExtra = partsGrupo.reduce(
-      (acc: number, item: any) => acc + pontosGrupo(item),
-      0
-    );
-    
     const pontuacao = await prisma.pontuacaoAtleta.findUnique({ where: { atletaId: atleta.id } });
     const pontosConquistadosBase = pontuacao
       ? pontuacao.pontuacaoDisciplina + pontuacao.pontuacaoPerformance + pontuacao.pontuacaoResponsabilidade
       : 0;
-    const pontosConquistados = pontosConquistadosBase + pontosGrupoExtra;
+
+    const pontosConquistados = pontosConquistadosBase + totalPontosGrupo;
+
+    const desafiosGrupo = partsGrupo.length;
+    const desafiosCompletos = desafiosIndividuais + desafiosGrupo;
 
     for (const recebido of atleta.treinosRecebidos) {
       for (const ex of recebido.treino.exercicios) {
@@ -1272,24 +1374,20 @@ export async function getPerfilOlheiro(req: Request, res: Response) {
         descricao: olheiro.descricao ?? null,
         areaAtuacao: olheiro.areaAtuacao ?? null,
         anosExperiencia: olheiro.anosExperiencia ?? 0,
-        contato: {
-          emailPublico: olheiro.emailPublico ?? null,
-          telefonePublico: olheiro.telefonePublico ?? null,
-          siteOuLinkedin: olheiro.siteOuLinkedin ?? null,
-        },
-        colaboracaoClube: olheiro.colaboracaoClube
-          ? {
-              id: olheiro.colaboracaoClube.id,
-              usuarioId: olheiro.colaboracaoClube.usuarioId,
-              nome: olheiro.colaboracaoClube.nome,
-              logo: (olheiro as any).colaboracaoClube?.logo ?? null,
-            }
-          : null,
+        emailPublico: olheiro.emailPublico ?? null,
+        telefonePublico: olheiro.telefonePublico ?? null,
+        siteOuLinkedin: olheiro.siteOuLinkedin ?? null,
+        colaboracaoClube: olheiro.colaboracaoClube ? {
+          id: olheiro.colaboracaoClube.id,
+          usuarioId: olheiro.colaboracaoClube.usuarioId,
+          nome: olheiro.colaboracaoClube.nome,
+          logo: (olheiro as any).colaboracaoClube?.logo ?? null,
+        } : null,
         createdAt: olheiro.createdAt,
         updatedAt: olheiro.updatedAt,
       },
       metrics: {
-        observados: 0, 
+        observados: 0,
         indicacoes: olheiro.totalIndicacoes ?? 0,
         reputacao: olheiro.reputacaoScore ?? 0,
       },

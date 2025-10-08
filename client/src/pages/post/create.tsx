@@ -203,7 +203,6 @@ export default function PaginaPostagem() {
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="p-6 max-w-xl mx-auto">
         <h1 className="text-2xl font-bold mb-4 text-green-900">Nova Postagem</h1>
-
         <textarea
           className="w-full border rounded p-3 mb-4"
           rows={4}

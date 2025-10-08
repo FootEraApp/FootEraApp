@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "wouter";
-import logo from "/assets/usuarios/footera-logo.png";
 
 type TabKey = "termos" | "privacidade";
 
@@ -18,9 +16,20 @@ function getInitialTab(): TabKey {
   }
 }
 
+async function sha256(text: string): Promise<string> {
+  const enc = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+const VERSAO_TERMO = "2025-10-06";
+const VERSAO_PRIV = "2025-10-06";
+
 export default function TermosEPrivacidade() {
-  const [location, setLocation] = useLocation();
   const [tab, setTab] = useState<TabKey>(getInitialTab());
+  const [conteudo, setConteudo] = useState<string>("");
+  const [hash, setHash] = useState<string>("");
+  const isTermos = tab === "termos";
 
   useEffect(() => {
     const onPopState = () => setTab(getInitialTab());
@@ -28,136 +37,133 @@ export default function TermosEPrivacidade() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-    const goTab = (t: TabKey) => {
+  useEffect(() => {
+    const url = isTermos
+      ? "/assets/legal/termos-de-uso.txt"
+      : "/assets/legal/politica-de-privacidade.txt";
+    (async () => {
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        const txt = await res.text();
+        setConteudo(txt);
+        setHash(await sha256(txt));
+      } catch {
+        setConteudo("Não foi possível carregar o documento.");
+        setHash("");
+      }
+    })();
+  }, [isTermos]);
+
+  const versao = isTermos ? VERSAO_TERMO : VERSAO_PRIV;
+
+  const goTab = (t: TabKey) => {
     setTab(t);
     const url = `/termos?tab=${t}`;
     window.history.replaceState({}, "", url);
   };
 
-  const isTermos = tab === "termos";
+  const paragraphs = useMemo(() => {
+    return conteudo
+      .split(/\n{2,}/g)
+      .map(s => s.trim())
+      .filter(Boolean);
+  }, [conteudo]);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
-          <img src={logo} className="w-8 h-8" alt="FootEra" />
-          <h1 className="text-xl font-semibold text-gray-800">
-            Termos de Uso & Política de Privacidade
-          </h1>
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-3">
+          <img src="/assets/usuarios/footera-logo.png" className="w-8 h-8" alt="FootEra" />
+          <div>
+            <h1 className="text-xl font-semibold text-gray-800">
+              Termos de Uso & Política de Privacidade
+            </h1>
+            <p className="text-xs text-gray-500">
+              Versão {versao} • Hash (SHA-256): <span className="font-mono">{hash.slice(0, 16)}…</span>
+            </p>
+          </div>
+          <div className="ml-auto">
+            <div className="inline-flex rounded-xl bg-white p-1 shadow-sm border">
+              <button
+                type="button"
+                onClick={() => goTab("termos")}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition ${isTermos ? "bg-green-700 text-white" : "text-gray-700 hover:bg-gray-100"}`}
+                aria-selected={isTermos}
+                aria-controls="painel-termos"
+                role="tab"
+                id="aba-termos"
+              >
+                Termos de Uso
+              </button>
+              <button
+                type="button"
+                onClick={() => goTab("privacidade")}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition ${!isTermos ? "bg-green-700 text-white" : "text-gray-700 hover:bg-gray-100"}`}
+                aria-selected={!isTermos}
+                aria-controls="painel-privacidade"
+                role="tab"
+                id="aba-privacidade"
+              >
+                Política de Privacidade
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6">
-        <div className="inline-flex rounded-xl bg-white p-1 shadow-sm border">
-          <button
-            type="button"
-            onClick={() => goTab("termos")}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
-              isTermos
-                ? "bg-green-700 text-white"
-                : "text-gray-700 hover:bg-gray-100"
-            }`}
-            aria-selected={isTermos}
-            aria-controls="painel-termos"
-            role="tab"
-            id="aba-termos"
-          >
-            Termos de Uso
-          </button>
-          <button
-            type="button"
-            onClick={() => goTab("privacidade")}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition ${
-              !isTermos
-                ? "bg-green-700 text-white"
-                : "text-gray-700 hover:bg-gray-100"
-            }`}
-            aria-selected={!isTermos}
-            aria-controls="painel-privacidade"
-            role="tab"
-            id="aba-privacidade"
-          >
-            Política de Privacidade
-          </button>
-        </div>
-
-        <section
-          id="painel-termos"
-          role="tabpanel"
-          aria-labelledby="aba-termos"
-          hidden={!isTermos}
-          className="mt-6"
-        >
+      <main className="max-w-6xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <section className="lg:col-span-8">
           <div className="bg-white rounded-xl shadow border p-5 space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Termos de Uso</h2>
-            <p className="text-sm text-gray-600">
-              <em>Texto provisório.</em> Você ainda não forneceu os termos finais. 
-              Este espaço é um placeholder para o conteúdo oficial dos Termos de Uso da FootEra.
-            </p>
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {isTermos ? "Termos de Uso" : "Política de Privacidade"}
+              </h2>
+              <div className="text-xs text-gray-500">
+                Última atualização: {versao}
+              </div>
+            </div>
 
-            <div className="space-y-3 text-sm text-gray-700">
-              <h3 className="font-medium">1. Aceite</h3>
-              <p>Ao criar uma conta e utilizar a plataforma, o usuário concorda com estes Termos de Uso.</p>
+            {!conteudo && <p className="text-sm text-gray-600">Carregando…</p>}
 
-              <h3 className="font-medium">2. Cadastro e Conta</h3>
-              <p>Informações corretas, confidencialidade de credenciais e responsabilidade por atividades na conta.</p>
+            <article className="prose max-w-none prose-p:my-3 prose-h3:mt-6">
+              {paragraphs.map((p, i) => (
+                <p key={i} className="whitespace-pre-wrap text-sm text-gray-800">{p}</p>
+              ))}
+            </article>
 
-              <h3 className="font-medium">3. Regras de Conduta</h3>
-              <p>Proibição de uso indevido, assédio, conteúdo ilegal, violação de direitos e tentativas de fraude.</p>
-
-              <h3 className="font-medium">4. Conteúdo do Usuário</h3>
-              <p>Direitos, licenças, moderação e remoção de conteúdo que viole estes termos.</p>
-
-              <h3 className="font-medium">5. Limitações de Responsabilidade</h3>
-              <p>Serviço “no estado em que se encontra”; isenções e limites conforme legislação aplicável.</p>
-
-              <h3 className="font-medium">6. Rescisão</h3>
-              <p>Encerramento de contas e remoção de acesso em caso de violações.</p>
-
-              <h3 className="font-medium">7. Alterações</h3>
-              <p>Atualizações dos termos com notificação razoável.</p>
+            <div className="pt-4 border-t flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-gray-500">Arquivos oficiais:</span>
+              <a className="underline text-blue-700" href="/assets/legal/termos-de-uso.txt" download>Baixar TXT</a>
+              <a className="underline text-blue-700" href="/assets/legal/termos-de-uso-footera.docx" target="_blank" rel="noreferrer">Baixar DOCX</a>
+              <span className="mx-2 text-gray-300">|</span>
+              <a className="underline text-blue-700" href="/assets/legal/politica-de-privacidade.txt" download>Baixar TXT</a>
+              <a className="underline text-blue-700" href="/assets/legal/Politica-de-privacidade-Footera.docx" target="_blank" rel="noreferrer">Baixar DOCX</a>
+              <span className="mx-2 text-gray-300">|</span>
+              <button
+                onClick={() => navigator.clipboard.writeText(hash)}
+                className="text-gray-700 border px-2 py-1 rounded hover:bg-gray-50"
+                title="Copiar hash"
+              >
+                Copiar hash
+              </button>
             </div>
           </div>
         </section>
 
-        <section
-          id="painel-privacidade"
-          role="tabpanel"
-          aria-labelledby="aba-privacidade"
-          hidden={isTermos}
-          className="mt-6"
-        >
+        <aside className="lg:col-span-4">
           <div className="bg-white rounded-xl shadow border p-5 space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Política de Privacidade</h2>
-            <p className="text-sm text-gray-600">
-              <em>Texto provisório.</em> Você ainda não forneceu a política final. 
-              Este espaço é um placeholder para o conteúdo oficial da Política de Privacidade da FootEra.
-            </p>
-
-            <div className="space-y-3 text-sm text-gray-700">
-              <h3 className="font-medium">1. Coleta de Dados</h3>
-              <p>Tipos de dados pessoais coletados, finalidades e base legal.</p>
-
-              <h3 className="font-medium">2. Uso e Compartilhamento</h3>
-              <p>Como os dados são usados, com quem podem ser compartilhados e por quê.</p>
-
-              <h3 className="font-medium">3. Direitos do Titular</h3>
-              <p>Direitos previstos na LGPD: acesso, correção, exclusão, portabilidade, etc.</p>
-
-              <h3 className="font-medium">4. Segurança</h3>
-              <p>Medidas técnicas e organizacionais para proteção de dados.</p>
-
-              <h3 className="font-medium">5. Retenção</h3>
-              <p>Prazos de armazenamento e critérios de eliminação.</p>
-
-              <h3 className="font-medium">6. Cookies</h3>
-              <p>Uso de cookies e tecnologias similares; preferências do usuário.</p>
-
-              <h3 className="font-medium">7. Contato</h3>
-              <p>Canal para dúvidas, solicitações e reclamações relacionadas à privacidade.</p>
+            <h3 className="font-semibold text-gray-900">Segurança de menores</h3>
+            <ul className="text-sm text-gray-700 list-disc list-inside space-y-2">
+              <li><strong>&lt; 12 anos (modo “Júnior”)</strong>: conta gerida por responsável; perfil privado; DMs fechadas por padrão; geolocalização e vídeos <em>privados</em> até o responsável ativar.</li>
+              <li><strong>12–17</strong>: perfil restrito por padrão (seguidores aprovados). Avisos antes de compartilhar rosto/localização. DMs apenas com contas verificadas/aprovadas ou com opt-in do responsável.</li>
+              <li><strong>Banner de saúde</strong>: conteúdo educacional; não substitui avaliação médica/profissional; responsável decide aptidão.</li>
+              <li><strong>Observadores</strong>: só com consentimento específico; responsável escolhe o que é visível.</li>
+            </ul>
+            <div className="text-sm text-gray-600">
+              Contato: <a className="underline text-blue-700" href="mailto:suporte@footera.app.br">suporte@footera.app.br</a>
             </div>
           </div>
-        </section>
+        </aside>
       </main>
     </div>
   );

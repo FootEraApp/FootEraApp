@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
+import { sanitizeText, basicModerationFails, normalizeIncomingMediaUrl, MOD, isAllowedMime } from "../utils/moderation.js";
+import { getIO } from "../socket.js"
 
 type AuthedReq = Request & { userId?: string };
 
@@ -47,64 +49,72 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
     const body = req.body as any;
     const file = (req as any).file as Express.Multer.File | undefined;
 
-    const descricao: string | undefined = body.descricao ?? body.conteudo;
-    const imagemUrl: string | undefined = body.imagemUrl;
-    const videoUrl: string | undefined = body.videoUrl;
+    const rawDescricao: string | undefined = body.descricao ?? body.conteudo;
+    const descricao = rawDescricao ? sanitizeText(rawDescricao, MOD.MAX_DESC_LEN) : undefined;
 
-    let finalImagemUrl: string | null = null;
-    let finalVideoUrl: string | null = null;
-
-    if (isAllowedUrl(imagemUrl)) finalImagemUrl = normalizeIncomingUrl(imagemUrl!, req) || null;
-    if (isAllowedUrl(videoUrl))  finalVideoUrl  = normalizeIncomingUrl(videoUrl!,  req) || null;
-
-    if (!finalImagemUrl && !finalVideoUrl && file) {
-      if (file.mimetype.startsWith("image/")) {
-        finalImagemUrl = `/uploads/${file.filename}`;
-      } else if (file.mimetype.startsWith("video/")) {
-        finalVideoUrl = `/uploads/${file.filename}`;
-      }
+    if (descricao) {
+      const fail = basicModerationFails(descricao);
+      if (fail) return res.status(422).json({ message: fail });
     }
 
+    const reqHost = String(req.headers.host || "");
+    let finalImagemUrl: string | null =
+      body.imagemUrl ? normalizeIncomingMediaUrl(body.imagemUrl, reqHost) || null : null;
+    let finalVideoUrl: string | null =
+      body.videoUrl ? normalizeIncomingMediaUrl(body.videoUrl, reqHost) || null : null;
+
+    if (!finalImagemUrl && !finalVideoUrl && file) {
+      if (!isAllowedMime(file.mimetype)) {
+        return res.status(400).json({ message: "Arquivo com tipo não permitido." });
+      }
+      if (file.mimetype.startsWith("image/")) finalImagemUrl = `/uploads/${file.filename}`;
+      else if (file.mimetype.startsWith("video/")) finalVideoUrl = `/uploads/${file.filename}`;
+    }
+
+    const descricaoBruta = body.descricao ?? body.conteudo ?? "";
+    const conteudo = sanitizeText(descricaoBruta, MOD.MAX_DESC_LEN);
+    {
+      const fail = basicModerationFails(conteudo);
+      if (fail) return res.status(422).json({ message: fail });
+    }
     if (!descricao && !finalImagemUrl && !finalVideoUrl) {
       return res.status(400).json({ message: "Descrição ou mídia obrigatória." });
     }
 
-    const tipoDetectado =
-      finalVideoUrl ? "Video" : finalImagemUrl ? "Imagem" : "Documento";
+    const tipoDetectado = finalVideoUrl ? "Video" : finalImagemUrl ? "Imagem" : "Documento";
+
+    const post = await prisma.postagem.create({
+      data: {
+        usuarioId: req.userId!,
+        conteudo: descricao || "",
+        tipoMidia: tipoDetectado as any,
+        imagemUrl: finalImagemUrl,
+        videoUrl: finalVideoUrl,
+        compartilhamentos: 0,
+      },
+      include: {
+        usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
+        curtidas: true,
+        comentarios: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
+      },
+    });
 
     try {
-      const post = await prisma.postagem.create({
-        data: {
-          usuarioId: req.userId!,
-          conteudo: descricao || "",
-          tipoMidia: tipoDetectado as any,
-          imagemUrl: finalImagemUrl,
-          videoUrl: finalVideoUrl,
-          compartilhamentos: 0,
-        },
-        include: {
-          usuario: { select: { id: true, nome: true, foto: true } },
-          curtidas: true,
-          comentarios: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
-        },
+      const segs = await prisma.seguidor.findMany({
+        where: { seguidoUsuarioId: req.userId! },
+        select: { seguidorUsuarioId: true },
       });
-      return res.status(201).json(post);
-    } catch (err: any) {
-      if (err?.code === "P2002") {
-        const existente = await prisma.postagem.findFirst({
-          where: { usuarioId: req.userId!, conteudo: descricao || "" },
-          include: {
-            usuario: { select: { id: true, nome: true, foto: true } },
-            curtidas: true,
-            comentarios: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
-          },
-        });
-        if (existente) return res.status(200).json(existente);
-        return res.status(409).json({ message: "Você já postou esse mesmo conteúdo." });
-      }
-      throw err;
+      const rooms = [req.userId!, ...segs.map(s => s.seguidorUsuarioId)].map(id => `u:${id}`);
+      const io = getIO();
+      io?.to(rooms).emit("feed:novoPost", post);
+    } catch (e) {
+      console.warn("emit feed:novoPost falhou (não crítico):", e);
     }
-  } catch (err) {
+    return res.status(201).json(post);
+  } catch (err: any) {
+    if (err?.code === "P2002") {
+      return res.status(409).json({ message: "Você já postou esse mesmo conteúdo recentemente." });
+    }
     console.error("postarConteudo error:", err);
     return res.status(500).json({ message: "Erro ao criar postagem." });
   }
@@ -115,26 +125,23 @@ export const adicionarComentario = async (req: AuthedReq, res: Response) => {
   const { conteudo } = req.body as { conteudo?: string };
 
   if (!req.userId) return res.status(401).json({ message: "Usuário não autenticado" });
-  if (!conteudo || !conteudo.trim())
-    return res.status(400).json({ message: "Conteúdo do comentário é obrigatório" });
 
-  try {
-    const post = await prisma.postagem.findUnique({ where: { id: postId }, select: { id: true } });
-    if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
+  const text = sanitizeText(conteudo || "", MOD.MAX_COMMENT_LEN);
+  if (!text) return res.status(400).json({ message: "Conteúdo do comentário é obrigatório" });
 
-    const novoComentario = await prisma.comentario.create({
-      data: {
-        conteudo: conteudo.trim(),
-        postagemId: postId,
-        usuarioId: req.userId!,
-      },
-    });
+  const bruto = (req.body.conteudo || "") as string;
+  const texto = sanitizeText(bruto, MOD.MAX_COMMENT_LEN);
+  const fail = basicModerationFails(texto);
+  if (fail) return res.status(422).json({ message: fail });
 
-    return res.status(201).json(novoComentario);
-  } catch (error) {
-    console.error("Erro ao adicionar comentário:", error);
-    return res.status(500).json({ message: "Erro interno ao adicionar comentário" });
-  }
+  const post = await prisma.postagem.findUnique({ where: { id: postId }, select: { id: true } });
+  if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
+
+  const novoComentario = await prisma.comentario.create({
+    data: { conteudo: text, postagemId: postId, usuarioId: req.userId! },
+  });
+
+  return res.status(201).json(novoComentario);
 };
 
 export const editarPostagemGet = async (req: AuthedReq, res: Response) => {
@@ -152,20 +159,20 @@ export const editarPostagemGet = async (req: AuthedReq, res: Response) => {
 
 export const editarPostagemPost = async (req: AuthedReq, res: Response) => {
   const { id } = req.params;
-  const { conteudo } = req.body;
+  const raw = String(req.body?.conteudo ?? "");
+  const conteudo = sanitizeText(raw, MOD.MAX_DESC_LEN);
 
-  try {
-    const postagem = await prisma.postagem.findUnique({ where: { id } });
-    if (!postagem || postagem.usuarioId !== req.userId) {
-      return res.status(401).json({ message: "Você não tem permissão para editar esta postagem." });
-    }
-    if (!conteudo) return res.status(400).json({ message: "O conteúdo não pode estar vazio." });
-
-    await prisma.postagem.update({ where: { id }, data: { conteudo } });
-    return res.json({ message: "Postagem atualizada com sucesso." });
-  } catch {
-    return res.status(500).json({ message: "Erro ao editar postagem." });
+  const postagem = await prisma.postagem.findUnique({ where: { id } });
+  if (!postagem || postagem.usuarioId !== req.userId) {
+    return res.status(401).json({ message: "Você não tem permissão para editar esta postagem." });
   }
+  if (!conteudo) return res.status(400).json({ message: "O conteúdo não pode estar vazio." });
+
+  const fail = basicModerationFails(conteudo);
+  if (fail) return res.status(422).json({ message: fail });
+
+  await prisma.postagem.update({ where: { id }, data: { conteudo } });
+  return res.json({ message: "Postagem atualizada com sucesso." });
 };
 
 export const deletarPost = async (req: AuthedReq, res: Response) => {

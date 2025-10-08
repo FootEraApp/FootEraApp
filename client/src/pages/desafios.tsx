@@ -1,4 +1,3 @@
-// client/src/pages/desafios
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -19,9 +18,80 @@ import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import CardAtletaShield from "../components/cards/CardAtletaShield.js";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 
 const TODAS_CATEGORIAS = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"] as const;
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"] as const;
+
+const authHeaders = { Authorization: `Bearer ${Storage.token || ""}` };
+
+function normaliza(input: any[]): Submissao[] {
+  const arr = Array.isArray(input) ? input : [];
+  return arr.map((s: any) => {
+  const isTreino = !!(s.treinoAgendadoId || s.treino || s.tipo === "TREINO");
+
+  const desafio: Desafio = isTreino
+    ? {
+        id:
+          s.treinoAgendado?.treinoProgramado?.id ||
+          s.treinoProgramadoId ||
+          String(s.id || "treino"),
+        titulo:
+          s.treinoTituloSnapshot ||
+          s.treinoAgendado?.treinoProgramado?.nome ||
+          s.titulo ||
+          "Treino",
+        nivel: String(s.nivel || "base"),
+        pontuacao: Number(s.pontuacaoSnapshot ?? s.pontosCreditados ?? 0),
+        categoria: Array.isArray(s.categoria) ? s.categoria : [],
+        imagemUrl:
+          s.imagemUrl || s.treinoAgendado?.treinoProgramado?.imagemUrl || undefined,
+      }
+    : {
+        id: s.desafio?.id || String(s.id),
+        titulo: s.desafio?.titulo || s.titulo || "",
+        nivel: s.desafio?.nivel || s.nivel || "base",
+        pontuacao: Number(s.desafio?.pontuacao ?? s.pontuacao ?? 0),
+        categoria: Array.isArray(s.desafio?.categoria) ? s.desafio.categoria : [],
+        imagemUrl: s.desafio?.imagemUrl,
+      };
+
+  const usuarioId =
+    s.usuarioId || s.atleta?.usuario?.id || s.atleta?.usuarioId || null;
+
+  const atleta: Atleta =
+    s.atleta && s.atleta.usuario
+      ? s.atleta
+      : {
+          id: s.atleta?.id || s.atletaId || usuarioId || "",
+          usuario: {
+            id: usuarioId || "",
+            nome: s.atleta?.nome || s.usuario?.nome || s.nome || "Atleta",
+            foto: s.atleta?.foto || s.usuario?.foto || s.foto || undefined,
+          },
+        };
+
+  return {
+    id: String(s.id),
+    desafio,
+    atleta,
+    midias: Array.isArray(s.midias)
+      ? s.midias.map((m: any) => ({
+          id: String(m.id || m.url),
+          url: m.url,
+          tipo: m.tipo || "imagem",
+        }))
+      : [],
+    createdAt: s.criadoEm || s.createdAt || new Date().toISOString(),
+    usuarioId,
+    curtidas: Array.isArray(s.curtidas) ? s.curtidas : [],
+    curtidasCount: Number(s.curtidasCount ?? (s.curtidas?.length ?? 0)),
+    comentariosCount: Number(s.comentariosCount ?? 0),
+    viewerLiked: Boolean(s.viewerLiked ?? false),
+    tipo: isTreino ? "TREINO" : "DESAFIO",
+  } as Submissao;
+});
+}
 
 interface Midia {
   id: string;
@@ -63,16 +133,16 @@ interface Submissao {
   comentariosCount: number;
   viewerLiked: boolean;
   comentarios?: Comentario[];
+  tipo: "TREINO" | "DESAFIO";
 }
 
-function fullUrl(possiblyRelative?: string) {
-  if (!possiblyRelative) return "";
-  if (possiblyRelative.startsWith("http") || possiblyRelative.startsWith("data:"))
-    return possiblyRelative;
-  return `${API.BASE_URL}${possiblyRelative}`;
-}
+  function fullUrl(possiblyRelative?: string) {  
+   if (!possiblyRelative) return "";
+   if (possiblyRelative.startsWith("http") || possiblyRelative.startsWith("data:"))
+     return possiblyRelative;
+   return `${API.BASE_URL}${possiblyRelative}`;
+ }
 
-/* ===================== RANKING GLOBAL (Top 100) ===================== */
 type RankItem = {
   rank: number;
   atletaId: string;
@@ -124,7 +194,6 @@ const RankingGlobalTab: React.FC = () => {
   const [minhaPosicao, setMinhaPosicao] = useState<PosicaoResp | null>(null);
   const [buscandoPos, setBuscandoPos] = useState(false);
 
-  // modal da carta (ampliada)
   const [cardModal, setCardModal] = useState<RankItem | null>(null);
   const openCardModal = (r: RankItem) => {
     setCardModal(r);
@@ -166,7 +235,6 @@ const RankingGlobalTab: React.FC = () => {
 
   useEffect(() => {
     carregar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const aplicarFiltros = async () => {
@@ -281,8 +349,7 @@ const RankingGlobalTab: React.FC = () => {
               <div className="font-bold text-lg">#{minhaPosicao.posicao}</div>
               <div className="text-xs text-gray-500">de {minhaPosicao.total}</div>
             </div>
-            <img
-              src={minhaPosicao.foto ? fullUrl(minhaPosicao.foto) : "/default-profile.png"}
+            <img src={formatarUrlFoto(minhaPosicao.foto, "usuarios")}
               className="w-12 h-12 rounded-full object-cover"
               alt={minhaPosicao.nome}
             />
@@ -313,7 +380,6 @@ const RankingGlobalTab: React.FC = () => {
         )}
       </div>
 
-      {/* Lista completa do Top 100 — Top 10 com CARTA do tamanho do avatar */}
       <h3 className="text-lg font-bold">
         {loading ? "Carregando Top 100..." : `Top 100${uf ? ` • ${uf}` : ""}${categoria ? ` • ${categoria}` : ""}`}
       </h3>
@@ -324,7 +390,7 @@ const RankingGlobalTab: React.FC = () => {
       ) : (
         <div className="space-y-2">
           {listaFiltradaTop.map((r) => {
-            const foto = r.foto ? fullUrl(r.foto) : "/default-profile.png";
+            const foto = formatarUrlFoto(r.foto, "usuarios");
             const isTop10 = r.rank <= 10;
             return (
               <div
@@ -339,7 +405,6 @@ const RankingGlobalTab: React.FC = () => {
                     className="shrink-0"
                     title="Ver carta em detalhe"
                   >
-                    {/* carta no tamanho do avatar (~40px) */}
                     <CardAtletaShield
                       atleta={{ id: r.atletaId, nome: r.nome, foto: r.foto || undefined, posicao: `#${r.rank}` }}
                       ovr={calcOVR(r)}
@@ -347,7 +412,7 @@ const RankingGlobalTab: React.FC = () => {
                       disc={r.disciplina}
                       resp={r.responsabilidade}
                       goldenMinOVR={88}
-                      size={{ w: 44, h: 62 }} // ~icone
+                      size={{ w: 44, h: 62 }}
                     />
                   </button>
                 ) : (
@@ -381,7 +446,6 @@ const RankingGlobalTab: React.FC = () => {
         </div>
       ))}
 
-      {/* Modal de carta ampliada — sem fundo branco (transparente) */}
       {cardModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-3"
@@ -430,7 +494,6 @@ const RankingGlobalTab: React.FC = () => {
     </div>
   );
 };
-/* =================== FIM RANKING GLOBAL (Top 100) =================== */
 
 const DesafiosPage: React.FC = () => {
   const [submissoes, setSubmissoes] = useState<Submissao[]>([]);
@@ -444,45 +507,50 @@ const DesafiosPage: React.FC = () => {
 
   const [modalSub, setModalSub] = useState<Submissao | null>(null);
   const [commentModalSub, setCommentModalSub] = useState<Submissao | null>(null);
+  const [subsDesafios, setSubsDesafios] = useState<Submissao[]>([]);
+  const [subsTreinos, setSubsTreinos] = useState<Submissao[]>([]);
 
   const token = Storage.token;
 
+  const applyUpdate = (alvo: Submissao, patch: Partial<Submissao>) => {
+    setSubsDesafios(prev => prev.map(s => s.id === alvo.id ? { ...s, ...patch } : s));
+    setSubsTreinos(prev => prev.map(s => s.id === alvo.id ? { ...s, ...patch } : s));
+    setSubmissoes(prev   => prev.map(s => s.id === alvo.id ? { ...s, ...patch } : s));
+    setModalSub(m => (m && m.id === alvo.id ? { ...m, ...patch } : m));
+    setCommentModalSub(m => (m && m.id === alvo.id ? { ...m, ...patch } : m));
+  };
+
   useEffect(() => {
-    const fetchSubmissoesEseguindo = async () => {
+    (async () => {
       try {
-        const [submissoesRes, seguindoRes] = await Promise.all([
-          axios.get(`${API.BASE_URL}/api/desafios/submissoes`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get(`${API.BASE_URL}/api/seguidores/meus-seguidos`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+        const [r1, r2, seguindoRes] = await Promise.all([
+          axios.get(`${API.BASE_URL}/api/desafios/submissoes`, { headers: authHeaders }),
+          axios.get(`${API.BASE_URL}/api/treinos/submissoes`,   { headers: authHeaders }),
+          axios.get(`${API.BASE_URL}/api/seguidores/meus-seguidos`, { headers: authHeaders }),
         ]);
 
-        const norm: Submissao[] = (submissoesRes.data as any[]).map((s) => ({
-          ...s,
-          curtidas: Array.isArray(s.curtidas) ? s.curtidas : [],
-          curtidasCount: Number(s.curtidasCount ?? (s.curtidas?.length ?? 0)),
-          comentariosCount: Number(s.comentariosCount ?? 0),
-          viewerLiked: Boolean(s.viewerLiked ?? false),
-        }));
+        const d1 = normaliza(r1.data);
+        const d2 = normaliza(r2.data);
 
-        setSubmissoes(norm);
+        setSubsDesafios(d1);
+        setSubsTreinos(d2);
+        setSubmissoes([...d1, ...d2]);
 
         const brutos = Array.isArray(seguindoRes.data) ? seguindoRes.data : [];
         const ids = brutos
-          .map((x: any) =>
-            typeof x === "string" ? x : x?.seguidoUsuarioId ?? x?.id ?? x?.usuarioId ?? ""
-          )
+          .map((x: any) => (typeof x === "string" ? x : x?.seguidoUsuarioId ?? x?.id ?? x?.usuarioId ?? ""))
           .filter(Boolean);
         setSeguindoIds(ids);
-      } catch (error) {
-        console.error("Erro ao buscar dados:", error);
+      } catch (err) {
+        console.error(err);
       }
-    };
+    })();
+  }, []);
 
-    fetchSubmissoesEseguindo();
-  }, [token]);
+  const feed = useMemo(
+    () => [...subsDesafios, ...subsTreinos].sort((a,b) => +new Date(b.createdAt) - +new Date(a.createdAt)),
+    [subsDesafios, subsTreinos]
+  );
 
   const seguindoSet = useMemo(
     () => new Set(seguindoIds.map((id) => id.toLowerCase())),
@@ -490,7 +558,7 @@ const DesafiosPage: React.FC = () => {
   );
 
   const submissoesFiltradas = useMemo(() => {
-    return submissoes.filter((s) => {
+    return feed.filter((s) => {
       const nivelLower = String(s.desafio?.nivel ?? "").toLowerCase();
       const nivelOk = !filtroNivel || nivelLower === filtroNivel;
 
@@ -502,71 +570,55 @@ const DesafiosPage: React.FC = () => {
 
       return nivelOk && categoriaOk && seguindoOk;
     });
-  }, [submissoes, filtroNivel, filtroCategoria, filtroSeguindo, seguindoSet]);
+  }, [feed, filtroNivel, filtroCategoria, filtroSeguindo, seguindoSet]);
 
-  const toggleLike = async (subId: string) => {
+  const baseDeSub = (s: Submissao) =>
+    `${API.BASE_URL}${s.tipo === "TREINO" ? "/api/treinos/submissoes" : "/api/desafios/submissoes"}`;
+
+  const toggleLike = async (sub: Submissao) => {
     try {
       const r = await axios.post(
-        `${API.BASE_URL}/api/desafios/submissoes/${subId}/like`,
+        `${baseDeSub(sub)}/${sub.id}/like`,
         {},
         { headers: { Authorization: `Bearer ${Storage.token || ""}` } }
       );
       const { liked, count } = r.data;
-
-      setSubmissoes((prev) =>
-        prev.map((s) => (s.id === subId ? { ...s, viewerLiked: liked, curtidasCount: count } : s))
-      );
-
-      setModalSub((m) => (m && m.id === subId ? { ...m, viewerLiked: liked, curtidasCount: count } : m));
-      setCommentModalSub((m) =>
-        m && m.id === subId ? { ...m, viewerLiked: liked, curtidasCount: count } : m
-      );
+      applyUpdate(sub, { viewerLiked: liked, curtidasCount: count });
     } catch (e) {
       console.error("Falha ao curtir:", e);
       alert("Não foi possível curtir.");
     }
   };
 
-  const enviarComentario = async (subId: string) => {
-    const txt = (comentarioTexto[subId] || "").trim();
+  const enviarComentario = async (sub: Submissao) => {
+    const txt = (comentarioTexto[sub.id] || "").trim();
     if (!txt) return;
-
     try {
       const r = await axios.post(
-        `${API.BASE_URL}/api/desafios/submissoes/${subId}/comentarios`,
+        `${baseDeSub(sub)}/${sub.id}/comentarios`,
         { conteudo: txt },
         { headers: { Authorization: `Bearer ${Storage.token || ""}` } }
       );
       const { comentario, count } = r.data;
-
-      setSubmissoes((prev) =>
-        prev.map((s) =>
-          s.id === subId
-            ? {
-                ...s,
-                comentariosCount: count,
-                comentarios: [...(s.comentarios || []), comentario],
-              }
-            : s
-        )
-      );
-      setComentarioTexto((p) => ({ ...p, [subId]: "" }));
-
-      setModalSub((m) =>
-        m && m.id === subId
-          ? { ...m, comentariosCount: count, comentarios: [...(m.comentarios || []), comentario] }
-          : m
-      );
-
-      setCommentModalSub((m) =>
-        m && m.id === subId
-          ? { ...m, comentariosCount: count, comentarios: [...(m.comentarios || []), comentario] }
-          : m
-      );
+      applyUpdate(sub, {
+        comentariosCount: count,
+        comentarios: [ ...(sub.comentarios || []), comentario ],
+      });
+      setComentarioTexto(p => ({ ...p, [sub.id]: "" }));
     } catch (e) {
       console.error("Falha ao comentar:", e);
       alert("Não foi possível comentar.");
     }
+  };
+
+  const fetchComentariosDaSubmissao = async (sub: Submissao) => {
+    try {
+      const r = await axios.get(`${baseDeSub(sub)}/${sub.id}/comentarios`, {
+        headers: { Authorization: `Bearer ${Storage.token || ""}` },
+      });
+      const lista = Array.isArray(r.data) ? (r.data as Comentario[]) : [];
+      if (lista.length) applyUpdate(sub, { comentarios: lista });
+    } catch {}
   };
 
   const compartilhar = async (subId: string) => {
@@ -588,59 +640,43 @@ const DesafiosPage: React.FC = () => {
   type RankAgg = { atleta: Atleta; total: number; best?: Submissao };
 
   const rankingSemanal = useMemo<RankAgg[]>(() => {
-    const recentes = submissoes.filter((s) => new Date(s.createdAt) >= seteDiasAtras);
+    const recentes = feed.filter((s) => new Date(s.createdAt) >= seteDiasAtras);
     const porAtleta = new Map<string, RankAgg>();
-
     for (const s of recentes) {
       const atletaId = s.atleta?.id;
       if (!atletaId) continue;
-
       const atual = porAtleta.get(atletaId);
       if (!atual) {
         porAtleta.set(atletaId, { atleta: s.atleta, total: s.curtidasCount || 0, best: s });
       } else {
         atual.total += s.curtidasCount || 0;
-        if (!atual.best || (s.curtidasCount || 0) > (atual.best.curtidasCount || 0)) {
-          atual.best = s;
-        }
+        if (!atual.best || (s.curtidasCount || 0) > (atual.best.curtidasCount || 0)) atual.best = s;
       }
     }
-
     return Array.from(porAtleta.values()).sort((a, b) => b.total - a.total).slice(0, 20);
-  }, [submissoes, seteDiasAtras]);
-
-  const fetchComentariosDaSubmissao = async (subId: string) => {
-    try {
-      const r = await axios.get(`${API.BASE_URL}/api/desafios/submissoes/${subId}/comentarios`, {
-        headers: { Authorization: `Bearer ${Storage.token || ""}` },
-      });
-      const lista = Array.isArray(r.data) ? (r.data as Comentario[]) : [];
-      if (lista.length) {
-        setSubmissoes((prev) =>
-          prev.map((s) => (s.id === subId ? { ...s, comentarios: lista } : s))
-        );
-        setModalSub((m) => (m && m.id === subId ? { ...m, comentarios: lista } : m));
-        setCommentModalSub((m) => (m && m.id === subId ? { ...m, comentarios: lista } : m));
-      }
-    } catch {
-    }
-  };
+  }, [feed, seteDiasAtras]);
 
   const abrirModal = (s: Submissao) => {
     setModalSub(s);
-    if (!s.comentarios || s.comentarios.length === 0) fetchComentariosDaSubmissao(s.id);
+    if (!s.comentarios || s.comentarios.length === 0) {
+      fetchComentariosDaSubmissao(s);
+    }
     document.body.style.overflow = "hidden";
   };
+
+  const abrirCommentModal = (s: Submissao) => {
+    setCommentModalSub(s);
+    if (!s.comentarios || s.comentarios.length === 0) {
+      fetchComentariosDaSubmissao(s);
+    }
+    document.body.style.overflow = "hidden";
+  };
+
   const fecharModal = () => {
     setModalSub(null);
     document.body.style.overflow = "";
   };
 
-  const abrirCommentModal = (s: Submissao) => {
-    setCommentModalSub(s);
-    if (!s.comentarios || s.comentarios.length === 0) fetchComentariosDaSubmissao(s.id);
-    document.body.style.overflow = "hidden";
-  };
   const fecharCommentModal = () => {
     setCommentModalSub(null);
     document.body.style.overflow = "";
@@ -660,7 +696,6 @@ const DesafiosPage: React.FC = () => {
   return (
     <div className="max-w-3xl mx-auto p-4 pb-24">
       <h1 className="text-2xl font-bold mb-4">Desafios dos Atletas</h1>
-
       <div className="flex gap-2 mb-3">
         <button
           onClick={() => setAba("feed")}
@@ -744,11 +779,8 @@ const DesafiosPage: React.FC = () => {
         </>
       )}
 
-      {/* Conteúdo por aba */}
-      {aba === "ranking" ? (
+       {aba === "ranking" ? (
         <div className="space-y-3">
-          {/* Ranking semanal (inalterado) */}
-          {/* ... (seu conteúdo do ranking semanal permanece igual) */}
           <p className="text-gray-500">Sem submissões nesta semana.</p>
         </div>
       ) : aba === "rankingGlobal" ? (
@@ -763,12 +795,7 @@ const DesafiosPage: React.FC = () => {
           return (
             <div key={sub.id} className="bg-white shadow rounded-lg p-4 mb-6">
               <div className="flex items-center mb-2">
-                <img
-                  src={
-                    sub.atleta.usuario.foto
-                      ? fullUrl(sub.atleta.usuario.foto)
-                      : "/default-profile.png"
-                  }
+                <img src={ formatarUrlFoto(sub.atleta.usuario.foto, "usuarios") }
                   alt="Perfil"
                   className="w-10 h-10 rounded-full mr-3 object-cover"
                 />
@@ -821,7 +848,7 @@ const DesafiosPage: React.FC = () => {
 
               <div className="flex items-center gap-6 text-sm text-gray-600 mt-2">
                 <button
-                  onClick={() => toggleLike(sub.id)}
+                  onClick={() => toggleLike(sub)}
                   className="flex items-center gap-1 cursor-pointer"
                   title={sub.viewerLiked ? "Remover gostei" : "Gostei"}
                 >
@@ -862,7 +889,7 @@ const DesafiosPage: React.FC = () => {
                   className="w-full border rounded px-3 py-2 text-sm"
                 />
                 <button
-                  onClick={() => enviarComentario(sub.id)}
+                  onClick={() => enviarComentario(sub)}
                   className="px-3 py-2 bg-green-700 text-white rounded"
                 >
                   Enviar

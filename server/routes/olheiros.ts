@@ -16,7 +16,7 @@ router.get("/perfil/olheiro/:id", async (req, res) => {
       where: { id },
       include: {
         usuario: { select: { id: true, nome: true, email: true, foto: true, nomeDeUsuario: true } },
-        colaboracaoClube: { select: { id: true, usuarioId: true, nome: true, logo: true } }, // <- aqui
+        colaboracaoClube: { select: { id: true, usuarioId: true, nome: true, logo: true } },
       },
     });
     if (!olheiro) return res.status(404).json({ error: "Olheiro não encontrado." });
@@ -92,7 +92,7 @@ router.patch("/:id", async (req, res) => {
     const updated = await prisma.olheiro.update({
       where: { id },
       data: { colaboracaoClubeId: colaboracaoClubeId ?? null },
-      include: { colaboracaoClube: { select: { id: true, usuarioId: true, nome: true, logo: true } } }, // <- aqui
+      include: { colaboracaoClube: { select: { id: true, usuarioId: true, nome: true, logo: true } } },
     });
 
   return res.json({
@@ -100,7 +100,7 @@ router.patch("/:id", async (req, res) => {
     colaboracaoClube: updated.colaboracaoClube
       ? {
           id: updated.colaboracaoClube.id,
-          usuarioId: updated.colaboracaoClube.usuarioId, // <- aqui
+          usuarioId: updated.colaboracaoClube.usuarioId,
           nome: updated.colaboracaoClube.nome,
           logo: updated.colaboracaoClube.logo,
         }

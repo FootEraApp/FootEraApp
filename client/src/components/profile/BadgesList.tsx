@@ -294,7 +294,7 @@ export function BadgesList({
                     {b.title}
                   </span>
                   <Button
-                    className="mt-2 h-8 text-xs"
+                    className="mt-2 h-8 text-xs bg-transparent border-gray-300 hover:bg-gray-100"
                     variant="secondary"
                     onClick={() => {
                       setSelected(b);

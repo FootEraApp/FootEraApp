@@ -45,7 +45,8 @@ import PaginaRanking from "./pages/ranking.js";
 import PaginaFormadores from "./pages/formadores.js";
 import PaginaDesempenhoAtleta from "./pages/olheiro/desempenho.js";
 import PaginaIndicarClube from "./pages/olheiro/indicar.js";
-
+import PaginaTreinoLivreNovo from "./pages/treinoLivreNovo.js";
+import PaginaTreinoLivresHistorico from "./pages/treinoLivreHistorico.js"
 export function AppRoutes() {
   return (
     <Switch>
@@ -123,6 +124,8 @@ export function AppRoutes() {
       <Route path="/feed/desafios"><Private><PaginaDesafios /></Private></Route>
       <Route path="/feed"><Private><PaginaFeed /></Private></Route>
       <Route path="/desafios/:id"><Private><PaginaDesafioUnico /></Private></Route>
+      <Route path="/treinos/livre/novo" component={PaginaTreinoLivreNovo} />
+      <Route path="/treinos/livre/historico" component={PaginaTreinoLivresHistorico} />
       <Route path="/treinos/elenco"><Private><PaginaElenco /></Private></Route>
       <Route path="/treinos/novo"><PaginaNovoTreino /></Route>
       <Route path="/treinos/unico"><Private><PaginaTreinoUnico /></Private></Route>

@@ -180,7 +180,6 @@ export default function TrainingsPage() {
   return (
     <div className="min-h-screen bg-transparent">
       <header className="bg-green-900 text-white text-center py-3 text-xl font-bold">Todos os Treinos</header>
-
       <div className="max-w-5xl mx-auto px-4 py-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[220px]">
