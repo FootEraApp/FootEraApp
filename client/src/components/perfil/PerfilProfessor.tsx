@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import {
-  CalendarClock, Activity, PlusCircle, Filter, ChevronRight, Trophy,
+  CalendarClock, Activity, PlusCircle, ChevronRight, Trophy,
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
@@ -9,10 +9,9 @@ import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 
+type Organizacao = { id: string; nome: string; tipo: "Escolinha" | "Clube" };
 type Props = { idDaUrl?: string };
-
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
-
 type PayloadProfessor = {
   tipo: "Professor";
   usuario: UsuarioMin | null;
@@ -110,6 +109,52 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(null);
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
 
+  const [orgsDisponiveis, setOrgsDisponiveis] = useState<Organizacao[]>([]);
+  const [orgSelecionada, setOrgSelecionada] = useState<string>("");
+  const professorId = data?.professor?.id;
+
+  useEffect(() => {
+  if (!token || !professorId) return;
+  let cancel = false;
+
+  (async () => {
+    try {
+      const tentativas = [
+        `${API.BASE_URL}/api/organizacoes?tipos=Escolinha,Clube`,
+        `${API.BASE_URL}/api/escolinhas`,
+        `${API.BASE_URL}/api/clubes`,
+      ];
+      let lista: any[] = [];
+      for (const url of tentativas) {
+        const r = await axios.get(url, { headers });
+        const arr = Array.isArray(r.data) ? r.data : (r.data.items ?? r.data.data ?? []);
+        if (Array.isArray(arr) && arr.length) { lista = arr; break; }
+      }
+      const normalizada: Organizacao[] = (lista || []).map((o: any) => ({
+        id: o.id,
+        nome: o.nome ?? o.titulo ?? "Organização",
+        tipo: (o.tipo ?? o.kind ?? o.categoria ?? "").toLowerCase().includes("clube") ? ("Clube" as const)
+      : ("Escolinha" as const),
+      }));
+      if (!cancel) setOrgsDisponiveis(normalizada);
+
+      const r = await axios.get(
+        `${API.BASE_URL}/api/organizacoes`,
+        { headers, params: { vinculadasAoProfessorId: professorId } }
+      ).catch(() => null);
+
+      const arr = r ? (Array.isArray(r.data) ? r.data : (r.data?.items ?? r.data?.data ?? [])) : [];
+      if (arr?.length) {
+        setOrgSelecionada(String(arr[0].id));
+      }
+    } catch (e) {
+      if (!cancel) { setOrgsDisponiveis([]); setOrgSelecionada(""); }
+    }
+  })();
+
+  return () => { cancel = true; };
+}, [token, professorId]);
+
   useEffect(() => {
     if (!token) return;
     let cancel = false;
@@ -148,6 +193,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     }
     if (aba === "visao" && atividades == null) fetchAtividades();
 
+    
 async function fetchVinculados() {
   const tipoId =
     (isOwn ? Storage.tipoUsuarioId : data?.professor?.id) ?? null;
@@ -225,6 +271,21 @@ async function fetchObservados() {
   const time = data.professor.escola || "Professor";
 
   const conquistasCount = data.metrics.conquistas ?? 0;
+   
+  async function salvarVinculo() {
+    if (!token || !professorId || !orgSelecionada) return;
+    try {
+      await axios.put(
+        `${API.BASE_URL}/api/professores/${professorId}/vinculos`,
+        { organizacaoId: orgSelecionada },
+        { headers }
+      );
+      alert("Vínculo atualizado!");
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao salvar vínculo.");
+    }
+  }
 
   return (
     <div className="max-w-md mx-auto">
@@ -263,6 +324,38 @@ async function fetchObservados() {
 
       {aba === "visao" && (
         <div className="mt-4 px-4 grid gap-4">
+          <SectionCard
+            title="Vínculo com Escolinha/Clube"
+            right={
+              <button
+                onClick={salvarVinculo}
+                className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white"
+                disabled={!orgSelecionada}
+              >
+                Salvar vínculo
+              </button>
+            }
+          >
+            <div className="grid gap-2">
+              <label className="text-sm">Selecione a organização onde você trabalha</label>
+              <select
+                className="border rounded px-3 py-2"
+                value={orgSelecionada}
+                onChange={(e) => setOrgSelecionada(e.target.value)}
+              >
+                <option value="">— Nenhuma —</option>
+                {orgsDisponiveis.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.nome} ({o.tipo})
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-green-900/70">
+                Esse vínculo permitirá ver os alunos da organização e montar “turmas”.
+              </p>
+            </div>
+          </SectionCard>
+
           <SectionCard title="Informações do Professor">
             <ul className="text-sm text-green-900/90 space-y-2">
               <li><b>Nome:</b> {data.professor.nome}</li>

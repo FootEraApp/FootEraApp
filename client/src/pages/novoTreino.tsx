@@ -7,6 +7,8 @@ import { TreinosApi } from "../utils/treinosApi.js";
 import { montarExerciciosParaPayload } from "../utils/treinos.helpers.js";
 import type { ExItemUI, TreinoCreatePayload } from "../utils/treinos.types.js";
 
+type Organizacao = { id: string; nome: string; tipo: "Escolinha" | "Clube" };
+
 type PontuacaoDetalhe = {
   total: number;
   nivel: number;
@@ -25,6 +27,14 @@ const PONTOS = {
   POR_DICA: 1,
   DICAS_MAX: 5,
 };
+
+function resolveVideoUrl(raw?: string) {
+  if (!raw) return "";
+  const p = raw.replace(/\\/g, "/");             
+  if (p.startsWith("http")) return p;       
+  if (p.startsWith("/assets/")) return p;        
+  return `${API.BASE_URL}${p.startsWith("/") ? p : `/${p}`}`;
+}
 
 function calcularPontuacaoTreino(
   nivel: string,
@@ -209,6 +219,11 @@ export default function NovoTreino() {
   const restoredRef = useRef(false);
 
   const [idsProgramadosBloqueados, setIdsProgramadosBloqueados] = useState<Set<string>>(new Set());
+  const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
+  const [orgSelecionada, setOrgSelecionada] = useState<string>("");
+  const [novaTurmaNome, setNovaTurmaNome] = useState<string>("");
+
+  const MOSTRAR_TODOS = "__todos__";
 
   const score = useMemo(
     () => calcularPontuacaoTreino(nivel, tipoTreino, duracao, exerciciosSelecionados, dicas),
@@ -230,50 +245,73 @@ export default function NovoTreino() {
     }));
   }
 
+  function mapAtletas(items: any[]): AtletaVinculado[] {
+    return (items || []).map((a: any) => ({
+      id: a.atletaId || a.id || a.usuarioId || "",
+      nome: a.nome ?? a?.usuario?.nome ?? a?.atleta?.nome ?? "Atleta",
+      foto: a.foto ?? a?.usuario?.foto ?? a?.atleta?.usuario?.foto ?? undefined,
+    })).filter(x => x.id);
+  }
+
   useEffect(() => {
-    (async () => {
-      try {
-        const token = (Storage as any).token ||
-          localStorage.getItem("token") ||
-          sessionStorage.getItem("token") || "";
+  (async () => {
+    try {
+      const token = (Storage as any).token ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token") || "";
 
-        const tipoUsuarioId =
-          (Storage as any).tipoUsuarioId ||
-          localStorage.getItem("tipoUsuarioId") ||
-          sessionStorage.getItem("tipoUsuarioId") || "";
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-        if (!tipoUsuarioId) return;
+      if (!orgSelecionada) {
+        setElencos([]);
+        setElencoSelecionado("");
+        return;
+      }
 
-        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-        const tentativas = [
-          `${API.BASE_URL}/api/elencos?tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
-          `${API.BASE_URL}/api/elencos/minha`,
-          `${API.BASE_URL}/api/treinos/elencos?tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
-          `${API.BASE_URL}/api/elencos`,
-        ];
-
-        for (const url of tentativas) {
-          const r = await fetch(url, { headers });
-          if (!r.ok) continue;
+       try {
+        const r = await fetch(
+          `${API.BASE_URL}/api/treinos/elencos?tipoUsuarioId=${encodeURIComponent(orgSelecionada)}`,
+          { headers }
+        );
+        if (r.ok) {
           const j = await r.json();
           const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
-          if (Array.isArray(arr)) {
-            setElencos(
-              arr.map((e: any) => ({
-                id: e.id,
-                nome: e.nome ?? e.titulo ?? "Elenco",
-                atletasIds: e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
-              }))
-            );
-            return;
-          }
+          setElencos((arr || []).map((e: any) => ({
+            id: String(e.id),
+            nome: e.nome ?? e.titulo ?? "Turma",
+            atletasIds: e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
+          })));
+          return;
         }
-        setElencos([]);
-      } catch {
-        setElencos([]);
+      } catch { }
+
+      const ownerId = orgSelecionada;
+      const urls = [
+        `${API.BASE_URL}/api/elencos?organizacaoId=${encodeURIComponent(ownerId)}`,
+        `${API.BASE_URL}/api/turmas?organizacaoId=${encodeURIComponent(ownerId)}`,
+        `${API.BASE_URL}/api/turmas?escolinhaId=${encodeURIComponent(ownerId)}`,
+      ];
+
+      for (const url of urls) {
+        const r = await fetch(url, { headers });
+        if (!r.ok) continue;
+        const j = await r.json();
+        const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
+        if (Array.isArray(arr)) {
+          setElencos(arr.map((e: any) => ({
+            id: e.id,
+            nome: e.nome ?? e.titulo ?? "Turma",
+            atletasIds: e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
+          })));
+          return;
+        }
       }
-    })();
-  }, []);
+      setElencos([]);
+    } catch {
+      setElencos([]);
+    }
+  })();
+}, [orgSelecionada]);
 
   useEffect(() => {
     const tipoPersistido = (
@@ -335,193 +373,106 @@ export default function NovoTreino() {
   }, []);
 
   useEffect(() => {
-    if (!iniciado) return;
+  (async () => {
+    try {
+      const token = (Storage as any).token || localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-    const token =
-      (Storage as any).token ||
-      localStorage.getItem("token") ||
-      sessionStorage.getItem("token") ||
-      "";
+      const professorTipoId =
+        (Storage as any).tipoUsuarioId ||
+        localStorage.getItem("tipoUsuarioId") ||
+        sessionStorage.getItem("tipoUsuarioId") || "";
 
-    const opt: RequestInit = token ? { headers: { Authorization: `Bearer ${token}` } as any } : {};
+      if (!professorTipoId) { setOrgsVinculadas([]); return; }
+
+      const tentativas = [
+        `${API.BASE_URL}/api/professores/${professorTipoId}/vinculos`,
+        `${API.BASE_URL}/api/organizacoes?vinculadasAoProfessorId=${professorTipoId}`,
+        `${API.BASE_URL}/api/vinculos?tipo=Professor&id=${professorTipoId}`,
+      ];
+
+      let arr: any[] = [];
+      for (const url of tentativas) {
+        const r = await fetch(url, { headers });
+        if (!r.ok) continue;
+        const j = await r.json();
+        const list = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
+        if (Array.isArray(list) && list.length) { arr = list; break; }
+      }
+
+      const normalizada: Organizacao[] = (arr || []).map((o: any) => {
+        const tipo: Organizacao["tipo"] =
+          String(o.tipo ?? o.kind ?? o.categoria ?? "")
+            .toLowerCase()
+            .includes("clube")
+            ? "Clube"
+            : "Escolinha";
+
+        return {
+          id: String(o.escolinhaId ?? o.clubeId ?? o.id ?? o.organizacaoId), 
+          nome: String(o.nome ?? o.titulo ?? "Organização"),
+          tipo,
+        };
+      }).filter((x) => x.id);
+
+      setOrgsVinculadas(normalizada);
+      if (!orgSelecionada && normalizada.length === 1) setOrgSelecionada(normalizada[0].id);
+    } catch {
+      setOrgsVinculadas([]);
+    }
+  })();
+}, []);
+
+  useEffect(() => {
+    let cancel = false;
 
     (async () => {
       try {
-        const urls = [
-          `${API.BASE_URL}/api/treinos/disponiveis?tipoUsuarioId=${(Storage as any).tipoUsuarioId ?? ""}`,
-          `${API.BASE_URL}/api/treinosprogramados`,
-          `${API.BASE_URL}/api/treinos`,
-        ];
+        const token =
+          (Storage as any).token ||
+          localStorage.getItem("token") ||
+          sessionStorage.getItem("token") || "";
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-        for (const url of urls) {
-          const r = await fetch(url, opt);
-          if (!r.ok) continue;
-
-          const j = await r.json();
-          const arr = Array.isArray(j) ? j : j.items ?? j.data ?? j.treinos ?? j.rows ?? j.result ?? [];
-          if (Array.isArray(arr) && arr.length) {
-            setTreinosDisponiveis(normalizaTreinos(arr));
+        if (orgSelecionada === MOSTRAR_TODOS) {
+          const urlsTodos = [
+            `${API.BASE_URL}/api/atletas`,
+            `${API.BASE_URL}/api/usuarios?perfil=atleta`,
+            `${API.BASE_URL}/api/relacoes/atletas?todos=1`,
+          ];
+          for (const url of urlsTodos) {
+            const r = await fetch(url, { headers });
+            if (!r.ok) continue;
+            const j = await r.json();
+            const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
+            if (!cancel) setAtletasVinculados(mapAtletas(arr));
             return;
           }
+          if (!cancel) setAtletasVinculados([]);
+          return;
         }
-        setTreinosDisponiveis([]);
-      } catch (e) {
-        console.error("Falha ao carregar treinos:", e);
-        setTreinosDisponiveis([]);
-      }
-    })();
-  }, [iniciado]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const tipo = String(
-          (Storage as any).tipoSalvo ??
-          localStorage.getItem("tipoUsuario") ??
-          sessionStorage.getItem("tipoUsuario") ??
-          ""
-        ).toLowerCase();
-
-        if (tipo !== "atleta") return;
-
-        const token =
-          (Storage as any).token ||
-          localStorage.getItem("token") ||
-          sessionStorage.getItem("token") ||
-          "";
-
-        if (!token) return;
-
-        const usuarioIdLocal =
-          (Storage as any).usuarioId ||
-          localStorage.getItem("usuarioId") ||
-          sessionStorage.getItem("usuarioId") ||
-          "";
-
-        const res = await fetch(
-          `${API.BASE_URL}/api/treinos/agendados?usuarioId=${encodeURIComponent(usuarioIdLocal)}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        if (!res.ok) return;
-
-        const itens = await res.json();
-        const programadoIds = new Set<string>();
-        (Array.isArray(itens) ? itens : []).forEach((t: any) => {
-          const idProg = t.treinoProgramadoId || t?.treinoProgramado?.id;
-          if (idProg) programadoIds.add(String(idProg));
-        });
-        setIdsProgramadosBloqueados(programadoIds);
-      } catch (e) {
-        console.warn("Falha ao checar treinos já agendados:", e);
-        setIdsProgramadosBloqueados(new Set());
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    let cancel = { v: false };
-
-    (async () => {
-      try {
-        const token =
-          (Storage as any).token ||
-          localStorage.getItem("token") ||
-          sessionStorage.getItem("token") ||
-          "";
-
-        const r = await fetch(`${API.BASE_URL}/api/treinos/exercicios`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        });
-
-        if (!r.ok) return;
-        const data = await r.json();
-        const arr: Exercicio[] = Array.isArray(data) ? data : data.items ?? data.data ?? [];
-        if (!cancel.v) {
-          setExerciciosDisponiveis(
-            arr.map((e: any) => ({
-              id: e.id,
-              nome: e.nome ?? e.titulo ?? "",
-              videoDemonstrativoUrl: e.videoDemonstrativoUrl,
-              descricao: e.descricao,
-              nivel: e.nivel,
-            }))
-          );
-        }
-      } catch {}
-    })();
-
-    (async () => {
-      try {
-        const token =
-          (Storage as any).token ||
-          localStorage.getItem("token") ||
-          sessionStorage.getItem("token") ||
-          "";
-
-        const tipoRaw = (
-          (Storage as any).tipoSalvo ??
-          localStorage.getItem("tipoUsuario") ??
-          sessionStorage.getItem("tipoUsuario") ??
-          ""
-        )
-          .toString()
-          .trim()
-          .toLowerCase();
-
-        const vinculo = tipoRaw === "escolinha" ? "escola" : tipoRaw;
-
-        const id =
-          (Storage as any).tipoUsuarioId ||
+        const tipoUsuarioId =
+          orgSelecionada ||                     
+          (Storage as any).tipoUsuarioId ||      
           localStorage.getItem("tipoUsuarioId") ||
-          sessionStorage.getItem("tipoUsuarioId") ||
-          (Storage as any).usuarioId;
+          sessionStorage.getItem("tipoUsuarioId") || "";
 
-        if (!id || !["professor", "escola", "clube"].includes(vinculo)) return;
+        if (!tipoUsuarioId) { if (!cancel) setAtletasVinculados([]); return; }
 
-        const r = await fetch(
-          `${API.BASE_URL}/api/relacoes/atletas?vinculo=${encodeURIComponent(vinculo)}&id=${encodeURIComponent(id)}`,
-          { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
-        );
-
-        let raw: any[] | undefined;
-        if (r.ok) {
-          const data = await r.json();
-          raw = Array.isArray(data)
-            ? data
-            : data.items ?? data.data ?? data.rows ?? data.result ?? data.atletasVinculados ?? [];
-        }
-
-        if (!raw || raw.length === 0) {
-          const r2 = await fetch(
-            `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(id)}`,
-            { headers: token ? { Authorization: `Bearer ${token}` } : undefined }
-          );
-          if (r2.ok) {
-            const d2 = await r2.json();
-            raw = Array.isArray(d2) ? d2 : d2.items ?? d2.data ?? [];
-          }
-        }
-
-        const lista: AtletaVinculado[] = (raw ?? [])
-          .map((a: any) => ({
-            id: a.usuarioId ?? a.id ?? a.atletaId ?? a?.atleta?.id ?? a?.usuario?.id ?? "",
-            nome: a.nome ?? a?.atleta?.usuario?.nome ?? a?.usuario?.nome ?? a?.atleta?.nome ?? "Atleta",
-            foto: a.foto ?? a?.atleta?.usuario?.foto ?? a?.usuario?.foto ?? a?.fotoUrl ?? undefined,
-          }))
-          .filter((x) => x.id);
-
-        setAtletasVinculados(lista);
-      } catch (e) {
-        console.error("Erro ao carregar atletas vinculados:", e);
-        setAtletasVinculados([]);
+        const url = `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}&incluirPontuacao=1`;
+        const r = await fetch(url, { headers });
+        if (!r.ok) { if (!cancel) setAtletasVinculados([]); return; }
+        const data = await r.json();
+        const items = Array.isArray(data) ? data : (data.items ?? []);
+        if (!cancel) setAtletasVinculados(mapAtletas(items));
+      } catch {
+        if (!cancel) setAtletasVinculados([]);
       }
     })();
 
-    return () => {
-      cancel.v = true;
-    };
-  }, []);
+    return () => { cancel = true; };
+  }, [orgSelecionada]);
 
   useEffect(() => {
     saveState({
@@ -552,6 +503,64 @@ export default function NovoTreino() {
     dicas,
     atletasSelecionados,
   ]);
+
+  const criarTurmaComSelecionados = async () => {
+    if (!orgSelecionada) { alert("Selecione uma organização primeiro."); return; }
+    if (!novaTurmaNome.trim()) { alert("Informe o nome da turma."); return; }
+    if (atletasSelecionados.length === 0) { alert("Selecione ao menos 1 atleta."); return; }
+
+    try {
+      const token = (Storage as any).token ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token") || "";
+      const headers: any = token
+        ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
+        : { "Content-Type": "application/json" };
+
+      const ownerTipo = orgsVinculadas.find(o => o.id === orgSelecionada)?.tipo;
+
+      const tentativas = [
+        { url: `${API.BASE_URL}/api/treinos/elencos`, method: "POST" },
+        { url: `${API.BASE_URL}/api/elencos`, method: "POST" },  
+        { url: `${API.BASE_URL}/api/turmas`, method: "POST" },   
+      ];
+
+      let ok = false, created: any = null;
+
+      for (const t of tentativas) {
+        const base = { nome: novaTurmaNome.trim(), atletasIds: atletasSelecionados, ownerTipo };
+        const body =
+          t.url.includes("/api/treinos/elencos")
+            ? { ...base, tipoUsuarioId: orgSelecionada }
+            : { ...base, organizacaoId: orgSelecionada };
+
+        const r = await fetch(t.url, { method: t.method, headers, body: JSON.stringify(body) });
+
+        const txt = await r.text();
+        console.log("resp criar turma:", t.url, r.status, txt);
+
+        if (!r.ok) continue;
+        created = txt ? JSON.parse(txt) : null;
+        ok = true;
+        break;
+      }
+
+      if (ok) {
+        alert("Turma criada!");
+        setNovaTurmaNome("");
+        setElencos(prev => [...prev, {
+          id: String(created?.id ?? Date.now()),
+          nome: created?.nome ?? novaTurmaNome.trim(),
+          atletasIds: created?.atletasIds ?? atletasSelecionados,
+        }]);
+      } else {
+        alert("Falha ao criar turma (verifique os logs no console para o motivo do 400).");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erro inesperado ao criar turma.");
+    }
+  };
 
   const incluirElencoNoTreino = () => {
     if (!elencoSelecionado) return;
@@ -1023,12 +1032,7 @@ export default function NovoTreino() {
               <div className="space-y-3">
                 {exerciciosSelecionados.map((ex, i) => {
                   const base = ex.idCatalogo ? exerciciosDisponiveis.find((e) => e.id === ex.idCatalogo) : undefined;
-
-                  const videoSrc = base?.videoDemonstrativoUrl
-                    ? base.videoDemonstrativoUrl.startsWith("http")
-                      ? base.videoDemonstrativoUrl
-                      : `${API.BASE_URL}${base.videoDemonstrativoUrl}`
-                    : "";
+                  const videoSrc = resolveVideoUrl(base?.videoDemonstrativoUrl);
 
                   const nomeFinal = base?.nome ?? ex.nome ?? "";
                   const nivelFinal = base?.nivel ?? undefined;
@@ -1040,7 +1044,7 @@ export default function NovoTreino() {
                     <div key={i} className="border rounded-lg p-3 relative bg-white shadow-sm">
                       <button
                         onClick={() => removerExercicio(i)}
-                        className="absolute top-2 right-2 text-red-600 text-sm"
+                        className="text-red-600 text-sm self-end sm:absolute sm:top-2 sm:right-2"
                         title="Remover exercício"
                       >
                         Remover
@@ -1143,13 +1147,7 @@ export default function NovoTreino() {
 
               <ul className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1">
                 {exerciciosFiltrados.map((exercicio) => {
-                  const videoParcial = exercicio.videoDemonstrativoUrl;
-                  const videoSrc = videoParcial
-                    ? videoParcial.startsWith("http")
-                      ? videoParcial
-                      : `${API.BASE_URL}${videoParcial}`
-                    : "";
-
+                  const videoSrc = resolveVideoUrl(exercicio.videoDemonstrativoUrl);
                   return (
                     <li key={exercicio.id} className="py-3">
                       <div className="flex flex-col sm:flex-row gap-3 items-start">
@@ -1238,9 +1236,27 @@ export default function NovoTreino() {
 
         {etapa === 4 && (
           <StepCard title="Selecionar Atletas Vinculados">
+            <div className="mb-4 grid gap-2">
+              <label className="block text-sm text-gray-700">Organização (para montar turmas e listar alunos)</label>
+              <select
+                className="border w-full p-2 rounded"
+                value={orgSelecionada}
+                onChange={(e) => { setOrgSelecionada(e.target.value); setAtletasSelecionados([]); setElencoSelecionado(""); }}
+              >
+                <option value="">— Meus vinculados (professor/escola/clube) —</option>
+                <option value={MOSTRAR_TODOS}>— Todos os atletas —</option>
+                {orgsVinculadas.map((o) => (
+                  <option key={o.id} value={o.id}>{o.nome} ({o.tipo})</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-600">
+                Se escolher uma organização, os alunos e as turmas listados abaixo virão dela.
+              </p>
+            </div>
+
             {atletasVinculados.length === 0 ? (
               <div className="bg-gray-100 text-gray-600 text-center py-6 rounded">
-                Nenhum atleta vinculado encontrado.
+                Nenhum atleta encontrado para a fonte selecionada.
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -1270,26 +1286,37 @@ export default function NovoTreino() {
               </div>
             )}
 
-            <div className="mb-4 flex items-end gap-2">
-              <div className="flex-1">
-                <label className="block text-sm text-gray-700 mb-1">Elenco</label>
-                <select
-                  className="border w-full p-2 rounded"
-                  value={elencoSelecionado}
-                  onChange={e => setElencoSelecionado(e.target.value)}
-                >
-                  <option value="">— Selecionar elenco —</option>
-                  {elencos.map(el => (
-                    <option key={el.id} value={el.id}>{el.nome}</option>
-                  ))}
-                </select>
+            <div className="my-4 p-3 border rounded-md">
+              <div className="mb-3 flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="block text-sm text-gray-700 mb-1">Turmas da organização</label>
+                  <select
+                    className="border w-full p-2 rounded"
+                    value={elencoSelecionado}
+                    onChange={e => setElencoSelecionado(e.target.value)}
+                  >
+                    <option value="">— Selecionar turma —</option>
+                    {elencos.map(el => (
+                      <option key={el.id} value={el.id}>{el.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <button onClick={incluirElencoNoTreino} className="bg-green-700 text-white px-3 py-2 rounded">
+                  Usar turma no treino
+                </button>
               </div>
-              <button
-                onClick={incluirElencoNoTreino}
-                className="bg-green-700 text-white px-3 py-2 rounded"
-              >
-                Incluir elenco
-              </button>
+
+              <div className="grid sm:grid-cols-3 gap-2">
+                <input
+                  className="border p-2 rounded sm:col-span-2"
+                  placeholder='Nova turma (ex.: "Sub-13 - Noite")'
+                  value={novaTurmaNome}
+                  onChange={(e) => setNovaTurmaNome(e.target.value)}
+                />
+                <button onClick={criarTurmaComSelecionados} className="bg-emerald-600 text-white px-3 py-2 rounded">
+                  + Criar turma com selecionados
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-col sm:flex-row justify-between gap-2 mt-6">

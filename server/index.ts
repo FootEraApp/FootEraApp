@@ -67,6 +67,9 @@ import scoutNotesRoutes from "./routes/scoutNotes.js";
 import checklistRoutes from "./routes/checklists.js";
 import catalogoRoutes from "./routes/catalogo.js";
 import legalRoutes from "./routes/legal.js";
+import organizacoesRoutes from "./routes/organizacoes.js";
+import turmasRoutes from "./routes/turmas.js";
+import treinosElencosRoutes from "./routes/treinosElencos.js";
 
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 
@@ -110,6 +113,7 @@ app.use('/assets', express.static(path.join(__dirname, 'public/assets')));
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
+app.use(treinosElencosRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/atletas", atletaRoutes);
 app.use("/api/auth", authRoutes);
@@ -151,6 +155,7 @@ app.use("/api/treino-unico", treinoUnicoRoutes);
 app.use("/api/treinosprogramados", treinoProgramadoRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
+app.use("/api/vinculos", vinculoRoutes);
 app.use("/api/observados", observadosRoutes);
 app.use("/api/gerenciar", gerenciarAtletasRoutes);
 app.use("/api/relacoes", relacoesRoutes);
@@ -161,10 +166,11 @@ app.use("/api/olheiros", olheirosRouter);
 app.use("/api/checklists", checklistRoutes);
 app.use("/api/catalogo", catalogoRoutes);
 app.use("/api/legal", legalRoutes);
+app.use("/api/organizacoes", organizacoesRoutes);
+app.use("/api/turmas", turmasRoutes);
 app.use("/api", treinoLivreRoutes);
 app.use("/api", scoutNotesRoutes);
 app.use("/api", indicacoesRouter); 
-
 
 app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
@@ -187,7 +193,7 @@ const LOCAL_IP = "192.168.18.8";
 server.listen({port: PORT, host: "0.0.0.0"}, () => {
   console.log(`Servidor acessível na rede: http://192.168.18.8:${PORT}`);
 
-  const frontendURL = `http://${LOCAL_IP}:${FRONT_PORT}`;
+const frontendURL = `http://${LOCAL_IP}:${FRONT_PORT}`;
   qrcode.generate(frontendURL, { small: true });
   console.log(`QR Code para acessar o front-end: ${frontendURL}`);
 });
@@ -200,6 +206,7 @@ cron.schedule("0 2 * * *", async () => {
 process.on("unhandledRejection", (reason) => {
   console.error("Unhandled Rejection:", reason);
 });
+
 process.on("uncaughtException", (err) => {
   console.error("Uncaught Exception:", err);
 });

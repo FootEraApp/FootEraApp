@@ -13,7 +13,11 @@
     "db:push": "drizzle-kit push",
     "backfill:snapshots": "tsx scripts/backfillSnapshots.ts",
     "clean:expired-trainings": "tsx server/routes/removerTreinosExpirados.ts",
-    "backfill:exercicios": "tsx scripts/backfillTreinoProgramadoExercicios.ts"
+    "backfill:exercicios": "tsx scripts/backfillTreinoProgramadoExercicios.ts",
+    "prisma:studio": "prisma studio --schema server/prisma/schema.prisma",
+  "prisma:generate": "prisma generate --schema server/prisma/schema.prisma",
+  "prisma:migrate": "prisma migrate dev --schema server/prisma/schema.prisma",
+  "prisma:seed": "prisma db seed --schema server/prisma/schema.prisma"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.4",
@@ -151,6 +155,7 @@
     "bufferutil": "^4.0.8"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx server/prisma/seed.ts",
+    "schema": "server/prisma/schema.prisma" 
   }
 }

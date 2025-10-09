@@ -699,7 +699,7 @@ export default function PaginaTreinos() {
           <strong className="text-sm text-gray-800">Exercícios:</strong>
           <div className="max-h-40 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
             {treino.exercicios.map((ex, i) => (
-              <div key={ex.id} className="border-b pb-1 last:border-b-0">
+               <div key={ex.id || `${i}-${ex.nome || "ex"}`} className="border-b pb-1 last:border-b-0">
                 <strong>{i + 1}.</strong> {ex.nome}{" "}
                 {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
               </div>
@@ -780,7 +780,7 @@ export default function PaginaTreinos() {
             <strong className="text-sm text-gray-800">Exercícios:</strong>
             <div className="max-h-40 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
               {exercicios.map((ex, i) => (
-                <div key={ex.exercicio.id} className="border-b pb-1 last:border-b-0">
+                <div key={ex.exercicio?.id || `${i}-${ex.exercicio?.nome || "ex"}`} className="border-b pb-1 last:border-b-0">
                   <strong>{i + 1}.</strong> {ex.exercicio.nome}{" "}
                   {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
                 </div>
