@@ -1,3 +1,4 @@
+// server/controllers/treinosController
 import { Response, Request } from "express";
 import { PrismaClient, PosicaoCampo, Categoria, TipoTreino, TreinoStatus } from "@prisma/client";
 import { getIO } from "../socket.js";
@@ -7,11 +8,21 @@ import { sanitizeText, basicModerationFails } from "../utils/moderation.js";
 
 const prisma = new PrismaClient();
 
+async function atletaTemVinculo(atletaId: string) {
+  const a = await prisma.atleta.findUnique({
+    where: { id: atletaId },
+    select: { id: true, clubeId: true, escolinhaId: true },
+  });
+  if (!a) return false;
+  const relCount = await prisma.relacaoTreinamento.count({ where: { atletaId } });
+  return !!(a.clubeId || a.escolinhaId || relCount > 0);
+}
+
 function normalizeCategorias(input: any): Categoria[] {
   if (!input) return [];
   const arr = Array.isArray(input) ? input : [input];
 
- const mapOne = (raw: any): string => {
+  const mapOne = (raw: any): string => {
     const s = String(raw).trim();
     const m = s.match(/^sub[\s-]?(\d{1,2})$/i);
     if (m) return `Sub${m[1]}`;
@@ -77,11 +88,11 @@ async function resolveEntidade(usuarioOuEntidadeId: string): Promise<
   return null;
 }
 
-export async function treinosDisponiveis(req: AuthenticatedRequest, res: Response) {
+export async function treinosDisponiveis(_req: AuthenticatedRequest, res: Response) {
   try {
-  const treinos = await prisma.treinoProgramado.findMany({
-    include: { exercicios: { include: { exercicio: true, exercicioTemporario: true } } },
-  });
+    const treinos = await prisma.treinoProgramado.findMany({
+      include: { exercicios: { include: { exercicio: true, exercicioTemporario: true } } },
+    });
 
     const resposta = treinos.map(t => ({
       id: t.id,
@@ -175,7 +186,7 @@ export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res:
         }
       }))
     };
-     res.json(out);
+    res.json(out);
   } catch (e) {
     console.error(e);
     res.status(500).json({ message: "Erro ao buscar treino programado" });
@@ -281,14 +292,12 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
     vinc.professores.length ? { professorId: { in: vinc.professores } } : undefined,
   ].filter(Boolean) as any[];
 
+  const where: any = { atletaId: vinc.atletaId };
+  if (donoOr.length) {
+    where.OR = [{ treinoProgramadoId: null }, { treinoProgramado: { OR: donoOr } }];
+  }
   const rows = await prisma.treinoAgendado.findMany({
-    where: {
-      atletaId: vinc.atletaId,
-      OR: [
-        { treinoProgramadoId: null },
-        donoOr.length ? { treinoProgramado: { OR: donoOr } } : undefined,
-      ].filter(Boolean) as any[],
-    },
+    where,
     include: {
       treinoProgramado: {
         include: {
@@ -350,8 +359,7 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
     });
     getIO()?.to([`u:${usuarioId}`, ...segs.map(s => `u:${s.seguidorUsuarioId}`)]).emit("feed:novoPost", post);
 
-    const pontosFinais =
-      typeof pontos === "number" && pontos >= 0 ? pontos : (agendado.treinoProgramado?.pontuacao ?? 0);
+    const pontosTemplate = typeof pontos === "number" && pontos >= 0 ? pontos : (agendado.treinoProgramado?.pontuacao ?? 0);
 
     const obs = req.body?.observacao ? sanitizeText(req.body.observacao, 800) : null;
     if (obs) {
@@ -362,19 +370,22 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
     const duracaoFinal =
       Number.isFinite(Number(duracaoMinutos)) ? Number(duracaoMinutos) : (agendado.treinoProgramado?.duracao ?? undefined);
 
+    const temVinc = await atletaTemVinculo(atletaId);
+
     const existente = await prisma.submissaoTreino.findFirst({ where: { treinoAgendadoId, atletaId } });
 
     const dataCommon = {
-      aprovado: true as any,
-      pontuacaoSnapshot: pontosFinais > 0 ? pontosFinais : undefined,
-      pontosCreditados:  pontosFinais > 0 ? pontosFinais : undefined,
+      aprovado: (temVinc ? (null as any) : (true as any)),
+      pontuacaoSnapshot: temVinc ? undefined : 0,
+      pontosCreditados:  temVinc ? undefined : 0,
       duracaoMinutos: duracaoFinal,
       treinoTituloSnapshot: agendado.treinoProgramado?.nome ?? agendado.titulo ?? undefined,
       tipoTreinoSnapshot: agendado.treinoProgramado?.tipoTreino ?? undefined,
       tempoSeg: Number.isFinite(Number(tempoSeg)) ? Number(tempoSeg) : undefined,
       repeticoes: Number.isFinite(Number(repeticoes)) ? Number(repeticoes) : undefined,
       observacao: obs ?? undefined,
-    };
+      sugestaoPontosTemplate: pontosTemplate > 0 ? pontosTemplate : undefined,
+    } as any;
 
     const sub = existente
       ? await prisma.submissaoTreino.update({ where: { id: existente.id }, data: dataCommon })
@@ -392,8 +403,7 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
       },
     });
 
-    await recomputePontuacaoAtleta(atletaId);
-    res.json({ ok: true, pontos: pontosFinais, submissao: sub });
+    res.json({ ok: true, pontos: 0, submissao: sub, pendenteValidacao: temVinc });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Erro ao concluir treino" });
@@ -786,12 +796,12 @@ export async function atualizarElenco(req: AuthenticatedRequest, res: Response) 
     }
 
     await prisma.atletaElenco.deleteMany({ where: { elencoId: id } });
-      if (vinculos.length) {
-        await prisma.atletaElenco.createMany({
-          data: vinculos.map(v => ({ elencoId: id, atletaId: v.atletaId, posicao: v.posicao })),
-          skipDuplicates: true,
-        });
-      }
+    if (vinculos.length) {
+      await prisma.atletaElenco.createMany({
+        data: vinculos.map(v => ({ elencoId: id, atletaId: v.atletaId, posicao: v.posicao })),
+        skipDuplicates: true,
+      });
+    }
 
     const setNovos = new Set(vinculos.map(v => v.atletaId));
     const removidos = vinculadosAtuais.map(v => v.atletaId).filter(a => !setNovos.has(a));
@@ -858,7 +868,7 @@ export async function atletasVinculados(req: Request, res: Response) {
 
     if (total === 0) return res.json({ items: [], total, limit, offset });
 
-    const idsOrdenados = Array.from(atletaIds); 
+    const idsOrdenados = Array.from(atletaIds);
     const atletas = await prisma.atleta.findMany({
       where: { id: { in: idsOrdenados } },
       select: {
@@ -938,17 +948,17 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
     const {
       nome,
       descricao,
-      nivel,              
-      exercicios,           
+      nivel,
+      exercicios,
       usuarioId,
-      categoria,             
-      tipoTreino,      
+      categoria,
+      tipoTreino,
       objetivo,
       duracao,
       dataTreino,
       dataAgendada,
       dicas,
-      tipoUsuario,          
+      tipoUsuario,
       tipoUsuarioId,
       atletasIds,
       pontuacao,
@@ -1287,11 +1297,10 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
         },
       });
     }
-    
+
     const pontosBase  = sub.pontuacaoSnapshot ?? sub.treinoAgendado?.treinoProgramado?.pontuacao ?? 0;
     const pontosFinais = aprovado
-      ? (Number.isFinite(Number(req.body?.pontos)) ? Number(req.body.pontos)
-        : (pontosDoChecklist ?? pontosBase ?? 0))
+      ? (Number.isFinite(Number(pontos)) ? Number(pontos) : (pontosDoChecklist ?? pontosBase ?? 0))
       : 0;
 
     const atualizado = await prisma.submissaoTreino.update({
@@ -1307,18 +1316,6 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
       },
     });
 
-    await prisma.pontuacaoAtleta.upsert({
-      where: { atletaId: sub.atletaId },
-      create: {
-        atletaId: sub.atletaId,
-        pontuacaoTotal: pontosFinais,
-        ultimaAtualizacao: new Date(),
-      },
-      update: {
-        pontuacaoTotal: { increment: pontosFinais },
-        ultimaAtualizacao: new Date(),
-      },
-    });
 
     try {
       await recomputePontuacaoAtleta(sub.atletaId);
@@ -1332,7 +1329,6 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
     return res.status(500).json({ message: "Erro ao validar submissão" });
   }
 }
-
 
 export async function listarMinhasSubmissoesTreino(req: AuthenticatedRequest, res: Response) {
   try {

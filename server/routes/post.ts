@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -15,7 +15,7 @@ import {
   repostarPost,
 } from "../controllers/postController.js";
 import { curtirPostagem } from "server/controllers/feedController.js";
-import rateLimit, {ipKeyGenerator} from "express-rate-limit";
+import rateLimit from "express-rate-limit";
 import { isAllowedMime } from "../utils/moderation.js";
 
 const router = Router();
@@ -40,27 +40,27 @@ const upload = multer({
   },
 });
 
-const postLimiter = rateLimit({
+// gerador simples por IP/usuário sem depender de tipos externos
+const keyFromReq = (req: any) => (req?.userId ? `u:${req.userId}` : (req.ip || req.headers["x-forwarded-for"] || "ip:desconhecido"));
+
+const postLimiterMw: RequestHandler = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 50,
-  standardHeaders: "draft-7",
+  standardHeaders: true, // usa boolean para compat com v6/v7
   legacyHeaders: false,
-  keyGenerator: (req, _res) => ipKeyGenerator(req as any),
-});
+  keyGenerator: keyFromReq as any,
+}) as unknown as RequestHandler;
 
-const commentLimiter = rateLimit({
+const commentLimiterMw: RequestHandler = rateLimit({
   windowMs: 60 * 60 * 1000,
   limit: 60,
-  standardHeaders: "draft-7",
+  standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    const r = req as any;
-    return r.userId ? `u:${r.userId}` : ipKeyGenerator(r);
-  },
-});
+  keyGenerator: keyFromReq as any,
+}) as unknown as RequestHandler;
 
 router.get("/visualizar/:id", authenticateToken, buscarPostagemPorId);
-router.post("/:postId/comentario", authenticateToken, commentLimiter, adicionarComentario);
+router.post("/:postId/comentario", authenticateToken, commentLimiterMw, adicionarComentario);
 router.post("/:postId/like", authenticateToken, curtirPostagem);
 router.post("/:postId/compartilhar", authenticateToken, registrarCompartilhamento);
 router.post("/:postId/compartilhar/mensagem", authenticateToken, compartilharPostPorMensagem);
@@ -68,7 +68,6 @@ router.post("/:postId/repost", authenticateToken, repostarPost);
 router.delete("/:id", authenticateToken, deletarPost);
 router.get("/editar/:id", authenticateToken, editarPostagemGet);
 router.post("/editar/:id", authenticateToken, editarPostagemPost);
-
-router.post(["/", "/postar"], authenticateToken, postLimiter, upload.single("arquivo"), postarConteudo);
+router.post(["/", "/postar"], authenticateToken, postLimiterMw, upload.single("arquivo"), postarConteudo);
 
 export default router;
