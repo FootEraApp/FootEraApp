@@ -78,7 +78,6 @@ export async function getEarnedByUsuarioId(req: Request, res: Response) {
   }
 }
 
-/** GET /api/conquistas/catalog/:entity?   (entity opcional: atleta|professor|escolinha|clube) */
 export async function getCatalog(req: Request, res: Response) {
   try {
     const raw = (req.params.entity || req.query.entity || "").toString().toLowerCase().trim();
@@ -113,7 +112,6 @@ export async function getCatalog(req: Request, res: Response) {
   }
 }
 
-/** POST /api/conquistas/compartilhar  (auth) */
 export async function compartilharConquista(req: AuthReq, res: Response) {
   const userId = req.userId;
   if (!userId) return res.status(401).json({ message: "Sem autenticação." });

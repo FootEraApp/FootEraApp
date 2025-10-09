@@ -950,7 +950,8 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
       dicas,
       tipoUsuario,          
       tipoUsuarioId,
-      atletasIds,
+      atletasIds = [],
+      elencosIds = [],
       pontuacao,
     } = req.body as any;
 
@@ -1002,6 +1003,34 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
     const exsBanco = (exercicios as any[]).filter((e) => e.exercicioId);
     const exsTemp = (exercicios as any[]).filter((e) => !e.exercicioId && e.nome);
 
+    const elencos = elencosIds.length
+      ? await prisma.elenco.findMany({
+          where: { id: { in: elencosIds } },
+          select: { atletasIds: true },
+        })
+      : [];
+
+    const atletasFromTurmas = elencos.flatMap(e => e.atletasIds ?? []);
+    const atletasUniqRaw = Array.from(
+      new Set([ ...(atletasIds || []), ...atletasFromTurmas ])
+    );
+
+    const atletasResolvidos = atletasUniqRaw.length
+      ? await prisma.atleta.findMany({
+          where: {
+            OR: [
+              { id:        { in: atletasUniqRaw } },
+              { usuarioId: { in: atletasUniqRaw } },
+            ],
+          },
+          select: { id: true },
+        })
+      : [];
+
+    const atletaIdsResolved: string[] = Array.from(
+      new Set(atletasResolvidos.map(a => a.id))
+    );
+
     if (exsBanco.length) {
       await prisma.treinoProgramadoExercicio.createMany({
         data: exsBanco.map((e, i) => ({
@@ -1035,21 +1064,18 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
       });
     }
 
-    if (Array.isArray(atletasIds) && atletasIds.length > 0) {
+    if (atletaIdsResolved.length > 0) {
       const whenDate = treino.dataAgendada ?? new Date();
-      await Promise.all(
-        (atletasIds as string[]).map((atletaId) =>
-          prisma.treinoAgendado.create({
-            data: {
-              titulo: treino.nome,
-              dataExpiracao: whenDate,
-              dataTreino: whenDate,
-              atletaId,
-              treinoProgramadoId: treino.id,
-            },
-          })
-        )
-      );
+      await prisma.treinoAgendado.createMany({
+        data: atletaIdsResolved.map((atletaId) => ({
+          titulo: treino.nome,
+          dataExpiracao: whenDate,
+          dataTreino: whenDate,
+          atletaId,
+          treinoProgramadoId: treino.id,
+        })),
+        skipDuplicates: true,
+      });
     }
 
     return res.status(201).json(treino);
