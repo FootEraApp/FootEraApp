@@ -1,3 +1,4 @@
+// server/controllers/submissoesController.ts
 import { Request, Response } from "express";
 import { PrismaClient, TipoMidia } from "@prisma/client";
 import { aplicarEstatisticasPosSubmissao } from "./submissoes/utilsEstatistica.js";
@@ -16,6 +17,16 @@ async function resolveUsuarioIdForActivity(reqUserId: string | undefined, atleta
   return atleta?.usuarioId || null;
 }
 
+async function atletaTemVinculo(atletaId: string) {
+  const a = await prisma.atleta.findUnique({
+    where: { id: atletaId },
+    select: { id: true, clubeId: true, escolinhaId: true },
+  });
+  if (!a) return false;
+  const relCount = await prisma.relacaoTreinamento.count({ where: { atletaId } });
+  return !!(a.clubeId || a.escolinhaId || relCount > 0);
+}
+
 export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
   try {
     const {
@@ -32,8 +43,8 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
       atletaId: string;
       aprovado?: boolean | string;
       duracaoMinutos?: number | string;
-      tempoSeg?: number | string;    
-      repeticoes?: number | string;  
+      tempoSeg?: number | string;
+      repeticoes?: number | string;
     };
 
     const file = (req as any).file as Express.Multer.File | undefined;
@@ -41,9 +52,11 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
       return res.status(400).json({ error: "Dados obrigatórios ausentes." });
     }
 
+    const temVinculo = await atletaTemVinculo(atletaId);
+    const aprovadoNormalizado = temVinculo ? (String(aprovado) === "true") : true;
+
     const assetUrl = `/uploads/${file.filename}`;
     const isVideo = file.mimetype?.startsWith("video");
-
     const midia = {
       url: assetUrl,
       tipo: isVideo ? TipoMidia.Video : TipoMidia.Imagem,
@@ -68,7 +81,10 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
         observacao,
         usuarioId: typeof (req as any).userId === "string" ? (req as any).userId : undefined,
         duracaoMinutos: duracaoMinutos ? Number(duracaoMinutos) : undefined,
-        aprovado: String(aprovado) === "true",
+        aprovado: aprovadoNormalizado,
+        // sem vínculo: aprova e zera pontos
+        pontuacaoSnapshot: temVinculo ? undefined : 0,
+        pontosCreditados: temVinculo ? undefined : 0,
         tempoSeg: tempoSegNum,
         repeticoes: repeticoesNum,
         midias: { create: [midia] },
@@ -119,11 +135,25 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
         tempoSegNum != null ? Math.round(tempoSegNum / 60) :
         undefined
       ).catch(() => {});
+
+      // garante que o total reflita 0 quando não há vínculo
+      await recomputePontuacaoAtleta(atletaId).catch(() => {});
+
       const atleta = await prisma.atleta.findUnique({ where: { id: atletaId }, select: { usuarioId: true } });
       if (atleta?.usuarioId) atualizarCachePontuacao(atleta.usuarioId).catch(() => {});
     }
 
-    return res.status(201).json({ ok: true, id: created.id });
+    return res.status(201).json({
+      ok: true,
+      id: created.id,
+      autoAprovado: !temVinculo,
+      temVinculo,
+      mensagem:
+        temVinculo
+          ? "Submissão enviada. Aguarde validação do responsável."
+          : "Submissão aprovada automaticamente (sem pontuação) por ausência de vínculo.",
+    });
+
   } catch (error) {
     console.error("Erro ao salvar submissão de treino:", error);
     return res.status(500).json({ error: "Erro ao salvar submissão de treino" });
