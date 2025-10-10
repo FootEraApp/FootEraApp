@@ -1,3 +1,4 @@
+//client/src/pages/submissao.tsx
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
@@ -87,9 +88,14 @@ export default function PaginaSubmissao() {
         },
       });
 
-      if (res.ok) {
-        alert("Submissão enviada com sucesso!");
-      } else {
+     const js = await res.json().catch(() => ({}));
+     if (res.ok) {
+       const msg =
+         js?.autoAprovado
+           ? "Submissão enviada e aprovada automaticamente (sem pontuação por ausência de vínculo)."
+           : (js?.mensagem || "Submissão enviada com sucesso! Aguarde validação.");
+       alert(msg);
+     } else {
         const erro = await res.json();
         console.error("Erro:", erro);
         alert("Erro ao enviar submissão.");

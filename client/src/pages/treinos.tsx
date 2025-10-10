@@ -1,3 +1,4 @@
+// client/src/pages/treinos.tsx
 import React, { useEffect, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -109,7 +110,12 @@ type MinhasSubTreino = {
   aprovado: boolean | null;
 };
 
+type TreinoStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "EXPIRED";
+type Checklist = Record<string, boolean>;
+
 const PLACEHOLDER_USER = "/assets/default-user.png";
+
+const CHECKLIST_KEY = (treinoAgendadoId: string) => `footera:treinoChecklist:${treinoAgendadoId}`;
 
 function resolveUploadUrl(raw?: string | null) {
   if (!raw) return "";
@@ -144,13 +150,40 @@ function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-type TreinoStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "EXPIRED";
-
 const getToken = () =>
   (Storage as any).token ??
   localStorage.getItem("token") ??
   sessionStorage.getItem("token") ??
   "";
+
+// ==== Persistência da CHECKLIST (sem seletor): usa localStorage, fallback sessionStorage ====
+const getStore = (): Storage => {
+  try {
+    // normal
+    if (typeof window !== "undefined" && window.localStorage) return window.localStorage;
+  } catch {}
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) return window.sessionStorage;
+  } catch {}
+  // shim (fallback em memória – só para não quebrar)
+  let mem: Record<string, string> = {};
+  return {
+    get length() {
+      return Object.keys(mem).length;
+    },
+    clear: () => {
+      mem = {};
+    },
+    getItem: (k: string) => (k in mem ? mem[k] : null),
+    key: (i: number) => Object.keys(mem)[i] ?? null,
+    removeItem: (k: string) => {
+      delete mem[k];
+    },
+    setItem: (k: string, v: string) => {
+      mem[k] = String(v);
+    },
+  } as any as Storage;
+};
 
 export default function PaginaTreinos() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
@@ -174,10 +207,65 @@ export default function PaginaTreinos() {
   const [idsAgendadosSubmetidos, setIdsAgendadosSubmetidos] = useState<Set<string>>(new Set());
   const [idsProgramadosSubmetidos, setIdsProgramadosSubmetidos] = useState<Set<string>>(new Set());
   const [idsDesafiosSubmetidos, setIdsDesafiosSubmetidos] = useState<Set<string>>(new Set());
- 
-  const [statusPorTreino, setStatusPorTreino] =
-    useState<Record<string, { status: string; startedAt?: string|null; completedAt?: string|null }>>({});
 
+  const [statusPorTreino, setStatusPorTreino] =
+    useState<Record<string, { status: string; startedAt?: string | null; completedAt?: string | null }>>({});
+
+  // Checklist por treino (id do exercicio => boolean)
+  const [checklistByTreino, setChecklistByTreino] = useState<Record<string, Checklist>>({});
+
+  // helpers checklist
+  const carregarChecklist = (treinoId: string, exerciciosIds: string[]) => {
+    try {
+      const raw = getStore().getItem(CHECKLIST_KEY(treinoId));
+      const parsed = raw ? (JSON.parse(raw) as Checklist) : {};
+      const filled: Checklist = { ...parsed };
+      for (const id of exerciciosIds) {
+        if (typeof filled[id] !== "boolean") filled[id] = false;
+      }
+      return filled;
+    } catch {
+      const empty: Checklist = {};
+      for (const id of exerciciosIds) empty[id] = false;
+      return empty;
+    }
+  };
+
+  const salvarChecklist = (treinoId: string, state: Checklist) => {
+    try {
+      getStore().setItem(CHECKLIST_KEY(treinoId), JSON.stringify(state));
+    } catch {}
+  };
+
+  const toggleItemChecklist = (treinoId: string, exercicioId: string) => {
+    setChecklistByTreino((prev) => {
+      const atual = { ...(prev[treinoId] ?? {}) };
+      atual[exercicioId] = !atual[exercicioId];
+      const novo = { ...prev, [treinoId]: atual };
+      salvarChecklist(treinoId, atual);
+      return novo;
+    });
+  };
+
+  const marcarTodos = (treinoId: string, exerciciosIds: string[], value: boolean) => {
+    setChecklistByTreino((prev) => {
+      const novoEstado: Checklist = {};
+      exerciciosIds.forEach((id) => (novoEstado[id] = value));
+      const novo = { ...prev, [treinoId]: novoEstado };
+      salvarChecklist(treinoId, novoEstado);
+      return novo;
+    });
+  };
+
+  const limparChecklist = (treinoId: string) => {
+    setChecklistByTreino((prev) => {
+      const novo = { ...prev, [treinoId]: {} };
+      salvarChecklist(treinoId, {});
+      return novo;
+    });
+  };
+
+  // Status do treino (IN_PROGRESS/COMPLETED)
   async function carregarStatus(id: string) {
     const token = getToken();
     if (!token) return;
@@ -191,7 +279,18 @@ export default function PaginaTreinos() {
   }
 
   useEffect(() => {
-    treinosAgendados.forEach(t => carregarStatus(t.id));
+    treinosAgendados.forEach((t) => carregarStatus(t.id));
+  }, [treinosAgendados]);
+
+  // Carrega a checklist dos treinos quando a lista muda
+  useEffect(() => {
+    const next: Record<string, Checklist> = {};
+    for (const t of treinosAgendados) {
+      const exIds = (t.treinoProgramado?.exercicios ?? []).map((e) => e.exercicio.id);
+      next[t.id] = carregarChecklist(t.id, exIds);
+    }
+    setChecklistByTreino(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [treinosAgendados]);
 
   useEffect(() => {
@@ -201,45 +300,45 @@ export default function PaginaTreinos() {
   }, []);
 
   async function concluir(
-  treinoAgendadoId: string,
-  payload?: { observacao?: string; duracaoMinutos?: number; tempoSeg?: number; repeticoes?: number }
-) {
-  const token = getToken();
-  if (!token) return alert("Sessão expirada. Faça login novamente.");
+    treinoAgendadoId: string,
+    payload?: { observacao?: string; duracaoMinutos?: number; tempoSeg?: number; repeticoes?: number }
+  ) {
+    const token = getToken();
+    if (!token) return alert("Sessão expirada. Faça login novamente.");
 
-  try {
-    const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${treinoAgendadoId}/complete`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ treinoAgendadoId, ...(payload || {}) }),
-    });
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${treinoAgendadoId}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ treinoAgendadoId, ...(payload || {}) }),
+      });
 
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      console.error("Falha ao concluir treino:", r.status, txt);
-      return alert("Não foi possível concluir o treino.");
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        console.error("Falha ao concluir treino:", r.status, txt);
+        return alert("Não foi possível concluir o treino.");
+      }
+
+      setStatusPorTreino((prev) => ({
+        ...prev,
+        [treinoAgendadoId]: {
+          ...(prev[treinoAgendadoId] ?? {}),
+          status: "COMPLETED",
+          completedAt: new Date().toISOString(),
+        },
+      }));
+      setIdsAgendadosSubmetidos((prev) => {
+        const s = new Set(prev);
+        s.add(treinoAgendadoId);
+        return s;
+      });
+
+      alert("Treino concluído!");
+    } catch (e) {
+      console.error(e);
+      alert("Erro inesperado ao concluir o treino.");
     }
-
-    setStatusPorTreino(prev => ({
-      ...prev,
-      [treinoAgendadoId]: {
-        ...(prev[treinoAgendadoId] ?? {}),
-        status: "COMPLETED",
-        completedAt: new Date().toISOString(),
-      },
-    }));
-    setIdsAgendadosSubmetidos(prev => {
-      const s = new Set(prev);
-      s.add(treinoAgendadoId);
-      return s;
-    });
-
-    alert("Treino concluído!");
-  } catch (e) {
-    console.error(e);
-    alert("Erro inesperado ao concluir o treino.");
   }
-}
 
   async function iniciar(treinoAgendadoId: string) {
     const token = getToken();
@@ -248,23 +347,18 @@ export default function PaginaTreinos() {
       return;
     }
 
-    const r = await fetch(
-      `${API.BASE_URL}/api/treinos/agendados/${treinoAgendadoId}/iniciar`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${treinoAgendadoId}/iniciar`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
     if (!r.ok) {
       const txt = await r.text().catch(() => "");
       console.error("Falha ao iniciar treino:", r.status, txt);
-      alert(r.status === 401
-        ? "Sessão expirada. Faça login novamente."
-        : "Não foi possível iniciar o treino.");
+      alert(r.status === 401 ? "Sessão expirada. Faça login novamente." : "Não foi possível iniciar o treino.");
       return;
     }
 
@@ -278,8 +372,7 @@ export default function PaginaTreinos() {
   }
 
   useEffect(() => {
-    const token =
-      (Storage as any).token ?? localStorage.getItem("token") ?? undefined;
+    const token = (Storage as any).token ?? localStorage.getItem("token") ?? undefined;
     if (!token) return;
 
     (async () => {
@@ -288,9 +381,7 @@ export default function PaginaTreinos() {
       });
       if (!res.ok) return;
       const rows: Array<{ treinoAgendadoId: string }> = await res.json();
-      setIdsAgendadosSubmetidos(
-        new Set(rows.map((r) => r.treinoAgendadoId).filter(Boolean))
-      );
+      setIdsAgendadosSubmetidos(new Set(rows.map((r) => r.treinoAgendadoId).filter(Boolean)));
     })();
   }, []);
 
@@ -298,10 +389,9 @@ export default function PaginaTreinos() {
     try {
       const token = (Storage as any).token ?? localStorage.getItem("token");
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-      const r = await fetch(
-        `${API.BASE_URL}/api/treinos/minhas-submissoes?atletaId=${encodeURIComponent(atletaId)}`,
-        { headers }
-      );
+      const r = await fetch(`${API.BASE_URL}/api/treinos/minhas-submissoes?atletaId=${encodeURIComponent(atletaId)}`, {
+        headers,
+      });
       if (r.ok) {
         const arr: MinhasSubTreino[] = await r.json();
         const setAg = new Set<string>();
@@ -539,35 +629,35 @@ export default function PaginaTreinos() {
   }, [abaProfessor, usuario?.tipoUsuarioId]);
 
   async function carregarSubmissoes(append = false) {
-  const token = (Storage as any).token ?? localStorage.getItem("token");
-  if (!token || !usuario) return;
+    const token = (Storage as any).token ?? localStorage.getItem("token");
+    if (!token || !usuario) return;
 
-  const limit = page.limit;
-  const offset = append ? (page.offset + page.limit) : 0;
+    const limit = page.limit;
+    const offset = append ? page.offset + page.limit : 0;
 
-  setCarregandoSubmissoes(true);
-  try {
-    const res = await fetch(
-      `${API.BASE_URL}/api/treinos/submissoes?tipoUsuarioId=${usuario.tipoUsuarioId}&status=pendente&limit=${limit}&offset=${offset}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!res.ok) throw new Error(`Falha /treinos/submissoes: ${res.status}`);
-    const data = await res.json();
-    const items = Array.isArray(data) ? data : (data.items ?? []);
+    setCarregandoSubmissoes(true);
+    try {
+      const res = await fetch(
+        `${API.BASE_URL}/api/treinos/submissoes?tipoUsuarioId=${usuario.tipoUsuarioId}&status=pendente&limit=${limit}&offset=${offset}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) throw new Error(`Falha /treinos/submissoes: ${res.status}`);
+      const data = await res.json();
+      const items = Array.isArray(data) ? data : data.items ?? [];
 
-    setSubmissoesPendentes(prev => append ? [...prev, ...items] : items);
-    setPage({
-      total: data.total ?? items.length,
-      limit: data.limit ?? limit,
-      offset,
-    });
-  } catch (e) {
-    console.error(e);
-    if (!append) setSubmissoesPendentes([]);
-  } finally {
-    setCarregandoSubmissoes(false);
+      setSubmissoesPendentes((prev) => (append ? [...prev, ...items] : items));
+      setPage({
+        total: data.total ?? items.length,
+        limit: data.limit ?? limit,
+        offset,
+      });
+    } catch (e) {
+      console.error(e);
+      if (!append) setSubmissoesPendentes([]);
+    } finally {
+      setCarregandoSubmissoes(false);
+    }
   }
-}
 
   async function validarSubmissao(id: string, aprovado: boolean, pontosSug?: number) {
     const token = (Storage as any).token ?? localStorage.getItem("token");
@@ -611,12 +701,8 @@ export default function PaginaTreinos() {
 
   const formatarData = (data?: string) => (data ? new Date(data).toLocaleDateString("pt-BR") : "");
 
-  const treinosAgendadosVisiveis = treinosAgendados.filter(
-    (t) => !idsAgendadosSubmetidos.has(t.id)
-  );
-  const desafiosVisiveis = desafios.filter(
-    (d) => !idsDesafiosSubmetidos.has(d.id)
-  );
+  const treinosAgendadosVisiveis = treinosAgendados.filter((t) => !idsAgendadosSubmetidos.has(t.id));
+  const desafiosVisiveis = desafios.filter((d) => !idsDesafiosSubmetidos.has(d.id));
 
   const renderDesafioCard = (desafio: Desafio) => (
     <div key={desafio.id} className="bg-white p-4 rounded-xl shadow-sm border border-yellow-300/60 mb-3">
@@ -634,11 +720,8 @@ export default function PaginaTreinos() {
         </span>
       </div>
 
-       <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:justify-between">
-        <button
-          onClick={() => navigate(`/desafios/${desafio.id}`)}
-          className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg"
-        >
+      <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:justify-between">
+        <button onClick={() => navigate(`/desafios/${desafio.id}`)} className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg">
           Ver desafio
         </button>
         <button
@@ -652,23 +735,17 @@ export default function PaginaTreinos() {
   );
 
   if (!usuario) return <p className="text-center p-4">Carregando...</p>;
-  const isGestor =
-    ["professor", "admin", "escola", "escolinha", "clube"].includes(usuario.tipo);
+  const isGestor = ["professor", "admin", "escola", "escolinha", "clube"].includes(usuario.tipo);
 
   const renderTreinoCard = (treino: TreinoProgramado) => (
     <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
       <div className="flex items-start justify-between gap-3">
-        <h4
-          className="font-bold text-lg text-green-800 cursor-pointer hover:underline"
-          onClick={() => navigate(`/treinos/unico?programadoId=${treino.id}`)}
-        >
+        <h4 className="font-bold text-lg text-green-800 cursor-pointer hover:underline" onClick={() => navigate(`/treinos/unico?programadoId=${treino.id}`)}>
           {treino.nome}
         </h4>
 
         {typeof treino.pontuacao === "number" && (
-          <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
-            +{treino.pontuacao} pts
-          </span>
+          <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">+{treino.pontuacao} pts</span>
         )}
       </div>
       {treino.descricao && <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>}
@@ -700,8 +777,7 @@ export default function PaginaTreinos() {
           <div className="max-h-40 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
             {treino.exercicios.map((ex, i) => (
               <div key={ex.id} className="border-b pb-1 last:border-b-0">
-                <strong>{i + 1}.</strong> {ex.nome}{" "}
-                {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
+                <strong>{i + 1}.</strong> {ex.nome} {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
               </div>
             ))}
           </div>
@@ -715,31 +791,28 @@ export default function PaginaTreinos() {
     const nivel = treino.nivel ?? treino.treinoProgramado?.nivel ?? "-";
     const prazoIso = treino.prazoEnvio ?? treino.dataTreino ?? treino.treinoProgramado?.dataAgendada ?? null;
     const exercicios = programado?.exercicios ?? [];
+    const exIds = exercicios.map((e) => e.exercicio.id);
     const pontos = programado?.pontuacao ?? null;
     const jaSubmetido = idsAgendadosSubmetidos.has(treino.id);
     const st = statusPorTreino[treino.id]?.status as TreinoStatus | undefined;
 
+    const ck = checklistByTreino[treino.id] ?? {};
+    const done = exIds.filter((id) => ck[id]).length;
+    const total = exIds.length;
+    const allChecked = total > 0 && done === total;
+
     return (
       <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
         <div className="flex items-start justify-between gap-3">
-          <h4
-            className="font-bold text-lg text-green-800 cursor-pointer hover:underline"
-            onClick={() => navigate(`/treinos/unico?agendadoId=${treino.id}`)}
-          >
+          <h4 className="font-bold text-lg text-green-800 cursor-pointer hover:underline" onClick={() => navigate(`/treinos/unico?agendadoId=${treino.id}`)}>
             {treino.titulo}
           </h4>
 
           <div className="flex items-center gap-2">
             {typeof pontos === "number" && pontos > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
-                +{pontos} pts
-              </span>
+              <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">+{pontos} pts</span>
             )}
-            <button
-              onClick={() => removerTreinoAgendado(treino.id)}
-              title="Remover"
-              className="shrink-0 p-2 rounded-full bg-red-100 text-red-700 hover:bg-red-200"
-            >
+            <button onClick={() => removerTreinoAgendado(treino.id)} title="Remover" className="shrink-0 p-2 rounded-full bg-red-100 text-red-700 hover:bg-red-200">
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
@@ -775,26 +848,58 @@ export default function PaginaTreinos() {
           )}
         </div>
 
+        {/* === CHECKLIST de Exercícios (persistido automaticamente) === */}
         {exercicios.length > 0 && (
           <div className="mt-3">
-            <strong className="text-sm text-gray-800">Exercícios:</strong>
-            <div className="max-h-40 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
-              {exercicios.map((ex, i) => (
-                <div key={ex.exercicio.id} className="border-b pb-1 last:border-b-0">
-                  <strong>{i + 1}.</strong> {ex.exercicio.nome}{" "}
-                  {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
-                </div>
-              ))}
+            <div className="flex items-center justify-between mb-1">
+              <strong className="text-sm text-gray-800">Exercícios</strong>
+              <div className="text-xs text-gray-600">
+                Progresso:{" "}
+                <span className={`font-semibold ${allChecked ? "text-emerald-700" : "text-gray-800"}`}>{done}/{total}</span>
+              </div>
+            </div>
+
+            <div className="max-h-56 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
+              {exercicios.map((ex, i) => {
+                const id = ex.exercicio.id;
+                const checked = !!ck[id];
+                return (
+                  <label key={id} className="flex items-start gap-2 border-b pb-2 last:border-b-0 cursor-pointer select-none" title={ex.exercicio.nome}>
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 accent-emerald-600"
+                      checked={checked}
+                      onChange={() => toggleItemChecklist(treino.id, id)}
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{i + 1}.</span>
+                        <span className={`truncate ${checked ? "line-through text-gray-500" : ""}`}>{ex.exercicio.nome}</span>
+                        {!!ex.repeticoes && <span className="text-[11px] text-gray-500">({ex.repeticoes})</span>}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button onClick={() => marcarTodos(treino.id, exIds, true)} className="text-xs px-2.5 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700">
+                Marcar todos
+              </button>
+              <button onClick={() => marcarTodos(treino.id, exIds, false)} className="text-xs px-2.5 py-1 rounded bg-white border text-gray-700 hover:bg-gray-50">
+                Desmarcar todos
+              </button>
+              <button onClick={() => limparChecklist(treino.id)} className="text-xs px-2.5 py-1 rounded bg-white border text-gray-700 hover:bg-gray-50">
+                Limpar checklist
+              </button>
             </div>
           </div>
         )}
 
         <div className="mt-4 flex gap-2 justify-end">
           {(st === undefined || st === "PENDING") && (
-            <button
-              onClick={() => iniciar(treino.id)}
-              className="bg-green-700 text-white px-3 py-2 rounded-lg"
-            >
+            <button onClick={() => iniciar(treino.id)} className="bg-green-700 text-white px-3 py-2 rounded-lg">
               Iniciar
             </button>
           )}
@@ -816,16 +921,11 @@ export default function PaginaTreinos() {
           )}
 
           {st === "COMPLETED" && (
-            <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-              Concluído
-            </span>
+            <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Concluído</span>
           )}
 
           {!jaSubmetido && (
-            <button
-              onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
-              className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg"
-            >
+            <button onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)} className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg">
               Fazer Submissão
             </button>
           )}
@@ -923,7 +1023,7 @@ export default function PaginaTreinos() {
     <div className="min-h-screen bg-neutral-50 pb-24">
       <div className="mx-auto w-full max-w-3xl lg:max-w-4xl px-3 sm:px-4">
         <div className="max-w-3xl mx-auto px-4 pt-3">
-         <HealthBanner />
+          <HealthBanner />
         </div>
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
           <div className="flex items-center justify-between gap-2">
@@ -932,9 +1032,7 @@ export default function PaginaTreinos() {
                 <button
                   onClick={() => setAbaProfessor("avaliar")}
                   className={`px-4 py-2 rounded-lg border text-sm ${
-                    abaProfessor === "avaliar"
-                      ? "bg-green-800 text-white border-green-900"
-                      : "bg-white text-gray-800 border-gray-200"
+                    abaProfessor === "avaliar" ? "bg-green-800 text-white border-green-900" : "bg-white text-gray-800 border-gray-200"
                   }`}
                 >
                   Avaliar Treinos
@@ -942,9 +1040,7 @@ export default function PaginaTreinos() {
                 <button
                   onClick={() => setAbaProfessor("criar")}
                   className={`px-4 py-2 rounded-lg border text-sm ${
-                    abaProfessor === "criar"
-                      ? "bg-green-800 text-white border-green-900"
-                      : "bg-white text-gray-800 border-gray-200"
+                    abaProfessor === "criar" ? "bg-green-800 text-white border-green-900" : "bg-white text-gray-800 border-gray-200"
                   }`}
                 >
                   Meus Treinos
@@ -964,24 +1060,20 @@ export default function PaginaTreinos() {
             </Link>
           </div>
         </div>
+
         <>
           {usuario.tipo === "atleta" && (
             <div className="space-y-6">
               <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
                   <h3 className="text-lg font-semibold">Meus Treinos</h3>
-                  <div className="flex gap-2">
-                    <button
-                      className="bg-green-800 text-white px-4 py-2 rounded-lg text-sm"
-                      onClick={() => navigate("/treinos/novo")}
-                    >
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button className="bg-green-800 text-white px-4 py-2 rounded-lg text-sm" onClick={() => navigate("/treinos/novo")}>
                       Agendar novo treino
                     </button>
 
-                    <button
-                      className="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm"
-                      onClick={() => navigate("/treinos/livre/novo")}
-                    >
+                    <button className="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm" onClick={() => navigate("/treinos/livre/novo")}>
                       Registrar treino livre
                     </button>
 
@@ -994,9 +1086,7 @@ export default function PaginaTreinos() {
                   </div>
                 </div>
                 {treinosAgendadosVisiveis.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {treinosAgendadosVisiveis.map(renderTreinoAgendadoCard)}
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{treinosAgendadosVisiveis.map(renderTreinoAgendadoCard)}</div>
                 ) : (
                   <p className="text-gray-500">Nenhum treino disponível ainda.</p>
                 )}
@@ -1031,10 +1121,7 @@ export default function PaginaTreinos() {
                           const midias = (Array.isArray(s.midias) ? s.midias : []).map(resolveUploadUrl);
 
                           return (
-                            <li
-                              key={s.id}
-                              className="rounded-xl border bg-white shadow-sm hover:shadow-md transition p-3 sm:p-4"
-                            >
+                            <li key={s.id} className="rounded-xl border bg-white shadow-sm hover:shadow-md transition p-3 sm:p-4">
                               <div className="flex items-start gap-3 sm:gap-4">
                                 <img
                                   src={foto}
@@ -1087,10 +1174,7 @@ export default function PaginaTreinos() {
                                     {midias.map((src, idx) => {
                                       const isVid = isVideoUrl(src);
                                       return isVid ? (
-                                        <div
-                                          key={`${src}-${idx}`}
-                                          className="relative w-full overflow-hidden rounded-lg bg-black border pt-[56.25%]"
-                                        >
+                                        <div key={`${src}-${idx}`} className="relative w-full overflow-hidden rounded-lg bg-black border pt-[56.25%]">
                                           <video
                                             src={src}
                                             className="absolute inset-0 h-full w-full object-cover group-hover:scale-[1.02] transition"
@@ -1102,14 +1186,7 @@ export default function PaginaTreinos() {
                                           />
                                         </div>
                                       ) : (
-                                        <a
-                                          key={`${src}-${idx}`}
-                                          href={src}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="block group"
-                                          title="Abrir imagem"
-                                        >
+                                        <a key={`${src}-${idx}`} href={src} target="_blank" rel="noreferrer" className="block group" title="Abrir imagem">
                                           <div className="relative w-full overflow-hidden rounded-lg border bg-gray-50 pt-[56.25%]">
                                             <img
                                               src={src}
@@ -1132,10 +1209,7 @@ export default function PaginaTreinos() {
 
                       {submissoesPendentes.length < page.total && (
                         <div className="mt-3 flex justify-center">
-                          <button
-                            onClick={() => carregarSubmissoes(true)}
-                            className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
-                          >
+                          <button onClick={() => carregarSubmissoes(true)} className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
                             Carregar mais
                           </button>
                         </div>
@@ -1148,13 +1222,8 @@ export default function PaginaTreinos() {
               {abaProfessor === "criar" && (
                 <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                    <h3 className="text-lg font-semibold">
-                      {usuario.tipo === "admin" ? "Todos os Treinos" : "Treinos que você criou"}
-                    </h3>
-                    <button
-                      className="bg-green-800 text-white px-4 py-2 rounded-lg"
-                      onClick={() => navigate("/treinos/novo")}
-                    >
+                    <h3 className="text-lg font-semibold">{usuario.tipo === "admin" ? "Todos os Treinos" : "Treinos que você criou"}</h3>
+                    <button className="bg-green-800 text-white px-4 py-2 rounded-lg" onClick={() => navigate("/treinos/novo")}>
                       Criar novo treino
                     </button>
                   </div>
@@ -1176,20 +1245,16 @@ export default function PaginaTreinos() {
                               t.professorId === usuario.tipoUsuarioId ||
                               t.escolinhaId === usuario.tipoUsuarioId ||
                               t.clubeId === usuario.tipoUsuarioId
-                          )
-                      ).map(renderTreinoCard)}
+                          )).map(renderTreinoCard)}
                     </div>
                   ) : (
-                    <p className="text-gray-500">
-                      {usuario.tipo === "admin" ? "Nenhum treino cadastrado." : "Você ainda não criou nenhum treino."}
-                    </p>
+                    <p className="text-gray-500">{usuario.tipo === "admin" ? "Nenhum treino cadastrado." : "Você ainda não criou nenhum treino."}</p>
                   )}
                 </div>
               )}
             </div>
           )}
-          </>
-
+        </>
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-[0_-4px_12px_-6px_rgba(0,0,0,0.3)]">
@@ -1217,6 +1282,7 @@ export default function PaginaTreinos() {
 
             <div className="mb-4">
               <p className="text-sm text-gray-700 mb-2">Enviar por mensagem:</p>
+
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {carregandoMutuos && <span className="text-sm text-gray-500">Carregando contatos...</span>}
 
@@ -1262,22 +1328,14 @@ export default function PaginaTreinos() {
                 disabled={selecionados.size === 0 || enviandoDM}
                 onClick={enviarCompartilhamentoPorDM}
                 className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded-lg 
-                    ${
-                      selecionados.size === 0 || enviandoDM
-                        ? "bg-gray-300 text-gray-600"
-                        : "bg-green-700 text-white hover:bg-green-800"
-                    }`}
+                    ${selecionados.size === 0 || enviandoDM ? "bg-gray-300 text-gray-600" : "bg-green-700 text-white hover:bg-green-800"}`}
               >
                 <Send className="w-4 h-4" />
                 {enviandoDM ? "Enviando..." : `Enviar para ${selecionados.size} contato(s)`}
               </button>
             </div>
 
-            <button
-              onClick={() => setModalAberto(false)}
-              className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl"
-              aria-label="Fechar modal"
-            >
+            <button onClick={() => setModalAberto(false)} className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl" aria-label="Fechar modal">
               <CircleX />
             </button>
           </div>
