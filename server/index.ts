@@ -8,11 +8,13 @@ import cron from "node-cron";
 import http from "http";
 import qrcode from "qrcode-terminal";
 import * as fs from "fs";
+import helmet from "helmet";
 
 import { setupSocket } from "./socket.js";
 import { UPLOADS_ROOT, ensureUploadDirs } from "./utils/uploads.js";
 import { gerarSnapshotRanking } from "./jobs/rankingSnapshot.js";
-import helmet from "helmet";
+import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
+import { authenticateToken } from "./middlewares/auth.js";
 
 // rotas
 import adminRoutes from "./routes/admin.js";
@@ -24,7 +26,7 @@ import cadastroRoutes from "./routes/cadastro.js";
 import clubeRoutes from "./routes/clube.js";
 import configuracoesRoutes from "./routes/configuracoes.js";
 import conquistasRoutes from "./routes/conquistas.js";
-import categoriasRoutes from "./routes/categorias.js"
+import categoriasRoutes from "./routes/categorias.js";
 import desafiosRoutes from "./routes/desafios.js";
 import desafiosEmGrupoRoutes from "./routes/desafiosEmGrupo.js";
 import escolinhaRoutes from "./routes/escolinha.js";
@@ -68,13 +70,13 @@ import scoutNotesRoutes from "./routes/scoutNotes.js";
 import checklistRoutes from "./routes/checklists.js";
 import catalogoRoutes from "./routes/catalogo.js";
 import legalRoutes from "./routes/legal.js";
-
-import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
-import { authenticateToken } from "./middlewares/auth.js"; // ⬅️ IMPORTANTE
+import organizacoesRoutes from "./routes/organizacoes.js";
+import turmasRoutes from "./routes/turmas.js";
+import treinosElencosRoutes from "./routes/treinosElencos.js";
 
 // ---------------- ENV ----------------
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);     
+const __dirname = dirname(__filename);
 
 const envCandidates = [
   path.resolve(__dirname, "../.env"),
@@ -106,7 +108,6 @@ const FRONT_PORT = Number(process.env.FRONT_PORT) || 5173;
 
 // ---------- Middlewares ----------
 app.use(helmet({ crossOriginResourcePolicy: false }));
-
 app.use(
   cors({
     origin: [FRONTEND_URL, "http://localhost:5173"],
@@ -118,7 +119,14 @@ app.use(
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
-// Uploads e assets
+if (NODE_ENV !== "production") {
+  app.use((req, _res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+    next();
+  });
+}
+
+// Uploads e assets estáticos (públicos)
 app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 app.use("/uploads", express.static(UPLOADS_ROOT, { maxAge: "1d" }));
 {
@@ -131,15 +139,21 @@ app.use("/uploads", express.static(UPLOADS_ROOT, { maxAge: "1d" }));
   if (found) app.use("/assets", express.static(found));
 }
 
+// Exercícios (estático com range)
+app.use(
+  "/exercicios",
+  express.static(path.join(process.cwd(), "public", "exercicios"), {
+    setHeaders: (res) => res.setHeader("Accept-Ranges", "bytes"),
+  })
+);
+
 // ---------- ROTAS PÚBLICAS (SEM TOKEN) ----------
 app.use("/api/auth", authRoutes);        // /login, /refresh etc.
 app.use("/api/cadastro", cadastroRoutes);
 app.use("/api/termos", termoRoutes);
 
-// Health check público para o Load Balancer
+// Health/public utils
 app.get("/api/health", (_req, res) => res.status(200).json({ ok: true }));
-
-// Health & util públicos
 app.get("/", (_req, res) => res.send("FootEra API está ativa!"));
 app.get("/resetar-senha", (req, res) => {
   const qs = req.originalUrl.split("?")[1] || "";
@@ -184,12 +198,12 @@ app.use("/api/seguidores", seguirRoutes);
 app.use("/api/usuarios", usuarioRoutes);
 app.use("/api/solicitacoes-treino", solicitacaoTreinoRoutes);
 app.use("/api/submissoes", submissoesRoutes);
-// app.use("/api/termos", termoRoutes);  // já está nas públicas
 app.use("/api/treinos", treinoRoutes);
 app.use("/api/treino-unico", treinoUnicoRoutes);
 app.use("/api/treinosprogramados", treinoProgramadoRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/vinculo", vinculoRoutes);
+app.use("/api/vinculos", vinculoRoutes);
 app.use("/api/observados", observadosRoutes);
 app.use("/api/gerenciar", gerenciarAtletasRoutes);
 app.use("/api/indicacoes", indicacoesRouter);
@@ -197,16 +211,18 @@ app.use("/api/olheiros", olheirosRouter);
 app.use("/api/relacoes", relacoesRoutes);
 app.use("/api/elencos", elencosRoutes);
 app.use("/api/formadores", formadoresRoutes);
-app.use("/api", scoutNotesRoutes);
-app.use("/api/checklists", checklistRoutes);
 
-// Exercícios (estático com range)
-app.use(
-  "/exercicios",
-  express.static(path.join(process.cwd(), "public", "exercicios"), {
-    setHeaders: (res) => res.setHeader("Accept-Ranges", "bytes"),
-  })
-);
+// novas do outro branch (mantidas e sem duplicar)
+app.use("/api/checklists", checklistRoutes);
+app.use("/api/catalogo", catalogoRoutes);
+app.use("/api/legal", legalRoutes);
+app.use("/api/organizacoes", organizacoesRoutes);
+app.use("/api/turmas", turmasRoutes);
+// routers cujo arquivo já define o subcaminho:
+app.use("/api", treinoLivreRoutes);
+app.use("/api", scoutNotesRoutes);
+// rota adicionada com prefixo claro:
+app.use("/api/treinos-elencos", treinosElencosRoutes);
 
 // ---------- Server ----------
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
