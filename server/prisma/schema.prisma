@@ -9,59 +9,59 @@ datasource db {
 }
 
 model Usuario {
-  id                     String                    @id @default(uuid())
-  nomeDeUsuario          String                    @unique
-  senhaHash              String
-  nome                   String
-  email                  String                    @unique
-  foto                   String?
-  tipo                   TipoUsuario
-  cidade                 String?
-  estado                 String?
-  pais                   String?
-  bairro                 String?
-  cpf                    String?
-  dataNascimento         DateTime?
-  responsavelNome        String?
-  responsavelEmail       String?
-  responsavelTelefone    String?
+  id                       String                    @id @default(uuid())
+  nomeDeUsuario            String                    @unique
+  senhaHash                String
+  nome                     String
+  email                    String                    @unique
+  foto                     String?
+  tipo                     TipoUsuario
+  cidade                   String?
+  estado                   String?
+  pais                     String?
+  bairro                   String?
+  cpf                      String?
+  dataNascimento           DateTime?
+  responsavelNome          String?
+  responsavelEmail         String?
+  responsavelTelefone      String?
   configuracoesPrivacidade Json?
-  dataCriacao            DateTime                  @default(now())
-  codigo                 String?
-  verified               Boolean                   @default(false)
-  administrador          Administrador?
-  amigosDe               Amigo[]                   @relation("AmigoUsuario")
-  amigos                 Amigo[]                   @relation("UsuarioAmigo")
-  atividadesRecentes     AtividadeRecente[]
-  atleta                 Atleta?
-  clube                  Clube?
-  comentarios            Comentario[]
-  curtidas               Curtida[]
-  desafiosCriados        DesafioEmGrupo[]          @relation("CriadorDesafioEmGrupo")
-  escolinha              Escolinha?
-  favoritadoPor          FavoritoUsuario[]         @relation("UsuarioFavorito")
-  favoritos              FavoritoUsuario[]         @relation("UsuarioFavoritador")
-  gruposDono             Grupo[]                   @relation("GruposQuePossuo")
-  logsErro               LogErro[]
-  MembroGrupo            MembroGrupo[]
-  mensagensEnviadas      Mensagem[]                @relation("MensagensEnviadas")
-  mensagensRecebidas     Mensagem[]                @relation("MensagensRecebidas")
-  mensagensReferenciando Mensagem[]                @relation("UsuarioMensagemReferencia")
-  MensagemGrupo          MensagemGrupo[]
-  olheiro                Olheiro?
-  PasswordReset          PasswordReset[]
-  postagens              Postagem[]
-  professor              Professor?
-  seguidores             Seguidor[]                @relation("Seguido")
-  seguindo               Seguidor[]                @relation("Seguidor")
-  solicitacoesRecebidas  SolicitacaoTreino[]       @relation("SolicitacoesRecebidas")
-  solicitacoesEnviadas   SolicitacaoTreino[]       @relation("SolicitacoesEnviadas")
-  submissaoDesafios      SubmissaoDesafio[]
-  submissaoEmGrupo       SubmissaoDesafioEmGrupo[]
-  submissaoTreinos       SubmissaoTreino[]
-  treinoRealizado        TreinoRealizado[]
-  desafiosEmGrupo        DesafioEmGrupo[]          @relation("MembrosDesafioEmGrupo")
-  Consentimento          Consentimento[]
+  dataCriacao              DateTime                  @default(now())
+  codigo                   String?
+  verified                 Boolean                   @default(false)
+  administrador            Administrador?
+  amigosDe                 Amigo[]                   @relation("AmigoUsuario")
+  amigos                   Amigo[]                   @relation("UsuarioAmigo")
+  atividadesRecentes       AtividadeRecente[]
+  atleta                   Atleta?
+  clube                    Clube?
+  comentarios              Comentario[]
+  curtidas                 Curtida[]
+  desafiosCriados          DesafioEmGrupo[]          @relation("CriadorDesafioEmGrupo")
+  escolinha                Escolinha?
+  favoritadoPor            FavoritoUsuario[]         @relation("UsuarioFavorito")
+  favoritos                FavoritoUsuario[]         @relation("UsuarioFavoritador")
+  gruposDono               Grupo[]                   @relation("GruposQuePossuo")
+  logsErro                 LogErro[]
+  MembroGrupo              MembroGrupo[]
+  mensagensEnviadas        Mensagem[]                @relation("MensagensEnviadas")
+  mensagensRecebidas       Mensagem[]                @relation("MensagensRecebidas")
+  mensagensReferenciando   Mensagem[]                @relation("UsuarioMensagemReferencia")
+  MensagemGrupo            MensagemGrupo[]
+  olheiro                  Olheiro?
+  PasswordReset            PasswordReset[]
+  postagens                Postagem[]
+  professor                Professor?
+  seguidores               Seguidor[]                @relation("Seguido")
+  seguindo                 Seguidor[]                @relation("Seguidor")
+  solicitacoesRecebidas    SolicitacaoTreino[]       @relation("SolicitacoesRecebidas")
+  solicitacoesEnviadas     SolicitacaoTreino[]       @relation("SolicitacoesEnviadas")
+  submissaoDesafios        SubmissaoDesafio[]
+  submissaoEmGrupo         SubmissaoDesafioEmGrupo[]
+  submissaoTreinos         SubmissaoTreino[]
+  treinoRealizado          TreinoRealizado[]
+  desafiosEmGrupo          DesafioEmGrupo[]          @relation("MembrosDesafioEmGrupo")
+  Consentimento            Consentimento[]
 }
 
 model Professor {
@@ -80,6 +80,16 @@ model Professor {
   usuario             Usuario?             @relation(fields: [usuarioId], references: [id])
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoProfessor")
   treinosProgramados  TreinoProgramado[]
+  escolinhaId         String?
+  clubeId             String?
+  organizacaoId       String?
+
+  escolinha Escolinha? @relation(fields: [escolinhaId], references: [id])
+  clube     Clube?     @relation(fields: [clubeId], references: [id])
+
+  @@index([escolinhaId])
+  @@index([clubeId])
+  @@index([organizacaoId])
 }
 
 model Amigo {
@@ -402,6 +412,7 @@ model Escolinha {
   postagens           Postagem[]
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoEscolinha")
   treinoProgramado    TreinoProgramado[]
+  Professor           Professor[]
 }
 
 model Comentario {
@@ -456,6 +467,7 @@ model Clube {
   postagens           Postagem[]
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoClube")
   treinoProgramado    TreinoProgramado[]
+  Professor           Professor[]
 }
 
 model SolicitacaoVinculo {

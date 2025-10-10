@@ -1,0 +1,59 @@
+import express from "express";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+const router = express.Router();
+
+type OrgTipo = "Escolinha" | "Clube";
+type OrgOut  = { id: string; nome: string; tipo: OrgTipo };
+
+router.get("/", async (req, res) => {
+  try {
+    const tipos = String(req.query.tipos ?? "");
+    const vinculadasAoProfessorId = req.query.vinculadasAoProfessorId as string | undefined;
+
+    if (vinculadasAoProfessorId) {
+      const rel = await prisma.relacaoTreinamento.findFirst({
+        where: {
+          professorId: vinculadasAoProfessorId,
+          atletaId: null,
+          OR: [{ escolinhaId: { not: null } }, { clubeId: { not: null } }],
+        },
+        orderBy: { criadoEm: "desc" },
+        select: { escolinhaId: true, clubeId: true },
+      });
+
+      if (!rel) return res.json([]);
+
+      if (rel.escolinhaId) {
+        const o = await prisma.escolinha.findUnique({ where: { id: rel.escolinhaId }, select: { id: true, nome: true } });
+        return res.json(o ? [{ id: o.id, nome: o.nome, tipo: "Escolinha" } satisfies OrgOut] : []);
+      }
+      if (rel.clubeId) {
+        const o = await prisma.clube.findUnique({ where: { id: rel.clubeId }, select: { id: true, nome: true } });
+        return res.json(o ? [{ id: o.id, nome: o.nome, tipo: "Clube" } satisfies OrgOut] : []);
+      }
+      return res.json([]);
+    }
+
+    const wantEscolinha = !tipos || tipos.toLowerCase().includes("escolinha");
+    const wantClube     = !tipos || tipos.toLowerCase().includes("clube");
+
+    const [escolinhas, clubes] = await Promise.all([
+      wantEscolinha ? prisma.escolinha.findMany({ select: { id: true, nome: true } }) : Promise.resolve([]),
+      wantClube     ? prisma.clube.findMany({ select: { id: true, nome: true } })     : Promise.resolve([]),
+    ]);
+
+    const out: OrgOut[] = [
+      ...escolinhas.map(o => ({ id: o.id, nome: o.nome, tipo: "Escolinha" as const })),
+      ...clubes.map(o => ({ id: o.id, nome: o.nome, tipo: "Clube" as const })),
+    ];
+
+    res.json(out);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Falha ao listar organizações" });
+  }
+});
+
+export default router;

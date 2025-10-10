@@ -159,13 +159,11 @@ const getToken = () =>
 // ==== Persistência da CHECKLIST (sem seletor): usa localStorage, fallback sessionStorage ====
 const getStore = (): Storage => {
   try {
-    // normal
     if (typeof window !== "undefined" && window.localStorage) return window.localStorage;
   } catch {}
   try {
     if (typeof window !== "undefined" && window.sessionStorage) return window.sessionStorage;
   } catch {}
-  // shim (fallback em memória – só para não quebrar)
   let mem: Record<string, string> = {};
   return {
     get length() {
@@ -740,7 +738,10 @@ export default function PaginaTreinos() {
   const renderTreinoCard = (treino: TreinoProgramado) => (
     <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
       <div className="flex items-start justify-between gap-3">
-        <h4 className="font-bold text-lg text-green-800 cursor-pointer hover:underline" onClick={() => navigate(`/treinos/unico?programadoId=${treino.id}`)}>
+        <h4
+          className="font-bold text-lg text-green-800 cursor-pointer hover:underline"
+          onClick={() => navigate(`/treinos/unico?programadoId=${treino.id}`)}
+        >
           {treino.nome}
         </h4>
 
@@ -776,8 +777,9 @@ export default function PaginaTreinos() {
           <strong className="text-sm text-gray-800">Exercícios:</strong>
           <div className="max-h-40 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
             {treino.exercicios.map((ex, i) => (
-              <div key={ex.id} className="border-b pb-1 last:border-b-0">
-                <strong>{i + 1}.</strong> {ex.nome} {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
+              <div key={ex.id || `${i}-${ex.nome || "ex"}`} className="border-b pb-1 last:border-b-0">
+                <strong>{i + 1}.</strong> {ex.nome}{" "}
+                {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
               </div>
             ))}
           </div>
@@ -804,7 +806,10 @@ export default function PaginaTreinos() {
     return (
       <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
         <div className="flex items-start justify-between gap-3">
-          <h4 className="font-bold text-lg text-green-800 cursor-pointer hover:underline" onClick={() => navigate(`/treinos/unico?agendadoId=${treino.id}`)}>
+          <h4
+            className="font-bold text-lg text-green-800 cursor-pointer hover:underline"
+            onClick={() => navigate(`/treinos/unico?agendadoId=${treino.id}`)}
+          >
             {treino.titulo}
           </h4>
 
@@ -812,7 +817,11 @@ export default function PaginaTreinos() {
             {typeof pontos === "number" && pontos > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">+{pontos} pts</span>
             )}
-            <button onClick={() => removerTreinoAgendado(treino.id)} title="Remover" className="shrink-0 p-2 rounded-full bg-red-100 text-red-700 hover:bg-red-200">
+            <button
+              onClick={() => removerTreinoAgendado(treino.id)}
+              title="Remover"
+              className="shrink-0 p-2 rounded-full bg-red-100 text-red-700 hover:bg-red-200"
+            >
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
@@ -864,7 +873,11 @@ export default function PaginaTreinos() {
                 const id = ex.exercicio.id;
                 const checked = !!ck[id];
                 return (
-                  <label key={id} className="flex items-start gap-2 border-b pb-2 last:border-b-0 cursor-pointer select-none" title={ex.exercicio.nome}>
+                  <label
+                    key={id}
+                    className="flex items-start gap-2 border-b pb-2 last:border-b-0 cursor-pointer select-none"
+                    title={ex.exercicio.nome}
+                  >
                     <input
                       type="checkbox"
                       className="mt-0.5 h-4 w-4 accent-emerald-600"
@@ -884,13 +897,22 @@ export default function PaginaTreinos() {
             </div>
 
             <div className="mt-2 flex flex-wrap gap-2">
-              <button onClick={() => marcarTodos(treino.id, exIds, true)} className="text-xs px-2.5 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700">
+              <button
+                onClick={() => marcarTodos(treino.id, exIds, true)}
+                className="text-xs px-2.5 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+              >
                 Marcar todos
               </button>
-              <button onClick={() => marcarTodos(treino.id, exIds, false)} className="text-xs px-2.5 py-1 rounded bg-white border text-gray-700 hover:bg-gray-50">
+              <button
+                onClick={() => marcarTodos(treino.id, exIds, false)}
+                className="text-xs px-2.5 py-1 rounded bg-white border text-gray-700 hover:bg-gray-50"
+              >
                 Desmarcar todos
               </button>
-              <button onClick={() => limparChecklist(treino.id)} className="text-xs px-2.5 py-1 rounded bg-white border text-gray-700 hover:bg-gray-50">
+              <button
+                onClick={() => limparChecklist(treino.id)}
+                className="text-xs px-2.5 py-1 rounded bg-white border text-gray-700 hover:bg-gray-50"
+              >
                 Limpar checklist
               </button>
             </div>
@@ -925,7 +947,10 @@ export default function PaginaTreinos() {
           )}
 
           {!jaSubmetido && (
-            <button onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)} className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg">
+            <button
+              onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
+              className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg"
+            >
               Fazer Submissão
             </button>
           )}
@@ -1163,7 +1188,7 @@ export default function PaginaTreinos() {
                                   <div className="text-xs text-gray-500">{formatarDataHora(s.criadoEm)}</div>
 
                                   {!!s.observacao && (
-                                    <p className="mt-1 text-[13px] italic text-gray-700 leading-snug">“{s.observacao}”</p>
+                                    <p className="mt-1 text[13px] italic text-gray-700 leading-snug">“{s.observacao}”</p>
                                   )}
                                 </div>
                               </div>

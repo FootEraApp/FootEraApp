@@ -1,9 +1,29 @@
 import { Request, Response } from "express";
-import multer from "multer";
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient;
-const upload = multer({dest: "uploads/"});
+const prisma = new PrismaClient();
+
+export async function buscarProfessorPorIdInterno(id: string) {
+  return prisma.professor.findUnique({
+    where: { id },
+    select: { id: true, escolinhaId: true, clubeId: true, organizacaoId: true },
+  });
+}
+
+export const buscarProfessorPorId = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const professor = await prisma.professor.findUnique({
+      where: { id },
+      include: { usuario: true },
+    });
+    if (!professor) return res.status(404).json({ message: "Professor não encontrado." });
+    res.json(professor);
+  } catch (error) {
+    console.error("Erro ao buscar professor:", error);
+    res.status(500).json({ message: "Erro ao buscar professor." });
+  }
+};
 
 export const listarProfessores = async (req: Request, res: Response) => {
   try {
@@ -16,23 +36,6 @@ export const listarProfessores = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Erro ao listar professores:", error);
     res.status(500).json({ message: "Erro ao listar professores." });
-  }
-};
-
-export const buscarProfessorPorId = async (req: Request, res: Response) => {
-  const { id } = req.params;
-  try {
-    const professor = await prisma.professor.findUnique({
-      where: { id },
-      include: {
-        usuario: true,
-      },
-    });
-    if (!professor) return res.status(404).json({ message: "Professor não encontrado." });
-    res.json(professor);
-  } catch (error) {
-    console.error("Erro ao buscar professor:", error);
-    res.status(500).json({ message: "Erro ao buscar professor." });
   }
 };
 
