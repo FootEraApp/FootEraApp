@@ -70,6 +70,12 @@ function readUsuarioId(): string | null {
 
 const USE_API = true;
 
+const getToken = () =>
+  (Storage as any)?.token ??
+  localStorage.getItem("token") ??
+  sessionStorage.getItem("token") ??
+  "";
+
 export default function ConquistasPage() {
   const usuarioId = readUsuarioId();
   const tipoRaw = readTipoUsuario();
@@ -111,11 +117,22 @@ export default function ConquistasPage() {
       }
 
       try {
-        const base =
-          (API?.BASE_URL ? String(API.BASE_URL).replace(/\/+$/, "") : "") || "";
+        const base = (API?.BASE_URL ? String(API.BASE_URL).replace(/\/+$/, "") : "") || "";
         const url = `${base}/api/conquistas/${usuarioId}`;
-        const r = await fetch(url, { credentials: "include" });
+        const token = getToken();
 
+        const r = await fetch(url, {
+          credentials: "include", // mantenha se usa cookie de sessão; não atrapalha
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        if (r.status === 401) {
+          setErro("Você precisa estar logado para ver suas conquistas.");
+          setEarned([]);
+          setServerEntity(entityFromTipoUsuario(String(tipoRaw)) ?? "Atleta");
+          setLoading(false);
+          return;
+        }
         if (!r.ok) {
           throw new Error(`Falha ao carregar conquistas (${r.status})`);
         }
@@ -141,9 +158,7 @@ export default function ConquistasPage() {
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
         <header className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-            Conquistas
-          </h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Conquistas</h1>
           <p className="text-gray-600">
             {USE_API
               ? `Veja seu progresso de badges como ${entity}.`
@@ -159,26 +174,18 @@ export default function ConquistasPage() {
               <>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-700">
-                    Progresso total: <strong>{totalEarned}</strong> /{" "}
-                    {totalCatalog}
+                    Progresso total: <strong>{totalEarned}</strong> / {totalCatalog}
                   </span>
                   {!!totalCatalog && (
                     <span className="text-sm text-gray-700">
-                      {Math.round(
-                        (totalEarned / Math.max(totalCatalog, 1)) * 100
-                      )}
-                      %
+                      {Math.round((totalEarned / Math.max(totalCatalog, 1)) * 100)}%
                     </span>
                   )}
                 </div>
                 <div className="mt-2 h-2 w-full bg-gray-200 rounded overflow-hidden">
                   <div
                     className="h-full bg-green-600 transition-all"
-                    style={{
-                      width: `${
-                        (totalEarned / Math.max(totalCatalog, 1)) * 100
-                      }%`,
-                    }}
+                    style={{ width: `${(totalEarned / Math.max(totalCatalog, 1)) * 100}%` }}
                   />
                 </div>
               </>
@@ -204,8 +211,7 @@ export default function ConquistasPage() {
                 </h2>
                 {!loading && (
                   <span className="text-sm text-gray-600">
-                    {grouped[group].filter((a) => earnedIds.has(a.id)).length} /{" "}
-                    {grouped[group].length}
+                    {grouped[group].filter((a) => earnedIds.has(a.id)).length} / {grouped[group].length}
                   </span>
                 )}
               </div>
@@ -236,14 +242,10 @@ export default function ConquistasPage() {
 
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-gray-900">
-                              {item.title}
-                            </h3>
+                            <h3 className="font-semibold text-gray-900">{item.title}</h3>
                             <TierPill tier={item.tier} active={has} />
                           </div>
-                          <p className="text-sm text-gray-600 mt-0.5">
-                            {item.description}
-                          </p>
+                          <p className="text-sm text-gray-600 mt-0.5">{item.description}</p>
 
                           <div className="mt-3 text-xs text-gray-500 flex items-center gap-2">
                             <span className="inline-block px-2 py-0.5 rounded bg-gray-100 border text-gray-600">
@@ -252,16 +254,8 @@ export default function ConquistasPage() {
                             <span className="inline-block px-2 py-0.5 rounded bg-gray-100 border text-gray-600">
                               {item.group}
                             </span>
-                            {!has && (
-                              <span className="ml-auto text-gray-400">
-                                Bloqueado
-                              </span>
-                            )}
-                            {has && (
-                              <span className="ml-auto text-green-700 font-medium">
-                                Conquistado
-                              </span>
-                            )}
+                            {!has && <span className="ml-auto text-gray-400">Bloqueado</span>}
+                            {has && <span className="ml-auto text-green-700 font-medium">Conquistado</span>}
                           </div>
                         </div>
                       </div>
@@ -280,7 +274,6 @@ export default function ConquistasPage() {
         <Link href="/treinos"><Volleyball /></Link>
         <Link href="/perfil"><User /></Link>
       </nav>
-
     </div>
   );
 }
@@ -294,24 +287,12 @@ function TierPill({
 }) {
   if (!tier) return null;
   const map: Record<string, string> = {
-    bronze: active
-      ? "bg-amber-100 text-amber-800 border-amber-200"
-      : "bg-gray-100 text-gray-500 border-gray-200",
-    prata: active
-      ? "bg-gray-100 text-gray-700 border-gray-300"
-      : "bg-gray-100 text-gray-500 border-gray-200",
-    ouro: active
-      ? "bg-yellow-100 text-yellow-800 border-yellow-200"
-      : "bg-gray-100 text-gray-500 border-gray-200",
-    platina: active
-      ? "bg-blue-100 text-blue-800 border-blue-200"
-      : "bg-gray-100 text-gray-500 border-gray-200",
+    bronze: active ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-gray-100 text-gray-500 border-gray-200",
+    prata: active ? "bg-gray-100 text-gray-700 border-gray-300" : "bg-gray-100 text-gray-500 border-gray-200",
+    ouro: active ? "bg-yellow-100 text-yellow-800 border-yellow-200" : "bg-gray-100 text-gray-500 border-gray-200",
+    platina: active ? "bg-blue-100 text-blue-800 border-blue-200" : "bg-gray-100 text-gray-500 border-gray-200",
   };
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded border ${map[tier] || ""}`}>
-      {tier[0].toUpperCase() + tier.slice(1)}
-    </span>
-  );
+  return <span className={`text-xs px-2 py-0.5 rounded border ${map[tier] || ""}`}>{tier[0].toUpperCase() + tier.slice(1)}</span>;
 }
 
 function PontuacaoHelp() {
@@ -338,8 +319,7 @@ function PontuacaoHelp() {
           <p className="font-medium text-gray-900 mb-1">Como calculamos seus pontos</p>
           <ul className="list-disc pl-4 space-y-1 text-gray-700">
             <li>
-              <strong>PERFORMANCE</strong> = soma dos pontos que aparecem no seu Histórico
-              (treinos + desafios realizados).
+              <strong>PERFORMANCE</strong> = soma dos pontos que aparecem no seu Histórico (treinos + desafios realizados).
             </li>
             <li>
               <strong>DISCIPLINA</strong> = <em>nº de treinos</em> × <strong>2</strong>.
@@ -349,8 +329,7 @@ function PontuacaoHelp() {
             </li>
           </ul>
           <p className="text-gray-600 mt-2">
-            As badges de pontuação acendem quando você atinge os marcos definidos
-            (ex.: 50/100/200 pontos em cada categoria).
+            As badges de pontuação acendem quando você atinge os marcos definidos (ex.: 50/100/200 pontos em cada categoria).
           </p>
         </div>
       )}

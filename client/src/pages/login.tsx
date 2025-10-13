@@ -1,4 +1,3 @@
-// client/src/pages/login.tsx
 import { useState, useEffect, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import axios from "axios";
@@ -78,18 +77,27 @@ export default function PaginaLogin() {
       if (!token || !usuarioId) throw new Error("Resposta inválida do servidor");
 
       const store = lembrarDeMim ? localStorage : sessionStorage;
+    
+      ["token","usuarioId","nomeUsuario","tipoUsuario","usuarioTipoRaw","tipoUsuarioId"].forEach((k) => {
+        localStorage.removeItem(k);
+        sessionStorage.removeItem(k);
+      });
+
       store.setItem("token", token);
       store.setItem("usuarioId", usuarioId);
       store.setItem("nomeUsuario", usuarioNome);
 
-      const tipoPadrao =
-        isAdmin ? "admin" :
-        rawTipo === "escolinha" ? "escola" :
-        rawTipo === "clube"     ? "clube" :
-        rawTipo === "professor" ? "professor" :
-        rawTipo === "olheiro"   ? "olheiro" :
-        "atleta";
+      const map: Record<string, string> = {
+        admin: "admin",
+        atleta: "atleta",
+        professor: "professor",
+        clube: "clube",
+        escolinha: "escolinha",
+        escola: "escola",
+        olheiro: "olheiro",
+      };
 
+      const tipoPadrao = isAdmin ? "admin" : (map[rawTipo] ?? "atleta");
       store.setItem("tipoUsuario", tipoPadrao);
       store.setItem("usuarioTipoRaw", rawTipo);
 
@@ -102,9 +110,7 @@ export default function PaginaLogin() {
         data?.atleta?.id ||
         null;
 
-      if (tipoUsuarioId) {
-        store.setItem("tipoUsuarioId", String(tipoUsuarioId));
-      }
+      if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
 
       navigate(isAdmin ? "/admin" : "/feed");
     } catch (err: any) {
