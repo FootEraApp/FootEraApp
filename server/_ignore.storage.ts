@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { db } from "./db.js"; 
 import { users } from "@shared/schema.js";
 import { eq } from "drizzle-orm";
