@@ -1,3 +1,4 @@
+// routes/admin.ts
 import { Router } from "express";
 import { adminDashboard, loginAdmin } from "../controllers/adminController.js";
 import { authenticateToken } from "../middlewares/auth.js";
@@ -9,18 +10,19 @@ import {
   banUser,
   unbanUser,
   removeUserContent,
-} from "../controllers/adminUsersController.js"; 
+} from "../controllers/adminUsersController.js";
 
 const router = Router();
 
 router.post("/login", loginAdmin);
-router.get("/", authenticateToken, requireAdmin, adminDashboard);
 
-router.get("/usuarios", authenticateToken, requireAdmin, listAdminUsers);
-router.get("/usuarios/:id", authenticateToken, requireAdmin, getAdminUserDetail);
-router.patch("/usuarios/:id", authenticateToken, requireAdmin, patchAdminUser);
-router.post("/usuarios/:id/banir", authenticateToken, requireAdmin, banUser);
-router.delete("/usuarios/:id/banir", authenticateToken, requireAdmin, unbanUser);
-router.post("/usuarios/:id/remover-conteudo", authenticateToken, requireAdmin, removeUserContent);
+router.use(authenticateToken, requireAdmin);
 
+router.get("/usuarios/:id", getAdminUserDetail);
+router.patch("/usuarios/:id", patchAdminUser);
+router.post("/usuarios/:id/banir", banUser);
+router.delete("/usuarios/:id/banir", unbanUser);
+router.post("/usuarios/:id/remover-conteudo", removeUserContent);
+router.get("/usuarios", listAdminUsers);
+router.get("/", adminDashboard);
 export default router;
