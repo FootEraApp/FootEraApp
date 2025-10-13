@@ -1,3 +1,4 @@
+//client/src/components/perfil/PerfilEscola
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -73,6 +74,8 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   const isOwn = !idDaUrl || idDaUrl === Storage.usuarioId;
+  const canEdit = isOwn;
+
   const targetId = isOwn ? (Storage.tipoUsuarioId || "me") : (idDaUrl as string);
 
   const [data, setData] = useState<PayloadEscola | null>(null);
@@ -225,11 +228,11 @@ export default function PerfilEscola({ idDaUrl }: Props) {
 
       <div className="mt-4 px-4">
         <div className="bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100">
-          {[
-            { id: "visao", label: "Visão Geral" },
-            { id: "atletas", label: "Atletas" },
-            { id: "conquistas", label: "Conquistas" },
-          ].map(t => (
+           {(canEdit ? [
+              { id:"visao",label:"Visão Geral"},{ id:"atletas",label:"Atletas"},{ id:"conquistas",label:"Conquistas"}
+            ] : [
+              { id:"visao",label:"Visão Geral"},{ id:"conquistas",label:"Conquistas"}
+            ]).map(t => (
             <button
               key={t.id}
               onClick={() => setAba(t.id as Aba)}
@@ -264,8 +267,8 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             </ul>
           </SectionCard>
 
-          <SectionCard
-            title="FootEra Formadores"
+          {canEdit && <SectionCard 
+            title="FootEra Formadores" 
             right={
               <Link href="/formadores">
                 <button
@@ -282,11 +285,12 @@ export default function PerfilEscola({ idDaUrl }: Props) {
               Gerencie vínculos de formação de atletas e documentos para mecanismo de solidariedade.
             </p>
           </SectionCard>
+          }
 
           <SectionCard title="Treinos">
             <div className="flex gap-2 justify-end">
               <Link href="/treinos" className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900">Ver todos</Link>
-              <Link href="/treinos/novo" className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"><PlusCircle className="w-4 h-4" />Criar novo treino</Link>
+              {canEdit && <Link href="/treinos/novo" className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"> <PlusCircle className="w-4 h-4" />Criar novo treino</Link>}
             </div>
             <p className="text-sm text-green-900/90 mt-2">Crie e gerencie treinos para seus atletas vinculados.</p>
           </SectionCard>
