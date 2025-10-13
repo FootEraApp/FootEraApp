@@ -1,3 +1,4 @@
+//client/src/components/perfil/PerfilClube
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
@@ -95,6 +96,8 @@ export default function PerfilClube({ idDaUrl }: Props) {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   const isOwn = !idDaUrl || idDaUrl === Storage.usuarioId;
+  const canEdit = isOwn;
+
   const targetId = isOwn ? (Storage.tipoUsuarioId || "me") : (idDaUrl as string);
 
   const [data, setData] = useState<PayloadClube | null>(null);
@@ -284,11 +287,18 @@ export default function PerfilClube({ idDaUrl }: Props) {
       />
 
       <div className="mt-4 grid grid-cols-3 gap-2">
-        {[
-          { key: "perfil", label: "Perfil" },
-          { key: "eventos", label: "Eventos" },
-          { key: "atletas", label: "Atletas" },
-        ].map((t) => (
+        {(canEdit
+          ? [
+              { key:"perfil",label:"Perfil"},
+              { key:"eventos",label:"Eventos"},
+              { key:"atletas",label:"Atletas"}
+            ]
+          : 
+            [
+              { key:"perfil",label:"Perfil"},
+              { key:"eventos",label:"Eventos"}
+            ]
+        ).map((t) => (
           <button
             key={t.key}
             onClick={() => setAba(t.key as AbaTopo)}
