@@ -1,3 +1,4 @@
+// server/controllers/solicitacaoTreinoController
 import { Response, Request } from "express";
 import { PrismaClient } from "@prisma/client";
 import { resolveAtletaId, resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
@@ -115,7 +116,7 @@ export async function listarSolicitacoesRecebidas(req: Request, res: Response) {
 
   try {
     const rows = await prisma.solicitacaoTreino.findMany({
-      where: { destinatarioId: me, status: "pendente" },
+      where: { destinatarioId: me, status: { in: ["pendente", "ativa"] } }, 
       include: {
         remetente: {
           select: { id: true, nomeDeUsuario: true, nome: true, foto: true },
@@ -126,14 +127,14 @@ export async function listarSolicitacoesRecebidas(req: Request, res: Response) {
 
     const payload = rows.map((s) => ({
       id: s.id,
-      status: s.status,
+      status: s.status,               
       criadaEm: s.criadoEm,
       remetenteId: s.remetenteId,
       remetente: {
         id: s.remetente.id,
         nomeDeUsuario: s.remetente.nomeDeUsuario,
         nome: s.remetente.nome,
-        foto: absFoto(req, s.remetente.foto),    
+        foto: absFoto(req, s.remetente.foto),
       },
     }));
 

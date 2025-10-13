@@ -1,3 +1,4 @@
+//client/src/components/perfil/PerfilProfessor
 import { useEffect, useState } from "react";
 import axios from "axios";
 import {
@@ -9,7 +10,7 @@ import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 
-type Organizacao = { id: string; nome: string; tipo: "Escolinha" | "Clube" };
+type Organizacao = { id: string; usuarioId?: string | null; nome: string; tipo: "Escolinha" | "Clube" };
 type Props = { idDaUrl?: string };
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
 type PayloadProfessor = {
@@ -93,6 +94,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   const isOwn = !idDaUrl || idDaUrl === Storage.usuarioId;
+  const canEdit = isOwn;
   const targetId = isOwn ? (Storage.tipoUsuarioId || "me") : (idDaUrl as string);
 
   const [data, setData] = useState<PayloadProfessor | null>(null);
@@ -110,7 +112,9 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
 
   const [orgsDisponiveis, setOrgsDisponiveis] = useState<Organizacao[]>([]);
+  const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
   const [orgSelecionada, setOrgSelecionada] = useState<string>("");
+
   const professorId = data?.professor?.id;
 
   useEffect(() => {
@@ -119,41 +123,51 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
   (async () => {
     try {
-      const tentativas = [
-        `${API.BASE_URL}/api/organizacoes?tipos=Escolinha,Clube`,
-        `${API.BASE_URL}/api/escolinhas`,
-        `${API.BASE_URL}/api/clubes`,
-      ];
-      let lista: any[] = [];
-      for (const url of tentativas) {
-        const r = await axios.get(url, { headers });
-        const arr = Array.isArray(r.data) ? r.data : (r.data.items ?? r.data.data ?? []);
-        if (Array.isArray(arr) && arr.length) { lista = arr; break; }
-      }
-      const normalizada: Organizacao[] = (lista || []).map((o: any) => ({
-        id: o.id,
-        nome: o.nome ?? o.titulo ?? "Organização",
-        tipo: (o.tipo ?? o.kind ?? o.categoria ?? "").toLowerCase().includes("clube") ? ("Clube" as const)
-      : ("Escolinha" as const),
-      }));
-      if (!cancel) setOrgsDisponiveis(normalizada);
 
-      const r = await axios.get(
-        `${API.BASE_URL}/api/organizacoes`,
-        { headers, params: { vinculadasAoProfessorId: professorId } }
-      ).catch(() => null);
 
-      const arr = r ? (Array.isArray(r.data) ? r.data : (r.data?.items ?? r.data?.data ?? [])) : [];
-      if (arr?.length) {
-        setOrgSelecionada(String(arr[0].id));
-      }
+
+        if (canEdit) {
+          // dono do perfil: carrega opções para selecionar
+          const tentativas = [
+            `${API.BASE_URL}/api/organizacoes?tipos=Escolinha,Clube`,
+            `${API.BASE_URL}/api/escolinhas`,
+            `${API.BASE_URL}/api/clubes`,
+          ];
+          let lista: any[] = [];
+          for (const url of tentativas) {
+            const r = await axios.get(url, { headers });
+            const arr = Array.isArray(r.data) ? r.data : (r.data.items ?? r.data.data ?? []);
+            if (Array.isArray(arr) && arr.length) { lista = arr; break; }
+          }
+          const normalizada: Organizacao[] = (lista || []).map((o: any) => ({
+            id: o.id,
+            usuarioId: o.usuarioId ?? null,
+            nome: o.nome ?? o.titulo ?? "Organização",
+            tipo: (o.tipo ?? o.kind ?? o.categoria ?? "").toLowerCase().includes("clube") ? "Clube" : "Escolinha",
+          })) as any;
+          if (!cancel) setOrgsDisponiveis(normalizada);
+        }
+
+        const r = await axios.get(`${API.BASE_URL}/api/organizacoes`, {
+          headers,
+          params: { vinculadasAoProfessorId: professorId },
+        }).catch(() => null);
+        const arr = r ? (Array.isArray(r.data) ? r.data : (r.data?.items ?? r.data?.data ?? [])) : [];
+        const vinculadas: Organizacao[] = (arr || []).map((o: any) => ({
+          id: o.id, usuarioId: o.usuarioId ?? null,
+          nome: o.nome ?? o.titulo ?? "Organização",
+          tipo: (o.tipo ?? o.kind ?? o.categoria ?? "").toLowerCase().includes("clube") ? "Clube" : "Escolinha",
+        })) as any;
+        if (!cancel) {
+          setOrgsVinculadas(vinculadas);
+          if (canEdit && vinculadas?.length) setOrgSelecionada(String(vinculadas[0].id));
+        }
     } catch (e) {
-      if (!cancel) { setOrgsDisponiveis([]); setOrgSelecionada(""); }
+      if (!cancel) { setOrgsDisponiveis([]); setOrgsVinculadas([]); setOrgSelecionada(""); }
     }
   })();
-
-  return () => { cancel = true; };
-}, [token, professorId]);
+    return () => { cancel = true; };
+  }, [token, professorId, canEdit]);
 
   useEffect(() => {
     if (!token) return;
@@ -304,11 +318,10 @@ async function fetchObservados() {
 
       <div className="mt-4 px-4">
         <div className="bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100">
-          {[
-            { id: "visao", label: "Visão Geral" },
-            { id: "atletas", label: "Atletas" },
-            { id: "conquistas", label: "Conquistas" },
-          ].map(t => (
+          {(canEdit
+            ? [{ id:"visao",label:"Visão Geral"},{ id:"atletas",label:"Atletas"},{ id:"conquistas",label:"Conquistas"}]
+            : [{ id:"visao",label:"Visão Geral"},{ id:"conquistas",label:"Conquistas"}]
+          ).map(t => (
             <button
               key={t.id}
               onClick={() => setAba(t.id as Aba)}
@@ -326,34 +339,36 @@ async function fetchObservados() {
         <div className="mt-4 px-4 grid gap-4">
           <SectionCard
             title="Vínculo com Escolinha/Clube"
-            right={
-              <button
-                onClick={salvarVinculo}
-                className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white"
-                disabled={!orgSelecionada}
-              >
-                Salvar vínculo
-              </button>
-            }
+           right={canEdit ? (
+             <button onClick={salvarVinculo} className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white" disabled={!orgSelecionada}>
+               Salvar vínculo
+             </button>
+           ) : null}
           >
-            <div className="grid gap-2">
-              <label className="text-sm">Selecione a organização onde você trabalha</label>
-              <select
-                className="border rounded px-3 py-2"
-                value={orgSelecionada}
-                onChange={(e) => setOrgSelecionada(e.target.value)}
-              >
-                <option value="">— Nenhuma —</option>
-                {orgsDisponiveis.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.nome} ({o.tipo})
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-green-900/70">
-                Esse vínculo permitirá ver os alunos da organização e montar “turmas”.
-              </p>
-            </div>
+
+           {canEdit ? (
+             <div className="grid gap-2">
+               <label className="text-sm">Selecione a organização onde você trabalha</label>
+               <select className="border rounded px-3 py-2" value={orgSelecionada} onChange={(e) => setOrgSelecionada(e.target.value)}>
+                 <option value="">— Nenhuma —</option>
+                 {orgsDisponiveis.map((o) => <option key={o.id} value={o.id}>{o.nome} ({o.tipo})</option>)}
+               </select>
+               <p className="text-xs text-green-900/70">Esse vínculo permitirá ver os alunos da organização e montar “turmas”.</p>
+             </div>
+           ) : (
+             <div className="grid gap-3">
+               {orgsVinculadas.length ? orgsVinculadas.map((o) => (
+                 <Link key={o.id} href={`/perfil/${o.usuarioId ?? o.id}`} className="flex items-center justify-between rounded-xl border border-green-100 p-3 hover:bg-green-50">
+                   <div>
+                     <div className="text-sm font-medium text-green-900">{o.nome}</div>
+                     <div className="text-xs text-green-900/70">{o.tipo}</div>
+                   </div>
+                   <ChevronRight className="w-4 h-4 text-green-800" />
+                 </Link>
+               )) : <div className="text-sm text-green-900/70">Nenhum vínculo público.</div>}
+             </div>
+           )}
+
           </SectionCard>
 
           <SectionCard title="Informações do Professor">
@@ -387,6 +402,7 @@ async function fetchObservados() {
             </SectionCard>
           )}
 
+        {canEdit && (
          <SectionCard
           title="Treinos"
           right={
@@ -412,7 +428,7 @@ async function fetchObservados() {
               Crie e gerencie treinos para seus atletas vinculados.
             </p>
           </SectionCard>
-
+        )}
           <SectionCard title="Atividade Recente">
             {atividades && atividades.length > 0 ? (
               <ul className="space-y-3">
