@@ -1,4 +1,3 @@
-// client/src/pages/admin-page.tsx
 import { useEffect, useState} from "react";
 import { API } from "../config.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";

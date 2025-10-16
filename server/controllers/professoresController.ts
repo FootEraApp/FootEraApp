@@ -109,7 +109,6 @@ export const excluirProfessor = async (req: Request, res: Response) => {
   }
 };
 
-/** GET /api/professores/:id/vinculos */
 export const listarVinculosProfessor = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -140,26 +139,22 @@ export const listarVinculosProfessor = async (req: Request, res: Response) => {
   }
 };
 
-/** PUT /api/professores/:id/vinculos  (criar/atualizar/limpar vínculo) */
 export const salvarVinculoProfessor = async (req: Request, res: Response) => {
   try {
     const { id: professorId } = req.params;
 
-    // Aceita vários nomes de campo pra não quebrar o front
     const body = req.body || {};
     const orgId: string | null =
       body.organizacaoId ?? body.idOrganizacao ?? body.organizacao ?? null;
 
     const { tipo, id } = await resolveOrganizacao(orgId);
 
-    // Se enviou null/undefined/“Nenhuma”: limpa vínculo
     if (!id || !tipo) {
       await prisma.$transaction(async (tx) => {
         await tx.professor.update({
           where: { id: professorId },
           data: { escolinhaId: null, clubeId: null, organizacaoId: null },
         });
-        // remove registros “vínculo do professor com org” (sem atleta)
         await tx.relacaoTreinamento.deleteMany({
           where: { professorId, atletaId: null },
         });
@@ -169,17 +164,14 @@ export const salvarVinculoProfessor = async (req: Request, res: Response) => {
       return res.status(200).json({ ok: true, tipo: null, organizacaoId: null, professor: atualizado });
     }
 
-    // Vincular a Escolinha OU Clube
     const dataProfessor =
       tipo === "Escolinha"
         ? { escolinhaId: id, clubeId: null, organizacaoId: id }
         : { clubeId: id, escolinhaId: null, organizacaoId: id };
 
     const professor = await prisma.$transaction(async (tx) => {
-      // zera vínculos antigos em RelacaoTreinamento (vínculo institucional do professor)
       await tx.relacaoTreinamento.deleteMany({ where: { professorId, atletaId: null } });
 
-      // recria o vínculo “institucional” do professor
       await tx.relacaoTreinamento.create({
         data: {
           professorId,
@@ -189,7 +181,6 @@ export const salvarVinculoProfessor = async (req: Request, res: Response) => {
         },
       });
 
-      // atualiza FK direta no Professor
       return tx.professor.update({ where: { id: professorId }, data: dataProfessor });
     });
 

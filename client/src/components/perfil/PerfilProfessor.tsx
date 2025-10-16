@@ -1,4 +1,3 @@
-//client/src/components/perfil/PerfilProfessor
 import { useEffect, useState } from "react";
 import axios from "axios";
 import {
@@ -123,11 +122,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
   (async () => {
     try {
-
-
-
         if (canEdit) {
-          // dono do perfil: carrega opções para selecionar
           const tentativas = [
             `${API.BASE_URL}/api/organizacoes?tipos=Escolinha,Clube`,
             `${API.BASE_URL}/api/escolinhas`,

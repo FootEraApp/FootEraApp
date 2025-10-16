@@ -537,8 +537,7 @@ export default function NovoTreino() {
         const r = await fetch(t.url, { method: t.method, headers, body: JSON.stringify(body) });
 
         const txt = await r.text();
-        console.log("resp criar turma:", t.url, r.status, txt);
-
+        
         if (!r.ok) continue;
         created = txt ? JSON.parse(txt) : null;
         ok = true;

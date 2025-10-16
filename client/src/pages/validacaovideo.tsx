@@ -2,13 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { API } from "../config.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 
-/**
- * Página de VALIDAÇÃO de vídeos de submissões de desafios.
- * Usa as mesmas rotas de moderação já existentes:
- *  - GET  /api/admin/moderacao/desafios?status=pendente&page=&pageSize=
- *  - POST /api/admin/moderacao/desafios/:id/aprovar
- */
-
 type ModeracaoItem = {
   id: string;
   criadoEm: string;
@@ -117,7 +110,6 @@ export default function ValidacaoVideo() {
 async function load(p = 1) {
   setLoading(true);
   try {
-    // 1) tenta status=invalido (muitos backends usam isso para 'aprovado=false')
     const params1 = new URLSearchParams();
     params1.set("page", String(p));
     params1.set("pageSize", String(pageSize));
@@ -129,13 +121,11 @@ async function load(p = 1) {
     let json = await res.json();
     let arr: ModeracaoItem[] = Array.isArray(json.items) ? json.items : [];
 
-    // 2) fallback: busca tudo e filtra client-side por aprovado=false
     if (arr.length === 0) {
       const params2 = new URLSearchParams();
       params2.set("page", String(p));
       params2.set("pageSize", String(pageSize));
       params2.set("status", "todos");
-      // se seu backend aceitar esse filtro, já ajuda:
       params2.set("aprovado", "false");
 
       res = await fetch(`${API.BASE_URL}/api/admin/moderacao/desafios?${params2}`, {
@@ -143,7 +133,6 @@ async function load(p = 1) {
       });
       json = await res.json();
       const raw = Array.isArray(json.items) ? json.items : [];
-      // garante apenas os com aprovado === false (robusto a strings/0)
       arr = raw.filter((it: any) => {
         const v = (it?.aprovado ?? null);
         if (typeof v === "boolean") return v === false;
@@ -185,7 +174,6 @@ async function load(p = 1) {
     if (selectedIds.length === 0) return;
     setBusy(true);
     try {
-      // processa com pequena concorrência para não sobrecarregar o backend
       const queue = [...selectedIds];
       const workers = Math.min(5, queue.length);
       const run = async () => {
@@ -219,7 +207,6 @@ async function load(p = 1) {
         const batch: ModeracaoItem[] = Array.isArray(json.items) ? json.items : [];
         if (batch.length === 0) break;
 
-        // aprova o lote atual
         const queue = [...batch.map((b) => b.id)];
         const workers = Math.min(6, queue.length);
         const run = async () => {
@@ -230,7 +217,6 @@ async function load(p = 1) {
         };
         await Promise.all(Array.from({ length: workers }, run));
 
-        // continua páginas enquanto houver
         const totalRows = json.total ?? 0;
         const lastPage = Math.ceil(totalRows / 100) || 1;
         if (p >= lastPage) break;

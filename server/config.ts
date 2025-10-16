@@ -1,4 +1,3 @@
-// server/config.ts
 import "dotenv/config";
 
 export const SERVER = {

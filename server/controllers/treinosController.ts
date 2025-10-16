@@ -1,4 +1,3 @@
-// server/controllers/treinosController
 import { Response, Request } from "express";
 import { PrismaClient, PosicaoCampo, Categoria, TipoTreino, TreinoStatus } from "@prisma/client";
 import { getIO } from "../socket.js";
@@ -1400,10 +1399,8 @@ export async function listarMinhasSubmissoesTreino(req: AuthenticatedRequest, re
 
 export async function statusDesafiosSemanais(req: AuthenticatedRequest, res: Response) {
   try {
-    // aceita ?tipoUsuarioId= (padrão do app) ou ?atletaId=
     const fromQuery = String((req.query.tipoUsuarioId ?? req.query.atletaId ?? "") as string).trim();
 
-    // resolve atletaId; se não vier na query, busca pelo usuário autenticado
     let atletaId = fromQuery;
     if (!atletaId) {
       const u = await prisma.usuario.findUnique({
@@ -1414,11 +1411,10 @@ export async function statusDesafiosSemanais(req: AuthenticatedRequest, res: Res
     }
     if (!atletaId) return res.status(400).json({ error: "tipoUsuarioId (atletaId) é obrigatório" });
 
-    // início da semana ISO (segunda-feira)
     const startOfIsoWeek = (d: Date): Date => {
       const x = new Date(d);
       x.setHours(0, 0, 0, 0);
-      const day = (x.getDay() + 6) % 7; // 0..6 com segunda=0
+      const day = (x.getDay() + 6) % 7;
       x.setDate(x.getDate() - day);
       return x;
     };
@@ -1429,12 +1425,11 @@ export async function statusDesafiosSemanais(req: AuthenticatedRequest, res: Res
       start.setDate(start.getDate() - i * 7);
       const end = new Date(start);
       end.setDate(end.getDate() + 7);
-      return { start, end, index: i + 1 }; // 1 = semana atual, 4 = há 3 semanas
+      return { start, end, index: i + 1 };
     });
 
     const since = windows[3].start;
 
-    // pega submissões de DESAFIO do atleta nas últimas 4 semanas
     const subs = await prisma.submissaoDesafio.findMany({
       where: {
         atletaId,

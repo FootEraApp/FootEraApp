@@ -1,22 +1,28 @@
 // @ts-nocheck
-import { db } from "./db.js"; 
-import { users } from "@shared/schema.js";
+import { db } from "./db";
+import { users, type InsertUser, type SelectUser } from "../shared/schema"; 
 import { eq } from "drizzle-orm";
 
 export const storage = {
-  getUserByUsername: async (username: string) => {
+  getUserByUsername: (username: string) => {
     return db.query.users.findFirst({ where: eq(users.username, username) });
   },
 
-  getUser: async (id: number) => {
+  getUser: (id: number) => {
     return db.query.users.findFirst({ where: eq(users.id, id) });
   },
 
-  createUser: async (data: any) => {
-    return db.insert(users).values(data).returning().then(r => r[0]);
+  createUser: async (data: InsertUser): Promise<SelectUser | undefined> => {
+    const [row] = await db.insert(users).values(data).returning();
+    return row;
   },
 
-  updateUser: async (id: number, data: any) => {
-    return db.update(users).set(data).where(eq(users.id, id)).returning().then(r => r[0]);
+  updateUser: async (id: number, data: Partial<InsertUser>): Promise<SelectUser | undefined> => {
+    const [row] = await db
+      .update(users)
+      .set(data)
+      .where(eq(users.id, id))
+      .returning();
+    return row;
   }
 };

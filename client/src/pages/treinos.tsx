@@ -103,7 +103,7 @@ type TreinoStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "EXPIRED";
 type Checklist = Record<string, boolean>;
 
 type WeekStatus = {
-  index: number; // 1 = semana atual, 4 = há 3 semanas
+  index: number;
   start: string;
   end: string;
   status: "success" | "fail" | "none";
@@ -206,10 +206,8 @@ export default function PaginaTreinos() {
     useState<Record<string, { status: string; startedAt?: string | null; completedAt?: string | null }>>({});
 
   const [checklistByTreino, setChecklistByTreino] = useState<Record<string, Checklist>>({});
-
   const [semanasDesafio, setSemanasDesafio] = useState<WeekStatus[]>([]);
 
-  // helpers checklist
   const carregarChecklist = (treinoId: string, exerciciosIds: string[]) => {
     try {
       const raw = getStore().getItem(CHECKLIST_KEY(treinoId));
@@ -260,7 +258,6 @@ export default function PaginaTreinos() {
     });
   };
 
-  // <<< SEMANAS: UI
 function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
   if (!weeks || weeks.length === 0) return null;
   return (
@@ -297,8 +294,6 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
   );
 }
 
-
-  // Status do treino (IN_PROGRESS/COMPLETED)
   async function carregarStatus(id: string) {
     const token = getToken();
     if (!token) return;
@@ -517,7 +512,6 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
 
         setTreinosAgendados(apenasVigentes);
         setDesafios(desafiosJson ?? []);
-        // <<< SEMANAS: fetch
         try {
           const resSem = await fetch(
             `${API.BASE_URL}/api/treinos/desafios-semanais?tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
@@ -898,7 +892,6 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
           )}
         </div>
 
-        {/* === CHECKLIST de Exercícios (persistido automaticamente) === */}
         {exercicios.length > 0 && (
           <div className="mt-3">
             <div className="flex items-center justify-between mb-1">
@@ -1162,7 +1155,6 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-lg font-semibold">Desafios</h3>
 
-                  {/* wrapper para alinhar à direita, remover mb do componente e ocultar o label interno */}
                   <div className="ml-3 shrink-0 [&>div]:mb-0 [&>div>div:first-child]:hidden">
                     <WeeklyChecker weeks={semanasDesafio} />
                   </div>

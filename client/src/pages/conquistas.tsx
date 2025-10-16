@@ -122,7 +122,7 @@ export default function ConquistasPage() {
         const token = getToken();
 
         const r = await fetch(url, {
-          credentials: "include", // mantenha se usa cookie de sessão; não atrapalha
+          credentials: "include", 
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
 

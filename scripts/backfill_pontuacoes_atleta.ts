@@ -8,7 +8,6 @@ const prisma = new PrismaClient();
   for (const a of atletas) {
     try {
       await recomputePontuacaoAtleta(a.id);
-      console.log("OK:", a.nome ?? a.id);
     } catch (e) {
       console.error("FAIL:", a.nome ?? a.id, e);
     }

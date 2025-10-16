@@ -1,4 +1,3 @@
-// server/controllers/submissoesController.ts
 import { Request, Response } from "express";
 import { PrismaClient, TipoMidia } from "@prisma/client";
 import { aplicarEstatisticasPosSubmissao } from "./submissoes/utilsEstatistica.js";
@@ -82,7 +81,6 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
         usuarioId: typeof (req as any).userId === "string" ? (req as any).userId : undefined,
         duracaoMinutos: duracaoMinutos ? Number(duracaoMinutos) : undefined,
         aprovado: aprovadoNormalizado,
-        // sem vínculo: aprova e zera pontos
         pontuacaoSnapshot: temVinculo ? undefined : 0,
         pontosCreditados: temVinculo ? undefined : 0,
         tempoSeg: tempoSegNum,
@@ -136,7 +134,6 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
         undefined
       ).catch(() => {});
 
-      // garante que o total reflita 0 quando não há vínculo
       await recomputePontuacaoAtleta(atletaId).catch(() => {});
 
       const atleta = await prisma.atleta.findUnique({ where: { id: atletaId }, select: { usuarioId: true } });
