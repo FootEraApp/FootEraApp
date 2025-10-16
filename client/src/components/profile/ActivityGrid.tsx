@@ -96,7 +96,7 @@ export default function ActivityGrid({
     <div className="my-6">
       {/* FEED DE 3 VÍDEOS DE DESAFIOS */}
       <h2 className="text-green-900 font-bold text-lg px-4 mt-2 mb-2 hover:underline">
-        Desafios (vídeos)
+        Atividades Recentes
       </h2>
 
       {videos.length === 0 ? (
@@ -176,8 +176,8 @@ export default function ActivityGrid({
           </div>
         </div>
       )}
-
-      {/* ATIVIDADES RECENTES (já existia) */}
+{/*
+      {/* ATIVIDADES RECENTES (já existia) /}
       <h2 className="text-green-900 font-bold text-lg px-4 mt-6 mb-2 hover:underline">
         Atividades Recentes
       </h2>
@@ -201,7 +201,7 @@ export default function ActivityGrid({
           );
         })}
       </div>
-      
+*/}
     </div>
   );
 }

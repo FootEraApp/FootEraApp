@@ -179,6 +179,79 @@ const getStore = (): Storage => {
   } as any as Storage;
 };
 
+function inferWeekStatus(w: WeekStatus, nowMs = Date.now()): WeekStatus["status"] {
+  const approved = Number(w?.count?.approved ?? 0);
+  const endMs = Date.parse(w.end);
+  if (approved > 0) return "success";
+  if (Number.isFinite(endMs) && nowMs >= endMs) return "fail";
+  return "none";
+}
+
+// === Semanas do mês (1..4) ===
+// 1: dias 1–7, 2: 8–14, 3: 15–21, 4: 22–fim do mês
+function weekOfMonthIndex(dateLike: string | number | Date): 1 | 2 | 3 | 4 {
+  const d = new Date(dateLike);
+  const day = d.getDate();
+  return Math.min(4, Math.floor((day - 1) / 7) + 1) as 1 | 2 | 3 | 4;
+}
+
+function buildMonthBuckets(now = new Date()) {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const toISO = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).toISOString();
+
+  const buckets = [
+    { index: 1, start: new Date(y, m, 1),  end: new Date(y, m, 8)  },
+    { index: 2, start: new Date(y, m, 8),  end: new Date(y, m, 15) },
+    { index: 3, start: new Date(y, m, 15), end: new Date(y, m, 22) },
+    { index: 4, start: new Date(y, m, 22), end: new Date(y, m + 1, 1) },
+  ].map(b => ({
+    index: b.index as 1 | 2 | 3 | 4,
+    start: toISO(b.start),
+    end: toISO(b.end),
+    status: "none" as WeekStatus["status"],
+    count: { total: 0, approved: 0, rejected: 0 },
+  }));
+
+  return buckets;
+}
+
+// Converte o retorno do backend (últimas semanas) para os 4 baldes do mês atual
+function computeMonthlyWeeks(rawWeeks: WeekStatus[], now = new Date()): WeekStatus[] {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const buckets = buildMonthBuckets(now);
+
+  // agrega contagens por semana do mês atual
+  for (const w of rawWeeks || []) {
+    const d = new Date(w.start);
+    if (d.getFullYear() !== y || d.getMonth() !== m) continue; // ignora semanas fora do mês atual
+    const idx = weekOfMonthIndex(d) - 1;
+    buckets[idx].count.total    += Number(w.count?.total ?? 0);
+    buckets[idx].count.approved += Number(w.count?.approved ?? 0);
+    buckets[idx].count.rejected += Number(w.count?.rejected ?? 0);
+  }
+
+  const nowMs = now.getTime();
+  for (const b of buckets) {
+    const endMs = Date.parse(b.end); // exclusivo
+    if (b.count.approved > 0) b.status = "success";
+    else if (nowMs >= endMs) b.status = "fail"; // semanas passadas sem envio => X
+    else b.status = "none";                      // semana atual futura/sem envio => número
+  }
+
+  // garante o tipo WeekStatus
+  return buckets.map(b => ({
+    index: b.index,
+    start: b.start,
+    end: b.end,
+    status: b.status,
+    count: b.count,
+  }));
+}
+
+
 export default function PaginaTreinos() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
@@ -265,7 +338,7 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
   if (!weeks || weeks.length === 0) return null;
   return (
     <div className="mb-3">
-      <div className="text-sm font-semibold text-green-900 mb-1">Desafios nas últimas 4 semanas</div>
+      <div className="text-sm font-semibold text-green-900 mb-1">Semanas do mês</div>
       <div className="flex items-center gap-2">
         {weeks.map((w) => {
           const base =
@@ -459,6 +532,19 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
     }
   }
 
+useEffect(() => {
+  if (!semanasDesafio.length) return;
+  const now = new Date();
+  const patched = semanasDesafio.map(b => {
+    if (b.count.approved > 0) return { ...b, status: "success" as const };
+    const ended = Date.now() >= Date.parse(b.end);
+    return { ...b, status: ended ? ("fail" as const) : ("none" as const) };
+  });
+  const changed = patched.some((w, i) => w.status !== semanasDesafio[i].status);
+  if (changed) setSemanasDesafio(patched);
+}, [semanasDesafio]);
+
+
   useEffect(() => {
     const carregar = async () => {
       const rawTipo =
@@ -525,13 +611,15 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
           );
           if (resSem.ok) {
             const js = await resSem.json();
-            setSemanasDesafio(Array.isArray(js?.weeks) ? js.weeks : []);
+            const rawWeeks: WeekStatus[] = Array.isArray(js?.weeks) ? js.weeks : [];
+            setSemanasDesafio(computeMonthlyWeeks(rawWeeks, new Date()));
           } else {
-            setSemanasDesafio([]);
+            setSemanasDesafio(buildMonthBuckets(new Date())); // mostra os 4 círculos do mês como "none"
           }
         } catch {
-          setSemanasDesafio([]);
+          setSemanasDesafio(buildMonthBuckets(new Date()));
         }
+
 
       } else if (tipo === "admin" && token) {
         const [resTreinos, resDesafios] = await Promise.all([
@@ -740,35 +828,54 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
   const treinosAgendadosVisiveis = treinosAgendados.filter((t) => !idsAgendadosSubmetidos.has(t.id));
   const desafiosVisiveis = desafios.filter((d) => !idsDesafiosSubmetidos.has(d.id));
 
-  const renderDesafioCard = (desafio: Desafio) => (
-    <div key={desafio.id} className="bg-white p-4 rounded-xl shadow-sm border border-yellow-300/60 mb-3">
-      <h4 className="font-bold text-yellow-700 text-lg mb-1">
-        <Link href={`/desafios/${desafio.id}`} className="hover:underline">
-          {desafio.titulo}
-        </Link>
-      </h4>
+const renderDesafioCard = (desafio: Desafio) => (
+  <div key={desafio.id} className="bg-white p-4 rounded-xl shadow-sm border border-yellow-300/60 mb-3">
+    <h4 className="font-bold text-yellow-700 text-lg mb-1">
+      <Link href={`/desafios/${desafio.id}`} className="hover:underline">
+        {desafio.titulo}
+      </Link>
+    </h4>
 
-      <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
-      <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-        <span>Nível: {desafio.nivel}</span>
-        <span className="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs">
-          {desafio.pontuacao} pts
-        </span>
-      </div>
-
-      <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:justify-between">
-        <button onClick={() => navigate(`/desafios/${desafio.id}`)} className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg">
-          Ver desafio
-        </button>
-        <button
-          onClick={() => abrirModalCompartilhar(desafio.id)}
-          className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg flex items-center gap-1 text-sm"
-        >
-          <Share2 className="w-4 h-4" /> Compartilhar
-        </button>
-      </div>
+    <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
+    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+      <span>Nível: {desafio.nivel}</span>
+      <span className="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs">
+        {desafio.pontuacao} pts
+      </span>
     </div>
-  );
+
+<div className="mt-3 grid grid-cols-3 gap-2">
+  <button
+    onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
+    className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-800 hover:bg-green-900 text-white"
+    title="Fazer Submissão"
+  >
+    {/* rótulo mais curto no mobile */}
+    <span className="sm:hidden">Submeter</span>
+    <span className="hidden sm:inline">Fazer Submissão</span>
+  </button>
+
+  <button
+    onClick={() => navigate(`/desafios/${desafio.id}`)}
+    className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white border border-green-300 text-green-800 hover:bg-green-50"
+    title="Ver desafio"
+  >
+    Ver desafio
+  </button>
+
+  <button
+    onClick={() => abrirModalCompartilhar(desafio.id)}
+    className="w-full inline-flex items-center justify-center gap-1 text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white"
+    title="Compartilhar"
+  >
+    <Share2 className="w-4 h-4" />
+    <span className="truncate">Compartilhar</span>
+  </button>
+</div>
+
+     
+  </div>
+);
 
   if (!usuario) return <p className="text-center p-4">Carregando...</p>;
 
