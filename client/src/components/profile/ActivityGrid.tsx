@@ -93,8 +93,9 @@ export default function ActivityGrid({
 
   return (
     <div className="my-6">
+      {/* FEED DE 3 VÍDEOS DE DESAFIOS */}
       <h2 className="text-green-900 font-bold text-lg px-4 mt-2 mb-2 hover:underline">
-        Desafios (vídeos)
+        Atividades Recentes
       </h2>
 
       {videos.length === 0 ? (
@@ -117,6 +118,7 @@ export default function ActivityGrid({
                 onClick={() => setSel(v)}
                 title={v.titulo}
               >
+                {/* thumbnail com botão de play */}
                 <img src={thumb} alt={v.titulo} className="w-full h-24 object-cover opacity-80 group-hover:opacity-60 transition" />
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow">
@@ -131,6 +133,7 @@ export default function ActivityGrid({
         </div>
       )}
 
+      {/* MODAL DE VÍDEO */}
       {sel && (
         <div
           className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4"
@@ -172,7 +175,8 @@ export default function ActivityGrid({
           </div>
         </div>
       )}
-
+{/*
+      {/* ATIVIDADES RECENTES (já existia) /}
       <h2 className="text-green-900 font-bold text-lg px-4 mt-6 mb-2 hover:underline">
         Atividades Recentes
       </h2>
@@ -196,7 +200,7 @@ export default function ActivityGrid({
           );
         })}
       </div>
-      
+*/}
     </div>
   );
 }
