@@ -1,4 +1,3 @@
-// client/src/pages/treinos.tsx
 import React, { useEffect, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -20,17 +19,6 @@ import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { Badge } from "@/components/ui/badge.js";
 import HealthBanner from "@/components/legal/HealthBanner.js";
-
-const tipoUser =
-  String(
-    (Storage as any)?.tipoSalvo ??
-      (Storage as any)?.tipoUsuario ??
-      localStorage.getItem("tipoUsuario") ??
-      sessionStorage.getItem("tipoUsuario") ??
-      ""
-  ).toLowerCase();
-
-const isOlheiro = tipoUser === "olheiro";
 
 interface Exercicio {
   id: string;
@@ -87,7 +75,7 @@ interface Desafio {
 }
 
 interface UsuarioLogado {
-  tipo: "admin" | "atleta" | "escola" | "escolinha" | "clube" | "professor";
+  tipo: "admin" | "atleta" | "escola" | "escolinha" | "clube" | "professor" | "olheiro";
   usuarioId: string;
   tipoUsuarioId: string;
 }
@@ -111,6 +99,7 @@ type MinhasSubTreino = {
 };
 
 type TreinoStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "EXPIRED";
+
 type Checklist = Record<string, boolean>;
 
 type WeekStatus = {
@@ -164,7 +153,6 @@ const getToken = () =>
   sessionStorage.getItem("token") ??
   "";
 
-// ==== Persistência da CHECKLIST (sem seletor): usa localStorage, fallback sessionStorage ====
 const getStore = (): Storage => {
   try {
     if (typeof window !== "undefined" && window.localStorage) return window.localStorage;
@@ -217,7 +205,6 @@ export default function PaginaTreinos() {
   const [statusPorTreino, setStatusPorTreino] =
     useState<Record<string, { status: string; startedAt?: string | null; completedAt?: string | null }>>({});
 
-  // Checklist por treino (id do exercicio => boolean)
   const [checklistByTreino, setChecklistByTreino] = useState<Record<string, Checklist>>({});
 
   const [semanasDesafio, setSemanasDesafio] = useState<WeekStatus[]>([]);
@@ -328,7 +315,6 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
     treinosAgendados.forEach((t) => carregarStatus(t.id));
   }, [treinosAgendados]);
 
-  // Carrega a checklist dos treinos quando a lista muda
   useEffect(() => {
     const next: Record<string, Checklist> = {};
     for (const t of treinosAgendados) {
@@ -336,7 +322,6 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
       next[t.id] = carregarChecklist(t.id, exIds);
     }
     setChecklistByTreino(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [treinosAgendados]);
 
   useEffect(() => {
@@ -648,22 +633,11 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
       const usuarioId = (Storage as any).usuarioId ?? localStorage.getItem("usuarioId");
       const tipoUsuarioId = (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
 
-      if (
-        ["admin", "atleta", "escola", "escolinha", "clube", "professor"].includes(String(tipoSalvo || "")) &&
-        usuarioId &&
-        tipoUsuarioId
-      ) {
-        setUsuario({
-          tipo: (tipoSalvo as any) === "escolinha" ? "escolinha" : (tipoSalvo as any),
-          usuarioId,
-          tipoUsuarioId,
-        });
+      const t = String(tipoSalvo || "").toLowerCase();
+      if (["admin", "atleta", "escola", "escolinha", "clube", "professor", "olheiro"].includes(t) && usuarioId && tipoUsuarioId) {
+        setUsuario({ tipo: t as any, usuarioId, tipoUsuarioId });
       } else {
-        console.warn("Tipo de usuário, tipoUsuarioId ou ID inválido ou não encontrado.", {
-          tipoSalvo,
-          usuarioId,
-          tipoUsuarioId,
-        });
+        console.warn("Tipo/IDs inválidos", { tipoSalvo, usuarioId, tipoUsuarioId });
       }
     };
 
@@ -672,10 +646,10 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
   }, []);
 
   useEffect(() => {
-    if (isOlheiro) {
+    if ((usuario?.tipo ?? "").toLowerCase() === "olheiro") {
       window.location.replace("/olheiros");
     }
-  }, [isOlheiro]);
+  }, [usuario?.tipo]);
 
   useEffect(() => {
     if (!usuario) return;
@@ -797,7 +771,10 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
   );
 
   if (!usuario) return <p className="text-center p-4">Carregando...</p>;
-  const isGestor = ["professor", "admin", "escola", "escolinha", "clube"].includes(usuario.tipo);
+
+  const tipoAtual = (usuario?.tipo ?? "").toLowerCase();
+  const isGestor = ["professor", "admin", "escola", "escolinha", "clube"].includes(tipoAtual);
+  const isOlheiro = tipoAtual === "olheiro";
 
   const renderTreinoCard = (treino: TreinoProgramado) => (
     <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">

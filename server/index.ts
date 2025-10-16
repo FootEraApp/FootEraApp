@@ -1,4 +1,3 @@
-// server/index.ts
 import express from "express";
 import cors from "cors";
 import path, { dirname } from "path";
@@ -16,7 +15,6 @@ import { gerarSnapshotRanking } from "./jobs/rankingSnapshot.js";
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 import { authenticateToken } from "./middlewares/auth.js";
 
-// rotas
 import adminRoutes from "./routes/admin.js";
 import adminModeracaoRoutes from "./routes/adminModeracao.js";
 import atletaRoutes from "./routes/atleta.js";
@@ -74,7 +72,6 @@ import organizacoesRoutes from "./routes/organizacoes.js";
 import turmasRoutes from "./routes/turmas.js";
 import treinosElencosRoutes from "./routes/treinosElencos.js";
 
-// ---------------- ENV ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -89,7 +86,6 @@ for (const p of envCandidates) {
     break;
   }
 }
-// -------------------------------------
 
 const app = express();
 app.set("trust proxy", 1);
@@ -99,14 +95,12 @@ const io = setupSocket(server);
 ensureUploadDirs();
 startExpiredTrainingsJob();
 
-// ---------- Configs ----------
 const NODE_ENV = process.env.NODE_ENV || "development";
 const PORT = Number(process.env.PORT) || 3001;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 const LOCAL_IP = process.env.LOCAL_IP || "192.168.18.8";
 const FRONT_PORT = Number(process.env.FRONT_PORT) || 5173;
 
-// ---------- Middlewares ----------
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(
   cors({
@@ -126,7 +120,6 @@ if (NODE_ENV !== "production") {
   });
 }
 
-// Uploads e assets estáticos (públicos)
 app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 app.use("/uploads", express.static(UPLOADS_ROOT, { maxAge: "1d" }));
 {
@@ -139,7 +132,6 @@ app.use("/uploads", express.static(UPLOADS_ROOT, { maxAge: "1d" }));
   if (found) app.use("/assets", express.static(found));
 }
 
-// Exercícios (estático com range)
 app.use(
   "/exercicios",
   express.static(path.join(process.cwd(), "public", "exercicios"), {
@@ -147,12 +139,6 @@ app.use(
   })
 );
 
-// ---------- ROTAS PÚBLICAS (SEM TOKEN) ----------
-app.use("/api/auth", authRoutes);        // /login, /refresh etc.
-app.use("/api/cadastro", cadastroRoutes);
-app.use("/api/termos", termoRoutes);
-
-// Health/public utils
 app.get("/api/health", (_req, res) => res.status(200).json({ ok: true }));
 app.get("/", (_req, res) => res.send("FootEra API está ativa!"));
 app.get("/resetar-senha", (req, res) => {
@@ -161,70 +147,67 @@ app.get("/resetar-senha", (req, res) => {
   res.redirect(302, dest);
 });
 
-// ---------- GUARD GLOBAL (DAQUI PRA BAIXO EXIGE TOKEN) ----------
-app.use(authenticateToken);
-
-// ---------- ROTAS PROTEGIDAS ----------
-app.use("/api/admin", adminRoutes);
-app.use("/api/admin/moderacao", adminModeracaoRoutes);
-app.use("/api/atletas", atletaRoutes);
-app.use("/api/amigos", amigosRoutes);
-app.use("/api/categorias", categoriasRoutes);
-app.use("/api/clubes", clubeRoutes);
-app.use("/api/configuracoes", configuracoesRoutes);
-app.use("/api/conquistas", conquistasRoutes);
-app.use("/api/desafios", desafiosRoutes);
-app.use("/api/desafios/em-grupo", desafiosEmGrupoRoutes);
-app.use("/api/desempenho", desempenhoRoutes);
-app.use("/api/escolinhas", escolinhaRoutes);
-app.use("/api/eventos", eventosRoutes);
-app.use("/api/explorar", explorarRoutes);
-app.use("/api/exercicios", exerciciosRoutes);
-app.use("/api/favoritos", favoritosRoutes);
-app.use("/api/feed", feedRoutes);
-app.use("/api/grupos", gruposRoutes);
-app.use("/api/home", homeRoutes);
-app.use("/api/logerro", logErroRoutes);
-app.use("/api/mensagem", mensagemRoutes);
-app.use("/api/midias", midiaRoutes);
-app.use("/api/notificacoes", notificacoesRoutes);
-app.use("/api/perfil", perfilRoutes);
-app.use("/api/pontuacao", pontuacaoRoutes);
-app.use("/api/post", postRoutes);
-app.use("/api/professores", professorRoutes);
-app.use("/api/ranking", rankingRoutes);
-app.use("/api/seguidores/mutuos", rotaSeguidorMutuo);
-app.use("/api/seguidores", seguirRoutes);
-app.use("/api/usuarios", usuarioRoutes);
-app.use("/api/solicitacoes-treino", solicitacaoTreinoRoutes);
-app.use("/api/submissoes", submissoesRoutes);
-app.use("/api/treinos", treinoRoutes);
-app.use("/api/treino-unico", treinoUnicoRoutes);
-app.use("/api/treinosprogramados", treinoProgramadoRoutes);
-app.use("/api/upload", uploadRoutes);
-app.use("/api/vinculo", vinculoRoutes);
-app.use("/api/vinculos", vinculoRoutes);
-app.use("/api/observados", observadosRoutes);
-app.use("/api/gerenciar", gerenciarAtletasRoutes);
-app.use("/api/indicacoes", indicacoesRouter);
-app.use("/api/olheiros", olheirosRouter);
-app.use("/api/relacoes", relacoesRoutes);
-app.use("/api/elencos", elencosRoutes);
-app.use("/api/formadores", formadoresRoutes);
-
-// novas do outro branch (mantidas e sem duplicar)
-app.use("/api/checklists", checklistRoutes);
-app.use("/api/catalogo", catalogoRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/cadastro", cadastroRoutes);
+app.use("/api/termos", termoRoutes);
+app.use("/api/ranking", rankingRoutes);    
+app.use("/api/explorar", explorarRoutes);  
 app.use("/api/legal", legalRoutes);
-app.use("/api/organizacoes", organizacoesRoutes);
-app.use("/api/turmas", turmasRoutes);
-// routers cujo arquivo já define o subcaminho:
-app.use("/api", treinoLivreRoutes);
-app.use("/api", scoutNotesRoutes);
-// rota adicionada com prefixo claro:
-app.use("/api/treinos-elencos", treinosElencosRoutes);
+app.use("/api/catalogo", catalogoRoutes);
+app.use("/api/admin", adminRoutes);
 
-// ---------- Server ----------
+import { requireAdmin } from "./middlewares/requireAdmin.js";
+app.use("/api/admin/moderacao", authenticateToken, requireAdmin, adminModeracaoRoutes);
+
+app.use("/api/atletas", authenticateToken, atletaRoutes);
+app.use("/api/amigos", authenticateToken, amigosRoutes);
+app.use("/api/categorias", authenticateToken, categoriasRoutes);
+app.use("/api/clubes", authenticateToken, clubeRoutes);
+app.use("/api/configuracoes", authenticateToken, configuracoesRoutes);
+app.use("/api/conquistas", authenticateToken, conquistasRoutes);
+app.use("/api/desafios", authenticateToken, desafiosRoutes);
+app.use("/api/desafios/em-grupo", authenticateToken, desafiosEmGrupoRoutes);
+app.use("/api/desempenho", authenticateToken, desempenhoRoutes);
+app.use("/api/escolinhas", authenticateToken, escolinhaRoutes);
+app.use("/api/eventos", authenticateToken, eventosRoutes);
+app.use("/api/exercicios", authenticateToken, exerciciosRoutes);
+app.use("/api/favoritos", authenticateToken, favoritosRoutes);
+app.use("/api/feed", authenticateToken, feedRoutes);
+app.use("/api/grupos", authenticateToken, gruposRoutes);
+app.use("/api/home", authenticateToken, homeRoutes);
+app.use("/api/logerro", authenticateToken, logErroRoutes);
+app.use("/api/mensagem", authenticateToken, mensagemRoutes);
+app.use("/api/midias", authenticateToken, midiaRoutes);
+app.use("/api/notificacoes", authenticateToken, notificacoesRoutes);
+app.use("/api/perfil", authenticateToken, perfilRoutes);
+app.use("/api/pontuacao", authenticateToken, pontuacaoRoutes);
+app.use("/api/post", authenticateToken, postRoutes);
+app.use("/api/professores", authenticateToken, professorRoutes);
+app.use("/api/seguidores/mutuos", authenticateToken, rotaSeguidorMutuo);
+app.use("/api/seguidores", authenticateToken, seguirRoutes);
+app.use("/api/usuarios", authenticateToken, usuarioRoutes);
+app.use("/api/solicitacoes-treino", authenticateToken, solicitacaoTreinoRoutes);
+app.use("/api/submissoes", authenticateToken, submissoesRoutes);
+app.use("/api/treinos", authenticateToken, treinoRoutes);
+app.use("/api/treino-unico", authenticateToken, treinoUnicoRoutes);
+app.use("/api/treinosprogramados", authenticateToken, treinoProgramadoRoutes);
+app.use("/api/upload", authenticateToken, uploadRoutes);
+app.use("/api/vinculo", authenticateToken, vinculoRoutes);
+app.use("/api/vinculos", authenticateToken, vinculoRoutes);
+app.use("/api/observados", authenticateToken, observadosRoutes);
+app.use("/api/gerenciar", authenticateToken, gerenciarAtletasRoutes);
+app.use("/api/indicacoes", authenticateToken, indicacoesRouter);
+app.use("/api/olheiros", authenticateToken, olheirosRouter);
+app.use("/api/relacoes", authenticateToken, relacoesRoutes);
+app.use("/api/elencos", authenticateToken, elencosRoutes);
+app.use("/api/formadores", authenticateToken, formadoresRoutes);
+app.use("/api/checklists", authenticateToken, checklistRoutes);
+app.use("/api/organizacoes", authenticateToken, organizacoesRoutes);
+app.use("/api/turmas", authenticateToken, turmasRoutes);
+app.use("/api/treinos-elencos", authenticateToken, treinosElencosRoutes);
+app.use("/api", authenticateToken, treinoLivreRoutes);
+app.use("/api", authenticateToken, scoutNotesRoutes);
+
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
   if (NODE_ENV !== "production") {
@@ -234,7 +217,6 @@ server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   }
 });
 
-// ---------- Cron ----------
 cron.schedule("0 2 * * *", async () => {
   try {
     await gerarSnapshotRanking();
@@ -244,6 +226,5 @@ cron.schedule("0 2 * * *", async () => {
   }
 });
 
-// ---------- Safety ----------
 process.on("unhandledRejection", (reason) => console.error("Unhandled Rejection:", reason));
 process.on("uncaughtException", (err) => console.error("Uncaught Exception:", err));
