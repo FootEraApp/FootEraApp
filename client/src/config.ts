@@ -1,4 +1,3 @@
-// client/src/config.ts
 const viteEnv =
   typeof import.meta !== "undefined" && (import.meta as any).env
     ? ((import.meta as any).env as Record<string, string | undefined>)
@@ -11,7 +10,6 @@ const isDev =
 
 const stripTrailingSlash = (url?: string) => (url ?? "").replace(/\/+$/, "");
 
-// Em dev, se não tiver env, usa localhost; em prod, NÃO fazemos fallback.
 const API_BASE = stripTrailingSlash(
   viteEnv?.VITE_API_URL ?? (isDev ? "http://localhost:3001" : "")
 );
@@ -30,7 +28,6 @@ const FRONTEND_BASE = stripTrailingSlash(
 );
 
 export const API = {
-  // Ex.: https://api.footera.app.br   (sem /api e sem / no final)
   BASE_URL: API_BASE,
   UPLOADS_URL: API_BASE ? `${API_BASE}/uploads` : "",
 };
