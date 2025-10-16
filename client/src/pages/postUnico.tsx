@@ -9,6 +9,8 @@ import { API, APP } from "../config.js";
 import { CircleX, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import PostImage from "@/components/PostImage.js";
 import { publicImgUrl } from "@/utils/publicUrl.js";
+import { FaRetweet } from "react-icons/fa";
+import { repostPost } from "../services/feedService.js";
 
 function PostUnico(): JSX.Element {
   const [match, params] = useRoute<{ id: string }>("/post/:id");
@@ -87,6 +89,18 @@ function PostUnico(): JSX.Element {
     }
   }
 
+  async function handleRepost() {
+    if (!post?.id) return;
+    const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
+    try {
+      await repostPost(post.id, comentario);
+      alert("Repost publicado no seu perfil!");
+    } catch (e) {
+      console.error(e);
+      alert("Não foi possível repostar.");
+    }
+  }
+
   if (!match) return <p className="text-center mt-10">Post não encontrado na URL.</p>;
   if (!post) return <p className="text-center mt-10">Carregando postagem...</p>;
 
@@ -102,16 +116,64 @@ function PostUnico(): JSX.Element {
       <p className="text-gray-600 mb-2">
         {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
       </p>
-      <p className="mb-4">{post.conteudo}</p>
-      
-      {post.tipoMidia === "Imagem" && post.imagemUrl && (
-        <PostImage src={publicImgUrl(post.imagemUrl) ?? undefined} />
+      {post.repostOf && (
+        <p className="text-xs text-gray-500 -mt-1 mb-2">
+          Repostou de <strong>{post.repostOf.usuario?.nome || "Usuário"}</strong>
+        </p>
       )}
-      {post.tipoMidia === "Video" && post.videoUrl && (
-        <video controls className="w-full rounded-lg">
-          <source src={publicImgUrl(post.videoUrl) ?? ""} type="video/mp4" />
-        </video>
-      )}
+      {post.repostOf ? (
+      <>
+        {post.conteudo?.trim() && (
+          <p className="mb-3">{post.conteudo}</p>
+        )}
+
+        <div className="border rounded-xl p-3 bg-gray-50">
+          <div className="flex items-center gap-2 mb-1">
+            <img
+              src={publicImgUrl(post.repostOf.usuario?.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
+              alt="avatar original"
+              className="w-7 h-7 rounded-full object-cover"
+            />
+            <div>
+              <p className="text-sm font-semibold">{post.repostOf.usuario?.nome}</p>
+              <p className="text-[11px] text-gray-500">
+                {format(new Date(post.repostOf.dataCriacao), "dd/MM, HH:mm")}
+              </p>
+            </div>
+          </div>
+
+          <p className="text-sm text-gray-800 whitespace-pre-line">
+            {post.repostOf.conteudo}
+          </p>
+
+          {post.repostOf.imagemUrl && (
+            <div className="mt-2">
+              <PostImage src={publicImgUrl(post.repostOf.imagemUrl) ?? undefined} />
+            </div>
+          )}
+
+          {post.repostOf.videoUrl && (
+            <video controls className="w-full mt-2 rounded-lg">
+              <source src={publicImgUrl(post.repostOf.videoUrl) ?? ""} type="video/mp4" />
+            </video>
+          )}
+        </div>
+      </>
+    ) : (
+      <>
+        <p className="mb-4">{post.conteudo}</p>
+
+        {post.tipoMidia === "Imagem" && post.imagemUrl && (
+          <PostImage src={publicImgUrl(post.imagemUrl) ?? undefined} />
+        )}
+
+        {post.tipoMidia === "Video" && post.videoUrl && (
+          <video controls className="w-full rounded-lg">
+            <source src={publicImgUrl(post.videoUrl) ?? ""} type="video/mp4" />
+          </video>
+        )}
+      </>
+    )}
       
       <div className="mt-4 flex items-center gap-4 text-xl">
         <button onClick={handleCurtir} className="text-black-500 hover:text-black-600">
@@ -128,7 +190,10 @@ function PostUnico(): JSX.Element {
         <button onClick={() => setModalAberto(true)} className="text-black-600 hover:text-black-800 ml-auto">
           <FaShare />
         </button>
-        <span className="text-sm">{post.compartilhamentos || 0}</span>
+        <button onClick={handleRepost} className="text-black-600 hover:text-black-800">
+          <FaRetweet />
+        </button>
+        <span className="text-sm">{post.reposts ?? post.compartilhamentos ?? 0}</span>
       </div>
 
       <div className="mt-6">

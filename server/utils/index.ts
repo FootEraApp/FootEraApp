@@ -1,4 +1,3 @@
-// server/utils/index.ts
 export * from './inferirTipoTreino.js';
 export * from './s3.js';
 export * from './sendMail.js';

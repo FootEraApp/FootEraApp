@@ -1,4 +1,3 @@
-//client/src/pages/submissao.tsx
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";

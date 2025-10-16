@@ -1,54 +1,47 @@
-import { Response, RequestHandler } from "express";
-import { Request } from "express";
-import { TipoMidia, Prisma } from "@prisma/client";
-import { PrismaClient } from "@prisma/client";
+import { Response, RequestHandler, Request } from "express";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { getIO } from "../socket.js";
 
 const prisma = new PrismaClient;
 
 export const getFeedPosts: RequestHandler = async (req, res) => {
   try {
-    const userId: string | undefined = (req as any).userId;
+    const userId = (req as any).userId as string | undefined;
     const raw = String(req.query.filtro ?? req.query.filter ?? "todos").toLowerCase();
     const filtro: "todos" | "seguindo" | "favoritos" | "meus" =
-      raw === "seguindo" || raw === "favoritos" || raw === "meus" ? raw : "todos";
+      raw === "seguindo" || raw === "favoritos" || raw === "meus" ? (raw as any) : "todos";
 
-    const where: Prisma.PostagemWhereInput = {};
+    let where: Prisma.PostagemWhereInput = {};
 
     if (filtro === "meus") {
-      if (!userId) return res.status(401).json({ message: "Requer login." });
-      where.usuarioId = userId;
+      if (!userId) return res.json([]);
+      where = { usuarioId: userId };
+    }
+
+    if (filtro === "todos") {
+      if (userId) where = { NOT: { usuarioId: userId } };
     }
 
     if (filtro === "seguindo") {
-      if (!userId) return res.status(401).json({ message: "Requer login." });
-      const seg = await prisma.seguidor.findMany({
-        where: { seguidorUsuarioId: userId },
+      if (!userId) return res.json([]);
+      const seguindo = await prisma.seguidor.findMany({
+        where: { seguidorUsuarioId: userId },      
         select: { seguidoUsuarioId: true },
       });
-      const ids = seg.map(s => s.seguidoUsuarioId);
-      if (ids.length === 0) {
-        return res.json([]); 
-      }
-      where.AND = [{ usuarioId: { in: ids } }, { usuarioId: { not: userId } }];
+      const ids = seguindo.map(s => s.seguidoUsuarioId);
+      if (ids.length === 0) return res.json([]);
+      where = { usuarioId: { in: ids } };
     }
 
     if (filtro === "favoritos") {
-      if (!userId) return res.status(401).json({ message: "Requer login." });
-
+      if (!userId) return res.json([]);
       const favs = await prisma.favoritoUsuario.findMany({
         where: { usuarioId: userId },
         select: { favoritoUsuarioId: true },
       });
-
-      const ids = favs.map(f => f.favoritoUsuarioId).filter(Boolean);
+      const ids = favs.map(f => f.favoritoUsuarioId);
       if (ids.length === 0) return res.json([]);
-
-      where.AND = [{ usuarioId: { in: ids } }, { usuarioId: { not: userId } }];
-    }
-
-    if (filtro === "todos") {
-      if (userId) where.usuarioId = { not: userId };
+      where = { usuarioId: { in: ids } };
     }
 
     const postagens = await prisma.postagem.findMany({
@@ -59,6 +52,13 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
         comentarios: {
           orderBy: { dataCriacao: "asc" },
           include: { usuario: { select: { nome: true, foto: true } } },
+        },
+        repostOf: {
+          include: {
+            usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
+            curtidas: true,
+            comentarios: { include: { usuario: { select: { nome: true, foto: true } } } },
+          },
         },
       },
       orderBy: { dataCriacao: "desc" },
@@ -73,28 +73,71 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
 
 export async function getPostById(req: Request, res: Response) {
   const { id } = req.params;
-
   try {
     const post = await prisma.postagem.findUnique({
       where: { id },
       include: {
         usuario: true,
-        comentarios: {
-          include: { usuario: true },
-        },
+        comentarios: { include: { usuario: true } },
         curtidas: true,
+        repostOf: { 
+          include: {
+            usuario: true,
+            comentarios: { include: { usuario: true } },
+            curtidas: true,
+          },
+        },
       },
     });
-
-    if (!post) {
-      return res.status(404).json({ erro: "Post não encontrado" });
-    }
-
+    if (!post) return res.status(404).json({ erro: "Post não encontrado" });
     return res.json(post);
   } catch (error) {
     console.error("Erro ao buscar post:", error);
     return res.status(500).json({ erro: "Erro interno ao buscar o post" });
   }
+}
+
+export async function repostPost(req: Request, res: Response) {
+  const postId = String(req.params.id);
+  const userId = (req as any).userId as string | undefined;
+  const comentario = (req.body?.comentario ?? "").trim();
+
+  if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
+
+  const original = await prisma.postagem.findUnique({
+    where: { id: postId },
+    include: { usuario: true, curtidas: true, comentarios: { include: { usuario: true } } },
+  });
+  if (!original) return res.status(404).json({ error: "Post não encontrado" });
+
+  const novo = await prisma.postagem.create({
+    data: {
+      usuarioId: userId,
+      conteudo: comentario, 
+      repostOfId: original.id,  
+    },
+    include: {
+      usuario: true,
+      curtidas: true,
+      comentarios: { include: { usuario: true } },
+      repostOf: {
+        include: {
+          usuario: true,
+          curtidas: true,
+          comentarios: { include: { usuario: true } },
+        },
+      },
+    },
+  });
+
+  await prisma.postagem.update({
+    where: { id: original.id },
+    data: { reposts: (original.reposts ?? 0) + 1 },
+  });
+
+  getIO()?.emit("feed:novoPost", novo);
+
+  res.json(novo);
 }
 
 export const curtirPostagem: RequestHandler = async (req, res) => {

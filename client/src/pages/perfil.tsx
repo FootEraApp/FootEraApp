@@ -1,12 +1,9 @@
-// client/src/pages/perfil
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
-
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
-
 import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
 import PerfilProfessor from "../components/perfil/PerfilProfessor.js";
 import PerfilClube from "../components/perfil/PerfilClube.js";

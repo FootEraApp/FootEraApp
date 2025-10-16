@@ -34,7 +34,7 @@ router.get("/", authenticateToken, async (req, res) => {
 router.post("/", authenticateToken, async (req, res) => {
   try {
     const { nome, organizacaoId: orgFromBody, tipoUsuarioId, atletasIds } = req.body || {};
-    const organizacaoId = orgFromBody || tipoUsuarioId; // <- aceita os dois
+    const organizacaoId = orgFromBody || tipoUsuarioId;
 
     if (!nome || !organizacaoId) {
       return res.status(400).json({ error: "nome e organizacaoId são obrigatórios" });

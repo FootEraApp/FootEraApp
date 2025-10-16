@@ -8,7 +8,6 @@ async function main() {
     WHERE event_object_table IN ('PontuacaoAtleta','EstatisticaAtleta','RelacaoTreinamento')
     ORDER BY 1,2;
   `);
-  console.log("\nTRIGGERS:");
   console.table(triggers);
 
   const trgFuncs = await prisma.$queryRawUnsafe<any[]>(`
@@ -20,7 +19,6 @@ async function main() {
       AND NOT t.tgisinternal
     ORDER BY 1,2;
   `);
-  console.log("\nTRIGGERS → FUNÇÕES:");
   console.table(trgFuncs);
 }
 main().finally(() => prisma.$disconnect());

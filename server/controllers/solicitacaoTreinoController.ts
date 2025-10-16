@@ -1,7 +1,6 @@
-// server/controllers/solicitacaoTreinoController
 import { Response, Request } from "express";
 import { PrismaClient } from "@prisma/client";
-import { resolveAtletaId, resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
+import { resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
 
 const prisma = new PrismaClient();
 

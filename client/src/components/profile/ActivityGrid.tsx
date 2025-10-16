@@ -44,7 +44,6 @@ function getYouTubeId(url: string): string | null {
     if (u.hostname.includes("youtube.com")) {
       const id = u.searchParams.get("v");
       if (id) return id;
-      // formato /embed/ID ou /shorts/ID
       const parts = u.pathname.split("/");
       const idx = parts.findIndex((p) => p === "embed" || p === "shorts");
       return idx >= 0 ? parts[idx + 1] || null : null;
@@ -57,7 +56,7 @@ function getYouTubeId(url: string): string | null {
 
 export default function ActivityGrid({
   activities,
-  perfilUsuarioId, // <== novo (usuarioId do perfil visualizado)
+  perfilUsuarioId,
 }: {
   activities: Activity[];
   perfilUsuarioId?: string | null;
@@ -94,7 +93,6 @@ export default function ActivityGrid({
 
   return (
     <div className="my-6">
-      {/* FEED DE 3 VÍDEOS DE DESAFIOS */}
       <h2 className="text-green-900 font-bold text-lg px-4 mt-2 mb-2 hover:underline">
         Desafios (vídeos)
       </h2>
@@ -119,7 +117,6 @@ export default function ActivityGrid({
                 onClick={() => setSel(v)}
                 title={v.titulo}
               >
-                {/* thumbnail com botão de play */}
                 <img src={thumb} alt={v.titulo} className="w-full h-24 object-cover opacity-80 group-hover:opacity-60 transition" />
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow">
@@ -134,7 +131,6 @@ export default function ActivityGrid({
         </div>
       )}
 
-      {/* MODAL DE VÍDEO */}
       {sel && (
         <div
           className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4"
@@ -177,7 +173,6 @@ export default function ActivityGrid({
         </div>
       )}
 
-      {/* ATIVIDADES RECENTES (já existia) */}
       <h2 className="text-green-900 font-bold text-lg px-4 mt-6 mb-2 hover:underline">
         Atividades Recentes
       </h2>

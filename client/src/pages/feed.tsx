@@ -36,6 +36,8 @@ import {
   type AchievementLite,
   type Tier,
 } from "../lib/achievementsCatalog.js";
+import { FaRetweet } from "react-icons/fa";
+import { repostPost } from "../services/feedService.js";
 
 interface Usuario {
   id: string;
@@ -216,7 +218,15 @@ function PaginaFeed(): JSX.Element {
     async function carregar() {
       const dados = await getFeedPosts(filtro);
       if (!dados) return;
-      setPosts(dados);
+
+      const uid = Storage.usuarioId;
+      const filtrado =
+        filtro === "todos" && uid
+          ? dados.filter(p => p.usuario?.id !== uid && (p as any).usuarioId !== uid)
+        : filtro === "meus" && uid
+          ? dados.filter(p => p.usuario?.id === uid || (p as any).usuarioId === uid)
+        : dados;
+      setPosts(filtrado);
     }
     carregar();
   }, [filtro]);
@@ -298,6 +308,18 @@ function PaginaFeed(): JSX.Element {
       alert(e?.message || "Não foi possível apagar a postagem.");
     }
   };
+
+  const handleRepost = async (postId: string) => {
+  if (!userId) return alert("Sessão expirada. Faça login novamente.");
+  const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
+  try {
+    const novo = await repostPost(postId, comentario);
+    setPosts((prev) => [novo, ...prev]);
+  } catch (e) {
+    console.error(e);
+    alert("Não foi possível repostar.");
+  }
+};
 
   const abrirModalComentarios = (post: PostagemComUsuario) => {
     setPostSelecionado(post);
@@ -430,23 +452,81 @@ function PaginaFeed(): JSX.Element {
                 </button>
               )}
             </div>
+            {post.repostOf && (
+              <div className="text-xs text-gray-500 -mt-1">
+                Repostou de <strong>{post.repostOf.usuario?.nome || "Usuário"}</strong>
+              </div>
+            )}
 
             <div>
-              {!isAchievement && <p className="text-gray-800 font-medium whitespace-pre-line">{post.conteudo}</p>}
+              {post.repostOf ? (
+                <>
+                  {post.conteudo?.trim() && (
+                    <p className="text-gray-800 font-medium whitespace-pre-line mb-2">
+                      {post.conteudo}
+                    </p>
+                  )}
 
-              {isAchievement && parsed && <AchievementShareCard parsed={parsed} />}
+                  <div className="border rounded-xl p-3 bg-gray-50">
+                    <div className="flex items-center gap-2 mb-1">
+                      <img
+                        src={publicImgUrl(post.repostOf.usuario?.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
+                        alt="avatar original"
+                        className="w-7 h-7 rounded-full object-cover"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold">{post.repostOf.usuario?.nome}</p>
+                        <p className="text-[11px] text-gray-500">
+                          {format(new Date(post.repostOf.dataCriacao), "dd/MM, HH:mm")}
+                        </p>
+                      </div>
+                    </div>
 
-              {imgSrc && (
-                <img src={imgSrc} alt="Post" className="mt-2 rounded-lg max-h-72 w-auto mx-auto" />
-              )}
+                    <p className="text-sm text-gray-800 whitespace-pre-line">
+                      {post.repostOf.conteudo}
+                    </p>
 
-              {videoSrc && (
-                <video controls className="w-full mt-2 rounded-lg">
-                  <source src={videoSrc} type="video/mp4" />
-                </video>
+                    {publicImgUrl(post.repostOf.imagemUrl) && (
+                      <img
+                        src={publicImgUrl(post.repostOf.imagemUrl) ?? undefined}
+                        alt="Post original"
+                        className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
+                      />
+                    )}
+
+                    {publicImgUrl(post.repostOf.videoUrl) && (
+                      <video controls className="w-full mt-2 rounded-lg">
+                        <source src={publicImgUrl(post.repostOf.videoUrl) ?? ""} type="video/mp4" />
+                      </video>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {!isAchievement && (
+                    <p className="text-gray-800 font-medium whitespace-pre-line">
+                      {post.conteudo}
+                    </p>
+                  )}
+
+                  {isAchievement && parsed && <AchievementShareCard parsed={parsed} />}
+
+                  {imgSrc && (
+                    <img
+                      src={imgSrc}
+                      alt="Post"
+                      className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
+                    />
+                  )}
+
+                  {videoSrc && (
+                    <video controls className="w-full mt-2 rounded-lg">
+                      <source src={videoSrc} type="video/mp4" />
+                    </video>
+                  )}
+                </>
               )}
             </div>
-
             <div className="flex justify-between text-gray-600 mt-2 px-2">
               <button className="flex items-center gap-1" onClick={() => handleLike(post.id)}>
                 {jaCurtiu ? <FaHeart className="text-black" /> : <FaRegHeart />} <span>{curtidas.length}</span>
@@ -459,6 +539,11 @@ function PaginaFeed(): JSX.Element {
               <button className="flex items-center gap-1" onClick={() => handleCompartilhar(post.id)}>
                 <FaShare />
               </button>
+
+              <button className="flex items-center gap-1" onClick={() => handleRepost(post.id)} title="Repostar">
+                <FaRetweet />
+              </button>
+              <span className="ml-1 text-sm">{post.reposts ?? post.compartilhamentos ?? 0}</span>
             </div>
 
             {mostrarInput && (

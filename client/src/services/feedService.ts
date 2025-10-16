@@ -16,18 +16,25 @@ export interface Comentarios {
   usuario: { nome: string; foto?: string };
 }
 
-export interface PostagemComUsuario {
+export type PostagemComUsuario = {
   id: string;
   conteudo: string;
-  tipoMidia?: string;
-  imagemUrl?: string;
-  videoUrl?: string;
   dataCriacao: string;
-  usuario: Usuario;
+  usuario: { id: string; nome: string; foto?: string | null; tipo?: string };
+  imagemUrl?: string | null;
+  videoUrl?: string | null;
+  tipoMidia?: "Imagem" | "Video" | "Documento" | null;
   curtidas: { usuarioId: string }[];
-  comentarios: Comentarios[];
-  compartilhamentos: number;
-}
+  comentarios: {
+    id: string;
+    conteudo: string;
+    dataCriacao: string;
+    usuario?: { nome: string; foto?: string | null };
+  }[];
+  compartilhamentos?: number | null;
+  reposts?: number | null;
+  repostOf?: PostagemComUsuario | null;
+};
 
 export type PostId = string;
 
@@ -38,54 +45,50 @@ export interface CriarPostInput {
   arquivo?: File | null;
 }
 
-export async function getFeedPosts(
-  filtro: "todos" | "seguindo" | "favoritos" | "meus" = "todos",
-  onUnauthorized?: () => void
-): Promise<PostagemComUsuario[]> {
-  try {
-    const res = await apiGet(`/api/feed?filtro=${filtro}`, onUnauthorized);
-    const data = await res.json();
+export type FiltroFeed = "todos" | "seguindo" | "favoritos" | "meus";
 
-    return data.map((post: any) => ({
-      ...post,
-      curtidas: Array.isArray(post.curtidas) ? post.curtidas : [],
-      comentarios: Array.isArray(post.comentarios) ? post.comentarios : [],
-      usuario: post.usuario || {
-        id: "",
-        nome: "Usuário desconhecido",
-        tipo: "Desconhecido",
-        foto: "/default-user.png",
-      },
-      compartilhamentos: Number(post?.compartilhamentos ?? 0),
-    })) as PostagemComUsuario[];
-  } catch (error) {
-    console.error("Erro ao buscar posts do feed:", error);
-    return [];
-  }
+const auth = () => ({ Authorization: `Bearer ${Storage.token || ""}` });
+
+export async function getFeedPosts(filtro: FiltroFeed = "todos"): Promise<PostagemComUsuario[]> {
+  const qs = new URLSearchParams({ filtro });
+  const res = await fetch(`${API.BASE_URL}/api/feed?${qs.toString()}`, {
+    headers: auth(),
+  });
+  if (!res.ok) throw new Error(`Falha ao carregar feed (${res.status})`);
+  return res.json();
 }
-
 export async function likePost(postId: string) {
-  const token = Storage.token;
-  const response = await fetch(`${API.BASE_URL}/api/post/${postId}/like`, {
+  await fetch(`${API.BASE_URL}/api/feed/${postId}/like`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: auth(),
   });
-  if (!response.ok) throw new Error(`Erro ao curtir post: ${response.statusText}`);
-  return response.json();
 }
 
-export async function comentarPost(postId: string, conteudo: string) {
-  const token = Storage.token;
-  const response = await fetch(`${API.BASE_URL}/api/post/${postId}/comentario`, {
+export async function comentarPost(postId: string, texto: string) {
+  const res = await fetch(`${API.BASE_URL}/api/comentarios`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ conteudo }),
+    headers: { ...auth(), "Content-Type": "application/json" },
+    body: JSON.stringify({ postagemId: postId, conteudo: texto }),
   });
-  if (!response.ok) throw new Error(`Erro ao comentar post: ${response.statusText}`);
-  return response.json();
+  if (!res.ok) throw new Error("Erro ao comentar");
+}
+
+export async function deletarPost(postId: string) {
+  const r = await fetch(`${API.BASE_URL}/api/feed/${postId}`, {
+    method: "DELETE",
+    headers: auth(),
+  });
+  if (!r.ok) throw new Error("Erro ao deletar");
+}
+
+export async function repostPost(postId: string, comentario = "") {
+  const r = await fetch(`${API.BASE_URL}/api/feed/${postId}/repost`, {
+    method: "POST",
+    headers: { ...auth(), "Content-Type": "application/json" },
+    body: JSON.stringify({ comentario }),
+  });
+  if (!r.ok) throw new Error("Erro ao repostar");
+  return r.json();
 }
 
 export async function compartilharPost(postId: string) {
@@ -114,19 +117,6 @@ export async function getPostById(id: string): Promise<PostagemComUsuario> {
     curtidas: Array.isArray(raw.curtidas) ? raw.curtidas : [],
     comentarios: Array.isArray(raw.comentarios) ? raw.comentarios : [],
   } as PostagemComUsuario;
-}
-
-export async function deletarPost(postId: PostId): Promise<boolean> {
-  const token = Storage.token;
-  const res = await fetch(`${API.BASE_URL}/api/post/${postId}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body?.message || "Falha ao apagar post");
-  }
-  return true;
 }
 
 export async function criarPost({

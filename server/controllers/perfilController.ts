@@ -1,4 +1,3 @@
-// server/controllers/perfilController
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
@@ -1399,13 +1398,11 @@ export async function getPerfilOlheiro(req: Request, res: Response) {
   }
 }
 
-// server/controllers/perfilController.ts
 export const getUltimasSubmissoesDesafioVideos = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.params.id || req.userId;
     if (!userId) return res.status(401).json({ error: "Não autenticado." });
 
-    // aceita id de usuário OU id de atleta
     const atleta = await prisma.atleta.findFirst({
       where: { OR: [{ usuarioId: userId }, { id: userId }] },
       select: { id: true },
@@ -1415,8 +1412,7 @@ export const getUltimasSubmissoesDesafioVideos = async (req: AuthenticatedReques
     const subs = await prisma.submissaoDesafio.findMany({
       where: {
         atletaId: atleta.id,
-        aprovado: true as any,          // campo Boolean? no schema
-        // NÃO use { not: null } porque videoUrl é obrigatório no schema
+        aprovado: true as any,       
       },
       select: {
         id: true,
