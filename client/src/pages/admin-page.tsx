@@ -1,6 +1,8 @@
+// client/src/pages/admin-page.tsx
 import { useEffect, useState} from "react";
 import { API } from "../config.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import ValidacaoVideo from "./validacaovideo.js";
 
 type Tab =
   | "dashboard"
@@ -9,6 +11,7 @@ type Tab =
   | "treinos"
   | "professores"
   | "desafios"
+  | "validacao"
   | "moderacao"
   | "configuracoes";
 
@@ -466,11 +469,16 @@ async function invalidarDesafio(id: string) {
       <h2 className="text-xl font-semibold text-green-900 my-4">Painel Administrativo</h2>
 
       <nav className="flex flex-wrap gap-3 mb-6">
-        {["dashboard","usuarios","exercicios","treinos","professores","desafios", "moderacao", "configuracoes"].map((t) => (
+        {["dashboard","usuarios","exercicios","treinos","professores","desafios", "validacao", "moderacao", "configuracoes"].map((t) => (
           <button key={t}
             className={`px-4 py-2 rounded ${aba === (t as Tab) ? "bg-green-800 text-white" : "bg-gray-200"}`}
-            onClick={() => setAba(t as Tab)}>
-            {t === "moderacao" ? "Moderação" : t.charAt(0).toUpperCase() + t.slice(1)}
+            onClick={() => setAba(t as Tab)}
+          >
+            {t === "moderacao" 
+              ? "Moderação"
+              : t === "validacao"
+              ? "Validar desafios"
+              : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </nav>
@@ -823,6 +831,9 @@ async function invalidarDesafio(id: string) {
                     </ul>
                   </div>
                 )}
+
+                {aba === "validacao" && <ValidacaoVideo />}
+
                 {aba === "moderacao" && ( 
                   <div>
                    <h3 className="text-xl font-bold mb-3">Moderação</h3>

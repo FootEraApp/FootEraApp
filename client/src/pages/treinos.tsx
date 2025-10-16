@@ -113,6 +113,14 @@ type MinhasSubTreino = {
 type TreinoStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "EXPIRED";
 type Checklist = Record<string, boolean>;
 
+type WeekStatus = {
+  index: number; // 1 = semana atual, 4 = há 3 semanas
+  start: string;
+  end: string;
+  status: "success" | "fail" | "none";
+  count: { total: number; approved: number; rejected: number };
+};
+
 const PLACEHOLDER_USER = "/assets/default-user.png";
 
 const CHECKLIST_KEY = (treinoAgendadoId: string) => `footera:treinoChecklist:${treinoAgendadoId}`;
@@ -212,6 +220,8 @@ export default function PaginaTreinos() {
   // Checklist por treino (id do exercicio => boolean)
   const [checklistByTreino, setChecklistByTreino] = useState<Record<string, Checklist>>({});
 
+  const [semanasDesafio, setSemanasDesafio] = useState<WeekStatus[]>([]);
+
   // helpers checklist
   const carregarChecklist = (treinoId: string, exerciciosIds: string[]) => {
     try {
@@ -262,6 +272,44 @@ export default function PaginaTreinos() {
       return novo;
     });
   };
+
+  // <<< SEMANAS: UI
+function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
+  if (!weeks || weeks.length === 0) return null;
+  return (
+    <div className="mb-3">
+      <div className="text-sm font-semibold text-green-900 mb-1">Desafios nas últimas 4 semanas</div>
+      <div className="flex items-center gap-2">
+        {weeks.map((w) => {
+          const base =
+            w.status === "success"
+              ? "bg-emerald-100 border-emerald-300 text-emerald-700"
+              : w.status === "fail"
+              ? "bg-red-100 border-red-300 text-red-700"
+              : "bg-gray-100 border-gray-200 text-gray-500";
+          return (
+            <div
+              key={w.index}
+              className={`h-9 w-9 rounded-full border flex items-center justify-center shrink-0 ${base}`}
+              title={`Semana ${w.index} (${new Date(w.start).toLocaleDateString("pt-BR")} – ${new Date(
+                new Date(w.end).getTime() - 1
+              ).toLocaleDateString("pt-BR")}) • ${w.count.approved} aprov., ${w.count.rejected} reprov.`}
+            >
+              {w.status === "success" ? (
+                <Check className="w-5 h-5" />
+              ) : w.status === "fail" ? (
+                <X className="w-5 h-5" />
+              ) : (
+                <span className="text-xs">{w.index}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 
   // Status do treino (IN_PROGRESS/COMPLETED)
   async function carregarStatus(id: string) {
@@ -484,6 +532,22 @@ export default function PaginaTreinos() {
 
         setTreinosAgendados(apenasVigentes);
         setDesafios(desafiosJson ?? []);
+        // <<< SEMANAS: fetch
+        try {
+          const resSem = await fetch(
+            `${API.BASE_URL}/api/treinos/desafios-semanais?tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (resSem.ok) {
+            const js = await resSem.json();
+            setSemanasDesafio(Array.isArray(js?.weeks) ? js.weeks : []);
+          } else {
+            setSemanasDesafio([]);
+          }
+        } catch {
+          setSemanasDesafio([]);
+        }
+
       } else if (tipo === "admin" && token) {
         const [resTreinos, resDesafios] = await Promise.all([
           fetch(`${API.BASE_URL}/api/treinos/programados`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -1118,7 +1182,15 @@ export default function PaginaTreinos() {
               </div>
 
               <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-                <h3 className="text-lg font-semibold mb-2">Desafios</h3>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-semibold">Desafios</h3>
+
+                  {/* wrapper para alinhar à direita, remover mb do componente e ocultar o label interno */}
+                  <div className="ml-3 shrink-0 [&>div]:mb-0 [&>div>div:first-child]:hidden">
+                    <WeeklyChecker weeks={semanasDesafio} />
+                  </div>
+                </div>
+                
                 {desafiosVisiveis.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{desafiosVisiveis.map(renderDesafioCard)}</div>
                 ) : (
