@@ -213,7 +213,7 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
         desafioId,
         videoUrl: finalVideoUrl,
         observacao,
-        aprovado: true,
+        aprovado: false,
         tempoMs: tempoMsNum,
         repeticoes: repeticoesNum,
         ...(uploadedUrl
@@ -242,8 +242,11 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
       }).catch(() => {});
     }
 
-    await recomputePontuacaoAtleta(atletaId).catch(() => {});
-    return res.status(201).json({ ok: true, id: created.id });
+    return res.status(201).json({
+      ok: true,
+      id: created.id,
+      mensagem: "Submissão enviada para validação. Aguarde aprovação.",
+    });
   } catch (error) {
     console.error("Erro ao criar submissão de desafio:", error);
     res.status(500).json({ message: "Erro ao criar submissão." });

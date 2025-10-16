@@ -261,7 +261,7 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
           }
         />
 
-        <ActivityGrid activities={activities} />
+        <ActivityGrid activities={activities} perfilUsuarioId={usuarioId ?? perfil.usuario.id} />
         <BadgesList userId={usuarioId ?? undefined} badges={badges} />
 
         {pontuacao && (

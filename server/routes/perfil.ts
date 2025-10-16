@@ -1,9 +1,11 @@
+// server/routes/perfil
 import { Router } from "express";
 import {
   getPerfilUsuario, getAtividadesRecentes, getBadges,
   getTreinosResumo, getProgressoTreinos, getPerfilUsuarioMe, getPontuacaoMe,
   getAtividadesRecentesMe, getBadgesMe, atualizarPerfil, getPosicaoAtualAtleta,
-  getPerfilProfessor, getPerfilClube, getPerfilEscola, getPerfilOlheiro,
+  getPerfilProfessor, getPerfilClube, getPerfilEscola, getPerfilOlheiro, 
+  getUltimasSubmissoesDesafioVideosMe, getUltimasSubmissoesDesafioVideos,
 } from "../controllers/perfilController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 import { PrismaClient } from "@prisma/client";
@@ -54,6 +56,9 @@ router.get("/me/posicao-atual", authenticateToken, getPosicaoAtualAtleta);
 router.get("/me", authenticateToken, getPerfilUsuarioMe);
 
 router.get("/:usuarioId/pontuacao", authenticateToken, getPontuacaoPerfil);
+
+router.get("/me/desafios-videos", authenticateToken, getUltimasSubmissoesDesafioVideosMe);
+router.get("/:id/desafios-videos", authenticateToken, getUltimasSubmissoesDesafioVideos);
 
 router.get("/:id/atividades", authenticateToken, getAtividadesRecentes);
 router.get("/:id/badges", authenticateToken, getBadges);

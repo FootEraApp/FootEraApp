@@ -1397,3 +1397,76 @@ export async function listarMinhasSubmissoesTreino(req: AuthenticatedRequest, re
     return res.status(500).json({ message: "Erro ao buscar submissões do atleta" });
   }
 }
+
+export async function statusDesafiosSemanais(req: AuthenticatedRequest, res: Response) {
+  try {
+    // aceita ?tipoUsuarioId= (padrão do app) ou ?atletaId=
+    const fromQuery = String((req.query.tipoUsuarioId ?? req.query.atletaId ?? "") as string).trim();
+
+    // resolve atletaId; se não vier na query, busca pelo usuário autenticado
+    let atletaId = fromQuery;
+    if (!atletaId) {
+      const u = await prisma.usuario.findUnique({
+        where: { id: req.userId! },
+        include: { atleta: { select: { id: true } } },
+      });
+      atletaId = u?.atleta?.id ?? "";
+    }
+    if (!atletaId) return res.status(400).json({ error: "tipoUsuarioId (atletaId) é obrigatório" });
+
+    // início da semana ISO (segunda-feira)
+    const startOfIsoWeek = (d: Date): Date => {
+      const x = new Date(d);
+      x.setHours(0, 0, 0, 0);
+      const day = (x.getDay() + 6) % 7; // 0..6 com segunda=0
+      x.setDate(x.getDate() - day);
+      return x;
+    };
+
+    const w0 = startOfIsoWeek(new Date());
+    const windows: { start: Date; end: Date; index: number }[] = Array.from({ length: 4 }, (_, i) => {
+      const start = new Date(w0);
+      start.setDate(start.getDate() - i * 7);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 7);
+      return { start, end, index: i + 1 }; // 1 = semana atual, 4 = há 3 semanas
+    });
+
+    const since = windows[3].start;
+
+    // pega submissões de DESAFIO do atleta nas últimas 4 semanas
+    const subs = await prisma.submissaoDesafio.findMany({
+      where: {
+        atletaId,
+        createdAt: { gte: since },
+      },
+      select: { aprovado: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const weeks = windows.map((w) => {
+      const inRange = subs.filter(
+        (s: { aprovado: boolean | null; createdAt: Date }) => s.createdAt >= w.start && s.createdAt < w.end
+      );
+      const approved = inRange.filter((s: { aprovado: boolean | null }) => s.aprovado === true).length;
+      const rejected = inRange.filter((s: { aprovado: boolean | null }) => s.aprovado === false).length;
+
+      let status: "success" | "fail" | "none" = "none";
+      if (approved > 0) status = "success";
+      else if (inRange.length > 0) status = "fail";
+
+      return {
+        index: w.index,
+        start: w.start.toISOString(),
+        end: w.end.toISOString(),
+        status,
+        count: { total: inRange.length, approved, rejected },
+      };
+    });
+
+    return res.json({ weeks });
+  } catch (e) {
+    console.error("statusDesafiosSemanais error:", e);
+    return res.status(500).json({ error: "Erro ao montar checker semanal" });
+  }
+}
