@@ -121,7 +121,7 @@ export function AppRoutes() {
           params ? <PaginaEventoDetalhe eventoId={params.id} /> : null}
       </Route>
 
-      <Route path="/feed/desafios"><Private><PaginaDesafios /></Private></Route>
+      <Route path="/desafios"><Private><PaginaDesafios /></Private></Route>
       <Route path="/feed"><Private><PaginaFeed /></Private></Route>
       <Route path="/desafios/:id"><Private><PaginaDesafioUnico /></Private></Route>
       <Route path="/treinos/livre/novo" component={PaginaTreinoLivreNovo} />

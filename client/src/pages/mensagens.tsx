@@ -1,3 +1,4 @@
+// client/src/pages/mensagens
 import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { Send, Share2, Volleyball, User, UserPlus, CirclePlus, Search, House, Users, Trash } from "lucide-react";
@@ -1124,6 +1125,7 @@ useEffect(() => {
     <div className="min-h-screen flex flex-col bg-transparent">
       <header className="sticky top-0 z-10 bg-green-900 text-white">
         <div className="relative h-14 flex items-center justify-center px-4">
+          
           <button
             onClick={() => setShowSidebar(true)}
             className="md:hidden absolute left-3 p-2 rounded-full hover:bg-white/10"
@@ -1132,8 +1134,11 @@ useEffect(() => {
             <Users size={18} />
           </button>
           <h1 className="text-base font-semibold truncate">
-            {alvo?.tipo === "usuario" ? alvo.usuario.nome : alvo?.tipo === "grupo" ? alvo.grupo.nome : "Conversas"}
+            {alvo?.tipo === "usuario" ? alvo.usuario.nome : 
+             alvo?.tipo === "grupo"   ? alvo.grupo.nome   : "Conversas"}
           </h1>
+
+          
         </div>
       </header>
 

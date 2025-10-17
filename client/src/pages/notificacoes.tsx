@@ -1,8 +1,10 @@
+// client/src/pages/notificacoes
 import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
+import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 
 type StatusSolicitacao = "pendente" | "ativa";
 
@@ -73,6 +75,18 @@ export default function PaginaNotificacoes() {
 
   return (
     <div className="p-4 max-w-xl mx-auto">
+      {/* Botão voltar p/ perfil (estático) */}
+      <div className="mb-3">
+        <Link
+          href="/perfil"
+          aria-label="Voltar para o perfil"
+          className="inline-flex h-10 w-10 items-center justify-center
+                    rounded-xl border border-green-800/60 bg-white text-green-900
+                    shadow-sm hover:bg-green-50"
+        >
+          <span className="text-xl -mt-0.5">&lt;</span>
+        </Link>
+      </div>
       <h2 className="text-2xl font-bold mb-4">Notificações</h2>
 
       {solicitacoes.length === 0 ? (
@@ -149,6 +163,15 @@ export default function PaginaNotificacoes() {
           })}
         </div>
       )}
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
+        <Link href="/feed" className="hover:underline"><House /></Link>
+        <Link href="/explorar" className="hover:underline"><Search /></Link>
+        <Link href="/post" className="hover:underline"><CirclePlus /></Link>
+        <Link href="/treinos" className="hover:underline"><Volleyball /></Link>
+        <Link href="/perfil" className="hover:underline"><User /></Link>
+      </nav>
+
     </div>
   );
 }
