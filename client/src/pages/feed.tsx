@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+// client/src/pages/feed
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FaHeart,
   FaRegHeart,
@@ -23,9 +24,10 @@ import {
   comentarPost,
   PostagemComUsuario,
   deletarPost,
+  repostPost,
 } from "../services/feedService.js";
 import { format } from "date-fns";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
@@ -37,16 +39,13 @@ import {
   type Tier,
 } from "../lib/achievementsCatalog.js";
 import { FaRetweet } from "react-icons/fa";
-import { repostPost } from "../services/feedService.js";
 
+/* ---------- Tipos/auxiliares usados no compartilhamento por DM ---------- */
 interface Usuario {
   id: string;
   nome: string;
   foto?: string | null;
 }
-
-const token = Storage.token;
-
 async function getUsuariosMutuos(token: string): Promise<Usuario[]> {
   const res = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -55,60 +54,106 @@ async function getUsuariosMutuos(token: string): Promise<Usuario[]> {
   return await res.json();
 }
 
-function BottomSheet({
-  open,
-  onClose,
-  heightPct = 40,
-  children,
-  ariaLabel = "Painel",
+// === Header compacto e leve (sem preloading) ===
+function HeaderSliderLite({
+  title,
+  start,
 }: {
-  open: boolean;
-  onClose: () => void;
-  heightPct?: number;
-  children: React.ReactNode;
-  ariaLabel?: string;
+  title: string;
+  start: "feed" | "desafios";
 }) {
-  useEffect(() => {
-    if (!open) return;
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onEsc);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onEsc);
-      document.body.style.overflow = prev;
-    };
-  }, [open, onClose]);
+  const [, setLocation] = useLocation();
+  const [pos, setPos] = useState(start === "feed" ? 0 : 1);
+  const [dragging, setDragging] = useState(false);
 
-  if (!open) return null;
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const widthRef = useRef(0);
+  const startX = useRef(0);
+  const startPos = useRef(0);
+
+  useEffect(() => {
+    const update = () => {
+      widthRef.current = wrapRef.current?.clientWidth || window.innerWidth;
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  useEffect(() => {
+    setPos(start === "feed" ? 0 : 1);
+  }, [start]);
+
+  const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+  const onDown: React.PointerEventHandler<HTMLButtonElement> = (e) => {
+    (e.currentTarget as any).setPointerCapture?.(e.pointerId);
+    setDragging(true);
+    startX.current = e.clientX;
+    startPos.current = pos;
+  };
+  const onMove: React.PointerEventHandler<HTMLButtonElement> = (e) => {
+    if (!dragging) return;
+    const w = widthRef.current || window.innerWidth;
+    setPos(clamp01(startPos.current + (e.clientX - startX.current) / w));
+  };
+  const onUp: React.PointerEventHandler<HTMLButtonElement> = () => {
+    setDragging(false);
+    const target = pos >= 0.5 ? "desafios" : "feed";
+    setPos(target === "desafios" ? 1 : 0);
+    if (target !== start) setTimeout(() => setLocation(`/${target}`), 100);
+  };
+
+  const px = Math.round(pos * (widthRef.current || 0));
+  const houseOpacity = 1 - pos;
+  const trophyOpacity = pos;
 
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={onClose} />
-      <div
-        role="dialog"
-        aria-label={ariaLabel}
-        aria-modal="true"
-        className="
-          absolute bottom-0 z-50 transform transition-transform duration-300 ease-out
-          left-0 right-0
-          md:left-1/2 md:right-auto md:-translate-x-1/2 md:max-w-[1160px] md:w-full
-        "
-        style={{ height: `${heightPct}vh` }}
-      >
+    <div ref={wrapRef} className="relative h-16 sm:h-20 -mx-4 px-4 sm:mx-0 mb-2">
+      {/* trilho: invisível quando não está arrastando; aparece verde só durante o drag */}
+      <div className="absolute inset-0 z-0">
         <div
-          className="bg-white rounded-t-2xl shadow-2xl h-full flex flex-col"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="w-full flex justify-center pt-2">
-            <div className="h-1.5 w-12 rounded-full bg-gray-300" />
-          </div>
-          <div className="h-full px-4 pb-4 pt-2 flex flex-col">{children}</div>
-        </div>
+          className={`absolute inset-y-2 left-0 right-0 rounded-full border overflow-hidden ${
+            dragging
+              ? "bg-green-100/70 border-green-200 shadow-inner"
+              : "bg-transparent border-transparent"
+          }`}
+        />
+        <div
+          className="absolute inset-y-2 left-0 rounded-full bg-green-200/60 transition-[width,opacity] duration-150"
+          style={{ width: `${px}px`, opacity: dragging ? 1 : 0 }}
+        />
       </div>
+
+      {/* título */}
+      <div className="relative z-10 h-full flex items-center justify-center pointer-events-none">
+        <h1 className="text-2xl font-bold">{title}</h1>
+      </div>
+
+      {/* knob */}
+      <button
+        aria-label="Trocar entre Feed e Desafios (arraste)"
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        className="absolute top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white shadow-lg border active:scale-[0.98] touch-none"
+        style={{
+          left: Math.max(6, Math.min(px - 20, (widthRef.current || 0) - 46)),
+          transition: dragging ? "none" : "left 140ms ease",
+        }}
+      >
+        <div className="relative w-full h-full flex items-center justify-center">
+          <House className="absolute" style={{ opacity: houseOpacity }} />
+          <Trophy className="absolute text-yellow-600" style={{ opacity: trophyOpacity }} />
+        </div>
+      </button>
     </div>
   );
 }
+
+/* =========================
+   RESTO DO FEED
+   ========================= */
 
 type ParsedAchievement = {
   ach?: AchievementLite;
@@ -162,11 +207,7 @@ function TierPill({ tier }: { tier?: Tier }) {
   );
 }
 
-function AchievementShareCard({
-  parsed,
-}: {
-  parsed: ParsedAchievement;
-}) {
+function AchievementShareCard({ parsed }: { parsed: ParsedAchievement }) {
   const icon = parsed.ach?.icon || "🏆";
   const title = parsed.ach?.title || parsed.headTitle || "Conquista";
   const desc = parsed.ach?.description || parsed.headDesc || "";
@@ -180,15 +221,64 @@ function AchievementShareCard({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h4 className="font-semibold text-yellow-900 truncate">
-              Conquista: {title}
-            </h4>
+            <h4 className="font-semibold text-yellow-900 truncate">Conquista: {title}</h4>
             <TierPill tier={tier} />
           </div>
           {!!desc && <p className="text-sm text-yellow-900/90 mt-0.5">{desc}</p>}
           {!!parsed.userMsg && (
             <p className="text-sm text-gray-700 mt-2 italic">“{parsed.userMsg}”</p>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BottomSheet({
+  open,
+  onClose,
+  heightPct = 40,
+  children,
+  ariaLabel = "Painel",
+}: {
+  open: boolean;
+  onClose: () => void;
+  heightPct?: number;
+  children: React.ReactNode;
+  ariaLabel?: string;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onEsc);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onEsc);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-label={ariaLabel}
+        aria-modal="true"
+        className="absolute bottom-0 z-50 transform transition-transform duration-300 ease-out left-0 right-0 md:left-1/2 md:right-auto md:-translate-x-1/2 md:max-w-[1160px] md:w-full"
+        style={{ height: `${heightPct}vh` }}
+      >
+        <div
+          className="bg-white rounded-t-2xl shadow-2xl h-full flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="w-full flex justify-center pt-2">
+            <div className="h-1.5 w-12 rounded-full bg-gray-300" />
+          </div>
+          <div className="h-full px-4 pb-4 pt-2 flex flex-col">{children}</div>
         </div>
       </div>
     </div>
@@ -222,10 +312,10 @@ function PaginaFeed(): JSX.Element {
       const uid = Storage.usuarioId;
       const filtrado =
         filtro === "todos" && uid
-          ? dados.filter(p => p.usuario?.id !== uid && (p as any).usuarioId !== uid)
-        : filtro === "meus" && uid
-          ? dados.filter(p => p.usuario?.id === uid || (p as any).usuarioId === uid)
-        : dados;
+          ? dados.filter((p) => p.usuario?.id !== uid && (p as any).usuarioId !== uid)
+          : filtro === "meus" && uid
+          ? dados.filter((p) => p.usuario?.id === uid || (p as any).usuarioId === uid)
+          : dados;
       setPosts(filtrado);
     }
     carregar();
@@ -241,7 +331,7 @@ function PaginaFeed(): JSX.Element {
     };
 
     socket.on("feed:novoPost", onNovoPost as any);
-    return () => { 
+    return () => {
       socket.off("feed:novoPost", onNovoPost as any);
     };
   }, [filtro]);
@@ -310,16 +400,17 @@ function PaginaFeed(): JSX.Element {
   };
 
   const handleRepost = async (postId: string) => {
-  if (!userId) return alert("Sessão expirada. Faça login novamente.");
-  const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
-  try {
-    const novo = await repostPost(postId, comentario);
-    setPosts((prev) => [novo, ...prev]);
-  } catch (e) {
-    console.error(e);
-    alert("Não foi possível repostar.");
-  }
-};
+    const uid = Storage.usuarioId;
+    if (!uid) return alert("Sessão expirada. Faça login novamente.");
+    const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
+    try {
+      const novo = await repostPost(postId, comentario);
+      setPosts((prev) => [novo, ...prev]);
+    } catch (e) {
+      console.error(e);
+      alert("Não foi possível repostar.");
+    }
+  };
 
   const abrirModalComentarios = (post: PostagemComUsuario) => {
     setPostSelecionado(post);
@@ -370,14 +461,7 @@ function PaginaFeed(): JSX.Element {
 
   return (
     <div className="px-4 py-6 space-y-6 pb-24">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-green-800">Feed de Postagens</h1>
-        <Link href="/feed/desafios">
-          <button className="p-2 rounded-full hover:bg-green-100 transition" title="Ranking e Desafios">
-            <Trophy className="w-6 h-6 text-yellow-600" />
-          </button>
-        </Link>
-      </div>
+      <HeaderSliderLite title="Feed de Postagens" start="feed" />
 
       <div className="flex gap-2 justify-center mb-4">
         {(["todos", "seguindo", "favoritos", "meus"] as const).map((f) => (
@@ -385,10 +469,18 @@ function PaginaFeed(): JSX.Element {
             key={f}
             onClick={() => setFiltro(f)}
             className={`px-3 py-1 rounded-full text-sm border ${
-              filtro === f ? "bg-green-700 text-white border-green-700" : "bg-white text-green-700 border-green-700"
+              filtro === f
+                ? "bg-green-700 text-white border-green-700"
+                : "bg-white text-green-700 border-green-700"
             }`}
           >
-            {f === "todos" ? "Todos" : f === "seguindo" ? "Seguindo" : f === "favoritos" ? "Favoritos" : "Meus"}
+            {f === "todos"
+              ? "Todos"
+              : f === "seguindo"
+              ? "Seguindo"
+              : f === "favoritos"
+              ? "Favoritos"
+              : "Meus"}
           </button>
         ))}
       </div>
@@ -398,18 +490,25 @@ function PaginaFeed(): JSX.Element {
           <p>
             {{
               todos: "Nenhuma postagem encontrada.",
-              seguindo: "Você ainda não segue ninguém — ou ninguém que você segue postou ainda.",
+              seguindo:
+                "Você ainda não segue ninguém — ou ninguém que você segue postou ainda.",
               favoritos: "Você não tem nenhum usuário favoritado.",
               meus: "Você ainda não postou nada.",
             }[filtro]}
           </p>
 
           {filtro === "seguindo" || filtro === "favoritos" ? (
-            <Link href="/explorar" className="text-green-700 underline mt-2 inline-block">
+            <Link
+              href="/explorar"
+              className="text-green-700 underline mt-2 inline-block"
+            >
               Explorar perfis
             </Link>
           ) : filtro === "meus" ? (
-            <Link href="/post" className="text-green-700 underline mt-2 inline-block">
+            <Link
+              href="/post"
+              className="text-green-700 underline mt-2 inline-block"
+            >
               Criar minha primeira postagem
             </Link>
           ) : null}
@@ -418,7 +517,7 @@ function PaginaFeed(): JSX.Element {
 
       {posts.map((post) => {
         const curtidas = post.curtidas || [];
-        const jaCurtiu = curtidas.some((c) => c.usuarioId === userId);
+        const jaCurtiu = curtidas.some((c) => c.usuarioId === Storage.usuarioId);
         const mostrarInput = mostrarInputPorPost[post.id] || false;
         const comentarioTexto = comentarioTextoPorPost[post.id] || "";
 
@@ -429,20 +528,29 @@ function PaginaFeed(): JSX.Element {
         const isAchievement = !!parsed;
 
         return (
-          <div key={post.id} className="max-w-xl mx-auto bg-white rounded-2xl shadow-md p-4 space-y-3">
+          <div
+            key={post.id}
+            className="max-w-xl mx-auto bg-white rounded-2xl shadow-md p-4 space-y-3"
+          >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <img
-                  src={publicImgUrl(post.usuario.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
+                  src={
+                    publicImgUrl(post.usuario.foto) ||
+                    `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
+                  }
                   alt="avatar"
                   className="w-10 h-10 rounded-full object-cover"
                 />
                 <div>
                   <p className="font-semibold">{post.usuario.nome}</p>
-                  <p className="text-xs text-gray-500">{format(new Date(post.dataCriacao), "dd/MM, HH:mm")}</p>
+                  <p className="text-xs text-gray-500">
+                    {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
+                  </p>
                 </div>
               </div>
-              {((post as any).usuarioId === userId || post?.usuario?.id === userId) && (
+              {((post as any).usuarioId === Storage.usuarioId ||
+                post?.usuario?.id === Storage.usuarioId) && (
                 <button
                   onClick={() => handleApagar(post.id)}
                   title="Apagar postagem"
@@ -454,7 +562,8 @@ function PaginaFeed(): JSX.Element {
             </div>
             {post.repostOf && (
               <div className="text-xs text-gray-500 -mt-1">
-                Repostou de <strong>{post.repostOf.usuario?.nome || "Usuário"}</strong>
+                Repostou de{" "}
+                <strong>{post.repostOf.usuario?.nome || "Usuário"}</strong>
               </div>
             )}
 
@@ -462,7 +571,7 @@ function PaginaFeed(): JSX.Element {
               {post.repostOf ? (
                 <>
                   {post.conteudo?.trim() && (
-                    <p className="text-gray-800 font-medium whitespace-pre-line mb-2">
+                    <p className="text-gray-800 font-medium whitespace-pre-line">
                       {post.conteudo}
                     </p>
                   )}
@@ -470,14 +579,22 @@ function PaginaFeed(): JSX.Element {
                   <div className="border rounded-xl p-3 bg-gray-50">
                     <div className="flex items-center gap-2 mb-1">
                       <img
-                        src={publicImgUrl(post.repostOf.usuario?.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
+                        src={
+                          publicImgUrl(post.repostOf.usuario?.foto) ||
+                          `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
+                        }
                         alt="avatar original"
                         className="w-7 h-7 rounded-full object-cover"
                       />
                       <div>
-                        <p className="text-sm font-semibold">{post.repostOf.usuario?.nome}</p>
-                        <p className="text-[11px] text-gray-500">
-                          {format(new Date(post.repostOf.dataCriacao), "dd/MM, HH:mm")}
+                        <p className="text-sm font-semibold">
+                          {post.repostOf.usuario?.nome}
+                        </p>
+                        <p className="text[11px] text-gray-500">
+                          {format(
+                            new Date(post.repostOf.dataCriacao),
+                            "dd/MM, HH:mm"
+                          )}
                         </p>
                       </div>
                     </div>
@@ -496,7 +613,10 @@ function PaginaFeed(): JSX.Element {
 
                     {publicImgUrl(post.repostOf.videoUrl) && (
                       <video controls className="w-full mt-2 rounded-lg">
-                        <source src={publicImgUrl(post.repostOf.videoUrl) ?? ""} type="video/mp4" />
+                        <source
+                          src={publicImgUrl(post.repostOf.videoUrl) ?? ""}
+                          type="video/mp4"
+                        />
                       </video>
                     )}
                   </div>
@@ -509,7 +629,9 @@ function PaginaFeed(): JSX.Element {
                     </p>
                   )}
 
-                  {isAchievement && parsed && <AchievementShareCard parsed={parsed} />}
+                  {isAchievement && parsed && (
+                    <AchievementShareCard parsed={parsed} />
+                  )}
 
                   {imgSrc && (
                     <img
@@ -528,30 +650,51 @@ function PaginaFeed(): JSX.Element {
               )}
             </div>
             <div className="flex justify-between text-gray-600 mt-2 px-2">
-              <button className="flex items-center gap-1" onClick={() => handleLike(post.id)}>
-                {jaCurtiu ? <FaHeart className="text-black" /> : <FaRegHeart />} <span>{curtidas.length}</span>
+              <button
+                className="flex items-center gap-1"
+                onClick={() => handleLike(post.id)}
+              >
+                {jaCurtiu ? (
+                  <FaHeart className="text-black" />
+                ) : (
+                  <FaRegHeart />
+                )}{" "}
+                <span>{curtidas.length}</span>
               </button>
 
-              <button className="flex items-center gap-1" onClick={() => abrirModalComentarios(post)}>
-                <FaRegCommentDots /> <span>{post.comentarios?.length || 0}</span>
+              <button
+                className="flex items-center gap-1"
+                onClick={() => abrirModalComentarios(post)}
+              >
+                <FaRegCommentDots />{" "}
+                <span>{post.comentarios?.length || 0}</span>
               </button>
 
-              <button className="flex items-center gap-1" onClick={() => handleCompartilhar(post.id)}>
+              <button
+                className="flex items-center gap-1"
+                onClick={() => handleCompartilhar(post.id)}
+              >
                 <FaShare />
               </button>
 
-              <button className="flex items-center gap-1" onClick={() => handleRepost(post.id)} title="Repostar">
+              <button
+                className="flex items-center gap-1"
+                onClick={() => handleRepost(post.id)}
+                title="Repostar"
+              >
                 <FaRetweet />
               </button>
-              <span className="ml-1 text-sm">{post.reposts ?? post.compartilhamentos ?? 0}</span>
+              <span className="ml-1 text-sm">
+                {(post as any).reposts ?? (post as any).compartilhamentos ?? 0}
+              </span>
             </div>
 
-            {mostrarInput && (
+            {mostrarInputPorPost[post.id] && (
               <>
                 <div className="mt-2 flex items-center gap-2">
                   <input
                     type="text"
-                    value={comentarioTexto}
+                    value={comentarioTextoPorPost[post.id] || ""}
                     onChange={(e) =>
                       setComentarioTextoPorPost((prev) => ({
                         ...prev,
@@ -561,7 +704,14 @@ function PaginaFeed(): JSX.Element {
                     placeholder="Adicione um comentário..."
                     className="w-full border rounded px-3 py-2 text-sm"
                   />
-                  <button onClick={() => handleComentario(post.id, comentarioTexto)}>
+                  <button
+                    onClick={() =>
+                      handleComentario(
+                        post.id,
+                        comentarioTextoPorPost[post.id] || ""
+                      )
+                    }
+                  >
                     <FaPaperPlane className="text-green-800" />
                   </button>
                 </div>
@@ -580,10 +730,19 @@ function PaginaFeed(): JSX.Element {
                         />
                         <div className="bg-gray-100 rounded-lg px-3 py-2 w-full">
                           <div className="flex justify-between text-sm text-gray-600">
-                            <span className="font-semibold">{comentario.usuario?.nome}</span>
-                            <span>{format(new Date(comentario.dataCriacao), "dd/MM, HH:mm")}</span>
+                            <span className="font-semibold">
+                              {comentario.usuario?.nome}
+                            </span>
+                            <span>
+                              {format(
+                                new Date(comentario.dataCriacao),
+                                "dd/MM, HH:mm"
+                              )}
+                            </span>
                           </div>
-                          <p className="text-sm text-gray-800">{comentario.conteudo}</p>
+                          <p className="text-sm text-gray-800">
+                            {comentario.conteudo}
+                          </p>
                         </div>
                       </div>
                     ))}
@@ -613,16 +772,30 @@ function PaginaFeed(): JSX.Element {
         </Link>
       </nav>
 
-      <BottomSheet open={modalAberto} onClose={() => setModalAberto(false)} heightPct={40} ariaLabel="Compartilhar postagem">
-        <h2 className="text-base font-bold mb-3 text-center">Compartilhar Postagem</h2>
+      {/* ---------- Modais (compartilhar / comentários) ---------- */}
+      <BottomSheet
+        open={modalAberto}
+        onClose={() => setModalAberto(false)}
+        heightPct={40}
+        ariaLabel="Compartilhar postagem"
+      >
+        <h2 className="text-base font-bold mb-3 text-center">
+          Compartilhar Postagem
+        </h2>
 
         <div className="mb-3">
           <p className="text-sm text-gray-700 mb-2">Enviar por mensagem:</p>
 
           <div className="flex gap-3 overflow-x-auto pb-1">
-            {carregandoMutuos && <span className="text-sm text-gray-500">Carregando contatos...</span>}
+            {carregandoMutuos && (
+              <span className="text-sm text-gray-500">
+                Carregando contatos...
+              </span>
+            )}
             {!carregandoMutuos && usuariosMutuos.length === 0 && (
-              <span className="text-sm text-gray-500">Você ainda não tem contatos mútuos.</span>
+              <span className="text-sm text-gray-500">
+                Você ainda não tem contatos mútuos.
+              </span>
             )}
             {usuariosMutuos.map((u) => {
               const selecionado = selecionados.has(u.id);
@@ -636,7 +809,11 @@ function PaginaFeed(): JSX.Element {
                     selecionado ? "border-green-600" : "border-transparent"
                   }`}
                 >
-                  <img src={fotoSrc} alt={u.nome} className="w-14 h-14 rounded-full object-cover" />
+                  <img
+                    src={fotoSrc}
+                    alt={u.nome}
+                    className="w-14 h-14 rounded-full object-cover"
+                  />
                   {selecionado && (
                     <span className="absolute -bottom-1 -right-1 bg-white rounded-full">
                       <CircleCheck className="w-5 h-5 text-green-600" />
@@ -651,10 +828,16 @@ function PaginaFeed(): JSX.Element {
             disabled={selecionados.size === 0 || enviandoDM}
             onClick={enviarCompartilhamentoPorDM}
             className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded 
-              ${selecionados.size === 0 || enviandoDM ? "bg-gray-300 text-gray-600" : "bg-green-700 text-white hover:bg-green-800"}`}
+              ${
+                selecionados.size === 0 || enviandoDM
+                  ? "bg-gray-300 text-gray-600"
+                  : "bg-green-700 text-white hover:bg-green-800"
+              }`}
           >
             <Send className="w-4 h-4" />
-            {enviandoDM ? "Enviando..." : `Enviar para ${selecionados.size} contato(s)`}
+            {enviandoDM
+              ? "Enviando..."
+              : `Enviar para ${selecionados.size} contato(s)`}
           </button>
         </div>
 
@@ -689,7 +872,9 @@ function PaginaFeed(): JSX.Element {
           </a>
 
           <a
-            href={`mailto:?subject=Veja esta postagem&body=${encodeURIComponent(linkCompartilhado)}`}
+            href={`mailto:?subject=Veja esta postagem&body=${encodeURIComponent(
+              linkCompartilhado
+            )}`}
             className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 text-sm text-center flex-1"
           >
             Email
@@ -727,7 +912,9 @@ function PaginaFeed(): JSX.Element {
 
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-white">
                 {postSelecionado.comentarios.length === 0 && (
-                  <p className="text-sm text-gray-500">Seja o primeiro a comentar!</p>
+                  <p className="text-sm text-gray-500">
+                    Seja o primeiro a comentar!
+                  </p>
                 )}
 
                 {postSelecionado.comentarios.map((comentario) => (
@@ -743,10 +930,15 @@ function PaginaFeed(): JSX.Element {
                           {comentario.usuario?.nome}
                         </span>
                         <span className="text-[11px] text-gray-500">
-                          {format(new Date(comentario.dataCriacao), "dd/MM, HH:mm")}
+                          {format(
+                            new Date(comentario.dataCriacao),
+                            "dd/MM, HH:mm"
+                          )}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-800 mt-1">{comentario.conteudo}</p>
+                      <p className="text-sm text-gray-800 mt-1">
+                        {comentario.conteudo}
+                      </p>
                     </div>
                   </div>
                 ))}

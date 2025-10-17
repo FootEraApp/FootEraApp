@@ -1,8 +1,11 @@
+// client/src/pages/editarPerfil
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { formatarUrlFoto } from '@/utils/formatarFoto.js';
 import Storage from "../../../server/utils/storage.js";
 import { API } from '../config.js';
+import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { Link } from 'wouter';
 
 type ResultadoBuscaClube = { id: string; nome: string; username?: string; fotoUrl?: string | null; };
 type OptionMin = { id: string; nome: string };
@@ -359,7 +362,24 @@ useEffect(() => {
     }
     
     return (
-      <div className="p-6 max-w-3xl mx-auto">
+      <div
+        className="p-6 max-w-3xl mx-auto pb-24"
+        style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom))" }}
+      >
+
+        {/* Botão voltar p/ perfil (estático) */}
+        <div className="mb-3">
+          <Link
+            href="/perfil"
+            aria-label="Voltar para o perfil"
+            className="inline-flex h-10 w-10 items-center justify-center
+                      rounded-xl border border-green-800/60 bg-white text-green-900
+                      shadow-sm hover:bg-green-50"
+          >
+            <span className="text-xl -mt-0.5">&lt;</span>
+          </Link>
+        </div>
+
         <h1 className="text-2xl font-bold mb-4">Editar Perfil</h1>
 
       {typeof dadosUsuario.foto === "string" && dadosUsuario.foto && (
@@ -501,6 +521,15 @@ useEffect(() => {
       >
         Salvar Alterações
       </button>
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
+        <Link href="/feed" className="hover:underline"><House /></Link>
+        <Link href="/explorar" className="hover:underline"><Search /></Link>
+        <Link href="/post" className="hover:underline"><CirclePlus /></Link>
+        <Link href="/treinos" className="hover:underline"><Volleyball /></Link>
+        <Link href="/perfil" className="hover:underline"><User /></Link>
+      </nav>
+
     </div>
   );
 };
