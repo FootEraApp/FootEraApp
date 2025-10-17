@@ -2,7 +2,7 @@ import { Response, RequestHandler, Request } from "express";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { getIO } from "../socket.js";
 
-const prisma = new PrismaClient;
+const prisma = new PrismaClient();
 
 export const getFeedPosts: RequestHandler = async (req, res) => {
   try {
@@ -97,49 +97,6 @@ export async function getPostById(req: Request, res: Response) {
   }
 }
 
-export async function repostPost(req: Request, res: Response) {
-  const postId = String(req.params.id);
-  const userId = (req as any).userId as string | undefined;
-  const comentario = (req.body?.comentario ?? "").trim();
-
-  if (!userId) return res.status(401).json({ error: "Usuário não autenticado" });
-
-  const original = await prisma.postagem.findUnique({
-    where: { id: postId },
-    include: { usuario: true, curtidas: true, comentarios: { include: { usuario: true } } },
-  });
-  if (!original) return res.status(404).json({ error: "Post não encontrado" });
-
-  const novo = await prisma.postagem.create({
-    data: {
-      usuarioId: userId,
-      conteudo: comentario, 
-      repostOfId: original.id,  
-    },
-    include: {
-      usuario: true,
-      curtidas: true,
-      comentarios: { include: { usuario: true } },
-      repostOf: {
-        include: {
-          usuario: true,
-          curtidas: true,
-          comentarios: { include: { usuario: true } },
-        },
-      },
-    },
-  });
-
-  await prisma.postagem.update({
-    where: { id: original.id },
-    data: { reposts: (original.reposts ?? 0) + 1 },
-  });
-
-  getIO()?.emit("feed:novoPost", novo);
-
-  res.json(novo);
-}
-
 export const curtirPostagem: RequestHandler = async (req, res) => {
   const { postId } = req.params;
   const usuarioId = req.userId;
@@ -198,23 +155,21 @@ export const postar: RequestHandler = async (req, res) => {
   const usuarioId = req.userId;
   if (!usuarioId) return res.status(401).json({ message: "Usuário não autenticado." });
 
-  const { conteudo, descricao } = req.body as { conteudo?: string; descricao?: string };
+  const { conteudo, descricao, imagemUrl: imagemUrlBody, videoUrl: videoUrlBody } =
+    req.body as { conteudo?: string; descricao?: string; imagemUrl?: string; videoUrl?: string };
+
   const texto = (descricao && descricao.length ? descricao : conteudo) || "";
   const file = (req as any).file as Express.Multer.File | undefined;
 
   try {
-    let tipoMidia: "Imagem" | "Video" | undefined = undefined;
-    let imagemUrl: string | undefined = undefined;
-    let videoUrl: string | undefined = undefined;
-
-    const isCard = /Meu Card FOOTERA/i.test(texto);
+    let tipoMidia: "Imagem" | "Video" | undefined;
+    let imagemUrl: string | undefined;
+    let videoUrl: string | undefined;
 
     if (file) {
       const isVideo = file.mimetype?.startsWith("video");
-
       const dest = (file.destination || "").replace(/\\/g, "/");
       const leaf = dest.split("/").filter(Boolean).pop() || "";
-
       if (isVideo) {
         tipoMidia = "Video";
         videoUrl = `/uploads/${leaf}/${file.filename}`;
@@ -224,45 +179,71 @@ export const postar: RequestHandler = async (req, res) => {
       }
     }
 
+    if (!file) {
+      const FRONT = (process.env.FRONTEND_BASE_URL || "http://localhost:5173").replace(/\/+$/, "");
+
+      const norm = (u?: string): string | undefined => {
+        if (!u) return undefined;
+        let s = String(u).trim();
+        if (!s) return undefined;
+
+        if (/^(https?:)?\/\//i.test(s) || s.startsWith("data:") || s.startsWith("blob:")) return s;
+
+        if (s.startsWith("uploads/")) s = "/" + s;
+        if (s.startsWith("/uploads/")) return s;
+
+        if (s.startsWith("assets/")) s = "/" + s;
+        if (s.startsWith("/assets/")) return `${FRONT}${s}`;
+
+        return undefined;
+      };
+
+      const img = norm(imagemUrlBody);
+      const vid = norm(videoUrlBody);
+
+      if (img) {
+        imagemUrl = img;
+        tipoMidia = "Imagem";
+      }
+      if (vid) {
+        videoUrl = vid;
+        tipoMidia = "Video";
+      }
+    }
+
     if (!texto && !imagemUrl && !videoUrl) {
       return res.status(400).json({ message: "Conteúdo ou mídia obrigatória." });
     }
 
-    try {
-      const postagem = await prisma.postagem.create({
-        data: {
-          conteudo: texto,
-          usuarioId,
-          dataCriacao: new Date(),
-          tipoMidia,
-          imagemUrl,
-          videoUrl,
-        },
-      });
-      const postForEmit = await prisma.postagem.findUnique({
-        where: { id: postagem.id },
-        include: {
-          usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
-          curtidas: true,
-          comentarios: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
-        },
-      });
-      const segs = await prisma.seguidor.findMany({
-        where: { seguidoUsuarioId: usuarioId! },
-        select: { seguidorUsuarioId: true },
-      });
-      getIO()?.to([`u:${usuarioId}`, ...segs.map(s => `u:${s.seguidorUsuarioId}`)]).emit("feed:novoPost", postForEmit);
-      return res.status(201).json(postagem);
-    } catch (err: any) {
-      if (err?.code === "P2002") {
-        const existente = await prisma.postagem.findFirst({
-          where: { usuarioId, conteudo: texto },
-        });
-        if (existente) return res.status(200).json(existente);
-        return res.status(409).json({ message: "Você já postou esse mesmo conteúdo." });
-      }
-      throw err;
-    }
+    const postagem = await prisma.postagem.create({
+      data: {
+        conteudo: texto,
+        usuarioId,
+        dataCriacao: new Date(),
+        tipoMidia,
+        imagemUrl,
+        videoUrl,
+      },
+    });
+
+    const postForEmit = await prisma.postagem.findUnique({
+      where: { id: postagem.id },
+      include: {
+        usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
+        curtidas: true,
+        comentarios: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
+      },
+    });
+
+    const segs = await prisma.seguidor.findMany({
+      where: { seguidoUsuarioId: usuarioId! },
+      select: { seguidorUsuarioId: true },
+    });
+    getIO()
+      ?.to([`u:${usuarioId}`, ...segs.map(s => `u:${s.seguidorUsuarioId}`)])
+      .emit("feed:novoPost", postForEmit);
+
+    return res.status(201).json(postagem);
   } catch (error) {
     console.error("Erro ao postar:", error);
     return res.status(500).json({ message: "Erro interno." });
@@ -362,3 +343,55 @@ export const deletarUsuario: RequestHandler = async (req, res) => {
     res.status(500).json({ message: "Erro interno ao deletar usuário." });
   }
 };
+
+export async function repostPost(req: Request, res: Response) {
+  try {
+    const postId = String(req.params.id);
+    const userId = (req as any).userId as string | undefined;
+    const comentario = (req.body?.comentario ?? "").trim();
+
+    if (!userId) return res.status(401).json({ message: "Usuário não autenticado" });
+
+    const original = await prisma.postagem.findUnique({
+      where: { id: postId },
+      include: {
+        usuario: true,
+        curtidas: true,
+        comentarios: { include: { usuario: true } },
+      },
+    });
+    if (!original) return res.status(404).json({ message: "Post não encontrado" });
+
+    const hidden = "\u200B" + Date.now();
+    const novo = await prisma.postagem.create({
+      data: {
+        usuarioId: userId,
+        conteudo: comentario || "",  
+        repostOfId: original.id,
+      },
+      include: {
+        usuario: true,
+        curtidas: true,
+        comentarios: { include: { usuario: true } },
+        repostOf: {
+          include: {
+            usuario: true,
+            curtidas: true,
+            comentarios: { include: { usuario: true } },
+          },
+        },
+      },
+    });
+
+    await prisma.postagem.update({
+      where: { id: original.id },
+      data: { reposts: (original.reposts ?? 0) + 1 },
+    });
+
+    getIO()?.emit("feed:novoPost", novo);
+    return res.json(novo);
+  } catch (e) {
+    console.error("Erro ao repostar:", e);
+    return res.status(500).json({ message: "Erro ao repostar" });
+  }
+}

@@ -25,7 +25,7 @@ type PayloadEscola = { tipo: "Escolinha"; usuario: UsuarioMin | null; escolinha:
 
 type AtletaItem = {
   id: string;
-  atletaId: string;
+  usuarioId: string;
   nome: string;
   foto?: string | null;
   posicao?: string | null;
@@ -139,16 +139,25 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     }
 
     async function fetchVinculados() {
-      const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
-      if (!tipoId) return;
+      const entidadeUsuarioId = isOwn ? Storage.usuarioId : data?.usuario?.id;
+      if (!entidadeUsuarioId) return;
+
       try {
-        const { data: lista } = await axios.get<AtletaItem[]>(
-          `${API.BASE_URL}/api/treinos/atletas-vinculados`,
-          { headers, params: { tipoUsuarioId: tipoId, incluirPontuacao: 1 } }
+        const { data: resp } = await axios.get<{ atletas: AtletaItem[] }>(
+          `${API.BASE_URL}/api/gerenciar/atletas`,
+          {
+            headers,
+            params: {
+              vinculo: "escolinha",    
+              id: entidadeUsuarioId,     
+              order: "pontuacao_desc",
+            },
+          }
         );
-        if (!cancel.v) setVinculados(Array.isArray(lista) ? lista : []);
+
+        setVinculados(Array.isArray(resp?.atletas) ? resp.atletas : []);
       } catch {
-        if (!cancel.v) setVinculados([]);
+        setVinculados([]);
       }
     }
 
@@ -358,9 +367,11 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                             {a.pontuacao} pts
                           </span>
                         )}
-                        <Link href={`/perfil/${a.id}`}
-                          className="ml-2 text-sm text-green-800 inline-flex items-center gap-1">
-                            Ver perfil <ChevronRight className="w-4 h-4" />
+                        <Link
+                          href={`/perfil/${a.usuarioId}`}
+                          className="ml-2 text-sm text-green-800 inline-flex items-center gap-1"
+                        >
+                          Ver perfil <ChevronRight className="w-4 h-4" />
                         </Link>
                       </li>
                     ))}
@@ -404,7 +415,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                             {a.pontuacao} pts
                           </span>
                         )}
-                        <Link href={`/perfil/${a.id}`}
+                        <Link href={`/perfil/${a.usuarioId}`}
                            className="ml-2 text-sm text-green-800 inline-flex items-center gap-1">
                             Ver perfil <ChevronRight className="w-4 h-4" />
                         </Link>

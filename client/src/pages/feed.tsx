@@ -227,6 +227,8 @@ function PaginaFeed(): JSX.Element {
           ? dados.filter(p => p.usuario?.id === uid || (p as any).usuarioId === uid)
         : dados;
       setPosts(filtrado);
+      const unicos = Array.from(new Map(filtrado.map(p => [p.id, p])).values());
+      setPosts(unicos);
     }
     carregar();
   }, [filtro]);
@@ -236,12 +238,14 @@ function PaginaFeed(): JSX.Element {
       setPosts((prev) => {
         if (filtro === "meus" && novo.usuario?.id !== Storage.usuarioId) return prev;
         if (filtro === "todos" && novo.usuario?.id === Storage.usuarioId) return prev;
+        if (prev.some(p => p.id === novo.id)) return prev;
+
         return [novo, ...prev];
       });
     };
 
     socket.on("feed:novoPost", onNovoPost as any);
-    return () => { 
+    return () => {
       socket.off("feed:novoPost", onNovoPost as any);
     };
   }, [filtro]);
@@ -314,7 +318,7 @@ function PaginaFeed(): JSX.Element {
   const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
   try {
     const novo = await repostPost(postId, comentario);
-    setPosts((prev) => [novo, ...prev]);
+    setPosts(prev => (prev.some(p => p.id === novo.id) ? prev : [novo, ...prev]));
   } catch (e) {
     console.error(e);
     alert("Não foi possível repostar.");

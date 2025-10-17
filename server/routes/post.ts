@@ -1,4 +1,5 @@
 import { Router, type RequestHandler } from "express";
+import type { Request, Response } from "express"; 
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -12,11 +13,14 @@ import {
   editarPostagemGet,
   editarPostagemPost,
   compartilharPostPorMensagem,
-  repostarPost,
 } from "../controllers/postController.js";
 import { curtirPostagem } from "server/controllers/feedController.js";
 import { isAllowedMime } from "../utils/moderation.js";
-import { rateLimit, type ValueDeterminingMiddleware } from "express-rate-limit";
+import {
+  rateLimit,
+  ipKeyGenerator,
+  type ValueDeterminingMiddleware,
+} from "express-rate-limit";
 
 const router = Router();
 
@@ -36,32 +40,14 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (isAllowedMime(file.mimetype)) return cb(null, true);
-    cb(
-      new Error(
-        "Tipo de arquivo não permitido (somente imagens JPEG/PNG/WEBP/GIF ou vídeo MP4/WEBM)."
-      )
-    );
+    cb(new Error("Tipo de arquivo não permitido (somente imagens JPEG/PNG/WEBP/GIF ou vídeo MP4/WEBM)."));
   },
 });
 
-const byUserOrIp: ValueDeterminingMiddleware<string> = (req) => {
+const byUserOrIp: ValueDeterminingMiddleware<string> = (req: Request, res: Response) => {
   const userId = (req as any)?.user?.id ?? (req as any)?.userId;
   if (userId) return `u:${userId}`;
-
-  const raw =
-    (req.ip ??
-      (Array.isArray(req.headers["x-forwarded-for"])
-        ? (req.headers["x-forwarded-for"][0] as string)
-        : (req.headers["x-forwarded-for"] as string)) ??
-      req.socket?.remoteAddress ??
-      "") as string;
-
-  const first = (raw || "").split(",")[0].trim();
-  const clean = first
-    .replace(/^::ffff:/, "") 
-    .replace(/\]?:\d+$/, ""); 
-
-  return `ip:${clean || "0.0.0.0"}`;
+  return `ip:${ipKeyGenerator(req as any, res as any)}`;
 };
 
 const postLimiterMw = rateLimit({
@@ -73,7 +59,7 @@ const postLimiterMw = rateLimit({
 }) as unknown as RequestHandler;
 
 const commentLimiterMw = rateLimit({
-  windowMs: 60 * 60 * 1000, 
+  windowMs: 60 * 60 * 1000,
   limit: 60,
   standardHeaders: true,
   legacyHeaders: false,
@@ -81,42 +67,13 @@ const commentLimiterMw = rateLimit({
 }) as unknown as RequestHandler;
 
 router.get("/visualizar/:id", authenticateToken, buscarPostagemPorId);
-
-router.post(
-  "/:postId/comentario",
-  authenticateToken,
-  commentLimiterMw,
-  adicionarComentario
-);
-
+router.post("/:postId/comentario", authenticateToken, commentLimiterMw, adicionarComentario);
 router.post("/:postId/like", authenticateToken, curtirPostagem);
-
-router.post(
-  "/:postId/compartilhar",
-  authenticateToken,
-  registrarCompartilhamento
-);
-
-router.post(
-  "/:postId/compartilhar/mensagem",
-  authenticateToken,
-  compartilharPostPorMensagem
-);
-
-router.post("/:postId/repost", authenticateToken, repostarPost);
-
+router.post("/:postId/compartilhar", authenticateToken, registrarCompartilhamento);
+router.post("/:postId/compartilhar/mensagem", authenticateToken, compartilharPostPorMensagem);
 router.delete("/:id", authenticateToken, deletarPost);
-
 router.get("/editar/:id", authenticateToken, editarPostagemGet);
-
 router.post("/editar/:id", authenticateToken, editarPostagemPost);
-
-router.post(
-  ["/", "/postar"],
-  authenticateToken,
-  postLimiterMw,
-  upload.single("arquivo"),
-  postarConteudo
-);
+router.post(["/", "/postar"], authenticateToken, postLimiterMw, upload.single("arquivo"), postarConteudo);
 
 export default router;
