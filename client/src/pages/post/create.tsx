@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House, Award } from "lucide-react";
 import { criarPost } from "@/services/feedService.js";
-import { API } from "../../config.js";
-import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import { API, APP } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import { ALL_ACHIEVEMENTS, type AchievementLite } from "../../lib/achievementsCatalog.js";
 
@@ -11,17 +10,22 @@ function normalizeMediaUrl(raw: string): string {
   let s = (raw || "").trim();
   if (!s) return "";
 
-  if (/^(https?:)?\/\//i.test(s) || s.startsWith("data:") || s.startsWith("blob:")) {
-    return s.replace(/\/assets\/usuarios\//, "/uploads/").replace(/\/assets\//, "/uploads/");
+  if (/^(https?:)?\/\//i.test(s) || s.startsWith("data:") || s.startsWith("blob:")) return s;
+
+  const FRONT = String(APP.FRONTEND_BASE_URL || "").replace(/\/+$/, "");
+  const APIBASE = String(API.BASE_URL || "").replace(/\/+$/, "");
+
+  if (s.startsWith("/assets/") || s.startsWith("assets/")) {
+    if (!s.startsWith("/")) s = "/" + s;
+    return `${FRONT}${s}`;
   }
 
-  s = s.replace(/^\/?assets\/usuarios\//, "/uploads/").replace(/^\/?assets\//, "/uploads/");
+  if (s.startsWith("/uploads/") || s.startsWith("uploads/")) {
+    if (!s.startsWith("/")) s = "/" + s;
+    return `${APIBASE}${s}`;
+  }
 
-  if (s.startsWith("/uploads/")) return `${API.BASE_URL}${s}`;
-  if (s.startsWith("uploads/")) return `${API.BASE_URL}/${s}`;
-
-  if (!s.startsWith("/")) s = `/${s}`;
-  return `${API.BASE_URL}/uploads${s}`;
+  return s;
 }
 
 type EarnedFromApi = {
@@ -92,14 +96,33 @@ export default function PaginaPostagem() {
     ? (ALL_ACHIEVEMENTS as AchievementLite[]).find((a: AchievementLite) => a.id === selectedAchId)
     : undefined;
 
-   useEffect(() => {
+  useEffect(() => {
     const usuarioId = getUsuarioId();
-    if (!usuarioId) return;
+
+    const perfil = String(
+      (Storage as any)?.tipoSalvo ||
+      localStorage.getItem("tipoUsuario") ||
+      sessionStorage.getItem("tipoUsuario") ||
+      ""
+    ).trim().toLowerCase();
+
+    if (!usuarioId || perfil !== "atleta") {
+      setEarned([]);
+      return;
+    }
 
     const base = (API?.BASE_URL ? String(API.BASE_URL).replace(/\/+$/, "") : "") || "";
     const url = `${base}/api/conquistas/${usuarioId}`;
 
-    fetch(url, { credentials: "include" })
+    const token =
+      (Storage as any)?.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
+
+    const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+    fetch(url, { headers })
       .then(async (r) => {
         if (!r.ok) throw new Error(`Falha ao carregar conquistas (${r.status})`);
         const json = await r.json();
@@ -172,7 +195,7 @@ export default function PaginaPostagem() {
       );
     }
     if (imagemUrl.trim()) {
-      return <img src={formatarUrlFoto(imagemUrl)} className="w-full rounded-lg shadow mb-3 object-cover" />;
+      return <img src={normalizeMediaUrl(imagemUrl)} className="w-full rounded-lg shadow mb-3 object-cover" />;
     }
     if (videoUrl.trim()) {
       return <video src={normalizeMediaUrl(videoUrl)} controls className="w-full rounded-lg shadow mb-3" />;
@@ -232,24 +255,6 @@ export default function PaginaPostagem() {
           })}
         </select>
         {previewConquista}
-
-        <input
-          type="text"
-          className="w-full border rounded p-3 mt-4 mb-2"
-          placeholder="URL da imagem (ex.: https://... ou /uploads/minha-imagem.jpg)"
-          value={imagemUrl}
-          onChange={(e) => setImagemUrl(e.target.value)}
-          disabled={!!arquivo}
-        />
-
-        <input
-          type="text"
-          className="w-full border rounded p-3 mb-4"
-          placeholder="URL do vídeo (opcional)"
-          value={videoUrl}
-          onChange={(e) => setVideoUrl(e.target.value)}
-          disabled={!!arquivo}
-        />
 
         <div className="text-sm text-gray-600 mb-2">— ou —</div>
 

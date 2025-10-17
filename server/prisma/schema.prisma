@@ -365,7 +365,8 @@ model Postagem {
   escolinha         Escolinha?   @relation(fields: [escolinhaId], references: [id])
   usuario           Usuario      @relation(fields: [usuarioId], references: [id])
 
-  @@index([repostOfId])  
+  @@index([repostOfId])
+  @@unique([usuarioId, conteudo, repostOfId]) 
 }
 
 model Midia {

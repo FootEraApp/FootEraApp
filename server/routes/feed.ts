@@ -46,7 +46,7 @@ const router = Router();
 
 router.use(authenticateToken);
 
-router.post("/posts/:id/repost", authenticateToken, repostPost);
+router.post("/:id/repost", authenticateToken, repostPost);
 router.get("/perfil/:id", authenticateToken, getPerfil);
 router.delete("/usuario/:id", adminAuth, deletarUsuario);
 router.post("/seguir", seguirUsuario);
