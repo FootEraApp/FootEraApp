@@ -226,9 +226,9 @@ function PaginaFeed(): JSX.Element {
         : filtro === "meus" && uid
           ? dados.filter(p => p.usuario?.id === uid || (p as any).usuarioId === uid)
         : dados;
-      setPosts(filtrado);
+
       const unicos = Array.from(new Map(filtrado.map(p => [p.id, p])).values());
-      setPosts(unicos);
+      setPosts(unicos);                   // ✅ remova o setPosts(filtrado) anterior
     }
     carregar();
   }, [filtro]);
@@ -456,21 +456,21 @@ function PaginaFeed(): JSX.Element {
                 </button>
               )}
             </div>
-            {post.repostOf && (
-              <div className="text-xs text-gray-500 -mt-1">
-                Repostou de <strong>{post.repostOf.usuario?.nome || "Usuário"}</strong>
-              </div>
-            )}
-
+            
             <div>
               {post.repostOf ? (
                 <>
-                  {post.conteudo?.trim() && (
-                    <p className="text-gray-800 font-medium whitespace-pre-line mb-2">
-                      {post.conteudo}
-                    </p>
-                  )}
+                  {/* comentário do repost (sanitizado) */}
+                  {(() => {
+                    const comment = (post.conteudo || "").replace(/\u200B\d+$/, "");
+                    return comment.trim() ? (
+                      <p className="text-gray-800 font-medium whitespace-pre-line mb-2">
+                        {comment}
+                      </p>
+                    ) : null;
+                  })()}
 
+                  {/* card do post original */}
                   <div className="border rounded-xl p-3 bg-gray-50">
                     <div className="flex items-center gap-2 mb-1">
                       <img

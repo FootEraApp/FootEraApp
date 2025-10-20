@@ -55,20 +55,17 @@ export async function listarObservados(req: Request, res: Response) {
 
   const rows = await prisma.atletaObservado.findMany({
     where: owner,
-    include: {
-      atleta: {
-        include: { usuario: true },
-      },
-    },
+    include: { atleta: { include: { usuario: true } } },
     orderBy: { criadoEm: "desc" },
   });
 
-  const incluirPontuacao =
-    String(req.query.incluirPontuacao ?? "").trim() !== "";
+  const incluirPontuacao = String(req.query.incluirPontuacao ?? "").trim() !== "";
 
   const lista = rows.map((r) => ({
-    id: r.atletaId,
+    // id que o front usa no href /perfil/:id  -> preferir o id do USUÁRIO
+    id: r.atleta?.usuario?.id ?? r.atleta?.usuarioId ?? r.atletaId,
     usuarioId: r.atleta?.usuario?.id ?? r.atleta?.usuarioId ?? "",
+    atletaId: r.atletaId,
     nome: r.atleta?.usuario?.nome ?? "Atleta",
     foto: r.atleta?.usuario?.foto ?? null,
     posicao: (r as any).atleta?.posicao ?? null,
@@ -90,7 +87,6 @@ export async function observarAtleta(req: Request, res: Response) {
   const owner = await resolveOwner(req);
   const keys = ["professorId", "escolinhaId", "clubeId", "olheiroId"] as const;
   const presentes = keys.filter(k => (owner as any)[k]);
-
   if (presentes.length !== 1) {
     return res.status(403).json({
       error: "Seu perfil precisa estar vinculado a um(a) professor/escola/clube/olheiro para observar atletas."
@@ -99,10 +95,13 @@ export async function observarAtleta(req: Request, res: Response) {
 
   const where = { atletaId, ...owner };
   const jaExiste = await prisma.atletaObservado.findFirst({ where });
-  if (jaExiste) return res.status(409).json({ ok: true, message: "Já observando" });
+  if (jaExiste) {
+    // <-- idempotente
+    return res.status(200).json({ ok: true, observando: true, id: jaExiste.id });
+  }
 
-  await prisma.atletaObservado.create({ data: where });
-  return res.status(201).json({ ok: true });
+  const row = await prisma.atletaObservado.create({ data: where });
+  return res.status(201).json({ ok: true, observando: true, id: row.id });
 }
 
 export async function pararDeObservar(req: Request, res: Response) {
@@ -110,11 +109,8 @@ export async function pararDeObservar(req: Request, res: Response) {
   if (!atletaId) return res.status(400).json({ message: "atletaId é obrigatório" });
 
   const owner = await resolveOwner(req);
-  const item = await prisma.atletaObservado.findFirst({ where: { atletaId, ...owner } });
-  if (!item) return res.status(404).json({ message: "Não encontrado" });
-
   await prisma.atletaObservado.deleteMany({ where: { atletaId, ...owner } });
-  res.json({ ok: true });
+  return res.sendStatus(204); // <-- idempotente
 }
 
 export async function listarObservadosPorOlheiro(req: Request, res: Response) {

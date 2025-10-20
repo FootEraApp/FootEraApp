@@ -6,6 +6,45 @@ import { listarObservadosPorOlheiro } from "../controllers/atletaObservadoContro
 const prisma = new PrismaClient();
 const router = Router();
 
+router.get("/:id/indicacoes", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const lista = await prisma.indicacao.findMany({
+      where: { olheiroId: id },
+      orderBy: { criadoEm: "desc" },
+      select: {
+        id: true,
+        criadoEm: true,
+        status: true,
+        atleta: { select: { id: true, nome: true, foto: true } },
+        clube:  { select: { id: true, nome: true, logo: true } },
+      },
+    });
+
+    // deixa no shape que o front espera
+    const itens = (lista || []).map(i => ({
+      id: i.id,
+      criadoEm: i.criadoEm,
+      status: i.status,
+      atleta: {
+        id: i.atleta?.id ?? "",
+        nome: i.atleta?.nome ?? "",
+        foto: i.atleta?.foto ?? null,
+      },
+      clube: {
+        id: i.clube?.id ?? "",
+        nome: i.clube?.nome ?? "",
+        logo: i.clube?.logo ?? null,
+      },
+    }));
+
+    res.json(itens);
+  } catch (e) {
+    console.error("GET /api/olheiros/:id/indicacoes", e);
+    res.status(500).json({ error: "Falha ao carregar indicações do olheiro." });
+  }
+});
+
 router.get("/perfil/olheiro/:id", async (req, res) => {
   try {
     let { id } = req.params;

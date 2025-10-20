@@ -366,7 +366,7 @@ export async function repostPost(req: Request, res: Response) {
     const novo = await prisma.postagem.create({
       data: {
         usuarioId: userId,
-        conteudo: comentario || "",  
+        conteudo: comentario || "" || hidden, // agora pode ser vazio sem violar unique
         repostOfId: original.id,
       },
       include: {

@@ -14,12 +14,16 @@ router.use(authenticateToken);
 
 router.post("/:id/aceitar", solicitacoesTreinoController.aceitar);
 router.post("/:id/recusar", recusarSolicitacao);
+
 router.post("/", criarSolicitacao);
 router.get("/minhas", listarSolicitacoesMinhas);
 router.get("/", listarSolicitacoesRecebidas);
 
-router.delete("/", cancelarSolicitacao);
-router.delete("/:destinatarioId", cancelarSolicitacao);
+// ---- cancelamento (três formas) ----
+router.delete("/id/:id", cancelarSolicitacao);              // por ID da solicitação
+router.delete("/dest/:destinatarioId", cancelarSolicitacao); // por destinatário
+router.delete("/", cancelarSolicitacao);                     // por body { destinatarioId }
+router.post("/cancelar", cancelarSolicitacao);               // compat
 
 router.put("/:id", async (req, res) => {
   try {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
-  CalendarClock, Activity, PlusCircle, ChevronRight,
+  Activity, PlusCircle, CirclePlus, ChevronRight, House, Search, User, Eye
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
@@ -10,11 +10,8 @@ import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 
 type Props = { idDaUrl?: string };
-
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null; nomeDeUsuario?: string };
-
 type Note = { texto: string; saving: boolean; dirty: boolean };
-
 type PayloadOlheiro = {
   tipo: "Olheiro";
   usuario: UsuarioMin | null;
@@ -182,16 +179,14 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
     }
 
     async function fetchObservados() {
-      const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.olheiro?.id) ?? null;
-      if (!tipoId) { if (!cancel.v) setObservados([]); return; }
       try {
         const { data: lista } = await axios.get<AtletaItem[]>(
-          `${API.BASE_URL}/api/olheiros/${tipoId}/observados`,
-          { headers }
+          `${API.BASE_URL}/api/observados`,
+          { headers, params: { incluirPontuacao: 1 } }
         );
-        if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
+        setObservados(Array.isArray(lista) ? lista : []);
       } catch {
-        if (!cancel.v) setObservados([]);
+        setObservados([]);
       }
     }
 
@@ -336,11 +331,7 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
     data.olheiro.totalIndicacoes ??
     0;
 
-  const atletasCount =
-    data.metrics?.atletasAcompanhados ??
-    data.metrics?.observados ??
-    0;
-
+  const atletasCount = (observados?.length ?? data.metrics?.observados ?? data.metrics?.atletasAcompanhados ?? 0);
 
   const time = clubeColab?.nome || "Olheiro";
 
@@ -349,7 +340,7 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
   const atletasAssinados = data.metrics?.atletasAssinados ?? undefined;
   
   return (
-    <div className="max-w-md mx-auto">
+    <div className="max-w-md mx-auto pb-20">
       <ProfileHeader
         nome={nome}
         time={time}
@@ -702,7 +693,6 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
           </SectionCard>
         </div>
       )}
-
       <div className="h-6" />
     </div>
   );

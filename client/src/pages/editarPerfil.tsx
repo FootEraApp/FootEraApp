@@ -7,6 +7,12 @@ import { API } from '../config.js';
 type ResultadoBuscaClube = { id: string; nome: string; username?: string; fotoUrl?: string | null; };
 type OptionMin = { id: string; nome: string };
 
+// normaliza string vazia -> null
+function nullIfEmpty<T>(v: T) {
+  // @ts-ignore
+  return v === "" ? null : v;
+}
+
 const EditarPerfil = () => {
   const usuarioId = Storage.usuarioId;
   const tipoUsuarioOriginal = Storage.tipoSalvo;
@@ -433,74 +439,137 @@ useEffect(() => {
 
       {renderCamposEspecificos()}
 
-      <button
-        className="bg-green-700 text-white px-4 py-2 rounded hover:bg-green-600"
-        onClick={async () => {
-          try {
-            let fotoUrl = dadosUsuario.foto;
+          <button
+            className="bg-green-700 text-white px-4 py-2 rounded hover:bg-green-600"
+            onClick={async () => {
+              // (a) normaliza e valida o username ANTES de enviar
+            const rawUsername = (dadosUsuario.nomeDeUsuario ?? "").trim();
+            if (rawUsername) {
+              const username = rawUsername.toLowerCase();     // força minúsculas
+              dadosUsuario.nomeDeUsuario = username;          // grava normalizado
 
-            if (dadosUsuario.foto instanceof File) {
-              const formData = new FormData();
-              formData.append("foto", dadosUsuario.foto);
-              formData.append("usuarioId", usuarioId!);
-              formData.append("tipo", tipoUsuarioOriginal!);
-              const uploadRes = await axios.post(`${API.BASE_URL}/api/upload/perfil`, formData, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              fotoUrl = uploadRes.data.url;
-            }
-
-            const tipo: any = { ...dadosTipo };
-
-            if (tipo.siteOficial && !tipo.site) tipo.site = tipo.siteOficial;
-
-            tipo.colaboracaoClubeId = clubeSel?.id ?? tipo.colaboracaoClubeId ?? null;
-            if (tipo.colaboracaoClube) delete tipo.colaboracaoClube;
-
-            delete tipo.escola;
-            delete tipo.clube;
-
-            if (escolinhaSelId === null)       tipo.escolinhaId = null; 
-            else if (typeof escolinhaSelId === "string") tipo.escolinhaId = escolinhaSelId;
-
-            if (clubeSelId === null)           tipo.clubeId = null;
-            else if (typeof clubeSelId === "string")     tipo.clubeId = clubeSelId;
-
-            if (typeof tipo.categorias === "string") {
-              tipo.categorias = tipo.categorias
-                .split(",")
-                .map((s: string) => s.trim())
-                .filter(Boolean);
-            }
-
-            if (typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== "") {
-              const n = Number(tipo.anosExperiencia);
-              tipo.anosExperiencia = Number.isNaN(n) ? undefined : n;
-            }
-            if (tipoUsuarioOriginal === "professor") {
-              if (typeof tipo.qualificacoes === "string") {
-                tipo.qualificacoes = tipo.qualificacoes.split(",").map((q: string) => q.trim()).filter(Boolean);
-              }
-              if (typeof tipo.certificacoes === "string") {
-                tipo.certificacoes = tipo.certificacoes.split(",").map((c: string) => c.trim()).filter(Boolean);
+              // sem o flag /i, pois já normalizamos para minúsculas
+              if (!/^[a-z0-9._]{3,30}$/.test(username)) {
+                alert("Nome de usuário inválido. Use letras, números, ponto e underline (3–30).");
+                return;
               }
             }
 
-            await axios.put(`${API.BASE_URL}/api/perfil/${usuarioId}`, {
-              usuario: { ...dadosUsuario, foto: fotoUrl },
-              tipo,
-              tipoUsuario: String(tipoUsuarioOriginal).toLowerCase(),
-            }, { headers: { Authorization: `Bearer ${token}` } });
+              try {
+                // (b) upload da foto, se preciso
+                let fotoUrl = dadosUsuario.foto;
+                if (dadosUsuario.foto instanceof File) {
+                  const formData = new FormData();
+                  formData.append("foto", dadosUsuario.foto);
+                  formData.append("usuarioId", usuarioId!);
+                  formData.append("tipo", tipoUsuarioOriginal!);
+                  const uploadRes = await axios.post(`${API.BASE_URL}/api/upload/perfil`, formData, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  fotoUrl = uploadRes.data.url;
+                }
 
-            alert("Dados atualizados com sucesso!");
-            window.location.href = "/perfil";
-          } catch (err) {
-            alert("Erro ao salvar os dados.");
-          }
-        }}
-      >
-        Salvar Alterações
-      </button>
+                // (c) monta e normaliza o objeto "tipo"
+                const tipo: any = { ...dadosTipo };
+
+                if (tipo.siteOficial && !tipo.site) tipo.site = tipo.siteOficial;
+
+                // seleção de clube colaborador (olheiro)
+                tipo.colaboracaoClubeId = clubeSel?.id ?? tipo.colaboracaoClubeId ?? null;
+                if (tipo.colaboracaoClube) delete tipo.colaboracaoClube;
+
+                // limpar campos que não devem ir
+                delete tipo.escola;
+                delete tipo.clube;
+
+                // selects (atleta)
+                if (escolinhaSelId === null)             tipo.escolinhaId = null;
+                else if (typeof escolinhaSelId === "string") tipo.escolinhaId = escolinhaSelId;
+
+                if (clubeSelId === null)                 tipo.clubeId = null;
+                else if (typeof clubeSelId === "string")     tipo.clubeId = clubeSelId;
+
+                // arrays vindos como string
+                if (typeof tipo.categorias === "string") {
+                  tipo.categorias = tipo.categorias
+                    .split(",")
+                    .map((s: string) => s.trim())
+                    .filter(Boolean);
+                }
+
+                // conversões numéricas
+                if (typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== "") {
+                  const n = Number(tipo.anosExperiencia);
+                  tipo.anosExperiencia = Number.isNaN(n) ? undefined : n;
+                }
+
+                // normalizar vazios -> null (contatos olheiro)
+                tipo.emailPublico    = nullIfEmpty(tipo.emailPublico);
+                tipo.telefonePublico = nullIfEmpty(tipo.telefonePublico);
+                tipo.siteOuLinkedin  = nullIfEmpty(tipo.siteOuLinkedin);
+
+                // professor: listas
+                if (tipoUsuarioOriginal === "professor") {
+                  if (typeof tipo.qualificacoes === "string") {
+                    tipo.qualificacoes = tipo.qualificacoes.split(",").map((q: string) => q.trim()).filter(Boolean);
+                  }
+                  if (typeof tipo.certificacoes === "string") {
+                    tipo.certificacoes = tipo.certificacoes.split(",").map((c: string) => c.trim()).filter(Boolean);
+                  }
+                }
+                 // (d) PUT principal
+                  try {
+                    await axios.put(
+                      `${API.BASE_URL}/api/perfil/${usuarioId}`,
+                      {
+                        usuario: { ...dadosUsuario, foto: fotoUrl },
+                        tipo,
+                        tipoUsuario: String(tipoUsuarioOriginal).toLowerCase(),
+                      },
+                      { headers: { Authorization: `Bearer ${token}` } }
+                    );
+                  } catch (err: any) {
+                    console.error("[EditarPerfil] PUT /perfil erro:", err?.response?.status, err?.response?.data, err?.message);
+                    alert(err?.response?.data?.error || err?.message || "Erro ao salvar os dados (PUT).");
+                    return; // evita tentar PATCH se o PUT falhou
+                  }
+
+                  // (e) PATCH extra (apenas para OLHEIRO) para vincular colaboracaoClubeId
+                  if (tipoRender === "olheiro") {
+                    const olheiroId = dadosTipo?.id ?? Storage.tipoUsuarioId; // fallback
+                    if (olheiroId) {
+                      try {
+                        await axios.patch(
+                          `${API.BASE_URL}/api/olheiros/${olheiroId}`,
+                          { colaboracaoClubeId: clubeSel?.id ?? null },
+                          { headers: { Authorization: `Bearer ${token}` } }
+                        );
+                      } catch (err: any) {
+                        console.error("[EditarPerfil] PATCH /olheiros erro:", err?.response?.status, err?.response?.data, err?.message);
+                        alert(err?.response?.data?.error || err?.message || "Erro ao salvar os dados (PATCH).");
+                        return;
+                      }
+                    }
+                  }
+
+                  // sucesso só depois dos dois passos passarem
+                  alert("Dados atualizados com sucesso!");
+                  window.location.href = "/perfil";
+                } catch (err: any) {
+                // (f) tratamento de erro detalhado
+                console.error("[EditarPerfil] PUT /perfil erro:", err?.response?.status, err?.response?.data);
+                const msg =
+                  err?.response?.data?.error ||
+                  err?.response?.data?.message ||
+                  err?.message ||
+                  "Erro ao salvar os dados.";
+                alert(msg);
+              }
+            }}
+          >
+            Salvar Alterações
+          </button>
+
     </div>
   );
 };

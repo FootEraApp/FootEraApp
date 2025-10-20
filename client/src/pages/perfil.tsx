@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";
-import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { Volleyball, User, CirclePlus, Search, House, Eye } from "lucide-react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
@@ -84,7 +84,11 @@ export default function ProfilePage() {
         <Link href="/feed"><House /></Link>
         <Link href="/explorar"><Search /></Link>
         <Link href="/post"><CirclePlus /></Link>
-        <Link href="/treinos"><Volleyball /></Link>
+        {tipo === "Olheiro" ? (
+          <Link href="/olheiros"><Eye /></Link>
+        ) : (
+          <Link href="/treinos"><Volleyball /></Link>
+        )}
         <Link href="/perfil"><User /></Link>
       </nav>
     </div>
