@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import axios from "axios";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
+import { House, Search, CirclePlus, Eye, User } from "lucide-react";
 
 type Atleta = {
   id: string;     
@@ -104,14 +105,14 @@ export default function PainelOlheiro() {
   const total = obs.length;
 
   return (
-    <div className="mx-auto max-w-2xl p-4">
+    <div className="mx-auto max-w-2xl p-4 pb-20">
       <div className="mb-3 flex items-end justify-between">
         <h1 className="text-xl font-bold text-green-900">Painel do Olheiro</h1>
         <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800 border border-green-200">
           {total} observado{total === 1 ? "" : "s"}
         </span>
       </div>
-
+      
       {loading ? (
         <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -172,6 +173,13 @@ export default function PainelOlheiro() {
                   >
                     Indicar
                   </Link>
+                   <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
+                    <Link href="/feed"><House /></Link>
+                    <Link href="/explorar"><Search /></Link>
+                    <Link href="/post"><CirclePlus /></Link>
+                    <Link href="/olheiros"><Eye /></Link>
+                    <Link href="/perfil"><User /></Link>
+                   </nav>
                 </div>
               </li>
             );

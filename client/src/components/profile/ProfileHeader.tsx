@@ -80,6 +80,7 @@ export default function ProfileHeader({
   const [carregandoObs, setCarregandoObs] = useState(false);
   const [podeObservar, setPodeObservar] = useState(false);
 
+  const obsKey = Storage.usuarioId && alvoAtletaId ? `obs_${Storage.usuarioId}_${alvoAtletaId}` : null;
   const storageKey = `tj_${Storage.usuarioId}_${perfilId}`;
 
   const [confirmBox, setConfirmBox] = useState<{
@@ -246,18 +247,27 @@ export default function ProfileHeader({
   }, [perfilId, isOwnProfile]);
 
   useEffect(() => {
-  if (!podeObservar || isOwnProfile || !alvoAtletaId) return;
-  const token = Storage.token; if (!token) return;
+    if (!podeObservar || isOwnProfile || !alvoAtletaId) return;
+    // pinta pelo cache
+    if (obsKey) setObservando(localStorage.getItem(obsKey) === "1");
 
-  setCarregandoObs(true);
-  fetch(`${API.BASE_URL}/api/observados/status/${encodeURIComponent(alvoAtletaId)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-    .then(r => (r.ok ? r.json() : null))
-    .then(j => setObservando(!!j?.observando))
-    .catch(() => setObservando(false))
-    .finally(() => setCarregandoObs(false));
-}, [podeObservar, isOwnProfile, alvoAtletaId]);
+    const token = Storage.token; if (!token) return;
+    setCarregandoObs(true);
+    fetch(`${API.BASE_URL}/api/observados/status/${encodeURIComponent(alvoAtletaId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => {
+        const val = !!j?.observando;
+        setObservando(val);
+        if (obsKey) {
+          if (val) localStorage.setItem(obsKey, "1");
+          else localStorage.removeItem(obsKey);
+        }
+      })
+      .catch(() => setObservando(false))
+      .finally(() => setCarregandoObs(false));
+  }, [podeObservar, isOwnProfile, alvoAtletaId]);
 
   const iniciarChat = () => {
     const me = Storage.usuarioId;
@@ -294,70 +304,95 @@ export default function ProfileHeader({
   }, [perfilId, kpis]);
 
   async function resolverAtletaIdSePreciso(): Promise<string | null> {
-  if (alvoAtletaId) return alvoAtletaId;
-  const token = Storage.token; if (!token) return null;
+    if (alvoAtletaId) return alvoAtletaId;
+    const token = Storage.token; if (!token) return null;
 
-  try {
-    const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(perfilId)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (r.ok) {
-      const data = await r.json();
-      const id1 = pickAtletaId(data, perfilId);
-      if (id1) { setAlvoAtletaId(id1); return id1; }
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(perfilId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) {
+        const data = await r.json();
+        const id1 = pickAtletaId(data, perfilId);
+        if (id1) { setAlvoAtletaId(id1); return id1; }
+      }
+    } catch {}
+
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/observados/resolve/${encodeURIComponent(perfilId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.status === 404) { alert("Este perfil não tem cadastro de atleta."); return null; }
+      if (!r.ok) return null;
+      if (r.ok) {
+        const j = await r.json();
+        const id2 = j?.atletaId || j?.id || null;
+        if (id2) { setAlvoAtletaId(id2); return id2; }
+      }
+    } catch {}
+
+    return null;
+  }
+
+    async function readBodySafe(r: Response) {
+      try { return await r.json(); } catch { return null; }
     }
-  } catch {}
-
-  try {
-    const r = await fetch(`${API.BASE_URL}/api/observados/resolve/${encodeURIComponent(perfilId)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (r.status === 404) { alert("Este perfil não tem cadastro de atleta."); return null; }
-    if (!r.ok) return null;
-    if (r.ok) {
-      const j = await r.json();
-      const id2 = j?.atletaId || j?.id || null;
-      if (id2) { setAlvoAtletaId(id2); return id2; }
+    function isDuplicado(resp: Response, body: any) {
+      if (resp.status === 400 || resp.status === 409) return true;
+      const msg = (body?.error || body?.message || "").toString().toLowerCase();
+      return msg.includes("já segue") || msg.includes("ja segue") || msg.includes("já existe") || msg.includes("pendente");
     }
-  } catch {}
 
-  return null;
-}
+    async function deixarDeSeguir(alvoId: string) {
+      const token = Storage.token;
+      const r = await fetch(`${API.BASE_URL}/api/seguidores/`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ seguidoUsuarioId: alvoId }),
+      });
+      return r.ok;
+    }
 
-  async function readBodySafe(r: Response) {
-    try { return await r.json(); } catch { return null; }
-  }
-  function isDuplicado(resp: Response, body: any) {
-    if (resp.status === 400 || resp.status === 409) return true;
-    const msg = (body?.error || body?.message || "").toString().toLowerCase();
-    return msg.includes("já segue") || msg.includes("ja segue") || msg.includes("já existe") || msg.includes("pendente");
-  }
+    async function cancelarSolicitacaoTreino(usuarioAlvoId: string) {
+      const token = Storage.token;
+      if (!token) return false;
 
-  async function deixarDeSeguir(alvoId: string) {
-    const token = Storage.token;
-    const r = await fetch(`${API.BASE_URL}/api/seguidores/`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ seguidoUsuarioId: alvoId }),
-    });
-    return r.ok;
-  }
+      // 1) pega o id da solicitação pendente com esse usuário
+      let solicitacaoId: string | null = null;
+      try {
+        const r = await fetch(`${API.BASE_URL}/api/solicitacoes-treino/minhas`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (r.ok) {
+          const arr = await r.json();
+          const pend = (arr || []).find((x: any) => {
+            const envolve = [x.destinatarioId, x.solicitanteId, x.usuarioId, x.userId]
+              .includes(usuarioAlvoId);
+            const s = String(x.status || "");
+            return /pend|solic|aguard|ativ|aprov|aceit/i.test(s);
+          });
+          solicitacaoId = pend?.id ?? null;
+        }
+      } catch {}
 
-  async function cancelarSolicitacaoTreino(destinatarioId: string) {
-    const token = Storage.token;
-    const del = await fetch(`${API.BASE_URL}/api/solicitacoes-treino/${destinatarioId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (del.ok) return true;
-    if (del.status !== 404) return false;
-    const post = await fetch(`${API.BASE_URL}/api/solicitacoes-treino/cancelar`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ destinatarioId }),
-    });
-    return post.ok;
-  }
+      // 2) se tiver id, cancela por id
+      if (solicitacaoId) {
+        const del = await fetch(
+          `${API.BASE_URL}/api/solicitacoes-treino/${encodeURIComponent(solicitacaoId)}`,
+          { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
+        );
+        return del.ok || del.status === 204;
+      }
+
+      // 3) se não tinha id, tenta cancelar por destinatarioId (idempotente)
+      const delBody = await fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ destinatarioId: usuarioAlvoId }),
+      });
+      // trate 204 e 404 como "ok, nada mais pendente"
+      return delBody.ok || delBody.status === 204 || delBody.status === 404;
+    }
 
   const carregarUsuariosMutuos = async () => {
     const token = Storage.token;
@@ -513,51 +548,59 @@ const toggleTreino = async () => {
   }
 };
 
-const observarAtleta = async (id: string): Promise<"ok"|"dup"|"auth"|"err"> => {
-  try {
-    const token = Storage.token;
-    if (!token || !id) return "auth";
-    const resp = await fetch(`${API.BASE_URL}/api/observados`,{
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ atletaId: id }),
-  });
+  const observarAtleta = async (id: string): Promise<"ok"|"dup"|"auth"|"err"> => {
+    try {
+      const token = Storage.token;
+      if (!token || !id) return "auth";
+      const resp = await fetch(`${API.BASE_URL}/api/observados`,{
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ atletaId: id }),
+    });
 
-  if (resp.ok) return "ok";
-  if (resp.status === 409) return "dup";
-  if (resp.status === 401) return "auth";
-  return "err";
-} catch {
-  return "err";
-}
-};
-
-const toggleObservar = async () => {
-  setCarregandoObs(true);
-  try {
-    const id = await resolverAtletaIdSePreciso();
-    if (!id) { alert("Não foi possível identificar o atleta."); return; }
-
-    if (observando) {
-      const prev = observando;
-      setObservando(false);
-      const del = await fetch(`${API.BASE_URL}/api/observados/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${Storage.token || ""}` },
-      });
-      if (!del.ok) setObservando(prev);
-      return;
-    }
-
-    const r = await observarAtleta(id);
-    if (r === "auth") { alert("Faça login novamente."); return; }
-    if (r === "err")  { alert("Não foi possível observar agora."); return; }
-    setObservando(true);
-  } finally {
-    setCarregandoObs(false);
+    if (resp.ok) return "ok";
+    if (resp.status === 409) return "dup";
+    if (resp.status === 401) return "auth";
+    return "err";
+  } catch {
+    return "err";
   }
-};
+  };
 
+  const toggleObservar = async () => {
+    setCarregandoObs(true);
+    try {
+      const id = await resolverAtletaIdSePreciso();
+      if (!id) { alert("Não foi possível identificar o atleta."); return; }
+
+      if (observando) {
+        const prev = observando;
+        setObservando(false);
+        const del = await fetch(`${API.BASE_URL}/api/observados/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${Storage.token || ""}` },
+        });
+
+        // sucesso (idempotente): ok, 204 ou 404
+        if (del.ok || del.status === 204 || del.status === 404) {
+          if (obsKey) localStorage.removeItem(obsKey);          // <-- AQUI remove do cache
+        } else {
+          setObservando(prev); // rollback
+        }
+        return;
+      }
+
+      const r = await observarAtleta(id);
+      if (r === "auth") { alert("Faça login novamente."); return; }
+      if (r === "err")  { alert("Não foi possível observar agora."); return; }
+
+      // ok ou duplicado
+      setObservando(true);
+      if (obsKey) localStorage.setItem(obsKey, "1");            // <-- AQUI grava no cache
+    } finally {
+      setCarregandoObs(false);
+    }
+  };
 
   const btnBase =
   "rounded-full font-semibold focus:outline-none focus:ring-2 focus:ring-white/40 transition " +
