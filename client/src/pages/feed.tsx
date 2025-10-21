@@ -167,7 +167,7 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
 
   const lines = conteudo.split(/\n+/);
   const head = (lines[0] || "").trim();
-  const rest = (lines.slice(1).join("\n") || "").trim();
+  const rest = (lines.slice[1]?.join("\n") || lines.slice(1).join("\n") || "").trim();
 
   const isHeadAchievement = /^🏆\s*Conquista:/i.test(head);
 
@@ -316,7 +316,10 @@ function PaginaFeed(): JSX.Element {
           : filtro === "meus" && uid
           ? dados.filter((p) => p.usuario?.id === uid || (p as any).usuarioId === uid)
           : dados;
-      setPosts(filtrado);
+
+      // remove duplicados por id
+      const unicos = Array.from(new Map(filtrado.map((p) => [p.id, p])).values());
+      setPosts(unicos);
     }
     carregar();
   }, [filtro]);
@@ -326,6 +329,8 @@ function PaginaFeed(): JSX.Element {
       setPosts((prev) => {
         if (filtro === "meus" && novo.usuario?.id !== Storage.usuarioId) return prev;
         if (filtro === "todos" && novo.usuario?.id === Storage.usuarioId) return prev;
+        if (prev.some((p) => p.id === novo.id)) return prev;
+
         return [novo, ...prev];
       });
     };
@@ -400,12 +405,11 @@ function PaginaFeed(): JSX.Element {
   };
 
   const handleRepost = async (postId: string) => {
-    const uid = Storage.usuarioId;
-    if (!uid) return alert("Sessão expirada. Faça login novamente.");
+    if (!userId) return alert("Sessão expirada. Faça login novamente.");
     const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
     try {
       const novo = await repostPost(postId, comentario);
-      setPosts((prev) => [novo, ...prev]);
+      setPosts((prev) => (prev.some((p) => p.id === novo.id) ? prev : [novo, ...prev]));
     } catch (e) {
       console.error(e);
       alert("Não foi possível repostar.");
@@ -560,6 +564,7 @@ function PaginaFeed(): JSX.Element {
                 </button>
               )}
             </div>
+
             {post.repostOf && (
               <div className="text-xs text-gray-500 -mt-1">
                 Repostou de{" "}
@@ -570,12 +575,17 @@ function PaginaFeed(): JSX.Element {
             <div>
               {post.repostOf ? (
                 <>
-                  {post.conteudo?.trim() && (
-                    <p className="text-gray-800 font-medium whitespace-pre-line">
-                      {post.conteudo}
-                    </p>
-                  )}
+                  {/* comentário do repost (sanitizado) */}
+                  {(() => {
+                    const comment = (post.conteudo || "").replace(/\u200B\d+$/, "");
+                    return comment.trim() ? (
+                      <p className="text-gray-800 font-medium whitespace-pre-line mb-2">
+                        {comment}
+                      </p>
+                    ) : null;
+                  })()}
 
+                  {/* card do post original */}
                   <div className="border rounded-xl p-3 bg-gray-50">
                     <div className="flex items-center gap-2 mb-1">
                       <img

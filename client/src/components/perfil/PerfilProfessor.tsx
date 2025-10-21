@@ -1,17 +1,57 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import {
-  CalendarClock, Activity, PlusCircle, ChevronRight, Trophy,
-} from "lucide-react";
+import { CalendarClock, Activity, PlusCircle, ChevronRight, Trophy } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 
+// ⬇⬇⬇ ADICIONE AQUI
+const ACHIEVEMENTS: Record<
+  string,
+  { title: string; desc: string; tier?: "Bronze" | "Prata" | "Ouro" }
+> = {
+  primeiro_treino_programado: {
+    title: "Primeiro Treino Programado",
+    desc: "Criou 1 treino programado.",
+    tier: "Bronze",
+  },
+  serie_de_treinos: {
+    title: "Série de Treinos",
+    desc: "Criou 5 treinos programados.",
+    tier: "Bronze",
+  },
+  planejamento_solido: {
+    title: "Planejamento Sólido",
+    desc: "Criou 10 treinos programados.",
+    tier: "Prata",
+  },
+  grupo_inicial: {
+    title: "Grupo Inicial",
+    desc: "Treina 5 atletas (vínculo).",
+    tier: "Bronze",
+  },
+  organizador_de_grupo: {
+    title: "Organizador de Desafios em Grupo",
+    desc: "Criou pelo menos 1 desafio em grupo.",
+    tier: "Bronze",
+  },
+};
+// ⬆⬆⬆ FIM DO BLOCO
+
 type Organizacao = { id: string; usuarioId?: string | null; nome: string; tipo: "Escolinha" | "Clube" };
 type Props = { idDaUrl?: string };
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
+// substitua a linha do type PayloadProfessor.metrics por:
+type MetricsProf = {
+  treinosProgramados: number;
+  alunosRelacionados: number;
+  conquistas?: number;              // legado (pode ficar)
+  conquistasUnlocked?: string[];    // <- novo
+  gruposCriados?: number;           // <- novo
+};
+
 type PayloadProfessor = {
   tipo: "Professor";
   usuario: UsuarioMin | null;
@@ -28,11 +68,12 @@ type PayloadProfessor = {
     fotoUrl?: string | null;
     statusCref?: string | null;
   };
-  metrics: { treinosProgramados: number; alunosRelacionados: number; conquistas?: number };
+  metrics: MetricsProf;
 };
 
 type AtletaItem = {
   id: string;
+  usuarioId: string;
   atletaId: string;
   nome: string;
   foto?: string | null;
@@ -50,6 +91,7 @@ type SolicitacaoItem = {
   remetenteId: string;
   remetente: {
     id: string;
+    usuarioId: string;
     nomeDeUsuario: string;
     foto: string | null;
   };
@@ -59,10 +101,12 @@ type SolicitacaoItem = {
 
 type AtividadeRecente = {
   id: string;
-  tipo: "Treino" | "Desafio" | "Vídeo" | "Postagem";
-  titulo: string;
-  criadoEm: string;
+  tipo: "Treino" | "Desafio";
+  nome: string;        // <— era titulo
+  data: string;        // <— era criadoEm
   imagemUrl?: string | null;
+  duracao?: string;
+  pontuacao?: number;
 };
 
 function SectionCard({
@@ -98,7 +142,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
   const [data, setData] = useState<PayloadProfessor | null>(null);
   const [loading, setLoading] = useState(true);
-
+  
   type Aba = "visao" | "atletas" | "conquistas";
   const [aba, setAba] = useState<Aba>("visao");
 
@@ -186,6 +230,38 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   }, [targetId, token]);
 
   useEffect(() => {
+    if (aba !== "atletas" || subAba !== "solicitacoes") return;
+
+    const fetch = async () => {
+      try {
+        const { data } = await axios.get<SolicitacaoItem[]>(
+          `${API.BASE_URL}/api/solicitacoes-treino`,
+          { headers }
+        );
+        setSolicitacoes((Array.isArray(data) ? data : [])
+          .filter(s => (s.status ?? "PENDENTE") === "PENDENTE"));
+      } catch {
+        setSolicitacoes([]);
+      }
+    };
+
+    fetch(); // <-- carrega imediatamente ao entrar na aba
+
+    const onFocus = () => fetch();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [aba, subAba, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    // quando já sabe quem é o professor/usuário alvo, pré-carrega
+    if (data?.professor?.id || data?.usuario?.id) {
+      // chame aqui a mesma função que você usa na aba "vinculados"
+      // ex.: await fetchVinculados();
+    }
+  }, [token, data?.professor?.id, data?.usuario?.id]);
+
+  useEffect(() => {
     if (!token) return;
     const cancel = { v: false };
 
@@ -200,53 +276,76 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         if (!cancel.v) setAtividades([]);
       }
     }
-    if (aba === "visao" && atividades == null) fetchAtividades();
+   
+    async function fetchVinculados() {
+      // priorize SEMPRE o id do professor (tipoUsuarioId). Se não tiver, use usuarioId
+      const tipoId        = isOwn ? Storage.tipoUsuarioId : data?.professor?.id;
+      const usuarioTarget = isOwn ? Storage.usuarioId      : data?.usuario?.id;
 
-    
-async function fetchVinculados() {
-  const tipoId =
-    (isOwn ? Storage.tipoUsuarioId : data?.professor?.id) ?? null;
+      // tente várias formas que o backend pode aceitar
+      const candidates = [
+        { professorId: tipoId, incluirPontuacao: 1 },
+        { tipoUsuarioId: tipoId, incluirPontuacao: 1 },
+        { usuarioId: usuarioTarget, incluirPontuacao: 1 },
+      ].filter(p => Object.values(p)[0]); // remove objetos sem id
 
-  if (!tipoId) {                   
-    if (!cancel.v) setVinculados([]);
-    return;
-  }
-
-  try {
-    const { data: lista } = await axios.get<AtletaItem[]>(
-      `${API.BASE_URL}/api/treinos/atletas-vinculados`,
-      {
-        headers,
-        params: { tipoUsuarioId: tipoId, incluirPontuacao: 1 },
+      let lista: any[] = [];
+      for (const params of candidates) {
+        try {
+          const r = await axios.get(
+            `${API.BASE_URL}/api/treinos/atletas-vinculados`,
+            { headers, params }
+          );
+          const arr = Array.isArray(r.data) ? r.data : (r.data?.items ?? r.data?.data ?? []);
+          if (Array.isArray(arr) && arr.length) { lista = arr; break; }
+          // se veio vazio, tenta o próximo formato de params
+        } catch {
+          // tenta o próximo formato
+        }
       }
-    );
-    if (!cancel.v) setVinculados(Array.isArray(lista) ? lista : []);
-  } catch {
-    if (!cancel.v) setVinculados([]);
-  }
-}
 
-async function fetchObservados() {
-  const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.professor?.id) ?? null;
+      // normaliza e DEDUPLICA por usuarioId (fallback atletaId/id)
+      const arr = (lista || []).map((x: any) => ({
+        id:        x.id ?? x.atletaId ?? x.usuarioId,
+        usuarioId: x.usuarioId ?? x.userId ?? x.usuario?.id ?? null,
+        atletaId:  x.atletaId ?? x.atleta?.id ?? null,
+        nome:      x.nome ?? x.usuario?.nome ?? x.atleta?.nome ?? x.nomeDeUsuario ?? "Atleta",
+        foto:      x.foto ?? x.usuario?.foto ?? x.atleta?.foto ?? null,
+        posicao:   x.posicao ?? x.atleta?.posicao ?? null,
+        idade:     x.idade ?? x.atleta?.idade ?? null,
+        categoria: x.categoria ?? x.atleta?.categoria ?? null,
+        pontuacao: x.pontuacao ?? null,
+      }));
 
-  if (!tipoId) {
-    if (!cancel.v) setObservados([]);
-    return;
-  }
+      const seen = new Set<string>();
+      const unique = arr.filter((a: any) => {
+        const key = String(a.usuarioId || a.atletaId || a.id);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
-  try {
-    const { data: lista } = await axios.get<AtletaItem[]>(
-      `${API.BASE_URL}/api/observados`,
-      {
-        headers,
-        params: { tipoUsuarioId: tipoId, incluirPontuacao: 1 }, 
+      setVinculados(unique);
+    }
+
+    async function fetchObservados() {
+      const usuarioTarget = isOwn ? Storage.usuarioId : data?.usuario?.id;
+      const tipoId        = isOwn ? Storage.tipoUsuarioId : data?.professor?.id; // compat
+
+      const params: any = { incluirPontuacao: 1 };
+      if (usuarioTarget) params.usuarioId = usuarioTarget;
+      if (tipoId)        params.tipoUsuarioId = tipoId;
+
+      try {
+        const { data: lista } = await axios.get<AtletaItem[]>(
+          `${API.BASE_URL}/api/observados`,
+          { headers, params }
+        );
+        setObservados(Array.isArray(lista) ? lista : []);
+      } catch {
+        setObservados([]);
       }
-    );
-    if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
-  } catch {
-    if (!cancel.v) setObservados([]);
-  }
-}
+    }
 
     async function fetchSolicitacoes() {
       try {
@@ -254,20 +353,22 @@ async function fetchObservados() {
           `${API.BASE_URL}/api/solicitacoes-treino`,
           { headers }
         );
-        if (!cancel.v) setSolicitacoes(Array.isArray(data) ? data : []);
+        // mantém só as pendentes
+        setSolicitacoes(Array.isArray(data) ? data.filter(s => (s.status ?? "PENDENTE") === "PENDENTE") : []);
       } catch {
-        if (!cancel.v) setSolicitacoes([]);
+        setSolicitacoes([]);
       }
     }
 
-    if (aba === "atletas") {
-      if (subAba === "vinculados" && vinculados == null) fetchVinculados();
-      if (subAba === "observados" && observados == null) fetchObservados();
-      if (subAba === "solicitacoes" && solicitacoes == null) fetchSolicitacoes();
-    }
+    if (aba === "visao" && atividades == null) fetchAtividades();
 
-    return () => { cancel.v = true; };
-  }, [aba, subAba, targetId, token, data?.professor?.id, atividades, vinculados, observados, solicitacoes]);
+    if (aba === "atletas") {
+      if (subAba === "vinculados")   fetchVinculados();
+      if (subAba === "observados")   fetchObservados();
+      if (subAba === "solicitacoes") fetchSolicitacoes();
+    }
+    // sem return de cleanup aqui, já que não há interval/timeout/evento
+  }, [aba, subAba, token, targetId, data?.usuario?.id, data?.professor?.id]);
 
   if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
   if (!data || !data.professor) return <div className="text-center p-10 text-red-600">Professor não encontrado.</div>;
@@ -278,9 +379,20 @@ async function fetchObservados() {
     (typeof data.professor.fotoUrl === "string" && data.professor.fotoUrl) ||
     undefined;
   const time = data.professor.escola || "Professor";
+    // ids vindos do backend
+  const unlockedIds = data.metrics.conquistasUnlocked ?? [];
 
-  const conquistasCount = data.metrics.conquistas ?? 0;
-   
+  // se quiser contar “gruposCriados > 0” como conquista, some este id virtual
+  const extraFromGrupos =
+    (data.metrics.gruposCriados ?? 0) > 0 ? ["organizador_de_grupo"] : [];
+
+  // lista final de conquistas (sem duplicatas)
+  const unlockedFinal = Array.from(new Set([...unlockedIds, ...extraFromGrupos]));
+
+  // KPI usa o total real que estamos mostrando
+  const conquistasCount = unlockedFinal.length;
+  const alunosCount = vinculados?.length ?? 0; // pare de usar metrics.alunosRelacionados
+
   async function salvarVinculo() {
     if (!token || !professorId || !orgSelecionada) return;
     try {
@@ -305,8 +417,8 @@ async function fetchObservados() {
         foto={headerFoto}
         perfilId={data.usuario?.id || data.professor.usuarioId || data.professor.id}
         kpis={[
-          { label: "Alunos", value: data.metrics.alunosRelacionados ?? 0 },
-          { label: "Treinos", value: data.metrics.treinosProgramados ?? 0 },
+          { label: "Alunos",   value: alunosCount },
+          { label: "Treinos",  value: data.metrics.treinosProgramados ?? 0 },
           { label: "Conquistas", value: conquistasCount },
         ]}
       />
@@ -431,8 +543,8 @@ async function fetchObservados() {
                   <li key={a.id} className="flex items-center gap-3">
                     <CalendarClock className="w-5 h-5 text-green-700" />
                     <div className="text-sm">
-                      <div className="font-medium text-green-900">{a.titulo}</div>
-                      <div className="text-xs text-green-900/70">{new Date(a.criadoEm).toLocaleString()}</div>
+                      <div className="font-medium text-green-900">{a.nome}</div>
+                      <div className="text-xs text-green-900/70">{new Date(a.data).toLocaleString()}</div>
                     </div>
                   </li>
                 ))}
@@ -477,7 +589,7 @@ async function fetchObservados() {
                 {vinculados && vinculados.length > 0 ? (
                   <ul className="grid grid-cols-1 gap-3">
                     {vinculados.map((a) => (
-                      <li key={a.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
+                      <li key={a.usuarioId} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
                         
                         <Avatar
                           foto={a.foto ?? null}
@@ -493,7 +605,7 @@ async function fetchObservados() {
                           </div>
                         </div>
                           <Link
-                            href={`/perfil/${a.id}`}
+                            href={`/perfil/${a.usuarioId}`}
                             className="text-sm text-green-800 inline-flex items-center gap-1"
                           >
                             Ver perfil <ChevronRight className="w-4 h-4" />
@@ -528,7 +640,7 @@ async function fetchObservados() {
                 {observados && observados.length > 0 ? (
                   <ul className="grid grid-cols-1 gap-3">
                     {observados.map((a) => (
-                      <li key={a.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
+                      <li key={a.usuarioId} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
                         
                         <Avatar
                           foto={a.foto ?? null}
@@ -544,7 +656,7 @@ async function fetchObservados() {
                           </div>
                         </div>
                         <Link
-                          href={`/perfil/${a.id}`}
+                          href={`/perfil/${a.usuarioId}`}
                           className="text-sm text-green-800 inline-flex items-center gap-1"
                         >
                           Ver perfil <ChevronRight className="w-4 h-4" />
@@ -617,17 +729,32 @@ async function fetchObservados() {
       )}
 
       {aba === "conquistas" && (
-        <div className="mt-4 px-4 grid gap-4">
-          <SectionCard title="Conquistas e Troféus">
-            {conquistasCount > 0 ? (
+         <div className="mt-4 px-4 grid gap-4">
+          <SectionCard
+            title="Conquistas e Troféus"
+            right={
+              <Link href="/perfil/conquistas" className="text-sm text-green-800">
+                Ver conquistas
+              </Link>
+            }
+          >
+           {unlockedFinal.length > 0 ? (
               <div className="grid grid-cols-2 gap-3">
-                {[...Array(conquistasCount)].map((_, i) => (
-                  <div key={i} className="rounded-xl p-4 border border-green-100 text-center">
-                    <Trophy className="mx-auto mb-2" />
-                    <div className="text-sm font-medium text-green-900">Conquista #{i + 1}</div>
-                    <div className="text-xs text-green-900/70">do professor ou seus atletas</div>
-                  </div>
-                ))}
+                {unlockedFinal.map((id) => {
+                  const a = ACHIEVEMENTS[id] ?? { title: id, desc: "" };
+                  return (
+                    <div key={id} className="rounded-xl p-4 border border-green-100 text-center">
+                      <Trophy className="mx-auto mb-2" />
+                      <div className="text-sm font-medium text-green-900">{a.title}</div>
+                      <div className="text-xs text-green-900/70">{a.desc}</div>
+                      {a.tier && (
+                        <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                          {a.tier}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <EmptyState text="Nenhuma conquista registrada ainda" />

@@ -104,12 +104,19 @@ const FRONT_PORT = Number(process.env.FRONT_PORT) || 5173;
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(
   cors({
-    origin: [FRONTEND_URL, "http://localhost:5173"],
+    origin: [
+      FRONTEND_URL,              // ex.: http://localhost:5173
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+    ],
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], // <— inclui PATCH
+    allowedHeaders: ["Content-Type", "Authorization"],              // <— libera Authorization
   })
 );
+
+// ⬇️ Adicione esta linha para responder ao preflight ANTES das rotas
+app.options("*", cors());
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
@@ -157,8 +164,10 @@ app.use("/api/catalogo", catalogoRoutes);
 app.use("/api/admin", adminRoutes);
 
 import { requireAdmin } from "./middlewares/requireAdmin.js";
+
 app.use("/api/admin/moderacao", authenticateToken, requireAdmin, adminModeracaoRoutes);
 
+app.use("/api/olheiros", authenticateToken, olheirosRouter);
 app.use("/api/atletas", authenticateToken, atletaRoutes);
 app.use("/api/amigos", authenticateToken, amigosRoutes);
 app.use("/api/categorias", authenticateToken, categoriasRoutes);
@@ -197,7 +206,6 @@ app.use("/api/vinculos", authenticateToken, vinculoRoutes);
 app.use("/api/observados", authenticateToken, observadosRoutes);
 app.use("/api/gerenciar", authenticateToken, gerenciarAtletasRoutes);
 app.use("/api/indicacoes", authenticateToken, indicacoesRouter);
-app.use("/api/olheiros", authenticateToken, olheirosRouter);
 app.use("/api/relacoes", authenticateToken, relacoesRoutes);
 app.use("/api/elencos", authenticateToken, elencosRoutes);
 app.use("/api/formadores", authenticateToken, formadoresRoutes);

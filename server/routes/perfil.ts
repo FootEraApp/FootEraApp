@@ -10,8 +10,8 @@ import { authenticateToken } from "../middlewares/auth.js";
 import { PrismaClient } from "@prisma/client";
 import multer from "multer";
 import { getPontuacaoPerfil } from "../controllers/perfilController.js";
-const prisma = new PrismaClient();
 
+const prisma = new PrismaClient();
 const storage = multer.diskStorage({
   destination: function (_req, _file, cb) {
     cb(null, "uploads/");
@@ -66,6 +66,6 @@ router.get("/:id/progresso", authenticateToken, getProgressoTreinos);
 router.get("/:id/posicao-atual", authenticateToken, getPosicaoAtualAtleta);
 
 router.get("/:id", authenticateToken, getPerfilUsuario);
-router.put("/:id", authenticateToken, upload.single("foto"), atualizarPerfil);
+router.put("/:id", authenticateToken, atualizarPerfil);
 
 export default router;

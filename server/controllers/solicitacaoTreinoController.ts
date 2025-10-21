@@ -212,25 +212,78 @@ export async function criarSolicitacao(req: Request, res: Response) {
   return res.status(existente ? 200 : 201).json({ ...row, ok: true });
 }
 
-export async function cancelarSolicitacao(req: Request, res: Response) {
-  const me: string | undefined = (req as any).user?.id || (req as any).userId;
-  const outroId = (req.params as any).destinatarioId || (req.body ?? {}).destinatarioId;
-
-  if (!me) return res.status(401).json({ message: "Não autenticado." });
-  if (!outroId) return res.status(400).json({ message: "destinatarioId é obrigatório" });
-
-  const del = await prisma.solicitacaoTreino.deleteMany({
+async function acharPendente(
+  userId: string,
+  outroUsuarioId: string
+) {
+  if (!userId || !outroUsuarioId) return null;
+  return prisma.solicitacaoTreino.findFirst({
     where: {
-      status: "pendente",
+      status: { in: ["pendente", "ativa"] },
       OR: [
-        { remetenteId: me, destinatarioId: outroId },
-        { remetenteId: outroId, destinatarioId: me },
+        { remetenteId: userId,        destinatarioId: outroUsuarioId },
+        { remetenteId: outroUsuarioId, destinatarioId: userId },
       ],
     },
+    orderBy: { criadoEm: "desc" },
   });
+}
 
-  if (del.count === 0) return res.status(404).json({ message: "Não há solicitação pendente" });
-  return res.sendStatus(204);
+/** Cancela (deleta ou marca como cancelada) uma solicitação pelo ID. */
+async function cancelarPorSolicitacaoId(
+  solicitacaoId: string,
+  userId?: string,
+): Promise<boolean> {
+  if (!solicitacaoId) return false;
+
+  const s = await prisma.solicitacaoTreino.findUnique({ where: { id: solicitacaoId } });
+  if (!s) return false;
+
+  // opcional: garante que o usuário logado faz parte da solicitação
+  if (userId && s.remetenteId !== userId && s.destinatarioId !== userId) return false;
+
+  // deletar (ou marcar como cancelada caso não possa deletar)
+  try {
+    await prisma.solicitacaoTreino.delete({ where: { id: solicitacaoId } });
+  } catch {
+    await prisma.solicitacaoTreino.update({
+      where: { id: solicitacaoId },
+      data: { status: "cancelada" as any },
+    });
+  }
+  return true;
+}
+
+/** Cancela por id OU por destinatarioId (idempotente). */
+export async function cancelarSolicitacao(req: Request, res: Response) {
+  try {
+    const userId: string | undefined = (req as any).user?.id || (req as any).userId;
+
+    // pode vir por url (/:id ou /:destinatarioId), query ou body
+    const solicitacaoId  = (req.params as any).id
+                        || (req.body?.id ?? req.query?.id) || null;
+    const destinatarioId = (req.params as any).destinatarioId
+                        || (req.body?.destinatarioId ?? req.query?.destinatarioId) || null;
+
+    // 1) cancelar pelo ID da solicitação
+    if (solicitacaoId) {
+      await cancelarPorSolicitacaoId(String(solicitacaoId), userId);
+      return res.sendStatus(204); // idempotente
+    }
+
+    // 2) cancelar por destinatário (procura pendente/ativa e cancela)
+    if (userId && destinatarioId) {
+      const pend = await acharPendente(userId, String(destinatarioId));
+      if (!pend) return res.sendStatus(204);
+      await cancelarPorSolicitacaoId(pend.id, userId);
+      return res.sendStatus(204);
+    }
+
+    return res.status(400).json({ error: "Informe id ou destinatarioId" });
+  } catch (e) {
+    console.error("cancelarSolicitacao", e);
+    return res.status(500).json({ error: "Falha ao cancelar solicitação" });
+  }
 }
 
 export async function aceitarSolicitacao(req: Request, res: Response) {

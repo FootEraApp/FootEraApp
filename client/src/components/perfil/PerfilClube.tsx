@@ -101,14 +101,12 @@ export default function PerfilClube({ idDaUrl }: Props) {
 
   const [data, setData] = useState<PayloadClube | null>(null);
   const [loading, setLoading] = useState(true);
-
   const [aba, setAba] = useState<AbaTopo>("perfil");
   const [subAba, setSubAba] = useState<SubAbaAtletas>("vinculados");
-
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[] | null>(null);
-
+  const [vinculadosPreview, setVinculadosPreview] = useState<AtletaItem[]>([]);
   const [observadoEdits, setObservadoEdits] = useState<Record<string, { notaInterna: string; alertarMudancas: boolean }>>({});
   const [savingById, setSavingById] = useState<Record<string, boolean>>({});
   const [errorById, setErrorById] = useState<Record<string, string | null>>({});
@@ -117,23 +115,38 @@ export default function PerfilClube({ idDaUrl }: Props) {
 
   useEffect(() => {
     if (!token) return;
-    const tipoId = tipoIdDoClube;
-    if (!tipoId) { setAtletasHeaderCount(0); return; }
+    const usuarioClubeId = data?.usuario?.id; 
+    if (!usuarioClubeId) { setAtletasHeaderCount(0); setVinculadosPreview([]); return; }
 
     let cancel = false;
     (async () => {
       try {
-        const { data: lista } = await axios.get(
-          `${API.BASE_URL}/api/treinos/atletas-vinculados`,
-          { headers, params: { tipoUsuarioId: tipoId, incluirPontuacao: 1 } }
-        );
-        if (!cancel) setAtletasHeaderCount(Array.isArray(lista) ? lista.length : 0);
+        const params: any = { vinculo: "clube", id: usuarioClubeId, order: "pontuacao_desc" };
+        const resp = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, { headers, params });
+
+        const rows: any[] =
+          Array.isArray(resp.data?.atletas) ? resp.data.atletas :
+          Array.isArray(resp.data) ? resp.data :
+          Array.isArray(resp.data?.items) ? resp.data.items : [];
+
+        if (cancel) return;
+        setAtletasHeaderCount(rows.length);
+        setVinculadosPreview(rows.slice(0, 5).map((r) => ({
+          id: r.id || r.usuarioId || r.atletaId,
+          atletaId: r.atletaId || r.usuarioId || r.id,
+          nome: r.nome,
+          foto: r.foto ?? null,
+          posicao: r.posicao ?? null,
+          categoria: r.categoria ?? null,
+          pontuacao: r.pontuacao ?? null,
+        } as AtletaItem)));
       } catch {
-        if (!cancel) setAtletasHeaderCount(null);
+        if (!cancel) { setAtletasHeaderCount(0); setVinculadosPreview([]); }
       }
     })();
+
     return () => { cancel = true; };
-  }, [token, tipoIdDoClube]);
+  }, [token, data?.usuario?.id]);
 
   useEffect(() => {
     if (!token) return;
@@ -442,40 +455,32 @@ export default function PerfilClube({ idDaUrl }: Props) {
 
           {subAba === "vinculados" && (
             <SectionCard
-              title="Atletas Vinculados"
+              title={`Atletas Vinculados${typeof atletasHeaderCount === "number" ? ` (${atletasHeaderCount})` : ""}`}
               right={
                 <Link href="/perfil/GerenciarAtletas" className="text-sm text-green-800">
                   Gerenciar Atletas
                 </Link>
               }
             >
-              {vinculados && vinculados.length > 0 ? (
-                <ul className="grid grid-cols-1 gap-3">
-                  {vinculados.map((a) => (
-                    <li key={a.atletaId} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-                      <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
+              {vinculadosPreview.length > 0 ? (
+                <ul className="space-y-2">
+                  {vinculadosPreview.map((a) => (
+                    <li key={a.atletaId} className="flex items-center gap-3">
+                      <Avatar foto={a.foto ?? null} alt={a.nome} className="w-9 h-9" />
                       <div className="flex-1">
                         <div className="text-sm font-medium text-green-900">{a.nome}</div>
                         <div className="text-xs text-green-900/70">
-                          {[
-                            a.posicao,
-                            a.idade ? `${a.idade} anos` : "",
-                            a.categoria ? `Cat. ${a.categoria}` : "",
-                            a.pontuacao != null ? `${a.pontuacao} pts` : "",
-                          ].filter(Boolean).join(" • ")}
+                          {[a.posicao, a.categoria, a.pontuacao != null ? `${a.pontuacao} pts` : ""]
+                            .filter(Boolean)
+                            .join(" • ")}
                         </div>
                       </div>
-                      <Link
-                        href={`/perfil/${a.id}`}
-                        className="text-sm text-green-800 inline-flex items-center gap-1"
-                      >
-                        Ver perfil <ChevronRight className="w-4 h-4" />
-                      </Link>
+                      <Link href={`/perfil/${a.id}`} className="text-xs text-green-800">Ver</Link>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <EmptyState text="Nenhum atleta vinculado ainda" />
+                <p className="text-sm text-green-900/70">Nenhum atleta vinculado ainda.</p>
               )}
             </SectionCard>
           )}
