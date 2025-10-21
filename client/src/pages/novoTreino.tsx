@@ -1,4 +1,3 @@
-// client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from "lucide-react";
@@ -192,7 +191,6 @@ export default function NovoTreino() {
 
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
-
   const [prazos, setPrazos] = useState<Record<string, string>>({});
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<Exercicio[]>([]);
   const [treinosDisponiveis, setTreinosDisponiveis] = useState<TreinoProgramado[]>([]);
@@ -200,7 +198,6 @@ export default function NovoTreino() {
   const [atletasSelecionados, setAtletasSelecionados] = useState<string[]>([]);
   const [elencos, setElencos] = useState<Elenco[]>([]);
   const [elencoSelecionado, setElencoSelecionado] = useState<string>("");
-
   const [etapa, setEtapa] = useState<number>(1);
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -211,14 +208,11 @@ export default function NovoTreino() {
   const [tipoTreino, setTipoTreino] = useState<string>("Tecnico");
   const [objetivo, setObjetivo] = useState<string>("");
   const [iniciado, setIniciado] = useState<boolean>(false);
-
   const [exerciciosSelecionados, setExerciciosSelecionados] = useState<ExItemUI[]>([]);
   const [dicas, setDicas] = useState<string[]>([]);
   const [dicaAtual, setDicaAtual] = useState<string>("");
-
   const [filtroEx, setFiltroEx] = useState("");
   const restoredRef = useRef(false);
-
   const [idsProgramadosBloqueados, setIdsProgramadosBloqueados] = useState<Set<string>>(new Set());
   const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
   const [orgSelecionada, setOrgSelecionada] = useState<string>("");
@@ -254,6 +248,52 @@ export default function NovoTreino() {
     })).filter(x => x.id);
   }
 
+  useEffect(() => {
+    const tipo =
+      (Storage as any).tipoSalvo ??
+      localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario") ?? "";
+    if (String(tipo).toLowerCase() !== "atleta") return;
+
+    let cancel = false;
+
+    (async () => {
+      try {
+        const token =
+          (Storage as any).token ||
+          localStorage.getItem("token") ||
+          sessionStorage.getItem("token") || "";
+        if (!token) return;
+
+        const headers = { Authorization: `Bearer ${token}` };
+        const atletaId =
+          (Storage as any).tipoUsuarioId ||
+          localStorage.getItem("tipoUsuarioId") ||
+          sessionStorage.getItem("tipoUsuarioId") || "";
+
+        const tries = [
+          `${API.BASE_URL}/api/treinos/disponiveis${atletaId ? `?atletaId=${encodeURIComponent(atletaId)}` : ""}`,
+          `${API.BASE_URL}/api/treinos/programados`,
+        ];
+
+        let lista: any[] = [];
+        for (const url of tries) {
+          const r = await fetch(url, { headers });
+          if (!r.ok) continue;
+          const j = await r.json();
+          const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
+          if (Array.isArray(arr)) { lista = arr; break; }
+        }
+
+        if (!cancel) setTreinosDisponiveis(normalizaTreinos(lista || []));
+      } catch (e) {
+        console.error("Falha ao carregar treinos disponíveis:", e);
+        if (!cancel) setTreinosDisponiveis([]);
+      }
+    })();
+
+    return () => { cancel = true; };
+  }, []); 
   useEffect(() => {
     (async () => {
       try {

@@ -1,4 +1,3 @@
-// client/src/pages/gerenciarAtletas
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, House } from "lucide-react";
@@ -445,7 +444,6 @@ const GerenciarAtletas: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
-      {/* Botão voltar p/ perfil (estático) */}
       <div className="mb-3">
         <Link
           href="/perfil"

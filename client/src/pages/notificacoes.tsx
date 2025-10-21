@@ -1,4 +1,3 @@
-// client/src/pages/notificacoes
 import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
@@ -75,7 +74,6 @@ export default function PaginaNotificacoes() {
 
   return (
     <div className="p-4 max-w-xl mx-auto">
-      {/* Botão voltar p/ perfil (estático) */}
       <div className="mb-3">
         <Link
           href="/perfil"

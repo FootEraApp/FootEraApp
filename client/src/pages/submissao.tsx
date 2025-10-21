@@ -5,7 +5,6 @@ import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 
 export default function PaginaSubmissao() {
-  // ====== Persistência: tentativas (DESAFIO) ======
   const ATTEMPT_LIMIT = 2;
   const STORAGE_KEY_PREFIX = "footera:desafioAttempts";
 
@@ -45,7 +44,6 @@ export default function PaginaSubmissao() {
     dualStorage.setItem(attemptKey(desafioId, atletaId), String(Math.min(ATTEMPT_LIMIT, Math.max(0, n))));
   };
 
-  // ====== Persistência: VÍDEO de DESAFIO (IndexedDB) ======
   const IDB_NAME = "footera-media";
   const IDB_STORE = "desafio-videos";
   const IDB_VERSION = 1;
@@ -128,19 +126,14 @@ export default function PaginaSubmissao() {
     } catch {}
   }
 
-  // ====== Estados comuns ======
   const [observacao, setObservacao] = useState("");
   const [treinoAgendadoId, setTreinoAgendadoId] = useState<string | null>(null);
   const [desafioId, setDesafioId] = useState<string | null>(null);
   const [atletaId, setAtletaId] = useState<string | null>(null);
   const [tempoTexto, setTempoTexto] = useState("");
   const [reps, setReps] = useState<string>("");
-
-  // UPLOAD de treino
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-
-  // Gravação ao vivo (DESAFIO)
   const [isRecording, setIsRecording] = useState(false);
   const [attemptsUsed, setAttemptsUsed] = useState<number>(0);
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
@@ -150,8 +143,6 @@ export default function PaginaSubmissao() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const liveVideoRef = useRef<HTMLVideoElement | null>(null);
-
-  // ====== NOVO: Gravação ao vivo (TREINO, sem limite) ======
   const [treinoMode, setTreinoMode] = useState<"upload" | "live">("upload");
   const [treinoIsRecording, setTreinoIsRecording] = useState(false);
   const [treinoRecordedBlob, setTreinoRecordedBlob] = useState<Blob | null>(null);
@@ -199,26 +190,21 @@ export default function PaginaSubmissao() {
       if (treinoRecordedUrl) URL.revokeObjectURL(treinoRecordedUrl);
       if (preview) URL.revokeObjectURL(preview);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location]);
 
-  // Carrega tentativas salvas (DESAFIO)
   useEffect(() => {
     if (desafioId && atletaId) {
       const n = loadAttempts(desafioId, atletaId);
       if (n !== attemptsUsed) setAttemptsUsed(n);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [desafioId, atletaId]);
 
-  // Persiste tentativas (DESAFIO)
   useEffect(() => {
     if (isDesafio && desafioId && atletaId) {
       saveAttempts(desafioId, atletaId, attemptsUsed);
     }
   }, [attemptsUsed, isDesafio, desafioId, atletaId]);
 
-  // Carregar VÍDEO salvo (DESAFIO)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -246,7 +232,6 @@ export default function PaginaSubmissao() {
     }
   };
 
-  // ====== DESAFIO: gravação ======
   async function startRecording() {
     setRecError(null);
     try {
@@ -358,7 +343,6 @@ export default function PaginaSubmissao() {
     }
   }
 
-  // ====== TREINO: gravação (sem limite) ======
   async function startRecordingTreino() {
     setTreinoRecError(null);
     try {
@@ -450,7 +434,6 @@ export default function PaginaSubmissao() {
     setTreinoRecordedBlob(null);
   }
 
-  // ====== Envio ======
   const handleEnviar = async () => {
     if (!atletaId || (!treinoAgendadoId && !desafioId)) {
       alert("Preencha todos os campos obrigatórios.");
@@ -464,7 +447,6 @@ export default function PaginaSubmissao() {
     let url = "";
 
     if (isTreino) {
-      // Aceitar upload OU gravação ao vivo (sem limite)
       if (treinoMode === "live") {
         if (!treinoRecordedBlob) {
           alert("Grave um vídeo do treino antes de enviar.");
@@ -517,13 +499,11 @@ export default function PaginaSubmissao() {
         alert(msg);
 
         if (isTreino) {
-          // reset upload
           setArquivo(null);
           if (preview) {
             URL.revokeObjectURL(preview);
             setPreview(null);
           }
-          // reset live
           if (treinoRecordedUrl) URL.revokeObjectURL(treinoRecordedUrl);
           setTreinoRecordedUrl(null);
           setTreinoRecordedBlob(null);
@@ -542,7 +522,6 @@ export default function PaginaSubmissao() {
           if (desafioId && atletaId) {
             await clearRecordedVideo(desafioId, atletaId);
           }
-          // setAttemptsUsed(ATTEMPT_LIMIT); // se quiser travar após enviar
         }
 
         setObservacao("");
@@ -556,7 +535,6 @@ export default function PaginaSubmissao() {
     }
   };
 
-  // ====== UI ======
   return (
     <div className="min-h-screen bg-yellow-transparent pb-24 px-4 pt-6">
       <div className="max-w-xl mx-auto bg-white rounded-xl shadow-lg p-6">
@@ -600,7 +578,6 @@ export default function PaginaSubmissao() {
               </div>
             </div>
 
-            {/* Toggle Upload x Ao vivo */}
             <div className="mt-6">
               <div className="flex gap-2 mb-3">
                 <button

@@ -1,4 +1,3 @@
-//client/src/pages/minhaRede
 import { useEffect, useMemo, useState } from "react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
@@ -80,7 +79,6 @@ export default function MinhaRede() {
 
   return (
     <div className="max-w-md mx-auto p-4">
-      {/* Botão voltar p/ perfil (estático) */}
       <div className="mb-3">
         <Link
           href="/perfil"
