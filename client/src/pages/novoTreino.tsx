@@ -255,64 +255,110 @@ export default function NovoTreino() {
   }
 
   useEffect(() => {
-  (async () => {
-    try {
-      const token = (Storage as any).token ||
-        localStorage.getItem("token") ||
-        sessionStorage.getItem("token") || "";
+    (async () => {
+      try {
+        const token = (Storage as any).token ||
+          localStorage.getItem("token") ||
+          sessionStorage.getItem("token") || "";
 
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-      if (!orgSelecionada) {
-        setElencos([]);
-        setElencoSelecionado("");
-        return;
-      }
+        if (!orgSelecionada) {
+          setElencos([]);
+          setElencoSelecionado("");
+          return;
+        }
 
-       try {
-        const r = await fetch(
-          `${API.BASE_URL}/api/treinos/elencos?tipoUsuarioId=${encodeURIComponent(orgSelecionada)}`,
-          { headers }
-        );
-        if (r.ok) {
+        try {
+          const r = await fetch(
+            `${API.BASE_URL}/api/treinos/elencos?tipoUsuarioId=${encodeURIComponent(orgSelecionada)}`,
+            { headers }
+          );
+          if (r.ok) {
+            const j = await r.json();
+            const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
+            setElencos((arr || []).map((e: any) => ({
+              id: String(e.id),
+              nome: e.nome ?? e.titulo ?? "Turma",
+              atletasIds: e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
+            })));
+            return;
+          }
+        } catch { }
+
+        const ownerId = orgSelecionada;
+        const urls = [
+          `${API.BASE_URL}/api/elencos?organizacaoId=${encodeURIComponent(ownerId)}`,
+          `${API.BASE_URL}/api/turmas?organizacaoId=${encodeURIComponent(ownerId)}`,
+          `${API.BASE_URL}/api/turmas?escolinhaId=${encodeURIComponent(ownerId)}`,
+        ];
+
+        for (const url of urls) {
+          const r = await fetch(url, { headers });
+          if (!r.ok) continue;
           const j = await r.json();
           const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
-          setElencos((arr || []).map((e: any) => ({
-            id: String(e.id),
-            nome: e.nome ?? e.titulo ?? "Turma",
-            atletasIds: e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
-          })));
-          return;
+          if (Array.isArray(arr)) {
+            setElencos(arr.map((e: any) => ({
+              id: e.id,
+              nome: e.nome ?? e.titulo ?? "Turma",
+              atletasIds: e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
+            })));
+            return;
+          }
         }
-      } catch { }
-
-      const ownerId = orgSelecionada;
-      const urls = [
-        `${API.BASE_URL}/api/elencos?organizacaoId=${encodeURIComponent(ownerId)}`,
-        `${API.BASE_URL}/api/turmas?organizacaoId=${encodeURIComponent(ownerId)}`,
-        `${API.BASE_URL}/api/turmas?escolinhaId=${encodeURIComponent(ownerId)}`,
-      ];
-
-      for (const url of urls) {
-        const r = await fetch(url, { headers });
-        if (!r.ok) continue;
-        const j = await r.json();
-        const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
-        if (Array.isArray(arr)) {
-          setElencos(arr.map((e: any) => ({
-            id: e.id,
-            nome: e.nome ?? e.titulo ?? "Turma",
-            atletasIds: e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
-          })));
-          return;
-        }
+        setElencos([]);
+      } catch {
+        setElencos([]);
       }
-      setElencos([]);
-    } catch {
-      setElencos([]);
-    }
-  })();
-}, [orgSelecionada]);
+    })();
+  }, [orgSelecionada]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token =
+          (Storage as any).token ||
+          localStorage.getItem("token") ||
+          sessionStorage.getItem("token") || "";
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+        const ownerId =
+          orgSelecionada ||
+          (Storage as any).tipoUsuarioId ||
+          localStorage.getItem("tipoUsuarioId") ||
+          sessionStorage.getItem("tipoUsuarioId") || "";
+
+        const tries = [
+          `${API.BASE_URL}/api/treinos/exercicios?tipoUsuarioId=${encodeURIComponent(ownerId)}`,
+          `${API.BASE_URL}/api/exercicios?ownerId=${encodeURIComponent(ownerId)}`,
+          `${API.BASE_URL}/api/exercicios`,
+        ];
+
+        for (const url of tries) {
+          const r = await fetch(url, { headers });
+          if (!r.ok) continue;
+          const j = await r.json();
+          const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
+          const itens: Exercicio[] = (arr || []).map((e: any) => ({
+            id: String(e.id),
+            nome: e.nome ?? e.titulo ?? "Sem nome",
+            videoDemonstrativoUrl:
+              e.videoDemonstrativoUrl ?? e.videoUrl ?? e.video ?? e.demonstracaoUrl ?? "",
+            descricao: e.descricao ?? e.resumo ?? "",
+            nivel: e.nivel ?? e.dificuldade ?? "",
+          }));
+          setExerciciosDisponiveis(itens);
+          return; 
+        }
+
+        setExerciciosDisponiveis([]);
+      } catch (e) {
+        console.error("Falha ao carregar exercícios:", e);
+        setExerciciosDisponiveis([]);
+      }
+    })();
+  }, [orgSelecionada]);
 
   useEffect(() => {
     const tipoPersistido = (
@@ -580,6 +626,21 @@ export default function NovoTreino() {
     setCompletedUntil((prev) => Math.max(prev, n));
   };
 
+  function normalizaNome(n?: string) {
+    return (n || "").trim().toLowerCase();
+  }
+
+  function jaEstaNoTreinoPorIdOuNome(lista: ExItemUI[], id?: string, nome?: string) {
+    const nomeK = normalizaNome(nome);
+    const idK = id ? String(id) : null;
+
+    return lista.some((ex) => {
+      const sameId = idK && ex.idCatalogo && String(ex.idCatalogo) === idK;
+      const sameName = nomeK && normalizaNome(ex.nome) === nomeK;
+      return Boolean(sameId || sameName);
+    });
+  }
+
   const exerciciosFiltrados = useMemo(() => {
     const q = filtroEx.trim().toLowerCase();
     if (!q) return exerciciosDisponiveis;
@@ -616,17 +677,23 @@ export default function NovoTreino() {
   };
 
   const adicionarExercicioExistente = (exercicio: Exercicio) => {
-    setExerciciosSelecionados((prev) => [
-      ...prev,
-      {
-        idCatalogo: exercicio.id,
-        nome: exercicio.nome,
-        descricao: "",
-        repeticoes: "",
-        ordem: prev.length + 1,
-        series: "",
-      },
-    ]);
+    setExerciciosSelecionados((prev) => {
+      if (jaEstaNoTreinoPorIdOuNome(prev, exercicio.id, exercicio.nome)) {
+        alert("Este exercício já foi adicionado ao treino.");
+        return prev;
+      }
+      return [
+        ...prev,
+        {
+          idCatalogo: String(exercicio.id),
+          nome: exercicio.nome,
+          descricao: "",
+          repeticoes: "",
+          ordem: prev.length + 1,
+          series: "",
+        },
+      ];
+    });
   };
 
   const adicionarDica = () => {
@@ -719,6 +786,28 @@ export default function NovoTreino() {
         pontuacao: Math.max(0, Math.floor(score.total)),
       };
 
+      const vistosId = new Set<string>();
+      const vistosNome = new Set<string>();
+      const duplicados: string[] = [];
+
+      for (const ex of exerciciosSelecionados) {
+        const idK = ex.idCatalogo ? String(ex.idCatalogo) : null;
+        const nomeK = normalizaNome(ex.nome);
+
+        if (idK) {
+          if (vistosId.has(idK)) duplicados.push(`ID ${idK}`);
+          vistosId.add(idK);
+        }
+        if (nomeK) {
+          if (vistosNome.has(nomeK)) duplicados.push(ex.nome || nomeK);
+          vistosNome.add(nomeK);
+        }
+      }
+
+      if (duplicados.length) {
+        alert(`Remova os exercícios repetidos antes de salvar: ${duplicados.join(", ")}`);
+        return;
+      }
       await TreinosApi.criar(payload);
       alert("Treino criado com sucesso!");
       sessionStorage.removeItem(SAVE_KEY);
@@ -1148,6 +1237,8 @@ export default function NovoTreino() {
               <ul className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1">
                 {exerciciosFiltrados.map((exercicio) => {
                   const videoSrc = resolveVideoUrl(exercicio.videoDemonstrativoUrl);
+                  const jaAdicionado = jaEstaNoTreinoPorIdOuNome(exerciciosSelecionados, exercicio.id, exercicio.nome);
+
                   return (
                     <li key={exercicio.id} className="py-3">
                       <div className="flex flex-col sm:flex-row gap-3 items-start">
@@ -1179,11 +1270,14 @@ export default function NovoTreino() {
                         </div>
 
                         <button
-                          onClick={() => adicionarExercicioExistente(exercicio)}
-                          className="bg-blue-600 text-white text-sm px-3 py-1.5 rounded w-full sm:w-auto"
-                          title="Adicionar ao treino"
+                          onClick={() => !jaAdicionado && adicionarExercicioExistente(exercicio)}
+                          disabled={jaAdicionado}
+                          className={`bg-blue-600 text-white text-sm px-3 py-1.5 rounded w-full sm:w-auto ${
+                            jaAdicionado ? "opacity-50 cursor-not-allowed" : ""
+                          }`}
+                          title={jaAdicionado ? "Já adicionado ao treino" : "Adicionar ao treino"}
                         >
-                          Adicionar
+                          {jaAdicionado ? "Adicionado" : "Adicionar"}
                         </button>
                       </div>
                     </li>

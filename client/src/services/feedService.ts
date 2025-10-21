@@ -1,6 +1,5 @@
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
-import { apiGet } from "./api.js";
 
 export interface Usuario {
   id: string;
@@ -74,11 +73,14 @@ export async function comentarPost(postId: string, texto: string) {
 }
 
 export async function deletarPost(postId: string) {
-  const r = await fetch(`${API.BASE_URL}/api/feed/${postId}`, {
+  const r = await fetch(`${API.BASE_URL}/api/feed/posts/${postId}`, {
     method: "DELETE",
-    headers: auth(),
+    headers: { Authorization: `Bearer ${Storage.token || ""}` },
   });
-  if (!r.ok) throw new Error("Erro ao deletar");
+  if (!r.ok) {
+    const msg = await r.text().catch(() => "");
+    throw new Error(msg || "Erro ao deletar");
+  }
 }
 
 export async function repostPost(postId: string, comentario = "") {

@@ -28,43 +28,38 @@ function pontosDesafioInd(s: any) {
 
 function pontosGrupo(p: any): number {
   const baseCandidates = [
-    p?.pontosCreditados,
-    p?.pontosAcumulados,
-    p?.pontuacao,
-    p?.pontosSnapshot,
-    p?.grupo?.pontosCreditados,
-    p?.grupo?.pontosAcumulados,
-    p?.grupo?.pontuacao,
-    p?.grupo?.desafio?.pontuacao,
+    p?.pontosGanhos,                             // pontos nessa submissão
+    p?.desafioEmGrupo?.pontosAcumulados,        // pontos do desafio em grupo
+    p?.desafioEmGrupo?.pontosSnapshot,
   ];
-  const base =
-    baseCandidates
-      .map((v) => Number(v))
-      .find((v) => Number.isFinite(v) && v > 0) ?? 0;
+  const base = baseCandidates
+    .map((v) => Number(v))
+    .find((v) => Number.isFinite(v) && v > 0) ?? 0;
 
-  const bonusCandidates = [p?.bonus, p?.bonusPoints, p?.grupo?.bonus, p?.grupo?.bonusPoints];
-  const bonusVal =
-    bonusCandidates
-      .map((v) => Number(v))
-      .find((v) => Number.isFinite(v)) ?? 0;
+  const bonus = Number(p?.desafioEmGrupo?.bonus) || 0;
+  const bonusDado = !!p?.desafioEmGrupo?.bonusDado;
 
-  const bonusFlag = p?.bonusAplicado ?? p?.bonusFlag ?? p?.grupo?.bonusAplicado ?? p?.grupo?.bonusFlag;
-  const aplicarBonus = bonusFlag !== false;
-
-  return base + (aplicarBonus ? bonusVal : 0);
+  return base + (bonusDado ? bonus : 0);
 }
 
 async function getParticipacoesGrupo(usuarioId: string, atletaId: string) {
   try {
-    return await (prisma as any).desafioGrupoParticipacao.findMany({
+    return await prisma.submissaoDesafioEmGrupo.findMany({
       where: {
         OR: [
-          { atletaId },   
-          { usuarioId },     
-        ]
-       },
-      include: { grupo: { include: { desafio: true } } },
-      orderBy: { updatedAt: "desc" },
+          { usuarioId },                             // participação direta do usuário
+          { submissaoDesafio: { atletaId } },        // participação via submissão do atleta
+        ],
+      },
+      include: {
+        desafioEmGrupo: {
+          include: {
+            grupo: true,
+            desafioOficial: true,
+          },
+        },
+      },
+      orderBy: { dataEnvio: "desc" },
     });
   } catch {
     return [];
@@ -72,26 +67,29 @@ async function getParticipacoesGrupo(usuarioId: string, atletaId: string) {
 }
 
 function mapGrupoToAtividade(p: any) {
+  const g = p.desafioEmGrupo;
+  const desafio = g?.desafioOficial;
   return {
     id: `g-${p.id}`,
     tipo: "Desafio" as const,
-    imagemUrl: p.grupo?.desafio?.imagemUrl ?? null,
-    nome: p.grupo?.desafio?.titulo ?? p.grupo?.nome ?? "Desafio em grupo",
-    data: p.updatedAt ?? p.createdAt,
+    imagemUrl: desafio?.imagemUrl ?? null,
+    nome: desafio?.titulo ?? g?.grupo?.nome ?? "Desafio em grupo",
+    data: p.dataEnvio ?? g?.dataCriacao,
     duracao: undefined,
     pontuacao: pontosGrupo(p),
   };
 }
 
 function mapGrupoToHistorico(p: any) {
-  const pts = Number(p.pontosCreditados ?? p.pontuacao ?? p.grupo?.desafio?.pontuacao ?? 0);
-  const ts = +new Date(p.updatedAt ?? p.createdAt ?? Date.now());
+  const g = p.desafioEmGrupo;
+  const desafio = g?.desafioOficial;
+  const ts = +new Date(p.dataEnvio ?? g?.dataCriacao ?? Date.now());
   return {
     tipo: "Desafio" as const,
     status: "Concluído (grupo)",
     data: new Date(ts).toLocaleDateString("pt-BR"),
     ts,
-    titulo: p.grupo?.desafio?.titulo ?? p.grupo?.nome ?? "Desafio em grupo",
+    titulo: desafio?.titulo ?? g?.grupo?.nome ?? "Desafio em grupo",
     pontuacao: pontosGrupo(p),
   };
 }
@@ -215,7 +213,6 @@ export async function getPontuacaoDetalhada(req: Request, res: Response) {
     try {
       const parts = await getParticipacoesGrupo(req.params.id, atleta.id);
       historicoGrupo = parts.map(mapGrupoToHistorico);
-       const ptsGrupo = historicoGrupo.reduce((a, b:any) => a + (Number(b.pontuacao) || 0), 0);
     } catch (e) {
       console.warn("[pontuacaoDetalhada] erro ao ler grupos", e);
     }
@@ -548,7 +545,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
   try {
     const usuario = await prisma.usuario.findUnique({
       where: { id },
-      select: { id: true, nome: true, email: true, foto: true },
+      select: { id: true, nome: true, email: true, foto: true, nomeDeUsuario: true },
     });
 
     if (!usuario) {
@@ -664,6 +661,42 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       tipoPerfil = "Clube";
     }
 
+    const olheiro = await prisma.olheiro.findUnique({
+      where: { usuarioId: id },
+      select: {
+        id: true,
+        fotoUrl: true,
+        headline: true,
+        areaAtuacao: true,
+        anosExperiencia: true,
+        // adicione:
+        descricao: true,
+        emailPublico: true,
+        telefonePublico: true,
+        siteOuLinkedin: true,
+        colaboracaoClube: { select: { id: true, nome: true, logo: true, usuarioId: true } },
+      },
+    });
+
+    if (olheiro) {
+      dadosEspecificos = {
+        id: olheiro.id,
+        foto: olheiro.fotoUrl,
+        headline: olheiro.headline,
+        areaAtuacao: olheiro.areaAtuacao,
+        anosExperiencia: olheiro.anosExperiencia,
+        // novos campos:
+        descricao: olheiro.descricao,
+        emailPublico: olheiro.emailPublico,
+        telefonePublico: olheiro.telefonePublico,
+        siteOuLinkedin: olheiro.siteOuLinkedin,
+        colaboracaoClube: olheiro.colaboracaoClube
+          ? { id: olheiro.colaboracaoClube.id, nome: olheiro.colaboracaoClube.nome, logo: olheiro.colaboracaoClube.logo }
+          : null,
+      };
+      tipoPerfil = "Olheiro";
+    }
+
     if (!tipoPerfil) {
       const olheiro = await prisma.olheiro.findUnique({
         where: { usuarioId: id },
@@ -725,7 +758,8 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
       data: {
         nome: usuario.nome,
         email: usuario.email,
-        foto: fotoFinal,    
+        nomeDeUsuario: usuario.nomeDeUsuario ?? undefined, // <— add
+        foto: fotoFinal,
         cidade: usuario.cidade,
         estado: usuario.estado,
         pais: usuario.pais,
@@ -752,8 +786,8 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
           nacionalidade: tipo.nacionalidade,
           naturalidade: tipo.naturalidade,
           posicao: tipo.posicao,
-          altura: isNaN(parseInt(tipo.altura)) ? undefined : parseInt(tipo.altura),
-          peso: isNaN(parseInt(tipo.peso)) ? undefined : parseInt(tipo.peso),
+          altura: isNaN(parseFloat(tipo.altura)) ? undefined : parseFloat(tipo.altura),
+          peso:   isNaN(parseFloat(tipo.peso))   ? undefined : parseFloat(tipo.peso),
           seloQualidade: tipo.seloQualidade,
           foto: fotoFinal,
         };
@@ -847,6 +881,34 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         break;
       }
 
+      case "olheiro": {
+        // converte anosExperiencia se vier string
+        const anos =
+          typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== ""
+            ? Number(tipo.anosExperiencia)
+            : tipo.anosExperiencia;
+
+        await prisma.olheiro.update({
+          where: { usuarioId: id }, // atualiza o olheiro deste usuário
+          data: {
+            headline:         tipo.headline ?? null,
+            descricao:        tipo.descricao ?? null,
+            areaAtuacao:      tipo.areaAtuacao ?? null,
+            anosExperiencia:  Number.isFinite(anos) ? (anos as number) : undefined,
+            emailPublico:     tipo.emailPublico ?? null,
+            telefonePublico:  tipo.telefonePublico ?? null,
+            siteOuLinkedin:   tipo.siteOuLinkedin ?? null,
+            // se quiser que a mesma foto vá também para o registro do olheiro:
+            fotoUrl:          fotoFinal,
+            // se você quiser já aceitar a colaboração aqui, pode descomentar:
+            // ...(typeof tipo.colaboracaoClubeId !== "undefined"
+            //     ? { colaboracaoClubeId: tipo.colaboracaoClubeId }
+            //     : {})
+          },
+        });
+        break;
+      }
+
       case "escola":
         await prisma.escolinha.update({
           where: { usuarioId: id },
@@ -871,7 +933,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         break;
 
       default:
-        return res.status(400).json({ error: "Tipo de usuário inválido." });
+        return res.status(400).json({ error: `Tipo de usuário inválido: ${tipoUsuario}` });
     }
 
     return res.status(200).json({ message: "Perfil atualizado com sucesso." });
@@ -906,11 +968,21 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
     }
 
     const categoriaContagem: Record<string, number> = {
-      fisico: 0,
-      tecnico: 0,
-      tatico: 0,
-      mental: 0,
+      fisico: 0, tecnico: 0, tatico: 0, mental: 0,
     };
+
+    for (const recebido of atleta.treinosRecebidos) {
+      const rawTipo = recebido.treino?.tipoTreino ?? "";
+      const norm = String(rawTipo)
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase();
+
+      if (norm.startsWith("fis")) categoriaContagem.fisico++;
+      else if (norm.startsWith("tec")) categoriaContagem.tecnico++;
+      else if (norm.startsWith("tat")) categoriaContagem.tatico++;
+      else if (norm.startsWith("men")) categoriaContagem.mental++;
+    }
 
     const desafiosIndividuais = await prisma.submissaoDesafio.count({
       where: { atletaId: atleta.id, aprovado: true },
@@ -928,19 +1000,6 @@ export const getProgressoTreinos = async (req: AuthenticatedRequest, res: Respon
 
     const desafiosGrupo = partsGrupo.length;
     const desafiosCompletos = desafiosIndividuais + desafiosGrupo;
-
-    for (const recebido of atleta.treinosRecebidos) {
-      for (const ex of recebido.treino.exercicios) {
-        const categorias = ex.exercicio?.categorias || [];
-
-        for (const cat of categorias) {
-          const catLower = cat.toLowerCase();
-          if (categoriaContagem[catLower] !== undefined) {
-            categoriaContagem[catLower]++;
-          }
-        }
-      }
-    }
 
     return res.json({
       ...categoriaContagem,
@@ -1020,13 +1079,14 @@ export const getTreinosResumo = async (req: any, res: Response) => {
 
     const horas = Math.round((minutos / 60) * 10) / 10;
 
-    const desafiosGrupo = await (async () => {
-      try {
-          return await (prisma as any).desafioGrupoParticipacao.count({
-            where: { OR: [{ atletaId: atleta.id }, { usuarioId }] },
-          });
-        } catch { return 0; }
-      })();
+    const desafiosGrupo = await prisma.submissaoDesafioEmGrupo.count({
+      where: {
+        OR: [
+          { usuarioId: usuarioId },
+          { submissaoDesafio: { atletaId: atleta.id } },
+        ],
+      },
+    });
 
       return res.status(200).json({
         completos,
@@ -1119,16 +1179,64 @@ export async function getPerfilProfessor(req: Request, res: Response) {
         statusCref: true,
         usuario: { select: { id: true, nome: true, email: true, foto: true } },
         treinosProgramados: { select: { id: true } },
-        relacoesTreinamento: { select: { id: true } },
+        relacoesTreinamento: { select: { atletaId: true, clubeId: true, escolinhaId: true } },
       },
     });
 
     if (!prof) return res.status(404).json({ error: "Professor não encontrado" });
 
-    const usuarioMin:
-      | { id: string; nome: string; email: string; foto?: string | null }
-      | null = (prof as any).usuario ?? null;
+    // ---- alunosRelacionados (únicos)
+    const rels = await prisma.relacaoTreinamento.findMany({
+      where: { professorId: prof.id, atletaId: { not: null } },
+      select: { atletaId: true },
+    });
 
+    const atletasDiretosClube = (prof as any).clubeId
+      ? await prisma.atleta.findMany({ where: { clubeId: (prof as any).clubeId }, select: { id: true } })
+      : [];
+    const atletasDiretosEscolinha = (prof as any).escolinhaId
+      ? await prisma.atleta.findMany({ where: { escolinhaId: (prof as any).escolinhaId }, select: { id: true } })
+      : [];
+
+    const uniq = new Set<string>([
+      ...rels.map(r => r.atletaId!).filter(Boolean),
+      ...atletasDiretosClube.map(a => a.id),
+      ...atletasDiretosEscolinha.map(a => a.id),
+    ]);
+    const alunosRelacionados = uniq.size;
+
+    // ===================== NOVO BLOCO: conquistas =====================
+    // depois de calcular alunosRelacionados e já ter prof.treinosProgramados
+    const treinosCount = (prof as any).treinosProgramados?.length ?? 0;
+
+    // desbloqueios
+    const unlocked: string[] = [];
+    if (treinosCount >= 1)  unlocked.push("primeiro_treino_programado");
+    if (treinosCount >= 5)  unlocked.push("serie_de_treinos");
+    if (treinosCount >= 10) unlocked.push("planejamento_solido");
+    if (alunosRelacionados >= 5) unlocked.push("grupo_inicial");
+
+    // se quiser manter a métrica de grupos criados, retorne separada:
+    let gruposCriados = 0;
+    try {
+      gruposCriados = await prisma.desafioEmGrupo.count({
+        where: {
+          OR: [
+            { criadoPorId: prof.usuarioId ?? "" },
+            { grupo: { ownerId: prof.usuarioId ?? "" } },
+          ],
+        },
+      });
+    } catch {
+      // ignora erro
+    }
+
+    // métrica agregada de conquistas (inclui +1 se criou algum grupo, conforme seu snippet)
+    let conquistas = unlocked.length;
+    if (gruposCriados > 0) conquistas += 1;
+    // =================== FIM DO NOVO BLOCO ===========================
+
+    const usuarioMin = (prof as any).usuario ?? null;
     const fotoPerfil: string | null = (prof as any).fotoUrl ?? (usuarioMin?.foto ?? null);
 
     return res.json({
@@ -1148,8 +1256,11 @@ export async function getPerfilProfessor(req: Request, res: Response) {
         statusCref: prof.statusCref ?? null,
       },
       metrics: {
-        treinosProgramados: (prof as any).treinosProgramados?.length ?? 0,
-        alunosRelacionados: (prof as any).relacoesTreinamento?.length ?? 0,
+        treinosProgramados: treinosCount,
+        alunosRelacionados,
+        conquistas,                 // usado no cartão-resumo
+        conquistasUnlocked: unlocked, // facilita marcar os cards no front
+        gruposCriados,             // métrica separada
       },
     });
   } catch (e) {

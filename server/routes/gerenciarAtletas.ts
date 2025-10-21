@@ -4,7 +4,6 @@ import { gerenciarAtletasController as ctrl } from "../controllers/gerenciarAtle
 const router = Router();
 
 router.get("/atletas", ctrl.list);
-
 router.get("/ranking", ctrl.ranking);
 router.get("/atletas/:usuarioId/pontuacao", ctrl.statsAtleta);
 router.get("/treinosprogramados", ctrl.listTreinos);
