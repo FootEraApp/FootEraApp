@@ -1,4 +1,3 @@
-// client/src/pages/feed
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FaHeart,
@@ -40,7 +39,6 @@ import {
 } from "../lib/achievementsCatalog.js";
 import { FaRetweet } from "react-icons/fa";
 
-/* ---------- Tipos/auxiliares usados no compartilhamento por DM ---------- */
 interface Usuario {
   id: string;
   nome: string;
@@ -54,7 +52,6 @@ async function getUsuariosMutuos(token: string): Promise<Usuario[]> {
   return await res.json();
 }
 
-// === Header compacto e leve (sem preloading) ===
 function HeaderSliderLite({
   title,
   start,
@@ -109,7 +106,6 @@ function HeaderSliderLite({
 
   return (
     <div ref={wrapRef} className="relative h-16 sm:h-20 -mx-4 px-4 sm:mx-0 mb-2">
-      {/* trilho: invisível quando não está arrastando; aparece verde só durante o drag */}
       <div className="absolute inset-0 z-0">
         <div
           className={`absolute inset-y-2 left-0 right-0 rounded-full border overflow-hidden ${
@@ -124,12 +120,10 @@ function HeaderSliderLite({
         />
       </div>
 
-      {/* título */}
       <div className="relative z-10 h-full flex items-center justify-center pointer-events-none">
         <h1 className="text-2xl font-bold">{title}</h1>
       </div>
 
-      {/* knob */}
       <button
         aria-label="Trocar entre Feed e Desafios (arraste)"
         onPointerDown={onDown}
@@ -151,10 +145,6 @@ function HeaderSliderLite({
   );
 }
 
-/* =========================
-   RESTO DO FEED
-   ========================= */
-
 type ParsedAchievement = {
   ach?: AchievementLite;
   headTitle?: string;
@@ -167,7 +157,7 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
 
   const lines = conteudo.split(/\n+/);
   const head = (lines[0] || "").trim();
-  const rest = (lines.slice[1]?.join("\n") || lines.slice(1).join("\n") || "").trim();
+  const rest = lines.slice(1).join("\n").trim();
 
   const isHeadAchievement = /^🏆\s*Conquista:/i.test(head);
 
@@ -188,7 +178,6 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
   }
 
   const userMsg = achId ? rest.replace(/\[[^\]]+\]\s*/, "").trim() : rest;
-
   return { ach, headTitle, headDesc, userMsg };
 }
 
@@ -317,7 +306,6 @@ function PaginaFeed(): JSX.Element {
           ? dados.filter((p) => p.usuario?.id === uid || (p as any).usuarioId === uid)
           : dados;
 
-      // remove duplicados por id
       const unicos = Array.from(new Map(filtrado.map((p) => [p.id, p])).values());
       setPosts(unicos);
     }
@@ -575,7 +563,6 @@ function PaginaFeed(): JSX.Element {
             <div>
               {post.repostOf ? (
                 <>
-                  {/* comentário do repost (sanitizado) */}
                   {(() => {
                     const comment = (post.conteudo || "").replace(/\u200B\d+$/, "");
                     return comment.trim() ? (
@@ -585,7 +572,6 @@ function PaginaFeed(): JSX.Element {
                     ) : null;
                   })()}
 
-                  {/* card do post original */}
                   <div className="border rounded-xl p-3 bg-gray-50">
                     <div className="flex items-center gap-2 mb-1">
                       <img
@@ -782,7 +768,6 @@ function PaginaFeed(): JSX.Element {
         </Link>
       </nav>
 
-      {/* ---------- Modais (compartilhar / comentários) ---------- */}
       <BottomSheet
         open={modalAberto}
         onClose={() => setModalAberto(false)}

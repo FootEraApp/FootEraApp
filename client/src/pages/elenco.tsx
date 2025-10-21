@@ -1,4 +1,3 @@
-// client/src/pages/elenco
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   DragDropContext,
@@ -655,7 +654,6 @@ export default function PaginaElenco() {
 
   return (
       <div className="min-h-screen bg-green-100 flex flex-col">
-        {/* Header com botão voltar – fica estático no topo/esquerda */}
         <div className="p-3">
           <Link
             href="/perfil"

@@ -1,4 +1,4 @@
-import { Router, type RequestHandler } from "express";
+import { Router, type RequestHandler, type Response} from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -16,7 +16,7 @@ import {
 } from "../controllers/postController.js";
 import { curtirPostagem } from "server/controllers/feedController.js";
 import { isAllowedMime } from "../utils/moderation.js";
-import { rateLimit, type ValueDeterminingMiddleware } from "express-rate-limit";
+import { rateLimit, type ValueDeterminingMiddleware, ipKeyGenerator, type AugmentedRequest } from "express-rate-limit";
 
 const router = Router();
 
@@ -44,24 +44,10 @@ const upload = multer({
   },
 });
 
-const byUserOrIp: ValueDeterminingMiddleware<string> = (req) => {
+const byUserOrIp = (req: any, res: any): string => {
   const userId = (req as any)?.user?.id ?? (req as any)?.userId;
   if (userId) return `u:${userId}`;
-
-  const raw =
-    (req.ip ??
-      (Array.isArray(req.headers["x-forwarded-for"])
-        ? (req.headers["x-forwarded-for"][0] as string)
-        : (req.headers["x-forwarded-for"] as string)) ??
-      req.socket?.remoteAddress ??
-      "") as string;
-
-  const first = (raw || "").split(",")[0].trim();
-  const clean = first
-    .replace(/^::ffff:/, "") 
-    .replace(/\]?:\d+$/, ""); 
-
-  return `ip:${clean || "0.0.0.0"}`;
+  return `ip:${ipKeyGenerator(req as any, res as any)}`;
 };
 
 const postLimiterMw = rateLimit({

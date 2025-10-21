@@ -830,7 +830,6 @@ export async function atualizarElenco(req: AuthenticatedRequest, res: Response) 
 
 export const atletasVinculados = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    // aceita professorId ou tipoUsuarioId; se vier usuarioId, resolve para o professor correspondente
     let professorId: string | undefined =
       (typeof req.query.professorId === "string" && req.query.professorId.trim()) ||
       (typeof req.query.tipoUsuarioId === "string" && req.query.tipoUsuarioId.trim()) ||
@@ -847,14 +846,12 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
     }
 
     if (!professorId) {
-      res.json([]); // nada para retornar -> evita 500
+      res.json([]); 
       return;
     }
     const pid: string = professorId;
-
     const incluirPontuacao = String(req.query.incluirPontuacao ?? "") === "1";
 
-    // Busca os vínculos do professor com atletas
     const rows = await prisma.relacaoTreinamento.findMany({
       where: { professorId: pid, atletaId: { not: null } },
       select: {
@@ -872,7 +869,6 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
       },
     });
 
-    // Normaliza para o formato que o front espera
     const lista = rows
       .map((r: typeof rows[number]) => r.atleta)
       .filter((a): a is NonNullable<typeof a> => Boolean(a))
@@ -883,12 +879,12 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
         nome: a.usuario?.nome ?? "Atleta",
         foto: a.usuario?.foto ?? null,
         posicao: a.posicao ?? null,
-        idade: a.idade ?? null, // seu schema tem Int obrigatório; manter compat no payload
+        idade: a.idade ?? null,
         categoria: Array.isArray(a.categoria) && a.categoria.length ? a.categoria[0] : null,
         pontuacao: (a as any).pontuacao?.pontuacaoTotal ?? null,
       }));
 
-    res.json(lista); // array puro
+    res.json(lista);
   } catch (e) {
     console.error("GET /treinos/atletas-vinculados erro:", e);
     res.status(500).json({ error: "Falha ao buscar atletas vinculados" });

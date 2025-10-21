@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { CalendarClock, Activity, PlusCircle, ChevronRight, Trophy } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
@@ -7,7 +7,6 @@ import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 
-// ⬇⬇⬇ ADICIONE AQUI
 const ACHIEVEMENTS: Record<
   string,
   { title: string; desc: string; tier?: "Bronze" | "Prata" | "Ouro" }
@@ -38,18 +37,15 @@ const ACHIEVEMENTS: Record<
     tier: "Bronze",
   },
 };
-// ⬆⬆⬆ FIM DO BLOCO
-
 type Organizacao = { id: string; usuarioId?: string | null; nome: string; tipo: "Escolinha" | "Clube" };
 type Props = { idDaUrl?: string };
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
-// substitua a linha do type PayloadProfessor.metrics por:
 type MetricsProf = {
   treinosProgramados: number;
   alunosRelacionados: number;
-  conquistas?: number;              // legado (pode ficar)
-  conquistasUnlocked?: string[];    // <- novo
-  gruposCriados?: number;           // <- novo
+  conquistas?: number;            
+  conquistasUnlocked?: string[];   
+  gruposCriados?: number;        
 };
 
 type PayloadProfessor = {
@@ -102,8 +98,8 @@ type SolicitacaoItem = {
 type AtividadeRecente = {
   id: string;
   tipo: "Treino" | "Desafio";
-  nome: string;        // <— era titulo
-  data: string;        // <— era criadoEm
+  nome: string;       
+  data: string;        
   imagemUrl?: string | null;
   duracao?: string;
   pontuacao?: number;
@@ -245,21 +241,61 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
       }
     };
 
-    fetch(); // <-- carrega imediatamente ao entrar na aba
+    fetch();
 
     const onFocus = () => fetch();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [aba, subAba, token]);
 
+ const fetchVinculados = useCallback(async () => {
+   if (!token) return;
+   const headers = { Authorization: `Bearer ${token}` };
+   const tipoId        = isOwn ? Storage.tipoUsuarioId : data?.professor?.id;
+   const usuarioTarget = isOwn ? Storage.usuarioId      : data?.usuario?.id;
+
+   const candidates = [
+     { professorId: tipoId, incluirPontuacao: 1 },
+     { tipoUsuarioId: tipoId, incluirPontuacao: 1 },
+     { usuarioId: usuarioTarget, incluirPontuacao: 1 },
+   ].filter(p => Object.values(p)[0]);
+
+   let lista: any[] = [];
+   for (const params of candidates) {
+     try {
+       const r = await axios.get(`${API.BASE_URL}/api/treinos/atletas-vinculados`, { headers, params });
+       const arr = Array.isArray(r.data) ? r.data : (r.data?.items ?? r.data?.data ?? []);
+       if (Array.isArray(arr) && arr.length) { lista = arr; break; }
+     } catch {}
+   }
+
+   const arr = (lista || []).map((x: any) => ({
+     id:        x.id ?? x.atletaId ?? x.usuarioId,
+     usuarioId: x.usuarioId ?? x.userId ?? x.usuario?.id ?? null,
+     atletaId:  x.atletaId ?? x.atleta?.id ?? null,
+     nome:      x.nome ?? x.usuario?.nome ?? x.atleta?.nome ?? x.nomeDeUsuario ?? "Atleta",
+     foto:      x.foto ?? x.usuario?.foto ?? x.atleta?.foto ?? null,
+     posicao:   x.posicao ?? x.atleta?.posicao ?? null,
+     idade:     x.idade ?? x.atleta?.idade ?? null,
+     categoria: x.categoria ?? x.atleta?.categoria ?? null,
+     pontuacao: x.pontuacao ?? null,
+   }));
+   const seen = new Set<string>();
+   const unique = arr.filter((a: any) => {
+     const key = String(a.usuarioId || a.atletaId || a.id);
+     if (seen.has(key)) return false;
+     seen.add(key);
+     return true;
+   });
+   setVinculados(unique);
+ }, [token, isOwn, data?.professor?.id, data?.usuario?.id]);
+
   useEffect(() => {
     if (!token) return;
-    // quando já sabe quem é o professor/usuário alvo, pré-carrega
-    if (data?.professor?.id || data?.usuario?.id) {
-      // chame aqui a mesma função que você usa na aba "vinculados"
-      // ex.: await fetchVinculados();
+    if ((data?.professor?.id || data?.usuario?.id) && vinculados == null) {
+      fetchVinculados();
     }
-  }, [token, data?.professor?.id, data?.usuario?.id]);
+  },  [token, data?.professor?.id, data?.usuario?.id, vinculados, fetchVinculados]);
 
   useEffect(() => {
     if (!token) return;
@@ -276,62 +312,10 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         if (!cancel.v) setAtividades([]);
       }
     }
-   
-    async function fetchVinculados() {
-      // priorize SEMPRE o id do professor (tipoUsuarioId). Se não tiver, use usuarioId
-      const tipoId        = isOwn ? Storage.tipoUsuarioId : data?.professor?.id;
-      const usuarioTarget = isOwn ? Storage.usuarioId      : data?.usuario?.id;
-
-      // tente várias formas que o backend pode aceitar
-      const candidates = [
-        { professorId: tipoId, incluirPontuacao: 1 },
-        { tipoUsuarioId: tipoId, incluirPontuacao: 1 },
-        { usuarioId: usuarioTarget, incluirPontuacao: 1 },
-      ].filter(p => Object.values(p)[0]); // remove objetos sem id
-
-      let lista: any[] = [];
-      for (const params of candidates) {
-        try {
-          const r = await axios.get(
-            `${API.BASE_URL}/api/treinos/atletas-vinculados`,
-            { headers, params }
-          );
-          const arr = Array.isArray(r.data) ? r.data : (r.data?.items ?? r.data?.data ?? []);
-          if (Array.isArray(arr) && arr.length) { lista = arr; break; }
-          // se veio vazio, tenta o próximo formato de params
-        } catch {
-          // tenta o próximo formato
-        }
-      }
-
-      // normaliza e DEDUPLICA por usuarioId (fallback atletaId/id)
-      const arr = (lista || []).map((x: any) => ({
-        id:        x.id ?? x.atletaId ?? x.usuarioId,
-        usuarioId: x.usuarioId ?? x.userId ?? x.usuario?.id ?? null,
-        atletaId:  x.atletaId ?? x.atleta?.id ?? null,
-        nome:      x.nome ?? x.usuario?.nome ?? x.atleta?.nome ?? x.nomeDeUsuario ?? "Atleta",
-        foto:      x.foto ?? x.usuario?.foto ?? x.atleta?.foto ?? null,
-        posicao:   x.posicao ?? x.atleta?.posicao ?? null,
-        idade:     x.idade ?? x.atleta?.idade ?? null,
-        categoria: x.categoria ?? x.atleta?.categoria ?? null,
-        pontuacao: x.pontuacao ?? null,
-      }));
-
-      const seen = new Set<string>();
-      const unique = arr.filter((a: any) => {
-        const key = String(a.usuarioId || a.atletaId || a.id);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      setVinculados(unique);
-    }
 
     async function fetchObservados() {
       const usuarioTarget = isOwn ? Storage.usuarioId : data?.usuario?.id;
-      const tipoId        = isOwn ? Storage.tipoUsuarioId : data?.professor?.id; // compat
-
+      const tipoId        = isOwn ? Storage.tipoUsuarioId : data?.professor?.id;
       const params: any = { incluirPontuacao: 1 };
       if (usuarioTarget) params.usuarioId = usuarioTarget;
       if (tipoId)        params.tipoUsuarioId = tipoId;
@@ -353,22 +337,25 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
           `${API.BASE_URL}/api/solicitacoes-treino`,
           { headers }
         );
-        // mantém só as pendentes
-        setSolicitacoes(Array.isArray(data) ? data.filter(s => (s.status ?? "PENDENTE") === "PENDENTE") : []);
+        setSolicitacoes(
+          Array.isArray(data) ? data.filter(s => (s.status ?? "PENDENTE") === "PENDENTE") : []
+        );
       } catch {
         setSolicitacoes([]);
       }
     }
 
-    if (aba === "visao" && atividades == null) fetchAtividades();
+    if (aba === "visao") {
+      if (atividades == null) fetchAtividades();
+      if (vinculados == null) fetchVinculados();
+    }
 
     if (aba === "atletas") {
       if (subAba === "vinculados")   fetchVinculados();
       if (subAba === "observados")   fetchObservados();
       if (subAba === "solicitacoes") fetchSolicitacoes();
     }
-    // sem return de cleanup aqui, já que não há interval/timeout/evento
-  }, [aba, subAba, token, targetId, data?.usuario?.id, data?.professor?.id]);
+  }, [aba, subAba, token, targetId, data?.usuario?.id, data?.professor?.id, vinculados, atividades, fetchVinculados]);
 
   if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
   if (!data || !data.professor) return <div className="text-center p-10 text-red-600">Professor não encontrado.</div>;
@@ -379,20 +366,14 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     (typeof data.professor.fotoUrl === "string" && data.professor.fotoUrl) ||
     undefined;
   const time = data.professor.escola || "Professor";
-    // ids vindos do backend
   const unlockedIds = data.metrics.conquistasUnlocked ?? [];
 
-  // se quiser contar “gruposCriados > 0” como conquista, some este id virtual
   const extraFromGrupos =
     (data.metrics.gruposCriados ?? 0) > 0 ? ["organizador_de_grupo"] : [];
 
-  // lista final de conquistas (sem duplicatas)
   const unlockedFinal = Array.from(new Set([...unlockedIds, ...extraFromGrupos]));
-
-  // KPI usa o total real que estamos mostrando
   const conquistasCount = unlockedFinal.length;
-  const alunosCount = vinculados?.length ?? 0; // pare de usar metrics.alunosRelacionados
-
+  const alunosCount = (vinculados?.length ?? data.metrics.alunosRelacionados ?? 0);
   async function salvarVinculo() {
     if (!token || !professorId || !orgSelecionada) return;
     try {

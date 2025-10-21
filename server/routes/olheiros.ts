@@ -21,7 +21,6 @@ router.get("/:id/indicacoes", async (req, res) => {
       },
     });
 
-    // deixa no shape que o front espera
     const itens = (lista || []).map(i => ({
       id: i.id,
       criadoEm: i.criadoEm,

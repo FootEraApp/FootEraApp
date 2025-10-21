@@ -1,4 +1,3 @@
-// client/src/pages/mensagens
 import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { Send, Share2, Volleyball, User, UserPlus, CirclePlus, Search, House, Users, Trash } from "lucide-react";
