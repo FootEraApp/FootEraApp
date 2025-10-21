@@ -1,3 +1,4 @@
+// server/routes/solicitacaoTreino
 import { Router } from "express";
 import {
   criarSolicitacao,
@@ -5,14 +6,15 @@ import {
   listarSolicitacoesMinhas,
   listarSolicitacoesRecebidas,
   recusarSolicitacao,
-  solicitacoesTreinoController
+  solicitacoesTreinoController,
+  aceitarSolicitacao,
 } from "../controllers/solicitacaoTreinoController.js";
 import { authenticateToken } from "server/middlewares/auth.js";
 
 const router = Router();
 router.use(authenticateToken);
 
-router.post("/:id/aceitar", solicitacoesTreinoController.aceitar);
+router.post("/:id/aceitar", aceitarSolicitacao);
 router.post("/:id/recusar", recusarSolicitacao);
 router.post("/", criarSolicitacao);
 router.get("/minhas", listarSolicitacoesMinhas);

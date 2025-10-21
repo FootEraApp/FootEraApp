@@ -1,3 +1,4 @@
+// server/controllers/solicitacaoTreinoController
 import { Response, Request } from "express";
 import { PrismaClient } from "@prisma/client";
 import { resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
@@ -277,34 +278,37 @@ export async function aceitarSolicitacao(req: Request, res: Response) {
       professorId?: string; escolinhaId?: string; clubeId?: string; atletaId?: string;
     };
 
-    const donos = ["professorId", "escolinhaId", "clubeId"].filter(k => (ids as any)[k]);
-    if (!ids.atletaId || donos.length !== 1) {
+    const casoAtletaDono =
+      !!ids.atletaId && (ids.professorId || ids.clubeId || ids.escolinhaId);
+
+    const casoProfEntidade =
+      !ids.atletaId && !!ids.professorId && (ids.clubeId || ids.escolinhaId);
+
+    if (!casoAtletaDono && !casoProfEntidade) {
       return res.status(400).json({ error: "Tipos de usuário inválidos para relação." });
     }
 
+    const relacaoShape = {
+      atletaId:     ids.atletaId ?? null,
+      professorId:  ids.professorId ?? null,
+      escolinhaId:  ids.escolinhaId ?? null,
+      clubeId:      ids.clubeId ?? null,
+    };
+
     const existente = await prisma.relacaoTreinamento.findFirst({
-      where: {
-        atletaId: ids.atletaId!,
-        ...(ids.professorId ? { professorId: ids.professorId } : {}),
-        ...(ids.escolinhaId ? { escolinhaId: ids.escolinhaId } : {}),
-        ...(ids.clubeId ? { clubeId: ids.clubeId } : {}),
-      },
+      where: relacaoShape,
     });
 
     if (!existente) {
-      await prisma.relacaoTreinamento.create({
-        data: {
-          atletaId: ids.atletaId!,
-          professorId: ids.professorId ?? null,
-          escolinhaId: ids.escolinhaId ?? null,
-          clubeId: ids.clubeId ?? null,
-        },
-      });
+      await prisma.relacaoTreinamento.create({ data: relacaoShape });
     }
 
     await prisma.solicitacaoTreino.delete({ where: { id } });
 
-    return res.json({ message: existente ? "Relação já existia. Solicitação removida." : "Solicitação aceita com sucesso." });
+    return res.json({
+      ok: true,
+      message: existente ? "Relação já existia. Solicitação removida." : "Solicitação aceita com sucesso.",
+    });
   } catch (error) {
     console.error("Erro ao aceitar solicitação:", error);
     return res.status(500).json({ error: "Erro interno do servidor" });

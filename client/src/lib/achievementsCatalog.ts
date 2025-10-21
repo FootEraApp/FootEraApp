@@ -1,3 +1,4 @@
+// client/src/lib/achievementsCatalog
 export type Tier = "bronze" | "prata" | "ouro" | "platina";
 export type Entity = "Atleta" | "Professor" | "Escolinha" | "Clube";
 export type Group =
@@ -32,6 +33,19 @@ const ATHLETE: AchievementLite[] = [
   { id: "ath_chal_5",  entity: "Atleta", title: "Serial Challenger",   description: "Concluiu 5 desafios oficiais.", icon: "💥", tier: "prata",  group: "Desafios" },
   { id: "ath_chal_10", entity: "Atleta", title: "Top 10",              description: "Concluiu 10 desafios oficiais.", icon: "🏅", tier: "ouro",   group: "Desafios" },
   { id: "ath_chal_20", entity: "Atleta", title: "Máquina de Desafios", description: "Concluiu 20 desafios oficiais.", icon: "🏆", tier: "platina", group: "Desafios" },
+
+  { id: "ath_chal_send_try1", entity: "Atleta", title: "Primeiro Take (Enviado)", description: "Enviou um desafio gravado em 1ª tentativa.", icon: "🎬", tier: "bronze", group: "Desafios" },
+  { id: "ath_chal_send_try2", entity: "Atleta", title: "Vai na Segunda (Enviado)", description: "Enviou um desafio gravado em 2ª tentativa.", icon: "🔁", tier: "bronze", group: "Desafios" },
+
+  { id: "ath_chal_valid_try1_1",  entity: "Atleta", title: "Primeiro Take",        description: "Teve 1 desafio aprovado de 1ª tentativa.",  icon: "🎯", tier: "bronze", group: "Desafios" },
+  { id: "ath_chal_valid_try1_5",  entity: "Atleta", title: "Cinco de Primeira",    description: "Teve 5 desafios aprovados de 1ª tentativa.", icon: "🏅", tier: "prata",  group: "Desafios" },
+  { id: "ath_chal_valid_try1_10", entity: "Atleta", title: "Dez de Primeira",      description: "Teve 10 desafios aprovados de 1ª tentativa.", icon: "🥇", tier: "ouro",   group: "Desafios" },
+  { id: "ath_chal_valid_try1_20", entity: "Atleta", title: "Impecável",            description: "Teve 20 desafios aprovados de 1ª tentativa.", icon: "🏆", tier: "platina", group: "Desafios" },
+
+  { id: "ath_chal_valid_try2_1",  entity: "Atleta", title: "Valeu a Segunda",      description: "Teve 1 desafio aprovado de 2ª tentativa.",  icon: "🩹", tier: "bronze", group: "Desafios" },
+  { id: "ath_chal_valid_try2_5",  entity: "Atleta", title: "Resiliente",           description: "Teve 5 desafios aprovados de 2ª tentativa.", icon: "🔁", tier: "prata",  group: "Desafios" },
+  { id: "ath_chal_valid_try2_10", entity: "Atleta", title: "Persistente",          description: "Teve 10 desafios aprovados de 2ª tentativa.", icon: "💪", tier: "ouro",   group: "Desafios" },
+
 
   { id: "ath_grp_1",  entity: "Atleta", title: "Time em Campo",     description: "Concluiu 1 desafio em grupo.",  icon: "🤝", tier: "bronze", group: "Desafios em Grupo" },
   { id: "ath_grp_3",  entity: "Atleta", title: "Entrosado",         description: "Concluiu 3 desafios em grupo.", icon: "🧩", tier: "prata",  group: "Desafios em Grupo" },

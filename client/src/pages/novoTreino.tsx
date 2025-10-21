@@ -1,3 +1,4 @@
+// client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from "lucide-react";
