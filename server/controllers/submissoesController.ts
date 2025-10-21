@@ -166,7 +166,6 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
       videoUrl: rawVideoUrl,
       tempoMs,
       tempoSeg,
-      repeticoes,
     } = req.body as {
       desafioId: string;
       atletaId: string;
@@ -189,6 +188,14 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
     const atleta = await prisma.atleta.findUnique({ where: { id: atletaId } });
     if (!atleta) return res.status(400).json({ message: "Atleta inválido ou não encontrado." });
 
+    const tentativas = await prisma.submissaoDesafio.count({
+      where: { atletaId, desafioId },
+    });
+    if (tentativas >= 2) {
+      return res.status(400).json({ message: "Limite de 2 tentativas atingido." });
+    }
+    const tentativaNumero = Math.min(2, tentativas + 1);
+
     const uploadedUrl = file ? `/uploads/${file.filename}` : undefined;
     const finalVideoUrl = (uploadedUrl ?? (rawVideoUrl && String(rawVideoUrl).trim())) || null;
     if (!finalVideoUrl) {
@@ -202,7 +209,8 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
       : tempoSeg != null ? Math.round(Number(tempoSeg) * 1000)
       : undefined;
 
-    const repeticoesNum = repeticoes != null ? Number(repeticoes) : undefined;
+    // Ignoramos 'repeticoes' do cliente e usamos tentativaNumero como "quantidade de tentativas usada"
+    const repeticoesNum = tentativaNumero;
 
     const created = await prisma.submissaoDesafio.create({
       data: {
@@ -210,9 +218,9 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
         desafioId,
         videoUrl: finalVideoUrl,
         observacao,
-        aprovado: false,
+        aprovado: false,              // continua indo para avaliação
         tempoMs: tempoMsNum,
-        repeticoes: repeticoesNum,
+        repeticoes: repeticoesNum,    // <- calculado no servidor
         ...(uploadedUrl
           ? {
               midias: {
@@ -242,6 +250,8 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
     return res.status(201).json({
       ok: true,
       id: created.id,
+      tentativaNumero,                 // <- útil para a UI
+      tentativasRestantes: Math.max(0, 2 - tentativaNumero),
       mensagem: "Submissão enviada para validação. Aguarde aprovação.",
     });
   } catch (error) {
