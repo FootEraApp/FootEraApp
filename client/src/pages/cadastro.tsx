@@ -312,7 +312,8 @@ export default function Cadastro() {
       if (!res.ok) { const t = await res.text(); throw new Error(t || "Erro ao cadastrar."); }
 
       const data = await res.json();
-      setSucesso("Cadastro realizado com sucesso!");
+      setSucesso("Cadastro realizado! Enviamos um e-mail para verificação. Confira sua caixa de entrada (e spam).");
+      setTimeout(() => navigate(`/login?verify=sent&email=${encodeURIComponent(email)}`), 1500);
 
       try {
         await fetch(`${API.BASE_URL}/api/legal/consentimentos`, {

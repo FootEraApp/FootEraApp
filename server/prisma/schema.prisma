@@ -29,6 +29,7 @@ model Usuario {
   dataCriacao              DateTime                  @default(now())
   codigo                   String?
   verified                 Boolean                   @default(false)
+  EmailVerification        EmailVerification[]
   administrador            Administrador?
   amigosDe                 Amigo[]                   @relation("AmigoUsuario")
   amigos                   Amigo[]                   @relation("UsuarioAmigo")
@@ -62,6 +63,20 @@ model Usuario {
   treinoRealizado          TreinoRealizado[]
   desafiosEmGrupo          DesafioEmGrupo[]          @relation("MembrosDesafioEmGrupo")
   Consentimento            Consentimento[]
+}
+
+model EmailVerification {
+  id        String   @id @default(uuid())
+  userId    String
+  email     String
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  usuario   Usuario  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Professor {

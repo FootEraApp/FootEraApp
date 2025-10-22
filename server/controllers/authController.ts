@@ -38,6 +38,13 @@ export async function login(req: Request, res: Response) {
       return res.status(401).json({ message: "Senha incorreta" });
     }
 
+    if (!usuario.verified) {
+      return res.status(403).json({
+        message: "Verifique seu e-mail para concluir o cadastro.",
+        needVerification: true,
+        emailDestino: usuario.responsavelEmail ?? usuario.email,
+      });
+    }
 
     const tipoUsuarioId: string | null =
       usuario.atleta?.id ??
@@ -66,6 +73,7 @@ export async function login(req: Request, res: Response) {
         nomeDeUsuario: usuario.nomeDeUsuario,
         tipo: usuario.tipo,
         email: usuario.email,
+        verified: usuario.verified,
       },
     });
   } catch (error) {

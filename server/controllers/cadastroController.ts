@@ -2,8 +2,49 @@ import { Request, Response } from "express";
 import { PrismaClient, TipoUsuario, Nivel, StatusCref } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto, { createHash } from "crypto";
+import { sendEmailVerification } from "../utils/mailer.js";
 
 const prisma = new PrismaClient();
+const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3001";
+const WEB_BASE_URL = process.env.WEB_BASE_URL || "http://localhost:5173";
+
+async function issueEmailVerification(params: {
+  userId: string;
+  emailDestino: string;
+  isResponsavel: boolean;
+  nome: string;
+  username: string;
+  tipo: string;
+  cidade?: string | null;
+  estado?: string | null;
+}) {
+  const raw = crypto.randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(raw).digest("hex");
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24h
+
+  await prisma.emailVerification.create({
+    data: {
+      userId: params.userId,
+      email: params.emailDestino.toLowerCase(),
+      tokenHash,
+      expiresAt,
+    },
+  });
+
+  const verifyUrl = `${APP_BASE_URL}/api/cadastro/verify?token=${raw}&uid=${params.userId}`;
+
+  await sendEmailVerification({
+    to: params.emailDestino,
+    verifyUrl,
+    isResponsavel: params.isResponsavel,
+    nome: params.nome,
+    username: params.username,
+    tipo: params.tipo,
+    cidade: params.cidade,
+    estado: params.estado,
+  });
+}
 
 export const getCadastroIndex = async (_req: Request, res: Response) => {
   res.json({ message: "Tela de cadastro inicial" });
@@ -419,12 +460,41 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       );
     }
 
+    // ----- Enviar verificação de e-mail (usuário >=18 ou responsável <18) -----
+    try {
+      // calcular idade a partir de dataNascimento já existente no usuário
+      let idadeCalc: number | null = null;
+      const usr = await prisma.usuario.findUnique({ where: { id: usuario.id } });
+      if (usr?.dataNascimento) {
+        const d = new Date(usr.dataNascimento);
+        const h = new Date();
+        idadeCalc = h.getFullYear() - d.getFullYear() - (h.getMonth() < d.getMonth() || (h.getMonth() === d.getMonth() && h.getDate() < d.getDate()) ? 1 : 0);
+      }
+
+      const isMenor = idadeCalc !== null && idadeCalc < 18;
+      const destino = isMenor && usr?.responsavelEmail ? usr.responsavelEmail : usr!.email;
+
+      await issueEmailVerification({
+        userId: usuario.id,
+        emailDestino: destino!,
+        isResponsavel: Boolean(isMenor),
+        nome: usuario.nome,
+        username: usernameFinal,
+        tipo: String(usuario.tipo),
+        cidade: usr?.cidade ?? null,
+        estado: usr?.estado ?? null,
+      });
+    } catch (e) {
+      console.error("Falha ao enviar verificação:", e);
+    }
+
     return res.status(201).json({
-      message: "Usuário cadastrado com sucesso.",
+      message: "Usuário cadastrado. Enviamos um e-mail para verificação.",
       usuarioId: usuario.id,
       tipoUsuarioId,
       tipo: usuario.tipo,
       token,
+      needsEmailVerification: true,
     });
   } catch (err: any) {
     if (err?.code === "P2002") {
@@ -435,6 +505,68 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Erro interno no servidor." });
   }
 };
+
+export const verificarEmail = async (req: Request, res: Response) => {
+  try {
+    const token = String(req.query.token ?? "");
+    const uid = String(req.query.uid ?? "");
+    if (!token || !uid) return res.status(400).send("Link inválido.");
+
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const registro = await prisma.emailVerification.findUnique({ where: { tokenHash } });
+
+    if (!registro || registro.userId !== uid) return res.status(400).send("Token inválido.");
+    if (registro.usedAt) return res.redirect(`${WEB_BASE_URL}/login?verified=already`);
+    if (registro.expiresAt < new Date()) return res.redirect(`${WEB_BASE_URL}/login?verified=expired`);
+
+    await prisma.$transaction([
+      prisma.usuario.update({ where: { id: uid }, data: { verified: true } }),
+      prisma.emailVerification.update({ where: { tokenHash }, data: { usedAt: new Date() } }),
+    ]);
+
+    return res.redirect(`${WEB_BASE_URL}/login?verified=ok`);
+  } catch (e) {
+    console.error("verificarEmail:", e);
+    return res.redirect(`${WEB_BASE_URL}/login?verified=error`);
+  }
+};
+
+export const reenviarVerificacao = async (req: Request, res: Response) => {
+  try {
+    const email = String(req.body?.email ?? "").toLowerCase();
+    if (!email) return res.status(400).json({ ok: false, message: "Informe o e-mail." });
+
+    const usr = await prisma.usuario.findUnique({ where: { email } });
+    if (!usr) return res.status(404).json({ ok: false, message: "Usuário não encontrado." });
+    if (usr.verified) return res.json({ ok: true, message: "Conta já verificada." });
+
+    let idadeCalc: number | null = null;
+    if (usr.dataNascimento) {
+      const d = new Date(usr.dataNascimento);
+      const h = new Date();
+      idadeCalc = h.getFullYear() - d.getFullYear() - (h.getMonth() < d.getMonth() || (h.getMonth() === d.getMonth() && h.getDate() < d.getDate()) ? 1 : 0);
+    }
+    const isMenor = idadeCalc !== null && idadeCalc < 18;
+    const destino = isMenor && usr.responsavelEmail ? usr.responsavelEmail : usr.email;
+
+    await issueEmailVerification({
+      userId: usr.id,
+      emailDestino: destino!,
+      isResponsavel: Boolean(isMenor),
+      nome: usr.nome,
+      username: usr.nomeDeUsuario,
+      tipo: String(usr.tipo),
+      cidade: usr.cidade,
+      estado: usr.estado,
+    });
+
+    return res.json({ ok: true, message: "E-mail de verificação reenviado." });
+  } catch (e) {
+    console.error("reenviarVerificacao:", e);
+    return res.status(500).json({ ok: false, message: "Erro ao reenviar." });
+  }
+};
+
 
 function stringParaTipoUsuario(v: any): TipoUsuario | null {
   const s = String(v ?? "").toLowerCase();
