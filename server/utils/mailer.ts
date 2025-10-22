@@ -42,3 +42,59 @@ export async function sendPasswordResetEmail(to: string, link: string) {
     console.log("[password-reset] preview email:", preview);
   }
 }
+
+export async function sendEmailVerification(opts: {
+  to: string;
+  verifyUrl: string;
+  isResponsavel?: boolean;
+  nome: string;
+  username: string;
+  tipo: string;
+  cidade?: string | null;
+  estado?: string | null;
+  supportEmail?: string;
+}) {
+  const transporter = await createTransport();
+
+  const support = opts.supportEmail ?? process.env.SUPPORT_EMAIL ?? "suporte@footera.app.br";
+  const subject = opts.isResponsavel
+    ? "Confirme o e-mail do responsável – FootEra"
+    : "Confirme seu e-mail – FootEra";
+
+  const aviso = `Se não foi você quem criou a conta, NÃO clique em validar e contate: ${support}`;
+
+  const html = `
+  <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px">
+    <img src="https://footera.com.br/assets/usuarios/footera-logo.png" alt="FootEra" style="height:48px;margin-bottom:8px"/>
+    <h2 style="margin:8px 0 2px">Olá, ${opts.isResponsavel ? "Responsável" : opts.nome}!</h2>
+    <p style="margin:4px 0 14px;line-height:1.5">
+      ${opts.isResponsavel
+        ? `Você foi indicado como responsável pelo cadastro do atleta <b>${opts.nome}</b> (@${opts.username}).`
+        : `Recebemos seu cadastro @${opts.username} como <b>${opts.tipo}</b>${opts.cidade ? ` em ${opts.cidade}-${opts.estado ?? ""}` : ""}.`}
+    </p>
+
+    <a href="${opts.verifyUrl}" style="display:inline-block;background:#065f46;color:#fff;text-decoration:none;border-radius:10px;padding:12px 18px;font-weight:600">
+      Validar e-mail
+    </a>
+
+    <p style="margin-top:18px;color:#555;font-size:13px">${aviso}</p>
+    <hr style="border:none;border-top:1px solid #eee;margin:20px 0"/>
+    <p style="color:#777;font-size:12px">
+      Se o botão não funcionar, copie e cole este link:<br/>
+      <span style="word-break:break-all;color:#444">${opts.verifyUrl}</span>
+    </p>
+  </div>`;
+
+  const text =
+`${opts.isResponsavel ? "Responsável" : opts.nome}, confirme o e-mail na FootEra.
+Link: ${opts.verifyUrl}
+${aviso}`;
+
+  await transporter.sendMail({
+    from: getFrom(),
+    to: opts.to,
+    subject,
+    html,
+    text,
+  });
+}
