@@ -9,10 +9,11 @@ import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import CardAtletaShield from "../components/cards/CardAtletaShield.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import { FLAGS } from "../config.js";
 
 const TODAS_CATEGORIAS = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"] as const;
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"] as const;
-const authHeaders = { Authorization: `Bearer ${Storage.token || ""}` };
+const authHeaders = () => ({ Authorization: `Bearer ${Storage.token || localStorage.getItem("token") || ""}` });
 
 function HeaderSlider({
   pos, setPos, onCommit, onDraggingChange,
@@ -247,10 +248,11 @@ function DesafiosInner() {
     (async () => {
       try {
         const [r1, r2, seguindoRes] = await Promise.all([
-          axios.get(`${API.BASE_URL}/api/desafios/submissoes`, { headers: authHeaders }),
-          axios.get(`${API.BASE_URL}/api/treinos/submissoes`,   { headers: authHeaders }),
-          axios.get(`${API.BASE_URL}/api/seguidores/meus-seguidos`, { headers: authHeaders }),
+          axios.get(`${API.BASE_URL}/api/desafios/submissoes`, { headers: authHeaders() }),
+          axios.get(`${API.BASE_URL}/api/treinos/submissoes`,   { headers: authHeaders() }),
+          axios.get(`${API.BASE_URL}/api/seguidores/meus-seguidos`, { headers: authHeaders() }),
         ]);
+
         const d1 = normaliza(r1.data); const d2 = normaliza(r2.data);
         setSubsDesafios(d1); setSubsTreinos(d2); setSubmissoes([...d1, ...d2]);
 
@@ -277,13 +279,13 @@ function DesafiosInner() {
 
   const baseDeSub = (s: Submissao) => `${API.BASE_URL}${s.tipo === "TREINO" ? "/api/treinos/submissoes" : "/api/desafios/submissoes"}`;
   const toggleLike = async (sub: Submissao) => {
-    try { const r = await axios.post(`${baseDeSub(sub)}/${sub.id}/like`, {}, { headers: authHeaders }); const { liked, count } = r.data; applyUpdate(sub, { viewerLiked: liked, curtidasCount: count }); }
+    try { const r = await axios.post(`${baseDeSub(sub)}/${sub.id}/like`, {}, { headers: authHeaders() }); const { liked, count } = r.data; applyUpdate(sub, { viewerLiked: liked, curtidasCount: count }); }
     catch { alert("Não foi possível curtir."); }
   };
   const enviarComentario = async (sub: Submissao) => {
     const txt = (comentarioTexto[sub.id] || "").trim(); if (!txt) return;
     try {
-      const r = await axios.post(`${baseDeSub(sub)}/${sub.id}/comentarios`, { conteudo: txt }, { headers: authHeaders });
+      const r = await axios.post(`${baseDeSub(sub)}/${sub.id}/comentarios`, { conteudo: txt }, { headers: authHeaders() });
       const { comentario, count } = r.data;
       applyUpdate(sub, { comentariosCount: count, comentarios: [ ...(sub.comentarios || []), comentario ] });
       setComentarioTexto((p) => ({ ...p, [sub.id]: "" }));
@@ -422,13 +424,19 @@ function DesafiosInner() {
   );
 }
 
-export default function DesafiosPage(): JSX.Element {
+export default function DesafiosPage(): JSX.Element | null {
   const [, setLocation] = useLocation();
   const [pos, setPos] = useState(1); 
   const [dragging, setDragging] = useState(false);
 
   const HEADER_H_MOBILE = 64;
   const HEADER_H_DESKTOP = 80; 
+
+  useEffect(() => {
+    if (!FLAGS.DESAFIOS_ENABLED) setLocation("/feed");
+  }, []);
+
+  if (!FLAGS.DESAFIOS_ENABLED) return null;
 
   const onCommit = (target: "feed" | "desafios") => {
     const snap = target === "desafios" ? 1 : 0;

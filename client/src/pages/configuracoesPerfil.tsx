@@ -1,7 +1,7 @@
 import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
-import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 
 export default function ConfiguracoesPerfil() {
@@ -29,12 +29,16 @@ export default function ConfiguracoesPerfil() {
     <div className="min-h-screen bg-transparent pb-24">
       <header className="bg-green-900 text-white text-center py-3 text-xl font-bold">FOOTERA</header>
 
-      <button
-        onClick={() => setLocation("/perfil")}
-        className="text-green-900 text-lg font-semibold px-4 mt-4 mb-2 hover:underline"
-      >
-        ← Configurações
-      </button>
+      <Link
+                            href="/perfil"
+                            aria-label="Voltar para perfil"
+                            className="inline-flex h-10 w-10 items-center justify-center
+                              rounded-full border border-green-800 bg-white text-green-900
+                              shadow-sm hover:bg-green-50 focus:outline-none
+                              focus:ring-2 focus:ring-green-700/30 mt-2 ml-2 mb-2"
+                            >
+                            <ArrowLeft className="h-5 w-5" />
+                          </Link>
 
       <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <h2 className="text-gray-800 font-bold mb-3">Conta</h2>

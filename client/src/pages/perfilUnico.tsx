@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";
-import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
@@ -62,6 +62,20 @@ export default function PerfilUnico() {
 
   return (
     <div className="min-h-screen bg-transparent pb-20">
+      <div className="mb-3">
+        <Link
+          href="/explorar"
+          aria-label="Voltar para explorar"
+          title="Voltar para explorar"
+          className="inline-flex h-10 w-10 items-center justify-center
+                    rounded-full border border-green-800 bg-white text-green-900
+                    shadow-sm hover:bg-green-50 focus:outline-none
+                    focus:ring-2 focus:ring-green-700/30 mt-6 ml-4"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+      </div>
+
       {tipo === "Atleta" && <PerfilAtleta idDaUrl={id} />}
       {tipo === "Professor" && <PerfilProfessor idDaUrl={id} />}
       {tipo === "Clube" && <PerfilClube idDaUrl={id} />}

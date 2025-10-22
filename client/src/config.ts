@@ -41,4 +41,8 @@ export function appUrl(path: string = "/") {
   return `${APP.FRONTEND_BASE_URL}${p}`;
 }
 
+export const FLAGS = {
+  DESAFIOS_ENABLED: false,
+};
+
 export default { API, APP, appUrl };

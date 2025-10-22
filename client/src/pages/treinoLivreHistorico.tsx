@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
+import { ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
 
 type TL = { id: string; data: string; descricao: string; duracaoMin: number; tipoAtividade?: string | null; categoria?: string | null; };
 
@@ -21,6 +23,17 @@ export default function TreinosLivresHistorico() {
 
   return (
     <div className="p-4 max-w-xl mx-auto">
+       <Link
+              href="/treinos"
+              aria-label="Voltar para treinos"
+              title="Voltar para explorar"
+              className="inline-flex h-10 w-10 items-center justify-center
+                rounded-full border border-green-800 bg-white text-green-900
+                shadow-sm hover:bg-green-50 focus:outline-none
+                focus:ring-2 focus:ring-green-700/30 mt-2 ml-2"
+              >
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
       <h2 className="text-lg font-bold mb-4">Treinos Livres</h2>
       {itens.length === 0 ? (
         <p className="text-gray-600">Nenhum treino livre registrado ainda.</p>

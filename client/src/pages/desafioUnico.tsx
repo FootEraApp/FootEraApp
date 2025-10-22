@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
-import { Volleyball, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
+import { FLAGS } from "../config.js";
 
 interface Desafio {
   id: string;
@@ -22,6 +23,12 @@ export default function DesafioUnico() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!FLAGS.DESAFIOS_ENABLED) setLocation("/treinos");
+  }, []);
+
+  if (!FLAGS.DESAFIOS_ENABLED) return null;
+  
   useEffect(() => {
     if (!id) return;
 
@@ -74,16 +81,6 @@ export default function DesafioUnico() {
     );
 
   if (!desafio) return null;
-
- function resolveImg(url?: string | null) {
-  if (!url) return null;
-  const s = url.trim();
-  if (/^https?:\/\//i.test(s) || s.startsWith("data:")) return s;   
-  if (s.startsWith("/uploads/")) return `${API.BASE_URL}${s}`;       
-  if (s.startsWith("/assets/")) return s;                          
-  if (s.startsWith("desafios/")) return `/assets/${s}`;             
-  return `/assets/desafios/${s}`;                                    
-}
 
  const imagemSrc =
   !desafio.imagemUrl ? null

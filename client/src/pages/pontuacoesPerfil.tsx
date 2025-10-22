@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import axios from "axios";
 import { Link, useLocation, useRoute } from "wouter";
-import { BarChart2, Timer, KeyRound, Play, CheckCircle, AlertCircle, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { ArrowLeft, BarChart2, Timer, KeyRound, Play, CheckCircle, AlertCircle, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import CardAtletaShield from "../components/cards/CardAtletaShield.js";
@@ -510,6 +510,16 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen bg-transparent pb-28">
+      <Link
+                            href="/perfil"
+                            aria-label="Voltar para perfil"
+                            className="inline-flex h-10 w-10 items-center justify-center
+                              rounded-full border border-green-800 bg-white text-green-900
+                              shadow-sm hover:bg-green-50 focus:outline-none
+                              focus:ring-2 focus:ring-green-700/30 mt-2 ml-2 mb-2"
+                            >
+                            <ArrowLeft className="h-5 w-5" />
+                          </Link>
       <header className="bg-green-900 text-white text-center py-3 text-xl font-bold">FOOTERA</header>
 
       {loading && (

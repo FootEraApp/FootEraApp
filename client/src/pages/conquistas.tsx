@@ -6,7 +6,7 @@ import {
 } from "../lib/achievementsCatalog.js";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
-import { Volleyball, User, CirclePlus, Search, House, HelpCircle } from "lucide-react";
+import { ArrowLeft, Volleyball, User, CirclePlus, Search, House, HelpCircle } from "lucide-react";
 import { Link } from "wouter";
 
 type Earned = {
@@ -157,6 +157,16 @@ export default function ConquistasPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
+        <Link
+                              href="/perfil"
+                              aria-label="Voltar para perfil"
+                              className="inline-flex h-10 w-10 items-center justify-center
+                                rounded-full border border-green-800 bg-white text-green-900
+                                shadow-sm hover:bg-green-50 focus:outline-none
+                                focus:ring-2 focus:ring-green-700/30 mt-2 ml-2 mb-2"
+                              >
+                              <ArrowLeft className="h-5 w-5" />
+                            </Link>
         <header className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Conquistas</h1>
           <p className="text-gray-600">

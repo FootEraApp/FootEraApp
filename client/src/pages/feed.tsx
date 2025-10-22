@@ -82,22 +82,25 @@ function HeaderSliderLite({
   }, [start]);
 
   const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
   const onDown: React.PointerEventHandler<HTMLButtonElement> = (e) => {
     (e.currentTarget as any).setPointerCapture?.(e.pointerId);
     setDragging(true);
     startX.current = e.clientX;
     startPos.current = pos;
   };
+
   const onMove: React.PointerEventHandler<HTMLButtonElement> = (e) => {
     if (!dragging) return;
     const w = widthRef.current || window.innerWidth;
     setPos(clamp01(startPos.current + (e.clientX - startX.current) / w));
   };
+
   const onUp: React.PointerEventHandler<HTMLButtonElement> = () => {
     setDragging(false);
     const target = pos >= 0.5 ? "desafios" : "feed";
     setPos(target === "desafios" ? 1 : 0);
-    if (target !== start) setTimeout(() => setLocation(`/${target}`), 100);
+    if (target !== start) setTimeout(() => setLocation(`/${target}`), 120);
   };
 
   const px = Math.round(pos * (widthRef.current || 0));
@@ -108,7 +111,7 @@ function HeaderSliderLite({
     <div ref={wrapRef} className="relative h-16 sm:h-20 -mx-4 px-4 sm:mx-0 mb-2">
       <div className="absolute inset-0 z-0">
         <div
-          className={`absolute inset-y-2 left-0 right-0 rounded-full border overflow-hidden ${
+          className={`absolute inset-y-2 left-0 right-0 rounded-full border overflow-hidden transition-colors duration-150 ${
             dragging
               ? "bg-green-100/70 border-green-200 shadow-inner"
               : "bg-transparent border-transparent"
@@ -118,6 +121,22 @@ function HeaderSliderLite({
           className="absolute inset-y-2 left-0 rounded-full bg-green-200/60 transition-[width,opacity] duration-150"
           style={{ width: `${px}px`, opacity: dragging ? 1 : 0 }}
         />
+        <div
+          className={`absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-green-800/70 text-xs sm:text-sm transition-opacity duration-150 ${
+            dragging ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <House className="w-4 h-4" />
+          <span className="hidden sm:inline">Feed</span>
+        </div>
+        <div
+          className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-yellow-700/80 text-xs sm:text-sm transition-opacity duration-150 ${
+            dragging ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <span className="hidden sm:inline">Desafios</span>
+          <Trophy className="w-4 h-4" />
+        </div>
       </div>
 
       <div className="relative z-10 h-full flex items-center justify-center pointer-events-none">

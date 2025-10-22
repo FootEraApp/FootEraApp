@@ -3,7 +3,7 @@ import axios from 'axios';
 import { formatarUrlFoto } from '@/utils/formatarFoto.js';
 import Storage from "../../../server/utils/storage.js";
 import { API } from '../config.js';
-import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { Link } from 'wouter';
 
 type ResultadoBuscaClube = { id: string; nome: string; username?: string; fotoUrl?: string | null; };
@@ -372,14 +372,15 @@ useEffect(() => {
       >
         <div className="mb-3">
           <Link
-            href="/perfil"
-            aria-label="Voltar para o perfil"
-            className="inline-flex h-10 w-10 items-center justify-center
-                      rounded-xl border border-green-800/60 bg-white text-green-900
-                      shadow-sm hover:bg-green-50"
-          >
-            <span className="text-xl -mt-0.5">&lt;</span>
-          </Link>
+                                href="/perfil"
+                                aria-label="Voltar para perfil"
+                                className="inline-flex h-10 w-10 items-center justify-center
+                                  rounded-full border border-green-800 bg-white text-green-900
+                                  shadow-sm hover:bg-green-50 focus:outline-none
+                                  focus:ring-2 focus:ring-green-700/30 mt-2 ml-2 mb-2"
+                                >
+                                <ArrowLeft className="h-5 w-5" />
+                              </Link>
         </div>
 
         <h1 className="text-2xl font-bold mb-4">Editar Perfil</h1>
