@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
-import { API } from "../config.js";
+import { API, FLAGS } from "../config.js";
 import { Badge } from "@/components/ui/badge.js";
 import HealthBanner from "@/components/legal/HealthBanner.js";
 
@@ -479,28 +479,31 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
     })();
   }, []);
 
-  async function carregarMinhasSubmissoes(atletaId: string) {
-    try {
-      const token = (Storage as any).token ?? localStorage.getItem("token");
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-      const r = await fetch(`${API.BASE_URL}/api/treinos/minhas-submissoes?atletaId=${encodeURIComponent(atletaId)}`, {
-        headers,
-      });
-      if (r.ok) {
-        const arr: MinhasSubTreino[] = await r.json();
-        const setAg = new Set<string>();
-        const setPg = new Set<string>();
-        for (const s of arr) {
-          if (s.treinoAgendadoId) setAg.add(s.treinoAgendadoId);
-          if (s.treinoProgramadoId) setPg.add(s.treinoProgramadoId);
-        }
-        setIdsAgendadosSubmetidos(setAg);
-        setIdsProgramadosSubmetidos(setPg);
-      } else {
-        setIdsAgendadosSubmetidos(new Set());
-        setIdsProgramadosSubmetidos(new Set());
-      }
+async function carregarMinhasSubmissoes(atletaId: string) {
+  try {
+    const token = (Storage as any).token ?? localStorage.getItem("token");
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
+    const r = await fetch(
+      `${API.BASE_URL}/api/treinos/minhas-submissoes?atletaId=${encodeURIComponent(atletaId)}`,
+      { headers }
+    );
+    if (r.ok) {
+      const arr: MinhasSubTreino[] = await r.json();
+      const setAg = new Set<string>();
+      const setPg = new Set<string>();
+      for (const s of arr) {
+        if (s.treinoAgendadoId) setAg.add(s.treinoAgendadoId);
+        if (s.treinoProgramadoId) setPg.add(s.treinoProgramadoId);
+      }
+      setIdsAgendadosSubmetidos(setAg);
+      setIdsProgramadosSubmetidos(setPg);
+    } else {
+      setIdsAgendadosSubmetidos(new Set());
+      setIdsProgramadosSubmetidos(new Set());
+    }
+
+    if (FLAGS.DESAFIOS_ENABLED) {
       try {
         const r2 = await fetch(
           `${API.BASE_URL}/api/desafios/minhas-submissoes?atletaId=${encodeURIComponent(atletaId)}`,
@@ -508,19 +511,22 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
         );
         if (r2.ok) {
           const arr2: { desafioId: string }[] = await r2.json();
-          setIdsDesafiosSubmetidos(new Set(arr2.map((x) => x.desafioId)));
+          setIdsDesafiosSubmetidos(new Set(arr2.map(x => x.desafioId)));
         } else {
           setIdsDesafiosSubmetidos(new Set());
         }
       } catch {
         setIdsDesafiosSubmetidos(new Set());
       }
-    } catch {
-      setIdsAgendadosSubmetidos(new Set());
-      setIdsProgramadosSubmetidos(new Set());
+    } else {
       setIdsDesafiosSubmetidos(new Set());
     }
+  } catch {
+    setIdsAgendadosSubmetidos(new Set());
+    setIdsProgramadosSubmetidos(new Set());
+    setIdsDesafiosSubmetidos(new Set());
   }
+}
 
 useEffect(() => {
   if (!semanasDesafio.length) return;
@@ -553,27 +559,17 @@ useEffect(() => {
       if (tipo === "atleta" && tipoUsuarioId && token) {
         carregarMinhasSubmissoes(tipoUsuarioId);
 
-        const [resTreinos, resDesafios] = await Promise.all([
-          fetch(`${API.BASE_URL}/api/treinos/agendados?usuarioId=${(Storage as any).usuarioId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ]);
-
-        if (!resTreinos.ok) {
-          console.error("/treinos/agendados", resTreinos.status, await resTreinos.text());
-          return;
-        }
-        if (!resDesafios.ok) {
-          console.error("/desafios", resDesafios.status, await resDesafios.text());
-          return;
-        }
+         const resTreinos = await fetch(
+            `${API.BASE_URL}/api/treinos/agendados?usuarioId=${(Storage as any).usuarioId}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (!resTreinos.ok) {
+            console.error("/treinos/agendados", resTreinos.status, await resTreinos.text());
+            return;
+          }
 
         const treinosJson = await resTreinos.json();
-        const desafiosJson = await resDesafios.json();
-
+        
         const normalizados = (Array.isArray(treinosJson) ? treinosJson : []).map((t: any) => ({
           id: t.id,
           titulo: t.titulo,
@@ -583,7 +579,7 @@ useEffect(() => {
           duracaoMinutos: t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
           treinoProgramado: t.treinoProgramado ?? null,
         }));
-
+        
         const agora = Date.now();
         const apenasVigentes = normalizados.filter((t) => {
           if (!t.prazoEnvio) return true;
@@ -592,113 +588,116 @@ useEffect(() => {
         });
 
         setTreinosAgendados(apenasVigentes);
-        setDesafios(desafiosJson ?? []);
-        try {
-          const resSem = await fetch(
-            `${API.BASE_URL}/api/treinos/desafios-semanais?tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          if (resSem.ok) {
-            const js = await resSem.json();
-            const rawWeeks: WeekStatus[] = Array.isArray(js?.weeks) ? js.weeks : [];
-            setSemanasDesafio(computeMonthlyWeeks(rawWeeks, new Date()));
-          } else {
-            setSemanasDesafio(buildMonthBuckets(new Date())); 
-          }
-        } catch {
-          setSemanasDesafio(buildMonthBuckets(new Date()));
-        }
+        if (FLAGS.DESAFIOS_ENABLED) {
+    const resDesafios = await fetch(
+      `${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (resDesafios.ok) {
+      const desafiosJson = await resDesafios.json();
+      setDesafios(desafiosJson ?? []);
+    } else {
+      setDesafios([]);
+    }
 
-
+    try {
+      const resSem = await fetch(
+        `${API.BASE_URL}/api/treinos/desafios-semanais?tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (resSem.ok) {
+        const js = await resSem.json();
+        const rawWeeks: WeekStatus[] = Array.isArray(js?.weeks) ? js.weeks : [];
+        setSemanasDesafio(computeMonthlyWeeks(rawWeeks, new Date()));
+      } else {
+        setSemanasDesafio(buildMonthBuckets(new Date()));
+      }
+    } catch {
+      setSemanasDesafio(buildMonthBuckets(new Date()));
+    }
+  } else {
+    setDesafios([]);
+    setSemanasDesafio([]);
+  }
       } else if (tipo === "admin" && token) {
-        const [resTreinos, resDesafios] = await Promise.all([
-          fetch(`${API.BASE_URL}/api/treinos/programados`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`${API.BASE_URL}/api/desafios`, { headers: { Authorization: `Bearer ${token}` } }),
-        ]);
+      const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/programados`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resTreinos.ok) throw new Error(`Falha /treinos/programados: ${resTreinos.status}`);
+      const jsonTreinos = await resTreinos.json();
 
-        if (!resTreinos.ok) throw new Error(`Falha /treinos/programados: ${resTreinos.status}`);
-        const jsonTreinos = await resTreinos.json();
-        const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
-          id: t.id,
-          nome: t.nome,
-          descricao: t.descricao ?? undefined,
-          nivel: t.nivel,
-          dataAgendada: t.dataAgendada ?? undefined,
-          duracao: t.duracao ?? undefined,
-          objetivo: t.objetivo ?? undefined,
-          dicas: Array.isArray(t.dicas) ? t.dicas : [],
-          professorId: t.professorId ?? undefined,
-          escolinhaId: t.escolinhaId ?? undefined,
-          clubeId: t.clubeId ?? undefined,
-          pontuacao: t.pontuacao ?? undefined,
-          exercicios: (t.exercicios ?? []).map((ex: any) => ({
-            id: ex.exercicio?.id ?? ex.id ?? "",
-            nome: ex.exercicio?.nome ?? ex.nome ?? "",
-            repeticoes: ex.repeticoes ?? undefined,
-          })),
-        }));
+      const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
+        id: t.id,
+        nome: t.nome,
+        descricao: t.descricao ?? undefined,
+        nivel: t.nivel,
+        dataAgendada: t.dataAgendada ?? undefined,
+        duracao: t.duracao ?? undefined,
+        objetivo: t.objetivo ?? undefined,
+        dicas: Array.isArray(t.dicas) ? t.dicas : [],
+        professorId: t.professorId ?? undefined,
+        escolinhaId: t.escolinhaId ?? undefined,
+        clubeId: t.clubeId ?? undefined,
+        pontuacao: t.pontuacao ?? undefined,
+        exercicios: (t.exercicios ?? []).map((ex: any) => ({
+          id: ex.exercicio?.id ?? ex.id ?? "",
+          nome: ex.exercicio?.nome ?? ex.nome ?? "",
+          repeticoes: ex.repeticoes ?? undefined,
+        })),
+      }));
+      setTreinos(normTreinos);
 
-        const jsonDesafios = await resDesafios.json();
-        setTreinos(normTreinos);
-        setDesafios(jsonDesafios?.desafiosOficiais ?? jsonDesafios ?? []);
-      } else if (["professor", "clube", "escolinha", "escola"].includes(String(tipo)) && token) {
-        const [resTreinos, resDesafios] = await Promise.all([
-          fetch(`${API.BASE_URL}/api/treinos/programados`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`${API.BASE_URL}/api/desafios?tipoUsuarioId=${(Storage as any).tipoUsuarioId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ]);
-
-        if (!resTreinos.ok) throw new Error(`/treinos/programados: ${resTreinos.status}`);
+      if (FLAGS.DESAFIOS_ENABLED) {
+        const resDesafios = await fetch(`${API.BASE_URL}/api/desafios`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!resDesafios.ok) throw new Error(`/desafios: ${resDesafios.status}`);
-
-        const jsonTreinos = await resTreinos.json();
-        const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
-          id: t.id,
-          nome: t.nome,
-          descricao: t.descricao ?? undefined,
-          nivel: t.nivel,
-          dataAgendada: t.dataAgendada ?? undefined,
-          duracao: t.duracao ?? undefined,
-          objetivo: t.objetivo ?? undefined,
-          dicas: Array.isArray(t.dicas) ? t.dicas : [],
-          professorId: t.professorId ?? undefined,
-          escolinhaId: t.escolinhaId ?? undefined,
-          clubeId: t.clubeId ?? undefined,
-          pontuacao: t.pontuacao ?? undefined,
-          exercicios: (t.exercicios ?? []).map((ex: any) => ({
-            id: ex.exercicio?.id ?? ex.id ?? "",
-            nome: ex.exercicio?.nome ?? ex.nome ?? "",
-            repeticoes: ex.repeticoes ?? undefined,
-          })),
-        }));
-
         const jsonDesafios = await resDesafios.json();
-        setTreinos(normTreinos);
+        setDesafios(jsonDesafios?.desafiosOficiais ?? jsonDesafios ?? []);
+      } else {
+        setDesafios([]);
+      }
+      } else if (["professor", "clube", "escolinha", "escola"].includes(String(tipo)) && token) {
+      const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/programados`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resTreinos.ok) throw new Error(`/treinos/programados: ${resTreinos.status}`);
+      const jsonTreinos = await resTreinos.json();
+
+      const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
+        id: t.id,
+        nome: t.nome,
+        descricao: t.descricao ?? undefined,
+        nivel: t.nivel,
+        dataAgendada: t.dataAgendada ?? undefined,
+        duracao: t.duracao ?? undefined,
+        objetivo: t.objetivo ?? undefined,
+        dicas: Array.isArray(t.dicas) ? t.dicas : [],
+        professorId: t.professorId ?? undefined,
+        escolinhaId: t.escolinhaId ?? undefined,
+        clubeId: t.clubeId ?? undefined,
+        pontuacao: t.pontuacao ?? undefined,
+        exercicios: (t.exercicios ?? []).map((ex: any) => ({
+          id: ex.exercicio?.id ?? ex.id ?? "",
+          nome: ex.exercicio?.nome ?? ex.nome ?? "",
+          repeticoes: ex.repeticoes ?? undefined,
+        })),
+      }));
+      setTreinos(normTreinos);
+
+      if (FLAGS.DESAFIOS_ENABLED) {
+        const resDesafios = await fetch(
+          `${API.BASE_URL}/api/desafios?tipoUsuarioId=${(Storage as any).tipoUsuarioId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!resDesafios.ok) throw new Error(`/desafios: ${resDesafios.status}`);
+        const jsonDesafios = await resDesafios.json();
         setDesafios(jsonDesafios ?? []);
       } else {
-        const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/disponiveis`);
-        if (!resTreinos.ok) {
-          console.error("/treinos/disponiveis", resTreinos.status, await resTreinos.text());
-          return;
-        }
-
-        const jsonTreinos = await resTreinos.json();
-        const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
-          ...t,
-          pontuacao: t.pontuacao ?? undefined,
-          exercicios: (t.exercicios ?? []).map((ex: any) => ({
-            id: ex.id ?? "",
-            nome: ex.nome ?? "",
-            repeticoes: ex.repeticoes ?? undefined,
-          })),
-        }));
-
-        setTreinos(normTreinos);
         setDesafios([]);
       }
     };
-
+  }
     const carregarUsuario = () => {
       const tipoSalvo =
         (Storage as any).tipoSalvo ??
@@ -717,7 +716,6 @@ useEffect(() => {
         console.warn("Tipo/IDs inválidos", { tipoSalvo, usuarioId, tipoUsuarioId });
       }
     };
-
     carregar();
     carregarUsuario();
   }, []);
@@ -1252,21 +1250,24 @@ const renderDesafioCard = (desafio: Desafio) => (
                 )}
               </div>
 
-              <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-lg font-semibold">Desafios</h3>
-
-                  <div className="ml-3 shrink-0 [&>div]:mb-0 [&>div>div:first-child]:hidden">
-                    <WeeklyChecker weeks={semanasDesafio} />
+              {FLAGS.DESAFIOS_ENABLED && (
+                <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-semibold">Desafios</h3>
+                    <div className="ml-3 shrink-0 [&>div]:mb-0 [&>div>div:first-child]:hidden">
+                      <WeeklyChecker weeks={semanasDesafio} />
+                    </div>
                   </div>
+
+                  {desafiosVisiveis.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {desafiosVisiveis.map(renderDesafioCard)}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500">Nenhum desafio disponível no momento.</p>
+                  )}
                 </div>
-                
-                {desafiosVisiveis.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{desafiosVisiveis.map(renderDesafioCard)}</div>
-                ) : (
-                  <p className="text-gray-500">Nenhum desafio disponível no momento.</p>
-                )}
-              </div>
+              )}
             </div>
           )}
 

@@ -1,7 +1,6 @@
-// client/src/pages/mensagens
 import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
-import { Send, Share2, Volleyball, User, UserPlus, CirclePlus, Search, House, Users, Trash } from "lucide-react";
+import { Send, Share2, Volleyball, User, UserPlus, CirclePlus, Search, House, Users, Trash, ArrowLeft } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import socket from "../services/socket.js";
@@ -11,6 +10,7 @@ import { MensagemItemGrupo } from "@/components/chat/GroupDesafioCards.js";
 import CardAtletaShield from "@/components/cards/CardAtletaShield.js";
 import * as htmlToImage from "html-to-image";
 import { publicImgUrl } from "@/utils/publicUrl.js";
+import { FLAGS } from "../config.js";
 
 interface Usuario {
   id: string;
@@ -634,6 +634,7 @@ const markReadFromUser = async (otherId: string) => {
     }
   };
   const carregarDesafioPorId = async (desafioId: string) => {
+    if (!FLAGS.DESAFIOS_ENABLED) return;
     if (!desafioId || desafiosCache[desafioId]) return;
     try {
       const res = await fetch(`${API.BASE_URL}/api/desafios/${desafioId}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -971,7 +972,7 @@ useEffect(() => {
     const isMine = msg.usuarioId === usuarioId;
     const wrap = isMine ? "self-end items-end" : "self-start items-start";
     const bubble = isMine ? "bg-green-900 text-white rounded-2xl rounded-tr-none" : "bg-[#E8ECF7] text-[#0F172A] rounded-2xl rounded-tl-none";
-    const ts = isMine ? "text-[11px] text-grey-500 text-right mt-1" : "text-[11px] text-gray-500 mt-1";
+    const ts = isMine ? "text-[11px] text-gray-500 text-right mt-1" : "text-[11px] text-gray-500 mt-1";
 
     const Shell = (children: React.ReactNode): JSX.Element => (
       <div className={`max-w-[75%] flex flex-col ${wrap}`}>
@@ -993,6 +994,12 @@ useEffect(() => {
       </div>
     );
 
+    if (!FLAGS.DESAFIOS_ENABLED && (
+      msg.tipo === "GRUPO_DESAFIO" || msg.tipo === "GRUPO_DESAFIO_BONUS"
+    )) {
+      return Shell(<p className="text-sm opacity-80">Conteúdo de desafio está temporariamente indisponível.</p>);
+    }
+
     if (msg.tipo === "GRUPO_DESAFIO" || msg.tipo === "GRUPO_DESAFIO_BONUS" || msg.tipo === "DESAFIO" || msg.tipo === "POST" || msg.tipo === "USUARIO") {
       return Shell(
         <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
@@ -1007,7 +1014,7 @@ useEffect(() => {
     const isMine = msg.deId === usuarioId;
     const wrap = isMine ? "self-end items-end" : "self-start items-start";
     const bubble = isMine ? "bg-green-900 text-white rounded-2xl rounded-tr-none" : "bg-[#E8ECF7] text-[#0F172A] rounded-2xl rounded-tl-none";
-    const ts = isMine ? "text-[11px] text-grey-500 text-right mt-1" : "text-[11px] text-gray-500 mt-1";
+    const ts = isMine ? "text-[11px] text-gray-500 text-right mt-1" : "text-[11px] text-gray-500 mt-1";
 
     const Shell = (children: React.ReactNode): JSX.Element => (
       <div className={`max-w-[75%] flex flex-col ${wrap}`}>
@@ -1097,6 +1104,10 @@ useEffect(() => {
     }
 
     if (msg.tipo === "DESAFIO") {
+      if (!FLAGS.DESAFIOS_ENABLED) {
+        return Shell(<div className="text-sm opacity-80">Desafio temporariamente indisponível.</div>);
+      }
+
       const d = desafiosCache[msg.conteudo];
       if (!d) return Shell(<div className="text-sm">Carregando desafio...</div>);
       const imagemSrc = d.imagemUrl ? publicImgUrl(d.imagemUrl) : undefined;
@@ -1123,6 +1134,16 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen flex flex-col bg-transparent">
+      <Link
+                      href="/perfil"
+                      aria-label="Voltar para perfil"
+                      className="inline-flex h-10 w-10 items-center justify-center
+                        rounded-full border border-green-800 bg-white text-green-900
+                        shadow-sm hover:bg-green-50 focus:outline-none
+                        focus:ring-2 focus:ring-green-700/30 mt-2 ml-2 mb-2"
+                      >
+                      <ArrowLeft className="h-5 w-5" />
+                    </Link>
       <header className="sticky top-0 z-10 bg-green-900 text-white">
         <div className="relative h-14 flex items-center justify-center px-4">
           
@@ -1178,7 +1199,7 @@ useEffect(() => {
                 </button>
               )}
 
-              {alvo?.tipo === "grupo" && (
+              {FLAGS.DESAFIOS_ENABLED && alvo?.tipo === "grupo" && (
                 <button
                   onClick={() => setModalDesafiosAberto(true)}
                   className="px-3 py-2 text-xs rounded-lg bg-green-800 text-white hover:bg-green-700"
@@ -1278,7 +1299,7 @@ useEffect(() => {
       </nav>
 
       <ModalGrupos aberto={modalAberto} onFechar={fecharModal} usuarioId={usuarioId ?? ""} token={token} />
-      {alvo?.tipo === "grupo" && (
+      {FLAGS.DESAFIOS_ENABLED && alvo?.tipo === "grupo" && (
         <ModalDesafiosGrupo
           aberto={modalDesafiosAberto}
           onFechar={fecharModalDesafios}

@@ -28,8 +28,8 @@ function pontosDesafioInd(s: any) {
 
 function pontosGrupo(p: any): number {
   const baseCandidates = [
-    p?.pontosGanhos,                             // pontos nessa submissão
-    p?.desafioEmGrupo?.pontosAcumulados,        // pontos do desafio em grupo
+    p?.pontosGanhos,                            
+    p?.desafioEmGrupo?.pontosAcumulados,     
     p?.desafioEmGrupo?.pontosSnapshot,
   ];
   const base = baseCandidates
@@ -47,8 +47,8 @@ async function getParticipacoesGrupo(usuarioId: string, atletaId: string) {
     return await prisma.submissaoDesafioEmGrupo.findMany({
       where: {
         OR: [
-          { usuarioId },                             // participação direta do usuário
-          { submissaoDesafio: { atletaId } },        // participação via submissão do atleta
+          { usuarioId },                            
+          { submissaoDesafio: { atletaId } },    
         ],
       },
       include: {
@@ -669,7 +669,6 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         headline: true,
         areaAtuacao: true,
         anosExperiencia: true,
-        // adicione:
         descricao: true,
         emailPublico: true,
         telefonePublico: true,
@@ -685,7 +684,6 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         headline: olheiro.headline,
         areaAtuacao: olheiro.areaAtuacao,
         anosExperiencia: olheiro.anosExperiencia,
-        // novos campos:
         descricao: olheiro.descricao,
         emailPublico: olheiro.emailPublico,
         telefonePublico: olheiro.telefonePublico,
@@ -758,7 +756,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
       data: {
         nome: usuario.nome,
         email: usuario.email,
-        nomeDeUsuario: usuario.nomeDeUsuario ?? undefined, // <— add
+        nomeDeUsuario: usuario.nomeDeUsuario ?? undefined,
         foto: fotoFinal,
         cidade: usuario.cidade,
         estado: usuario.estado,
@@ -882,14 +880,13 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
       }
 
       case "olheiro": {
-        // converte anosExperiencia se vier string
         const anos =
           typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== ""
             ? Number(tipo.anosExperiencia)
             : tipo.anosExperiencia;
 
         await prisma.olheiro.update({
-          where: { usuarioId: id }, // atualiza o olheiro deste usuário
+          where: { usuarioId: id },  
           data: {
             headline:         tipo.headline ?? null,
             descricao:        tipo.descricao ?? null,
@@ -898,12 +895,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             emailPublico:     tipo.emailPublico ?? null,
             telefonePublico:  tipo.telefonePublico ?? null,
             siteOuLinkedin:   tipo.siteOuLinkedin ?? null,
-            // se quiser que a mesma foto vá também para o registro do olheiro:
             fotoUrl:          fotoFinal,
-            // se você quiser já aceitar a colaboração aqui, pode descomentar:
-            // ...(typeof tipo.colaboracaoClubeId !== "undefined"
-            //     ? { colaboracaoClubeId: tipo.colaboracaoClubeId }
-            //     : {})
           },
         });
         break;
@@ -1185,7 +1177,6 @@ export async function getPerfilProfessor(req: Request, res: Response) {
 
     if (!prof) return res.status(404).json({ error: "Professor não encontrado" });
 
-    // ---- alunosRelacionados (únicos)
     const rels = await prisma.relacaoTreinamento.findMany({
       where: { professorId: prof.id, atletaId: { not: null } },
       select: { atletaId: true },
@@ -1204,19 +1195,13 @@ export async function getPerfilProfessor(req: Request, res: Response) {
       ...atletasDiretosEscolinha.map(a => a.id),
     ]);
     const alunosRelacionados = uniq.size;
-
-    // ===================== NOVO BLOCO: conquistas =====================
-    // depois de calcular alunosRelacionados e já ter prof.treinosProgramados
     const treinosCount = (prof as any).treinosProgramados?.length ?? 0;
-
-    // desbloqueios
     const unlocked: string[] = [];
     if (treinosCount >= 1)  unlocked.push("primeiro_treino_programado");
     if (treinosCount >= 5)  unlocked.push("serie_de_treinos");
     if (treinosCount >= 10) unlocked.push("planejamento_solido");
     if (alunosRelacionados >= 5) unlocked.push("grupo_inicial");
 
-    // se quiser manter a métrica de grupos criados, retorne separada:
     let gruposCriados = 0;
     try {
       gruposCriados = await prisma.desafioEmGrupo.count({
@@ -1228,13 +1213,10 @@ export async function getPerfilProfessor(req: Request, res: Response) {
         },
       });
     } catch {
-      // ignora erro
     }
 
-    // métrica agregada de conquistas (inclui +1 se criou algum grupo, conforme seu snippet)
     let conquistas = unlocked.length;
     if (gruposCriados > 0) conquistas += 1;
-    // =================== FIM DO NOVO BLOCO ===========================
 
     const usuarioMin = (prof as any).usuario ?? null;
     const fotoPerfil: string | null = (prof as any).fotoUrl ?? (usuarioMin?.foto ?? null);
@@ -1258,9 +1240,9 @@ export async function getPerfilProfessor(req: Request, res: Response) {
       metrics: {
         treinosProgramados: treinosCount,
         alunosRelacionados,
-        conquistas,                 // usado no cartão-resumo
-        conquistasUnlocked: unlocked, // facilita marcar os cards no front
-        gruposCriados,             // métrica separada
+        conquistas,               
+        conquistasUnlocked: unlocked,
+        gruposCriados,        
       },
     });
   } catch (e) {

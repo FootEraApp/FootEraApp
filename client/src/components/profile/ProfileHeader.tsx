@@ -248,7 +248,6 @@ export default function ProfileHeader({
 
   useEffect(() => {
     if (!podeObservar || isOwnProfile || !alvoAtletaId) return;
-    // pinta pelo cache
     if (obsKey) setObservando(localStorage.getItem(obsKey) === "1");
 
     const token = Storage.token; if (!token) return;
@@ -357,7 +356,6 @@ export default function ProfileHeader({
       const token = Storage.token;
       if (!token) return false;
 
-      // 1) pega o id da solicitação pendente com esse usuário
       let solicitacaoId: string | null = null;
       try {
         const r = await fetch(`${API.BASE_URL}/api/solicitacoes-treino/minhas`, {
@@ -375,7 +373,6 @@ export default function ProfileHeader({
         }
       } catch {}
 
-      // 2) se tiver id, cancela por id
       if (solicitacaoId) {
         const del = await fetch(
           `${API.BASE_URL}/api/solicitacoes-treino/${encodeURIComponent(solicitacaoId)}`,
@@ -384,13 +381,11 @@ export default function ProfileHeader({
         return del.ok || del.status === 204;
       }
 
-      // 3) se não tinha id, tenta cancelar por destinatarioId (idempotente)
       const delBody = await fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ destinatarioId: usuarioAlvoId }),
       });
-      // trate 204 e 404 como "ok, nada mais pendente"
       return delBody.ok || delBody.status === 204 || delBody.status === 404;
     }
 
@@ -581,11 +576,10 @@ const toggleTreino = async () => {
           headers: { Authorization: `Bearer ${Storage.token || ""}` },
         });
 
-        // sucesso (idempotente): ok, 204 ou 404
         if (del.ok || del.status === 204 || del.status === 404) {
-          if (obsKey) localStorage.removeItem(obsKey);          // <-- AQUI remove do cache
+          if (obsKey) localStorage.removeItem(obsKey);      
         } else {
-          setObservando(prev); // rollback
+          setObservando(prev);
         }
         return;
       }
@@ -593,10 +587,8 @@ const toggleTreino = async () => {
       const r = await observarAtleta(id);
       if (r === "auth") { alert("Faça login novamente."); return; }
       if (r === "err")  { alert("Não foi possível observar agora."); return; }
-
-      // ok ou duplicado
       setObservando(true);
-      if (obsKey) localStorage.setItem(obsKey, "1");            // <-- AQUI grava no cache
+      if (obsKey) localStorage.setItem(obsKey, "1");      
     } finally {
       setCarregandoObs(false);
     }

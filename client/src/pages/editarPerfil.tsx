@@ -1,16 +1,14 @@
-// client/src/pages/editarPerfil
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { formatarUrlFoto } from '@/utils/formatarFoto.js';
 import Storage from "../../../server/utils/storage.js";
 import { API } from '../config.js';
-import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { Link } from 'wouter';
 
 type ResultadoBuscaClube = { id: string; nome: string; username?: string; fotoUrl?: string | null; };
 type OptionMin = { id: string; nome: string };
 
-// normaliza string vazia -> null
 function nullIfEmpty<T>(v: T) {
   // @ts-ignore
   return v === "" ? null : v;
@@ -372,18 +370,17 @@ useEffect(() => {
         className="p-6 max-w-3xl mx-auto pb-24"
         style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom))" }}
       >
-
-        {/* Botão voltar p/ perfil (estático) */}
         <div className="mb-3">
           <Link
-            href="/perfil"
-            aria-label="Voltar para o perfil"
-            className="inline-flex h-10 w-10 items-center justify-center
-                      rounded-xl border border-green-800/60 bg-white text-green-900
-                      shadow-sm hover:bg-green-50"
-          >
-            <span className="text-xl -mt-0.5">&lt;</span>
-          </Link>
+                                href="/perfil"
+                                aria-label="Voltar para perfil"
+                                className="inline-flex h-10 w-10 items-center justify-center
+                                  rounded-full border border-green-800 bg-white text-green-900
+                                  shadow-sm hover:bg-green-50 focus:outline-none
+                                  focus:ring-2 focus:ring-green-700/30 mt-2 ml-2 mb-2"
+                                >
+                                <ArrowLeft className="h-5 w-5" />
+                              </Link>
         </div>
 
         <h1 className="text-2xl font-bold mb-4">Editar Perfil</h1>
@@ -462,13 +459,11 @@ useEffect(() => {
           <button
             className="bg-green-700 text-white px-4 py-2 rounded hover:bg-green-600"
             onClick={async () => {
-              // (a) normaliza e valida o username ANTES de enviar
             const rawUsername = (dadosUsuario.nomeDeUsuario ?? "").trim();
             if (rawUsername) {
-              const username = rawUsername.toLowerCase();     // força minúsculas
-              dadosUsuario.nomeDeUsuario = username;          // grava normalizado
+              const username = rawUsername.toLowerCase();   
+              dadosUsuario.nomeDeUsuario = username;         
 
-              // sem o flag /i, pois já normalizamos para minúsculas
               if (!/^[a-z0-9._]{3,30}$/.test(username)) {
                 alert("Nome de usuário inválido. Use letras, números, ponto e underline (3–30).");
                 return;
@@ -476,7 +471,6 @@ useEffect(() => {
             }
 
               try {
-                // (b) upload da foto, se preciso
                 let fotoUrl = dadosUsuario.foto;
                 if (dadosUsuario.foto instanceof File) {
                   const formData = new FormData();
@@ -489,27 +483,22 @@ useEffect(() => {
                   fotoUrl = uploadRes.data.url;
                 }
 
-                // (c) monta e normaliza o objeto "tipo"
                 const tipo: any = { ...dadosTipo };
 
                 if (tipo.siteOficial && !tipo.site) tipo.site = tipo.siteOficial;
 
-                // seleção de clube colaborador (olheiro)
                 tipo.colaboracaoClubeId = clubeSel?.id ?? tipo.colaboracaoClubeId ?? null;
                 if (tipo.colaboracaoClube) delete tipo.colaboracaoClube;
 
-                // limpar campos que não devem ir
                 delete tipo.escola;
                 delete tipo.clube;
 
-                // selects (atleta)
                 if (escolinhaSelId === null)             tipo.escolinhaId = null;
                 else if (typeof escolinhaSelId === "string") tipo.escolinhaId = escolinhaSelId;
 
                 if (clubeSelId === null)                 tipo.clubeId = null;
                 else if (typeof clubeSelId === "string")     tipo.clubeId = clubeSelId;
 
-                // arrays vindos como string
                 if (typeof tipo.categorias === "string") {
                   tipo.categorias = tipo.categorias
                     .split(",")
@@ -517,18 +506,15 @@ useEffect(() => {
                     .filter(Boolean);
                 }
 
-                // conversões numéricas
                 if (typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== "") {
                   const n = Number(tipo.anosExperiencia);
                   tipo.anosExperiencia = Number.isNaN(n) ? undefined : n;
                 }
 
-                // normalizar vazios -> null (contatos olheiro)
                 tipo.emailPublico    = nullIfEmpty(tipo.emailPublico);
                 tipo.telefonePublico = nullIfEmpty(tipo.telefonePublico);
                 tipo.siteOuLinkedin  = nullIfEmpty(tipo.siteOuLinkedin);
 
-                // professor: listas
                 if (tipoUsuarioOriginal === "professor") {
                   if (typeof tipo.qualificacoes === "string") {
                     tipo.qualificacoes = tipo.qualificacoes.split(",").map((q: string) => q.trim()).filter(Boolean);
@@ -537,7 +523,6 @@ useEffect(() => {
                     tipo.certificacoes = tipo.certificacoes.split(",").map((c: string) => c.trim()).filter(Boolean);
                   }
                 }
-                 // (d) PUT principal
                   try {
                     await axios.put(
                       `${API.BASE_URL}/api/perfil/${usuarioId}`,
@@ -551,12 +536,11 @@ useEffect(() => {
                   } catch (err: any) {
                     console.error("[EditarPerfil] PUT /perfil erro:", err?.response?.status, err?.response?.data, err?.message);
                     alert(err?.response?.data?.error || err?.message || "Erro ao salvar os dados (PUT).");
-                    return; // evita tentar PATCH se o PUT falhou
+                    return; 
                   }
 
-                  // (e) PATCH extra (apenas para OLHEIRO) para vincular colaboracaoClubeId
                   if (tipoRender === "olheiro") {
-                    const olheiroId = dadosTipo?.id ?? Storage.tipoUsuarioId; // fallback
+                    const olheiroId = dadosTipo?.id ?? Storage.tipoUsuarioId;
                     if (olheiroId) {
                       try {
                         await axios.patch(
@@ -571,12 +555,9 @@ useEffect(() => {
                       }
                     }
                   }
-
-                  // sucesso só depois dos dois passos passarem
                   alert("Dados atualizados com sucesso!");
                   window.location.href = "/perfil";
                 } catch (err: any) {
-                // (f) tratamento de erro detalhado
                 console.error("[EditarPerfil] PUT /perfil erro:", err?.response?.status, err?.response?.data);
                 const msg =
                   err?.response?.data?.error ||

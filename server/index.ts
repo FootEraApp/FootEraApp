@@ -105,17 +105,16 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(
   cors({
     origin: [
-      FRONTEND_URL,              // ex.: http://localhost:5173
+      FRONTEND_URL,           
       "http://localhost:5173",
       "http://127.0.0.1:5173",
     ],
     credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], // <— inclui PATCH
-    allowedHeaders: ["Content-Type", "Authorization"],              // <— libera Authorization
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],           
   })
 );
 
-// ⬇️ Adicione esta linha para responder ao preflight ANTES das rotas
 app.options("*", cors());
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
@@ -228,7 +227,6 @@ server.listen({ port: PORT, host: "0.0.0.0" }, () => {
 cron.schedule("0 2 * * *", async () => {
   try {
     await gerarSnapshotRanking();
-    console.log("🗂️ Snapshot de ranking gerado");
   } catch (e) {
     console.error("❌ Falha snapshot ranking", e);
   }

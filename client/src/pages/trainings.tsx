@@ -2,16 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
-  Search, Dumbbell, Target, Layers, Zap, Timer, Medal, CalendarClock, ChevronDown
+  ArrowLeft, Search, Dumbbell, Target, Layers, Zap, Timer, Medal, CalendarClock, ChevronDown
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { Card, CardContent } from "../components/ui/card.js";
 import { Badge } from "../components/ui/badge.js";
 import { Button } from "../components/ui/button.js";
+import { Link  } from "wouter";
 
 type TipoTreino = "Tecnico" | "Físico" | "Tatico" | "Mental" | null;
-
 type TpExercicio = { exercicio: { nome: string }; repeticoes: string };
 
 type TreinoProgramado = {
@@ -179,7 +179,17 @@ export default function TrainingsPage() {
 
   return (
     <div className="min-h-screen bg-transparent">
-      <header className="bg-green-900 text-white text-center py-3 text-xl font-bold">Todos os Treinos</header>
+      <Link
+                            href="/perfil"
+                            aria-label="Voltar para perfil"
+                            className="inline-flex h-10 w-10 items-center justify-center
+                              rounded-full border border-green-800 bg-white text-green-900
+                              shadow-sm hover:bg-green-50 focus:outline-none
+                              focus:ring-2 focus:ring-green-700/30 mt-2 ml-2 mb-2"
+                            >
+                            <ArrowLeft className="h-5 w-5" />
+                          </Link>
+     <header className="bg-green-900 text-white text-center py-3 text-xl font-bold">Todos os Treinos</header>
       <div className="max-w-5xl mx-auto px-4 py-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[220px]">

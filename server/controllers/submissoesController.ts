@@ -209,7 +209,6 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
       : tempoSeg != null ? Math.round(Number(tempoSeg) * 1000)
       : undefined;
 
-    // Ignoramos 'repeticoes' do cliente e usamos tentativaNumero como "quantidade de tentativas usada"
     const repeticoesNum = tentativaNumero;
 
     const created = await prisma.submissaoDesafio.create({
@@ -218,9 +217,9 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
         desafioId,
         videoUrl: finalVideoUrl,
         observacao,
-        aprovado: false,              // continua indo para avaliação
+        aprovado: false,            
         tempoMs: tempoMsNum,
-        repeticoes: repeticoesNum,    // <- calculado no servidor
+        repeticoes: repeticoesNum,  
         ...(uploadedUrl
           ? {
               midias: {
@@ -250,7 +249,7 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
     return res.status(201).json({
       ok: true,
       id: created.id,
-      tentativaNumero,                 // <- útil para a UI
+      tentativaNumero,              
       tentativasRestantes: Math.max(0, 2 - tentativaNumero),
       mensagem: "Submissão enviada para validação. Aguarde aprovação.",
     });

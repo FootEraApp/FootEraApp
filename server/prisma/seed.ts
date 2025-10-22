@@ -1620,30 +1620,30 @@ if (atletaFormado && escolinhaEstrelasDb) {
   }
 }
 
-  const desafios = [
-    {
-      titulo: 'Desafio Controle Aéreo',
-      descricao: 'Mantenha a bola no ar pelo maior tempo possível usando diferentes partes do corpo.',
-      imagemUrl: '/assets/controle-aereo.jpg',
-      nivel: Nivel.Avancado,
-      pontuacao: 10,
-      categoria: [Categoria.Sub15]
-    },
-    {
-      titulo: 'Desafio Equilíbrio e Agilidade',
-      descricao: 'Supere um percurso de obstáculos mantendo o controle da bola.',
-      imagemUrl: '/assets/treino-agilidade.webp',
-      nivel: Nivel.Avancado,
-      pontuacao: 8,
-      categoria: [Categoria.Sub13]
-    }
-  ];
-  for (const desafio of desafios) {
-    const exists = await prisma.desafioOficial.findFirst({ where: { titulo: desafio.titulo } });
-    if (!exists) {
-      await prisma.desafioOficial.create({ data: desafio });
-    }
-  }
+  // const desafios = [
+  //   {
+  //     titulo: 'Desafio Controle Aéreo',
+  //     descricao: 'Mantenha a bola no ar pelo maior tempo possível usando diferentes partes do corpo.',
+  //     imagemUrl: '/assets/controle-aereo.jpg',
+  //     nivel: Nivel.Avancado,
+  //     pontuacao: 10,
+  //     categoria: [Categoria.Sub15]
+  //   },
+  //   {
+  //     titulo: 'Desafio Equilíbrio e Agilidade',
+  //     descricao: 'Supere um percurso de obstáculos mantendo o controle da bola.',
+  //     imagemUrl: '/assets/treino-agilidade.webp',
+  //     nivel: Nivel.Avancado,
+  //     pontuacao: 8,
+  //     categoria: [Categoria.Sub13]
+  //   }
+  // ];
+  // for (const desafio of desafios) {
+  //   const exists = await prisma.desafioOficial.findFirst({ where: { titulo: desafio.titulo } });
+  //   if (!exists) {
+  //     await prisma.desafioOficial.create({ data: desafio });
+  //   }
+  // }
 
   const professorArthur = await prisma.professor.findFirst({
     where: { usuario: { nomeDeUsuario: 'arthur.persio' } }
@@ -1748,11 +1748,11 @@ if (atletaFormado && escolinhaEstrelasDb) {
 
   await prisma.atividadeRecente.createMany({
     data: [
-      {
-        usuarioId: usuarioTeste.id,
-        tipo: "Desafio",
-        imagemUrl: "/assets/desafios/velocidade.jpg",
-      },
+      // {
+      //   usuarioId: usuarioTeste.id,
+      //   tipo: "Desafio",
+      //   imagemUrl: "/assets/desafios/velocidade.jpg",
+      // },
       {
         usuarioId: usuarioTeste.id,
         tipo: "Treino",
@@ -1767,53 +1767,53 @@ if (atletaFormado && escolinhaEstrelasDb) {
     skipDuplicates: true,
   });
 
-  const desafioExtra = await prisma.desafioOficial.upsert({
-    where: { titulo: "Desafio de Velocidade" },
-    update: {},
-    create: {
-      titulo: "Desafio de Velocidade",
-      descricao: "Complete um circuito em tempo recorde.",
-      nivel: Nivel.Performance,
-      pontuacao: 15,
-      categoria: [Categoria.Sub17],
-      imagemUrl: "/assets/desafios/velocidade.jpg"
-    }
-  });
+  // const desafioExtra = await prisma.desafioOficial.upsert({
+  //   where: { titulo: "Desafio de Velocidade" },
+  //   update: {},
+  //   create: {
+  //     titulo: "Desafio de Velocidade",
+  //     descricao: "Complete um circuito em tempo recorde.",
+  //     nivel: Nivel.Performance,
+  //     pontuacao: 15,
+  //     categoria: [Categoria.Sub17],
+  //     imagemUrl: "/assets/desafios/velocidade.jpg"
+  //   }
+  // });
 
-  await prisma.submissaoDesafio.upsert({
-  where: { videoUrl: "https://www.google.com/imgres?q=desafio%20velocidade%20futebol&imgurl=https%3A%2F%2Fwww.tiktok.com%2Fapi%2Fimg%2F%3FitemId%3D7358856354527857926%26location%3D0%26aid%3D1988&imgrefurl=https%3A%2F%2Fwww.tiktok.com%2F%40adonias%2Fvideo%2F7358856354527857926&docid=Q3i_9CrrR3OQFM&tbnid=3SL_XXb6IEl1zM&vet=12ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA..i&w=1080&h=1920&hcb=2&ved=2ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA" },
-  update: {},
-  create: {
-    atletaId: atletaTeste.id,
-    desafioId: desafioExtra.id,
-    videoUrl: "https://www.google.com/imgres?q=desafio%20velocidade%20futebol&imgurl=https%3A%2F%2Fwww.tiktok.com%2Fapi%2Fimg%2F%3FitemId%3D7358856354527857926%26location%3D0%26aid%3D1988&imgrefurl=https%3A%2F%2Fwww.tiktok.com%2F%40adonias%2Fvideo%2F7358856354527857926&docid=Q3i_9CrrR3OQFM&tbnid=3SL_XXb6IEl1zM&vet=12ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA..i&w=1080&h=1920&hcb=2&ved=2ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA",
-    aprovado: true,
-  },
-});
+  // await prisma.submissaoDesafio.upsert({
+  //   where: { videoUrl: "https://www.google.com/imgres?q=desafio%20velocidade%20futebol&imgurl=https%3A%2F%2Fwww.tiktok.com%2Fapi%2Fimg%2F%3FitemId%3D7358856354527857926%26location%3D0%26aid%3D1988&imgrefurl=https%3A%2F%2Fwww.tiktok.com%2F%40adonias%2Fvideo%2F7358856354527857926&docid=Q3i_9CrrR3OQFM&tbnid=3SL_XXb6IEl1zM&vet=12ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA..i&w=1080&h=1920&hcb=2&ved=2ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA" },
+  //   update: {},
+  //   create: {
+  //     atletaId: atletaTeste.id,
+  //     desafioId: desafioExtra.id,
+  //     videoUrl: "https://www.google.com/imgres?q=desafio%20velocidade%20futebol&imgurl=https%3A%2F%2Fwww.tiktok.com%2Fapi%2Fimg%2F%3FitemId%3D7358856354527857926%26location%3D0%26aid%3D1988&imgrefurl=https%3A%2F%2Fwww.tiktok.com%2F%40adonias%2Fvideo%2F7358856354527857926&docid=Q3i_9CrrR3OQFM&tbnid=3SL_XXb6IEl1zM&vet=12ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA..i&w=1080&h=1920&hcb=2&ved=2ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA",
+  //     aprovado: true,
+  //   },
+  // });
 
-const desafioTeste2 = await prisma.desafioOficial.upsert({
-  where: { titulo: "Desafio de Controle Avançado" },
-  update: {},
-  create: {
-    titulo: "Desafio de Controle Avançado",
-    descricao: "Mantenha a posse da bola com domínio total durante 60 segundos.",
-    nivel: Nivel.Performance,
-    pontuacao: 20,
-    categoria: [Categoria.Sub15],
-    imagemUrl: "/assets/desafios/controle-avancado.jpg",
-  },
-});
+// const desafioTeste2 = await prisma.desafioOficial.upsert({
+//   where: { titulo: "Desafio de Controle Avançado" },
+//   update: {},
+//   create: {
+//     titulo: "Desafio de Controle Avançado",
+//     descricao: "Mantenha a posse da bola com domínio total durante 60 segundos.",
+//     nivel: Nivel.Performance,
+//     pontuacao: 20,
+//     categoria: [Categoria.Sub15],
+//     imagemUrl: "/assets/desafios/controle-avancado.jpg",
+//   },
+// });
 
-await prisma.submissaoDesafio.upsert({
-  where: { videoUrl: "https://www.youtube.com/watch?v=controle_avancado" },
-  update: {},
-  create: {
-    atletaId: atletaTeste!.id,
-    desafioId: desafioTeste2.id,
-    videoUrl: "https://www.youtube.com/watch?v=controle_avancado",
-    aprovado: true,
-  },
-});
+// await prisma.submissaoDesafio.upsert({
+//   where: { videoUrl: "https://www.youtube.com/watch?v=controle_avancado" },
+//   update: {},
+//   create: {
+//     atletaId: atletaTeste!.id,
+//     desafioId: desafioTeste2.id,
+//     videoUrl: "https://www.youtube.com/watch?v=controle_avancado",
+//     aprovado: true,
+//   },
+// });
 
 await prisma.atividadeRecente.createMany({
   data: [
@@ -1822,11 +1822,11 @@ await prisma.atividadeRecente.createMany({
       tipo: "Treino",
       imagemUrl: "/assets/treinos/controle.jpg",
     },
-    {
-      usuarioId: atletaTeste!.usuarioId,
-      tipo: "Desafio",
-      imagemUrl: "/assets/desafios/controle-avancado.jpg",
-    },
+    // {
+    //   usuarioId: atletaTeste!.usuarioId,
+    //   tipo: "Desafio",
+    //   imagemUrl: "/assets/desafios/controle-avancado.jpg",
+    // },
   ],
   skipDuplicates: true,
 });
@@ -1942,29 +1942,29 @@ if (atletaAaaaa && professorArthur) {
     },
   });
 
-  const desafio = await prisma.desafioOficial.upsert({
-    where: { titulo: "Desafio Técnica com Bola" },
-    update: {},
-    create: {
-      titulo: "Desafio Técnica com Bola",
-      descricao: "Controle e passes curtos",
-      nivel: Nivel.Base,
-      categoria: [Categoria.Sub9],
-      pontuacao: 15,
-      imagemUrl: "/assets/desafios/tecnico-bola.jpg"
-    },
-  });
+  // const desafio = await prisma.desafioOficial.upsert({
+  //   where: { titulo: "Desafio Técnica com Bola" },
+  //   update: {},
+  //   create: {
+  //     titulo: "Desafio Técnica com Bola",
+  //     descricao: "Controle e passes curtos",
+  //     nivel: Nivel.Base,
+  //     categoria: [Categoria.Sub9],
+  //     pontuacao: 15,
+  //     imagemUrl: "/assets/desafios/tecnico-bola.jpg"
+  //   },
+  // });
 
-  await prisma.submissaoDesafio.upsert({
-    where: { videoUrl: "https://video.url/desafio.mp4" },
-    update: {},
-    create: {
-      atleta: { connect: { id: atletaAaaaa.id } },
-      desafio: { connect: { id: desafio.id } },
-      videoUrl: "https://video.url/desafio.mp4",
-      aprovado: true,
-    },
-  });
+  // await prisma.submissaoDesafio.upsert({
+  //   where: { videoUrl: "https://video.url/desafio.mp4" },
+  //   update: {},
+  //   create: {
+  //     atleta: { connect: { id: atletaAaaaa.id } },
+  //     desafio: { connect: { id: desafio.id } },
+  //     videoUrl: "https://video.url/desafio.mp4",
+  //     aprovado: true,
+  //   },
+  // });
 
   await prisma.atividadeRecente.createMany({
     data: [
@@ -1973,11 +1973,11 @@ if (atletaAaaaa && professorArthur) {
         tipo: "Treino",
         imagemUrl: "/assets/treinos/resistencia.jpg",
       },
-      {
-        usuarioId: atletaAaaaa.usuarioId,
-        tipo: "Desafio",
-        imagemUrl: "/assets/desafios/tecnico-bola.jpg",
-      },
+      // {
+      //   usuarioId: atletaAaaaa.usuarioId,
+      //   tipo: "Desafio",
+      //   imagemUrl: "/assets/desafios/tecnico-bola.jpg",
+      // },
     ],
     skipDuplicates: true,
   });
