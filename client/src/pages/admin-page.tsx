@@ -2,6 +2,7 @@ import { useEffect, useState} from "react";
 import { API } from "../config.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 import ValidacaoVideo from "./validacaovideo.js";
+import { FLAGS } from "../config.js";
 
 type Tab =
   | "dashboard"
@@ -66,6 +67,21 @@ const USERS_ENDPOINT = [
   `${API.BASE_URL}/api/admin/usuarios`,
   `${API.BASE_URL}/api/usuarios`, 
 ];
+
+
+const EMPTY_DASH = {
+  totalUsuarios: 0,
+  totalTreinos: 0,
+  totalDesafios: 0,
+  totalPostsCriados: 0,
+  totalAtletas: 0,
+  totalEscolinhas: 0,
+  totalClubes: 0,
+  totalAdministradores: 0,
+  totalMidias: 0,
+  totalVerificados: 0,
+  totalNaoVerificados: 0,
+};
 
 function getToken() {
   return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
@@ -160,6 +176,16 @@ function formatResultado(it: ModeracaoItem) {
 
 export default function AdminDashboard() {
   const [aba, setAba] = useState<Tab>("dashboard");
+  
+  const tabs: Tab[] = [
+    "dashboard",
+    "usuarios",
+    "exercicios",
+    "treinos",
+    "professores",
+    ...(FLAGS.DESAFIOS_ENABLED ? (["desafios", "validacao", "moderacao"] as Tab[]) : []),
+    "configuracoes",
+  ];
 
   const [dados, setDados] = useState<any>(null);
   const [exercicios, setExercicios] = useState<any[]>([]);
@@ -193,6 +219,8 @@ export default function AdminDashboard() {
   const [player, setPlayer] = useState<{ src: string; kind: "video" | "iframe" } | null>(null);
   const [modStatus, setModStatus] = useState<"pendente"|"aprovado"|"invalido"|"todos">("pendente");
 
+  const isAdminBase = usersBase === USERS_ENDPOINT[0];
+
   function toPlayer(raw?: string | null) {
     if (!raw) return null;
     const url = toAbsoluteUrl(raw) || raw;
@@ -224,29 +252,50 @@ export default function AdminDashboard() {
   }, [q]);
 
   useEffect(() => {
-    fetch(`${API.BASE_URL}/api/admin`, { headers: authHeaders() })
-      .then(res => res.json()).then(setDados).catch(console.error);
-
     fetch(`${API.BASE_URL}/api/exercicios`, { headers: authHeaders() })
-      .then(res => res.json()).then(setExercicios).catch(console.error);
+      .then(r => r.json())
+      .then(setExercicios)
+      .catch(() => setExercicios([]));
+  }, []);
 
-    fetch(`${API.BASE_URL}/api/treinos`, { headers: authHeaders() })
-      .then(res => res.json()).then(setTreinos).catch(console.error);
-
+  useEffect(() => {
     fetch(`${API.BASE_URL}/api/professores`, { headers: authHeaders() })
-      .then(res => res.json()).then(setProfessores).catch(console.error);
+      .then(r => r.json())
+      .then(setProfessores)
+      .catch(() => setProfessores([]));
+  }, []);
 
-    fetch(`${API.BASE_URL}/api/desafios`, { headers: authHeaders() })
-      .then(res => res.json()).then(setDesafios).catch(console.error);
-
+  useEffect(() => {
     fetch(`${API.BASE_URL}/api/configuracoes`, { headers: authHeaders() })
-      .then(res => res.json()).then(setConfiguracoes).catch(console.error);
+      .then(r => r.json())
+      .then(setConfiguracoes)
+      .catch(() => setConfiguracoes({}));
   }, []);
 
   useEffect(() => {
     if (aba !== "usuarios") return;
     carregarUsuarios(1).catch(() => {});
   }, [aba, tipoFiltro, debouncedQ]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API.BASE_URL}/api/admin`, { headers: authHeaders() });
+        if (!res.ok) { setDados(EMPTY_DASH); return; }
+        setDados(await res.json());
+      } catch {
+        setDados(EMPTY_DASH);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!FLAGS.DESAFIOS_ENABLED) return;
+    fetch(`${API.BASE_URL}/api/desafios`, { headers: authHeaders() })
+      .then((res) => res.json())
+      .then(setDesafios)
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
   (async () => {
@@ -274,9 +323,10 @@ export default function AdminDashboard() {
 }, []);
 
   useEffect(() => {
-  if (aba !== "moderacao") return;                     
-  carregarPendentes(1).catch(() => {});              
-}, [aba]);                                          
+    if (!FLAGS.DESAFIOS_ENABLED) return;
+    if (aba !== "moderacao") return;
+    carregarPendentes(1).catch(() => {});
+  }, [aba, modStatus]);                                    
 
 async function carregarPendentes(page: number) {
   setModLoading(true);
@@ -439,9 +489,10 @@ async function invalidarDesafio(id: string) {
 
   if (!dados) return <div className="p-6">Carregando...</div>;
 
-  const percent = (val: number) => {
-    const total = dados.totalUsuarios || 1;
-    return Math.round((val * 100) / total);
+  const percent = (val: unknown) => {
+    const n = Number(val ?? 0);
+    const total = Number(dados?.totalUsuarios ?? 0) || 1;
+    return Math.round((n * 100) / total);
   };
 
   function handleLogout() {
@@ -453,7 +504,7 @@ async function invalidarDesafio(id: string) {
       sessionStorage.removeItem("token");
       (window as any)?.Storage && ((window as any).Storage.token = null);
     } catch {}
-    window.location.href = "/login";
+    window.location.href = "/admin/login";
   }
 
   const rotulo = { pendente: "pendentes", aprovado: "aprovados", invalido: "inválidos", todos: "registros" }[modStatus];
@@ -468,12 +519,13 @@ async function invalidarDesafio(id: string) {
       <h2 className="text-xl font-semibold text-green-900 my-4">Painel Administrativo</h2>
 
       <nav className="flex flex-wrap gap-3 mb-6">
-        {["dashboard","usuarios","exercicios","treinos","professores","desafios", "validacao", "moderacao", "configuracoes"].map((t) => (
-          <button key={t}
-            className={`px-4 py-2 rounded ${aba === (t as Tab) ? "bg-green-800 text-white" : "bg-gray-200"}`}
-            onClick={() => setAba(t as Tab)}
+        {tabs.map((t) => (
+          <button
+            key={t}
+            className={`px-4 py-2 rounded ${aba === t ? "bg-green-800 text-white" : "bg-gray-200"}`}
+            onClick={() => setAba(t)}
           >
-            {t === "moderacao" 
+            {t === "moderacao"
               ? "Moderação"
               : t === "validacao"
               ? "Validar desafios"
@@ -487,10 +539,10 @@ async function invalidarDesafio(id: string) {
           <div>
             <h3 className="text-xl font-bold mb-4">Dashboard Administrativo</h3>
             <div className="grid grid-cols-2 gap-4 mb-6">
-              <Card title="Total de Usuários" icon="👥" value={dados.totalUsuarios} />
-              <Card title="Treinos Cadastrados" icon="🏋️" value={dados.totalTreinos} />
-              <Card title="Desafios Ativos" icon="🏆" value={dados.totalDesafios} />
-              <Card title="Posts Criados" icon="✍️" value={dados.totalPostsCriados} />
+              <Card title="Total de Usuários" icon="👥" value={dados?.totalUsuarios ?? 0} />
+              <Card title="Treinos Cadastrados" icon="🏋️" value={dados?.totalTreinos ?? 0} />
+              <Card title="Desafios Ativos" icon="🏆" value={dados?.totalDesafios ?? 0} />
+              <Card title="Posts Criados" icon="✍️" value={dados?.totalPostsCriados ?? 0} />
             </div>
 
             <h4 className="font-semibold mb-2">Distribuição de Usuários</h4>
@@ -567,8 +619,28 @@ async function invalidarDesafio(id: string) {
                             <img src={foto} className="w-8 h-8 rounded-full object-cover border" />
                             <div className="font-medium flex items-center gap-2">
                               {nome}
-                              {u.verificado && <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-800">Verificado</span>}
-                              {u.destaque && <span className="text-[10px] px-2 py-0.5 rounded-full bg-transparent text-yellow-900">Destaque</span>}
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={!!u.verificado}
+                                  disabled={!isAdminBase || acaoBusy}
+                                  onChange={(e) => toggleCampo(u.id, "verificado", e.target.checked)}
+                                  title={!isAdminBase ? "Requer permissão de admin" : ""}
+                                />
+                                Verificado
+                              </label>
+
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={!!u.destaque}
+                                  disabled={!isAdminBase || acaoBusy}
+                                  onChange={(e) => toggleCampo(u.id, "destaque", e.target.checked)}
+                                  title={!isAdminBase ? "Requer permissão de admin" : ""}
+                                />
+                                Destaque
+                              </label>
+
                             </div>
                           </div>
                         </td>
@@ -686,63 +758,66 @@ async function invalidarDesafio(id: string) {
                   <div>
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="font-bold text-lg">Gerenciar Treinos</h3>
-                      <button className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800" onClick={() => window.location.href = "/admin/treinos/create"}>
+                      <button
+                        className="bg-green-700 text-white px-4 py-1 rounded hover:bg-green-800"
+                        onClick={() => (window.location.href = "/admin/treinos/create")}
+                      >
                         + Novo Treino
                       </button>
-
                     </div>
-                    {treinos.length === 0 ? (
-                          <p className="text-gray-500">Nenhum treino encontrado.</p>
-                        ) : (
-                          treinos.map((t: any) => {
-                            const nome = t.nome ?? t.titulo ?? "(sem nome)";
-                            const codigo = t.codigo;
-                            const nivel = t.nivel ?? t.dificuldade ?? "-";
-                            const descricao = t.descricao ?? t.resumo ?? "";
 
-                            return (
-                              <li key={t.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
-                                <div>
-                                  <strong>{nome}</strong> — {codigo} [{nivel}]
-                                  <p className="text-sm text-gray-500">{descricao}</p>
-                                </div>
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => (window.location.href = `/admin/treinos/create?id=${t.id}`)}
-                                    className="text-blue-600"
-                                  >
-                                    ✏️
-                                  </button>
-                                  <button
-                                    onClick={async () => {
-                                      if (!confirm("Deseja mesmo excluir este treino?")) return;
-                                     
-                                      let resp = await fetch(`${API.BASE_URL}/api/treinos/${t.id}`, {
+                    {treinos.length === 0 ? (
+                      <p className="text-gray-500">Nenhum treino encontrado.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {treinos.map((t: any) => {
+                          const nome = t.nome ?? t.titulo ?? "(sem nome)";
+                          const codigo = t.codigo ?? "-";
+                          const nivel = t.nivel ?? t.dificuldade ?? "-";
+                          const descricao = t.descricao ?? t.resumo ?? "";
+                          return (
+                            <li key={t.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
+                              <div>
+                                <strong>{nome}</strong> — {codigo} [{nivel}]
+                                <p className="text-sm text-gray-500">{descricao}</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => (window.location.href = `/admin/treinos/create?id=${t.id}`)}
+                                  className="text-blue-600"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm("Deseja mesmo excluir este treino?")) return;
+
+                                    let resp = await fetch(`${API.BASE_URL}/api/treinos/${t.id}`, {
+                                      method: "DELETE",
+                                      headers: authHeaders(),
+                                    });
+                                    if (!resp.ok) {
+                                      resp = await fetch(`${API.BASE_URL}/api/treinosprogramados/${t.id}`, {
                                         method: "DELETE",
                                         headers: authHeaders(),
                                       });
-                                      if (!resp.ok) {
-                                        resp = await fetch(`${API.BASE_URL}/api/treinosprogramados/${t.id}`, {
-                                          method: "DELETE",
-                                          headers: authHeaders(),
-                                        });
-                                      }
-                                      if (resp.ok) {
-                                        alert("Treino excluído com sucesso!");
-                                        setTreinos(prev => prev.filter(x => x.id !== t.id));
-                                      } else {
-                                        alert("Erro ao excluir treino.");
-                                      }
-                                    }}
-                                  >
-                                    🗑
-                                  </button>
-                                </div>
-                              </li>
-                            );
-                          })
-                        )}
-
+                                    }
+                                    if (resp.ok) {
+                                      alert("Treino excluído com sucesso!");
+                                      setTreinos((prev) => prev.filter((x) => x.id !== t.id));
+                                    } else {
+                                      alert("Erro ao excluir treino.");
+                                    }
+                                  }}
+                                >
+                                  🗑
+                                </button>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
                   </div>
                 )}
                 
@@ -785,7 +860,7 @@ async function invalidarDesafio(id: string) {
                   </div>
                 )}
         
-                {aba === "desafios" && (
+                {aba === "desafios" && (FLAGS.DESAFIOS_ENABLED ? (
                   <div>
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="font-bold text-lg">Gerenciar Desafios</h3>
@@ -829,11 +904,13 @@ async function invalidarDesafio(id: string) {
                       ))}
                     </ul>
                   </div>
-                )}
+                ) : (
+                  <div className="text-gray-600">Desafios desativados por enquanto.</div>
+                ))}
 
-                {aba === "validacao" && <ValidacaoVideo />}
+                {aba === "validacao" && (FLAGS.DESAFIOS_ENABLED ? <ValidacaoVideo /> : null)}
 
-                {aba === "moderacao" && ( 
+                {aba === "moderacao" && (FLAGS.DESAFIOS_ENABLED ? (
                   <div>
                    <h3 className="text-xl font-bold mb-3">Moderação</h3>
                     <div className="flex items-center gap-2 mb-2">
@@ -841,7 +918,7 @@ async function invalidarDesafio(id: string) {
                       <select
                         className="border rounded px-2 py-1"
                         value={modStatus}
-                        onChange={(e) => { setModStatus(e.target.value as any); carregarPendentes(1); }}
+                        onChange={(e) => setModStatus(e.target.value as any)}
                       >
                         <option value="todos">Todos</option>
                         <option value="pendente">Pendentes</option>
@@ -944,7 +1021,7 @@ async function invalidarDesafio(id: string) {
                       </button>
                     </div>
                   </div>
-                )}
+              ) : null)}
 
                 {aba === "configuracoes" && configuracoes && (
                   <div className="bg-white p-6 rounded shadow">
@@ -969,7 +1046,7 @@ async function invalidarDesafio(id: string) {
                             onChange={async (e) => {
                               const res = await fetch(`${API.BASE_URL}/api/configuracoes`, {
                                 method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
+                                headers: authHeaders({ "Content-Type": "application/json" }),
                                 body: JSON.stringify({ [item.key]: e.target.checked }),
                               });
                               if (res.ok) {
@@ -996,7 +1073,7 @@ async function invalidarDesafio(id: string) {
         
                           await fetch(`${API.BASE_URL}/api/configuracoes`, {
                             method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
+                            headers: authHeaders ({ "Content-Type": "application/json" }),
                             body: JSON.stringify({ maxDailyPosts: novoValor }),
                           });
                         }}
@@ -1121,30 +1198,48 @@ async function invalidarDesafio(id: string) {
                   <div className="border-t pt-3 flex flex-wrap gap-2">
                     {u.status === "banido" ? (
                       <button
-                        disabled={acaoBusy}
+                        disabled={!isAdminBase || acaoBusy}
                         onClick={() => banirOuDesbanir(u.id, false)}
-                        className="px-3 py-2 rounded bg-yellow-500 text-white"
+                        className="px-3 py-2 rounded bg-yellow-500 text-white disabled:opacity-50"
+                        title={!isAdminBase ? "Requer permissão de admin" : ""}
                       >
                         Desbanir usuário
                       </button>
                     ) : (
                       <button
-                        disabled={acaoBusy}
+                        disabled={!isAdminBase || acaoBusy}
                         onClick={() => banirOuDesbanir(u.id, true)}
-                        className="px-3 py-2 rounded bg-red-600 text-white"
+                        className="px-3 py-2 rounded bg-red-600 text-white disabled:opacity-50"
+                        title={!isAdminBase ? "Requer permissão de admin" : ""}
                       >
                         Banir usuário
                       </button>
                     )}
 
+
                     <div className="ml-auto flex gap-2">
-                      <button disabled={acaoBusy} onClick={() => removerConteudo(u.id, "posts")} className="px-3 py-2 rounded bg-gray-200">
+                      <button
+                        disabled={!isAdminBase || acaoBusy}
+                        onClick={() => removerConteudo(u.id, "posts")}
+                        className="px-3 py-2 rounded bg-gray-200 disabled:opacity-50"
+                        title={!isAdminBase ? "Requer permissão de admin" : ""}
+                      >
                         Remover posts
                       </button>
-                      <button disabled={acaoBusy} onClick={() => removerConteudo(u.id, "comentarios")} className="px-3 py-2 rounded bg-gray-200">
+                      <button
+                        disabled={!isAdminBase || acaoBusy}
+                        onClick={() => removerConteudo(u.id, "comentarios")}
+                        className="px-3 py-2 rounded bg-gray-200 disabled:opacity-50"
+                        title={!isAdminBase ? "Requer permissão de admin" : ""}
+                      >
                         Remover comentários
                       </button>
-                      <button disabled={acaoBusy} onClick={() => removerConteudo(u.id, "todos")} className="px-3 py-2 rounded bg-gray-200">
+                      <button
+                        disabled={!isAdminBase || acaoBusy}
+                        onClick={() => removerConteudo(u.id, "todos")}
+                        className="px-3 py-2 rounded bg-gray-200 disabled:opacity-50"
+                        title={!isAdminBase ? "Requer permissão de admin" : ""}
+                      >
                         Remover tudo
                       </button>
                     </div>

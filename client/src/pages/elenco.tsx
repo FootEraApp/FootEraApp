@@ -10,6 +10,7 @@ import axios from "axios";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { Link } from "wouter";
+import { ArrowLeft } from "lucide-react";
 
 const ELENCOS_BASE = `${API.BASE_URL}/api/treinos/elencos`;
 const PONTOS_BASE  = `${API.BASE_URL}/api/treinos/pontuacoes`;
@@ -655,14 +656,16 @@ export default function PaginaElenco() {
   return (
       <div className="min-h-screen bg-green-100 flex flex-col">
         <div className="p-3">
-          <Link
-            href="/perfil"
-            aria-label="Voltar para o perfil"
+           <Link
+            href="/treinos"
+            aria-label="Voltar para treinos"
+            title="Voltar para explorar"
             className="inline-flex h-10 w-10 items-center justify-center
-                      rounded-xl border border-green-800/60 bg-white text-green-900
-                      shadow-sm hover:bg-green-50"
-          >
-            <span className="text-xl -mt-0.5">&lt;</span>
+              rounded-full border border-green-800 bg-white text-green-900
+              shadow-sm hover:bg-green-50 focus:outline-none
+              focus:ring-2 focus:ring-green-700/30 mt-2 ml-2"
+            >
+            <ArrowLeft className="h-5 w-5" />
           </Link>
         </div>
 

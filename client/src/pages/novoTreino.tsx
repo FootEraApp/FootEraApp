@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from "lucide-react";
+import { ArrowLeft, Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { TreinosApi } from "../utils/treinosApi.js";
@@ -926,6 +926,17 @@ export default function NovoTreino() {
 
     return (
       <div className="p-4 max-w-xl mx-auto mb-5">
+        <Link
+          href="/treinos"
+          aria-label="Voltar para treinos"
+          title="Voltar para explorar"
+          className="inline-flex h-10 w-10 items-center justify-center
+            rounded-full border border-green-800 bg-white text-green-900
+            shadow-sm hover:bg-green-50 focus:outline-none
+            focus:ring-2 focus:ring-green-700/30 mt-2 ml-2"
+          >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
         <h2 className="text-lg font-bold mb-4">Treinos Disponíveis</h2>
 
         {treinosParaAgendar.length === 0 ? (
