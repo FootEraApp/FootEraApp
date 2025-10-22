@@ -1,4 +1,3 @@
-// client/src/pages/desafios
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
@@ -10,13 +9,12 @@ import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import CardAtletaShield from "../components/cards/CardAtletaShield.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import { FLAGS } from "../config.js";
 
-/* ===== dados base ===== */
 const TODAS_CATEGORIAS = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"] as const;
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"] as const;
-const authHeaders = { Authorization: `Bearer ${Storage.token || ""}` };
+const authHeaders = () => ({ Authorization: `Bearer ${Storage.token || localStorage.getItem("token") || ""}` });
 
-/* ===== header slider (leve: trilho só aparece durante o drag) ===== */
 function HeaderSlider({
   pos, setPos, onCommit, onDraggingChange,
 }: {
@@ -41,18 +39,15 @@ function HeaderSlider({
   return (
     <div className="absolute inset-0 z-0">
       <div ref={trackRef} className="relative h-full w-full">
-        {/* trilho */}
         <div
           className={`absolute inset-y-2 left-0 right-0 rounded-full border overflow-hidden transition-colors duration-150 ${
             dragging ? "bg-green-100/70 border-green-200 shadow-inner" : "bg-transparent border-transparent"
           }`}
         />
-        {/* preenchimento no drag */}
         <div
           className="absolute inset-y-2 left-0 rounded-full bg-green-200/60 transition-[width,opacity] duration-150"
           style={{ width: `${px}px`, opacity: dragging ? 1 : 0 }}
         />
-        {/* labels */}
         <div className={`absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-green-800/70 text-xs sm:text-sm transition-opacity duration-150 ${dragging ? "opacity-100" : "opacity-0"}`}>
           <House className="w-4 h-4"/><span className="hidden sm:inline">Feed</span>
         </div>
@@ -60,7 +55,6 @@ function HeaderSlider({
           <span className="hidden sm:inline">Desafios</span><Trophy className="w-4 h-4"/>
         </div>
 
-        {/* knob */}
         <button
           aria-label="Trocar entre Feed e Desafios (arraste)"
           onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
@@ -76,7 +70,6 @@ function HeaderSlider({
   );
 }
 
-/* ===== tipos e helpers ===== */
 function normaliza(input: any[]): Submissao[] {
   const arr = Array.isArray(input) ? input : [];
   return arr.map((s: any) => {
@@ -135,7 +128,6 @@ type RankListResp = { total: number; items: RankItem[] };
 type PosicaoResp = { atletaId: string; nome: string; foto?: string|null; cidade?: string|null; estado?: string|null; pais?: string|null; categoria: string[]; pontuacaoTotal: number; posicao: number; total: number; inTop100: boolean; isViewer: boolean; };
 const calcOVR = (r: RankItem) => Math.round((Number(r.performance||0)+Number(r.disciplina||0)+Number(r.responsabilidade||0))/3);
 
-/* ===== ranking global ===== */
 const RankingGlobalTab: React.FC = () => {
   const token = Storage.token || localStorage.getItem("token") || sessionStorage.getItem("token") || "";
   const [uf,setUf] = useState<string>(""); const [categoria,setCategoria]=useState<string>(""); const [qTop,setQTop]=useState<string>("");
@@ -198,7 +190,6 @@ const RankingGlobalTab: React.FC = () => {
         </div>
       </div>
 
-      {/* listagem resumida */}
       {loading ? <div className="text-gray-600">Aguarde…</div> :
         (listaFiltradaTop.length===0 ? <div className="text-gray-600">Nenhum atleta encontrado para os filtros.</div> :
           <div className="space-y-2">
@@ -235,7 +226,6 @@ const RankingGlobalTab: React.FC = () => {
   );
 };
 
-/* =============== conteúdo (feed de desafios) =============== */
 function DesafiosInner() {
   const [submissoes, setSubmissoes] = useState<Submissao[]>([]);
   const [filtroSeguindo, setFiltroSeguindo] = useState(false);
@@ -258,10 +248,11 @@ function DesafiosInner() {
     (async () => {
       try {
         const [r1, r2, seguindoRes] = await Promise.all([
-          axios.get(`${API.BASE_URL}/api/desafios/submissoes`, { headers: authHeaders }),
-          axios.get(`${API.BASE_URL}/api/treinos/submissoes`,   { headers: authHeaders }),
-          axios.get(`${API.BASE_URL}/api/seguidores/meus-seguidos`, { headers: authHeaders }),
+          axios.get(`${API.BASE_URL}/api/desafios/submissoes`, { headers: authHeaders() }),
+          axios.get(`${API.BASE_URL}/api/treinos/submissoes`,   { headers: authHeaders() }),
+          axios.get(`${API.BASE_URL}/api/seguidores/meus-seguidos`, { headers: authHeaders() }),
         ]);
+
         const d1 = normaliza(r1.data); const d2 = normaliza(r2.data);
         setSubsDesafios(d1); setSubsTreinos(d2); setSubmissoes([...d1, ...d2]);
 
@@ -288,13 +279,13 @@ function DesafiosInner() {
 
   const baseDeSub = (s: Submissao) => `${API.BASE_URL}${s.tipo === "TREINO" ? "/api/treinos/submissoes" : "/api/desafios/submissoes"}`;
   const toggleLike = async (sub: Submissao) => {
-    try { const r = await axios.post(`${baseDeSub(sub)}/${sub.id}/like`, {}, { headers: authHeaders }); const { liked, count } = r.data; applyUpdate(sub, { viewerLiked: liked, curtidasCount: count }); }
+    try { const r = await axios.post(`${baseDeSub(sub)}/${sub.id}/like`, {}, { headers: authHeaders() }); const { liked, count } = r.data; applyUpdate(sub, { viewerLiked: liked, curtidasCount: count }); }
     catch { alert("Não foi possível curtir."); }
   };
   const enviarComentario = async (sub: Submissao) => {
     const txt = (comentarioTexto[sub.id] || "").trim(); if (!txt) return;
     try {
-      const r = await axios.post(`${baseDeSub(sub)}/${sub.id}/comentarios`, { conteudo: txt }, { headers: authHeaders });
+      const r = await axios.post(`${baseDeSub(sub)}/${sub.id}/comentarios`, { conteudo: txt }, { headers: authHeaders() });
       const { comentario, count } = r.data;
       applyUpdate(sub, { comentariosCount: count, comentarios: [ ...(sub.comentarios || []), comentario ] });
       setComentarioTexto((p) => ({ ...p, [sub.id]: "" }));
@@ -313,7 +304,7 @@ function DesafiosInner() {
     for (const s of recentes) {
       const atletaId = s.atleta?.id; if (!atletaId) continue;
       const atual = porAtleta.get(atletaId);
-      if (!atual) porAtleta.set(atletaId, { atleta: s.atleta, total: s.curtidasCount || 0, best: s }); // 🔧 fix
+      if (!atual) porAtleta.set(atletaId, { atleta: s.atleta, total: s.curtidasCount || 0, best: s });
       else { atual.total += s.curtidasCount || 0; if (!atual.best || (s.curtidasCount || 0) > (atual.best.curtidasCount || 0)) atual.best = s; }
     }
     return Array.from(porAtleta.values()).sort((a,b)=>b.total-a.total).slice(0,20);
@@ -433,15 +424,19 @@ function DesafiosInner() {
   );
 }
 
-/* =============== página: header central + slider leve (gap igual ao feed) =============== */
-export default function DesafiosPage(): JSX.Element {
+export default function DesafiosPage(): JSX.Element | null {
   const [, setLocation] = useLocation();
-  const [pos, setPos] = useState(1); // 0 = Feed ; 1 = Desafios
+  const [pos, setPos] = useState(1); 
   const [dragging, setDragging] = useState(false);
 
-  // alturas do header
-  const HEADER_H_MOBILE = 64;  // h-16
-  const HEADER_H_DESKTOP = 80; // sm:h-20
+  const HEADER_H_MOBILE = 64;
+  const HEADER_H_DESKTOP = 80; 
+
+  useEffect(() => {
+    if (!FLAGS.DESAFIOS_ENABLED) setLocation("/feed");
+  }, []);
+
+  if (!FLAGS.DESAFIOS_ENABLED) return null;
 
   const onCommit = (target: "feed" | "desafios") => {
     const snap = target === "desafios" ? 1 : 0;
@@ -451,9 +446,7 @@ export default function DesafiosPage(): JSX.Element {
 
   return (
     <div className="pt-6 pb-24 overflow-x-hidden">
-      {/* container com largura máxima e padding lateral suave */}
       <div className="mx-auto w-full max-w-[430px] px-3 sm:max-w-3xl sm:px-0">
-        {/* header com a MESMA altura e um pequeno espaçamento inferior */}
         <div
           className="relative mb-2 h-[var(--header-h)] sm:h-[var(--header-h-sm)] -mx-1 px-1 sm:mx-0"
           style={
@@ -473,8 +466,6 @@ export default function DesafiosPage(): JSX.Element {
             <h1 className="text-2xl font-bold">Feed de Desafios</h1>
           </div>
         </div>
-
-        {/* conteúdo */}
         <DesafiosInner />
       </div>
 

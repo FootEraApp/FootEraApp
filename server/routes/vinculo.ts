@@ -1,4 +1,3 @@
-// server/routes/vinculo
 import { Router } from "express";
 import { vinculoController } from "../controllers/vinculoController.js";
 import { buscarProfessorPorIdInterno } from "../controllers/professoresController.js";

@@ -1,4 +1,3 @@
-// server/routes/solicitacaoTreino
 import { Router } from "express";
 import {
   criarSolicitacao,
@@ -21,11 +20,10 @@ router.post("/", criarSolicitacao);
 router.get("/minhas", listarSolicitacoesMinhas);
 router.get("/", listarSolicitacoesRecebidas);
 
-// ---- cancelamento (três formas) ----
-router.delete("/id/:id", cancelarSolicitacao);              // por ID da solicitação
-router.delete("/dest/:destinatarioId", cancelarSolicitacao); // por destinatário
-router.delete("/", cancelarSolicitacao);                     // por body { destinatarioId }
-router.post("/cancelar", cancelarSolicitacao);               // compat
+router.delete("/id/:id", cancelarSolicitacao);             
+router.delete("/dest/:destinatarioId", cancelarSolicitacao); 
+router.delete("/", cancelarSolicitacao);                    
+router.post("/cancelar", cancelarSolicitacao);             
 
 router.put("/:id", async (req, res) => {
   try {

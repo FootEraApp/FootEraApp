@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
+import { FLAGS } from "../config.js";
 
 export default function SubmissaoDesafioEmGrupo() {
   const { grupoId, desafioId } = useParams<{ grupoId: string; desafioId: string }>();
@@ -14,6 +15,12 @@ export default function SubmissaoDesafioEmGrupo() {
   const [successMsg, setSuccessMsg] = useState("");
 
   const [desafioEmGrupoId, setDesafioEmGrupoId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!FLAGS.DESAFIOS_ENABLED) setLocation("/mensagens");
+  }, []);
+
+  if (!FLAGS.DESAFIOS_ENABLED) return null;
 
   useEffect(() => {
     (async () => {

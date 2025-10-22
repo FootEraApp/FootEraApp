@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
+import { ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
 
 export default function TreinoLivreNovo() {
   const [, navigate] = useLocation();
@@ -44,6 +46,17 @@ export default function TreinoLivreNovo() {
 
   return (
     <div className="p-4 max-w-md mx-auto">
+      <Link
+        href="/treinos"
+        aria-label="Voltar para treinos"
+        title="Voltar para explorar"
+        className="inline-flex h-10 w-10 items-center justify-center
+          rounded-full border border-green-800 bg-white text-green-900
+          shadow-sm hover:bg-green-50 focus:outline-none
+          focus:ring-2 focus:ring-green-700/30 mt-2 ml-2"
+        >
+        <ArrowLeft className="h-5 w-5" />
+      </Link>
       <h2 className="text-lg font-bold mb-4">Registrar Treino Livre</h2>
       <label className="block text-sm mb-1">Descrição da atividade</label>
       <input

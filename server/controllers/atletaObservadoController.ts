@@ -62,7 +62,6 @@ export async function listarObservados(req: Request, res: Response) {
   const incluirPontuacao = String(req.query.incluirPontuacao ?? "").trim() !== "";
 
   const lista = rows.map((r) => ({
-    // id que o front usa no href /perfil/:id  -> preferir o id do USUÁRIO
     id: r.atleta?.usuario?.id ?? r.atleta?.usuarioId ?? r.atletaId,
     usuarioId: r.atleta?.usuario?.id ?? r.atleta?.usuarioId ?? "",
     atletaId: r.atletaId,
@@ -96,7 +95,6 @@ export async function observarAtleta(req: Request, res: Response) {
   const where = { atletaId, ...owner };
   const jaExiste = await prisma.atletaObservado.findFirst({ where });
   if (jaExiste) {
-    // <-- idempotente
     return res.status(200).json({ ok: true, observando: true, id: jaExiste.id });
   }
 
@@ -110,7 +108,7 @@ export async function pararDeObservar(req: Request, res: Response) {
 
   const owner = await resolveOwner(req);
   await prisma.atletaObservado.deleteMany({ where: { atletaId, ...owner } });
-  return res.sendStatus(204); // <-- idempotente
+  return res.sendStatus(204);
 }
 
 export async function listarObservadosPorOlheiro(req: Request, res: Response) {

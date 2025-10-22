@@ -1,4 +1,3 @@
-// server/controllers/solicitacaoTreinoController
 import { Response, Request } from "express";
 import { PrismaClient } from "@prisma/client";
 import { resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
@@ -229,7 +228,6 @@ async function acharPendente(
   });
 }
 
-/** Cancela (deleta ou marca como cancelada) uma solicitação pelo ID. */
 async function cancelarPorSolicitacaoId(
   solicitacaoId: string,
   userId?: string,
@@ -237,12 +235,10 @@ async function cancelarPorSolicitacaoId(
   if (!solicitacaoId) return false;
 
   const s = await prisma.solicitacaoTreino.findUnique({ where: { id: solicitacaoId } });
-  if (!s) return false;
 
-  // opcional: garante que o usuário logado faz parte da solicitação
+  if (!s) return false;
   if (userId && s.remetenteId !== userId && s.destinatarioId !== userId) return false;
 
-  // deletar (ou marcar como cancelada caso não possa deletar)
   try {
     await prisma.solicitacaoTreino.delete({ where: { id: solicitacaoId } });
   } catch {
@@ -254,24 +250,20 @@ async function cancelarPorSolicitacaoId(
   return true;
 }
 
-/** Cancela por id OU por destinatarioId (idempotente). */
 export async function cancelarSolicitacao(req: Request, res: Response) {
   try {
     const userId: string | undefined = (req as any).user?.id || (req as any).userId;
 
-    // pode vir por url (/:id ou /:destinatarioId), query ou body
     const solicitacaoId  = (req.params as any).id
                         || (req.body?.id ?? req.query?.id) || null;
     const destinatarioId = (req.params as any).destinatarioId
                         || (req.body?.destinatarioId ?? req.query?.destinatarioId) || null;
 
-    // 1) cancelar pelo ID da solicitação
     if (solicitacaoId) {
       await cancelarPorSolicitacaoId(String(solicitacaoId), userId);
-      return res.sendStatus(204); // idempotente
+      return res.sendStatus(204);
     }
 
-    // 2) cancelar por destinatário (procura pendente/ativa e cancela)
     if (userId && destinatarioId) {
       const pend = await acharPendente(userId, String(destinatarioId));
       if (!pend) return res.sendStatus(204);

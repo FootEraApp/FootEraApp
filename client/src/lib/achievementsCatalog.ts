@@ -1,4 +1,3 @@
-// client/src/lib/achievementsCatalog
 export type Tier = "bronze" | "prata" | "ouro" | "platina";
 export type Entity = "Atleta" | "Professor" | "Escolinha" | "Clube";
 export type Group =
