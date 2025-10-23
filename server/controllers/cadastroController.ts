@@ -21,7 +21,7 @@ async function issueEmailVerification(params: {
 }) {
   const raw = crypto.randomBytes(32).toString("hex");
   const tokenHash = createHash("sha256").update(raw).digest("hex");
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24h
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
 
   await prisma.emailVerification.create({
     data: {
@@ -460,9 +460,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       );
     }
 
-    // ----- Enviar verificação de e-mail (usuário >=18 ou responsável <18) -----
     try {
-      // calcular idade a partir de dataNascimento já existente no usuário
       let idadeCalc: number | null = null;
       const usr = await prisma.usuario.findUnique({ where: { id: usuario.id } });
       if (usr?.dataNascimento) {

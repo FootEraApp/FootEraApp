@@ -218,6 +218,9 @@ export default function AdminDashboard() {
   const [modLoading, setModLoading] = useState(false);
   const [player, setPlayer] = useState<{ src: string; kind: "video" | "iframe" } | null>(null);
   const [modStatus, setModStatus] = useState<"pendente"|"aprovado"|"invalido"|"todos">("pendente");
+  const [meId, setMeId] = useState<string | null>(null);
+  const [canManageAdmins, setCanManageAdmins] = useState(false);
+  const [adminNivel, setAdminNivel] = useState<number>(0);
 
   const isAdminBase = usersBase === USERS_ENDPOINT[0];
 
@@ -328,6 +331,19 @@ export default function AdminDashboard() {
     carregarPendentes(1).catch(() => {});
   }, [aba, modStatus]);                                    
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(`${API.BASE_URL}/api/admin/me`, { headers: authHeaders() });
+        if (!r.ok) return;
+        const me = await r.json();
+        setMeId(me.id ?? null);
+        setAdminNivel(me.adminNivel ?? 0);
+        setCanManageAdmins(!!me.canManageAdmins);
+      } catch {}
+    })();
+  }, []);
+
 async function carregarPendentes(page: number) {
   setModLoading(true);
   try {
@@ -366,6 +382,49 @@ async function invalidarDesafio(id: string) {
   });
   await carregarPendentes(modPage);
 }
+
+  async function criarAdminViaPrompt() {
+    if (!canManageAdmins) return alert("Ação restrita ao super admin.");
+
+    const email = prompt("Email do novo admin:");
+    if (!email) return;
+    const senha = prompt("Senha inicial do novo admin:");
+    if (!senha) return;
+    const nome  = prompt("Nome (opcional):") ?? "";
+
+    const resp = await fetch(`${API.BASE_URL}/api/admin/admins`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ email, senha, nome }),
+    });
+
+    if (!resp.ok) {
+      const t = await resp.text();
+      alert(`Erro ao criar admin: ${t}`);
+      return;
+    }
+    alert("Administrador criado com sucesso! Ele já pode acessar /admin/login com o email/senha definidos.");
+    await carregarUsuarios(1);
+  }
+
+  async function deletarAdmin(id: string) {
+    if (!canManageAdmins) return alert("Ação restrita ao super admin.");
+    if (meId && id === meId) return alert("Você não pode deletar sua própria conta.");
+    if (!confirm("Tem certeza que deseja deletar este administrador?")) return;
+
+    const resp = await fetch(`${API.BASE_URL}/api/admin/admins/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    if (!resp.ok) {
+      const t = await resp.text();
+      alert(`Falha ao deletar: ${t}`);
+      return;
+    }
+    alert("Administrador removido.");
+    setUsuarios(prev => prev.filter(u => u.id !== id));
+  }
 
   async function carregarUsuarios(targetPage: number) {
     setCarregandoUsuarios(true);
@@ -596,6 +655,25 @@ async function invalidarDesafio(id: string) {
               </div>
             )}
 
+             {canManageAdmins && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold text-amber-800">Gerenciar administradores</div>
+                    <div className="text-sm text-amber-700">
+                      Somente você (super admin) pode criar e remover contas de admin.
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => (window.location.href = "/admin/admins/create")}
+                    className="px-3 py-2 rounded bg-green-700 text-white hover:bg-green-800"
+                  >
+                    + Criar novo admin
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white rounded shadow overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50">
@@ -658,12 +736,24 @@ async function invalidarDesafio(id: string) {
                           ) : "—"}
                         </td>
                         <td className="px-3 py-2 text-right">
-                          <button
-                            onClick={() => abrirDetalhes(u.id)}
-                            className="text-green-700 hover:underline"
-                          >
-                            Detalhes
-                          </button>
+                          <div className="flex items-center gap-3 justify-end">
+                            <button
+                              onClick={() => abrirDetalhes(u.id)}
+                              className="text-green-700 hover:underline"
+                            >
+                              Detalhes
+                            </button>
+
+                            {canManageAdmins && String(u.tipo).toLowerCase() === "admin" && u.id !== meId && (
+                              <button
+                                onClick={() => deletarAdmin(u.id)}
+                                className="text-red-600 hover:underline"
+                                title="Deletar este administrador"
+                              >
+                                Remover admin
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -838,8 +928,12 @@ async function invalidarDesafio(id: string) {
                           <div>
                             <strong>{p.nome}</strong>
                             <p>CREF: {p.cref} — {p.areaFormacao}</p>
-                            <p className="text-sm text-gray-600">Qualificações: {p.qualificacoes.join(", ")}</p>
-                            <p className="text-sm text-gray-500">Certificações: {p.certificacoes.join(", ")}</p>
+                            <p className="text-sm text-gray-600">
+                              Qualificações: {(Array.isArray(p.qualificacoes) ? p.qualificacoes : []).join(", ") || "—"}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              Certificações: {(Array.isArray(p.certificacoes) ? p.certificacoes : []).join(", ") || "—"}
+                            </p>
                           </div>
                           <div className="flex gap-2">
                             <button onClick={() => (window.location.href = `/admin/professores/create?id=${p.id}`)}>✏️</button>
@@ -876,7 +970,7 @@ async function invalidarDesafio(id: string) {
                         <li key={d.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
                           <div>
                             <strong>{d.titulo}</strong>
-                            <p>• {d.categoria.join(", ")} - {d.descricao}</p>
+                            <p>• {(Array.isArray(d.categoria) ? d.categoria : [d.categoria]).filter(Boolean).join(", ")} - {d.descricao}</p>
                             <p className="text-sm text-gray-500">Pontos: {d.pontuacao}</p>
                           </div>
                           <div className="flex gap-2">

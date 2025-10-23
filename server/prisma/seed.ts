@@ -21,6 +21,10 @@ async function main() {
     'aaaaa': 'aaaaa123',
     'admin': 'admin123',
     'olheiro_joao': 'olheiro123',
+    // perfil adicionado p teste em admin
+    // nomeusuario: adminTeste
+    // email: adminTeste@gmail.com
+    // senha: adminteste1
   } as const;
 
   const H = Object.fromEntries(
@@ -205,55 +209,86 @@ async function main() {
   });
 
   await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'mateus.furieri' },
-  update: {},
-  create: {
-    nome: 'Mateus Barbarioli Furieri',
-    nomeDeUsuario: 'mateus.furieri',
-    email: 'mateus.furieri@example.com',
-    senhaHash: H['mateus.furieri'],
-    tipo: TipoUsuario.Professor,
-    estado: 'ES',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/prof-teste.png',
-    professor: {
-      create: {
-        codigo: 'PROF001',
-        cref: '015293-G/ES',
-        areaFormacao: '',
-        escola: '',
-        qualificacoes: [],
-        certificacoes: [],
-        fotoUrl: '/assets/usuarios/prof-teste.png',
-        nome: 'Mateus Barbarioli Furieri'
-      }
-    }
-  }
-});
+    where: { nomeDeUsuario: 'admin' },
+    create: {
+      nome: 'Administrador do Sistema',
+      nomeDeUsuario: 'admin',
+      email: 'admin@footera.example.com',
+      senhaHash: H['admin'],
+      tipo: TipoUsuario.Admin,
+      verified: true,
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/profa-teste.png',
+      administrador: {
+        create: {
+          cargo: 'Super Admin',          
+          nivel: Nivel.Performance,
+          fotoUrl: '/assets/usuarios/profa-teste.png',
+        },
+      },
+    },
+    update: {
+      tipo: TipoUsuario.Admin,              
+      verified: true,
+      administrador: {
+        upsert: {
+          create: {
+            cargo: 'Super Admin',
+            nivel: Nivel.Performance,
+            fotoUrl: '/assets/usuarios/profa-teste.png',
+          },
+          update: {
+            cargo: 'Super Admin',
+            nivel: Nivel.Performance,
+            fotoUrl: '/assets/usuarios/profa-teste.png',
+          },
+        },
+      },
+    },
+  });
 
-await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'admin' },
-  update: {},
-  create: {
-    nome: 'Administrador do Sistema',
-    nomeDeUsuario: 'admin',
-    email: 'admin@footera.example.com',
-    senhaHash: H['admin'], 
-    tipo: TipoUsuario.Admin,
-    verified: true,
-    cidade: 'São Paulo',
-    estado: 'SP',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/profa-teste.png',
-    administrador: {
-      create: {
-        cargo: 'Super Admin',
-        nivel: Nivel.Performance,
-        fotoUrl: '/assets/usuarios/profa-teste.png',
+  await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'admin' },
+    create: {
+      nome: 'Administrador do Sistema',
+      nomeDeUsuario: 'admin',
+      email: 'admin@footera.example.com',
+      senhaHash: H['admin'],
+      tipo: TipoUsuario.Admin,
+      verified: true,
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/profa-teste.png',
+      administrador: {
+        create: {
+          cargo: 'superadmin',             
+          nivel: Nivel.Performance,
+          fotoUrl: '/assets/usuarios/profa-teste.png',
+        }
+      }
+    },
+    update: {
+      tipo: TipoUsuario.Admin,             
+      verified: true,
+      administrador: {
+        upsert: {                           
+          create: {
+            cargo: 'superadmin',
+            nivel: Nivel.Performance,
+            fotoUrl: '/assets/usuarios/profa-teste.png',
+          },
+          update: {
+            cargo: 'superadmin',
+            nivel: Nivel.Performance,
+            fotoUrl: '/assets/usuarios/profa-teste.png',
+          }
+        }
       }
     }
-  }
-});
+  });
 
   const clube1Db = await prisma.clube.findFirst({
     where: { usuario: { nomeDeUsuario: "clube_footera" } }

@@ -1,0 +1,290 @@
+import { useMemo, useState, type ComponentPropsWithoutRef} from "react";
+import logo from "/assets/usuarios/footera-logo.png";
+import { API } from "../config.js";
+import { Eye, EyeOff } from "lucide-react";
+
+type SvgProps = ComponentPropsWithoutRef<"svg">;
+
+function ChevronDown(props: SvgProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+function ChevronUp(props: SvgProps) {
+  return (
+    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="m18 15-6-6-6 6" />
+    </svg>
+  );
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+const USER_RE = /^(?=.{3,20}$)[a-z0-9._]+$/i;
+const PASS_RE = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+const CEP_RE = /^\d{5}-?\d{3}$/;
+
+function somenteDigitos(v: string) { return v.replace(/\D+/g, ""); }
+function maskCEP(v: string) {
+  const d = somenteDigitos(v).slice(0, 8);
+  if (d.length <= 5) return d;
+  return d.slice(0, 5) + "-" + d.slice(5);
+}
+function debounce<T extends (...args: any[]) => void>(fn: T, ms = 400) {
+  let t: any; return (...a: Parameters<T>) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+function authHeaders(extra: Record<string, string> = {}) {
+  const token = localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+  return token ? { Authorization: `Bearer ${token}`, ...extra } : { ...extra };
+}
+
+export default function CreateAdmin() {
+  const [cep, setCep] = useState("");
+  const [cidade, setCidade] = useState("");
+  const [estado, setEstado] = useState("");
+  const [bairro, setBairro] = useState("");
+  const [pais, setPais] = useState("Brasil");
+  type CepStatus = "idle" | "loading" | "ok" | "not_found" | "invalid";
+  const [cepStatus, setCepStatus] = useState<CepStatus>("idle");
+
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [senha, setSenha] = useState("");
+  const [confirmar, setConfirmar] = useState("");
+  const [nascimento, setNascimento] = useState("");
+
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [mostrarConfirmar, setMostrarConfirmar] = useState(false);
+
+  const [erro, setErro] = useState("");
+  const [ok, setOk] = useState("");
+  const [infoAberto, setInfoAberto] = useState(false);
+
+  const emailValido = EMAIL_RE.test(email.trim());
+  const userValido = USER_RE.test(username.trim());
+  const senhaForte = PASS_RE.test(senha);
+  const confirmarOk = confirmar === senha && confirmar.length > 0;
+
+  const buscarCEP = useMemo(
+    () => debounce(async (valor: string) => {
+      const num = somenteDigitos(valor);
+      if (!num) { setCepStatus("idle"); setCidade(""); setEstado(""); setBairro(""); setPais("Brasil"); return; }
+      if (num.length !== 8) { setCepStatus("invalid"); return; }
+      setCepStatus("loading");
+      try {
+        const r = await fetch(`https://viacep.com.br/ws/${num}/json/`);
+        const j = await r.json();
+        if (!r.ok || j?.erro) { setCepStatus("not_found"); return; }
+        setCidade(j?.localidade || ""); setEstado((j?.uf || "").toUpperCase());
+        setBairro(j?.bairro || ""); setPais("Brasil"); setCepStatus("ok");
+      } catch { setCepStatus("not_found"); }
+    }, 400),
+    []
+  );
+  useMemo(() => buscarCEP(cep), [cep, buscarCEP]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErro(""); setOk("");
+
+    if (!nome.trim()) return setErro("Informe o nome completo.");
+    if (!emailValido) return setErro("E-mail inválido.");
+    if (!userValido) return setErro("Nome de usuário inválido (3–20, letras/números/._).");
+    if (!senhaForte) return setErro("Senha fraca: mínimo 8 caracteres com letra e número.");
+    if (!confirmarOk) return setErro("As senhas não coincidem.");
+    if (!nascimento) return setErro("Informe a data de nascimento.");
+    if (!CEP_RE.test(cep) || !cidade || !estado) return setErro("Informe um CEP válido para preencher Cidade e UF (ou ajuste manualmente).");
+
+    const payload: any = {
+      email, senha, nome,
+      nomeDeUsuario: username,
+      dataNascimento: nascimento,
+      endereco: {
+        cep,
+        cidade,
+        estado,
+        bairro,
+        pais
+      }
+    };
+
+    try {
+      const resp = await fetch(`${API.BASE_URL}/api/admin/admins`, {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        const t = await resp.text();
+        throw new Error(t || "Erro ao criar admin.");
+      }
+
+      setOk("Administrador criado com sucesso!");
+      setTimeout(() => (window.location.href = "/admin?tab=usuarios"), 900);
+    } catch (e: any) {
+      setErro(e?.message || "Falha ao criar administrador.");
+    }
+  }
+
+  return (
+    <div className="flex flex-col lg:flex-row min-h-screen">
+         <div className="w-full lg:w-1/2 bg-green-800 text-white flex flex-col items-center p-5 lg:p-10">
+           <div className="w-full max-w-[680px]">
+             <div className="flex items-center justify-between gap-3 lg:flex-col lg:gap-2">
+               <img src={logo} className="w-10 h-10 lg:w-14 lg:h-14" alt="FootEra" />
+               <h1 className="flex-1 lg:flex-none text-center text-xl lg:text-3xl font-bold">Bem-vindo à FootEra</h1>
+               <button type="button" className="lg:hidden p-2 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40 rounded-full" aria-expanded={infoAberto} aria-controls="cadastro-info" onClick={() => setInfoAberto(v => !v)} title={infoAberto ? "Recolher" : "Expandir"}>
+                 {infoAberto ? <ChevronUp /> : <ChevronDown />}
+               </button>
+             </div>
+   
+             <div id="cadastro-info" className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${infoAberto ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0 lg:max-h-[520px] lg:opacity-100"}`}>
+               <p className="text-center max-w-md text-base lg:text-lg mt-4">
+                 Se você sonha em conquistar uma oportunidade, joga por amor ou quer se superar...
+                 aqui é o seu lugar. FootEra. A metodologia dos profissionais, para quem vive futebol.
+               </p>
+               <div className="mt-6 p-5 lg:p-6 rounded-xl text-sm lg:text-base text-left w-full bg-white/10 backdrop-blur-[1px]">
+                 <h2 className="font-semibold mb-2">O que a FootEra oferece:</h2>
+                 <ul className="list-disc list-inside space-y-1">
+                   <li>Treinamentos personalizados</li>
+                   <li>Desafios para testar suas habilidades</li>
+                   <li>Compartilhe seu progresso com a comunidade</li>
+                   <li>Conecte-se com escolinhas e clubes profissionais</li>
+                   <li>Acompanhe sua evolução com pontuações e rankings</li>
+                 </ul>
+               </div>
+             </div>
+           </div>
+         </div>
+   
+         <div className="relative bg-cream flex justify-center items-center p-6 lg:p-10 w-full lg:w-1/2">
+           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-0">
+             <div aria-hidden className="w-[420px] h-[420px] opacity-[0.06] lg:opacity-[0.08] rounded-full overflow-hidden"
+               style={{ backgroundImage: `url(${logo})`, backgroundRepeat: "no-repeat", backgroundPosition: "center 20%", backgroundSize: "85% auto", filter: "grayscale(100%)" }} />
+           </div>
+
+        <div className="relative z-10 bg-white rounded-2xl shadow-md w-full max-w-xl p-6">
+          <h2 className="text-xl font-semibold mb-1">Criar conta admin</h2>
+          <p className="text-sm text-green-600 mb-4">Preencha os campos abaixo</p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium mb-1">CEP</label>
+                <input
+                  className={`w-full border rounded px-3 py-2 ${cep && !CEP_RE.test(cep) ? "border-red-400" : ""}`}
+                  placeholder="00000-000"
+                  inputMode="numeric"
+                  value={cep}
+                  onChange={(e) => setCep(maskCEP(e.target.value))}
+                />
+                {cep && (
+                  <p className={`text-xs mt-1 ${
+                    cepStatus === "loading" ? "text-gray-500" :
+                    cepStatus === "ok" ? "text-green-700" :
+                    "text-red-600"
+                  }`}>
+                    {cepStatus === "loading" ? "Buscando endereço…" :
+                     cepStatus === "ok" ? "Endereço localizado pelo CEP." :
+                     cepStatus === "invalid" ? "CEP inválido." :
+                     "CEP não encontrado."}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Cidade</label>
+                <input className="w-full border rounded px-3 py-2" value={cidade} onChange={(e) => setCidade(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">UF</label>
+                <input className="w-full border rounded px-3 py-2 uppercase" maxLength={2} value={estado} onChange={(e) => setEstado(e.target.value.toUpperCase().slice(0,2))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Bairro</label>
+                <input className="w-full border rounded px-3 py-2" value={bairro} onChange={(e) => setBairro(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">País</label>
+                <input className="w-full border rounded px-3 py-2" value={pais} onChange={(e) => setPais(e.target.value)} />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Nome Completo</label>
+              <input className="w-full border rounded px-3 py-2" value={nome} onChange={(e) => setNome(e.target.value)} />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Email</label>
+              <input type="email" className={`w-full border rounded px-3 py-2 ${email && !emailValido ? "border-red-400" : ""}`} value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Nome de usuário</label>
+              <input className={`w-full border rounded px-3 py-2 ${username && !userValido ? "border-red-400" : ""}`} value={username} onChange={(e) => setUsername(e.target.value)} />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Senha</label>
+                <div className="relative">
+                  <input
+                    type={mostrarSenha ? "text" : "password"}
+                    autoComplete="new-password"
+                    className={`w-full border rounded px-3 py-2 pr-10 ${senha && !senhaForte ? "border-red-400" : ""}`}
+                    value={senha}
+                    onChange={(e) => setSenha(e.target.value)}
+                  />
+                  <button type="button" onClick={() => setMostrarSenha(v => !v)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700">
+                    {mostrarSenha ? <EyeOff size={18}/> : <Eye size={18}/>}
+                  </button>
+                </div>
+                {senha && <p className={`text-xs mt-1 ${senhaForte ? "text-green-700" : "text-red-600"}`}>Mín. 8 caracteres com letra e número.</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Confirmar Senha</label>
+                <div className="relative">
+                  <input
+                    type={mostrarConfirmar ? "text" : "password"}
+                    autoComplete="new-password"
+                    className={`w-full border rounded px-3 py-2 pr-10 ${confirmar && !confirmarOk ? "border-red-400" : ""}`}
+                    value={confirmar}
+                    onChange={(e) => setConfirmar(e.target.value)}
+                  />
+                  <button type="button" onClick={() => setMostrarConfirmar(v => !v)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700">
+                    {mostrarConfirmar ? <EyeOff size={18}/> : <Eye size={18}/>}
+                  </button>
+                </div>
+                {confirmar && <p className={`text-xs mt-1 ${confirmarOk ? "text-green-700" : "text-red-600"}`}>{confirmarOk ? "OK" : "Senhas não coincidem."}</p>}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Data de nascimento</label>
+              <input type="date" className="w-full border rounded px-3 py-2" value={nascimento} onChange={(e) => setNascimento(e.target.value)} />
+            </div>
+
+            {erro && <p className="text-sm text-red-600">{erro}</p>}
+            {ok && <p className="text-sm text-green-700">{ok}</p>}
+
+            <div className="mt-2 flex justify-end gap-2">
+              <a href="/admin" className="border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50">Cancelar</a>
+              <button type="submit" className="bg-green-900 hover:bg-green-800 text-white px-4 py-2 rounded">Criar admin</button>
+            </div>
+          </form>
+
+          <p className="text-center text-sm mt-4">
+            Voltar para o <a href="/admin" className="text-green-700 underline">Painel</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

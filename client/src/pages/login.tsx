@@ -46,7 +46,6 @@ export default function PaginaLogin() {
   const [, navigate] = useLocation();
   const [mostrarSenha, setMostrarSenha] = useState(false);
 
-  // bloco informativo no mobile
   const [infoAberto, setInfoAberto] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -103,16 +102,13 @@ export default function PaginaLogin() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen">
-      {/* COLUNA VERDE */}
       <div className="md:w-1/2 bg-green-800 text-white flex flex-col items-center p-5 md:p-10">
         <div className="w-full max-w-[680px]">
-          {/* header em fileira no mobile; coluna no desktop */}
           <div className="flex items-center justify-between gap-3 md:flex-col md:gap-2">
             <img src="/assets/usuarios/footera-logo.png" alt="Logo FootEra" className="w-10 h-10 md:w-14 md:h-14" />
             <h1 className="flex-1 md:flex-none text-center text-xl md:text-3xl font-bold">
               Bem-vindo à FootEra
             </h1>
-            {/* botão de expandir simples, sem fundo branco */}
             <button
               type="button"
               className="md:hidden p-2 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40 rounded-full"
@@ -125,7 +121,6 @@ export default function PaginaLogin() {
             </button>
           </div>
 
-          {/* conteúdo informativo (desktop sempre aberto; mobile colapsável) */}
           <div
             id="info-footera"
             className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out
@@ -150,9 +145,7 @@ export default function PaginaLogin() {
         </div>
       </div>
 
-      {/* COLUNA DO FORMULÁRIO */}
       <div className="relative md:w-1/2 bg-cream flex justify-center items-center p-6 md:p-10">
-        {/* RELEVO: símbolo da logo atrás do card (usa a PNG real, recortada em círculo para esconder o texto) */}
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-0">
           <div
             aria-hidden
@@ -160,16 +153,13 @@ export default function PaginaLogin() {
             style={{
               backgroundImage: "url('/assets/usuarios/footera-logo.png')",
               backgroundRepeat: "no-repeat",
-              // posiciona para pegar só o símbolo (parte superior da imagem)
               backgroundPosition: "center 20%",
-              // aumenta para garantir que o texto (embaixo) fique fora do círculo
               backgroundSize: "85% auto",
               filter: "grayscale(100%)",
             }}
           />
         </div>
 
-        {/* CARD CENTRALIZADO */}
         <div className="relative z-10 w-full max-w-md bg-white shadow-lg rounded-2xl p-7 md:p-8 mx-auto">
           <h2 className="text-xl font-semibold mb-2 text-center">Entrar</h2>
           <p className="text-sm text-center text-gray-600 mb-6">

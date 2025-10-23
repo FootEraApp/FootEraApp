@@ -4,7 +4,7 @@
   "type": "module",
   "main": "dist/index.js",
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx server/prisma/seed.ts"
   },
   "engines": {
     "node": ">=18"
