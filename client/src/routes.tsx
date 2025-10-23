@@ -48,6 +48,7 @@ import PaginaDesempenhoAtleta from "./pages/olheiro/desempenho.js";
 import PaginaIndicarClube from "./pages/olheiro/indicar.js";
 import PaginaTreinoLivreNovo from "./pages/treinoLivreNovo.js";
 import PaginaTreinoLivresHistorico from "./pages/treinoLivreHistorico.js"
+import PaginaCreateAdmin from "./pages/createAdmin.js";
 
 export function AppRoutes() {
   return (
@@ -85,6 +86,7 @@ export function AppRoutes() {
       <Route path="/admin/professores/create">
         <RequireAdmin><PaginaCreateProfessores /></RequireAdmin>
       </Route>
+      <Route path="/admin/admins/create" component={PaginaCreateAdmin} />
       <Route path="/admin">
         <RequireAdmin>
           <AdminDashboard />
