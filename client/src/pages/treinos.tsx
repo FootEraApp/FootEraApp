@@ -1006,25 +1006,65 @@ const renderDesafioCard = (desafio: Desafio) => (
                 const id = ex.exercicio.id;
                 const checked = !!ck[id];
                 return (
-                  <label
-                    key={id}
-                    className="flex items-start gap-2 border-b pb-2 last:border-b-0 cursor-pointer select-none"
-                    title={ex.exercicio.nome}
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 h-4 w-4 accent-emerald-600"
-                      checked={checked}
-                      onChange={() => toggleItemChecklist(treino.id, id)}
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{i + 1}.</span>
-                        <span className={`truncate ${checked ? "line-through text-gray-500" : ""}`}>{ex.exercicio.nome}</span>
-                        {!!ex.repeticoes && <span className="text-[11px] text-gray-500">({ex.repeticoes})</span>}
-                      </div>
-                    </div>
-                  </label>
+<label
+  key={id}
+  className="flex items-start gap-2 border-b pb-2 last:border-b-0 cursor-pointer select-none"
+  title={ex.exercicio.nome}
+>
+  {/* input acessível */}
+  <input
+    type="checkbox"
+    checked={checked}
+    onChange={() => toggleItemChecklist(treino.id, id)}
+    className="sr-only peer"
+  />
+
+  {/* caixinha custom — ativa o SVG filho quando checado */}
+  <span
+    className="
+      mt-0.5 relative h-5 w-5 rounded-md
+      border-2 border-emerald-600 bg-white
+      flex items-center justify-center
+      transition-all duration-150
+      peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-400/60
+      peer-checked:border-emerald-700
+      peer-checked:[&>svg]:opacity-100
+      peer-checked:[&>svg]:scale-100
+    "
+    aria-hidden="true"
+  >
+    <svg
+      viewBox="0 0 24 24"
+      className="
+        absolute h-3.5 w-3.5
+        text-emerald-700            /* V mais escuro */
+        opacity-0 scale-75
+        transition duration-150
+        pointer-events-none
+      "
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={3}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      role="presentation"
+    >
+      <path d="M20 6L9 17l-5-5" />
+    </svg>
+  </span>
+
+  <div className="flex-1">
+    <div className="flex items-center gap-2">
+      <span className="font-medium">{i + 1}.</span>
+      <span className={`truncate ${checked ? "line-through text-gray-500" : ""}`}>
+        {ex.exercicio.nome}
+      </span>
+      {!!ex.repeticoes && <span className="text-[11px] text-gray-500">({ex.repeticoes})</span>}
+    </div>
+  </div>
+</label>
+
+
                 );
               })}
             </div>
