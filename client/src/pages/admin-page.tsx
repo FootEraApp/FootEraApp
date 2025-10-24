@@ -216,25 +216,26 @@ export default function AdminDashboard() {
   const [modPage, setModPage] = useState(1);                            
   const modPageSize = 20;                                                
   const [modLoading, setModLoading] = useState(false);
-  const [player, setPlayer] = useState<{ src: string; kind: "video" | "iframe" } | null>(null);
+  const [player, setPlayer] = useState<{ src: string; kind: "video" | "iframe" | "image" } | null>(null);
   const [modStatus, setModStatus] = useState<"pendente"|"aprovado"|"invalido"|"todos">("pendente");
   const [meId, setMeId] = useState<string | null>(null);
   const [canManageAdmins, setCanManageAdmins] = useState(false);
   const [adminNivel, setAdminNivel] = useState<number>(0);
 
   const isAdminBase = usersBase === USERS_ENDPOINT[0];
+  const isImage = (u: string) => /\.(png|jpe?g|webp|gif|bmp|svg)(\?.*)?$/i.test(u);
 
   function toPlayer(raw?: string | null) {
     if (!raw) return null;
     const url = toAbsoluteUrl(raw) || raw;
 
     if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(url)) return { kind: "video" as const, src: url };
+    if (isImage(url)) return { kind: "image" as const, src: url };
 
     const yt1 = url.match(/youtube\.com\/watch\?v=([^&]+)/i);
     const yt2 = url.match(/youtu\.be\/([^?]+)/i);
     if (yt1?.[1]) return { kind: "iframe" as const, src: `https://www.youtube.com/embed/${yt1[1]}` };
     if (yt2?.[1]) return { kind: "iframe" as const, src: `https://www.youtube.com/embed/${yt2[1]}` };
-
     return { kind: "iframe" as const, src: url };
   }
 
@@ -1188,16 +1189,14 @@ async function invalidarDesafio(id: string) {
           {player && (
             <div className="fixed inset-0 z-[70] grid place-items-center">
               <div className="absolute inset-0 bg-black/60" onClick={() => setPlayer(null)} />
-
               <div className="relative z-10">
-                {player.kind === "video" ? (
-                  <video
-                    src={player.src}
-                    controls
-                    autoPlay
-                    className="block max-w-[92vw] max-h-[90vh] rounded-lg shadow-xl"
-                  />
-                ) : (
+                {player.kind === "video" && (
+                  <video src={player.src} controls autoPlay className="block max-w-[92vw] max-h-[90vh] rounded-lg shadow-xl" />
+                )}
+                {player.kind === "image" && (
+                  <img src={player.src} alt="Prévia" className="block max-w-[85vw] max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-xl" />
+                )}
+                {player.kind === "iframe" && (
                   <div className="rounded-lg shadow-xl overflow-hidden">
                     <iframe
                       src={player.src}
@@ -1208,14 +1207,7 @@ async function invalidarDesafio(id: string) {
                     />
                   </div>
                 )}
-
-                <button
-                  onClick={() => setPlayer(null)}
-                  className="absolute -top-3 -right-3 bg-white text-gray-700 rounded-full shadow p-2"
-                  title="Fechar"
-                >
-                  ✕
-                </button>
+                <button onClick={() => setPlayer(null)} className="absolute -top-3 -right-3 bg-white text-gray-700 rounded-full shadow p-2">✕</button>
               </div>
             </div>
           )}
