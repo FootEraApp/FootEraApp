@@ -21,6 +21,10 @@ async function main() {
     'aaaaa': 'aaaaa123',
     'admin': 'admin123',
     'olheiro_joao': 'olheiro123',
+    // perfil adicionado p teste em admin
+    // nomeusuario: adminTeste
+    // email: adminTeste@gmail.com
+    // senha: adminteste1
   } as const;
 
   const H = Object.fromEntries(
@@ -205,55 +209,86 @@ async function main() {
   });
 
   await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'mateus.furieri' },
-  update: {},
-  create: {
-    nome: 'Mateus Barbarioli Furieri',
-    nomeDeUsuario: 'mateus.furieri',
-    email: 'mateus.furieri@example.com',
-    senhaHash: H['mateus.furieri'],
-    tipo: TipoUsuario.Professor,
-    estado: 'ES',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/prof-teste.png',
-    professor: {
-      create: {
-        codigo: 'PROF001',
-        cref: '015293-G/ES',
-        areaFormacao: '',
-        escola: '',
-        qualificacoes: [],
-        certificacoes: [],
-        fotoUrl: '/assets/usuarios/prof-teste.png',
-        nome: 'Mateus Barbarioli Furieri'
-      }
-    }
-  }
-});
+    where: { nomeDeUsuario: 'admin' },
+    create: {
+      nome: 'Administrador do Sistema',
+      nomeDeUsuario: 'admin',
+      email: 'admin@footera.example.com',
+      senhaHash: H['admin'],
+      tipo: TipoUsuario.Admin,
+      verified: true,
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/profa-teste.png',
+      administrador: {
+        create: {
+          cargo: 'Super Admin',          
+          nivel: Nivel.Performance,
+          fotoUrl: '/assets/usuarios/profa-teste.png',
+        },
+      },
+    },
+    update: {
+      tipo: TipoUsuario.Admin,              
+      verified: true,
+      administrador: {
+        upsert: {
+          create: {
+            cargo: 'Super Admin',
+            nivel: Nivel.Performance,
+            fotoUrl: '/assets/usuarios/profa-teste.png',
+          },
+          update: {
+            cargo: 'Super Admin',
+            nivel: Nivel.Performance,
+            fotoUrl: '/assets/usuarios/profa-teste.png',
+          },
+        },
+      },
+    },
+  });
 
-await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'admin' },
-  update: {},
-  create: {
-    nome: 'Administrador do Sistema',
-    nomeDeUsuario: 'admin',
-    email: 'admin@footera.example.com',
-    senhaHash: H['admin'], 
-    tipo: TipoUsuario.Admin,
-    verified: true,
-    cidade: 'São Paulo',
-    estado: 'SP',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/profa-teste.png',
-    administrador: {
-      create: {
-        cargo: 'Super Admin',
-        nivel: Nivel.Performance,
-        fotoUrl: '/assets/usuarios/profa-teste.png',
+  await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'admin' },
+    create: {
+      nome: 'Administrador do Sistema',
+      nomeDeUsuario: 'admin',
+      email: 'admin@footera.example.com',
+      senhaHash: H['admin'],
+      tipo: TipoUsuario.Admin,
+      verified: true,
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/profa-teste.png',
+      administrador: {
+        create: {
+          cargo: 'superadmin',             
+          nivel: Nivel.Performance,
+          fotoUrl: '/assets/usuarios/profa-teste.png',
+        }
+      }
+    },
+    update: {
+      tipo: TipoUsuario.Admin,             
+      verified: true,
+      administrador: {
+        upsert: {                           
+          create: {
+            cargo: 'superadmin',
+            nivel: Nivel.Performance,
+            fotoUrl: '/assets/usuarios/profa-teste.png',
+          },
+          update: {
+            cargo: 'superadmin',
+            nivel: Nivel.Performance,
+            fotoUrl: '/assets/usuarios/profa-teste.png',
+          }
+        }
       }
     }
-  }
-});
+  });
 
   const clube1Db = await prisma.clube.findFirst({
     where: { usuario: { nomeDeUsuario: "clube_footera" } }
@@ -1448,6 +1483,320 @@ await prisma.usuario.upsert({
     categorias: TODAS_CATEGORIAS_SEED,
     videoDemonstrativoUrl: "/assets/videos/exercicios/salto-coordentivo-chapa-explosao.mp4",
   },
+  {
+  codigo: 'EX136',
+  nome: 'Alongamento Quadríceps Deitado (Dir/Esq)',
+  descricao: 'Alongamento do quadríceps em decúbito com pega no tornozelo. Foco em quadril alinhado e respiração.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/quadriceps-deitado-perna-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX137',
+  nome: 'Alongamento Glúteo Unilateral (Dir/Esq)',
+  descricao: 'Flexão e rotação de quadril para alongar glúteos. Manter coluna neutra e respiração contínua.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-gluteo-unilateral-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX138',
+  nome: 'Mobilidade Rotação de Tórax (Dir/Esq)',
+  descricao: 'Rotações controladas para mobilizar coluna torácica. Evite compensar na lombar; amplitude confortável.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-rotacao-torax-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX139',
+  nome: 'Mobilidade Passiva Tornozelo–Joelho–Quadril (Dir/Esq)',
+  descricao: 'Aberturas passivas guiadas para liberar cadeia inferior. Trabalha amplitude articular sem carga.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-mobilidade-tornozelo-joelho-quadril-passivo-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX140',
+  nome: 'Mobilidade Ativa Tornozelo–Joelho–Quadril (Dir/Esq)',
+  descricao: 'Sequência ativa com controle e estabilidade. Ganho de amplitude com força e consciência corporal.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-mobilidade-tornozelo-joelho-quadril-ativo-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX141',
+  nome: 'Mobilidade Passiva Lateral (Tornozelo–Joelho–Quadril)',
+  descricao: 'Alongamentos laterais passivos para adutores e quadril. Manter joelho alinhado e respiração fluida.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-mobilidade-tornozelo-joelho-quadril-passivo-lateral-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX142',
+  nome: 'Mobilidade Ativa Lateral (Tornozelo–Joelho–Quadril)',
+  descricao: 'Aberturas laterais ativas com tronco estável. Trabalha adutores, controle e mobilidade de quadril.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-mobilidade-tornozelo-joelho-quadril-ativo-lateral-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX143',
+  nome: 'Alongamento Panturrilha Passivo (Dir/Esq)',
+  descricao: 'Sustentação para gastrocnêmio/solear com calcanhar no chão. Atenção ao alinhamento do joelho.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-panturrilha-passivo-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX144',
+  nome: 'Alongamento de Quadríceps (Foto) Dir/Esq',
+  descricao: 'Em pé, puxe o tornozelo ao glúteo sem inclinar o tronco. Mantenha joelhos alinhados.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-quadriceps-direita-esquerda.jpeg'
+},
+{
+  codigo: 'EX145',
+  nome: 'Quadríceps + Cadeia Posterior (Foto) Dir/Esq',
+  descricao: 'Sequência para quadríceps e posterior com controle de quadril. Postura neutra e respiração cadenciada.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-quadriceps-cadeia-posterior-direita-esquerda.jpeg'
+},
+{
+  codigo: 'EX146',
+  nome: 'Cadeia Posterior + Panturrilha',
+  descricao: 'Sustentação para ísquios e panturrilha com leve dorsiflexão. Coluna neutra e progressão suave.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-cadeia-posterior-panturrilha.mp4'
+},
+{
+  codigo: 'EX147',
+  nome: 'Condução Zig-Zag + Passe na Parede',
+  descricao: 'Zigue-zague entre marcas e passe rápido na parede. Mudanças de direção e precisão do passe.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-zigzag-passe-parede.mp4'
+},
+{
+  codigo: 'EX148',
+  nome: 'Coordenativo – Condução por Cima da Bola 002',
+  descricao: 'Passadas por cima da bola mantendo controle e ritmo. Coordenação, equilíbrio e fluidez.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-conducao-por-cima-bola-002.mp4'
+},
+{
+  codigo: 'EX149',
+  nome: 'Coordenativo – Condução por Cima 001',
+  descricao: 'Variação de step-over contínuo com condução curta. Cadência alta e sincronia tronco-pernas.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-conducao-por-cima-bola-001.mp4'
+},
+{
+  codigo: 'EX150',
+  nome: 'Corrida + Mudança de Direção (Dir.)',
+  descricao: 'Acelera, corta e conduz curto com a direita. Desaceleração eficiente e nova aceleração.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/corrida-mudanca-direcao-conducao-curta-direita.mp4'
+},
+{
+  codigo: 'EX151',
+  nome: 'Corrida + Mudança de Direção (Esq.)',
+  descricao: 'Acelera, corta e conduz curto com a esquerda. Controle do pé fraco e cortes rápidos.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/corrida-mudanca-direcao-conducao-curta-esquerda.mp4'
+},
+{
+  codigo: 'EX152',
+  nome: 'Frente–Costas + Condução Lateral por Cima',
+  descricao: 'Alterna frente–costas e passadas por cima da bola. Coordenação de apoios e transições rápidas.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas-conducao-lateral-por-cima-bola.mp4'
+},
+{
+  codigo: 'EX153',
+  nome: 'Condução em 8 por Cima + Passe Curto',
+  descricao: 'Trajetória em “8” com step-overs e passe curto. Orientação corporal e precisão.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-8-por-cima-bola-passe-curto.mp4'
+},
+{
+  codigo: 'EX154',
+  nome: 'Condução Curta + Passada Lateral + Sprint',
+  descricao: 'Condução próxima, passada lateral e sprint final. Troca de ritmos e explosão.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-curta-passada-lateral-sprint.mp4'
+},
+{
+  codigo: 'EX155',
+  nome: 'Alongamento Panturrilha Ativo (Dir/Esq)',
+  descricao: 'Mobilização ativa do tornozelo para panturrilha. Controle de movimento e amplitude segura.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-panturrilha-ativo-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX156',
+  nome: 'Condução em Cruz (Perímetro) – Direita',
+  descricao: 'Percurso em cruz conduzindo com a direita no quadrante. Ângulos curtos e primeiro toque preciso.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-em-cruz-dentro-perimetro-direita.mp4'
+},
+{
+  codigo: 'EX157',
+  nome: 'Condução em Cruz (Perímetro) – Esquerda',
+  descricao: 'Percurso em cruz só com a esquerda mantendo bola próxima. Coordenação e domínio do pé não dominante.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-em-cruz-dentro-perimetro-esquerda.mp4'
+},
+{
+  codigo: 'EX158',
+  nome: 'Condução em Cruz (Perímetro) – Alternado',
+  descricao: 'Alterna pés a cada segmento do trajeto em cruz. Ritmo, mudanças de direção e controle fino.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-em-cruz-dentro-perimetro-alternado.mp4'
+},
+{
+  codigo: 'EX159',
+  nome: 'Condução por Cima + Sprint Curto',
+  descricao: 'Sequência de step-overs seguida de arranque curto. Coordenação e explosão na saída.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-por-cima-bola-sprint-curto.mp4'
+},
+{
+  codigo: 'EX160',
+  nome: 'Situação de Jogo – Finalização 003',
+  descricao: 'Ataque ao espaço e finalização após corte. Ênfase em aceleração e gesto de chute.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-003.mp4'
+},
+{
+  codigo: 'EX161',
+  nome: 'Situação de Jogo – Finalização 004',
+  descricao: 'Recepção sob pressão e finalização cruzada. Primeiro toque e mira ao canto.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-004.mp4'
+},
+{
+  codigo: 'EX162',
+  nome: 'Situação de Jogo – Finalização 005',
+  descricao: 'Condução curta + finta e batida rápida. Desequilibra o marcador e define com precisão.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-005.mp4'
+},
+{
+  codigo: 'EX163',
+  nome: 'Situação de Jogo – Finalização 006',
+  descricao: 'Finalização de primeira após passe/cruzamento. Tempo de bola e posicionamento.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-006.mp4'
+},
+{
+  codigo: 'EX164',
+  nome: 'Situação de Jogo – Finalização 007',
+  descricao: 'Ajeitada curta e chute de média distância. Ajuste de corpo e potência controlada.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-007.mp4'
+},
+{
+  codigo: 'EX165',
+  nome: 'Situação de Jogo – Finalização 008',
+  descricao: 'Gira sobre o eixo e finaliza ao canto. Perfil corporal e rapidez na execução.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-008.mp4'
+},
+{
+  codigo: 'EX166',
+  nome: 'Situação de Jogo – Finalização 001',
+  descricao: 'Recebe, orienta o corpo e finaliza rápido. Decisão e precisão da batida.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-001.mp4'
+},
+{
+  codigo: 'EX167',
+  nome: 'Situação de Jogo – Finalização 002',
+  descricao: 'Combinação curta antes do chute, ajustando apoio e direção. Timing e definição.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-002.mp4'
+},
+{
+  codigo: 'EX168',
+  nome: 'Domínio Orientado + Finalização (Direita)',
+  descricao: 'Primeiro toque orientado com a direita e batida rápida. Perfil corporal, aceleração e precisão.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-orientado-finalizacao-direita.mp4'
+},
+{
+  codigo: 'EX169',
+  nome: 'Domínio Orientado + Finalização (Esquerda)',
+  descricao: 'Primeiro toque com a esquerda e chute imediato. Leitura do espaço, equilíbrio e precisão.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-orientado-finalizacao-esquerda.mp4'
+},
+{
+  codigo: 'EX170',
+  nome: 'Domínio no Alto + Finalização (Direita)',
+  descricao: 'Controle aéreo (amortecer) e finalizar com a direita. Tempo de bola e gesto técnico.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-no-alto-finalizacao-direita.mp4'
+},
+{
+  codigo: 'EX171',
+  nome: 'Domínio no Alto + Finalização (Esquerda)',
+  descricao: 'Amortecer bola alta e concluir com a esquerda. Timing, apoio e precisão.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-no-alto-finalizacao-esquerda.mp4'
+},
+{
+  codigo: 'EX172',
+  nome: 'Reação Rápida + Finalização (Cor) 001',
+  descricao: 'Responder ao comando de cor e finalizar rápido. Percepção, decisão e explosão.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/reacao-rapida-finalizacao-escolha-cor-001.mp4'
+},
+{
+  codigo: 'EX173',
+  nome: 'Reação Rápida + Finalização (Cor) 002',
+  descricao: 'Variação de estímulo por cor com rota e chute imediato. Reatividade e definição.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/reacao-rapida-finalizacao-escolha-cor-002.mp4'
+},
+{
+  codigo: 'EX174',
+  nome: 'Finalização de Primeira',
+  descricao: 'Passe/cruzamento e batida de primeira sem domínio. Timing de ataque à bola e técnica.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/finalizacao-de-primeira.mp4'
+},
+
+
   ];
   for (const ex of exercicios) {
     await prisma.exercicio.upsert({

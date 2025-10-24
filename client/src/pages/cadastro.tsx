@@ -4,7 +4,6 @@ import logo from "/assets/usuarios/footera-logo.png";
 import { API } from "../config.js";
 import { Eye, EyeOff } from "lucide-react";
 
-/* ---------------- SVGs ---------------- */
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
 function ChevronDown(props: SvgProps) {
@@ -22,14 +21,13 @@ function ChevronUp(props: SvgProps) {
   );
 }
 
-/* ---------------- Tipagens ---------------- */
 type TipoPerfil = "Atleta" | "Professor" | "Escolinha" | "Clube" | "Olheiro";
 type Etapa = 1 | 2 | 3;
 
 type CamposAtleta = { idade: number | ""; categoria: string; treinaEscolinha: "sim" | "nao" | "" };
 type CamposProfessor = { treinaEscolinha: "sim" | "nao" | ""; areaFormacao: string; cref?: string; statusCref?: "Ativo" | "Desativo" | "Pendente" };
-type CamposClube = { cnpjClube: string; cidadeClube: string }; // cidadeClube não é exibido mais, mas mantive a tipagem
-type CamposEscolinha = { cnpjEscolinha: string; cidadeEscolinha: string }; // idem
+type CamposClube = { cnpjClube: string; cidadeClube: string };
+type CamposEscolinha = { cnpjEscolinha: string; cidadeEscolinha: string };
 type CamposOlheiro = {
   areaAtuacao: string; anosExperiencia: number | ""; headline: string; siteOuLinkedin: string;
   telefonePublico: string; emailPublico: string; descricao: string; colaboracaoClubeId?: string;
@@ -40,13 +38,11 @@ type Responsavel = { nome: string; email: string; telefone?: string };
 
 const PLACEHOLDER_AVATAR = logo;
 
-/* ---------------- Utils ---------------- */
 function debounce<T extends (...args: any[]) => void>(fn: T, ms = 400) {
   let t: any;
   return (...args: Parameters<T>) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
-// Regexes
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const USER_RE = /^(?=.{3,20}$)[a-z0-9._]+$/i;
 const PASS_RE = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
@@ -77,11 +73,9 @@ function validarCNPJ(v: string) {
   return cnpj.endsWith(`${d1}${d2}`);
 }
 
-/* ---------------- Componente ---------------- */
 export default function Cadastro() {
   const [_, navigate] = useLocation();
 
-  // etapa 1
   const [tipoPerfil, setTipoPerfil] = useState<TipoPerfil>("Atleta");
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
@@ -90,7 +84,6 @@ export default function Cadastro() {
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [aceitaTermos, setAceitaTermos] = useState(false);
 
-  // localização (preenchida por CEP)
   const [cep, setCep] = useState("");
   const [bairro, setBairro] = useState("");
   const [cidade, setCidade] = useState("");
@@ -99,13 +92,11 @@ export default function Cadastro() {
   type CepStatus = "idle" | "loading" | "ok" | "not_found" | "invalid";
   const [cepStatus, setCepStatus] = useState<CepStatus>("idle");
 
-  // gerais
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [etapa, setEtapa] = useState<Etapa>(1);
   const [infoAberto, setInfoAberto] = useState(false);
 
-  // etapa 2 específicos
   const [atleta, setAtleta] = useState<CamposAtleta>({ idade: "", categoria: "", treinaEscolinha: "" });
   const [professor, setProfessor] = useState<CamposProfessor>({ treinaEscolinha: "", areaFormacao: "", statusCref: "Pendente", cref: "" });
   const [clube, setClube] = useState<CamposClube>({ cnpjClube: "", cidadeClube: "" });
@@ -115,22 +106,16 @@ export default function Cadastro() {
     telefonePublico: "", emailPublico: "", descricao: "", colaboracaoClubeId: ""
   });
 
-  // vínculo (etapa 3)
   const [vinculo, setVinculo] = useState<CamposVinculo>({ desejaVinculo: false, tipoAlvo: "", alvoBusca: "", destinatarioId: "" });
-
-  // disponibilidade remota
   const [emailDisp, setEmailDisp] = useState<null | boolean>(null);
   const [userDisp, setUserDisp] = useState<null | boolean>(null);
 
-  // UI
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [mostrarConfirmar, setMostrarConfirmar] = useState(false);
 
-  // menor
   const [dataNascimento, setDataNascimento] = useState<string>("");
   const [responsavel, setResponsavel] = useState<Responsavel>({ nome: "", email: "", telefone: "" });
 
-  // validações em tempo real
   const emailValido = EMAIL_RE.test(email.trim());
   const usernameValido = USER_RE.test(nomeDeUsuario.trim());
   const senhaForte = PASS_RE.test(senha);
@@ -145,7 +130,6 @@ export default function Cadastro() {
   }
   const idade = useMemo(() => calcIdade(dataNascimento), [dataNascimento]);
 
-  // disponibilidade remota
   const verificarEmail = useMemo(() => debounce(async (e: string) => {
     if (!e || !EMAIL_RE.test(e)) return setEmailDisp(null);
     try {
@@ -167,7 +151,6 @@ export default function Cadastro() {
   useEffect(() => { verificarEmail(email.trim().toLowerCase()); }, [email]);
   useEffect(() => { verificarUsername(nomeDeUsuario.trim().toLowerCase()); }, [nomeDeUsuario]);
 
-  /* -------- CEP -> localização (ViaCEP) -------- */
   const buscarCEP = useMemo(() => debounce(async (valor: string) => {
     const num = somenteDigitos(valor);
     if (!num) {
@@ -192,7 +175,6 @@ export default function Cadastro() {
   }, 400), []);
   useEffect(() => { buscarCEP(cep); }, [cep, buscarCEP]);
 
-  /* ---------------- Navegação / validações por etapa ---------------- */
   const podeIrParaEtapa2 = () => {
     if (!aceitaTermos) return setErro("Você deve aceitar os termos."), false;
     if (!nome.trim()) return setErro("Informe seu nome completo."), false;
@@ -206,7 +188,6 @@ export default function Cadastro() {
     const nasc = new Date(dataNascimento);
     if (nasc > new Date()) return setErro("Data de nascimento no futuro."), false;
 
-    // Localização obrigatória (via CEP ou manual)
     if (!CEP_RE.test(cep) || !cidade || !estado) {
       return setErro("Informe um CEP válido para preencher Cidade e UF (ou ajuste manualmente)."), false;
     }
@@ -237,7 +218,6 @@ export default function Cadastro() {
       if (olheiro.emailPublico && !EMAIL_RE.test(olheiro.emailPublico)) return setErro("E-mail público inválido."), false;
     }
 
-    // Responsável obrigatório para < 18
     if (idade !== null && idade < 18) {
       if (!responsavel.nome.trim()) return setErro("Informe o nome do responsável."), false;
       if (!EMAIL_RE.test(responsavel.email)) return setErro("Informe um e-mail válido do responsável."), false;
@@ -248,7 +228,6 @@ export default function Cadastro() {
     return true;
   };
 
-  /* ---------------- Submit ---------------- */
   const handleFinalizar = async () => {
     setErro(""); setSucesso("");
     try {
@@ -258,7 +237,6 @@ export default function Cadastro() {
         email,
         nomeDeUsuario,
         senha,
-        // localização no nível do usuário
         cidade: cidade || undefined,
         estado: estado || undefined,
         pais: pais || undefined,
@@ -278,11 +256,9 @@ export default function Cadastro() {
       }
       if (tipoPerfil === "Clube") {
         payload.cnpjClube = clube.cnpjClube || undefined;
-        // cidadeClube/UF removidos – vamos usar a localização do usuário
       }
       if (tipoPerfil === "Escolinha") {
         payload.cnpjEscolinha = escolinha.cnpjEscolinha || undefined;
-        // cidadeEscolinha/UF removidos – vamos usar a localização do usuário
       }
       if (tipoPerfil === "Olheiro") {
         payload.areaAtuacao = olheiro.areaAtuacao || undefined;
@@ -297,7 +273,6 @@ export default function Cadastro() {
 
       payload.dataNascimento = dataNascimento;
 
-      // mapear para o schema do Usuario
       if (idade !== null && idade < 18) {
         payload.responsavel = {
           nome: responsavel.nome,
@@ -344,7 +319,6 @@ export default function Cadastro() {
     }
   };
 
-  /* ---------------- Busca (etapa 3) ---------------- */
   const [resultadosBusca, setResultadosBusca] = useState<ResultadoBusca[]>([]);
   const buscarAlvo = useMemo(() => debounce(async (q: string, tipoAlvo: string) => {
     setResultadosBusca([]); if (!q) return;
@@ -372,7 +346,6 @@ export default function Cadastro() {
     [resultadosBusca, vinculo.destinatarioId]
   );
 
-  /* ---------------- UI auxiliares ---------------- */
   const Step = ({ n, label }: { n: Etapa; label: string }) => {
     const active = etapa === n; const done = etapa > n;
     return (
@@ -383,10 +356,8 @@ export default function Cadastro() {
     );
   };
 
-  /* ---------------- Render ---------------- */
   return (
     <div className="flex flex-col lg:flex-row min-h-screen">
-      {/* Coluna verde com cabeçalho colapsável no mobile */}
       <div className="w-full lg:w-1/2 bg-green-800 text-white flex flex-col items-center p-5 lg:p-10">
         <div className="w-full max-w-[680px]">
           <div className="flex items-center justify-between gap-3 lg:flex-col lg:gap-2">
@@ -416,7 +387,6 @@ export default function Cadastro() {
         </div>
       </div>
 
-      {/* Coluna do formulário */}
       <div className="relative bg-cream flex justify-center items-center p-6 lg:p-10 w-full lg:w-1/2">
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-0">
           <div aria-hidden className="w-[420px] h-[420px] opacity-[0.06] lg:opacity-[0.08] rounded-full overflow-hidden"
@@ -432,7 +402,6 @@ export default function Cadastro() {
             <Step n={3} label="Complementar" />
           </div>
 
-          {/* ETAPA 1 */}
           {etapa === 1 && (
             <div>
               <h2 className="text-xl font-semibold mb-1">Criar conta</h2>
@@ -449,7 +418,6 @@ export default function Cadastro() {
                 ))}
               </div>
 
-              {/* CEP + Localização */}
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium mb-1">CEP</label>
@@ -569,13 +537,11 @@ export default function Cadastro() {
             </div>
           )}
 
-          {/* ETAPA 2 */}
           {etapa === 2 && (
             <div>
               <h2 className="text-xl font-semibold mb-1">Dados do Tipo: {tipoPerfil}</h2>
               <p className="text-sm text-green-600 mb-4">Complete as informações específicas</p>
 
-              {/* ATLETA */}
               {tipoPerfil === "Atleta" && (
                 <>
                   <div className="mt-2">
@@ -637,7 +603,6 @@ export default function Cadastro() {
                 </>
               )}
 
-              {/* PROFESSOR */}
               {tipoPerfil === "Professor" && (
                 <>
                   <div className="mt-2">
@@ -668,7 +633,6 @@ export default function Cadastro() {
                 </>
               )}
 
-              {/* CLUBE */}
               {tipoPerfil === "Clube" && (
                 <>
                   <div className="mt-2">
@@ -687,7 +651,6 @@ export default function Cadastro() {
                 </>
               )}
 
-              {/* ESCOLINHA */}
               {tipoPerfil === "Escolinha" && (
                 <>
                   <div className="mt-2">
@@ -706,7 +669,6 @@ export default function Cadastro() {
                 </>
               )}
 
-              {/* OLHEIRO */}
               {tipoPerfil === "Olheiro" && (
                 <>
                   <div className="mt-2 grid grid-cols-1 gap-3">
@@ -757,7 +719,6 @@ export default function Cadastro() {
             </div>
           )}
 
-          {/* ETAPA 3 */}
           {etapa === 3 && (
             <div>
               <h2 className="text-xl font-semibold mb-1">Complementar</h2>
