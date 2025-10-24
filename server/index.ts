@@ -71,6 +71,7 @@ import legalRoutes from "./routes/legal.js";
 import organizacoesRoutes from "./routes/organizacoes.js";
 import turmasRoutes from "./routes/turmas.js";
 import treinosElencosRoutes from "./routes/treinosElencos.js";
+import adminAdminsRoutes from "./routes/adminAdmins.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -161,11 +162,11 @@ app.use("/api/explorar", explorarRoutes);
 app.use("/api/legal", legalRoutes);
 app.use("/api/catalogo", catalogoRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/admin", adminAdminsRoutes);
 
 import { requireAdmin } from "./middlewares/requireAdmin.js";
 
 app.use("/api/admin/moderacao", authenticateToken, requireAdmin, adminModeracaoRoutes);
-
 app.use("/api/olheiros", authenticateToken, olheirosRouter);
 app.use("/api/atletas", authenticateToken, atletaRoutes);
 app.use("/api/amigos", authenticateToken, amigosRoutes);

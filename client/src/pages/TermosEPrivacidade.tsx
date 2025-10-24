@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
+import { ArrowLeft } from "lucide-react";
 
 type TabKey = "termos" | "privacidade";
 
@@ -71,6 +73,17 @@ export default function TermosEPrivacidade() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Link
+                href="/cadastro"
+                aria-label="Voltar para cadastro"
+                title="Voltar para explorar"
+                className="inline-flex h-10 w-10 items-center justify-center
+                          rounded-full border border-green-800 bg-white text-green-900
+                          shadow-sm hover:bg-green-50 focus:outline-none
+                          focus:ring-2 focus:ring-green-700/30 mt-4 ml-4 mb-2"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
       <header className="bg-white border-b">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-3">
           <img src="/assets/usuarios/footera-logo.png" className="w-8 h-8" alt="FootEra" />
