@@ -72,6 +72,9 @@ import organizacoesRoutes from "./routes/organizacoes.js";
 import turmasRoutes from "./routes/turmas.js";
 import treinosElencosRoutes from "./routes/treinosElencos.js";
 import adminAdminsRoutes from "./routes/adminAdmins.js";
+import analisesRoutes from "./routes/analises.js";
+import adminAssinantesRoutes from "./routes/admin.assinantes.js";
+import assinaturasRoutes from "./routes/assinaturas.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -163,6 +166,10 @@ app.use("/api/legal", legalRoutes);
 app.use("/api/catalogo", catalogoRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminAdminsRoutes);
+
+app.use("/api/analises", analisesRoutes);
+app.use("/api/admin/assinantes", adminAssinantesRoutes);
+app.use("/api/assinaturas", assinaturasRoutes);
 
 import { requireAdmin } from "./middlewares/requireAdmin.js";
 
