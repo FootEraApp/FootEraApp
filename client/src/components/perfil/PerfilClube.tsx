@@ -1,3 +1,4 @@
+// client/src/pages/perfil/PerfilClube.tsx
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
@@ -5,8 +6,9 @@ import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
-import { Activity, ChevronRight } from "lucide-react";
+import { Activity, ChevronRight, PlusCircle } from "lucide-react";
 import Avatar from "../shared/Avatar.js";
+import TurmasManager from "../turmas/TurmasManager.js";
 
 type Props = { idDaUrl?: string };
 
@@ -42,12 +44,12 @@ type PayloadClube = {
   metrics: { atletas: number; eventos?: number; conquistas?: number };
 };
 
-type AbaTopo = "perfil" | "eventos" | "atletas";
+type AbaTopo = "perfil" | "eventos" | "atletas" | "professores";
 type SubAbaAtletas = "vinculados" | "observados" | "solicitacoes";
 
 type AtletaItem = {
-  id: string;              
-  atletaId: string;       
+  id: string;              // usuarioId ou atletaId
+  atletaId: string;        // id do registro de atleta
   nome: string;
   foto?: string | null;
   posicao?: string | null;
@@ -65,6 +67,25 @@ type Solicitacao = {
   id: string;
   remetenteId: string;
   remetente: { id: string; nomeDeUsuario: string; foto: string | null };
+};
+
+type ProfessorItem = {
+  id: string;
+  usuarioId?: string | null;
+  nome: string;
+  codigo?: string | null;
+  cref?: string | null;
+  fotoUrl?: string | null;
+};
+
+type Turma = {
+  id: string;
+  nome: string;
+  ownerTipo?: "Clube" | "Escolinha" | null;
+  ownerId?: string | null;
+  professorId?: string | null;
+  professorNome?: string | null;
+  alunosCount?: number | null;
 };
 
 function EmptyState({ text }: { text: string }) {
@@ -101,7 +122,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
 
   const [data, setData] = useState<PayloadClube | null>(null);
   const [loading, setLoading] = useState(true);
-  const [aba, setAba] = useState<AbaTopo>("perfil");
+  const [aba, setAba] = useState<AbaTopo>(canEdit ? "perfil" : "perfil");
   const [subAba, setSubAba] = useState<SubAbaAtletas>("vinculados");
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
@@ -111,11 +132,21 @@ export default function PerfilClube({ idDaUrl }: Props) {
   const [savingById, setSavingById] = useState<Record<string, boolean>>({});
   const [errorById, setErrorById] = useState<Record<string, string | null>>({});
   const [atletasHeaderCount, setAtletasHeaderCount] = useState<number | null>(null);
-  const tipoIdDoClube = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
 
+  // ---- Professores / Turmas (NOVO) ----
+  const [professores, setProfessores] = useState<ProfessorItem[]>([]);
+  const [professoresLoading, setProfessoresLoading] = useState(false);
+  const [turmas, setTurmas] = useState<Turma[]>([]);
+  const [turmasLoading, setTurmasLoading] = useState(false);
+  const [turmasOpen, setTurmasOpen] = useState(false);
+  const [professorSelecionado, setProfessorSelecionado] = useState<string | undefined>();
+
+  const clubeId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
+
+  // preview de atletas do header
   useEffect(() => {
     if (!token) return;
-    const usuarioClubeId = data?.usuario?.id; 
+    const usuarioClubeId = data?.usuario?.id;
     if (!usuarioClubeId) { setAtletasHeaderCount(0); setVinculadosPreview([]); return; }
 
     let cancel = false;
@@ -148,6 +179,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
     return () => { cancel = true; };
   }, [token, data?.usuario?.id]);
 
+  // payload principal
   useEffect(() => {
     if (!token) return;
     let cancel = false;
@@ -168,12 +200,13 @@ export default function PerfilClube({ idDaUrl }: Props) {
     return () => { cancel = true; };
   }, [targetId, token]);
 
+  // atletas / observados / solicitações
   useEffect(() => {
     if (!token) return;
     const cancel = { v: false };
 
     async function fetchVinculados() {
-      const tipoId = tipoIdDoClube;
+      const tipoId = clubeId;
       if (!tipoId) { if (!cancel.v) setVinculados([]); return; }
       try {
         const { data: lista } = await axios.get<AtletaItem[]>(
@@ -187,7 +220,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
     }
 
     async function fetchObservados() {
-      const tipoId = tipoIdDoClube;
+      const tipoId = clubeId;
       if (!tipoId) { if (!cancel.v) setObservados([]); return; }
       try {
         const { data: lista } = await axios.get<AtletaItem[]>(
@@ -228,10 +261,73 @@ export default function PerfilClube({ idDaUrl }: Props) {
       if (subAba === "solicitacoes" && solicitacoes == null) fetchSolicitacoes();
     }
     return () => { cancel.v = true; };
-  }, [aba, subAba, token, tipoIdDoClube, vinculados, observados, solicitacoes]);
+  }, [aba, subAba, token, clubeId, vinculados, observados, solicitacoes]);
+
+  // -------- Professores do Clube (NOVO) ----------
+  async function loadProfessores() {
+    if (!token || !clubeId) return;
+    setProfessoresLoading(true);
+    try {
+      const { data } = await axios.get(`${API.BASE_URL}/api/professores`, {
+        headers,
+        params: { organizacaoId: clubeId }, // usa o mesmo filtro da tela GerenciarAtletas
+      });
+      const arr = Array.isArray(data) ? data : (data?.items ?? data?.data ?? []);
+      setProfessores(
+        (arr ?? []).map((p: any) => ({
+          id: String(p.id),
+          usuarioId: p.usuarioId ?? p.usuario?.id ?? null,
+          nome: p.nome ?? p.usuario?.nome ?? "Professor",
+          codigo: p.codigo ?? null,
+          cref: p.cref ?? null,
+          fotoUrl: p.fotoUrl ?? p.usuario?.foto ?? null,
+        }))
+      );
+    } catch {
+      setProfessores([]);
+    } finally {
+      setProfessoresLoading(false);
+    }
+  }
+
+  // -------- Turmas do Clube (NOVO) ----------
+  async function loadTurmas() {
+    if (!token || !clubeId) return;
+    setTurmasLoading(true);
+    try {
+      const { data } = await axios.get(`${API.BASE_URL}/api/turmas`, {
+        headers,
+        params: { ownerTipo: "Clube", ownerId: clubeId },
+      });
+      const arr = Array.isArray(data) ? data : (data?.items ?? data?.data ?? []);
+      setTurmas(
+        (arr ?? []).map((t: any) => ({
+          id: String(t.id),
+          nome: String(t.nome ?? t.titulo ?? "Turma"),
+          ownerTipo: t.ownerTipo ?? "Clube",
+          ownerId: t.ownerId ?? clubeId,
+          professorId: t.professorId ?? t.responsavelId ?? null,
+          professorNome: t.professor?.nome ?? t.professorNome ?? null,
+          alunosCount: t.alunosCount ?? t.qtdAlunos ?? null,
+        }))
+      );
+    } catch {
+      setTurmas([]);
+    } finally {
+      setTurmasLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (aba === "professores" && canEdit) {
+      loadProfessores();
+      loadTurmas();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, canEdit, clubeId, token]);
 
   async function salvarObservado(atletaId: string) {
-    if (!token || !tipoIdDoClube) return;
+    if (!token || !clubeId) return;
     const edit = observadoEdits[atletaId] || { notaInterna: "", alertarMudancas: false };
 
     setSavingById((s) => ({ ...s, [atletaId]: true }));
@@ -239,7 +335,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
     try {
       await axios.patch(
         `${API.BASE_URL}/api/observados/${atletaId}`,
-        { tipoUsuarioId: tipoIdDoClube, notaInterna: edit.notaInterna, alertarMudancas: edit.alertarMudancas },
+        { tipoUsuarioId: clubeId, notaInterna: edit.notaInterna, alertarMudancas: edit.alertarMudancas },
         { headers }
       );
       setObservados((prev) =>
@@ -285,7 +381,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
     { label: "Conquistas", value: data.metrics?.conquistas ?? 0 },
   ];
 
-  const clubeId = data.clube.id;
+  const clubeIdStr = data.clube.id;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
@@ -298,12 +394,13 @@ export default function PerfilClube({ idDaUrl }: Props) {
         kpis={kpis}
       />
 
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      <div className="mt-4 grid grid-cols-4 gap-2">
         {(canEdit
           ? [
               { key:"perfil",label:"Perfil"},
               { key:"eventos",label:"Eventos"},
-              { key:"atletas",label:"Atletas"}
+              { key:"atletas",label:"Atletas"},
+              { key:"professores",label:"Professores"}, // NOVO
             ]
           : 
             [
@@ -408,7 +505,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-green-900">Eventos e Peneiras</h3>
               <Link
-                href={`/eventos/clubes/${clubeId}`}
+                href={`/eventos/clubes/${clubeIdStr}`}
                 className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
               >
                 Ver eventos
@@ -422,7 +519,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
             {isOwn && (
               <div className="mt-4">
                 <Link
-                  href={`/eventos/clubes/${clubeId}/novo`}
+                  href={`/eventos/clubes/${clubeIdStr}/novo`}
                   className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-4 py-2"
                 >
                   <span>+</span> Criar novo evento
@@ -614,6 +711,138 @@ export default function PerfilClube({ idDaUrl }: Props) {
             </SectionCard>
           )}
         </section>
+      )}
+
+      {aba === "professores" && canEdit && (
+        <section className="mt-4 grid gap-4">
+          <SectionCard
+            title="Professores do Clube"
+            right={
+              <button
+                onClick={() => { setProfessorSelecionado(undefined); setTurmasOpen(true); }}
+                className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Adicionar turma
+              </button>
+            }
+          >
+            {professoresLoading ? (
+              <div className="text-sm text-green-900/70">Carregando professores…</div>
+            ) : professores.length ? (
+              <ul className="grid grid-cols-1 gap-3">
+                {professores.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between rounded-xl border border-green-100 p-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar foto={p.fotoUrl ?? null} alt={p.nome} className="w-10 h-10" />
+                      <div>
+                        <div className="text-sm font-medium text-green-900">{p.nome}</div>
+                        <div className="text-xs text-green-900/70">
+                          {[p.codigo ? `Código ${p.codigo}` : "", p.cref ? `CREF ${p.cref}` : ""].filter(Boolean).join(" • ") || "—"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { setProfessorSelecionado(String(p.id)); setTurmasOpen(true); }}
+                        className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
+                      >
+                        Administrar turmas
+                      </button>
+                      <Link href={`/perfil/${p.usuarioId ?? p.id}`} className="text-sm text-green-800 inline-flex items-center gap-1">
+                        Ver perfil <ChevronRight className="w-4 h-4" />
+                      </Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState text="Nenhum professor vinculado ao clube." />
+            )}
+          </SectionCard>
+
+          <SectionCard title="Turmas do Clube">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm text-green-900/80">
+                Gerencie turmas do clube e defina o professor responsável.
+              </div>
+              <button
+                onClick={() => { setProfessorSelecionado(undefined); setTurmasOpen(true); }}
+                className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Nova turma
+              </button>
+            </div>
+
+            {turmasLoading ? (
+              <div className="text-sm text-green-900/70">Carregando turmas…</div>
+            ) : turmas.length ? (
+              <ul className="space-y-2">
+                {turmas.map((t) => (
+                  <li key={t.id} className="border rounded-xl p-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-medium text-green-900">{t.nome}</div>
+                        <div className="text-xs text-green-900/70">
+                          {t.professorNome ? `Professor: ${t.professorNome}` : "Professor: —"} • {typeof t.alunosCount === "number" ? `${t.alunosCount} alunos` : "—"}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { setProfessorSelecionado(t.professorId ?? undefined); setTurmasOpen(true); }}
+                        className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
+                      >
+                        Administrar
+                      </button>
+                    </div>
+
+                    {/* Troca rápida de professor */}
+                    {professores.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <select
+                          className="border rounded px-3 py-2 text-sm"
+                          value={t.professorId ?? ""}
+                          onChange={async (e) => {
+                            const newProfId = e.target.value || null;
+                            try {
+                              await axios.put(
+                                `${API.BASE_URL}/api/turmas/${t.id}/vincular-professor`,
+                                { professorId: newProfId },
+                                { headers }
+                              );
+                              await loadTurmas();
+                              alert("Professor atualizado na turma!");
+                            } catch (err) {
+                              console.error(err);
+                              alert("Não foi possível atualizar o professor.");
+                            }
+                          }}
+                        >
+                          <option value="">— Sem professor —</option>
+                          {professores.map((p) => (
+                            <option key={p.id} value={p.id}>{p.nome}{p.cref ? ` • CREF ${p.cref}` : ""}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState text="Nenhuma turma cadastrada no clube." />
+            )}
+          </SectionCard>
+        </section>
+      )}
+
+      {/* Modal de turmas compartilhado (criar/vincular) */}
+      {canEdit && (
+        <TurmasManager
+          open={turmasOpen}
+          onClose={() => { setTurmasOpen(false); loadTurmas(); loadProfessores(); }}
+          owner={clubeId ? { tipo: "Clube", id: clubeId } : undefined}
+          professorId={professorSelecionado}
+        />
       )}
     </div>
   );

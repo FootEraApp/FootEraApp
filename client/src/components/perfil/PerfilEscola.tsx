@@ -1,3 +1,4 @@
+// client/src/pages/perfil/PerfilEscolinha.tsx
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -9,6 +10,7 @@ import { API } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
+import TurmasManager from "../turmas/TurmasManager.js";
 
 type Props = { idDaUrl?: string };
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
@@ -47,6 +49,25 @@ type AtividadeRecente = {
   titulo: string; criadoEm: string; imagemUrl?: string | null;
 };
 
+type ProfessorItem = {
+  id: string;
+  usuarioId?: string | null;
+  nome: string;
+  codigo?: string | null;
+  cref?: string | null;
+  fotoUrl?: string | null;
+};
+
+type Turma = {
+  id: string;
+  nome: string;
+  ownerTipo?: "Clube" | "Escolinha" | null;
+  ownerId?: string | null;
+  professorId?: string | null;
+  professorNome?: string | null;
+  alunosCount?: number | null;
+};
+
 function SectionCard({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
   return (
     <section className="bg-white/90 rounded-2xl shadow-sm border border-green-100">
@@ -80,7 +101,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   const [data, setData] = useState<PayloadEscola | null>(null);
   const [loading, setLoading] = useState(true);
 
-  type Aba = "visao" | "atletas" | "conquistas";
+  type Aba = "visao" | "atletas" | "conquistas" | "professores";
   const [aba, setAba] = useState<Aba>("visao");
 
   type SubAba = "vinculados" | "observados" | "solicitacoes";
@@ -91,12 +112,22 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(null);
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
 
+  // Professores / Turmas (NOVO)
+  const [professores, setProfessores] = useState<ProfessorItem[]>([]);
+  const [professoresLoading, setProfessoresLoading] = useState(false);
+  const [turmas, setTurmas] = useState<Turma[]>([]);
+  const [turmasLoading, setTurmasLoading] = useState(false);
+  const [turmasOpen, setTurmasOpen] = useState(false);
+  const [professorSelecionado, setProfessorSelecionado] = useState<string | undefined>();
+
+  const escolinhaId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
+
   useEffect(() => {
     setVinculados(null);
     setObservados(null);
     setSolicitacoes(null);
     setAtividades(null);
-  }, [isOwn, data?.escolinha?.id, data?.usuario?.id]); 
+  }, [isOwn, data?.escolinha?.id, data?.usuario?.id]);
 
   useEffect(() => {
     if (!token) return;
@@ -141,20 +172,18 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     async function fetchVinculados() {
       const entidadeUsuarioId = isOwn ? Storage.usuarioId : data?.usuario?.id;
       if (!entidadeUsuarioId) return;
-
       try {
         const { data: resp } = await axios.get<{ atletas: AtletaItem[] }>(
           `${API.BASE_URL}/api/gerenciar/atletas`,
           {
             headers,
             params: {
-              vinculo: "escolinha",    
-              id: entidadeUsuarioId,     
+              vinculo: "escolinha",
+              id: entidadeUsuarioId,
               order: "pontuacao_desc",
             },
           }
         );
-
         setVinculados(Array.isArray(resp?.atletas) ? resp.atletas : []);
       } catch {
         setVinculados([]);
@@ -162,12 +191,12 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     }
 
     async function fetchObservados() {
-      const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
+      const tipoId = escolinhaId;
       if (!tipoId) return;
       try {
         const { data: lista } = await axios.get<AtletaItem[]>(
           `${API.BASE_URL}/api/observados`,
-          { headers, params: { incluirPontuacao: 1 } }
+          { headers, params: { tipoUsuarioId: tipoId, incluirPontuacao: 1 } }
         );
         if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
       } catch {
@@ -199,9 +228,73 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   }, [
     aba, subAba, token,
     isOwn,
-    data?.usuario?.id,    
-    data?.escolinha?.id  
+    data?.usuario?.id,
+    data?.escolinha?.id,
+    escolinhaId,
+    atividades
   ]);
+
+  // -------- Professores / Turmas (NOVO) ----------
+  async function loadProfessores() {
+    if (!token || !escolinhaId) return;
+    setProfessoresLoading(true);
+    try {
+      const { data } = await axios.get(`${API.BASE_URL}/api/professores`, {
+        headers,
+        params: { organizacaoId: escolinhaId },
+      });
+      const arr = Array.isArray(data) ? data : (data?.items ?? data?.data ?? []);
+      setProfessores(
+        (arr ?? []).map((p: any) => ({
+          id: String(p.id),
+          usuarioId: p.usuarioId ?? p.usuario?.id ?? null,
+          nome: p.nome ?? p.usuario?.nome ?? "Professor",
+          codigo: p.codigo ?? null,
+          cref: p.cref ?? null,
+          fotoUrl: p.fotoUrl ?? p.usuario?.foto ?? null,
+        }))
+      );
+    } catch {
+      setProfessores([]);
+    } finally {
+      setProfessoresLoading(false);
+    }
+  }
+
+  async function loadTurmas() {
+    if (!token || !escolinhaId) return;
+    setTurmasLoading(true);
+    try {
+      const { data } = await axios.get(`${API.BASE_URL}/api/turmas`, {
+        headers,
+        params: { ownerTipo: "Escolinha", ownerId: escolinhaId },
+      });
+      const arr = Array.isArray(data) ? data : (data?.items ?? data?.data ?? []);
+      setTurmas(
+        (arr ?? []).map((t: any) => ({
+          id: String(t.id),
+          nome: String(t.nome ?? t.titulo ?? "Turma"),
+          ownerTipo: t.ownerTipo ?? "Escolinha",
+          ownerId: t.ownerId ?? escolinhaId,
+          professorId: t.professorId ?? t.responsavelId ?? null,
+          professorNome: t.professor?.nome ?? t.professorNome ?? null,
+          alunosCount: t.alunosCount ?? t.qtdAlunos ?? null,
+        }))
+      );
+    } catch {
+      setTurmas([]);
+    } finally {
+      setTurmasLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (aba === "professores" && canEdit) {
+      loadProfessores();
+      loadTurmas();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, canEdit, escolinhaId, token]);
 
   if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
   if (!data || !data.escolinha) return <div className="text-center p-10 text-red-600">Escolinha não encontrada.</div>;
@@ -235,11 +328,15 @@ export default function PerfilEscola({ idDaUrl }: Props) {
       />
 
       <div className="mt-4 px-4">
-        <div className="bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100">
+        <div className="bg-white/90 rounded-xl p-1 grid grid-cols-4 gap-1 border border-green-100">
            {(canEdit ? [
-              { id:"visao",label:"Visão Geral"},{ id:"atletas",label:"Atletas"},{ id:"conquistas",label:"Conquistas"}
+              { id:"visao",label:"Visão Geral"},
+              { id:"atletas",label:"Atletas"},
+              { id:"conquistas",label:"Conquistas"},
+              { id:"professores",label:"Professores"}, // NOVO
             ] : [
-              { id:"visao",label:"Visão Geral"},{ id:"conquistas",label:"Conquistas"}
+              { id:"visao",label:"Visão Geral"},
+              { id:"conquistas",label:"Conquistas"}
             ]).map(t => (
             <button
               key={t.id}
@@ -281,7 +378,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
               <Link href="/formadores">
                 <button
                   className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-green-600 text-white"
-                  onClick={() => alert("Abrir módulo Formadores")}
+                  onClick={() => {}}
                 >
                   <Shield className="w-4 h-4" />
                   Acessar Módulo Formadores
@@ -295,12 +392,38 @@ export default function PerfilEscola({ idDaUrl }: Props) {
           </SectionCard>
           }
 
-          <SectionCard title="Treinos">
-            <div className="flex gap-2 justify-end">
-              <Link href="/treinos" className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900">Ver todos</Link>
-              {canEdit && <Link href="/treinos/novo" className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"> <PlusCircle className="w-4 h-4" />Criar novo treino</Link>}
-            </div>
-            <p className="text-sm text-green-900/90 mt-2">Crie e gerencie treinos para seus atletas vinculados.</p>
+          <SectionCard
+            title="Treinos"
+            right={
+              <div className="flex gap-2">
+                <Link href="/treinos" className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900">Ver todos</Link>
+                {canEdit && (
+                  <>
+                    <button
+                      onClick={() => { setProfessorSelecionado(undefined); setTurmasOpen(true); }}
+                      className="text-sm px-3 py-1.5 rounded-md bg-green-100 text-green-900 inline-flex items-center gap-1"
+                    >
+                      <PlusCircle className="w-4 h-4" />
+                      Adicionar turma
+                    </button>
+                    <button
+                      onClick={() => { setAba("professores"); }}
+                      className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
+                    >
+                      Administrar turmas
+                    </button>
+                    <Link href="/treinos/novo" className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1">
+                      <PlusCircle className="w-4 h-4" />
+                      Criar novo treino
+                    </Link>
+                  </>
+                )}
+              </div>
+            }
+          >
+            <p className="text-sm text-green-900/90 mt-2">
+              Crie treinos e agrupe seus atletas em <b>turmas</b>. Vincule cada turma a um professor para facilitar a condução do treino.
+            </p>
           </SectionCard>
 
           <SectionCard title="Atividade Recente">
@@ -393,10 +516,10 @@ export default function PerfilEscola({ idDaUrl }: Props) {
               <SectionCard
                 title="Atletas Observados"
                 right={
-                  <button className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-amber-500 text-white">
+                  <Link href="/explorar" className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-amber-500 text-white">
                     <PlusCircle className="w-4 h-4" />
                     Descobrir novos atletas
-                  </button>
+                  </Link>
                 }
               >
                 {observados && observados.length > 0 ? (
@@ -426,7 +549,9 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                   <div>
                     <EmptyState text="Você ainda não observa nenhum atleta" />
                     <div className="flex justify-center">
-                      <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">Ver atletas observados</button>
+                      <Link href="/explorar">
+                        <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">Ver atletas observados</button>
+                      </Link>
                     </div>
                   </div>
                 )}
@@ -486,6 +611,137 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             )}
           </SectionCard>
         </div>
+      )}
+
+      {aba === "professores" && canEdit && (
+        <div className="mt-4 px-4 grid gap-4">
+          <SectionCard
+            title="Professores da Escolinha"
+            right={
+              <button
+                onClick={() => { setProfessorSelecionado(undefined); setTurmasOpen(true); }}
+                className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Adicionar turma
+              </button>
+            }
+          >
+            {professoresLoading ? (
+              <div className="text-sm text-green-900/70">Carregando professores…</div>
+            ) : professores.length ? (
+              <ul className="grid grid-cols-1 gap-3">
+                {professores.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between rounded-xl border border-green-100 p-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar foto={p.fotoUrl ?? null} alt={p.nome} className="w-10 h-10" />
+                      <div>
+                        <div className="text-sm font-medium text-green-900">{p.nome}</div>
+                        <div className="text-xs text-green-900/70">
+                          {[p.codigo ? `Código ${p.codigo}` : "", p.cref ? `CREF ${p.cref}` : ""].filter(Boolean).join(" • ") || "—"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { setProfessorSelecionado(String(p.id)); setTurmasOpen(true); }}
+                        className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
+                      >
+                        Administrar turmas
+                      </button>
+                      <Link href={`/perfil/${p.usuarioId ?? p.id}`} className="text-sm text-green-800 inline-flex items-center gap-1">
+                        Ver perfil <ChevronRight className="w-4 h-4" />
+                      </Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState text="Nenhum professor vinculado à escolinha." />
+            )}
+          </SectionCard>
+
+          <SectionCard title="Turmas da Escolinha">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm text-green-900/80">
+                Crie turmas e defina o professor responsável. Alunos vinculados à escolinha podem ser adicionados às turmas.
+              </div>
+              <button
+                onClick={() => { setProfessorSelecionado(undefined); setTurmasOpen(true); }}
+                className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Nova turma
+              </button>
+            </div>
+
+            {turmasLoading ? (
+              <div className="text-sm text-green-900/70">Carregando turmas…</div>
+            ) : turmas.length ? (
+              <ul className="space-y-2">
+                {turmas.map((t) => (
+                  <li key={t.id} className="border rounded-xl p-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-medium text-green-900">{t.nome}</div>
+                        <div className="text-xs text-green-900/70">
+                          {t.professorNome ? `Professor: ${t.professorNome}` : "Professor: —"} • {typeof t.alunosCount === "number" ? `${t.alunosCount} alunos` : "—"}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { setProfessorSelecionado(t.professorId ?? undefined); setTurmasOpen(true); }}
+                        className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
+                      >
+                        Administrar
+                      </button>
+                    </div>
+
+                    {professores.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <select
+                          className="border rounded px-3 py-2 text-sm"
+                          value={t.professorId ?? ""}
+                          onChange={async (e) => {
+                            const newProfId = e.target.value || null;
+                            try {
+                              await axios.put(
+                                `${API.BASE_URL}/api/turmas/${t.id}/vincular-professor`,
+                                { professorId: newProfId },
+                                { headers }
+                              );
+                              await loadTurmas();
+                              alert("Professor atualizado na turma!");
+                            } catch (err) {
+                              console.error(err);
+                              alert("Não foi possível atualizar o professor.");
+                            }
+                          }}
+                        >
+                          <option value="">— Sem professor —</option>
+                          {professores.map((p) => (
+                            <option key={p.id} value={p.id}>{p.nome}{p.cref ? ` • CREF ${p.cref}` : ""}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState text="Nenhuma turma cadastrada na escolinha." />
+            )}
+          </SectionCard>
+        </div>
+      )}
+
+      {/* Modal TurmasManager (criar/vincular) */}
+      {canEdit && (
+        <TurmasManager
+          open={turmasOpen}
+          onClose={() => { setTurmasOpen(false); loadTurmas(); loadProfessores(); }}
+          owner={escolinhaId ? { tipo: "Escolinha", id: escolinhaId } : undefined}
+          professorId={professorSelecionado}
+        />
       )}
 
       <div className="h-6" />
