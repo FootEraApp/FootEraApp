@@ -30,6 +30,7 @@ model Usuario {
   codigo                   String?
   verified                 Boolean                   @default(false)
   EmailVerification        EmailVerification[]
+  assinatura               Assinatura?
   administrador            Administrador?
   amigosDe                 Amigo[]                   @relation("AmigoUsuario")
   amigos                   Amigo[]                   @relation("UsuarioAmigo")
@@ -77,6 +78,19 @@ model EmailVerification {
   usuario Usuario @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model Assinatura {
+  id         String    @id @default(uuid())
+  usuarioId  String    @unique
+  plano      String // "FREE" | "PRO" | "ELITE"
+  startsAt   DateTime  @default(now())
+  canceledAt DateTime?
+  ativo      Boolean   @default(true)
+  usuario    Usuario   @relation(fields: [usuarioId], references: [id])
+
+  @@index([startsAt])
+  @@index([canceledAt])
 }
 
 model Professor {
