@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
+import TurmasManager from "@/components/turmas/TurmasManager.js";
 
 export type CategoriaBase =
   | "Sub-9"
@@ -39,6 +40,15 @@ type AtletaMin = {
   posicao?: Posicao | null;
   pontuacao?: number | null;
   ativoRecentemente?: boolean;
+};
+
+type ProfessorMin = {
+  id: string;
+  usuarioId: string;
+  nome: string;
+  cref?: string | null;
+  foto?: string | null;
+  turmas?: number;
 };
 
 type EstatisticasAtleta = {
@@ -121,12 +131,16 @@ const posicoesMap: Record<string, string> = {
   PE: "Ponta Esquerda",
 };
 
+type PosicaoCodigo = keyof typeof posicoesMap; // "GOL" | "LD" | "ZD" | ...
+
 const apiToUiCategoria = (c?: string | null): CategoriaBase | null => {
   if (!c) return null;
   if (c === "Livre") return "Livre";
-  if (c.startsWith("Sub")) return c.replace("Sub", "Sub-") as CategoriaBase;
+  if (c.startsWith("Sub-")) return c as CategoriaBase;
+  if (c.startsWith("Sub"))  return (`Sub-${c.slice(3)}` as CategoriaBase);
   return null;
 };
+
 const uiToApiCategoria = (c?: CategoriaBase | ""): string | undefined => {
   if (!c) return undefined;
   if (c === "Livre") return "Livre";
@@ -138,14 +152,15 @@ const GerenciarAtletas: React.FC = () => {
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   const [tipo, setTipo] = useState<"Escola" | "Clube" | "Professor" | null>(null);
-  const [entidadeUsuarioId, setEntidadeUsuarioId] = useState<string | null>(null);
+  const [usuarioIdEntidade, setUsuarioIdEntidade] = useState<string | null>(null);
+  const [tipoUsuarioIdEntidade, setTipoUsuarioIdEntidade] = useState<string | null>(null);
   const [atletas, setAtletas] = useState<AtletaMin[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [q, setQ] = useState("");
   const [categoria, setCategoria] = useState<"" | CategoriaBase>("");
-  const [posicao, setPosicao] = useState<"" | Posicao>("");
+  const [posicaoCodigo, setPosicaoCodigo] = useState<"" | PosicaoCodigo>(""); // ⬅️ MUDAR
   const [status, setStatus] = useState<"" | "ativo" | "inativo">("");
   const [ordenacao, setOrdenacao] = useState<
     "pontuacao_desc" | "pontuacao_asc" | "nome_asc" | "nome_desc"
@@ -155,8 +170,9 @@ const GerenciarAtletas: React.FC = () => {
   const [focado, setFocado] = useState<AtletaMin | null>(null);
   const [stats, setStats] = useState<EstatisticasAtleta | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
-  const pollingStatsRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingStatsRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingSubsRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [abrirDesignar, setAbrirDesignar] = useState(false);
   const [treinosDisponiveis, setTreinosDisponiveis] = useState<TreinoProgramadoMin[]>([]);
@@ -169,46 +185,66 @@ const GerenciarAtletas: React.FC = () => {
 
   const [submissoes, setSubmissoes] = useState<SubmissaoItem[]>([]);
   const [subsLoading, setSubsLoading] = useState(false);
-  const pollingSubsRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [aba, setAba] = useState<"atletas" | "professores">("atletas");
+  const [turmasOpen, setTurmasOpen] = useState(false);
+  const [turmasProfessorId, setTurmasProfessorId] = useState<string | null>(null);
+  const [professores, setProfessores] = useState<ProfessorMin[]>([]);
+  const [profLoading, setProfLoading] = useState(false);
+  const [profError, setProfError] = useState<string | null>(null);
 
   const tipoParaVinculo = (t: "Escola" | "Clube" | "Professor") =>
     t === "Escola" ? "escolinha" : t.toLowerCase();
 
+  // === SUBSTITUIR FUNÇÃO descobrirPerfil POR ESTA VERSÃO ===
   const descobrirPerfil = async () => {
     try {
       const { data } = await axios.get(`${API.BASE_URL}/api/perfil/me`, { headers });
 
-      const perfilTipo: string = data?.tipo;
+      const perfilTipo: string | undefined = data?.tipo; // Professor | Clube | Escolinha
       const normalizado =
         perfilTipo === "Escolinha" ? "Escola" :
-          perfilTipo === "Clube" ? "Clube" :
-            perfilTipo === "Professor" ? "Professor" : null;
+        perfilTipo === "Clube"     ? "Clube"  :
+        perfilTipo === "Professor" ? "Professor" : null;
 
       if (!normalizado) throw new Error("Perfil institucional inválido para Gerenciar Atletas.");
 
+      // IDs separados
+      const usuarioId = data?.usuario?.id || Storage.usuarioId || null;
+      const tipoId =
+        (perfilTipo === "Professor"  && (data?.professor?.id))  ||
+        (perfilTipo === "Clube"      && (data?.clube?.id))      ||
+        (perfilTipo === "Escolinha"  && (data?.escolinha?.id))  ||
+        null;
+
+      if (!usuarioId) throw new Error("Não foi possível identificar o usuarioId da entidade.");
+
       setTipo(normalizado);
-      setEntidadeUsuarioId(data?.usuario?.id || Storage.tipoUsuarioId || Storage.usuarioId || null);
+      setUsuarioIdEntidade(usuarioId);       // para /api/gerenciar/atletas (id = usuarioId)
+      setTipoUsuarioIdEntidade(tipoId);      // útil para treinos, etc.
     } catch (e: any) {
       setTipo(null);
-      setEntidadeUsuarioId(null);
+      setUsuarioIdEntidade(null);
+      setTipoUsuarioIdEntidade(null);
       setError(e?.response?.data?.message || e?.message || "Não foi possível identificar o perfil");
     }
   };
 
   const carregarAtletas = async () => {
-    if (!tipo || !entidadeUsuarioId) return;
+    if (!tipo || !usuarioIdEntidade) return;
     try {
       setError(null);
       setLoading(true);
 
       const params: any = {
-        vinculo: tipoParaVinculo(tipo),
-        id: entidadeUsuarioId,
+        vinculo: tipoParaVinculo(tipo), // "escolinha" | "clube" | "professor"
+        id: usuarioIdEntidade,          // <— SEMPRE usuarioId
         order: ordenacao,
       };
+      if (tipoUsuarioIdEntidade) params.tipoUsuarioId = tipoUsuarioIdEntidade; // opcional, se seu backend usar
       if (q.trim()) params.search = q.trim();
       if (categoria) params.categoria = uiToApiCategoria(categoria);
-      if (posicao) params.posicao = posicao;
+      if (posicaoCodigo) params.posicao = posicaoCodigo;
       if (status) params.status = status;
 
       const { data } = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, { headers, params });
@@ -220,7 +256,7 @@ const GerenciarAtletas: React.FC = () => {
         nome: a.nome,
         idade: a.idade ?? null,
         foto: a.foto ?? null,
-        posicao: a.posicao ?? null,
+        posicao: (posicoesMap as any)[a.posicao] ?? a.posicao ?? null, // já rótulo
         categoria: apiToUiCategoria(a.categoria),
         pontuacao: a.pontuacao ?? null,
         ativoRecentemente: !!a.ativoRecentemente,
@@ -234,27 +270,64 @@ const GerenciarAtletas: React.FC = () => {
     }
   };
 
+const carregarProfessores = async () => {
+  if (!tipo || tipo === "Professor" || !usuarioIdEntidade) return;
+  try {
+    setProfError(null);
+    setProfLoading(true);
+
+    const params: any = {
+      vinculo: tipoParaVinculo(tipo), // "escolinha" | "clube"
+      id: usuarioIdEntidade,          // <— usuarioId da entidade
+    };
+    if (q.trim()) params.search = q.trim();
+
+    // ajuste o endpoint conforme seu backend
+    const { data } = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, { headers, params });
+    const lista = (data?.professores || data || []) as any[];
+
+    setProfessores(
+      lista.map((p) => ({
+        id: p.id,
+        usuarioId: p.usuarioId,
+        nome: p.nome,
+        cref: p.cref ?? null,
+        foto: p.fotoUrl ?? p.foto ?? null,
+        turmas: p._count?.turmas ?? p.turmasCount ?? 0,
+      }))
+    );
+  } catch (e: any) {
+    setProfessores([]);
+    setProfError(e?.response?.data?.message || e?.message || "Falha ao carregar professores");
+  } finally {
+    setProfLoading(false);
+  }
+};
+
   const carregarTreinos = async () => {
-    if (!tipo || !entidadeUsuarioId) return;
-    try {
-      const params = { criador: tipoParaVinculo(tipo), id: entidadeUsuarioId };
-      const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados`, { headers, params });
-      const items = (res.data?.items ?? res.data ?? []) as any[];
-      setTreinosDisponiveis(
-        items.map((t) => ({
-          id: t.id,
-          titulo: t.titulo ?? t.nome ?? "Treino",
-          objetivo: t.objetivo ?? null,
-          pontuacao: t.pontuacao ?? null,
-          categoria: apiToUiCategoria(t.categoria),
-          expiraEm: t.expiraEm ?? null,
-          naoExpira: !!t.naoExpira,
-        }))
-      );
-    } catch (_) {
-      setTreinosDisponiveis([]);
-    }
-  };
+  if (!tipo || !usuarioIdEntidade) return;
+  try {
+    const params: any = { criador: tipoParaVinculo(tipo), id: usuarioIdEntidade }; // <<< id
+    if (tipoUsuarioIdEntidade) params.tipoUsuarioId = tipoUsuarioIdEntidade;
+
+    const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados`, { headers, params });
+    const items = (res.data?.items ?? res.data ?? []) as any[];
+    setTreinosDisponiveis(
+      items.map((t) => ({
+        id: t.id,
+        titulo: t.titulo ?? t.nome ?? "Treino",
+        objetivo: t.objetivo ?? null,
+        pontuacao: t.pontuacao ?? null,
+        categoria: apiToUiCategoria(t.categoria),
+        expiraEm: t.expiraEm ?? null,
+        naoExpira: !!t.naoExpira,
+      }))
+    );
+  } catch {
+    setTreinosDisponiveis([]);
+  }
+};
+
 
   const carregarStatsAtleta = async (atletaUsuarioId: string) => {
     setStatsLoading(true);
@@ -309,24 +382,27 @@ const GerenciarAtletas: React.FC = () => {
   }, [token]);
 
   useEffect(() => {
-    if (!tipo || !entidadeUsuarioId) return;
+    if (!tipo || !usuarioIdEntidade) return;
     carregarAtletas();
     carregarTreinos();
+    if (tipo !== "Professor") carregarProfessores();
 
     if (pollingRef.current) clearInterval(pollingRef.current);
     pollingRef.current = setInterval(() => {
       carregarAtletas();
+      if (tipo !== "Professor") carregarProfessores();
     }, 30000);
 
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [tipo, entidadeUsuarioId]);
+  }, [tipo, usuarioIdEntidade]);
+
 
   useEffect(() => {
-    if (!tipo || !entidadeUsuarioId) return;
+    if (!tipo || !usuarioIdEntidade) return;
     carregarAtletas();
-  }, [q, categoria, posicao, status, ordenacao]);
+  }, [q, categoria, posicaoCodigo, status, ordenacao]);
 
   const filtrados = useMemo(() => atletas, [atletas]);
 
@@ -464,10 +540,44 @@ const GerenciarAtletas: React.FC = () => {
           <div>
             <h1 className="text-xl font-semibold text-zinc-900">{tipo ?? "Institucional"} · Gerenciar Atletas</h1>
             <p className="text-sm text-zinc-500">Acompanhe e organize seus atletas vinculados na FootEra.</p>
+
+            {/* Abas visíveis só para Escola/Clube */}
+            {tipo && tipo !== "Professor" && (
+              <div className="mt-2 inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
+                <button
+                  onClick={() => setAba("atletas")}
+                  className={`px-3 py-1.5 rounded-lg ${aba === "atletas" ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"}`}
+                >
+                  Atletas
+                </button>
+                <button
+                  onClick={() => setAba("professores")}
+                  className={`px-3 py-1.5 rounded-lg ${aba === "professores" ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"}`}
+                >
+                  Professores
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {tipo && tipo !== "Professor" && (
+            <>
+              <button
+                onClick={() => { setTurmasProfessorId(null); setTurmasOpen(true); }}
+                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-zinc-700 hover:bg-zinc-50"
+              >
+                <CirclePlus className="h-4 w-4" /> Adicionar turma
+              </button>
+              <button
+                onClick={() => { setTurmasProfessorId(null); setTurmasOpen(true); }}
+                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-zinc-700 hover:bg-zinc-50"
+              >
+                <ListChecks className="h-4 w-4" /> Administrar turmas
+              </button>
+            </>
+          )}
           <button
             onClick={() => setAbrirDesignar(true)}
             className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-white shadow hover:bg-emerald-700"
@@ -505,8 +615,8 @@ const GerenciarAtletas: React.FC = () => {
         </div>
         <div className="md:col-span-3">
           <select
-            value={posicao}
-            onChange={(e) => setPosicao(e.target.value as any)}
+            value={posicaoCodigo}
+            onChange={(e) => setPosicaoCodigo(e.target.value as any)}
             className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
           >
             <option value="">Posição (todas)</option>
@@ -554,309 +664,297 @@ const GerenciarAtletas: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="lg:col-span-7 xl:col-span-8">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-zinc-600">
-              <Filter className="h-4 w-4" /> {filtrados.length} resultado(s)
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setOrdenacao((o) => (o === "pontuacao_desc" ? "pontuacao_asc" : "pontuacao_desc"))}
-                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
-              >
-                {ordenacao.includes("pontuacao") ? (
-                  ordenacao === "pontuacao_desc" ? (
-                    <ArrowDownZA className="h-4 w-4" />
-                  ) : (
-                    <ArrowUpAZ className="h-4 w-4" />
-                  )
-                ) : (
-                  <ArrowDownZA className="h-4 w-4" />
-                )}
-                Pontuação
-              </button>
-              <button
-                onClick={() => setOrdenacao((o) => (o === "nome_asc" || o === "pontuacao_desc" ? "nome_desc" : "nome_asc"))}
-                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
-              >
-                <ArrowDownZA className="h-4 w-4" /> Nome
-              </button>
-            </div>
+      {aba === "professores" && tipo !== "Professor" ? (
+        /* ==== VIEW: PROFESSORES ==== */
+        <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
+          <div className="flex items-center justify-between border-b border-zinc-100 p-4">
+            <div className="text-sm font-semibold text-zinc-900">Professores vinculados</div>
+            <div className="text-sm text-zinc-600">{professores.length} resultado(s)</div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+          {profLoading ? (
+            <div className="p-6 text-center text-zinc-600">
+              <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+            </div>
+          ) : profError ? (
+            <div className="p-6 text-center text-red-600">{profError}</div>
+          ) : professores.length === 0 ? (
+            <div className="p-8 text-center text-zinc-500">Nenhum professor encontrado.</div>
+          ) : (
             <table className="min-w-full table-fixed">
               <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-500">
                 <tr>
-                  <th className="w-12 p-3">Sel.</th>
                   <th className="w-16 p-3">Foto</th>
                   <th className="p-3">Nome</th>
-                  <th className="w-24 p-3">Categoria</th>
-                  <th className="w-24 p-3">Posição</th>
-                  <th className="w-24 p-3">Idade</th>
-                  <th className="w-28 p-3">Pontuação</th>
-                  <th className="w-28 p-3">Status</th>
-                  <th className="w-10 p-3">Ver</th>
+                  <th className="w-28 p-3">CREF</th>
+                  <th className="w-28 p-3">Turmas</th>
+                  <th className="w-40 p-3">Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={9} className="p-6 text-center text-zinc-600">
-                      <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                {professores.map((p) => (
+                  <tr key={p.id} className="border-t border-zinc-100">
+                    <td className="p-3">
+                      <img src={getFoto(p.foto)} alt={p.nome} className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow" />
+                    </td>
+                    <td className="p-3">
+                      <div className="font-medium text-zinc-900">{p.nome}</div>
+                      <div className="text-xs text-zinc-500">ID: {p.usuarioId || p.id}</div>
+                    </td>
+                    <td className="p-3 text-sm text-zinc-700">{p.cref ?? "—"}</td>
+                    <td className="p-3 text-sm text-zinc-700">{p.turmas ?? 0}</td>
+                    <td className="p-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { setTurmasProfessorId(p.id); setTurmasOpen(true); }}
+                          className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
+                        >
+                          Administrar turmas
+                        </button>
+                        <button
+                          onClick={() => { setTurmasProfessorId(p.id); setTurmasOpen(true); }}
+                          className="rounded-xl bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700"
+                        >
+                          Adicionar turma
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ) : error ? (
-                  <tr>
-                    <td colSpan={9} className="p-6 text-center text-red-600">{error}</td>
-                  </tr>
-                ) : filtrados.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="p-8 text-center text-zinc-500">Nenhum atleta encontrado com os filtros aplicados.</td>
-                  </tr>
-                ) : (
-                  filtrados.map((a) => (
-                    <tr key={a.id} className="border-t border-zinc-100">
-                      <td className="p-3">
-                        <input
-                          type="checkbox"
-                          checked={!!selecionados[a.usuarioId || a.id]}
-                          onChange={() => toggleSelecionado(a.usuarioId || a.id)}
-                          className="h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
-                        />
-                      </td>
-                      <td className="p-3">
-                        <img src={getFoto(a.foto)} alt={a.nome} className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow" />
-                      </td>
-                      <td className="truncate p-3">
-                        <div className="font-medium text-zinc-900">{a.nome}</div>
-                        <div className="text-xs text-zinc-500">ID: {a.usuarioId || a.id}</div>
-                      </td>
-                      <td className="p-3 text-sm text-zinc-700">{a.categoria ?? "–"}</td>
-                      <td className="p-3 text-sm text-zinc-700">{a.posicao ?? "–"}</td>
-                      <td className="p-3 text-sm text-zinc-700">{numberOrDash(a.idade)}</td>
-                      <td className="p-3 text-sm font-semibold text-zinc-900">{numberOrDash(a.pontuacao)}</td>
-                      <td className="p-3 text-sm">
-                        <StatusBadge ativo={a.ativoRecentemente} />
-                      </td>
-                      <td className="p-3">
-                        <button
-                          onClick={() => abrirDetalhe(a)}
-                          className="rounded-lg border border-zinc-200 p-1.5 text-zinc-700 hover:bg-zinc-50"
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
-          </div>
-
-          <div className="mt-3 flex items-center justify-between text-sm">
-            <div className="text-zinc-500">
-              {Object.values(selecionados).filter(Boolean).length} selecionado(s)
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={limparSelecao}
-                className="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-zinc-700 hover:bg-zinc-50"
-              >
-                Limpar seleção
-              </button>
-              <button
-                onClick={() => setAbrirDesignar(true)}
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-1.5 text-white hover:bg-emerald-700"
-              >
-                <ListChecks className="h-4 w-4" /> Designar treino aos selecionados
-              </button>
-            </div>
-          </div>
+          )}
         </div>
-
-        <div className="lg:col-span-5 xl:col-span-4">
-          <div className="rounded-2xl border border-zinc-200 bg-white">
-            <div className="flex items-center justify-between border-b border-zinc-100 p-4">
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-zinc-100 p-2 text-zinc-700">
-                  <ChevronDown className="h-4 w-4" />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-zinc-900">Detalhes do atleta</div>
-                  <div className="text-xs text-zinc-500">Perfil e desempenho</div>
-                </div>
+      ) : (
+        /* ==== VIEW: ATLETAS (mantém seu grid atual) ==== */
+        /* ==== VIEW: ATLETAS (mantém seu grid atual) ==== */
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+          {/* ===== COLUNA ESQUERDA: LISTA/TABELA ===== */}
+          <div className="lg:col-span-7 xl:col-span-8">
+            {/* barra de quantidade + ordenação */}
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-zinc-600">
+                <Filter className="h-4 w-4" /> {filtrados.length} resultado(s)
               </div>
-              {focado && (
-                <button onClick={() => setFocado(null)} className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-50">
-                  <X className="h-4 w-4" />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setOrdenacao((o) => (o === "pontuacao_desc" ? "pontuacao_asc" : "pontuacao_desc"))}
+                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
+                >
+                  {ordenacao.includes("pontuacao")
+                    ? ordenacao === "pontuacao_desc"
+                      ? <ArrowDownZA className="h-4 w-4" />
+                      : <ArrowUpAZ className="h-4 w-4" />
+                    : <ArrowDownZA className="h-4 w-4" />}
+                  Pontuação
                 </button>
+                <button
+                  onClick={() => setOrdenacao((o) => (o === "nome_asc" || o === "pontuacao_desc" ? "nome_desc" : "nome_asc"))}
+                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
+                >
+                  <ArrowDownZA className="h-4 w-4" /> Nome
+                </button>
+              </div>
+            </div>
+
+            {/* tabela de atletas */}
+            <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+              {loading ? (
+                <div className="p-6 text-center text-zinc-600">
+                  <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+                  Carregando atletas…
+                </div>
+              ) : error ? (
+                <div className="p-6 text-center text-red-600">{error}</div>
+              ) : filtrados.length === 0 ? (
+                <div className="p-8 text-center text-zinc-500">Nenhum atleta encontrado.</div>
+              ) : (
+                <table className="min-w-full table-fixed">
+                  <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-500">
+                    <tr>
+                      <th className="w-10 p-3">
+                        <input
+                          type="checkbox"
+                          aria-label="Selecionar todos"
+                          checked={filtrados.length > 0 && filtrados.every((a) => !!selecionados[a.usuarioId || a.id])}
+                          onChange={(e) => {
+                            const checked = e.currentTarget.checked;
+                            setSelecionados((prev) => {
+                              const next = { ...prev };
+                              filtrados.forEach((a) => {
+                                const key = a.usuarioId || a.id;
+                                next[key] = checked;
+                              });
+                              return next;
+                            });
+                          }}
+                        />
+                      </th>
+                      <th className="w-16 p-3">Foto</th>
+                      <th className="p-3">Nome</th>
+                      <th className="w-28 p-3">Categoria</th>
+                      <th className="w-32 p-3">Posição</th>
+                      <th className="w-28 p-3">Pontuação</th>
+                      <th className="w-28 p-3">Status</th>
+                      <th className="w-32 p-3">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtrados.map((a) => {
+                      const key = a.usuarioId || a.id;
+                      const checked = !!selecionados[key];
+                      return (
+                        <tr key={a.id} className="border-t border-zinc-100 hover:bg-zinc-50">
+                          <td className="p-3">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleSelecionado(key)}
+                              aria-label={`Selecionar ${a.nome}`}
+                            />
+                          </td>
+                          <td className="p-3">
+                            <img
+                              src={getFoto(a.foto)}
+                              alt={a.nome}
+                              className={`h-10 w-10 rounded-full object-cover ring-2 ring-white shadow ${checked ? "outline outline-2 outline-emerald-500" : ""}`}
+                            />
+                          </td>
+                          <td className="p-3">
+                            <div className="font-medium text-zinc-900">{a.nome}</div>
+                            <div className="text-xs text-zinc-500">ID: {key}</div>
+                          </td>
+                          <td className="p-3 text-sm text-zinc-700">{a.categoria ?? "—"}</td>
+                          <td className="p-3 text-sm text-zinc-700">{a.posicao ?? "—"}</td>
+                          <td className="p-3 text-sm text-zinc-900">{numberOrDash(a.pontuacao)}</td>
+                          <td className="p-3">
+                            <StatusBadge ativo={a.ativoRecentemente} />
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => abrirDetalhe(a)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100"
+                              >
+                                Ver detalhes <ChevronRight className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => toggleSelecionado(key)}
+                                className={`rounded-lg px-3 py-1.5 text-sm ${
+                                  checked
+                                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                                    : "border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100"
+                                }`}
+                              >
+                                {checked ? "Selecionado" : "Selecionar"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               )}
             </div>
 
-            {!focado ? (
-              <div className="p-6 text-center text-zinc-500">Selecione um atleta para ver o resumo do perfil.</div>
-            ) : (
-              <div className="p-4">
+            {/* rodapé de ações */}
+            <div className="mt-3 flex flex-col items-start justify-between gap-2 text-sm sm:flex-row sm:items-center">
+              <div className="text-zinc-600">
+                Selecionados manualmente: <strong>{Object.values(selecionados).filter(Boolean).length}</strong>
+                {" · "}Destinatários atuais (respeitando “Alcance”): <strong>{idsDestino.length}</strong>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={limparSelecao}
+                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-zinc-700 hover:bg-zinc-50"
+                >
+                  Limpar seleção
+                </button>
+                <button
+                  onClick={() => setAbrirDesignar(true)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-white hover:bg-emerald-700"
+                >
+                  <ListChecks className="h-4 w-4" /> Designar treino
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ===== COLUNA DIREITA: PAINEL LATERAL ===== */}
+          <div className="lg:col-span-5 xl:col-span-4">
+            {focado ? (
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4">
                 <div className="flex items-center gap-3">
-                  <img src={getFoto(focado.foto)} alt={focado.nome} className="h-14 w-14 rounded-full object-cover" />
+                  <img src={getFoto(focado.foto)} className="h-12 w-12 rounded-full object-cover" />
                   <div>
-                    <div className="text-base font-semibold text-zinc-900">{focado.nome}</div>
-                    <div className="text-xs text-zinc-500">{focado.posicao ?? "Posição –"} • {focado.categoria ?? "Categoria –"}</div>
-                    <div className="mt-1 text-xs text-zinc-500">Pontuação: {numberOrDash(focado.pontuacao)}</div>
+                    <div className="font-semibold text-zinc-900">{focado.nome}</div>
+                    <div className="text-xs text-zinc-500">{focado.categoria ?? "—"} · {focado.posicao ?? "—"}</div>
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded-xl border border-zinc-200 p-3">
-                    <div className="text-xs text-zinc-500">Treinos (mês)</div>
-                    <div className="text-lg font-semibold">
-                      {statsLoading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : (stats?.totalTreinosMes ?? "–")}
-                    </div>
+                <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+                  <div className="rounded-xl bg-zinc-50 p-3">
+                    <div className="text-xs text-zinc-500">Treinos mês</div>
+                    <div className="text-lg font-semibold">{stats?.concluidosMes ?? 0}</div>
                   </div>
-                  <div className="rounded-xl border border-zinc-200 p-3">
-                    <div className="text-xs text-zinc-500">Concluídos</div>
-                    <div className="text-lg font-semibold">
-                      {statsLoading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : (stats?.concluidosMes ?? "–")}
-                    </div>
+                  <div className="rounded-xl bg-zinc-50 p-3">
+                    <div className="text-xs text-zinc-500">Desafios mês</div>
+                    <div className="text-lg font-semibold">{stats?.desafiosFeitosMes ?? 0}</div>
                   </div>
-                  <div className="rounded-xl border border-zinc-200 p-3">
-                    <div className="text-xs text-zinc-500">Desafios</div>
-                    <div className="text-lg font-semibold">
-                      {statsLoading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : (stats?.desafiosFeitosMes ?? "–")}
-                    </div>
+                  <div className="rounded-xl bg-zinc-50 p-3">
+                    <div className="text-xs text-zinc-500">Média 4s</div>
+                    <div className="text-lg font-semibold">{stats?.mediaUltimas4Semanas ?? 0}</div>
                   </div>
                 </div>
 
-                <div className="mt-4 rounded-xl border border-zinc-200 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm font-medium text-zinc-900">
-                      <Trophy className="h-4 w-4" />
-                      Atividade por semana
-                    </div>
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="inline-flex items-center gap-1 text-zinc-600">
-                        <span className="inline-block h-2 w-2 rounded-sm" style={{ background: "#10b981" }} />
-                        Treinos
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-zinc-600">
-                        <span className="inline-block h-2 w-2 rounded-sm" style={{ background: "#f59e0b" }} />
-                        Desafios
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="h-40 w-full">
+                <div className="mt-4">
+                  <div className="mb-2 text-sm font-medium text-zinc-700">Atividade nas últimas 4 semanas</div>
+                  <div className="h-40">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="semana" tick={{ fontSize: 12 }} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                        <Tooltip
-                          formatter={(value: any, name: any) =>
-                            [value as number, name === "treinos" ? "Treinos" : "Desafios"]
-                          }
-                          labelFormatter={(label) => label}
-                        />
-                        <Bar dataKey="treinos" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="desafios" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                      <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="semana" />
+                        <YAxis allowDecimals={false} />
+                        <Tooltip />
+                        <Bar dataKey="treinos" />
+                        <Bar dataKey="desafios" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
 
-                <div className="mt-4 rounded-xl border border-zinc-200">
-                  <div className="flex items-center gap-2 border-b border-zinc-100 p-3 text-sm font-medium text-zinc-900">
-                    <ListChecks className="h-4 w-4" /> Concluídos recentemente
-                    <span className="ml-auto text-xs font-normal text-zinc-500">
-                      {subsLoading ? "atualizando..." : `${submissoes.length} item(ns)`}
-                    </span>
-                  </div>
-
+                <div className="mt-4">
+                  <div className="text-sm font-medium text-zinc-700 mb-2">Últimas submissões (mês)</div>
                   {subsLoading ? (
-                    <div className="p-4 text-center text-zinc-600">
-                      <Loader2 className="mx-auto h-4 w-4 animate-spin" />
-                    </div>
+                    <div className="text-zinc-600 text-sm">Carregando…</div>
                   ) : submissoes.length === 0 ? (
-                    <div className="p-4 text-center text-zinc-500">Sem registros neste período.</div>
+                    <div className="text-zinc-500 text-sm">Sem submissões no período.</div>
                   ) : (
-                    <ul className="divide-y divide-zinc-100">
+                    <ul className="space-y-2">
                       {submissoes.map((s) => (
-                        <li key={s.id} className="flex items-center justify-between p-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className={`rounded-full px-2 py-0.5 text-[11px] ${s.tipo === "treino" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
-                                }`}>
-                                {s.tipo === "treino" ? "Treino" : "Desafio"}
-                              </span>
-                              <AprovacaoPill value={s.aprovado} />
-                              <span className="truncate text-sm font-medium text-zinc-900">{s.titulo}</span>
-                            </div>
-                            <div className="mt-0.5 text-xs text-zinc-500">
-                              <CalendarClock className="mr-1 inline h-3 w-3" />
-                              {formatRelativo(s.data)}
-                            </div>
+                        <li key={s.id} className="rounded-lg border border-zinc-200 p-2 text-sm">
+                          <div className="flex items-center justify-between">
+                            <div className="font-medium">{s.titulo}</div>
+                            <AprovacaoPill value={s.aprovado} />
                           </div>
-
-                          <div className="ml-3 shrink-0 text-right">
-                            <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-                              {typeof s.pontos === "number" ? `${s.pontos} pts` : "—"}
-                            </span>
+                          <div className="text-xs text-zinc-500">
+                            {s.tipo === "treino" ? "Treino" : "Desafio"} · {formatRelativo(s.data)}
                           </div>
                         </li>
                       ))}
                     </ul>
                   )}
                 </div>
-
-                <div className="mt-4 flex items-center justify-end gap-2">
-                  <button
-                    onClick={() => {
-                      setSelecionados({ [focado.usuarioId || focado.id]: true });
-                      setAbrirDesignar(true);
-                    }}
-                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
-                  >
-                    <CalendarClock className="h-4 w-4" /> Designar treino a este atleta
-                  </button>
-                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">
+                Selecione um atleta para ver detalhes.
               </div>
             )}
           </div>
-
-          <div className="mt-4 rounded-2xl border border-zinc-200 bg-white">
-            <div className="flex items-center gap-2 border-b border-zinc-100 p-4 text-sm font-semibold text-zinc-900">
-              <Trophy className="h-4 w-4" /> Ranking interno (Pontuação)
-            </div>
-            <div className="p-3">
-              {filtrados.length === 0 ? (
-                <div className="p-4 text-center text-zinc-500">Sem dados para ranking.</div>
-              ) : (
-                <ul className="space-y-2">
-                  {[...filtrados]
-                    .sort((a, b) => (b.pontuacao ?? 0) - (a.pontuacao ?? 0))
-                    .slice(0, 8)
-                    .map((a, i) => (
-                      <li key={a.id} className="flex items-center justify-between rounded-xl p-2 hover:bg-zinc-50">
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full ring-1 ring-zinc-100">
-                            <img src={getFoto(a.foto)} className="h-full w-full object-cover" />
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-zinc-900">{i + 1}. {a.nome}</div>
-                            <div className="text-xs text-zinc-500">{a.posicao ?? "–"} • {a.categoria ?? "–"}</div>
-                          </div>
-                        </div>
-                        <div className="text-sm font-semibold text-zinc-900">{numberOrDash(a.pontuacao)}</div>
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </div>
-          </div>
         </div>
-      </div>
+      )}
 
       {abrirDesignar && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
@@ -994,6 +1092,17 @@ const GerenciarAtletas: React.FC = () => {
           </div>
         </div>
       )}
+
+      <TurmasManager
+        open={turmasOpen}
+        onClose={() => setTurmasOpen(false)}
+        // Dono da turma é a organização (id de tipo!), não o usuarioId
+        owner={tipo && tipo !== "Professor" && tipoUsuarioIdEntidade ? {
+          tipo: tipo === "Escola" ? "Escolinha" : "Clube",
+          id: tipoUsuarioIdEntidade
+        } : undefined}
+        professorId={turmasProfessorId || undefined}
+      />
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed"><House /></Link>
