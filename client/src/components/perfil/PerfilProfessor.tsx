@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
+// client/src/pages/perfil/PerfilProfessor.tsx
+import { useEffect, useMemo, useState, useCallback } from "react";
 import axios from "axios";
 import { CalendarClock, Activity, PlusCircle, ChevronRight, Trophy } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
@@ -6,6 +7,7 @@ import { API } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
+import TurmasManager from "../turmas/TurmasManager.js"; // <- NOVO (ajuste o caminho se necessário)
 
 const ACHIEVEMENTS: Record<
   string,
@@ -37,15 +39,16 @@ const ACHIEVEMENTS: Record<
     tier: "Bronze",
   },
 };
+
 type Organizacao = { id: string; usuarioId?: string | null; nome: string; tipo: "Escolinha" | "Clube" };
 type Props = { idDaUrl?: string };
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
 type MetricsProf = {
   treinosProgramados: number;
   alunosRelacionados: number;
-  conquistas?: number;            
-  conquistasUnlocked?: string[];   
-  gruposCriados?: number;        
+  conquistas?: number;
+  conquistasUnlocked?: string[];
+  gruposCriados?: number;
 };
 
 type PayloadProfessor = {
@@ -63,6 +66,9 @@ type PayloadProfessor = {
     certificacoes: string[];
     fotoUrl?: string | null;
     statusCref?: string | null;
+    // ---- NOVOS (p/ dono org e turmas):
+    clubeId?: string | null;
+    escolinhaId?: string | null;
   };
   metrics: MetricsProf;
 };
@@ -98,11 +104,20 @@ type SolicitacaoItem = {
 type AtividadeRecente = {
   id: string;
   tipo: "Treino" | "Desafio";
-  nome: string;       
-  data: string;        
+  nome: string;
+  data: string;
   imagemUrl?: string | null;
   duracao?: string;
   pontuacao?: number;
+};
+
+type Turma = {
+  id: string;
+  nome: string;
+  ownerTipo?: "Clube" | "Escolinha" | null;
+  ownerId?: string | null;
+  professorId?: string | null;
+  alunosCount?: number | null;
 };
 
 function SectionCard({
@@ -138,7 +153,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
   const [data, setData] = useState<PayloadProfessor | null>(null);
   const [loading, setLoading] = useState(true);
-  
+
   type Aba = "visao" | "atletas" | "conquistas";
   const [aba, setAba] = useState<Aba>("visao");
 
@@ -154,14 +169,58 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
   const [orgSelecionada, setOrgSelecionada] = useState<string>("");
 
+  // ----- TURMAS -----
+  const [turmasOpen, setTurmasOpen] = useState(false);
+  const [turmas, setTurmas] = useState<Turma[] | null>(null);
+  const [turmasLoading, setTurmasLoading] = useState(false);
+
   const professorId = data?.professor?.id;
 
-  useEffect(() => {
-  if (!token || !professorId) return;
-  let cancel = false;
+  const owner = useMemo(() => {
+    if (!data?.professor) return undefined as undefined | { tipo: "Clube" | "Escolinha"; id: string };
+    const { clubeId, escolinhaId } = data.professor;
+    if (clubeId) return { tipo: "Clube" as const, id: clubeId };
+    if (escolinhaId) return { tipo: "Escolinha" as const, id: escolinhaId };
+    return undefined;
+  }, [data?.professor]);
 
-  (async () => {
+  // --------- carregar turmas do professor ----------
+  const reloadTurmas = useCallback(async () => {
+    if (!token || !professorId) return;
+    setTurmasLoading(true);
     try {
+      const { data } = await axios.get(
+        `${API.BASE_URL}/api/turmas`,
+        { headers, params: { professorId } }
+      );
+      const arr = Array.isArray(data) ? data : (data?.items ?? data?.data ?? []);
+      const parsed: Turma[] = (arr ?? []).map((t: any) => ({
+        id: String(t.id),
+        nome: String(t.nome ?? t.titulo ?? "Turma"),
+        ownerTipo: t.ownerTipo ?? t.tipoOwner ?? null,
+        ownerId: t.ownerId ?? t.clubeId ?? t.escolinhaId ?? null,
+        professorId: t.professorId ?? t.responsavelId ?? null,
+        alunosCount: t.alunosCount ?? t.qtdAlunos ?? null,
+      }));
+      setTurmas(parsed);
+    } catch {
+      setTurmas([]);
+    } finally {
+      setTurmasLoading(false);
+    }
+  }, [token, professorId, headers]);
+
+  useEffect(() => {
+    if (professorId && turmas == null) reloadTurmas();
+  }, [professorId, turmas, reloadTurmas]);
+
+  // Carrega organizações e vínculos do professor
+  useEffect(() => {
+    if (!token || !professorId) return;
+    let cancel = false;
+
+    (async () => {
+      try {
         if (canEdit) {
           const tentativas = [
             `${API.BASE_URL}/api/organizacoes?tipos=Escolinha,Clube`,
@@ -170,9 +229,11 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
           ];
           let lista: any[] = [];
           for (const url of tentativas) {
-            const r = await axios.get(url, { headers });
-            const arr = Array.isArray(r.data) ? r.data : (r.data.items ?? r.data.data ?? []);
-            if (Array.isArray(arr) && arr.length) { lista = arr; break; }
+            try {
+              const r = await axios.get(url, { headers });
+              const arr = Array.isArray(r.data) ? r.data : (r.data.items ?? r.data.data ?? []);
+              if (Array.isArray(arr) && arr.length) { lista = arr; break; }
+            } catch {}
           }
           const normalizada: Organizacao[] = (lista || []).map((o: any) => ({
             id: o.id,
@@ -187,26 +248,32 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
           headers,
           params: { vinculadasAoProfessorId: professorId },
         }).catch(() => null);
+
         const arr = r ? (Array.isArray(r.data) ? r.data : (r.data?.items ?? r.data?.data ?? [])) : [];
         const vinculadas: Organizacao[] = (arr || []).map((o: any) => ({
-          id: o.id, usuarioId: o.usuarioId ?? null,
+          id: o.id,
+          usuarioId: o.usuarioId ?? null,
           nome: o.nome ?? o.titulo ?? "Organização",
           tipo: (o.tipo ?? o.kind ?? o.categoria ?? "").toLowerCase().includes("clube") ? "Clube" : "Escolinha",
         })) as any;
+
         if (!cancel) {
           setOrgsVinculadas(vinculadas);
           if (canEdit && vinculadas?.length) setOrgSelecionada(String(vinculadas[0].id));
         }
-    } catch (e) {
-      if (!cancel) { setOrgsDisponiveis([]); setOrgsVinculadas([]); setOrgSelecionada(""); }
-    }
-  })();
-    return () => { cancel = true; };
-  }, [token, professorId, canEdit]);
+      } catch {
+        if (!cancel) { setOrgsDisponiveis([]); setOrgsVinculadas([]); setOrgSelecionada(""); }
+      }
+    })();
 
+    return () => { cancel = true; };
+  }, [token, professorId, canEdit, headers]);
+
+  // Carrega payload principal do perfil
   useEffect(() => {
     if (!token) return;
     let cancel = false;
+
     (async () => {
       setLoading(true);
       try {
@@ -222,11 +289,13 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         if (!cancel) setLoading(false);
       }
     })();
-    return () => { cancel = true; };
-  }, [targetId, token]);
 
+    return () => { cancel = true; };
+  }, [targetId, token, headers]);
+
+  // Carrega solicitações quando a sub-aba estiver ativa
   useEffect(() => {
-    if (aba !== "atletas" || subAba !== "solicitacoes") return;
+    if (aba !== "atletas" || subAba !== "solicitacoes" || !token) return;
 
     const fetch = async () => {
       try {
@@ -242,61 +311,58 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     };
 
     fetch();
-
     const onFocus = () => fetch();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [aba, subAba, token]);
+  }, [aba, subAba, token, headers]);
 
- const fetchVinculados = useCallback(async () => {
-   if (!token) return;
-   const headers = { Authorization: `Bearer ${token}` };
-   const tipoId        = isOwn ? Storage.tipoUsuarioId : data?.professor?.id;
-   const usuarioTarget = isOwn ? Storage.usuarioId      : data?.usuario?.id;
-
-   const candidates = [
-     { professorId: tipoId, incluirPontuacao: 1 },
-     { tipoUsuarioId: tipoId, incluirPontuacao: 1 },
-     { usuarioId: usuarioTarget, incluirPontuacao: 1 },
-   ].filter(p => Object.values(p)[0]);
-
-   let lista: any[] = [];
-   for (const params of candidates) {
-     try {
-       const r = await axios.get(`${API.BASE_URL}/api/treinos/atletas-vinculados`, { headers, params });
-       const arr = Array.isArray(r.data) ? r.data : (r.data?.items ?? r.data?.data ?? []);
-       if (Array.isArray(arr) && arr.length) { lista = arr; break; }
-     } catch {}
-   }
-
-   const arr = (lista || []).map((x: any) => ({
-     id:        x.id ?? x.atletaId ?? x.usuarioId,
-     usuarioId: x.usuarioId ?? x.userId ?? x.usuario?.id ?? null,
-     atletaId:  x.atletaId ?? x.atleta?.id ?? null,
-     nome:      x.nome ?? x.usuario?.nome ?? x.atleta?.nome ?? x.nomeDeUsuario ?? "Atleta",
-     foto:      x.foto ?? x.usuario?.foto ?? x.atleta?.foto ?? null,
-     posicao:   x.posicao ?? x.atleta?.posicao ?? null,
-     idade:     x.idade ?? x.atleta?.idade ?? null,
-     categoria: x.categoria ?? x.atleta?.categoria ?? null,
-     pontuacao: x.pontuacao ?? null,
-   }));
-   const seen = new Set<string>();
-   const unique = arr.filter((a: any) => {
-     const key = String(a.usuarioId || a.atletaId || a.id);
-     if (seen.has(key)) return false;
-     seen.add(key);
-     return true;
-   });
-   setVinculados(unique);
- }, [token, isOwn, data?.professor?.id, data?.usuario?.id]);
-
-  useEffect(() => {
+  // Carrega atletas vinculados (com fallback de parâmetros)
+  const fetchVinculados = useCallback(async () => {
     if (!token) return;
-    if ((data?.professor?.id || data?.usuario?.id) && vinculados == null) {
-      fetchVinculados();
-    }
-  },  [token, data?.professor?.id, data?.usuario?.id, vinculados, fetchVinculados]);
+    const h = { Authorization: `Bearer ${token}` };
 
+    const tipoId        = isOwn ? Storage.tipoUsuarioId : data?.professor?.id;
+    const usuarioTarget = isOwn ? Storage.usuarioId      : data?.usuario?.id;
+
+    const candidates = [
+      { professorId: tipoId, incluirPontuacao: 1 },
+      { tipoUsuarioId: tipoId, incluirPontuacao: 1 },
+      { usuarioId: usuarioTarget, incluirPontuacao: 1 },
+    ].filter(p => Object.values(p)[0]);
+
+    let lista: any[] = [];
+    for (const params of candidates) {
+      try {
+        const r = await axios.get(`${API.BASE_URL}/api/treinos/atletas-vinculados`, { headers: h, params });
+        const arr = Array.isArray(r.data) ? r.data : (r.data?.items ?? r.data?.data ?? []);
+        if (Array.isArray(arr) && arr.length) { lista = arr; break; }
+      } catch {}
+    }
+
+    const arr = (lista || []).map((x: any) => ({
+      id:        x.id ?? x.atletaId ?? x.usuarioId,
+      usuarioId: x.usuarioId ?? x.userId ?? x.usuario?.id ?? null,
+      atletaId:  x.atletaId ?? x.atleta?.id ?? null,
+      nome:      x.nome ?? x.usuario?.nome ?? x.atleta?.nome ?? x.nomeDeUsuario ?? "Atleta",
+      foto:      x.foto ?? x.usuario?.foto ?? x.atleta?.foto ?? null,
+      posicao:   x.posicao ?? x.atleta?.posicao ?? null,
+      idade:     x.idade ?? x.atleta?.idade ?? null,
+      categoria: x.categoria ?? x.atleta?.categoria ?? null,
+      pontuacao: x.pontuacao ?? null,
+    }));
+
+    const seen = new Set<string>();
+    const unique = arr.filter((a: any) => {
+      const key = String(a.usuarioId || a.atletaId || a.id);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    setVinculados(unique);
+  }, [token, isOwn, data?.professor?.id, data?.usuario?.id]);
+
+  // Primeira carga de vinculados e atividades
   useEffect(() => {
     if (!token) return;
     const cancel = { v: false };
@@ -325,23 +391,9 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
           `${API.BASE_URL}/api/observados`,
           { headers, params }
         );
-        setObservados(Array.isArray(lista) ? lista : []);
+        if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
       } catch {
-        setObservados([]);
-      }
-    }
-
-    async function fetchSolicitacoes() {
-      try {
-        const { data } = await axios.get<SolicitacaoItem[]>(
-          `${API.BASE_URL}/api/solicitacoes-treino`,
-          { headers }
-        );
-        setSolicitacoes(
-          Array.isArray(data) ? data.filter(s => (s.status ?? "PENDENTE") === "PENDENTE") : []
-        );
-      } catch {
-        setSolicitacoes([]);
+        if (!cancel.v) setObservados([]);
       }
     }
 
@@ -353,9 +405,11 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     if (aba === "atletas") {
       if (subAba === "vinculados")   fetchVinculados();
       if (subAba === "observados")   fetchObservados();
-      if (subAba === "solicitacoes") fetchSolicitacoes();
+      // "solicitações" é carregado em outro effect
     }
-  }, [aba, subAba, token, targetId, data?.usuario?.id, data?.professor?.id, vinculados, atividades, fetchVinculados]);
+
+    return () => { cancel.v = true; };
+  }, [aba, subAba, token, targetId, data?.usuario?.id, data?.professor?.id, vinculados, atividades, fetchVinculados, headers, isOwn]);
 
   if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
   if (!data || !data.professor) return <div className="text-center p-10 text-red-600">Professor não encontrado.</div>;
@@ -367,13 +421,11 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     undefined;
   const time = data.professor.escola || "Professor";
   const unlockedIds = data.metrics.conquistasUnlocked ?? [];
-
-  const extraFromGrupos =
-    (data.metrics.gruposCriados ?? 0) > 0 ? ["organizador_de_grupo"] : [];
-
+  const extraFromGrupos = (data.metrics.gruposCriados ?? 0) > 0 ? ["organizador_de_grupo"] : [];
   const unlockedFinal = Array.from(new Set([...unlockedIds, ...extraFromGrupos]));
   const conquistasCount = unlockedFinal.length;
   const alunosCount = (vinculados?.length ?? data.metrics.alunosRelacionados ?? 0);
+
   async function salvarVinculo() {
     if (!token || !professorId || !orgSelecionada) return;
     try {
@@ -388,6 +440,11 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
       alert("Erro ao salvar vínculo.");
     }
   }
+
+  const handleCloseTurmas = () => {
+    setTurmasOpen(false);
+    reloadTurmas(); // ao fechar, atualiza a listagem
+  };
 
   return (
     <div className="max-w-md mx-auto">
@@ -413,9 +470,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
             <button
               key={t.id}
               onClick={() => setAba(t.id as Aba)}
-              className={`py-2 rounded-lg text-sm font-medium ${
-                aba === t.id ? "bg-green-600 text-white" : "text-green-900"
-              }`}
+              className={`py-2 rounded-lg text-sm font-medium ${aba === t.id ? "bg-green-600 text-white" : "text-green-900"}`}
             >
               {t.label}
             </button>
@@ -427,36 +482,34 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         <div className="mt-4 px-4 grid gap-4">
           <SectionCard
             title="Vínculo com Escolinha/Clube"
-           right={canEdit ? (
-             <button onClick={salvarVinculo} className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white" disabled={!orgSelecionada}>
-               Salvar vínculo
-             </button>
-           ) : null}
+            right={canEdit ? (
+              <button onClick={salvarVinculo} className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white" disabled={!orgSelecionada}>
+                Salvar vínculo
+              </button>
+            ) : null}
           >
-
-           {canEdit ? (
-             <div className="grid gap-2">
-               <label className="text-sm">Selecione a organização onde você trabalha</label>
-               <select className="border rounded px-3 py-2" value={orgSelecionada} onChange={(e) => setOrgSelecionada(e.target.value)}>
-                 <option value="">— Nenhuma —</option>
-                 {orgsDisponiveis.map((o) => <option key={o.id} value={o.id}>{o.nome} ({o.tipo})</option>)}
-               </select>
-               <p className="text-xs text-green-900/70">Esse vínculo permitirá ver os alunos da organização e montar “turmas”.</p>
-             </div>
-           ) : (
-             <div className="grid gap-3">
-               {orgsVinculadas.length ? orgsVinculadas.map((o) => (
-                 <Link key={o.id} href={`/perfil/${o.usuarioId ?? o.id}`} className="flex items-center justify-between rounded-xl border border-green-100 p-3 hover:bg-green-50">
-                   <div>
-                     <div className="text-sm font-medium text-green-900">{o.nome}</div>
-                     <div className="text-xs text-green-900/70">{o.tipo}</div>
-                   </div>
-                   <ChevronRight className="w-4 h-4 text-green-800" />
-                 </Link>
-               )) : <div className="text-sm text-green-900/70">Nenhum vínculo público.</div>}
-             </div>
-           )}
-
+            {canEdit ? (
+              <div className="grid gap-2">
+                <label className="text-sm">Selecione a organização onde você trabalha</label>
+                <select className="border rounded px-3 py-2" value={orgSelecionada} onChange={(e) => setOrgSelecionada(e.target.value)}>
+                  <option value="">— Nenhuma —</option>
+                  {orgsDisponiveis.map((o) => <option key={o.id} value={o.id}>{o.nome} ({o.tipo})</option>)}
+                </select>
+                <p className="text-xs text-green-900/70">Esse vínculo permitirá ver os alunos da organização e montar “turmas”.</p>
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {orgsVinculadas.length ? orgsVinculadas.map((o) => (
+                  <Link key={o.id} href={`/perfil/${o.usuarioId ?? o.id}`} className="flex items-center justify-between rounded-xl border border-green-100 p-3 hover:bg-green-50">
+                    <div>
+                      <div className="text-sm font-medium text-green-900">{o.nome}</div>
+                      <div className="text-xs text-green-900/70">{o.tipo}</div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-green-800" />
+                  </Link>
+                )) : <div className="text-sm text-green-900/70">Nenhum vínculo público.</div>}
+              </div>
+            )}
           </SectionCard>
 
           <SectionCard title="Informações do Professor">
@@ -490,33 +543,92 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
             </SectionCard>
           )}
 
-        {canEdit && (
-         <SectionCard
-          title="Treinos"
-          right={
-            <div className="flex gap-2">
-              <Link
-                href="/treinos"
-                className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
-              >
-                Ver todos
-              </Link>
+          {canEdit && (
+            <SectionCard
+              title="Treinos"
+              right={
+                <div className="flex gap-2">
+                  <Link
+                    href="/treinos"
+                    className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
+                  >
+                    Ver todos
+                  </Link>
 
-              <Link
-                href="/treinos/novo"
-                className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
-              >
-                <PlusCircle className="w-4 h-4" />
-                Criar novo treino
-              </Link>
-            </div>
-          }
-        >
-            <p className="text-sm text-green-900/90">
-              Crie e gerencie treinos para seus atletas vinculados.
-            </p>
+                  <Link
+                    href="/treinos/novo"
+                    className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    Criar novo treino
+                  </Link>
+
+                  {/* NOVO: botão para turmas */}
+                  <button
+                    onClick={() => setTurmasOpen(true)}
+                    className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
+                  >
+                    Administrar turmas
+                  </button>
+                </div>
+              }
+            >
+              <p className="text-sm text-green-900/90">
+                Crie e gerencie treinos para seus atletas vinculados.
+              </p>
+            </SectionCard>
+          )}
+
+          {/* NOVO: Seção de Turmas do Professor */}
+          <SectionCard
+            title="Turmas do Professor"
+            right={
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setTurmasOpen(true)}
+                  className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Adicionar turma
+                </button>
+              </div>
+            }
+          >
+            {turmasLoading ? (
+              <div className="text-sm text-green-900/70">Carregando turmas…</div>
+            ) : (turmas && turmas.length > 0) ? (
+              <ul className="grid grid-cols-1 gap-3">
+                {turmas.map((t) => (
+                  <li key={t.id} className="flex items-center justify-between rounded-xl border border-green-100 p-3">
+                    <div>
+                      <div className="text-sm font-medium text-green-900">{t.nome}</div>
+                      <div className="text-xs text-green-900/70">
+                        {(t.ownerTipo && t.ownerId) ? `${t.ownerTipo}` : "Sem dono"} • {typeof t.alunosCount === "number" ? `${t.alunosCount} alunos` : "—"}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setTurmasOpen(true)}
+                      className="text-sm text-green-800"
+                      title="Administrar turma"
+                    >
+                      Administrar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="grid gap-3">
+                <EmptyState text="Nenhuma turma vinculada a este professor" />
+                <button
+                  onClick={() => setTurmasOpen(true)}
+                  className="px-4 py-2 rounded-md border border-green-200 text-green-900 inline-block"
+                >
+                  Criar primeira turma
+                </button>
+              </div>
+            )}
           </SectionCard>
-        )}
+
           <SectionCard title="Atividade Recente">
             {atividades && atividades.length > 0 ? (
               <ul className="space-y-3">
@@ -548,9 +660,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
               <button
                 key={t.id}
                 onClick={() => setSubAba(t.id as SubAba)}
-                className={`py-2 rounded-lg text-sm font-medium ${
-                  subAba === t.id ? "bg-green-600 text-white" : "text-green-900"
-                }`}
+                className={`py-2 rounded-lg text-sm font-medium ${subAba === t.id ? "bg-green-600 text-white" : "text-green-900"}`}
               >
                 {t.label}
               </button>
@@ -561,46 +671,30 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
             {subAba === "vinculados" && (
               <SectionCard
                 title="Atletas Vinculados"
-                right={
-                  <Link href="/perfil/GerenciarAtletas" className="text-sm text-green-800">
-                    Gerenciar Atletas
-                  </Link>
-                }
+                right={<Link href="/perfil/GerenciarAtletas" className="text-sm text-green-800">Gerenciar Atletas</Link>}
               >
                 {vinculados && vinculados.length > 0 ? (
                   <ul className="grid grid-cols-1 gap-3">
                     {vinculados.map((a) => (
                       <li key={a.usuarioId} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-                        
-                        <Avatar
-                          foto={a.foto ?? null}
-                          alt={a.nome}
-                          className="w-10 h-10"
-                        />
-
+                        <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
                         <div className="flex-1">
                           <div className="text-sm font-medium text-green-900">{a.nome}</div>
                           <div className="text-xs text-green-900/70">
-                            {[a.posicao, a.idade ? `${a.idade} anos` : "",  a.categoria ? `Cat. ${a.categoria}` : "",
-                              a.pontuacao != null ? `${a.pontuacao} pts` : ""].filter(Boolean).join(" • ")}
+                            {[a.posicao, a.idade ? `${a.idade} anos` : "",  a.categoria ? `Cat. ${a.categoria}` : "", a.pontuacao != null ? `${a.pontuacao} pts` : ""]
+                              .filter(Boolean).join(" • ")}
                           </div>
                         </div>
-                          <Link
-                            href={`/perfil/${a.usuarioId}`}
-                            className="text-sm text-green-800 inline-flex items-center gap-1"
-                          >
-                            Ver perfil <ChevronRight className="w-4 h-4" />
-                          </Link>
+                        <Link href={`/perfil/${a.usuarioId}`} className="text-sm text-green-800 inline-flex items-center gap-1">
+                          Ver perfil <ChevronRight className="w-4 h-4" />
+                        </Link>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <div>
+                  <div className="grid gap-3">
                     <EmptyState text="Nenhum atleta vinculado ainda" />
-                    <Link
-                      href="/explorar"
-                      className="px-4 py-2 rounded-md border border-green-200 text-green-900 inline-block"
-                    >
+                    <Link href="/explorar" className="px-4 py-2 rounded-md border border-green-200 text-green-900 inline-block">
                       Ver atletas
                     </Link>
                   </div>
@@ -612,44 +706,35 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
               <SectionCard
                 title="Atletas Observados"
                 right={
-                  <button className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-amber-500 text-white">
+                  <Link href="/explorar" className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-amber-500 text-white">
                     <PlusCircle className="w-4 h-4" />
                     Descobrir novos atletas
-                  </button>
+                  </Link>
                 }
               >
                 {observados && observados.length > 0 ? (
                   <ul className="grid grid-cols-1 gap-3">
                     {observados.map((a) => (
                       <li key={a.usuarioId} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-                        
-                        <Avatar
-                          foto={a.foto ?? null}
-                          alt={a.nome}
-                          className="w-10 h-10"
-                        />
-
+                        <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
                         <div className="flex-1">
                           <div className="text-sm font-medium text-green-900">{a.nome}</div>
                           <div className="text-xs text-green-900/70">
-                            {[a.posicao, a.idade ? `${a.idade} anos` : "",  a.categoria ? `Cat. ${a.categoria}` : "",
-                              a.pontuacao != null ? `${a.pontuacao} pts` : ""].filter(Boolean).join(" • ")}
+                            {[a.posicao, a.idade ? `${a.idade} anos` : "",  a.categoria ? `Cat. ${a.categoria}` : "", a.pontuacao != null ? `${a.pontuacao} pts` : ""]
+                              .filter(Boolean).join(" • ")}
                           </div>
                         </div>
-                        <Link
-                          href={`/perfil/${a.usuarioId}`}
-                          className="text-sm text-green-800 inline-flex items-center gap-1"
-                        >
+                        <Link href={`/perfil/${a.usuarioId}`} className="text-sm text-green-800 inline-flex items-center gap-1">
                           Ver perfil <ChevronRight className="w-4 h-4" />
                         </Link>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <div>
+                  <div className="grid gap-3">
                     <EmptyState text="Você ainda não observa nenhum atleta" />
                     <div className="flex justify-center">
-                      <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">Ver atletas observados</button>
+                      <Link href="/explorar" className="px-4 py-2 rounded-md border border-green-200 text-green-900">Ver atletas observados</Link>
                     </div>
                   </div>
                 )}
@@ -659,45 +744,25 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
             {subAba === "solicitacoes" && (
               <SectionCard
                 title="Solicitações de Atletas"
-                right={
-                  <Link href="/notificacoes" className="text-sm text-green-800">
-                    Abrir notificações
-                  </Link>
-                }
+                right={<Link href="/notificacoes" className="text-sm text-green-800">Abrir notificações</Link>}
               >
                 {solicitacoes && solicitacoes.length > 0 ? (
                   <ul className="grid grid-cols-1 gap-3">
                     {solicitacoes.map((s) => (
-
-                      <li
-                        key={s.id}
-                        className="flex items-center gap-3 rounded-xl border border-green-100 p-3 hover:bg-green-50"
-                      >
-                        <Link
-                          href={`/perfil/${s.remetenteId}`}
-                          className="flex items-center gap-3 flex-1"
-                        >
-                          <Avatar
-                            foto={s.remetente.foto ?? null}
-                            alt={s.remetente.nomeDeUsuario}
-                            className="w-10 h-10"
-                          />
+                      <li key={s.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3 hover:bg-green-50">
+                        <Link href={`/perfil/${s.remetenteId}`} className="flex items-center gap-3 flex-1">
+                          <Avatar foto={s.remetente.foto ?? null} alt={s.remetente.nomeDeUsuario} className="w-10 h-10" />
                           <div className="flex-1">
-                            <div className="text-sm font-medium text-green-900">
-                              {s.remetente.nomeDeUsuario}
-                            </div>
+                            <div className="text-sm font-medium text-green-900">{s.remetente.nomeDeUsuario}</div>
                             <div className="text-xs text-green-900/70">
                               {s.criadaEm ? new Date(s.criadaEm).toLocaleString() : "—"}
                               {s.status ? ` • ${s.status}` : ""}
                             </div>
-                            <div className="text-xs text-green-900/80">
-                              quer treinar junto com você
-                            </div>
+                            <div className="text-xs text-green-900/80">quer treinar junto com você</div>
                           </div>
                           <ChevronRight className="w-4 h-4 text-green-800" />
                         </Link>
                       </li>
-
                     ))}
                   </ul>
                 ) : (
@@ -710,16 +775,12 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
       )}
 
       {aba === "conquistas" && (
-         <div className="mt-4 px-4 grid gap-4">
+        <div className="mt-4 px-4 grid gap-4">
           <SectionCard
             title="Conquistas e Troféus"
-            right={
-              <Link href="/perfil/conquistas" className="text-sm text-green-800">
-                Ver conquistas
-              </Link>
-            }
+            right={<Link href="/perfil/conquistas" className="text-sm text-green-800">Ver conquistas</Link>}
           >
-           {unlockedFinal.length > 0 ? (
+            {unlockedFinal.length > 0 ? (
               <div className="grid grid-cols-2 gap-3">
                 {unlockedFinal.map((id) => {
                   const a = ACHIEVEMENTS[id] ?? { title: id, desc: "" };
@@ -743,6 +804,14 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
           </SectionCard>
         </div>
       )}
+
+      {/* ---- Turmas Manager embutido ---- */}
+      <TurmasManager
+        open={turmasOpen}
+        onClose={handleCloseTurmas}
+        owner={owner}
+        professorId={professorId}
+      />
 
       <div className="h-6" />
     </div>

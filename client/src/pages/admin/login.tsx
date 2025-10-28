@@ -4,6 +4,7 @@ import { API } from "../../config.js";
 import logo from "/assets/usuarios/footera-logo.png";
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
+
 const ChevronDown = (p: SvgProps) => (
   <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}>
     <path d="m6 9 6 6 6-6" />
@@ -15,11 +16,27 @@ const ChevronUp = (p: SvgProps) => (
   </svg>
 );
 
+/* Ícones do olho */
+const Eye = (p: SvgProps) => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}>
+    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+const EyeOff = (p: SvgProps) => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}>
+    <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.78 20.78 0 0 1 5.06-6.94" />
+    <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.82 20.82 0 0 1-4.87 6.82" />
+    <line x1="1" y1="1" x2="23" y2="23" />
+  </svg>
+);
+
 const toLower = (v: any) => (v ?? "").toString().trim().toLowerCase();
 
 export default function AdminLogin() {
   const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro] = useState("");
   const [, navigate] = useLocation();
   const [infoAberto, setInfoAberto] = useState(false);
@@ -146,23 +163,51 @@ export default function AdminLogin() {
                 value={usuario}
                 onChange={(e) => setUsuario(e.target.value)}
                 required
+                autoComplete="username"
                 className="w-full border border-gray-300 rounded px-3 py-2 mb-4"
               />
-              <input
-                type="password"
-                placeholder="Senha"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                required
-                className="w-full border border-gray-300 rounded px-3 py-2 mb-4"
-              />
+
+              {/* Campo de senha com olhinho */}
+              <div className="relative mb-4">
+                <input
+                  type={mostrarSenha ? "text" : "password"}
+                  placeholder="Senha"
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  className="w-full border border-gray-300 rounded px-3 py-2 pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setMostrarSenha(v => !v)}
+                  aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                  title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                  className="absolute inset-y-0 right-2 flex items-center px-2 text-gray-500 hover:text-gray-700"
+                >
+                  {mostrarSenha ? <EyeOff /> : <Eye />}
+                </button>
+              </div>
+
               <button
                 type="submit"
                 className="w-full bg-green-900 hover:bg-green-800 text-white font-semibold py-2 rounded"
               >
                 Entrar
               </button>
+
               {erro && <p className="text-red-600 text-sm mt-3 text-center">{erro}</p>}
+
+              {/* Link para login principal */}
+              <div className="mt-4 text-center text-sm">
+                <button
+                  type="button"
+                  onClick={() => navigate("/login")}
+                  className="text-green-900 hover:underline font-medium"
+                >
+                  Você não é admin? Vá para o login principal
+                </button>
+              </div>
             </form>
           </div>
         </section>
