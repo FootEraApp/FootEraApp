@@ -9,7 +9,7 @@ import {
   checarUsername,
   buscarPerfisPublico,
   verificarEmail, 
-  reenviarVerificacao,
+  resendVerification,
 } from "../controllers/cadastroController.js";
 
 const router = express.Router();
@@ -23,7 +23,7 @@ router.get("/criar", getCriar);
 
 router.post("/cadastro", cadastrarUsuario);
 router.get("/verify", verificarEmail);
-router.post("/resend-verification", reenviarVerificacao);
+router.post("/resend-verification", resendVerification);
 router.delete("/deletar/:id", deletarUsuario);
 
 router.get("/buscar", buscarPerfisPublico); 

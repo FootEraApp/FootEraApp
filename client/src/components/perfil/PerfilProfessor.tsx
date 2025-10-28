@@ -144,13 +144,6 @@ function EmptyState({ text }: { text: string }) {
 }
 
 export default function PerfilProfessor({ idDaUrl }: Props) {
-  const token = Storage.token;
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
-  const isOwn = !idDaUrl || idDaUrl === Storage.usuarioId;
-  const canEdit = isOwn;
-  const targetId = isOwn ? (Storage.tipoUsuarioId || "me") : (idDaUrl as string);
-
   const [data, setData] = useState<PayloadProfessor | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -184,9 +177,84 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     return undefined;
   }, [data?.professor]);
 
+  // substitua as linhas de token/headers e o cálculo de isOwn/targetId:
+  const rawToken =
+    Storage.token ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    "";
+
+  const headers = useMemo(
+    () => (rawToken ? { Authorization: `Bearer ${rawToken}` } : undefined),
+    [rawToken]
+  );
+
+  const usuarioIdStorage =
+    Storage.usuarioId ||
+    localStorage.getItem("usuarioId") ||
+    sessionStorage.getItem("usuarioId") ||
+    "";
+
+  const tipoUsuarioIdStorage =
+    Storage.tipoUsuarioId ||
+    localStorage.getItem("tipoUsuarioId") ||
+    sessionStorage.getItem("tipoUsuarioId") ||
+    "";
+
+  const isOwn = !idDaUrl || idDaUrl === usuarioIdStorage;
+  const targetId = isOwn ? (tipoUsuarioIdStorage || "me") : (idDaUrl as string);
+
+  const canEdit = useMemo(() => {
+    const tipoLocal =
+      localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario") ??
+      "";
+
+    return isOwn || tipoLocal.toLowerCase() === "admin";
+  }, [isOwn]);
+
+  useEffect(() => {
+    let cancel = false;
+
+    const fetchPerfil = async () => {
+      setLoading(true);
+
+      // sem token: não trava a tela
+      if (!rawToken) {
+        if (!cancel) setLoading(false);
+        return;
+      }
+
+      try {
+        // 1ª tentativa com o targetId calculado
+        let url = `${API.BASE_URL}/api/perfil/professor/${targetId}`;
+        let r = await axios.get<PayloadProfessor>(url, { headers });
+        if (!cancel) setData(r.data);
+      } catch (e) {
+        // se pediu "me" e falhou, re-tenta com tipoUsuarioId do storage
+        if (!cancel && targetId === "me" && tipoUsuarioIdStorage) {
+          try {
+            const url2 = `${API.BASE_URL}/api/perfil/professor/${tipoUsuarioIdStorage}`;
+            const r2 = await axios.get<PayloadProfessor>(url2, { headers });
+            setData(r2.data);
+          } catch {
+            setData(null);
+          }
+        } else if (!cancel) {
+          setData(null);
+        }
+      } finally {
+        if (!cancel) setLoading(false);
+      }
+    };
+
+    fetchPerfil();
+    return () => { cancel = true; };
+  }, [targetId, rawToken]); // << deps mínimas
+
   // --------- carregar turmas do professor ----------
   const reloadTurmas = useCallback(async () => {
-    if (!token || !professorId) return;
+    if (!rawToken || !professorId) return;
     setTurmasLoading(true);
     try {
       const { data } = await axios.get(
@@ -208,70 +276,15 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     } finally {
       setTurmasLoading(false);
     }
-  }, [token, professorId, headers]);
+  }, [rawToken, professorId, headers]);
 
   useEffect(() => {
     if (professorId && turmas == null) reloadTurmas();
   }, [professorId, turmas, reloadTurmas]);
 
-  // Carrega organizações e vínculos do professor
-  useEffect(() => {
-    if (!token || !professorId) return;
-    let cancel = false;
-
-    (async () => {
-      try {
-        if (canEdit) {
-          const tentativas = [
-            `${API.BASE_URL}/api/organizacoes?tipos=Escolinha,Clube`,
-            `${API.BASE_URL}/api/escolinhas`,
-            `${API.BASE_URL}/api/clubes`,
-          ];
-          let lista: any[] = [];
-          for (const url of tentativas) {
-            try {
-              const r = await axios.get(url, { headers });
-              const arr = Array.isArray(r.data) ? r.data : (r.data.items ?? r.data.data ?? []);
-              if (Array.isArray(arr) && arr.length) { lista = arr; break; }
-            } catch {}
-          }
-          const normalizada: Organizacao[] = (lista || []).map((o: any) => ({
-            id: o.id,
-            usuarioId: o.usuarioId ?? null,
-            nome: o.nome ?? o.titulo ?? "Organização",
-            tipo: (o.tipo ?? o.kind ?? o.categoria ?? "").toLowerCase().includes("clube") ? "Clube" : "Escolinha",
-          })) as any;
-          if (!cancel) setOrgsDisponiveis(normalizada);
-        }
-
-        const r = await axios.get(`${API.BASE_URL}/api/organizacoes`, {
-          headers,
-          params: { vinculadasAoProfessorId: professorId },
-        }).catch(() => null);
-
-        const arr = r ? (Array.isArray(r.data) ? r.data : (r.data?.items ?? r.data?.data ?? [])) : [];
-        const vinculadas: Organizacao[] = (arr || []).map((o: any) => ({
-          id: o.id,
-          usuarioId: o.usuarioId ?? null,
-          nome: o.nome ?? o.titulo ?? "Organização",
-          tipo: (o.tipo ?? o.kind ?? o.categoria ?? "").toLowerCase().includes("clube") ? "Clube" : "Escolinha",
-        })) as any;
-
-        if (!cancel) {
-          setOrgsVinculadas(vinculadas);
-          if (canEdit && vinculadas?.length) setOrgSelecionada(String(vinculadas[0].id));
-        }
-      } catch {
-        if (!cancel) { setOrgsDisponiveis([]); setOrgsVinculadas([]); setOrgSelecionada(""); }
-      }
-    })();
-
-    return () => { cancel = true; };
-  }, [token, professorId, canEdit, headers]);
-
   // Carrega payload principal do perfil
   useEffect(() => {
-    if (!token) return;
+    if (!rawToken) return;
     let cancel = false;
 
     (async () => {
@@ -291,11 +304,11 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     })();
 
     return () => { cancel = true; };
-  }, [targetId, token, headers]);
+  }, [targetId, rawToken, headers]);
 
   // Carrega solicitações quando a sub-aba estiver ativa
   useEffect(() => {
-    if (aba !== "atletas" || subAba !== "solicitacoes" || !token) return;
+    if (aba !== "atletas" || subAba !== "solicitacoes" || !rawToken) return;
 
     const fetch = async () => {
       try {
@@ -314,12 +327,12 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     const onFocus = () => fetch();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [aba, subAba, token, headers]);
+  }, [aba, subAba, rawToken, headers]);
 
   // Carrega atletas vinculados (com fallback de parâmetros)
   const fetchVinculados = useCallback(async () => {
-    if (!token) return;
-    const h = { Authorization: `Bearer ${token}` };
+    if (!rawToken) return;
+    const h = { Authorization: `Bearer ${rawToken}` };
 
     const tipoId        = isOwn ? Storage.tipoUsuarioId : data?.professor?.id;
     const usuarioTarget = isOwn ? Storage.usuarioId      : data?.usuario?.id;
@@ -360,11 +373,11 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     });
 
     setVinculados(unique);
-  }, [token, isOwn, data?.professor?.id, data?.usuario?.id]);
+  }, [rawToken, isOwn, data?.professor?.id, data?.usuario?.id]);
 
   // Primeira carga de vinculados e atividades
   useEffect(() => {
-    if (!token) return;
+    if (!rawToken) return;
     const cancel = { v: false };
 
     async function fetchAtividades() {
@@ -409,7 +422,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     }
 
     return () => { cancel.v = true; };
-  }, [aba, subAba, token, targetId, data?.usuario?.id, data?.professor?.id, vinculados, atividades, fetchVinculados, headers, isOwn]);
+  }, [aba, subAba, rawToken, targetId, data?.usuario?.id, data?.professor?.id, vinculados, atividades, fetchVinculados, headers, isOwn]);
 
   if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
   if (!data || !data.professor) return <div className="text-center p-10 text-red-600">Professor não encontrado.</div>;
@@ -427,7 +440,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   const alunosCount = (vinculados?.length ?? data.metrics.alunosRelacionados ?? 0);
 
   async function salvarVinculo() {
-    if (!token || !professorId || !orgSelecionada) return;
+    if (!rawToken || !professorId || !orgSelecionada) return;
     try {
       await axios.put(
         `${API.BASE_URL}/api/professores/${professorId}/vinculos`,
