@@ -45,7 +45,6 @@ export default function PaginaLogin() {
   const [erro, setErro] = useState("");
   const [, navigate] = useLocation();
   const [mostrarSenha, setMostrarSenha] = useState(false);
-
   const [infoAberto, setInfoAberto] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -102,13 +101,31 @@ export default function PaginaLogin() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen">
+      {/* Lado esquerdo - Apresentação */}
       <div className="md:w-1/2 bg-green-800 text-white flex flex-col items-center p-5 md:p-10">
         <div className="w-full max-w-[680px]">
           <div className="flex items-center justify-between gap-3 md:flex-col md:gap-2">
-            <img src="/assets/usuarios/footera-logo.png" alt="Logo FootEra" className="w-10 h-10 md:w-14 md:h-14" />
+            {/* LOGO: menor no mobile; 60x60 no desktop */}
+<img
+  src="/assets/usuarios/footera-logo.png"
+  alt="Logo FootEra"
+  className="
+    shrink-0 object-contain transform-gpu
+    w-10 h-10 sm:w-12 sm:h-12 md:w-[80px] md:h-[80px] lg:w-[96px] lg:h-[96px]
+
+    max-[639px]:scale-[1.6]   /* AUMENTA no MOBILE (<640px) */
+    md:scale-[1.55]            /* mantém seu boost no desktop */
+
+    origin-left md:origin-center mr-1
+  "
+/>
+
+
+
             <h1 className="flex-1 md:flex-none text-center text-xl md:text-3xl font-bold">
               Bem-vindo à FootEra
             </h1>
+
             <button
               type="button"
               className="md:hidden p-2 text-white/90 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40 rounded-full"
@@ -121,30 +138,32 @@ export default function PaginaLogin() {
             </button>
           </div>
 
+          {/* Bloco de apresentação (texto refeito) */}
           <div
             id="info-footera"
             className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out
-              ${infoAberto ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0 md:max-h-[520px] md:opacity-100"}`}
+              ${infoAberto ? "max-h-[720px] opacity-100" : "max-h-0 opacity-0 md:max-h-[720px] md:opacity-100"}`}
           >
             <p className="text-center text-base md:text-lg mt-4">
-              Se você sonha em conquistar uma oportunidade, joga por amor ou quer se superar...
-              aqui é o seu lugar. FootEra. A metodologia dos profissionais, para quem vive futebol.
+              Treine, se desafie e ganhe visibilidade com a metodologia de profissionais.
+              Aqui você acompanha sua evolução e se conecta com quem vive futebol.
             </p>
 
             <div className="mt-6 p-5 md:p-6 rounded-xl text-sm md:text-base text-left w-full bg-white/10">
-              <h2 className="font-semibold mb-2">O que a FootEra oferece:</h2>
+              <h2 className="font-semibold mb-2">O que você encontra na FootEra</h2>
               <ul className="list-disc list-inside space-y-1">
-                <li>Treinamentos personalizados</li>
-                <li>Desafios para testar suas habilidades</li>
-                <li>Compartilhe seu progresso com a comunidade</li>
-                <li>Conecte-se com escolinhas e clubes profissionais</li>
-                <li>Acompanhe sua evolução com pontuações e rankings</li>
+                <li><span className="font-medium">Treinos Programados</span> com objetivos e instruções claras.</li>
+                <li><span className="font-medium">Desafios Oficiais</span> com validação por vídeo e rankings.</li>
+                <li><span className="font-medium">Pontuação FootEra & Badges</span> para acompanhar seu progresso.</li>
+                <li><span className="font-medium">Perfil com vídeos</span> — seu “cartão de visitas” esportivo.</li>
+                <li><span className="font-medium">Conexão</span> com Escolinhas, Clubes e Olheiros.</li>
               </ul>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Lado direito - Formulário */}
       <div className="relative md:w-1/2 bg-cream flex justify-center items-center p-6 md:p-10">
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-0">
           <div
