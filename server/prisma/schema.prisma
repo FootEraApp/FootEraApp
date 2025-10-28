@@ -115,6 +115,7 @@ model Professor {
 
   escolinha Escolinha? @relation(fields: [escolinhaId], references: [id])
   clube     Clube?     @relation(fields: [clubeId], references: [id])
+  Turma     Turma[]
 
   @@index([escolinhaId])
   @@index([clubeId])
@@ -447,6 +448,7 @@ model Escolinha {
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoEscolinha")
   treinoProgramado    TreinoProgramado[]
   Professor           Professor[]
+  Turma               Turma[]
 }
 
 model Comentario {
@@ -502,6 +504,7 @@ model Clube {
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoClube")
   treinoProgramado    TreinoProgramado[]
   Professor           Professor[]
+  Turma               Turma[]
 }
 
 model SolicitacaoVinculo {
@@ -1080,6 +1083,28 @@ model Consentimento {
   createdAt    DateTime @default(now())
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
+}
+
+model Turma {
+  id        String  @id @default(uuid())
+  nome      String
+  categoria String?
+  descricao String?
+  ativo     Boolean @default(true)
+
+  // Dono da turma (um de dois): Escolinha OU Clube
+  escolinhaId String?
+  escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id])
+
+  clubeId String?
+  clube   Clube?  @relation(fields: [clubeId], references: [id])
+
+  // Professor responsável (opcional e trocável)
+  professorId String?
+  professor   Professor? @relation(fields: [professorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum TreinoStatus {

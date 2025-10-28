@@ -86,7 +86,7 @@ export const gerenciarAtletasController = {
       if (search) {
         where.OR = [
           { nome: { contains: search, mode: "insensitive" } },
-          { usuario: { nome: { contains: search, mode: "insensitive" } } },
+          { usuario: { is: { nome: { contains: search, mode: "insensitive" } } } }, // 👈 correção
         ];
       }
 
@@ -126,7 +126,7 @@ export const gerenciarAtletasController = {
         });
         for (const v of vincs) {
           if (!posicaoPorAtletaId.has(v.atletaId)) {
-            posicaoPorAtletaId.set(v.atletaId, v.posicao as unknown as string);
+            posicaoPorAtletaId.set(v.atletaId, String(v.posicao));
           }
         }
       }
@@ -160,15 +160,11 @@ export const gerenciarAtletasController = {
       }
 
       const ord = parseOrder(order);
-      if ((ord as any).nome) {
+      if ("nome" in ord) {
+        filtered.sort((a, b) => (ord.nome === "asc" ? a.nome.localeCompare(b.nome) : b.nome.localeCompare(a.nome)));
+      } else if ("pontuacao" in ord) {
         filtered.sort((a, b) =>
-          (ord as any).nome === "asc" ? a.nome.localeCompare(b.nome) : b.nome.localeCompare(a.nome)
-        );
-      } else if ((ord as any).pontuacao) {
-        filtered.sort((a, b) =>
-          (ord as any).pontuacao === "asc"
-            ? (a.pontuacao ?? 0) - (b.pontuacao ?? 0)
-            : (b.pontuacao ?? 0) - (a.pontuacao ?? 0)
+          ord.pontuacao === "asc" ? (a.pontuacao ?? 0) - (b.pontuacao ?? 0) : (b.pontuacao ?? 0) - (a.pontuacao ?? 0)
         );
       }
 
@@ -179,10 +175,102 @@ export const gerenciarAtletasController = {
     }
   },
 
+  // ---- Professores (para aba Professores)
+  listProfessores: async (req: Request, res: Response) => {
+    try {
+      const vinculo = String(req.query.vinculo || "").toLowerCase(); // "escolinha" | "clube"
+      const entidadeUsuarioId = String(req.query.id || "");
+      const search = (req.query.search as string) || "";
+
+      if (!["escolinha", "clube"].includes(vinculo)) {
+        return res
+          .status(400)
+          .json({ message: "Parâmetro 'vinculo' inválido (use 'escolinha' ou 'clube')" });
+      }
+      if (!entidadeUsuarioId) {
+        return res
+          .status(400)
+          .json({ message: "Parâmetro 'id' (usuarioId da entidade) é obrigatório" });
+      }
+
+      // Resolve ID da entidade a partir do usuarioId
+      let entidadeId: string | null = null;
+      if (vinculo === "clube") {
+        const clube = await prisma.clube.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
+          select: { id: true },
+        });
+        if (!clube) return res.status(404).json({ message: "Clube não encontrado" });
+        entidadeId = clube.id;
+      } else {
+        const escolinha = await prisma.escolinha.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
+          select: { id: true },
+        });
+        if (!escolinha) return res.status(404).json({ message: "Escolinha não encontrada" });
+        entidadeId = escolinha.id;
+      }
+
+      // Professores que têm alguma turma pertencente a essa entidade
+      const ownerWhere = vinculo === "clube" ? { clubeId: entidadeId } : { escolinhaId: entidadeId };
+
+      const professores = await prisma.professor.findMany({
+        where: {
+          // campo relacional é "Turma" no schema
+          Turma: { some: ownerWhere }, // 👈 correção (era "turmas")
+          ...(search
+            ? {
+                OR: [
+                  { nome: { contains: search, mode: "insensitive" } },
+                  { usuario: { is: { nome: { contains: search, mode: "insensitive" } } } }, // 👈 correção
+                ],
+              }
+            : {}),
+        },
+        select: {
+          id: true,
+          usuarioId: true,
+          nome: true,
+          cref: true,
+          fotoUrl: true,
+          usuario: { select: { nome: true } },
+        },
+        orderBy: { nome: "asc" },
+      });
+
+      // Conta de turmas por professor **dessa entidade**
+      const grupos = await prisma.turma.groupBy({
+        by: ["professorId"],
+        where: { ...ownerWhere, professorId: { not: null } },
+        _count: { _all: true },
+      });
+
+      const entries: [string, number][] = grupos
+        .filter((g) => g.professorId !== null)
+        .map((g) => [g.professorId as string, g._count._all]);
+
+      const turmasCountMap = new Map<string, number>(entries); // 👈 correção (sem null)
+
+      const payload = professores.map((p) => ({
+        id: p.id,
+        usuarioId: p.usuarioId,
+        nome: p.nome || p.usuario?.nome || "—",
+        cref: p.cref ?? null,
+        fotoUrl: p.fotoUrl ?? null,
+        turmasCount: turmasCountMap.get(p.id) ?? 0,
+      }));
+
+      return res.json({ professores: payload });
+    } catch (e: any) {
+      console.error("[gerenciarAtletas.listProfessores]", e);
+      return res.status(500).json({ message: e?.message || "Erro ao listar professores" });
+    }
+  },
+
   listTreinos: async (req: Request, res: Response) => {
     try {
       const criador = String(req.query.criador || "").toLowerCase();
-      const entidadeUsuarioId = String(req.query.id || ""); 
+      const entidadeUsuarioId = String(req.query.id || "");
 
       if (!["escolinha", "clube", "professor"].includes(criador)) {
         return res.status(400).json({ message: "Parâmetro 'criador' inválido" });
@@ -193,7 +281,10 @@ export const gerenciarAtletasController = {
 
       let entidadeId: string | null = null;
       if (criador === "clube") {
-        const clube = await prisma.clube.findUnique({ where: { usuarioId: entidadeUsuarioId }, select: { id: true } });
+        const clube = await prisma.clube.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
+          select: { id: true },
+        });
         if (!clube) return res.status(404).json({ message: "Entidade não encontrada" });
         entidadeId = clube.id;
       } else if (criador === "escolinha") {
@@ -255,7 +346,7 @@ export const gerenciarAtletasController = {
         treinoProgramadoId: string;
         destinatarios: string[];
         objetivo?: string;
-        prazo?: string;        
+        prazo?: string;
         origem: "escolinha" | "clube" | "professor";
       };
 
@@ -275,12 +366,9 @@ export const gerenciarAtletasController = {
       });
       if (atletas.length === 0) return res.status(400).json({ message: "Nenhum atleta válido encontrado" });
 
-      const dataExpiracaoDerivada =
-        prazo ? new Date(prazo) :
-        treino.expiraEm ?? undefined;
-
+      const dataExpiracaoDerivada = prazo ? new Date(prazo) : treino.expiraEm ?? undefined;
       const dataTreinoDerivada = treino.dataAgendada ?? undefined;
-      const objetivoSnapshot   = (objetivo ?? treino.objetivo ?? undefined);
+      const objetivoSnapshot = objetivo ?? treino.objetivo ?? undefined;
 
       await prisma.$transaction(async (tx) => {
         for (const a of atletas) {
@@ -336,8 +424,8 @@ export const gerenciarAtletasController = {
       ]);
 
       const totalTreinosMes = treinosMes + desafiosMes;
-      const concluidosMes = treinosMes;               
-      const desafiosFeitosMes = desafiosMes;          
+      const concluidosMes = treinosMes;
+      const desafiosFeitosMes = desafiosMes;
 
       const fourWeeksAgo = new Date();
       fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
@@ -392,15 +480,24 @@ export const gerenciarAtletasController = {
 
       let whereByVinculo: any = {};
       if (vinculo === "clube") {
-        const entidade = await prisma.clube.findUnique({ where: { usuarioId: entidadeUsuarioId }, select: { id: true } });
+        const entidade = await prisma.clube.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
+          select: { id: true },
+        });
         if (!entidade) return res.status(404).json({ message: "Entidade não encontrada" });
         whereByVinculo = { clubeId: entidade.id };
       } else if (vinculo === "escolinha") {
-        const entidade = await prisma.escolinha.findUnique({ where: { usuarioId: entidadeUsuarioId }, select: { id: true } });
+        const entidade = await prisma.escolinha.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
+          select: { id: true },
+        });
         if (!entidade) return res.status(404).json({ message: "Entidade não encontrada" });
         whereByVinculo = { escolinhaId: entidade.id };
       } else {
-        const prof = await prisma.professor.findUnique({ where: { usuarioId: entidadeUsuarioId }, select: { id: true } });
+        const prof = await prisma.professor.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
+          select: { id: true },
+        });
         if (!prof) return res.status(404).json({ message: "Professor não encontrado" });
         whereByVinculo = { relacoesTreinamento: { some: { professorId: prof.id } } };
       }
@@ -443,47 +540,50 @@ export const gerenciarAtletasController = {
       const usuarioId = String(req.params.usuarioId || "");
       if (!usuarioId) return res.status(400).json({ message: "usuarioId obrigatório" });
 
-      const atleta = await prisma.atleta.findUnique({ where: { usuarioId }, select: { id: true, nome: true, foto: true } });
+      const atleta = await prisma.atleta.findUnique({
+        where: { usuarioId },
+        select: { id: true, nome: true, foto: true },
+      });
       if (!atleta) return res.status(404).json({ message: "Atleta não encontrado" });
 
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-const [treinosMes, desafiosMes, ultTreinos, ultDesafios] = await Promise.all([
-  prisma.submissaoTreino.count({
-    where: { atletaId: atleta.id, criadoEm: { gte: startOfMonth, lt: startOfNextMonth } },
-  }),
-  prisma.submissaoDesafio.count({
-    where: { atletaId: atleta.id, createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
-  }),
-  prisma.submissaoTreino.findMany({
-    where: { atletaId: atleta.id },
-    select: {
-      id: true,
-      criadoEm: true,
-      aprovado: true,
-      pontuacaoSnapshot: true,
-      treinoTituloSnapshot: true,
-      treinoAgendado: { select: { titulo: true } },
-    },
-    orderBy: { criadoEm: "desc" },
-    take: 5,
-  }),
-  prisma.submissaoDesafio.findMany({
-    where: { atletaId: atleta.id },
-    include: {
-      desafio: { select: { titulo: true, pontuacao: true } },
-      submissaoEmGrupo: {
-        select: { pontosGanhos: true, dataEnvio: true },
-        orderBy: { dataEnvio: "desc" },
-        take: 1,
-      },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 5,
-  }),
-]);
+      const [treinosMes, desafiosMes, ultTreinos, ultDesafios] = await Promise.all([
+        prisma.submissaoTreino.count({
+          where: { atletaId: atleta.id, criadoEm: { gte: startOfMonth, lt: startOfNextMonth } },
+        }),
+        prisma.submissaoDesafio.count({
+          where: { atletaId: atleta.id, createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
+        }),
+        prisma.submissaoTreino.findMany({
+          where: { atletaId: atleta.id },
+          select: {
+            id: true,
+            criadoEm: true,
+            aprovado: true,
+            pontuacaoSnapshot: true,
+            treinoTituloSnapshot: true,
+            treinoAgendado: { select: { titulo: true } },
+          },
+          orderBy: { criadoEm: "desc" },
+          take: 5,
+        }),
+        prisma.submissaoDesafio.findMany({
+          where: { atletaId: atleta.id },
+          include: {
+            desafio: { select: { titulo: true, pontuacao: true } },
+            submissaoEmGrupo: {
+              select: { pontosGanhos: true, dataEnvio: true },
+              orderBy: { dataEnvio: "desc" },
+              take: 1,
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        }),
+      ]);
 
       const totalTreinosMes = treinosMes + desafiosMes;
       const concluidosMes = treinosMes;
@@ -507,13 +607,13 @@ const [treinosMes, desafiosMes, ultTreinos, ultDesafios] = await Promise.all([
           })),
           desafios: ultDesafios.map((d) => {
             const pontosGrupo = d.submissaoEmGrupo?.[0]?.pontosGanhos ?? null;
-            const pontosBase  = d.desafio?.pontuacao ?? null;
+            const pontosBase = d.desafio?.pontuacao ?? null;
             const pontosEfetivos = d.aprovado ? (pontosGrupo ?? pontosBase ?? null) : null;
             return {
               id: d.id,
               tipo: "desafio" as const,
               criadoEm: d.createdAt,
-              aprovado: (d as any).aprovado ?? null,
+              aprovado: d.aprovado ?? null,
               titulo: d.desafio?.titulo || "Desafio",
               pontos: pontosEfetivos,
             };
@@ -545,7 +645,7 @@ const [treinosMes, desafiosMes, ultTreinos, ultDesafios] = await Promise.all([
         const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
         dateFilterTreino = { gte: startOfMonth, lt: startOfNextMonth };
         dateFilterDesafio = { gte: startOfMonth, lt: startOfNextMonth };
-      }
+        }
 
       const doTreinos = type === "all" || type === "treinos";
       const doDesafios = type === "all" || type === "desafios";
@@ -565,7 +665,7 @@ const [treinosMes, desafiosMes, ultTreinos, ultDesafios] = await Promise.all([
               orderBy: { criadoEm: "desc" },
               take,
             })
-          : Promise.resolve([]),
+          : Promise.resolve([] as any[]),
         doDesafios
           ? prisma.submissaoDesafio.findMany({
               where: { atletaId: atleta.id, ...(dateFilterDesafio ? { createdAt: dateFilterDesafio } : {}) },
@@ -580,7 +680,7 @@ const [treinosMes, desafiosMes, ultTreinos, ultDesafios] = await Promise.all([
               orderBy: { createdAt: "desc" },
               take,
             })
-          : Promise.resolve([]),
+          : Promise.resolve([] as any[]),
       ]);
 
       type Row =
@@ -598,21 +698,20 @@ const [treinosMes, desafiosMes, ultTreinos, ultDesafios] = await Promise.all([
         })),
         ...desafios.map((d) => {
           const pontosGrupo = d.submissaoEmGrupo?.[0]?.pontosGanhos ?? null;
-          const pontosBase  = d.desafio?.pontuacao ?? null;
+          const pontosBase = d.desafio?.pontuacao ?? null;
           const pontosEfetivos = d.aprovado ? (pontosGrupo ?? pontosBase ?? null) : null;
           return {
             id: d.id,
             tipo: "desafio" as const,
-            data: (d as any).createdAt,
-            aprovado: (d as any).aprovado ?? null,
-            titulo: (d as any).desafio?.titulo || "Desafio",
+            data: d.createdAt as Date,
+            aprovado: d.aprovado ?? null,
+            titulo: d.desafio?.titulo || "Desafio",
             pontos: pontosEfetivos,
           };
         }),
       ].sort((a, b) => b.data.getTime() - a.data.getTime());
 
       return res.json({ total: rows.length, items: rows.slice(0, take) });
-
     } catch (e: any) {
       console.error("[gerenciarAtletas.submissoesAtleta]", e);
       return res.status(500).json({ message: e?.message || "Erro ao listar submissões" });
