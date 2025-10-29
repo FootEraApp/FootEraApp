@@ -68,16 +68,12 @@ model Usuario {
 
 model EmailVerification {
   id        String    @id @default(uuid())
-  userId    String
-  email     String
-  tokenHash String    @unique
-  createdAt DateTime  @default(now())
-  expiresAt DateTime
-  usedAt    DateTime?
-
-  usuario Usuario @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id])
+  usuarioId String    @unique
+  token     String    @unique
+  criadoEm  DateTime  @default(now())
+  expiraEm  DateTime
+  usadoEm   DateTime?
 }
 
 model Assinatura {

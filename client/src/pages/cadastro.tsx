@@ -229,7 +229,8 @@ export default function Cadastro() {
   };
 
   const handleFinalizar = async () => {
-    setErro(""); setSucesso("");
+    setErro("");
+    setSucesso("");
     try {
       const payload: any = {
         tipo: tipoPerfil,
@@ -241,6 +242,7 @@ export default function Cadastro() {
         estado: estado || undefined,
         pais: pais || undefined,
         bairro: bairro || undefined,
+        dataNascimento,
       };
 
       if (tipoPerfil === "Atleta") {
@@ -262,7 +264,8 @@ export default function Cadastro() {
       }
       if (tipoPerfil === "Olheiro") {
         payload.areaAtuacao = olheiro.areaAtuacao || undefined;
-        payload.anosExperiencia = olheiro.anosExperiencia === "" ? undefined : Number(olheiro.anosExperiencia);
+        payload.anosExperiencia =
+          olheiro.anosExperiencia === "" ? undefined : Number(olheiro.anosExperiencia);
         payload.headline = olheiro.headline || undefined;
         payload.siteOuLinkedin = olheiro.siteOuLinkedin || undefined;
         payload.telefonePublico = olheiro.telefonePublico || undefined;
@@ -270,8 +273,6 @@ export default function Cadastro() {
         payload.descricao = olheiro.descricao || undefined;
         payload.colaboracaoClubeId = olheiro.colaboracaoClubeId || undefined;
       }
-
-      payload.dataNascimento = dataNascimento;
 
       if (idade !== null && idade < 18) {
         payload.responsavel = {
@@ -282,38 +283,58 @@ export default function Cadastro() {
       }
 
       const res = await fetch(`${API.BASE_URL}/api/cadastro/cadastro`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) { const t = await res.text(); throw new Error(t || "Erro ao cadastrar."); }
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || "Erro ao cadastrar.");
+      }
 
       const data = await res.json();
-      setSucesso("Cadastro realizado! Enviamos um e-mail para verificação. Confira sua caixa de entrada (e spam).");
-      setTimeout(() => navigate(`/login?verify=sent&email=${encodeURIComponent(email)}`), 1500);
 
+      // mensagem de sucesso + scroll pra garantir visibilidade
+      setSucesso("Cadastro salvo com sucesso! Redirecionando para a página de login…");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+
+      // registra consentimento (best-effort)
       try {
         await fetch(`${API.BASE_URL}/api/legal/consentimentos`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...(data?.token ? { Authorization: `Bearer ${data.token}` } : {}) },
+          headers: {
+            "Content-Type": "application/json",
+            ...(data?.token ? { Authorization: `Bearer ${data.token}` } : {}),
+          },
           body: JSON.stringify({
-            doc: (idade !== null && idade < 18) ? "Termos e Privacidade (menor)" : "Termos e Privacidade",
+            doc: idade !== null && idade < 18 ? "Termos e Privacidade (menor)" : "Termos e Privacidade",
             versao: { termos: "2025-10-06", privacidade: "2025-10-06" },
             hashes: { termosHash: "<opcional>", privHash: "<opcional>" },
             metodo: "click-wrap",
           }),
         });
-      } catch (e) { console.warn("Falha ao registrar consentimento:", e); }
+      } catch (e) {
+        console.warn("Falha ao registrar consentimento:", e);
+      }
 
+      // cria solicitação de vínculo (se aplicável) — best-effort
       if (tipoPerfil === "Atleta" && vinculo.desejaVinculo && vinculo.destinatarioId) {
         try {
           await fetch(`${API.BASE_URL}/api/solicitacoes`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...(data?.token ? { Authorization: `Bearer ${data.token}` } : {}) },
+            headers: {
+              "Content-Type": "application/json",
+              ...(data?.token ? { Authorization: `Bearer ${data.token}` } : {}),
+            },
             body: JSON.stringify({ destinatarioId: vinculo.destinatarioId }),
           });
-        } catch (e) { console.warn("Falha ao criar solicitação de vínculo:", e); }
+        } catch (e) {
+          console.warn("Falha ao criar solicitação de vínculo:", e);
+        }
       }
 
-      setTimeout(() => navigate("/login"), 1200);
+      // redireciona para /login (sem query params)
+      setTimeout(() => navigate("/login"), 1800);
     } catch (err: any) {
       setErro(err?.message || "Falha no cadastro.");
     }

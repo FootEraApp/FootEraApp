@@ -24,12 +24,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 const router = Router();
 
-router.get("/professor/me", authenticateToken, (req, res) => {
-  (req as any).params = { id: req.userId };
-  getPerfilProfessor(req as any, res);
-});
 router.get("/professor/:id", authenticateToken, getPerfilProfessor);
-
 router.get("/clube/me", authenticateToken, (req, res) => {
   (req as any).params = { id: req.userId };
   getPerfilClube(req as any, res);
@@ -64,8 +59,7 @@ router.get("/:id/badges", authenticateToken, getBadges);
 router.get("/:id/treinos", authenticateToken, getTreinosResumo);
 router.get("/:id/progresso", authenticateToken, getProgressoTreinos);
 router.get("/:id/posicao-atual", authenticateToken, getPosicaoAtualAtleta);
-
 router.get("/:id", authenticateToken, getPerfilUsuario);
-router.put("/:id", authenticateToken, atualizarPerfil);
+router.put("/:id", authenticateToken, upload.single("foto"), atualizarPerfil);
 
 export default router;

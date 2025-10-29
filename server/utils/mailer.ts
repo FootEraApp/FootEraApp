@@ -27,11 +27,12 @@ export async function createTransport(): Promise<Transporter> {
       requireTLS: true,
       tls: { minVersion: "TLSv1.2" },
       auth: SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
-
       pool: true,
       maxConnections: 2,
       rateDelta: 1000,
       rateLimit: 14,
+      logger: true,
+      debug: true,
     } as any);
   }
 
