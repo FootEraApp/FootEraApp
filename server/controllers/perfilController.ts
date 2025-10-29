@@ -1150,9 +1150,18 @@ export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Resp
   }
 };
 
-export async function getPerfilProfessor(req: Request, res: Response) {
+export async function getPerfilProfessor(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params;
+    let { id } = req.params; // pode vir "me"
+
+    if (id === "me") {
+      const prof = await prisma.professor.findFirst({
+        where: { usuarioId: req.userId },
+        select: { id: true },
+      });
+      if (!prof) return res.status(404).json({ message: "Professor não encontrado" });
+      id = prof.id; // resolve "me" para o ID real do professor
+    }
 
     const prof = await resolveByUsuarioOrEntity({
       entity: "professor",
@@ -1169,6 +1178,8 @@ export async function getPerfilProfessor(req: Request, res: Response) {
         certificacoes: true,
         fotoUrl: true,
         statusCref: true,
+        clubeId: true,
+        escolinhaId: true,
         usuario: { select: { id: true, nome: true, email: true, foto: true } },
         treinosProgramados: { select: { id: true } },
         relacoesTreinamento: { select: { atletaId: true, clubeId: true, escolinhaId: true } },
@@ -1196,6 +1207,7 @@ export async function getPerfilProfessor(req: Request, res: Response) {
     ]);
     const alunosRelacionados = uniq.size;
     const treinosCount = (prof as any).treinosProgramados?.length ?? 0;
+
     const unlocked: string[] = [];
     if (treinosCount >= 1)  unlocked.push("primeiro_treino_programado");
     if (treinosCount >= 5)  unlocked.push("serie_de_treinos");
@@ -1212,8 +1224,7 @@ export async function getPerfilProfessor(req: Request, res: Response) {
           ],
         },
       });
-    } catch {
-    }
+    } catch {}
 
     let conquistas = unlocked.length;
     if (gruposCriados > 0) conquistas += 1;
@@ -1236,15 +1247,18 @@ export async function getPerfilProfessor(req: Request, res: Response) {
         certificacoes: prof.certificacoes ?? [],
         fotoUrl: fotoPerfil,
         statusCref: prof.statusCref ?? null,
+        clubeId: (prof as any).clubeId ?? null,          // ← novo
+        escolinhaId: (prof as any).escolinhaId ?? null,  // ← novo
       },
       metrics: {
         treinosProgramados: treinosCount,
         alunosRelacionados,
-        conquistas,               
+        conquistas,
         conquistasUnlocked: unlocked,
-        gruposCriados,        
+        gruposCriados,
       },
     });
+
   } catch (e) {
     console.error("getPerfilProfessor error:", e);
     return res.status(500).json({ error: "Erro interno ao buscar professor" });

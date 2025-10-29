@@ -79,14 +79,18 @@ import assinaturasRoutes from "./routes/assinaturas.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Tente primeiro /server/.env, depois raiz e afins
 const envCandidates = [
-  path.resolve(__dirname, "../.env"),
+  path.resolve(__dirname, ".env"),        // <== NEW: server/.env
+  path.resolve(__dirname, "../.env"),     // raiz do projeto
   path.resolve(process.cwd(), ".env"),
   path.resolve(__dirname, "../../.env"),
 ];
+
 for (const p of envCandidates) {
   if (fs.existsSync(p)) {
     dotenv.config({ path: p });
+    console.log("🔑 .env carregado de:", p);
     break;
   }
 }

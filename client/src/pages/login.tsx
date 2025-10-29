@@ -45,7 +45,22 @@ export default function PaginaLogin() {
   const [erro, setErro] = useState("");
   const [, navigate] = useLocation();
   const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [needVerify, setNeedVerify] = useState(false);
+  const [emailDestino, setEmailDestino] = useState<string | null>(null);
+  const [sendingResend, setSendingResend] = useState(false);
   const [infoAberto, setInfoAberto] = useState(false);
+
+  async function handleResend() {
+  try {
+    setSendingResend(true);
+    await axios.post(`${API.BASE_URL}/api/auth/cadastro/resend-verification`, { nomeDeUsuario });
+    alert("Reenviamos o e-mail de verificação.");
+  } catch (e: any) {
+    alert(e?.response?.data?.message ?? "Não foi possível reenviar agora.");
+  } finally {
+    setSendingResend(false);
+  }
+}
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +103,10 @@ export default function PaginaLogin() {
       navigate(isAdmin ? "/admin" : "/feed");
     } catch (err: any) {
       console.error("Erro no login:", err.response?.status, err.response?.data || err.message);
-      setErro(err.response?.data?.message || "Nome de usuário ou senha inválidos.");
+      const data = err.response?.data;
+      setNeedVerify(!!data?.needVerification);
+      setEmailDestino(data?.emailDestino ?? null);
+      setErro(data?.message || "Nome de usuário ou senha inválidos.");
     }
   };
 
@@ -231,6 +249,23 @@ export default function PaginaLogin() {
             </div>
 
             {erro && <p className="text-sm text-red-500 mb-3">{erro}</p>}
+
+            {needVerify && (
+              <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <div className="mb-2">
+                  Verifique seu e-mail para concluir o cadastro
+                  {emailDestino ? <> ({emailDestino})</> : null}.
+                </div>
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={sendingResend || !nomeDeUsuario}
+                  className={`px-3 py-1.5 rounded-md ${sendingResend ? "bg-amber-300" : "bg-amber-500 hover:bg-amber-600"} text-white`}
+                >
+                  {sendingResend ? "Reenviando..." : "Reenviar e-mail"}
+                </button>
+              </div>
+            )}
 
             <button
               type="submit"
