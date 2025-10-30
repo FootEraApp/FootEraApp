@@ -1,4 +1,3 @@
-// client/src/pages/perfil/PerfilClube.tsx
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
@@ -48,8 +47,8 @@ type AbaTopo = "perfil" | "eventos" | "atletas" | "professores";
 type SubAbaAtletas = "vinculados" | "observados" | "solicitacoes";
 
 type AtletaItem = {
-  id: string;              // usuarioId ou atletaId
-  atletaId: string;        // id do registro de atleta
+  id: string;          
+  atletaId: string;      
   nome: string;
   foto?: string | null;
   posicao?: string | null;
@@ -132,8 +131,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
   const [savingById, setSavingById] = useState<Record<string, boolean>>({});
   const [errorById, setErrorById] = useState<Record<string, string | null>>({});
   const [atletasHeaderCount, setAtletasHeaderCount] = useState<number | null>(null);
-
-  // ---- Professores / Turmas (NOVO) ----
   const [professores, setProfessores] = useState<ProfessorItem[]>([]);
   const [professoresLoading, setProfessoresLoading] = useState(false);
   const [turmas, setTurmas] = useState<Turma[]>([]);
@@ -142,17 +139,17 @@ export default function PerfilClube({ idDaUrl }: Props) {
   const [professorSelecionado, setProfessorSelecionado] = useState<string | undefined>();
 
   const clubeId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
+  const entidadeUsuarioId = isOwn ? Storage.usuarioId : data?.clube?.usuarioId ?? null;
 
-  // preview de atletas do header
   useEffect(() => {
     if (!token) return;
-    const usuarioClubeId = data?.usuario?.id;
-    if (!usuarioClubeId) { setAtletasHeaderCount(0); setVinculadosPreview([]); return; }
 
     let cancel = false;
     (async () => {
+      const usuarioIdEnt = entidadeUsuarioId;
+      if (!usuarioIdEnt) { if (!cancel) { setAtletasHeaderCount(0); setVinculadosPreview([]); } return; }
       try {
-        const params: any = { vinculo: "clube", id: usuarioClubeId, order: "pontuacao_desc" };
+        const params: any = { vinculo: "clube", id: usuarioIdEnt, order: "pontuacao_desc" };
         const resp = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, { headers, params });
 
         const rows: any[] =
@@ -170,16 +167,15 @@ export default function PerfilClube({ idDaUrl }: Props) {
           posicao: r.posicao ?? null,
           categoria: r.categoria ?? null,
           pontuacao: r.pontuacao ?? null,
-        } as AtletaItem)));
+        })));
       } catch {
         if (!cancel) { setAtletasHeaderCount(0); setVinculadosPreview([]); }
       }
     })();
 
     return () => { cancel = true; };
-  }, [token, data?.usuario?.id]);
+  }, [token, clubeId]);
 
-  // payload principal
   useEffect(() => {
     if (!token) return;
     let cancel = false;
@@ -200,7 +196,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
     return () => { cancel = true; };
   }, [targetId, token]);
 
-  // atletas / observados / solicitações
   useEffect(() => {
     if (!token) return;
     const cancel = { v: false };
@@ -263,14 +258,13 @@ export default function PerfilClube({ idDaUrl }: Props) {
     return () => { cancel.v = true; };
   }, [aba, subAba, token, clubeId, vinculados, observados, solicitacoes]);
 
-  // -------- Professores do Clube (NOVO) ----------
   async function loadProfessores() {
     if (!token || !clubeId) return;
     setProfessoresLoading(true);
     try {
       const { data } = await axios.get(`${API.BASE_URL}/api/professores`, {
         headers,
-        params: { organizacaoId: clubeId }, // usa o mesmo filtro da tela GerenciarAtletas
+        params: { organizacaoId: clubeId }, 
       });
       const arr = Array.isArray(data) ? data : (data?.items ?? data?.data ?? []);
       setProfessores(
@@ -290,7 +284,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
     }
   }
 
-  // -------- Turmas do Clube (NOVO) ----------
   async function loadTurmas() {
     if (!token || !clubeId) return;
     setTurmasLoading(true);
@@ -400,7 +393,7 @@ export default function PerfilClube({ idDaUrl }: Props) {
               { key:"perfil",label:"Perfil"},
               { key:"eventos",label:"Eventos"},
               { key:"atletas",label:"Atletas"},
-              { key:"professores",label:"Professores"}, // NOVO
+              { key:"professores",label:"Professores"}, 
             ]
           : 
             [
@@ -796,7 +789,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
                       </button>
                     </div>
 
-                    {/* Troca rápida de professor */}
                     {professores.length > 0 && (
                       <div className="flex items-center gap-2">
                         <select
@@ -835,12 +827,15 @@ export default function PerfilClube({ idDaUrl }: Props) {
         </section>
       )}
 
-      {/* Modal de turmas compartilhado (criar/vincular) */}
       {canEdit && (
         <TurmasManager
           open={turmasOpen}
           onClose={() => { setTurmasOpen(false); loadTurmas(); loadProfessores(); }}
-          owner={clubeId ? { tipo: "Clube", id: clubeId } : undefined}
+          owner={
+            clubeId
+              ? { tipo: "Clube", id: clubeId, usuarioId: data.usuario?.id }
+              : undefined
+          }
           professorId={professorSelecionado}
         />
       )}

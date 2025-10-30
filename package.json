@@ -15,9 +15,9 @@
     "clean:expired-trainings": "tsx server/routes/removerTreinosExpirados.ts",
     "backfill:exercicios": "tsx scripts/backfillTreinoProgramadoExercicios.ts",
     "prisma:studio": "prisma studio --schema server/prisma/schema.prisma",
-  "prisma:generate": "prisma generate --schema server/prisma/schema.prisma",
-  "prisma:migrate": "prisma migrate dev --schema server/prisma/schema.prisma",
-  "prisma:seed": "prisma db seed --schema server/prisma/schema.prisma"
+    "prisma:generate": "prisma generate --schema server/prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema server/prisma/schema.prisma",
+    "prisma:seed": "prisma db seed --schema server/prisma/schema.prisma"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.4",
@@ -137,6 +137,7 @@
     "@types/sanitize-html": "^2.16.0",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",
+    "@vitejs/plugin-legacy": "^5.4.3",
     "@vitejs/plugin-react": "^4.6.0",
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.2.0",
@@ -145,6 +146,7 @@
     "esbuild": "^0.25.0",
     "postcss": "^8.5.6",
     "prisma": "^6.15.0",
+    "regenerator-runtime": "^0.14.1",
     "tailwindcss": "^3.4.17",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.4",
@@ -156,6 +158,6 @@
   },
   "prisma": {
     "seed": "tsx server/prisma/seed.ts",
-    "schema": "server/prisma/schema.prisma" 
+    "schema": "server/prisma/schema.prisma"
   }
 }

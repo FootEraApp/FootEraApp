@@ -1,4 +1,3 @@
-// client/src/pages/perfil/PerfilEscolinha.tsx
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -111,8 +110,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(null);
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
-
-  // Professores / Turmas (NOVO)
   const [professores, setProfessores] = useState<ProfessorItem[]>([]);
   const [professoresLoading, setProfessoresLoading] = useState(false);
   const [turmas, setTurmas] = useState<Turma[]>([]);
@@ -234,7 +231,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     atividades
   ]);
 
-  // -------- Professores / Turmas (NOVO) ----------
   async function loadProfessores() {
     if (!token || !escolinhaId) return;
     setProfessoresLoading(true);
@@ -333,7 +329,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
               { id:"visao",label:"Visão Geral"},
               { id:"atletas",label:"Atletas"},
               { id:"conquistas",label:"Conquistas"},
-              { id:"professores",label:"Professores"}, // NOVO
+              { id:"professores",label:"Professores"}, 
             ] : [
               { id:"visao",label:"Visão Geral"},
               { id:"conquistas",label:"Conquistas"}
@@ -734,7 +730,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         </div>
       )}
 
-      {/* Modal TurmasManager (criar/vincular) */}
       {canEdit && (
         <TurmasManager
           open={turmasOpen}

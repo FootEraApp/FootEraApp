@@ -87,9 +87,14 @@ export default function PaginaLogin() {
         sessionStorage.removeItem(k);
       });
 
-      store.setItem("token", token);
-      store.setItem("usuarioId", usuarioId);
-      store.setItem("nomeUsuario", usuarioNome);
+      sessionStorage.setItem("token", token);
+      localStorage.setItem("token", token);
+
+      sessionStorage.setItem("usuarioId", usuario.id);
+      localStorage.setItem("usuarioId", usuario.id);
+
+      sessionStorage.setItem("tipoUsuario", (usuario.tipo || "").toLowerCase());
+      localStorage.setItem("tipoUsuario", (usuario.tipo || "").toLowerCase());
 
       const map: Record<string, string> = { admin:"admin", atleta:"atleta", professor:"professor", clube:"clube", escolinha:"escolinha", escola:"escola", olheiro:"olheiro" };
       const tipoPadrao = isAdmin ? "admin" : map[rawTipo] ?? "atleta";
@@ -119,24 +124,22 @@ export default function PaginaLogin() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen">
-      {/* Lado esquerdo - Apresentação */}
       <div className="md:w-1/2 bg-green-800 text-white flex flex-col items-center p-5 md:p-10">
         <div className="w-full max-w-[680px]">
           <div className="flex items-center justify-between gap-3 md:flex-col md:gap-2">
-            {/* LOGO: menor no mobile; 60x60 no desktop */}
-<img
-  src="/assets/usuarios/footera-logo.png"
-  alt="Logo FootEra"
-  className="
-    shrink-0 object-contain transform-gpu
-    w-10 h-10 sm:w-12 sm:h-12 md:w-[80px] md:h-[80px] lg:w-[96px] lg:h-[96px]
+            <img
+              src="/assets/usuarios/footera-logo.png"
+              alt="Logo FootEra"
+              className="
+                shrink-0 object-contain transform-gpu
+                w-10 h-10 sm:w-12 sm:h-12 md:w-[80px] md:h-[80px] lg:w-[96px] lg:h-[96px]
 
-    max-[639px]:scale-[1.6]   /* AUMENTA no MOBILE (<640px) */
-    md:scale-[1.55]            /* mantém seu boost no desktop */
+                max-[639px]:scale-[1.6]  
+                md:scale-[1.55]          
 
-    origin-left md:origin-center mr-1
-  "
-/>
+                origin-left md:origin-center mr-1
+              "
+            />
 
 
 
@@ -156,7 +159,6 @@ export default function PaginaLogin() {
             </button>
           </div>
 
-          {/* Bloco de apresentação (texto refeito) */}
           <div
             id="info-footera"
             className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out
@@ -181,7 +183,6 @@ export default function PaginaLogin() {
         </div>
       </div>
 
-      {/* Lado direito - Formulário */}
       <div className="relative md:w-1/2 bg-cream flex justify-center items-center p-6 md:p-10">
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-0">
           <div

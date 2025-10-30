@@ -1006,12 +1006,11 @@ const renderDesafioCard = (desafio: Desafio) => (
                 const id = ex.exercicio.id;
                 const checked = !!ck[id];
                 return (
-<label
-  key={id}
-  className="flex items-start gap-2 border-b pb-2 last:border-b-0 cursor-pointer select-none"
-  title={ex.exercicio.nome}
->
-  {/* input acessível */}
+  <label
+    key={id}
+    className="flex items-start gap-2 border-b pb-2 last:border-b-0 cursor-pointer select-none"
+    title={ex.exercicio.nome}
+  >
   <input
     type="checkbox"
     checked={checked}
@@ -1019,7 +1018,6 @@ const renderDesafioCard = (desafio: Desafio) => (
     className="sr-only peer"
   />
 
-  {/* caixinha custom — ativa o SVG filho quando checado */}
   <span
     className="
       mt-0.5 relative h-5 w-5 rounded-md
@@ -1037,7 +1035,7 @@ const renderDesafioCard = (desafio: Desafio) => (
       viewBox="0 0 24 24"
       className="
         absolute h-3.5 w-3.5
-        text-emerald-700            /* V mais escuro */
+        text-emerald-700            
         opacity-0 scale-75
         transition duration-150
         pointer-events-none

@@ -9,10 +9,8 @@ const prisma = new PrismaClient();
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3001";
-
-// jwt ainda é usado para o token de boas-vindas do cadastro
 const JWT_SECRET: jwt.Secret = (process.env.JWT_SECRET || "defaultsecret");
-const JWT_VERIFY_TTL = process.env.JWT_VERIFY_TTL || "2d"; // não é usado no link; deixei se você quiser logar
+const JWT_VERIFY_TTL = process.env.JWT_VERIFY_TTL || "2d";
 
 function addHours(d: Date, h: number) {
   return new Date(d.getTime() + h * 60 * 60 * 1000);
@@ -29,8 +27,6 @@ function verificationEmailHtml(link: string) {
   `;
 }
 
-/** Emite/atualiza o token de verificação (conforme o schema atual) e envia o e-mail. */
-/** Emite/atualiza o token de verificação (conforme o schema atual) e envia o e-mail. */
 async function issueEmailVerification(params: {
   userId: string;
   emailDestino: string;
@@ -43,7 +39,6 @@ async function issueEmailVerification(params: {
 }) {
   const raw = crypto.randomBytes(32).toString("hex");
 
-  // Schema atual: token | expiraEm | usadoEm | usuarioId (unique)
   await prisma.emailVerification.upsert({
     where: { usuarioId: params.userId },
     update: { token: raw, expiraEm: addHours(new Date(), 24), usadoEm: null },
@@ -321,6 +316,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             usuarioId: usuario.id,
             idade: typeof idade === "number" ? idade : 0,
             categoria: Array.isArray(categoria) ? categoria : [],
+            email: emailNorm,
           },
           select: { id: true },
         });
@@ -328,6 +324,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         tipoUsuarioId = atleta.id;
         break;
       }
+
       case TipoUsuario.Professor: {
         const professor = await prisma.professor.create({
           data: {
@@ -340,6 +337,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             certificacoes: [],
             fotoUrl: null,
             usuarioId: usuario.id,
+            email: emailNorm,
           },
           select: { id: true },
         });
@@ -347,6 +345,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         break;
       }
       case TipoUsuario.Clube: {
+        const emailNorm = String(email).trim().toLowerCase(); 
         const clube = await prisma.clube.create({
           data: {
             usuarioId: usuario.id,
@@ -354,7 +353,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             cnpj: cnpjClube ?? null,
             telefone1: telefone1Clube ?? null,
             telefone2: telefone2Clube ?? null,
-            email: emailClube ?? null,
+            email: (emailClube ?? emailNorm) || null,
             siteOficial: siteOficialClube ?? null,
             sede: sedeClube ?? null,
             logradouro: logradouroClube ?? null,
@@ -373,7 +372,9 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         tipoUsuarioId = clube.id;
         break;
       }
+
       case TipoUsuario.Escolinha: {
+        const emailNorm = String(email).trim().toLowerCase();
         const escolinha = await prisma.escolinha.create({
           data: {
             usuarioId: usuario.id,
@@ -381,7 +382,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             cnpj: cnpjEscolinha ?? null,
             telefone1: telefone1Escolinha ?? null,
             telefone2: telefone2Escolinha ?? null,
-            email: emailEscolinha ?? null,
+            email: (emailEscolinha ?? emailNorm) || null,
             siteOficial: siteOficialEscolinha ?? null,
             sede: sedeEscolinha ?? null,
             logradouro: logradouroEscolinha ?? null,
@@ -411,7 +412,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
               typeof anosExperiencia === "number"
                 ? anosExperiencia
                 : (anosExperiencia ? Number(anosExperiencia) : 0),
-            emailPublico: emailPublico ?? null,
+            emailPublico: (emailPublico ?? emailNorm) || null,
             telefonePublico: telefonePublico ?? null,
             siteOuLinkedin: siteOuLinkedin ?? null,
             colaboracaoClubeId: colaboracaoClubeId || null,
@@ -431,7 +432,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       }
     }
 
-    // Privacidade padrão (mantido)
     try {
       let idadeCalc: number | null = null;
       if (dataNascimento) {
@@ -458,7 +458,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       console.error("Falha ao setar privacidade default:", e);
     }
 
-    // Gera JWT opcional de boas-vindas (não usado no e-mail)
     let token: string | null = null;
     if (process.env.JWT_SECRET) {
       token = jwt.sign(
@@ -468,10 +467,8 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       );
     }
 
-    // Enviar e-mail de verificação (usa o schema correto)
     try {
       const usr = await prisma.usuario.findUnique({ where: { id: usuario.id } });
-      // idade para decidir se vai ao responsável
       let idadeCalc: number | null = null;
       if (usr?.dataNascimento) {
         const d = new Date(usr.dataNascimento);
@@ -513,9 +510,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
   }
 };
 
-/* =========================================
-   VERIFICAR E-MAIL (GET)
-========================================= */
 export async function verificarEmail(req: Request, res: Response) {
   const { token } = req.query as { token?: string };
   if (!token) return res.status(400).send("Token ausente.");
@@ -526,9 +520,7 @@ export async function verificarEmail(req: Request, res: Response) {
     if (rec.usadoEm) return res.redirect(302, `${FRONTEND_URL.replace(/\/+$/, "")}/login?verified=1`);
     if (rec.expiraEm && rec.expiraEm < new Date()) return res.status(400).send("Token expirado. Solicite novo envio.");
 
-    // marca usuário como verificado
     await prisma.usuario.update({ where: { id: rec.usuarioId }, data: { verified: true } });
-    // marca token como usado
     await prisma.emailVerification.update({ where: { usuarioId: rec.usuarioId }, data: { usadoEm: new Date() } });
 
     const redirect = `${FRONTEND_URL.replace(/\/+$/, "")}/login?verified=1`;
@@ -539,10 +531,6 @@ export async function verificarEmail(req: Request, res: Response) {
   }
 }
 
-
-/* =========================================
-   REENVIAR VERIFICAÇÃO (POST)
-========================================= */
 export async function resendVerification(req: Request, res: Response) {
   try {
     const rawUser = String(req.body?.nomeDeUsuario || "").trim().toLowerCase();
@@ -551,7 +539,6 @@ export async function resendVerification(req: Request, res: Response) {
       return res.status(400).json({ message: "Informe nomeDeUsuario ou email." });
     }
 
-    // Procura por nomeDeUsuario OU email
     const usuario = await prisma.usuario.findFirst({
       where: {
         OR: [
@@ -563,7 +550,6 @@ export async function resendVerification(req: Request, res: Response) {
     if (!usuario) return res.status(404).json({ message: "Usuário não encontrado." });
     if (usuario.verified) return res.json({ message: "Usuário já verificado." });
 
-    // (re)emite token na tabela EmailVerification
     const raw = crypto.randomBytes(32).toString("hex");
     await prisma.emailVerification.upsert({
       where: { usuarioId: usuario.id },
@@ -571,7 +557,6 @@ export async function resendVerification(req: Request, res: Response) {
       create: { usuarioId: usuario.id, token: raw, expiraEm: addHours(new Date(), 24) },
     });
 
-    // calcula destino (responsável para menor de idade, senão o próprio e-mail)
     let idadeCalc: number | null = null;
     if (usuario.dataNascimento) {
       const d = new Date(usuario.dataNascimento);

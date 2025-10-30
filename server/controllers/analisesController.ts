@@ -1,10 +1,8 @@
-// server/controllers/analisesController.ts
 import type { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-/** Utils **/
 function assertAdmin(req: Request) {
   const u: any = (req as any).user || {};
   if (!u?.id || String(u?.tipo) !== "Admin") {
@@ -28,14 +26,12 @@ function addDays(d: Date, n: number) {
   return x;
 }
 function monthBounds(isoYYYYMM: string) {
-  // "2025-10" -> [2025-10-01, 2025-11-01)
   const [y, m] = isoYYYYMM.split("-").map(Number);
   const start = new Date(y, m - 1, 1);
   const end = new Date(y, m, 1);
   return { start, end };
 }
 
-/** ---------------- Overview: DAU/WAU/MAU + D7/D30 + novos ---------------- **/
 export async function overview(req: Request, res: Response) {
   try {
     assertAdmin(req);
@@ -64,7 +60,6 @@ export async function overview(req: Request, res: Response) {
       prisma.usuario.count({ where: { dataCriacao: { gte: from30, lt: toFloor } } }),
     ]);
 
-    // retenção simples por janelas (usuários criados nos últimos 30d)
     const d7 = await prisma.$queryRaw<{ retained: bigint }[]>`
       SELECT COUNT(DISTINCT u.id)::bigint AS retained
       FROM "Usuario" u
@@ -105,7 +100,6 @@ export async function overview(req: Request, res: Response) {
   }
 }
 
-/** ---------------- Série de ativos (diário/semanal/mensal) ---------------- **/
 export async function activeUsersSeries(req: Request, res: Response) {
   try {
     assertAdmin(req);
@@ -131,7 +125,6 @@ export async function activeUsersSeries(req: Request, res: Response) {
   }
 }
 
-/** ---------------- Engajamento (resumo) ---------------- **/
 export async function engagementSummary(req: Request, res: Response) {
   try {
     assertAdmin(req);
@@ -146,7 +139,7 @@ export async function engagementSummary(req: Request, res: Response) {
       prisma.submissaoTreino.count({ where: { criadoEm:{ gte: from, lt: to } } }),
       prisma.submissaoDesafio.count({ where:{ createdAt:{ gte: from, lt: to } } }),
       prisma.treinoAgendado.count({ where: { dataTreino: { gte: from, lt: to } } }),
-      prisma.treinoRealizado.count({ where: { /* sem timestamp dedicado, utiliza treinoId/usuarioId registrados nesse período? */ } }).catch(() => 0),
+      prisma.treinoRealizado.count({ where: { } }).catch(() => 0),
     ]);
 
     res.json({ posts, comments, likes, messages: msgs, subTreino, subDesafio, treinosAgendados, treinosRealizados });
@@ -155,7 +148,6 @@ export async function engagementSummary(req: Request, res: Response) {
   }
 }
 
-/** ---------------- Engajamento (série por métrica) ---------------- **/
 export async function engagementSeries(req: Request, res: Response) {
   try {
     assertAdmin(req);
@@ -191,7 +183,6 @@ export async function engagementSeries(req: Request, res: Response) {
   }
 }
 
-/** ---------------- Conversão via Escolinha ---------------- **/
 export async function convEscolinha(req: Request, res: Response) {
   try {
     assertAdmin(req);
@@ -212,7 +203,6 @@ export async function convEscolinha(req: Request, res: Response) {
   }
 }
 
-/** ---------------- Conversão via Clube ---------------- **/
 export async function convClube(req: Request, res: Response) {
   try {
     assertAdmin(req);
@@ -233,7 +223,6 @@ export async function convClube(req: Request, res: Response) {
   }
 }
 
-/** ---------------- Convites (SolicitacaoVinculo) ---------------- **/
 export async function invitesSummary(req: Request, res: Response) {
   try {
     assertAdmin(req);
@@ -252,7 +241,6 @@ export async function invitesSummary(req: Request, res: Response) {
   }
 }
 
-/** ---------------- Heatmap por UF ---------------- **/
 export async function activityByUf(req: Request, res: Response) {
   try {
     assertAdmin(req);
@@ -272,11 +260,10 @@ export async function activityByUf(req: Request, res: Response) {
   }
 }
 
-/** ---------------- Assinaturas ativas no mês ---------------- **/
 export async function subscriptionsActive(req: Request, res: Response) {
   try {
     assertAdmin(req);
-    const on = String(req.query.on || "").trim(); // "YYYY-MM"
+    const on = String(req.query.on || "").trim(); 
     const { start, end } = on ? monthBounds(on) : monthBounds(new Date().toISOString().slice(0,7));
 
     const ativos = await prisma.assinatura.count({
@@ -293,18 +280,16 @@ export async function subscriptionsActive(req: Request, res: Response) {
   }
 }
 
-/** ---------------- Churn mensal ---------------- **/
 export async function subscriptionsChurn(req: Request, res: Response) {
   try {
     assertAdmin(req);
-    const fromStr = String(req.query.from || "").trim(); // "YYYY-MM"
-    const toStr   = String(req.query.to   || "").trim(); // "YYYY-MM"
+    const fromStr = String(req.query.from || "").trim();
+    const toStr   = String(req.query.to   || "").trim(); 
     if (!fromStr || !toStr) return res.status(400).send("Informe from=YYYY-MM&to=YYYY-MM");
 
     const { start: from } = monthBounds(fromStr);
     const { end: to } = monthBounds(toStr);
 
-    // lista de meses no intervalo
     const months = await prisma.$queryRaw<{ m: Date }[]>`
       SELECT date_trunc('month', dd)::date AS m
       FROM generate_series(${from}::timestamp, ${to}::timestamp - interval '1 day', interval '1 month') dd;

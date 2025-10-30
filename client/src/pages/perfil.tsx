@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";
 import { Volleyball, User, CirclePlus, Search, House, Eye } from "lucide-react";
-import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
 import PerfilProfessor from "../components/perfil/PerfilProfessor.js";
@@ -10,6 +9,7 @@ import PerfilClube from "../components/perfil/PerfilClube.js";
 import PerfilEscola from "../components/perfil/PerfilEscola.js";
 import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
 import HealthBanner from "@/components/legal/HealthBanner.js";
+import { http } from "@/services/http.js";
 
 type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha" | "Admin" | "Olheiro";
 
@@ -26,7 +26,6 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
 
   const token = Storage.token;
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   const isOwnProfile = !idDaUrl || idDaUrl === Storage.usuarioId;
   const basePerfil = isOwnProfile ? "me" : (idDaUrl as string);
@@ -38,20 +37,22 @@ export default function ProfilePage() {
     (async () => {
       setLoading(true);
       try {
-        const { data } = await axios.get<PerfilMinimo>(
-          `${API.BASE_URL}/api/perfil/${basePerfil}`,
-          { headers }
-        );
+        const { data } = await http.get<PerfilMinimo>(`/api/perfil/${basePerfil}`);
 
         if (cancelled) return;
 
         setTipo(data?.tipo ?? null);
         setUsuarioId(data?.usuario?.id ?? null);
-      } catch (err) {
+      } catch (err: any) {
+        if (axios.isAxiosError(err) && err.response?.status === 401) {
+          console.warn("Token ausente/ inválido. Redirecionando para login.");
+          window.location.href = "/login"; // ou useLocation()[1]("/login")
+          return;
+        }
         console.error("Erro ao carregar tipo do perfil:", err);
         setTipo(null);
         setUsuarioId(null);
-      } finally {
+      }finally {
         if (!cancelled) setLoading(false);
       }
     })();
