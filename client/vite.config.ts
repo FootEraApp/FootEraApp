@@ -1,8 +1,7 @@
-// vite.config.ts
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { fileURLToPath, URL } from 'node:url'
-import { VitePWA } from 'vite-plugin-pwa'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { fileURLToPath, URL } from 'node:url';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: '/',
@@ -10,7 +9,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'script',
+      injectReagister: 'script',
       devOptions: { enabled: false },
       manifest: {
         name: 'FootEra',
@@ -27,20 +26,12 @@ export default defineConfig({
       },
       workbox: {
         cleanupOutdatedCaches: true,
-
-        // Só assets versionados; HTML fica fora do precache
         globPatterns: ['**/*.{js,css,ico,svg,webp,woff2,png}'],
-
-        // NÃO precachear imagens pesadas de usuarios
         globIgnores: ['**/assets/usuarios/**'],
-
-        // (opcional) aumenta o limite p/ evitar warning em outros PNGs
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // 4 MiB
-
-        // HTML sempre pela rede primeiro (evita tela branca pós-deploy)
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         runtimeCaching: [
           {
-            urlPattern: ({ request }) => request.mode === 'navigate',
+            urlPattern: (ctx: { request: Request }) => ctx.request.mode === 'navigate',
             handler: 'NetworkFirst',
             options: {
               cacheName: 'html-cache',
@@ -49,8 +40,7 @@ export default defineConfig({
             },
           },
           {
-            // assets gerados pelo Vite
-            urlPattern: ({ url }) => url.pathname.startsWith('/assets/'),
+            urlPattern: (ctx: { url: URL }) => ctx.url.pathname.startsWith('/assets/'),
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'assets-cache',
@@ -65,4 +55,4 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   server: { host: true },
-})
+});
