@@ -1,33 +1,26 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Volleyball, User, CirclePlus, Search, House, Award } from "lucide-react";
+import {
+  Volleyball,
+  User,
+  CirclePlus,
+  Search,
+  House,
+  Award,
+  Trophy,
+  UploadCloud,
+  ImagePlay,
+  X,
+  Check,
+  ShieldCheck,
+  Flag,
+} from "lucide-react";
 import { criarPost } from "@/services/feedService.js";
-import { API, APP } from "../../config.js";
+import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import { ALL_ACHIEVEMENTS, type AchievementLite } from "../../lib/achievementsCatalog.js";
 
-function normalizeMediaUrl(raw: string): string {
-  let s = (raw || "").trim();
-  if (!s) return "";
-
-  if (/^(https?:)?\/\//i.test(s) || s.startsWith("data:") || s.startsWith("blob:")) return s;
-
-  const FRONT = String(APP.FRONTEND_BASE_URL || "").replace(/\/+$/, "");
-  const APIBASE = String(API.BASE_URL || "").replace(/\/+$/, "");
-
-  if (s.startsWith("/assets/") || s.startsWith("assets/")) {
-    if (!s.startsWith("/")) s = "/" + s;
-    return `${FRONT}${s}`;
-  }
-
-  if (s.startsWith("/uploads/") || s.startsWith("uploads/")) {
-    if (!s.startsWith("/")) s = "/" + s;
-    return `${APIBASE}${s}`;
-  }
-
-  return s;
-}
-
+/* ---------------- tipos ---------------- */
 type EarnedFromApi = {
   id: string;
   entity: string;
@@ -47,12 +40,72 @@ function getUsuarioId(): string | null {
   );
 }
 
+/* ---------------- mini UI kit (esportivo) ---------------- */
+function SportButton({
+  onClick,
+  disabled,
+  children,
+  variant = "primary",
+  icon,
+  className = "",
+}: {
+  onClick?: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+  variant?: "primary" | "outline" | "ghost";
+  icon?: React.ReactNode;
+  className?: string;
+}) {
+  const base =
+    "w-full rounded-2xl px-4 py-3 font-semibold transition active:scale-[0.98] select-none";
+  const styles: Record<string, string> = {
+    primary:
+      "bg-gradient-to-b from-emerald-600 to-green-700 text-white shadow-[0_8px_20px_rgba(22,156,54,.35)] hover:from-emerald-500 hover:to-green-600",
+    outline:
+      "border-2 border-emerald-600 text-emerald-700 bg-white hover:bg-emerald-50",
+    ghost:
+      "text-emerald-800/90 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100",
+  };
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`${base} ${styles[variant]} disabled:opacity-60 ${className}`}
+    >
+      <span className="flex items-center justify-center gap-2">
+        {icon ? <span className="shrink-0">{icon}</span> : null}
+        <span className="truncate">{children}</span>
+      </span>
+    </button>
+  );
+}
+
+function Chip({
+  children,
+  color = "emerald",
+}: {
+  children: React.ReactNode;
+  color?: "emerald" | "amber" | "sky" | "gray";
+}) {
+  const maps = {
+    emerald: "bg-emerald-50 text-emerald-800 border-emerald-200",
+    amber: "bg-amber-50 text-amber-800 border-amber-200",
+    sky: "bg-sky-50 text-sky-800 border-sky-200",
+    gray: "bg-gray-50 text-gray-700 border-gray-200",
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 border rounded-md ${maps[color]}`}>
+      {children}
+    </span>
+  );
+}
+
+/* ---------------- componente ---------------- */
 export default function PaginaPostagem() {
   const [, navigate] = useLocation();
 
   const [descricao, setDescricao] = useState("");
-  const [imagemUrl, setImagemUrl] = useState("");
-  const [videoUrl, setVideoUrl] = useState("");
   const [arquivo, setArquivo] = useState<File | null>(null);
 
   const [earned, setEarned] = useState<EarnedFromApi[]>([]);
@@ -60,6 +113,9 @@ export default function PaginaPostagem() {
 
   const [carregando, setCarregando] = useState(false);
   const [mensagem, setMensagem] = useState("");
+  const [achPickerOpen, setAchPickerOpen] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const catalogMap = useMemo(
     () =>
@@ -87,23 +143,17 @@ export default function PaginaPostagem() {
       : null;
   }, [selectedAchId, earned, catalogMap]);
 
-  const temUrl = useMemo(() => !!(imagemUrl.trim() || videoUrl.trim()), [imagemUrl, videoUrl]);
   const temArquivo = !!arquivo;
   const temConquista = !!selectedAch;
   const temDescricao = !!descricao.trim();
 
-  const ach = selectedAchId
-    ? (ALL_ACHIEVEMENTS as AchievementLite[]).find((a: AchievementLite) => a.id === selectedAchId)
-    : undefined;
-
   useEffect(() => {
     const usuarioId = getUsuarioId();
-
     const perfil = String(
       (Storage as any)?.tipoSalvo ||
-      localStorage.getItem("tipoUsuario") ||
-      sessionStorage.getItem("tipoUsuario") ||
-      ""
+        localStorage.getItem("tipoUsuario") ||
+        sessionStorage.getItem("tipoUsuario") ||
+        ""
     ).trim().toLowerCase();
 
     if (!usuarioId || perfil !== "atleta") {
@@ -128,30 +178,19 @@ export default function PaginaPostagem() {
         const json = await r.json();
         setEarned(Array.isArray(json?.earned) ? json.earned : []);
       })
-      .catch((e) => {
-        console.warn("Conquistas: fallback vazio.", e);
-        setEarned([]);
-      });
+      .catch(() => setEarned([]));
   }, []);
 
   async function handleEnviar() {
     setMensagem("");
 
-    if (!temDescricao && !temConquista && !temUrl && !temArquivo) {
-      setMensagem("Escreva algo, selecione uma conquista ou anexe uma mídia (URL/arquivo).");
-      return;
-    }
-
-    if (temUrl && temArquivo) {
-      setMensagem("Use URL ou arquivo, não os dois ao mesmo tempo.");
+    if (!temDescricao && !temConquista && !temArquivo) {
+      setMensagem("Escreva algo, selecione uma conquista ou anexe uma mídia (arquivo).");
       return;
     }
 
     setCarregando(true);
     try {
-      const img = imagemUrl.trim() ? normalizeMediaUrl(imagemUrl) : undefined;
-      const vid = videoUrl.trim() ? normalizeMediaUrl(videoUrl) : undefined;
-
       const partes: string[] = [];
       if (selectedAch) {
         const icon = selectedAch.icon || "🏆";
@@ -163,17 +202,17 @@ export default function PaginaPostagem() {
 
       await criarPost({
         descricao: descricaoFinal || "(post sem texto)",
-        imagemUrl: img,
-        videoUrl: vid,
+        imagemUrl: undefined,
+        videoUrl: undefined,
         arquivo: arquivo || undefined,
       });
 
+      // reset
       setMensagem("Postagem enviada com sucesso!");
       setDescricao("");
-      setImagemUrl("");
-      setVideoUrl("");
       setArquivo(null);
       setSelectedAchId("");
+      setAchPickerOpen(false);
 
       navigate("/feed");
     } catch (err: any) {
@@ -185,114 +224,245 @@ export default function PaginaPostagem() {
   }
 
   const previewMidia = (() => {
-    if (arquivo) {
-      const isVideo = arquivo.type?.startsWith("video/");
-      const url = URL.createObjectURL(arquivo);
-      return isVideo ? (
-        <video src={url} controls className="w-full rounded-lg shadow mb-3" />
-      ) : (
-        <img src={url} className="w-full rounded-lg shadow mb-3 object-cover" />
-      );
-    }
-    if (imagemUrl.trim()) {
-      return <img src={normalizeMediaUrl(imagemUrl)} className="w-full rounded-lg shadow mb-3 object-cover" />;
-    }
-    if (videoUrl.trim()) {
-      return <video src={normalizeMediaUrl(videoUrl)} controls className="w-full rounded-lg shadow mb-3" />;
-    }
-    return null;
+    if (!arquivo) return null;
+    const isVideo = arquivo.type?.startsWith("video/");
+    const url = URL.createObjectURL(arquivo);
+    return isVideo ? (
+      <video src={url} controls className="w-full rounded-xl shadow mb-3" />
+    ) : (
+      <img src={url} className="w-full rounded-xl shadow mb-3 object-cover" />
+    );
   })();
 
   const previewConquista = selectedAch ? (
-    <div className="mt-2 rounded-lg border bg-white p-3 shadow-sm">
+    <div className="mt-3 rounded-xl border bg-white p-3 shadow-sm">
       <div className="flex items-start gap-3">
-        <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-green-50 border text-xl">
+        <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-emerald-50 border text-xl">
           <span>{selectedAch.icon || "🏆"}</span>
         </div>
         <div className="min-w-0">
-          <div className="font-semibold text-green-900">Conquista: {selectedAch.title}</div>
+          <div className="font-semibold text-emerald-900">Conquista: {selectedAch.title}</div>
           <div className="text-sm text-gray-600">{selectedAch.description}</div>
-          {selectedAch.tier && (
-            <span className="mt-1 inline-block text-[11px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
-              {selectedAch.tier[0].toUpperCase() + selectedAch.tier.slice(1)}
-            </span>
-          )}
+          <div className="mt-2 flex items-center gap-2">
+            <Chip color="emerald">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span>ID {selectedAch.id}</span>
+            </Chip>
+            {selectedAch.tier && (
+              <Chip color="amber">
+                <Trophy className="h-3.5 w-3.5" />
+                <span>{selectedAch.tier[0].toUpperCase() + selectedAch.tier.slice(1)}</span>
+              </Chip>
+            )}
+          </div>
         </div>
       </div>
     </div>
   ) : null;
 
+  const fileName = arquivo?.name ? arquivo.name : "";
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="p-6 max-w-xl mx-auto">
-        <h1 className="text-2xl font-bold mb-4 text-green-900">Nova Postagem</h1>
-        <textarea
-          className="w-full border rounded p-3 mb-4"
-          rows={4}
-          placeholder="Escreva algo sobre sua postagem..."
-          value={descricao}
-          onChange={(e) => setDescricao(e.target.value)}
-        />
-
-        <div className="mb-2 text-sm text-gray-700 flex items-center gap-2">
-          <Award className="h-4 w-4 text-amber-600" />
-          Compartilhar conquista concluída (opcional)
+    <div className="min-h-screen bg-[#FEFBE9] pb-24">
+      {/* header (mesma cor do bottom + título centralizado, sem linha inferior) */}
+      <div className="h-24 bg-green-900 text-white">
+        <div className="max-w-xl mx-auto h-full px-6 flex items-center justify-center">
+          <div className="flex items-center gap-3">
+            <Flag className="h-7 w-7 opacity-90" />
+            <h1 className="text-xl font-extrabold tracking-wide">Nova Postagem</h1>
+          </div>
         </div>
-        <select
-          className="w-full border rounded p-2"
-          value={selectedAchId}
-          onChange={(e) => setSelectedAchId(e.target.value)}
-        >
-          <option value="">— Selecionar conquista —</option>
-          {earned.map((e) => {
-            const meta: AchievementLite | undefined = catalogMap.get(e.id);
-            const label = meta ? `${meta.title}` : e.title || e.id;
-            return (
-              <option key={e.id} value={e.id}>
-                {label}
-              </option>
-            );
-          })}
-        </select>
-        {previewConquista}
-
-        <div className="text-sm text-gray-600 mb-2">— ou —</div>
-
-        <div className="flex items-center gap-3 mb-4">
-          <input
-            type="file"
-            accept="image/*,video/*"
-            onChange={(e) => setArquivo(e.target.files?.[0] || null)}
-            disabled={temUrl}
-          />
-          {arquivo && (
-            <button type="button" onClick={() => setArquivo(null)} className="text-xs text-red-600 underline">
-              Remover arquivo
-            </button>
-          )}
-        </div>
-
-        {previewMidia}
-
-        {mensagem && (
-          <p
-            className={`mb-4 text-sm text-center ${
-              mensagem.toLowerCase().includes("sucesso") ? "text-green-700" : "text-red-600"
-            }`}
-          >
-            {mensagem}
-          </p>
-        )}
-
-        <button
-          onClick={handleEnviar}
-          disabled={carregando}
-          className="w-full bg-green-800 text-white py-2 rounded hover:bg-green-700 disabled:opacity-50"
-        >
-          {carregando ? "Enviando..." : "Publicar"}
-        </button>
       </div>
 
+      <div className="p-6 max-w-xl mx-auto">
+        {/* texto */}
+        <label className="block text-sm font-semibold text-emerald-900 mb-2">Texto da postagem</label>
+        <div className="rounded-2xl border bg-white shadow-sm focus-within:ring-2 ring-emerald-100 transition">
+          <textarea
+            className="w-full rounded-2xl p-4 outline-none"
+            rows={4}
+            placeholder="Conte sua história do treino, do desafio ou marque a conquista…"
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+          />
+          <div className="px-4 pb-3 flex items-center justify-between text-xs text-gray-500">
+            <span>{descricao.length}/1.000</span>
+            <span className="italic">Dica: fale do objetivo, resultado e próxima meta.</span>
+          </div>
+        </div>
+
+        {/* ações principais */}
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <SportButton
+            variant="ghost"
+            onClick={() => setAchPickerOpen(true)}
+            icon={<Award className="h-5 w-5" />}
+          >
+            Selecionar conquista
+          </SportButton>
+
+        <SportButton
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            icon={<UploadCloud className="h-5 w-5" />}
+          >
+            Enviar foto/vídeo
+          </SportButton>
+        </div>
+
+        {/* input de arquivo escondido */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={(e) => setArquivo(e.target.files?.[0] || null)}
+        />
+
+        {/* feedback seleção */}
+        {(fileName || temConquista) && (
+          <div className="mt-3 space-y-2">
+            {fileName && (
+              <div className="text-sm text-emerald-900 flex items-center gap-2">
+                <ImagePlay className="h-4 w-4" />
+                <span className="truncate">
+                  Arquivo selecionado: <b>{fileName}</b>
+                </span>
+                <button
+                  type="button"
+                  className="ml-auto text-red-600 hover:underline"
+                  onClick={() => setArquivo(null)}
+                >
+                  Remover
+                </button>
+              </div>
+            )}
+            {previewConquista}
+          </div>
+        )}
+
+        {/* preview de mídia */}
+        {previewMidia}
+
+        {/* mensagem */}
+        {mensagem && (
+          <div
+            className={`mt-4 rounded-xl px-4 py-3 text-sm flex items-center gap-2 ${
+              mensagem.toLowerCase().includes("sucesso")
+                ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                : "bg-red-50 text-red-700 border border-red-200"
+            }`}
+          >
+            {mensagem.toLowerCase().includes("sucesso") ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <X className="h-4 w-4" />
+            )}
+            <span className="whitespace-pre-line">{mensagem}</span>
+          </div>
+        )}
+
+        {/* publicar */}
+        <div className="mt-6">
+          <SportButton
+            onClick={handleEnviar}
+            disabled={carregando}
+            variant="primary"
+            icon={<Trophy className="h-5 w-5" />}
+            className="shadow-[0_14px_34px_rgba(16,120,35,.35)]"
+          >
+            {carregando ? "Enviando..." : "Publicar"}
+          </SportButton>
+          <p className="mt-2 text-xs text-center text-gray-500">
+            Ao publicar, você concorda com as diretrizes da comunidade.
+          </p>
+        </div>
+      </div>
+
+      {/* Modal de conquistas */}
+      {achPickerOpen && (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setAchPickerOpen(false)}
+          />
+          <div className="absolute inset-x-0 bottom-0 sm:top-[10%] sm:bottom-auto sm:mx-auto sm:max-w-xl">
+            <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[80vh] overflow-auto">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Award className="h-5 w-5 text-emerald-700" />
+                  <h2 className="font-bold text-emerald-900">Selecionar conquista</h2>
+                </div>
+                <button
+                  onClick={() => setAchPickerOpen(false)}
+                  className="p-1 rounded-full hover:bg-gray-100"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <p className="mt-1 text-sm text-gray-600">
+                Escolha uma conquista concluída para destacar na sua postagem.
+              </p>
+
+              <div className="mt-4 space-y-2">
+                {earned.length === 0 && (
+                  <div className="text-sm text-gray-500 border rounded-xl p-4">
+                    Nenhuma conquista disponível agora.
+                  </div>
+                )}
+
+                {earned.map((e) => {
+                  const meta: AchievementLite | undefined = catalogMap.get(e.id);
+                  const title = meta?.title || e.title || e.id;
+                  const desc = meta?.description || e.description || "";
+                  const tier = (meta?.tier || e.tier) as EarnedFromApi["tier"];
+
+                  const picked = selectedAchId === e.id;
+
+                  return (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedAchId(e.id);
+                        setAchPickerOpen(false);
+                      }}
+                      className={`w-full text-left rounded-xl border px-4 py-3 hover:bg-emerald-50 transition ${
+                        picked ? "border-emerald-400 bg-emerald-50" : "border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-emerald-50 border text-xl">
+                          <span>{meta?.icon || e.icon || "🏆"}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-semibold text-emerald-900">{title}</div>
+                          <div className="text-xs text-gray-600 line-clamp-2">{desc}</div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <Chip color="emerald">ID {e.id}</Chip>
+                            {tier && (
+                              <Chip color="amber">
+                                <Trophy className="h-3.5 w-3.5" />
+                                <span>{tier[0].toUpperCase() + tier.slice(1)}</span>
+                              </Chip>
+                            )}
+                          </div>
+                        </div>
+                        {selectedAchId === e.id && (
+                          <Check className="h-5 w-5 text-emerald-600 ml-auto mt-1" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
           <House />

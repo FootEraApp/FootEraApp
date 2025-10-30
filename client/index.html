@@ -1,12 +1,28 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FootEra</title>
+
+    <!-- Cor da barra do navegador (Android) -->
+    <meta name="theme-color" content="#169c36" />
+
+    <!-- Favicons (coloque os arquivos em client/public/) -->
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" href="/icon-32.png" sizes="32x32">
+    <link rel="icon" type="image/png" href="/icon-16.png" sizes="16x16">
+    <link rel="apple-touch-icon" href="/icon-180.png">
+
+    <!-- PWA (o vite-plugin-pwa injeta o registerSW no build) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   </head>
   <body>
     <div id="root"></div>
+
+    <!-- Entrada do app (ajuste se seu arquivo estiver em outro caminho) -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
