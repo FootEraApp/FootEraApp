@@ -136,17 +136,19 @@ function Tab({
   onClick,
   children,
   icon,
+  className = "",
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
   icon?: React.ReactNode;
+  className?: string;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-sm transition
-      ${active ? "bg-white text-green-900 font-semibold shadow" : "bg-green-100/70 text-green-800 hover:bg-green-100"}`}
+      className={`flex items-center justify-center gap-2 py-2 rounded-full text-sm transition
+      ${active ? "bg-white text-green-900 font-semibold shadow" : "bg-green-100/70 text-green-800 hover:bg-green-100"} ${className}`}
     >
       {icon ? <span className="shrink-0">{icon}</span> : null}
       <span>{children}</span>
@@ -294,13 +296,6 @@ function Explorar() {
       .finally(() => setCarregandoDados(false));
   }, [busca, loggedUserId, filtrosKey, filtrarEu]);
 
-  const abas: Array<["atletas" | "escolas" | "clubes" | "profissionais", string]> = [
-    ["atletas", "Atletas"],
-    ["escolas", "Escolas"],
-    ["clubes", "Clubes"],
-    ["profissionais", "Profissionais"],
-  ];
-
   const profissionais = useMemo(
     () =>
       [
@@ -374,16 +369,16 @@ function Explorar() {
     (typeof draft.pontuacaoMax === "number" ? 1 : 0);
 
   return (
-    <div className="min-h-screen bg-[#FEFBE9] text-green-900 pb-24">
-      {/* Header */}
-      <div className="h-20 bg-green-900 text-white flex items-center">
-        <div className="max-w-5xl mx-auto w-full px-5">
-          <h1 className="text-xl font-extrabold tracking-wide text-center">Explorar</h1>
+    <div className="min-h-screen bg-[#FEFBE9] text-green-900 pb-28 sm:pb-24">
+      {/* Header (menor no mobile) */}
+      <div className="h-16 sm:h-20 bg-green-900 text-white flex items-center">
+        <div className="max-w-5xl mx-auto w-full px-4 sm:px-5">
+          <h1 className="text-lg sm:text-xl font-extrabold tracking-wide text-center">Explorar</h1>
         </div>
       </div>
 
       {/* Busca + Filtros */}
-      <div className="max-w-5xl mx-auto px-5 mt-4">
+      <div className="max-w-5xl mx-auto px-4 sm:px-5 mt-3 sm:mt-4">
         <div className="flex gap-2 items-center">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-800/70" />
@@ -392,36 +387,71 @@ function Explorar() {
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Buscar por nome, posição, cidade..."
-              className="w-full pl-9 pr-4 py-2 rounded-xl border outline-none focus:ring-2 ring-emerald-100 bg-white"
+              className="w-full pl-9 pr-4 py-2 rounded-xl border outline-none focus:ring-2 ring-emerald-100 bg-white text-sm sm:text-base"
             />
           </div>
 
+          {/* Botão filtros: ícone no mobile, texto no desktop */}
           {aba === "atletas" && (
-            <button
-              onClick={abrirFiltros}
-              className="px-3 py-2 rounded-xl border bg-white flex items-center gap-2 text-sm hover:bg-emerald-50"
-              title="Filtros"
-            >
-              <Filter size={16} /> Filtros
-              {activeFiltersCount > 0 && <Pill tone="emerald" className="ml-1">{activeFiltersCount}</Pill>}
-            </button>
+            <>
+              <button
+                onClick={abrirFiltros}
+                className="sm:hidden relative p-2 rounded-xl border bg-white hover:bg-emerald-50"
+                aria-label="Abrir filtros"
+              >
+                <Filter size={18} />
+                {activeFiltersCount > 0 && (
+                  <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-5 h-5 text-[10px] rounded-full bg-green-800 text-white">
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={abrirFiltros}
+                className="hidden sm:flex px-3 py-2 rounded-xl border bg-white items-center gap-2 text-sm hover:bg-emerald-50"
+                title="Filtros"
+              >
+                <Filter size={16} /> Filtros
+                {activeFiltersCount > 0 && <Pill tone="emerald" className="ml-1">{activeFiltersCount}</Pill>}
+              </button>
+            </>
           )}
         </div>
 
-        {/* Abas */}
-        <div className="mt-4 grid grid-cols-4 gap-2">
-          <Tab active={aba === "atletas"} onClick={() => setAba("atletas")} icon={<Trophy className="h-4 w-4" />}>
-            Atletas
-          </Tab>
-          <Tab active={aba === "escolas"} onClick={() => setAba("escolas")} icon={<School className="h-4 w-4" />}>
-            Escolas
-          </Tab>
-          <Tab active={aba === "clubes"} onClick={() => setAba("clubes")} icon={<Building2 className="h-4 w-4" />}>
-            Clubes
-          </Tab>
-          <Tab active={aba === "profissionais"} onClick={() => setAba("profissionais")} icon={<User className="h-4 w-4" />}>
-            Profissionais
-          </Tab>
+        {/* Abas: carrossel no mobile, grid no desktop */}
+        <div className="mt-3 sm:mt-4">
+          {/* mobile */}
+          <div className="-mx-4 px-4 sm:hidden">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <Tab active={aba === "atletas"} onClick={() => setAba("atletas")} icon={<Trophy className="h-4 w-4" />} className="min-w-[110px]">
+                Atletas
+              </Tab>
+              <Tab active={aba === "escolas"} onClick={() => setAba("escolas")} icon={<School className="h-4 w-4" />} className="min-w-[110px]">
+                Escolas
+              </Tab>
+              <Tab active={aba === "clubes"} onClick={() => setAba("clubes")} icon={<Building2 className="h-4 w-4" />} className="min-w-[110px]">
+                Clubes
+              </Tab>
+              <Tab active={aba === "profissionais"} onClick={() => setAba("profissionais")} icon={<User className="h-4 w-4" />} className="min-w-[130px]">
+                Profissionais
+              </Tab>
+            </div>
+          </div>
+          {/* desktop */}
+          <div className="hidden sm:grid sm:grid-cols-4 sm:gap-2">
+            <Tab active={aba === "atletas"} onClick={() => setAba("atletas")} icon={<Trophy className="h-4 w-4" />}>
+              Atletas
+            </Tab>
+            <Tab active={aba === "escolas"} onClick={() => setAba("escolas")} icon={<School className="h-4 w-4" />}>
+              Escolas
+            </Tab>
+            <Tab active={aba === "clubes"} onClick={() => setAba("clubes")} icon={<Building2 className="h-4 w-4" />}>
+              Clubes
+            </Tab>
+            <Tab active={aba === "profissionais"} onClick={() => setAba("profissionais")} icon={<User className="h-4 w-4" />}>
+              Profissionais
+            </Tab>
+          </div>
         </div>
       </div>
 
@@ -441,7 +471,7 @@ function Explorar() {
                 </button>
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-3 mt-3">
+              <div className="grid grid-cols-1 gap-3 mt-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm mb-1">Faixa etária / Categoria</label>
                   <select
@@ -542,7 +572,6 @@ function Explorar() {
                 </div>
               </div>
 
-              {/* ações */}
               <div className="flex flex-wrap gap-2 justify-between items-center pt-4">
                 <div className="flex gap-2">
                   {draft.categoria && <Pill tone="emerald">{draft.categoria}</Pill>}
@@ -581,16 +610,16 @@ function Explorar() {
       )}
 
       {/* Conteúdo */}
-      <div className="max-w-5xl mx-auto px-5 mt-4">
+      <div className="max-w-5xl mx-auto px-4 sm:px-5 mt-3 sm:mt-4">
         {aba === "atletas" && (
           <>
-            <h2 className="text-lg font-bold mb-2">Atletas em Destaque</h2>
+            <h2 className="text-base sm:text-lg font-bold mb-2">Atletas em Destaque</h2>
 
             {carregandoDados && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="bg-white rounded-xl p-3 shadow-sm animate-pulse">
-                    <div className="w-24 h-24 mx-auto rounded-full bg-gray-200" />
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto rounded-full bg-gray-200" />
                     <div className="h-3 bg-gray-200 rounded mt-3" />
                     <div className="h-3 bg-gray-200 rounded mt-2 w-2/3" />
                   </div>
@@ -612,12 +641,12 @@ function Explorar() {
                           <img
                             src={foto}
                             alt={`${nome} profile`}
-                            className="w-24 h-24 rounded-full object-cover border"
+                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
                             onError={(e) =>
                               ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`)
                             }
                           />
-                          <p className="mt-2 font-medium text-center line-clamp-2">{nome}</p>
+                          <p className="mt-2 font-medium text-center line-clamp-2 text-sm sm:text-base">{nome}</p>
                           <div className="mt-1 flex flex-wrap gap-1 justify-center">
                             {categoria && (
                               <Pill tone="emerald">
@@ -665,23 +694,23 @@ function Explorar() {
                 </div>
 
                 {/* Ranking */}
-                <h2 className="text-lg font-bold mt-6 mb-2">Top da semana (geral)</h2>
+                <h2 className="text-base sm:text-lg font-bold mt-6 mb-2">Top da semana (geral)</h2>
                 {topGeral.length === 0 ? (
                   <p className="text-gray-600 mb-4">Sem dados desta semana.</p>
                 ) : (
-                  <div className="flex gap-3 overflow-x-auto pb-2 mb-4">
+                  <div className="flex gap-3 overflow-x-auto pb-2 mb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
                     {topGeral.slice(0, 10).map((r, idx) => {
                       const foto = formatarUrlFoto(r.usuario?.foto, "usuarios");
                       return (
                         <Link href={`/perfil/${r.usuario.id}`} key={r.atletaId}>
-                          <div className="min-w-[150px] bg-white rounded-xl shadow-sm p-3 flex flex-col items-center hover:shadow transition">
+                          <div className="min-w-[130px] sm:min-w-[150px] bg-white rounded-xl shadow-sm p-3 flex flex-col items-center hover:shadow transition">
                             <div className="text-xs font-semibold mb-1">{idx + 1}º</div>
                             <img
                               src={foto}
                               onError={(e) =>
                                 ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`)
                               }
-                              className="w-16 h-16 rounded-full object-cover border"
+                              className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border"
                               alt={r.usuario.nome}
                             />
                             <div className="mt-2 text-sm text-center line-clamp-2">{r.usuario.nome}</div>
@@ -703,17 +732,17 @@ function Explorar() {
                     return (
                       <Link href={`/perfil/${top.usuario.id}`} key={`cat-${cat}`}>
                         <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition">
-                          <div className="text-sm font-bold w-24">{rotulo}</div>
+                          <div className="text-xs sm:text-sm font-bold w-20 sm:w-24">{rotulo}</div>
                           <img
                             src={foto}
                             onError={(e) =>
                               ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`)
                             }
-                            className="w-10 h-10 rounded-full object-cover border"
+                            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border"
                             alt={top.usuario.nome}
                           />
-                          <div className="flex-1">
-                            <div className="text-sm font-medium">{top.usuario.nome}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">{top.usuario.nome}</div>
                             <div className="text-xs text-gray-600">❤️ {top.total}</div>
                           </div>
                         </div>
@@ -728,14 +757,14 @@ function Explorar() {
 
         {aba === "escolas" && (
           <>
-            <h2 className="text-lg font-bold my-4">Escolas de Futebol</h2>
+            <h2 className="text-base sm:text-lg font-bold my-4">Escolas de Futebol</h2>
             <div className="space-y-3">
               {dados.escolas.slice(0, showCountEscolas).map((e) => {
                 const logo = formatarUrlFoto(e.logo) || "/placeholder.png";
                 const href = e.usuarioId ? `/perfil/${e.usuarioId}` : undefined;
                 const Card = (
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
-                    <img src={logo} alt="Logo da escola" className="w-16 h-16 rounded-full object-cover border" />
+                    <img src={logo} alt="Logo da escola" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border" />
                     <div className="min-w-0">
                       <h3 className="font-semibold truncate">{e.nome}</h3>
                       <p className="text-sm text-gray-600 flex items-center gap-1">
@@ -779,14 +808,14 @@ function Explorar() {
 
         {aba === "clubes" && (
           <>
-            <h2 className="text-lg font-bold my-4">Clubes</h2>
+            <h2 className="text-base sm:text-lg font-bold my-4">Clubes</h2>
             <div className="space-y-3">
               {dados.clubes.slice(0, showCountClubes).map((c) => {
                 const logo = formatarUrlFoto(c.logo) || "/placeholder.png";
                 const href = c.usuarioId ? `/perfil/${c.usuarioId}` : undefined;
                 const Card = (
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
-                    <img src={logo} alt="Logo do clube" className="w-16 h-16 rounded-full object-cover border" />
+                    <img src={logo} alt="Logo do clube" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border" />
                     <div className="min-w-0">
                       <h3 className="font-semibold truncate">{c.nome}</h3>
                       <p className="text-sm text-gray-600 flex items-center gap-1">
@@ -830,7 +859,7 @@ function Explorar() {
 
         {aba === "profissionais" && (
           <>
-            <h2 className="text-lg font-bold my-4">Professores e Olheiros</h2>
+            <h2 className="text-base sm:text-lg font-bold my-4">Professores e Olheiros</h2>
             {profissionais.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {profissionais.slice(0, showCountProfs).map((p) => {
@@ -844,12 +873,12 @@ function Explorar() {
                         <img
                           src={foto}
                           alt="Foto do usuário"
-                          className="w-24 h-24 rounded-full object-cover border"
+                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
                           onError={(e) => {
                             (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`;
                           }}
                         />
-                        <p className="mt-2 font-medium text-center line-clamp-2">{p.usuario.nome}</p>
+                        <p className="mt-2 font-medium text-center line-clamp-2 text-sm sm:text-base">{p.usuario.nome}</p>
                         <Pill tone="amber" className="mt-1">{p.role}</Pill>
                       </div>
                     </Link>
@@ -878,8 +907,11 @@ function Explorar() {
         )}
       </div>
 
-      {/* bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
+      {/* bottom nav com safe-area */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md"
+        style={{ paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}
+      >
         <Link href="/feed" className="hover:underline">
           <House />
         </Link>
