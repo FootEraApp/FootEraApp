@@ -2331,6 +2331,10 @@ if (atletaAaaaa && professorArthur) {
     skipDuplicates: true,
   });
 }
+  // garanta que TODOS os usuários fiquem verificados
+  await prisma.usuario.updateMany({
+    data: { verified: true },
+  });
 
   console.log("✅ Seed completo executado com sucesso!");
 }
