@@ -79,10 +79,9 @@ import assinaturasRoutes from "./routes/assinaturas.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Tente primeiro /server/.env, depois raiz e afins
 const envCandidates = [
-  path.resolve(__dirname, ".env"),        // <== NEW: server/.env
-  path.resolve(__dirname, "../.env"),     // raiz do projeto
+  path.resolve(__dirname, ".env"),      
+  path.resolve(__dirname, "../.env"),    
   path.resolve(process.cwd(), ".env"),
   path.resolve(__dirname, "../../.env"),
 ];
@@ -110,18 +109,24 @@ const LOCAL_IP = process.env.LOCAL_IP || "192.168.18.8";
 const FRONT_PORT = Number(process.env.FRONT_PORT) || 5173;
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
-app.use(
-  cors({
-    origin: [
-      FRONTEND_URL,           
-      "http://localhost:5173",
-      "http://127.0.0.1:5173",
-    ],
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],           
-  })
-);
+
+const ALLOWED = new Set([
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://footera.app.br",
+  "https://www.footera.app.br",
+]);
+
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin) return cb(null, true);
+    cb(null, ALLOWED.has(origin));
+  },
+  methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "authorization"], // inclui minúsculo
+  credentials: true,
+  maxAge: 86400,
+}));
 
 app.options("*", cors());
 app.use(express.json({ limit: "20mb" }));

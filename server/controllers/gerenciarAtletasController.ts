@@ -52,41 +52,47 @@ export const gerenciarAtletasController = {
         return res.status(400).json({ message: "Parâmetro 'id' (usuarioId da entidade) é obrigatório" });
       }
 
-      let whereByVinculo: any = {};
-      let entidadeId: string | null = null;
+    let whereByVinculo: any = {};
+    let entidadeId: string | null = null;
 
-      if (vinculo === "clube") {
-        const entidade = await prisma.clube.findUnique({
-          where: { usuarioId: entidadeUsuarioId },
+    if (vinculo === "clube") {
+      let entidade = await prisma.clube.findUnique({
+        where: { usuarioId: entidadeUsuarioId },
+        select: { id: true },
+      });
+      if (!entidade) {
+        entidade = await prisma.clube.findUnique({
+          where: { id: entidadeUsuarioId },
           select: { id: true },
         });
-        if (!entidade) return res.status(404).json({ message: "Entidade não encontrada" });
-        entidadeId = entidade.id;
-        whereByVinculo = { clubeId: entidade.id };
-      } else if (vinculo === "escolinha") {
-        const entidade = await prisma.escolinha.findUnique({
-          where: { usuarioId: entidadeUsuarioId },
-          select: { id: true },
-        });
-        if (!entidade) return res.status(404).json({ message: "Entidade não encontrada" });
-        entidadeId = entidade.id;
-        whereByVinculo = { escolinhaId: entidade.id };
-      } else {
-        const prof = await prisma.professor.findUnique({
-          where: { usuarioId: entidadeUsuarioId },
-          select: { id: true },
-        });
-        if (!prof) return res.status(404).json({ message: "Professor não encontrado" });
-        entidadeId = prof.id;
-        whereByVinculo = { relacoesTreinamento: { some: { professorId: prof.id } } };
       }
+      if (!entidade) return res.status(404).json({ message: "Entidade não encontrada" });
 
+      entidadeId = entidade.id;
+      whereByVinculo = { clubeId: entidade.id };
+    } else if (vinculo === "escolinha") {
+      const entidade = await prisma.escolinha.findUnique({
+        where: { usuarioId: entidadeUsuarioId },
+        select: { id: true },
+      });
+      if (!entidade) return res.status(404).json({ message: "Entidade não encontrada" });
+      entidadeId = entidade.id;
+      whereByVinculo = { escolinhaId: entidade.id };
+    } else {
+      const prof = await prisma.professor.findUnique({
+        where: { usuarioId: entidadeUsuarioId },
+        select: { id: true },
+      });
+      if (!prof) return res.status(404).json({ message: "Professor não encontrado" });
+      entidadeId = prof.id;
+      whereByVinculo = { relacoesTreinamento: { some: { professorId: prof.id } } };
+    }
       const where: any = { ...whereByVinculo };
       if (categoria) where.categoria = { has: categoria };
       if (search) {
         where.OR = [
           { nome: { contains: search, mode: "insensitive" } },
-          { usuario: { is: { nome: { contains: search, mode: "insensitive" } } } }, // 👈 correção
+          { usuario: { is: { nome: { contains: search, mode: "insensitive" } } } },
         ];
       }
 
@@ -175,10 +181,9 @@ export const gerenciarAtletasController = {
     }
   },
 
-  // ---- Professores (para aba Professores)
   listProfessores: async (req: Request, res: Response) => {
     try {
-      const vinculo = String(req.query.vinculo || "").toLowerCase(); // "escolinha" | "clube"
+      const vinculo = String(req.query.vinculo || "").toLowerCase();
       const entidadeUsuarioId = String(req.query.id || "");
       const search = (req.query.search as string) || "";
 
@@ -193,7 +198,6 @@ export const gerenciarAtletasController = {
           .json({ message: "Parâmetro 'id' (usuarioId da entidade) é obrigatório" });
       }
 
-      // Resolve ID da entidade a partir do usuarioId
       let entidadeId: string | null = null;
       if (vinculo === "clube") {
         const clube = await prisma.clube.findUnique({
@@ -211,18 +215,16 @@ export const gerenciarAtletasController = {
         entidadeId = escolinha.id;
       }
 
-      // Professores que têm alguma turma pertencente a essa entidade
       const ownerWhere = vinculo === "clube" ? { clubeId: entidadeId } : { escolinhaId: entidadeId };
 
       const professores = await prisma.professor.findMany({
         where: {
-          // campo relacional é "Turma" no schema
-          Turma: { some: ownerWhere }, // 👈 correção (era "turmas")
+          Turma: { some: ownerWhere },
           ...(search
             ? {
                 OR: [
                   { nome: { contains: search, mode: "insensitive" } },
-                  { usuario: { is: { nome: { contains: search, mode: "insensitive" } } } }, // 👈 correção
+                  { usuario: { is: { nome: { contains: search, mode: "insensitive" } } } },
                 ],
               }
             : {}),
@@ -238,7 +240,6 @@ export const gerenciarAtletasController = {
         orderBy: { nome: "asc" },
       });
 
-      // Conta de turmas por professor **dessa entidade**
       const grupos = await prisma.turma.groupBy({
         by: ["professorId"],
         where: { ...ownerWhere, professorId: { not: null } },
@@ -249,7 +250,7 @@ export const gerenciarAtletasController = {
         .filter((g) => g.professorId !== null)
         .map((g) => [g.professorId as string, g._count._all]);
 
-      const turmasCountMap = new Map<string, number>(entries); // 👈 correção (sem null)
+      const turmasCountMap = new Map<string, number>(entries);
 
       const payload = professores.map((p) => ({
         id: p.id,

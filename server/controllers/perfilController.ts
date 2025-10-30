@@ -1152,7 +1152,7 @@ export const getPosicaoAtualAtleta = async (req: AuthenticatedRequest, res: Resp
 
 export async function getPerfilProfessor(req: AuthenticatedRequest, res: Response) {
   try {
-    let { id } = req.params; // pode vir "me"
+    let { id } = req.params; 
 
     if (id === "me") {
       const prof = await prisma.professor.findFirst({
@@ -1160,7 +1160,7 @@ export async function getPerfilProfessor(req: AuthenticatedRequest, res: Respons
         select: { id: true },
       });
       if (!prof) return res.status(404).json({ message: "Professor não encontrado" });
-      id = prof.id; // resolve "me" para o ID real do professor
+      id = prof.id;
     }
 
     const prof = await resolveByUsuarioOrEntity({
@@ -1247,8 +1247,8 @@ export async function getPerfilProfessor(req: AuthenticatedRequest, res: Respons
         certificacoes: prof.certificacoes ?? [],
         fotoUrl: fotoPerfil,
         statusCref: prof.statusCref ?? null,
-        clubeId: (prof as any).clubeId ?? null,          // ← novo
-        escolinhaId: (prof as any).escolinhaId ?? null,  // ← novo
+        clubeId: (prof as any).clubeId ?? null,       
+        escolinhaId: (prof as any).escolinhaId ?? null, 
       },
       metrics: {
         treinosProgramados: treinosCount,

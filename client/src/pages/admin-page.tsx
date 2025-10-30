@@ -51,7 +51,6 @@ interface UsuarioAdmin {
   ultimaAtividadeNome?: string | null;
 }
 
-/* ==== Assinatura ==== */
 type PlanoAssinatura = "FREE" | "PRO" | "ELITE" | string;
 
 interface AssinaturaDTO {
@@ -74,8 +73,6 @@ interface UsuarioDetalhe extends UsuarioAdmin {
   camposCadastro?: Record<string, any>;
   posicaoCampo?: string | null;
   totalVinculados?: number | null;
-
-  /* <- novo */
   assinatura?: AssinaturaDTO | null;
 }
 
@@ -236,7 +233,6 @@ export default function AdminDashboard() {
   const [canManageAdmins, setCanManageAdmins] = useState(false);
   const [adminNivel, setAdminNivel] = useState<number>(0);
 
-  /* ================= [ASSINATURAS] state ================= */
 type AssinanteListItem = {
   id: string;
   plano: string;
@@ -257,7 +253,7 @@ type AssinanteListItem = {
 const [assQ, setAssQ] = useState("");
 const [assDebQ, setAssDebQ] = useState("");
 const [assPlano, setAssPlano] = useState<string>("");
-const [assAtivo, setAssAtivo] = useState<string>(""); // "", "true", "false"
+const [assAtivo, setAssAtivo] = useState<string>("");
 const [assPage, setAssPage] = useState(1);
 const assPageSize = 20;
 const [assLoading, setAssLoading] = useState(false);
@@ -599,8 +595,6 @@ function fmtDate(d?: string | null) {
     try {
       const res = await fetch(`${usersBase}/${id}`, { headers: authHeaders() });
       const data = (await res.json()) as UsuarioDetalhe;
-
-      // Fallback: buscar assinatura se o endpoint do usuário não incluir
       try {
         if (!data.assinatura) {
           const r2 = await fetch(`${API.BASE_URL}/api/assinaturas/${id}`, { headers: authHeaders() });
@@ -610,7 +604,6 @@ function fmtDate(d?: string | null) {
           }
         }
       } catch {}
-
       setUserSelecionado(data);
     } catch {
       setUserSelecionado(null);
@@ -665,7 +658,6 @@ function fmtDate(d?: string | null) {
     }
   }
 
-  /* ===== Assinatura: ações ===== */
   async function alterarPlanoAssinatura(usuarioId: string, novoPlano: PlanoAssinatura) {
     if (!novoPlano) return;
     const resp = await fetch(`${API.BASE_URL}/api/assinaturas/${usuarioId}`, {
@@ -732,7 +724,6 @@ function fmtDate(d?: string | null) {
 
   const rotulo = { pendente: "pendentes", aprovado: "aprovados", invalido: "inválidos", todos: "registros" }[modStatus];
 
-  // ==== dados para gráficos do dashboard ====
   const distTipos = [
     { label: "Atletas", value: Number(dados.totalAtletas || 0) },
     { label: "Escolas", value: Number(dados.totalEscolinhas || 0) },
@@ -770,7 +761,6 @@ function fmtDate(d?: string | null) {
           <div>
             <h3 className="text-xl font-bold mb-4">Dashboard Administrativo</h3>
 
-            {/* KPIs principais */}
             <div className="grid md:grid-cols-4 gap-4 mb-6">
               <Card title="Total de Usuários" icon="👥" value={dados?.totalUsuarios ?? 0} />
               <Card title="Treinos Cadastrados" icon="🏋️" value={dados?.totalTreinos ?? 0} />
@@ -778,7 +768,6 @@ function fmtDate(d?: string | null) {
               <Card title="Posts Criados" icon="✍️" value={dados?.totalPostsCriados ?? 0} />
             </div>
 
-            {/* Novos gráficos */}
             <div className="grid lg:grid-cols-2 gap-6 mb-6">
               <div className="bg-white rounded shadow p-4">
                 <div className="flex items-center justify-between">
@@ -808,7 +797,6 @@ function fmtDate(d?: string | null) {
               </div>
             </div>
 
-            {/* Barras simples já existentes */}
             <h4 className="font-semibold mb-2">Distribuição de Usuários</h4>
             <div className="bg-white p-3">
               {[
@@ -1314,14 +1302,12 @@ function fmtDate(d?: string | null) {
           <div>
             <h3 className="text-xl font-bold mb-3">Gerenciar Assinaturas</h3>
 
-            {/* KPIs rápidos */}
             <div className="grid md:grid-cols-3 gap-4 mb-4">
               <Card title="Total de Assinaturas" icon="🧾" value={Number(assOverview?.total || 0)} />
               <Card title="Ativas" icon="✅" value={Number(assOverview?.ativos || 0)} />
               <Card title="Canceladas" icon="🛑" value={Number(assOverview?.cancelados || 0)} />
             </div>
 
-            {/* Filtros */}
             <div className="flex flex-wrap gap-2 items-center mb-4">
               <input
                 value={assQ}
@@ -1350,7 +1336,6 @@ function fmtDate(d?: string | null) {
 
             {assErro && <div className="mb-3 text-sm text-red-600">{assErro}</div>}
 
-            {/* Lista */}
             <div className="bg-white rounded shadow overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50">
@@ -1452,7 +1437,6 @@ function fmtDate(d?: string | null) {
               </table>
             </div>
 
-            {/* Paginação */}
             <div className="flex items-center justify-between mt-3">
               <button
                 disabled={assPage <= 1}
@@ -1471,7 +1455,6 @@ function fmtDate(d?: string | null) {
               </button>
             </div>
 
-            {/* Breakdown por plano */}
             {assOverview && (
               <div className="mt-6 bg-white rounded shadow p-4">
                 <div className="font-semibold mb-2">Distribuição por plano (ativos)</div>
@@ -1635,7 +1618,6 @@ function fmtDate(d?: string | null) {
                         <Info label="Comentários" value={String(u.contagens?.comentarios ?? "-")} />
                       </div>
 
-                      {/* ===== Assinatura ===== */}
                       <div className="border-t pt-3">
                         <div className="flex items-center justify-between mb-2">
                           <div className="font-semibold">Assinatura</div>
@@ -1770,7 +1752,6 @@ function fmtDate(d?: string | null) {
   );
 }
 
-/* ========= Helpers visuais padrões ========= */
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -1804,7 +1785,6 @@ function Bar({ label, percent }: { label: string; percent: number }) {
   );
 }
 
-/* ========= Ícone de informação (i no círculo) ========= */
 function InfoI({ text, className = "" }: { text: string; className?: string }) {
   return (
     <span className={`relative inline-flex items-center group ${className}`}>
@@ -1821,7 +1801,6 @@ function InfoI({ text, className = "" }: { text: string; className?: string }) {
   );
 }
 
-/* ========= Gráficos simples em SVG ========= */
 function num(n: any) {
   return Number(n ?? 0);
 }
@@ -1829,7 +1808,6 @@ function fmt(n: number) {
   return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : String(n);
 }
 
-/** Mini line chart em SVG (sem libs) */
 function LineChart({ data, w = 560, h = 140 }: { data: Array<{ bucket: string | Date; value: number }>; w?: number; h?: number }) {
   const vals = data.map((d) => num(d.value));
   const max = Math.max(1, ...vals);
@@ -1849,7 +1827,6 @@ function LineChart({ data, w = 560, h = 140 }: { data: Array<{ bucket: string | 
   );
 }
 
-/** Colunas verticais simples */
 function ColumnChart({ series, w = 520, h = 180 }: { series: Array<{ label: string; value: number }>; w?: number; h?: number }) {
   const vals = series.map(s => s.value);
   const max = Math.max(1, ...vals);
@@ -1877,7 +1854,6 @@ function ColumnChart({ series, w = 520, h = 180 }: { series: Array<{ label: stri
   );
 }
 
-/** Donut com 2 segmentos (verificados vs não verificados) */
 function DonutTwoSegments({
   a,
   b,
@@ -1920,7 +1896,6 @@ function DonutTwoSegments({
   );
 }
 
-/* ========= Painel de análises ========= */
 function Kpi({ title, value, sub }: { title: React.ReactNode; value: any; sub?: string }) {
   return (
     <div className="bg-white rounded shadow p-4">
@@ -1988,7 +1963,6 @@ function AnalyticsPane() {
     loadAll();
   }, [from, to]);
 
-  // ==== cálculos de tendência 7d vs 7d anterior (série de ativos) ====
   function avgLast(series: Array<{active: number}>, take: number, offset: number) {
     const end = Math.max(0, series.length - offset);
     const start = Math.max(0, end - take);
@@ -2017,7 +1991,6 @@ function AnalyticsPane() {
         </button>
       </div>
 
-      {/* KPIs com "i" nas siglas */}
       <div className="grid md:grid-cols-3 gap-4">
         <Kpi
           title={<span className="inline-flex items-center gap-2">DAU <InfoI text="Daily Active Users — usuários ativos nas últimas 24h." /></span>}
@@ -2054,7 +2027,6 @@ function AnalyticsPane() {
         />
       </div>
 
-      {/* Série de ativos */}
       <div className="bg-white rounded shadow p-3">
         <div className="font-semibold mb-2 flex items-center gap-2">
           Usuários ativos por dia
@@ -2063,7 +2035,6 @@ function AnalyticsPane() {
         <LineChart data={activeSeries.map((r) => ({ bucket: r.bucket, value: r.active }))} />
       </div>
 
-      {/* Engajamento */}
       <div className="bg-white rounded shadow p-3">
         <div className="font-semibold mb-3">Engajamento no período</div>
         <div className="grid md:grid-cols-4 gap-3">
@@ -2077,7 +2048,6 @@ function AnalyticsPane() {
         </div>
       </div>
 
-      {/* Conversões */}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-white rounded shadow p-3">
           <div className="font-semibold mb-2 flex items-center gap-2">
@@ -2095,7 +2065,6 @@ function AnalyticsPane() {
         </div>
       </div>
 
-      {/* Churn (mensal) */}
       <div className="bg-white rounded shadow p-3">
         <div className="font-semibold mb-2 flex items-center gap-2">
           Churn de Assinaturas (mensal)
