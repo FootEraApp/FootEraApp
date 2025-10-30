@@ -46,7 +46,7 @@ export default function ProfilePage() {
       } catch (err: any) {
         if (axios.isAxiosError(err) && err.response?.status === 401) {
           console.warn("Token ausente/ inválido. Redirecionando para login.");
-          window.location.href = "/login"; // ou useLocation()[1]("/login")
+          window.location.href = "/login";
           return;
         }
         console.error("Erro ao carregar tipo do perfil:", err);
