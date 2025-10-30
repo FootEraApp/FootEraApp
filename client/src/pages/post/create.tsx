@@ -20,7 +20,6 @@ import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import { ALL_ACHIEVEMENTS, type AchievementLite } from "../../lib/achievementsCatalog.js";
 
-/* ---------------- tipos ---------------- */
 type EarnedFromApi = {
   id: string;
   entity: string;
@@ -40,7 +39,6 @@ function getUsuarioId(): string | null {
   );
 }
 
-/* ---------------- mini UI kit (esportivo) ---------------- */
 function SportButton({
   onClick,
   disabled,
@@ -101,7 +99,6 @@ function Chip({
   );
 }
 
-/* ---------------- componente ---------------- */
 export default function PaginaPostagem() {
   const [, navigate] = useLocation();
 
@@ -207,7 +204,6 @@ export default function PaginaPostagem() {
         arquivo: arquivo || undefined,
       });
 
-      // reset
       setMensagem("Postagem enviada com sucesso!");
       setDescricao("");
       setArquivo(null);
@@ -264,7 +260,6 @@ export default function PaginaPostagem() {
 
   return (
     <div className="min-h-screen bg-[#FEFBE9] pb-24">
-      {/* header (mesma cor do bottom + título centralizado, sem linha inferior) */}
       <div className="h-24 bg-green-900 text-white">
         <div className="max-w-xl mx-auto h-full px-6 flex items-center justify-center">
           <div className="flex items-center gap-3">
@@ -275,7 +270,6 @@ export default function PaginaPostagem() {
       </div>
 
       <div className="p-6 max-w-xl mx-auto">
-        {/* texto */}
         <label className="block text-sm font-semibold text-emerald-900 mb-2">Texto da postagem</label>
         <div className="rounded-2xl border bg-white shadow-sm focus-within:ring-2 ring-emerald-100 transition">
           <textarea
@@ -291,7 +285,6 @@ export default function PaginaPostagem() {
           </div>
         </div>
 
-        {/* ações principais */}
         <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <SportButton
             variant="ghost"
@@ -310,7 +303,6 @@ export default function PaginaPostagem() {
           </SportButton>
         </div>
 
-        {/* input de arquivo escondido */}
         <input
           ref={fileInputRef}
           type="file"
@@ -319,7 +311,6 @@ export default function PaginaPostagem() {
           onChange={(e) => setArquivo(e.target.files?.[0] || null)}
         />
 
-        {/* feedback seleção */}
         {(fileName || temConquista) && (
           <div className="mt-3 space-y-2">
             {fileName && (
@@ -341,10 +332,8 @@ export default function PaginaPostagem() {
           </div>
         )}
 
-        {/* preview de mídia */}
         {previewMidia}
 
-        {/* mensagem */}
         {mensagem && (
           <div
             className={`mt-4 rounded-xl px-4 py-3 text-sm flex items-center gap-2 ${
@@ -362,7 +351,6 @@ export default function PaginaPostagem() {
           </div>
         )}
 
-        {/* publicar */}
         <div className="mt-6">
           <SportButton
             onClick={handleEnviar}
@@ -379,7 +367,6 @@ export default function PaginaPostagem() {
         </div>
       </div>
 
-      {/* Modal de conquistas */}
       {achPickerOpen && (
         <div className="fixed inset-0 z-50">
           <div
@@ -462,7 +449,6 @@ export default function PaginaPostagem() {
         </div>
       )}
 
-      {/* bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
           <House />

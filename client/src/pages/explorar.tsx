@@ -21,7 +21,6 @@ import {
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 
-/* ---------------- types ---------------- */
 type UsuarioBasic = { id: string; nome: string; foto?: string | null };
 
 type AtletaItem = {
@@ -83,7 +82,6 @@ type RankItem = {
   usuario: { id: string; nome: string; foto?: string | null };
 };
 
-/* ---------------- utils ---------------- */
 const CAT_LABEL: Record<string, string> = {
   Sub9: "Sub-9",
   Sub11: "Sub-11",
@@ -107,7 +105,6 @@ const mapIdadeParaCategoria = (idade?: number | null): string | null => {
   return "Profissional";
 };
 
-/* ---------------- tiny UI kit ---------------- */
 function Pill({
   children,
   tone = "emerald",
@@ -154,7 +151,6 @@ function Tab({
   );
 }
 
-/* ---------------- component ---------------- */
 function Explorar() {
   const [busca, setBusca] = useState("");
   const [aba, setAba] = useState<"atletas" | "escolas" | "clubes" | "profissionais">("atletas");
@@ -375,14 +371,12 @@ function Explorar() {
 
   return (
     <div className="min-h-screen bg-[#FEFBE9] text-green-900 pb-24">
-      {/* Header */}
       <div className="h-20 bg-green-900 text-white flex items-center">
         <div className="max-w-5xl mx-auto w-full px-5">
           <h1 className="text-xl font-extrabold tracking-wide text-center">Explorar</h1>
         </div>
       </div>
 
-      {/* Busca + Filtros */}
       <div className="max-w-5xl mx-auto px-5 mt-4">
         <div className="flex gap-2 items-center">
           <div className="flex-1 relative">
@@ -408,7 +402,6 @@ function Explorar() {
           )}
         </div>
 
-        {/* Abas */}
         <div className="mt-4 grid grid-cols-4 gap-2">
           <Tab active={aba === "atletas"} onClick={() => setAba("atletas")} icon={<Trophy className="h-4 w-4" />}>
             Atletas
@@ -425,7 +418,6 @@ function Explorar() {
         </div>
       </div>
 
-      {/* Modal de filtros */}
       {showFilters && (
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowFilters(false)} />
@@ -542,7 +534,6 @@ function Explorar() {
                 </div>
               </div>
 
-              {/* ações */}
               <div className="flex flex-wrap gap-2 justify-between items-center pt-4">
                 <div className="flex gap-2">
                   {draft.categoria && <Pill tone="emerald">{draft.categoria}</Pill>}
@@ -580,7 +571,6 @@ function Explorar() {
         </div>
       )}
 
-      {/* Conteúdo */}
       <div className="max-w-5xl mx-auto px-5 mt-4">
         {aba === "atletas" && (
           <>
@@ -664,7 +654,6 @@ function Explorar() {
                   )}
                 </div>
 
-                {/* Ranking */}
                 <h2 className="text-lg font-bold mt-6 mb-2">Top da semana (geral)</h2>
                 {topGeral.length === 0 ? (
                   <p className="text-gray-600 mb-4">Sem dados desta semana.</p>
@@ -878,7 +867,6 @@ function Explorar() {
         )}
       </div>
 
-      {/* bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
           <House />
