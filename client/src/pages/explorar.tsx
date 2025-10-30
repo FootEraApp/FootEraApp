@@ -2,10 +2,26 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
-import { Volleyball, User, CirclePlus, Search, House, Filter, X } from "lucide-react";
+import {
+  Volleyball,
+  User,
+  CirclePlus,
+  Search,
+  House,
+  Filter,
+  X,
+  Trophy,
+  School,
+  Building2,
+  MapPin,
+  Goal,
+  Shield,
+  Heart,
+} from "lucide-react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 
+/* ---------------- types ---------------- */
 type UsuarioBasic = { id: string; nome: string; foto?: string | null };
 
 type AtletaItem = {
@@ -67,14 +83,17 @@ type RankItem = {
   usuario: { id: string; nome: string; foto?: string | null };
 };
 
+/* ---------------- utils ---------------- */
 const CAT_LABEL: Record<string, string> = {
-  Sub9: "Sub-9", Sub11: "Sub-11", Sub13: "Sub-13", Sub15: "Sub-15",
-  Sub17: "Sub-17", Sub20: "Sub-20", Livre: "Livre",
+  Sub9: "Sub-9",
+  Sub11: "Sub-11",
+  Sub13: "Sub-13",
+  Sub15: "Sub-15",
+  Sub17: "Sub-17",
+  Sub20: "Sub-20",
+  Livre: "Livre",
 };
-
-const CATEGORIAS = [
-  "Sub-9","Sub-11","Sub-13","Sub-15","Sub-17","Sub-20","Sub-23","Profissional",
-];
+const CATEGORIAS = ["Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-17", "Sub-20", "Sub-23", "Profissional"];
 
 const mapIdadeParaCategoria = (idade?: number | null): string | null => {
   if (idade == null) return null;
@@ -88,6 +107,54 @@ const mapIdadeParaCategoria = (idade?: number | null): string | null => {
   return "Profissional";
 };
 
+/* ---------------- tiny UI kit ---------------- */
+function Pill({
+  children,
+  tone = "emerald",
+  className = "",
+}: {
+  children: React.ReactNode;
+  tone?: "emerald" | "amber" | "sky" | "gray" | "rose";
+  className?: string;
+}) {
+  const map = {
+    emerald: "bg-emerald-50 text-emerald-800 border-emerald-200",
+    amber: "bg-amber-50 text-amber-800 border-amber-200",
+    sky: "bg-sky-50 text-sky-800 border-sky-200",
+    gray: "bg-gray-50 text-gray-700 border-gray-200",
+    rose: "bg-rose-50 text-rose-700 border-rose-200",
+  }[tone];
+  return (
+    <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded border ${map} ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function Tab({
+  active,
+  onClick,
+  children,
+  icon,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-sm transition
+      ${active ? "bg-white text-green-900 font-semibold shadow" : "bg-green-100/70 text-green-800 hover:bg-green-100"}`}
+    >
+      {icon ? <span className="shrink-0">{icon}</span> : null}
+      <span>{children}</span>
+    </button>
+  );
+}
+
+/* ---------------- component ---------------- */
 function Explorar() {
   const [busca, setBusca] = useState("");
   const [aba, setAba] = useState<"atletas" | "escolas" | "clubes" | "profissionais">("atletas");
@@ -96,8 +163,11 @@ function Explorar() {
   const [showFilters, setShowFilters] = useState(false);
   const [filtros, setFiltros] = useState<Filtros>({ independente: null, pontuacaoMin: null, pontuacaoMax: null });
   const [draft, setDraft] = useState<Filtros>({ independente: null, pontuacaoMin: null, pontuacaoMax: null });
+
   const [topGeral, setTopGeral] = useState<RankItem[]>([]);
   const [topPorCategoria, setTopPorCategoria] = useState<Record<string, RankItem[]>>({});
+
+  const [carregandoDados, setCarregandoDados] = useState(false);
 
   const [pageSize, setPageSize] = useState(12);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -151,16 +221,10 @@ function Explorar() {
       (entries) => {
         const [entry] = entries;
         if (!entry.isIntersecting) return;
-
-        if (aba === "atletas") {
-          setShowCountAtletas((c) => Math.min(c + pageSize, atletasFiltrados.length));
-        } else if (aba === "escolas") {
-          setShowCountEscolas((c) => Math.min(c + pageSize, dados.escolas.length));
-        } else if (aba === "clubes") {
-          setShowCountClubes((c) => Math.min(c + pageSize, dados.clubes.length));
-        } else if (aba === "profissionais") {
-          setShowCountProfs((c) => Math.min(c + pageSize, profissionais.length));
-        }
+        if (aba === "atletas") setShowCountAtletas((c) => Math.min(c + pageSize, atletasFiltrados.length));
+        else if (aba === "escolas") setShowCountEscolas((c) => Math.min(c + pageSize, dados.escolas.length));
+        else if (aba === "clubes") setShowCountClubes((c) => Math.min(c + pageSize, dados.clubes.length));
+        else if (aba === "profissionais") setShowCountProfs((c) => Math.min(c + pageSize, profissionais.length));
       },
       { root: null, rootMargin: "400px", threshold: 0 }
     );
@@ -184,34 +248,32 @@ function Explorar() {
 
   useEffect(() => {
     const token = Storage?.token || "";
-    axios.get(`${API.BASE_URL}/api/ranking/weekly`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    })
-    .then(({ data }) => {
-      setTopGeral(Array.isArray(data?.geral) ? data.geral : []);
-      setTopPorCategoria(typeof data?.porCategoria === "object" && data?.porCategoria ? data.porCategoria : {});
-    })
-    .catch(() => {
-      setTopGeral([]); setTopPorCategoria({});
-    });
+    axios
+      .get(`${API.BASE_URL}/api/ranking/weekly`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+      .then(({ data }) => {
+        setTopGeral(Array.isArray(data?.geral) ? data.geral : []);
+        setTopPorCategoria(typeof data?.porCategoria === "object" && data?.porCategoria ? data.porCategoria : {});
+      })
+      .catch(() => {
+        setTopGeral([]);
+        setTopPorCategoria({});
+      });
   }, []);
 
   useEffect(() => {
     const token = Storage?.token ?? (typeof window !== "undefined" ? Storage.token : "");
-    const params: any = {
-      q: busca,
-      excludeUsuarioId: loggedUserId,
-    };
+    const params: any = { q: busca, excludeUsuarioId: loggedUserId };
     if (filtros.categoria) params.categoria = filtros.categoria;
     if (filtros.posicao) params.posicao = filtros.posicao;
     if (filtros.estado) params.estado = filtros.estado;
     if (filtros.cidade) params.cidade = filtros.cidade;
-    if (filtros.independente !== null && filtros.independente !== undefined) {
-      params.independente = String(!!filtros.independente);
-    }
+    if (filtros.independente !== null && filtros.independente !== undefined) params.independente = String(!!filtros.independente);
     if (typeof filtros.pontuacaoMin === "number") params.pMin = filtros.pontuacaoMin;
     if (typeof filtros.pontuacaoMax === "number") params.pMax = filtros.pontuacaoMax;
 
+    setCarregandoDados(true);
     axios
       .get(`${API.BASE_URL}/api/explorar`, {
         params,
@@ -226,13 +288,13 @@ function Explorar() {
           escolas: filtrarEu<EscolaItem>(data.escolas || []),
         });
       })
-      .catch((e) => {
-        console.error(e);
+      .catch(() => {
         setDados({ atletas: [], professores: [], olheiros: [], clubes: [], escolas: [] });
-      });
+      })
+      .finally(() => setCarregandoDados(false));
   }, [busca, loggedUserId, filtrosKey, filtrarEu]);
 
-  const abas: Array<["atletas" | "escolas" | "clubes" |  "profissionais", string]> = [
+  const abas: Array<["atletas" | "escolas" | "clubes" | "profissionais", string]> = [
     ["atletas", "Atletas"],
     ["escolas", "Escolas"],
     ["clubes", "Clubes"],
@@ -261,7 +323,6 @@ function Explorar() {
   const atletasFiltrados = useMemo(() => {
     const f = filtros;
     const norm = (s?: string | null) => (s || "").toLowerCase();
-
     return (dados.atletas || []).filter((a) => {
       if (f.categoria) {
         const cat = a.categoriaBase || mapIdadeParaCategoria(a.idade);
@@ -283,295 +344,413 @@ function Explorar() {
     });
   }, [dados.atletas, filtros]);
 
-  const abrirFiltros = () => { setDraft(filtros); setShowFilters(true); };
-  const aplicarFiltros = () => { setFiltros(draft); setShowFilters(false); };
+  const abrirFiltros = () => {
+    setDraft(filtros);
+    setShowFilters(true);
+  };
+  const aplicarFiltros = () => {
+    setFiltros(draft);
+    setShowFilters(false);
+  };
   const limparFiltros = () => {
     const base = { independente: null, pontuacaoMin: null, pontuacaoMax: null } as Filtros;
-    setDraft(base); setFiltros(base); setShowFilters(false);
+    setDraft(base);
+    setFiltros(base);
+    setShowFilters(false);
   };
 
   const hasMoreAtletas = showCountAtletas < atletasFiltrados.length;
   const hasMoreEscolas = showCountEscolas < dados.escolas.length;
-  const hasMoreClubes  = showCountClubes  < dados.clubes.length;
-  const hasMoreProfs   = showCountProfs   < profissionais.length;
+  const hasMoreClubes = showCountClubes < dados.clubes.length;
+  const hasMoreProfs = showCountProfs < profissionais.length;
+
+  const activeFiltersCount =
+    (draft.categoria ? 1 : 0) +
+    (draft.posicao ? 1 : 0) +
+    (draft.estado ? 1 : 0) +
+    (draft.cidade ? 1 : 0) +
+    (draft.independente !== null && draft.independente !== undefined ? 1 : 0) +
+    (typeof draft.pontuacaoMin === "number" ? 1 : 0) +
+    (typeof draft.pontuacaoMax === "number" ? 1 : 0);
 
   return (
-    <div className="min-h-screen bg-cream text-green-900">
-      <div className="bg-green-900 p-4 text-white text-center text-2xl font-bold">FOOTERA</div>
-
-      <div className="p-4 flex gap-2 items-center">
-        <input
-          type="text"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar"
-          className="w-full p-2 rounded border"
-        />
-        {aba === "atletas" && (
-          <button
-            onClick={abrirFiltros}
-            className="px-3 py-2 rounded border bg-white flex items-center gap-1"
-            title="Filtros"
-          >
-            <Filter size={16} /> Filtros
-          </button>
-        )}
+    <div className="min-h-screen bg-[#FEFBE9] text-green-900 pb-24">
+      {/* Header */}
+      <div className="h-20 bg-green-900 text-white flex items-center">
+        <div className="max-w-5xl mx-auto w-full px-5">
+          <h1 className="text-xl font-extrabold tracking-wide text-center">Explorar</h1>
+        </div>
       </div>
 
+      {/* Busca + Filtros */}
+      <div className="max-w-5xl mx-auto px-5 mt-4">
+        <div className="flex gap-2 items-center">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-800/70" />
+            <input
+              type="text"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar por nome, posição, cidade..."
+              className="w-full pl-9 pr-4 py-2 rounded-xl border outline-none focus:ring-2 ring-emerald-100 bg-white"
+            />
+          </div>
+
+          {aba === "atletas" && (
+            <button
+              onClick={abrirFiltros}
+              className="px-3 py-2 rounded-xl border bg-white flex items-center gap-2 text-sm hover:bg-emerald-50"
+              title="Filtros"
+            >
+              <Filter size={16} /> Filtros
+              {activeFiltersCount > 0 && <Pill tone="emerald" className="ml-1">{activeFiltersCount}</Pill>}
+            </button>
+          )}
+        </div>
+
+        {/* Abas */}
+        <div className="mt-4 grid grid-cols-4 gap-2">
+          <Tab active={aba === "atletas"} onClick={() => setAba("atletas")} icon={<Trophy className="h-4 w-4" />}>
+            Atletas
+          </Tab>
+          <Tab active={aba === "escolas"} onClick={() => setAba("escolas")} icon={<School className="h-4 w-4" />}>
+            Escolas
+          </Tab>
+          <Tab active={aba === "clubes"} onClick={() => setAba("clubes")} icon={<Building2 className="h-4 w-4" />}>
+            Clubes
+          </Tab>
+          <Tab active={aba === "profissionais"} onClick={() => setAba("profissionais")} icon={<User className="h-4 w-4" />}>
+            Profissionais
+          </Tab>
+        </div>
+      </div>
+
+      {/* Modal de filtros */}
       {showFilters && (
-        <div className="px-4">
-          <div className="bg-white rounded-lg border shadow-sm p-3 grid gap-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Filtrar atletas</h3>
-              <button onClick={() => setShowFilters(false)} className="p-1 rounded hover:bg-gray-100">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm mb-1">Faixa etária / Categoria</label>
-                <select
-                  className="w-full border rounded px-2 py-2 bg-white"
-                  value={draft.categoria ?? ""}
-                  onChange={(e) => setDraft((d) => ({ ...d, categoria: e.target.value || undefined }))}
-                >
-                  <option value="">Todas</option>
-                  {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowFilters(false)} />
+          <div className="absolute inset-x-0 bottom-0 sm:top-[10%] sm:bottom-auto sm:mx-auto sm:max-w-3xl">
+            <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 max-h-[80vh] overflow-auto">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-5 w-5 text-emerald-700" />
+                  <h3 className="font-bold text-emerald-900">Filtrar atletas</h3>
+                </div>
+                <button onClick={() => setShowFilters(false)} className="p-1 rounded-full hover:bg-gray-100">
+                  <X className="h-5 w-5" />
+                </button>
               </div>
 
-              <div>
-                <label className="block text-sm mb-1">Posição</label>
-                <input
-                  className="w-full border rounded px-2 py-2"
-                  placeholder="ex.: Zagueiro, Lateral, Meia..."
-                  value={draft.posicao ?? ""}
-                  onChange={(e) => setDraft((d) => ({ ...d, posicao: e.target.value || undefined }))}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm mb-1">Estado (UF)</label>
-                <input
-                  className="w-full border rounded px-2 py-2"
-                  placeholder="ex.: SP"
-                  value={draft.estado ?? ""}
-                  onChange={(e) => setDraft((d) => ({ ...d, estado: e.target.value || undefined }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm mb-1">Cidade</label>
-                <input
-                  className="w-full border rounded px-2 py-2"
-                  placeholder="ex.: Santos"
-                  value={draft.cidade ?? ""}
-                  onChange={(e) => setDraft((d) => ({ ...d, cidade: e.target.value || undefined }))}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm mb-1">Vínculo</label>
-                <select
-                  className="w-full border rounded px-2 py-2 bg-white"
-                  value={
-                    draft.independente === null || draft.independente === undefined
-                      ? ""
-                      : draft.independente ? "indep" : "vinc"
-                  }
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setDraft((d) => ({
-                      ...d,
-                      independente: v === "" ? null : v === "indep"
-                    }));
-                  }}
-                >
-                  <option value="">Todos</option>
-                  <option value="indep">Independente</option>
-                  <option value="vinc">Vinculado</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid sm:grid-cols-2 gap-3 mt-3">
                 <div>
-                  <label className="block text-sm mb-1">Pontuação mínima</label>
+                  <label className="block text-sm mb-1">Faixa etária / Categoria</label>
+                  <select
+                    className="w-full border rounded px-2 py-2 bg-white"
+                    value={draft.categoria ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, categoria: e.target.value || undefined }))}
+                  >
+                    <option value="">Todas</option>
+                    {CATEGORIAS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1">Posição</label>
                   <input
-                    type="number"
-                    min={0}
-                    max={100}
                     className="w-full border rounded px-2 py-2"
-                    value={draft.pontuacaoMin ?? ""}
-                    onChange={(e) =>
-                      setDraft((d) => ({
-                        ...d,
-                        pontuacaoMin: e.target.value === "" ? null : Number(e.target.value),
-                      }))
-                    }
+                    placeholder="ex.: Zagueiro, Lateral, Meia..."
+                    value={draft.posicao ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, posicao: e.target.value || undefined }))}
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm mb-1">Pontuação máxima</label>
+                  <label className="block text-sm mb-1">Estado (UF)</label>
                   <input
-                    type="number"
-                    min={0}
-                    max={100}
                     className="w-full border rounded px-2 py-2"
-                    value={draft.pontuacaoMax ?? ""}
-                    onChange={(e) =>
-                      setDraft((d) => ({
-                        ...d,
-                        pontuacaoMax: e.target.value === "" ? null : Number(e.target.value),
-                      }))
-                    }
+                    placeholder="ex.: SP"
+                    value={draft.estado ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, estado: e.target.value || undefined }))}
                   />
                 </div>
-              </div>
-            </div>
 
-            <div className="flex gap-2 justify-end pt-2">
-              <button onClick={limparFiltros} className="px-3 py-2 rounded border">Limpar</button>
-              <button onClick={aplicarFiltros} className="px-4 py-2 rounded bg-green-800 text-white">Aplicar</button>
+                <div>
+                  <label className="block text-sm mb-1">Cidade</label>
+                  <input
+                    className="w-full border rounded px-2 py-2"
+                    placeholder="ex.: Santos"
+                    value={draft.cidade ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, cidade: e.target.value || undefined }))}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1">Vínculo</label>
+                  <select
+                    className="w-full border rounded px-2 py-2 bg-white"
+                    value={
+                      draft.independente === null || draft.independente === undefined ? "" : draft.independente ? "indep" : "vinc"
+                    }
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setDraft((d) => ({ ...d, independente: v === "" ? null : v === "indep" }));
+                    }}
+                  >
+                    <option value="">Todos</option>
+                    <option value="indep">Independente</option>
+                    <option value="vinc">Vinculado</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-sm mb-1">Pontuação mín.</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      className="w-full border rounded px-2 py-2"
+                      value={draft.pontuacaoMin ?? ""}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          pontuacaoMin: e.target.value === "" ? null : Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1">Pontuação máx.</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      className="w-full border rounded px-2 py-2"
+                      value={draft.pontuacaoMax ?? ""}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          pontuacaoMax: e.target.value === "" ? null : Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ações */}
+              <div className="flex flex-wrap gap-2 justify-between items-center pt-4">
+                <div className="flex gap-2">
+                  {draft.categoria && <Pill tone="emerald">{draft.categoria}</Pill>}
+                  {draft.posicao && (
+                    <Pill tone="sky">
+                      <Goal className="h-3.5 w-3.5" /> {draft.posicao}
+                    </Pill>
+                  )}
+                  {(draft.estado || draft.cidade) && (
+                    <Pill tone="gray">
+                      <MapPin className="h-3.5 w-3.5" /> {draft.cidade || ""} {draft.estado ? `, ${draft.estado}` : ""}
+                    </Pill>
+                  )}
+                  {draft.independente !== null && draft.independente !== undefined && (
+                    <Pill tone="amber">{draft.independente ? "Independente" : "Vinculado"}</Pill>
+                  )}
+                  {(typeof draft.pontuacaoMin === "number" || typeof draft.pontuacaoMax === "number") && (
+                    <Pill tone="rose">
+                      <Heart className="h-3.5 w-3.5" />
+                      {draft.pontuacaoMin ?? 0}–{draft.pontuacaoMax ?? 100}
+                    </Pill>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={limparFiltros} className="px-3 py-2 rounded-xl border">
+                    Limpar
+                  </button>
+                  <button onClick={aplicarFiltros} className="px-4 py-2 rounded-xl bg-green-800 text-white">
+                    Aplicar
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      <div className="flex justify-around mb-2 px-2 mt-2">
-        {abas.map(([tab, label]) => (
-          <button
-            key={tab}
-            className={`flex-1 py-2 text-center rounded-t-lg text-sm ${aba === tab ? "bg-white font-bold border-b-2 border-green-900" : "bg-green-100"}`}
-            onClick={() => setAba(tab)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="px-4 pb-24">
+      {/* Conteúdo */}
+      <div className="max-w-5xl mx-auto px-5 mt-4">
         {aba === "atletas" && (
           <>
-            <h2 className="text-xl font-bold my-2">Atletas em Destaque</h2>
-            <div className="grid grid-cols-2 gap-3">
-              {atletasFiltrados.slice(0, showCountAtletas).map((a) => {
-                const foto = formatarUrlFoto(a.foto ?? a.usuario?.foto, "usuarios");
-                const nome = a?.usuario?.nome ?? "profile";
-                const uid  = a?.usuario?.id ?? a?.usuarioId ?? a.id;
-                return (
-                  <Link href={`/perfil/${uid}`} key={`${a.id}-${uid}`}>
-                    <div className="bg-white rounded shadow p-2 flex flex-col items-center">
-                      <img
-                        src={foto}
-                        alt={`${nome} profile`}
-                        className="w-24 h-24 rounded-full object-cover"
-                      />
-                      <p className="mt-2 font-medium text-center">{nome}</p>
-                      {a.tipoTreino && (
-                        <span className="mt-1 text-[10px] px-2 py-0.5 rounded bg-green-100 text-green-800">
-                          {a.tipoTreino}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+            <h2 className="text-lg font-bold mb-2">Atletas em Destaque</h2>
 
-            <div className="mt-3 flex flex-col items-center">
-              {hasMoreAtletas && (
-                <button
-                  onClick={() => setShowCountAtletas((c) => Math.min(c + pageSize, atletasFiltrados.length))}
-                  className="mt-2 px-4 py-2 rounded border bg-white text-sm"
-                >
-                  Carregar mais
-                </button>
-              )}
-              <div ref={sentinelRef} className="h-1 w-full" />
-              {!hasMoreAtletas && atletasFiltrados.length > 0 && (
-                <div className="text-xs text-gray-500 mt-2">Fim dos resultados</div>
-              )}
-              {atletasFiltrados.length === 0 && (
-                <div className="text-sm text-gray-500 mt-2">Nenhum atleta encontrado</div>
-              )}
-            </div>
-
-            <h2 className="text-xl font-bold my-2">Top da semana (geral)</h2>
-            {topGeral.length === 0 ? (
-              <p className="text-gray-600 mb-4">Sem dados desta semana.</p>
-            ) : (
-              <div className="flex gap-3 overflow-x-auto pb-2 mb-4">
-                {topGeral.slice(0, 10).map((r, idx) => {
-                  const foto = formatarUrlFoto(r.usuario?.foto, "usuarios");
-                  return (
-                    <Link href={`/perfil/${r.usuario.id}`} key={r.atletaId}>
-                      <div className="min-w-[150px] bg-white rounded shadow p-2 flex flex-col items-center">
-                        <div className="text-xs font-semibold mb-1">{idx + 1}º</div>
-                        <img
-                          src={foto}
-                          onError={(e) => ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`)}
-                          className="w-16 h-16 rounded-full object-cover"
-                          alt={r.usuario.nome}
-                        />
-                        <div className="mt-2 text-sm text-center line-clamp-2">{r.usuario.nome}</div>
-                        <div className="text-xs mt-1">❤️ {r.total}</div>
-                      </div>
-                    </Link>
-                  );
-                })}
+            {carregandoDados && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="bg-white rounded-xl p-3 shadow-sm animate-pulse">
+                    <div className="w-24 h-24 mx-auto rounded-full bg-gray-200" />
+                    <div className="h-3 bg-gray-200 rounded mt-3" />
+                    <div className="h-3 bg-gray-200 rounded mt-2 w-2/3" />
+                  </div>
+                ))}
               </div>
             )}
 
-            <h3 className="text-lg font-bold mt-4 mb-2">Líderes por categoria</h3>
-            <div className="space-y-2 mb-4">
-              {Object.entries(topPorCategoria).map(([cat, lista]) => {
-                const top = (lista as RankItem[])[0];
-                if (!top) return null;
-                const foto = formatarUrlFoto(top.usuario?.foto, "usuarios");
-                const rotulo = CAT_LABEL[cat] ?? cat;
-                return (
-                  <Link href={`/perfil/${top.usuario.id}`} key={`cat-${cat}`}>
-                    <div className="bg-white rounded shadow p-2 flex items-center gap-3">
-                      <div className="text-sm font-bold w-24">{rotulo}</div>
-                      <img
-                        src={foto}
-                        onError={(e) => ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`)}
-                        className="w-10 h-10 rounded-full object-cover"
-                        alt={top.usuario.nome}
-                      />
-                      <div className="flex-1">
-                        <div className="text-sm font-medium">{top.usuario.nome}</div>
-                        <div className="text-xs text-gray-600">❤️ {top.total}</div>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+            {!carregandoDados && (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {atletasFiltrados.slice(0, showCountAtletas).map((a) => {
+                    const foto = formatarUrlFoto(a.foto ?? a.usuario?.foto, "usuarios");
+                    const nome = a?.usuario?.nome ?? "profile";
+                    const uid = a?.usuario?.id ?? a?.usuarioId ?? a.id;
+                    const categoria = a.categoriaBase || mapIdadeParaCategoria(a.idade);
+                    return (
+                      <Link href={`/perfil/${uid}`} key={`${a.id}-${uid}`}>
+                        <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
+                          <img
+                            src={foto}
+                            alt={`${nome} profile`}
+                            className="w-24 h-24 rounded-full object-cover border"
+                            onError={(e) =>
+                              ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`)
+                            }
+                          />
+                          <p className="mt-2 font-medium text-center line-clamp-2">{nome}</p>
+                          <div className="mt-1 flex flex-wrap gap-1 justify-center">
+                            {categoria && (
+                              <Pill tone="emerald">
+                                <Shield className="h-3.5 w-3.5" /> {categoria}
+                              </Pill>
+                            )}
+                            {a.posicao && (
+                              <Pill tone="sky">
+                                <Goal className="h-3.5 w-3.5" /> {a.posicao}
+                              </Pill>
+                            )}
+                            {(a.cidade || a.estado) && (
+                              <Pill tone="gray">
+                                <MapPin className="h-3.5 w-3.5" /> {a.cidade ?? ""} {a.estado ? `, ${a.estado}` : ""}
+                              </Pill>
+                            )}
+                            {typeof a.pontuacao === "number" && (
+                              <Pill tone="amber">
+                                <Heart className="h-3.5 w-3.5" /> {a.pontuacao}
+                              </Pill>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-3 flex flex-col items-center">
+                  {hasMoreAtletas && (
+                    <button
+                      onClick={() => setShowCountAtletas((c) => Math.min(c + pageSize, atletasFiltrados.length))}
+                      className="mt-2 px-4 py-2 rounded-xl border bg-white text-sm hover:bg-emerald-50"
+                    >
+                      Carregar mais
+                    </button>
+                  )}
+                  <div ref={sentinelRef} className="h-1 w-full" />
+                  {!hasMoreAtletas && atletasFiltrados.length > 0 && (
+                    <div className="text-xs text-gray-500 mt-2">Fim dos resultados</div>
+                  )}
+                  {atletasFiltrados.length === 0 && !carregandoDados && (
+                    <div className="text-sm text-gray-600 mt-2">Nenhum atleta encontrado</div>
+                  )}
+                </div>
+
+                {/* Ranking */}
+                <h2 className="text-lg font-bold mt-6 mb-2">Top da semana (geral)</h2>
+                {topGeral.length === 0 ? (
+                  <p className="text-gray-600 mb-4">Sem dados desta semana.</p>
+                ) : (
+                  <div className="flex gap-3 overflow-x-auto pb-2 mb-4">
+                    {topGeral.slice(0, 10).map((r, idx) => {
+                      const foto = formatarUrlFoto(r.usuario?.foto, "usuarios");
+                      return (
+                        <Link href={`/perfil/${r.usuario.id}`} key={r.atletaId}>
+                          <div className="min-w-[150px] bg-white rounded-xl shadow-sm p-3 flex flex-col items-center hover:shadow transition">
+                            <div className="text-xs font-semibold mb-1">{idx + 1}º</div>
+                            <img
+                              src={foto}
+                              onError={(e) =>
+                                ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`)
+                              }
+                              className="w-16 h-16 rounded-full object-cover border"
+                              alt={r.usuario.nome}
+                            />
+                            <div className="mt-2 text-sm text-center line-clamp-2">{r.usuario.nome}</div>
+                            <div className="text-xs mt-1">❤️ {r.total}</div>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <h3 className="text-base font-bold mt-4 mb-2">Líderes por categoria</h3>
+                <div className="space-y-2 mb-4">
+                  {Object.entries(topPorCategoria).map(([cat, lista]) => {
+                    const top = (lista as RankItem[])[0];
+                    if (!top) return null;
+                    const foto = formatarUrlFoto(top.usuario?.foto, "usuarios");
+                    const rotulo = CAT_LABEL[cat] ?? cat;
+                    return (
+                      <Link href={`/perfil/${top.usuario.id}`} key={`cat-${cat}`}>
+                        <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition">
+                          <div className="text-sm font-bold w-24">{rotulo}</div>
+                          <img
+                            src={foto}
+                            onError={(e) =>
+                              ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`)
+                            }
+                            className="w-10 h-10 rounded-full object-cover border"
+                            alt={top.usuario.nome}
+                          />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium">{top.usuario.nome}</div>
+                            <div className="text-xs text-gray-600">❤️ {top.total}</div>
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </>
         )}
 
         {aba === "escolas" && (
           <>
-            <h2 className="text-xl font-bold my-4">Escolas de Futebol</h2>
+            <h2 className="text-lg font-bold my-4">Escolas de Futebol</h2>
             <div className="space-y-3">
               {dados.escolas.slice(0, showCountEscolas).map((e) => {
                 const logo = formatarUrlFoto(e.logo) || "/placeholder.png";
                 const href = e.usuarioId ? `/perfil/${e.usuarioId}` : undefined;
                 const Card = (
-                  <div className="bg-white rounded shadow p-3 flex items-center gap-3 cursor-pointer">
-                    <img src={logo} alt="Logo da escola" className="w-16 h-16 rounded-full object-cover" />
-                    <div>
-                      <h3 className="font-bold">{e.nome}</h3>
-                      <p className="text-sm text-gray-600">
-                        {e.cidade ?? "Cidade"}{e.estado ? `, ${e.estado}` : ""}
+                  <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
+                    <img src={logo} alt="Logo da escola" className="w-16 h-16 rounded-full object-cover border" />
+                    <div className="min-w-0">
+                      <h3 className="font-semibold truncate">{e.nome}</h3>
+                      <p className="text-sm text-gray-600 flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5" />
+                        {e.cidade ?? "Cidade"}
+                        {e.estado ? `, ${e.estado}` : ""}
                       </p>
-                      <p className="text-sm">{e.siteOficial || "Site indisponível"}</p>
+                      <p className="text-xs text-gray-600 truncate">{e.siteOficial || "Site indisponível"}</p>
                     </div>
                   </div>
                 );
                 return href ? (
-                  <Link href={href} key={e.id}>{Card}</Link>
+                  <Link href={href} key={e.id}>
+                    {Card}
+                  </Link>
                 ) : (
                   <div key={e.id}>{Card}</div>
                 );
@@ -582,7 +761,7 @@ function Explorar() {
               {hasMoreEscolas && (
                 <button
                   onClick={() => setShowCountEscolas((c) => Math.min(c + pageSize, dados.escolas.length))}
-                  className="mt-2 px-4 py-2 rounded border bg-white text-sm"
+                  className="mt-2 px-4 py-2 rounded-xl border bg-white text-sm hover:bg-emerald-50"
                 >
                   Carregar mais
                 </button>
@@ -591,8 +770,8 @@ function Explorar() {
               {!hasMoreEscolas && dados.escolas.length > 0 && (
                 <div className="text-xs text-gray-500 mt-2">Fim dos resultados</div>
               )}
-              {dados.escolas.length === 0 && (
-                <div className="text-sm text-gray-500 mt-2">Nenhuma escola encontrada</div>
+              {dados.escolas.length === 0 && !carregandoDados && (
+                <div className="text-sm text-gray-600 mt-2">Nenhuma escola encontrada</div>
               )}
             </div>
           </>
@@ -600,25 +779,29 @@ function Explorar() {
 
         {aba === "clubes" && (
           <>
-            <h2 className="text-xl font-bold my-4">Clubes</h2>
+            <h2 className="text-lg font-bold my-4">Clubes</h2>
             <div className="space-y-3">
               {dados.clubes.slice(0, showCountClubes).map((c) => {
                 const logo = formatarUrlFoto(c.logo) || "/placeholder.png";
                 const href = c.usuarioId ? `/perfil/${c.usuarioId}` : undefined;
                 const Card = (
-                  <div className="bg-white rounded shadow p-3 flex items-center gap-3 cursor-pointer">
-                    <img src={logo} alt="Logo do clube" className="w-16 h-16 rounded-full object-cover" />
-                    <div>
-                      <h3 className="font-bold">{c.nome}</h3>
-                      <p className="text-sm text-gray-600">
-                        {c.cidade ?? "Cidade"}{c.estado ? `, ${c.estado}` : ""}
+                  <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
+                    <img src={logo} alt="Logo do clube" className="w-16 h-16 rounded-full object-cover border" />
+                    <div className="min-w-0">
+                      <h3 className="font-semibold truncate">{c.nome}</h3>
+                      <p className="text-sm text-gray-600 flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5" />
+                        {c.cidade ?? "Cidade"}
+                        {c.estado ? `, ${c.estado}` : ""}
                       </p>
-                      <p className="text-sm">Clube Profissional</p>
+                      <p className="text-xs text-gray-600">Clube Profissional</p>
                     </div>
                   </div>
                 );
                 return href ? (
-                  <Link href={href} key={c.id}>{Card}</Link>
+                  <Link href={href} key={c.id}>
+                    {Card}
+                  </Link>
                 ) : (
                   <div key={c.id}>{Card}</div>
                 );
@@ -629,7 +812,7 @@ function Explorar() {
               {hasMoreClubes && (
                 <button
                   onClick={() => setShowCountClubes((c) => Math.min(c + pageSize, dados.clubes.length))}
-                  className="mt-2 px-4 py-2 rounded border bg-white text-sm"
+                  className="mt-2 px-4 py-2 rounded-xl border bg-white text-sm hover:bg-emerald-50"
                 >
                   Carregar mais
                 </button>
@@ -638,8 +821,8 @@ function Explorar() {
               {!hasMoreClubes && dados.clubes.length > 0 && (
                 <div className="text-xs text-gray-500 mt-2">Fim dos resultados</div>
               )}
-              {dados.clubes.length === 0 && (
-                <div className="text-sm text-gray-500 mt-2">Nenhum clube encontrado</div>
+              {dados.clubes.length === 0 && !carregandoDados && (
+                <div className="text-sm text-gray-600 mt-2">Nenhum clube encontrado</div>
               )}
             </div>
           </>
@@ -647,30 +830,27 @@ function Explorar() {
 
         {aba === "profissionais" && (
           <>
-            <h2 className="text-xl font-bold my-4">Profissionais</h2>
+            <h2 className="text-lg font-bold my-4">Professores e Olheiros</h2>
             {profissionais.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {profissionais.slice(0, showCountProfs).map((p) => {
                   const foto = formatarUrlFoto(p.foto, "usuarios");
                   const uid = p.usuario.id;
-                  const href =
-                    p.role === "Olheiro" ? `/perfil-olheiro/${uid}` : `/perfil/${uid}`;
+                  const href = p.role === "Olheiro" ? `/perfil-olheiro/${uid}` : `/perfil/${uid}`;
 
                   return (
                     <Link href={href} key={`${p.role}-${p.id}`}>
-                      <div className="bg-white rounded shadow p-2 flex flex-col items-center">
+                      <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
                         <img
                           src={foto}
                           alt="Foto do usuário"
-                          className="w-24 h-24 rounded-full object-cover"
+                          className="w-24 h-24 rounded-full object-cover border"
                           onError={(e) => {
                             (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`;
                           }}
                         />
-                        <p className="mt-2 font-medium text-center">{p.usuario.nome}</p>
-                        <span className="mt-1 text-[11px] px-1.5 py-0.2 rounded bg-green-800 text-white">
-                          {p.role}
-                        </span>
+                        <p className="mt-2 font-medium text-center line-clamp-2">{p.usuario.nome}</p>
+                        <Pill tone="amber" className="mt-1">{p.role}</Pill>
                       </div>
                     </Link>
                   );
@@ -684,7 +864,7 @@ function Explorar() {
               {hasMoreProfs && (
                 <button
                   onClick={() => setShowCountProfs((c) => Math.min(c + pageSize, profissionais.length))}
-                  className="mt-2 px-4 py-2 rounded border bg-white text-sm"
+                  className="mt-2 px-4 py-2 rounded-xl border bg-white text-sm hover:bg-emerald-50"
                 >
                   Carregar mais
                 </button>
@@ -698,12 +878,23 @@ function Explorar() {
         )}
       </div>
 
+      {/* bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed" className="hover:underline"><House /></Link>
-        <Link href="/explorar" className="hover:underline"><Search /></Link>
-        <Link href="/post" className="hover:underline"><CirclePlus /></Link>
-        <Link href="/treinos" className="hover:underline"><Volleyball /></Link>
-        <Link href="/perfil" className="hover:underline"><User /></Link>
+        <Link href="/feed" className="hover:underline">
+          <House />
+        </Link>
+        <Link href="/explorar" className="hover:underline">
+          <Search />
+        </Link>
+        <Link href="/post" className="hover:underline">
+          <CirclePlus />
+        </Link>
+        <Link href="/treinos" className="hover:underline">
+          <Volleyball />
+        </Link>
+        <Link href="/perfil" className="hover:underline">
+          <User />
+        </Link>
       </nav>
     </div>
   );
