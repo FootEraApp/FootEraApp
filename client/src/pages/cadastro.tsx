@@ -294,11 +294,9 @@ export default function Cadastro() {
 
       const data = await res.json();
 
-      // mensagem de sucesso + scroll pra garantir visibilidade
       setSucesso("Cadastro salvo com sucesso! Redirecionando para a página de login…");
       window.scrollTo({ top: 0, behavior: "smooth" });
 
-      // registra consentimento (best-effort)
       try {
         await fetch(`${API.BASE_URL}/api/legal/consentimentos`, {
           method: "POST",
@@ -317,7 +315,6 @@ export default function Cadastro() {
         console.warn("Falha ao registrar consentimento:", e);
       }
 
-      // cria solicitação de vínculo (se aplicável) — best-effort
       if (tipoPerfil === "Atleta" && vinculo.desejaVinculo && vinculo.destinatarioId) {
         try {
           await fetch(`${API.BASE_URL}/api/solicitacoes`, {
@@ -333,7 +330,6 @@ export default function Cadastro() {
         }
       }
 
-      // redireciona para /login (sem query params)
       setTimeout(() => navigate("/login"), 1800);
     } catch (err: any) {
       setErro(err?.message || "Falha no cadastro.");

@@ -46,16 +46,30 @@ export interface CriarPostInput {
 
 export type FiltroFeed = "todos" | "seguindo" | "favoritos" | "meus";
 
-const auth = () => ({ Authorization: `Bearer ${Storage.token || ""}` });
-
-export async function getFeedPosts(filtro: FiltroFeed = "todos"): Promise<PostagemComUsuario[]> {
-  const qs = new URLSearchParams({ filtro });
-  const res = await fetch(`${API.BASE_URL}/api/feed?${qs.toString()}`, {
-    headers: auth(),
-  });
-  if (!res.ok) throw new Error(`Falha ao carregar feed (${res.status})`);
-  return res.json();
+function pickToken(): string {
+  const t =
+    Storage?.token ||
+    (typeof window !== "undefined" &&
+      (sessionStorage.getItem("token") || localStorage.getItem("token"))) ||
+    "";
+  if (!t) throw new Error("Sem token. Faça login novamente.");
+  return t.startsWith("Bearer ") ? t : `Bearer ${t}`;
 }
+
+const auth = () => ({ Authorization: pickToken() });
+
+export async function getFeedPosts(filtro: FiltroFeed = "todos") {
+  const qs = new URLSearchParams({ filtro });
+  const res = await fetch(`${API.BASE_URL}/api/feed?${qs}`, { headers: auth() });
+  if (res.status === 401) {
+    try { sessionStorage.clear(); localStorage.removeItem("token"); } catch {}
+    window.location.href = "/login";
+    return []; 
+  }
+  if (!res.ok) throw new Error(`Falha ao carregar feed (${res.status})`);
+  return (await res.json()) as PostagemComUsuario[];
+}
+
 export async function likePost(postId: string) {
   await fetch(`${API.BASE_URL}/api/feed/${postId}/like`, {
     method: "POST",
@@ -75,7 +89,7 @@ export async function comentarPost(postId: string, texto: string) {
 export async function deletarPost(postId: string) {
   const r = await fetch(`${API.BASE_URL}/api/feed/posts/${postId}`, {
     method: "DELETE",
-    headers: { Authorization: `Bearer ${Storage.token || ""}` },
+    headers: auth(),
   });
   if (!r.ok) {
     const msg = await r.text().catch(() => "");
@@ -97,7 +111,10 @@ export async function compartilharPost(postId: string) {
   const link = `${window.location.origin}/post/${postId}`;
   try {
     await navigator.clipboard.writeText(link);
-    await fetch(`${API.BASE_URL}/api/post/${postId}/compartilhar`, { method: "POST" });
+    await fetch(`${API.BASE_URL}/api/post/${postId}/compartilhar`, {
+      method: "POST",
+      headers: auth(),
+    });
     alert("Link copiado para a área de transferência!");
   } catch (error) {
     console.error("Erro ao copiar link:", error);
@@ -106,9 +123,8 @@ export async function compartilharPost(postId: string) {
 }
 
 export async function getPostById(id: string): Promise<PostagemComUsuario> {
-  const token = Storage.token;
   const response = await fetch(`${API.BASE_URL}/api/post/visualizar/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: auth(),
   });
   if (!response.ok) throw new Error("Erro ao buscar post");
 
@@ -127,9 +143,7 @@ export async function criarPost({
   videoUrl,
   arquivo,
 }: CriarPostInput) {
-  const token = Storage.token;
   const POST_URL = `${API.BASE_URL}/api/post`;
-
   const hasDescricao = !!descricao && descricao.trim().length > 0;
   const hasImagem = !!imagemUrl && imagemUrl.trim().length > 0;
   const hasVideo  = !!videoUrl && videoUrl.trim().length > 0;
@@ -140,7 +154,7 @@ export async function criarPost({
     fd.append("arquivo", arquivo);
     const res = await fetch(POST_URL, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: auth(),
       body: fd,
     });
     if (!res.ok) {
@@ -158,10 +172,7 @@ export async function criarPost({
 
     const res = await fetch(POST_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { ...auth(), "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
