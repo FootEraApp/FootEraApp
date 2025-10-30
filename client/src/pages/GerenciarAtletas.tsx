@@ -131,7 +131,7 @@ const posicoesMap: Record<string, string> = {
   PE: "Ponta Esquerda",
 };
 
-type PosicaoCodigo = keyof typeof posicoesMap; // "GOL" | "LD" | "ZD" | ...
+type PosicaoCodigo = keyof typeof posicoesMap;
 
 const apiToUiCategoria = (c?: string | null): CategoriaBase | null => {
   if (!c) return null;
@@ -160,7 +160,7 @@ const GerenciarAtletas: React.FC = () => {
 
   const [q, setQ] = useState("");
   const [categoria, setCategoria] = useState<"" | CategoriaBase>("");
-  const [posicaoCodigo, setPosicaoCodigo] = useState<"" | PosicaoCodigo>(""); // ⬅️ MUDAR
+  const [posicaoCodigo, setPosicaoCodigo] = useState<"" | PosicaoCodigo>("");
   const [status, setStatus] = useState<"" | "ativo" | "inativo">("");
   const [ordenacao, setOrdenacao] = useState<
     "pontuacao_desc" | "pontuacao_asc" | "nome_asc" | "nome_desc"
@@ -196,12 +196,11 @@ const GerenciarAtletas: React.FC = () => {
   const tipoParaVinculo = (t: "Escola" | "Clube" | "Professor") =>
     t === "Escola" ? "escolinha" : t.toLowerCase();
 
-  // === SUBSTITUIR FUNÇÃO descobrirPerfil POR ESTA VERSÃO ===
   const descobrirPerfil = async () => {
     try {
       const { data } = await axios.get(`${API.BASE_URL}/api/perfil/me`, { headers });
 
-      const perfilTipo: string | undefined = data?.tipo; // Professor | Clube | Escolinha
+      const perfilTipo: string | undefined = data?.tipo; 
       const normalizado =
         perfilTipo === "Escolinha" ? "Escola" :
         perfilTipo === "Clube"     ? "Clube"  :
@@ -209,7 +208,6 @@ const GerenciarAtletas: React.FC = () => {
 
       if (!normalizado) throw new Error("Perfil institucional inválido para Gerenciar Atletas.");
 
-      // IDs separados
       const usuarioId = data?.usuario?.id || Storage.usuarioId || null;
       const tipoId =
         (perfilTipo === "Professor"  && (data?.professor?.id))  ||
@@ -220,8 +218,8 @@ const GerenciarAtletas: React.FC = () => {
       if (!usuarioId) throw new Error("Não foi possível identificar o usuarioId da entidade.");
 
       setTipo(normalizado);
-      setUsuarioIdEntidade(usuarioId);       // para /api/gerenciar/atletas (id = usuarioId)
-      setTipoUsuarioIdEntidade(tipoId);      // útil para treinos, etc.
+      setUsuarioIdEntidade(usuarioId);     
+      setTipoUsuarioIdEntidade(tipoId);     
     } catch (e: any) {
       setTipo(null);
       setUsuarioIdEntidade(null);
@@ -237,11 +235,11 @@ const GerenciarAtletas: React.FC = () => {
       setLoading(true);
 
       const params: any = {
-        vinculo: tipoParaVinculo(tipo), // "escolinha" | "clube" | "professor"
-        id: usuarioIdEntidade,          // <— SEMPRE usuarioId
+        vinculo: tipoParaVinculo(tipo),
+        id: usuarioIdEntidade,      
         order: ordenacao,
       };
-      if (tipoUsuarioIdEntidade) params.tipoUsuarioId = tipoUsuarioIdEntidade; // opcional, se seu backend usar
+      if (tipoUsuarioIdEntidade) params.tipoUsuarioId = tipoUsuarioIdEntidade; 
       if (q.trim()) params.search = q.trim();
       if (categoria) params.categoria = uiToApiCategoria(categoria);
       if (posicaoCodigo) params.posicao = posicaoCodigo;
@@ -256,7 +254,7 @@ const GerenciarAtletas: React.FC = () => {
         nome: a.nome,
         idade: a.idade ?? null,
         foto: a.foto ?? null,
-        posicao: (posicoesMap as any)[a.posicao] ?? a.posicao ?? null, // já rótulo
+        posicao: (posicoesMap as any)[a.posicao] ?? a.posicao ?? null,
         categoria: apiToUiCategoria(a.categoria),
         pontuacao: a.pontuacao ?? null,
         ativoRecentemente: !!a.ativoRecentemente,
@@ -277,12 +275,11 @@ const carregarProfessores = async () => {
     setProfLoading(true);
 
     const params: any = {
-      vinculo: tipoParaVinculo(tipo), // "escolinha" | "clube"
-      id: usuarioIdEntidade,          // <— usuarioId da entidade
+      vinculo: tipoParaVinculo(tipo),
+      id: usuarioIdEntidade,      
     };
     if (q.trim()) params.search = q.trim();
 
-    // ajuste o endpoint conforme seu backend
     const { data } = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, { headers, params });
     const lista = (data?.professores || data || []) as any[];
 
@@ -307,7 +304,7 @@ const carregarProfessores = async () => {
   const carregarTreinos = async () => {
   if (!tipo || !usuarioIdEntidade) return;
   try {
-    const params: any = { criador: tipoParaVinculo(tipo), id: usuarioIdEntidade }; // <<< id
+    const params: any = { criador: tipoParaVinculo(tipo), id: usuarioIdEntidade };
     if (tipoUsuarioIdEntidade) params.tipoUsuarioId = tipoUsuarioIdEntidade;
 
     const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados`, { headers, params });
@@ -541,7 +538,6 @@ const carregarProfessores = async () => {
             <h1 className="text-xl font-semibold text-zinc-900">{tipo ?? "Institucional"} · Gerenciar Atletas</h1>
             <p className="text-sm text-zinc-500">Acompanhe e organize seus atletas vinculados na FootEra.</p>
 
-            {/* Abas visíveis só para Escola/Clube */}
             {tipo && tipo !== "Professor" && (
               <div className="mt-2 inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
                 <button
@@ -665,7 +661,6 @@ const carregarProfessores = async () => {
       </div>
 
       {aba === "professores" && tipo !== "Professor" ? (
-        /* ==== VIEW: PROFESSORES ==== */
         <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
           <div className="flex items-center justify-between border-b border-zinc-100 p-4">
             <div className="text-sm font-semibold text-zinc-900">Professores vinculados</div>
@@ -726,12 +721,8 @@ const carregarProfessores = async () => {
           )}
         </div>
       ) : (
-        /* ==== VIEW: ATLETAS (mantém seu grid atual) ==== */
-        /* ==== VIEW: ATLETAS (mantém seu grid atual) ==== */
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-          {/* ===== COLUNA ESQUERDA: LISTA/TABELA ===== */}
           <div className="lg:col-span-7 xl:col-span-8">
-            {/* barra de quantidade + ordenação */}
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-zinc-600">
                 <Filter className="h-4 w-4" /> {filtrados.length} resultado(s)
@@ -757,7 +748,6 @@ const carregarProfessores = async () => {
               </div>
             </div>
 
-            {/* tabela de atletas */}
             <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
               {loading ? (
                 <div className="p-6 text-center text-zinc-600">
@@ -858,7 +848,6 @@ const carregarProfessores = async () => {
               )}
             </div>
 
-            {/* rodapé de ações */}
             <div className="mt-3 flex flex-col items-start justify-between gap-2 text-sm sm:flex-row sm:items-center">
               <div className="text-zinc-600">
                 Selecionados manualmente: <strong>{Object.values(selecionados).filter(Boolean).length}</strong>
@@ -881,7 +870,6 @@ const carregarProfessores = async () => {
             </div>
           </div>
 
-          {/* ===== COLUNA DIREITA: PAINEL LATERAL ===== */}
           <div className="lg:col-span-5 xl:col-span-4">
             {focado ? (
               <div className="rounded-2xl border border-zinc-200 bg-white p-4">
@@ -1096,7 +1084,6 @@ const carregarProfessores = async () => {
       <TurmasManager
         open={turmasOpen}
         onClose={() => setTurmasOpen(false)}
-        // Dono da turma é a organização (id de tipo!), não o usuarioId
         owner={tipo && tipo !== "Professor" && tipoUsuarioIdEntidade ? {
           tipo: tipo === "Escola" ? "Escolinha" : "Clube",
           id: tipoUsuarioIdEntidade

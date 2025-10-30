@@ -441,7 +441,9 @@ export default function ProfileHeader({
     }
   };
 
-  const imageSrc = formatarUrlFoto(foto ?? avatar, "usuarios");
+  const imageSrc = (foto ?? avatar)
+    ? formatarUrlFoto(foto ?? avatar, "usuarios")
+    : "/assets/usuarios/default-user.png";
 
   const alvoUsuarioId = isOwnProfile ? String(Storage.usuarioId ?? "") : perfilId;
 

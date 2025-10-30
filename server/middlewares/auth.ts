@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction, RequestHandler } from "express";
 import jwt from "jsonwebtoken";
 import { TipoUsuario } from "@prisma/client";
 
@@ -11,36 +11,18 @@ export interface AuthenticatedRequest extends Request {
 
 const SECRET = process.env.JWT_SECRET || "footera_secret";
 
-export function authenticateToken(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  const header = req.headers.authorization || "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-  if (!token) return res.status(401).json({ message: "Token ausente" });
+export const authenticateToken: RequestHandler = (req, res, next) => {
+  const auth = req.headers.authorization || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : auth;
+  if (!token) return res.status(401).json({ message: "Missing token" });
 
   try {
-    const payload = jwt.verify(token, SECRET) as any;
-
-    const id =
-      payload?.id ??
-      payload?.sub ??
-      payload?.userId ??
-      payload?.usuarioId ??
-      payload?.escolinhaId ??
-      payload?.organizationId;
-
-    if (!id) return res.status(401).json({ message: "Token inválido (sem id)" });
-
-    const tipo = String(payload?.tipo ?? payload?.role ?? payload?.tipoUsuario ?? "").trim();
-    const isAdmin = tipo.toLowerCase() === "admin" || payload?.isAdmin === true;
-
-    req.userId = String(id);
-    req.tipo = tipo;
-    req.isAdmin = isAdmin;
-    req.user = payload;
-
-    (res.locals as any).user = { id: req.userId, tipo: req.tipo, isAdmin: req.isAdmin, ...payload };
-
-    next();
-  } catch {
-    return res.status(401).json({ message: "Token inválido" });
+    const payload = jwt.verify(token, process.env.JWT_SECRET! ) as any;
+    req.userId = payload.id || payload.sub;
+    if (!req.userId) return res.status(401).json({ message: "Invalid token payload" });
+    return next();
+  } catch (err: any) {
+    console.error("JWT verify fail:", err.name, err.message);
+    return res.status(401).json({ message: "Invalid/expired token" });
   }
-}
+};

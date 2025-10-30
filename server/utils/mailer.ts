@@ -1,4 +1,3 @@
-// server/utils/mailer
 import nodemailer from "nodemailer";
 
 type Transporter = nodemailer.Transporter;
@@ -6,12 +5,10 @@ type Transporter = nodemailer.Transporter;
 const SUPPORT_FALLBACK = "suporte@footera.app.br";
 
 function getFrom() {
-
   return process.env.EMAIL_FROM || '"FootEra" <no-reply@footera.app.br>';
 }
 
 function getReplyTo() {
-
   return process.env.SUPPORT_EMAIL || SUPPORT_FALLBACK;
 }
 

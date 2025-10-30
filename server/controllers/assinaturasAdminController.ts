@@ -17,7 +17,6 @@ function parseBool(v?: string) {
   return undefined;
 }
 
-/** GET /api/admin/assinantes?q=&plano=&ativo=&page=1&pageSize=20 */
 export async function listar(req: Request, res: Response) {
   try {
     assertAdmin(req);
@@ -74,7 +73,6 @@ export async function listar(req: Request, res: Response) {
   }
 }
 
-/** GET /api/admin/assinantes/overview */
 export async function overview(req: Request, res: Response) {
   try {
     assertAdmin(req);

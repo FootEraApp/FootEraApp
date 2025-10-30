@@ -1,4 +1,3 @@
-// client/src/pages/perfil/PerfilProfessor.tsx
 import { useEffect, useMemo, useState, useCallback } from "react";
 import axios from "axios";
 import { CalendarClock, Activity, PlusCircle, ChevronRight, Trophy } from "lucide-react";
@@ -7,7 +6,7 @@ import { API } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
-import TurmasManager from "../turmas/TurmasManager.js"; // <- NOVO (ajuste o caminho se necessário)
+import TurmasManager from "../turmas/TurmasManager.js"; 
 
 const ACHIEVEMENTS: Record<
   string,
@@ -66,7 +65,6 @@ type PayloadProfessor = {
     certificacoes: string[];
     fotoUrl?: string | null;
     statusCref?: string | null;
-    // ---- NOVOS (p/ dono org e turmas):
     clubeId?: string | null;
     escolinhaId?: string | null;
   };
@@ -162,7 +160,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
   const [orgSelecionada, setOrgSelecionada] = useState<string>("");
 
-  // ----- TURMAS -----
   const [turmasOpen, setTurmasOpen] = useState(false);
   const [turmas, setTurmas] = useState<Turma[] | null>(null);
   const [turmasLoading, setTurmasLoading] = useState(false);
@@ -177,7 +174,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     return undefined;
   }, [data?.professor]);
 
-  // substitua as linhas de token/headers e o cálculo de isOwn/targetId:
   const rawToken =
     Storage.token ||
     localStorage.getItem("token") ||
@@ -219,19 +215,16 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     const fetchPerfil = async () => {
       setLoading(true);
 
-      // sem token: não trava a tela
       if (!rawToken) {
         if (!cancel) setLoading(false);
         return;
       }
 
       try {
-        // 1ª tentativa com o targetId calculado
         let url = `${API.BASE_URL}/api/perfil/professor/${targetId}`;
         let r = await axios.get<PayloadProfessor>(url, { headers });
         if (!cancel) setData(r.data);
       } catch (e) {
-        // se pediu "me" e falhou, re-tenta com tipoUsuarioId do storage
         if (!cancel && targetId === "me" && tipoUsuarioIdStorage) {
           try {
             const url2 = `${API.BASE_URL}/api/perfil/professor/${tipoUsuarioIdStorage}`;
@@ -250,9 +243,8 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
     fetchPerfil();
     return () => { cancel = true; };
-  }, [targetId, rawToken]); // << deps mínimas
+  }, [targetId, rawToken]); 
 
-  // --------- carregar turmas do professor ----------
   const reloadTurmas = useCallback(async () => {
     if (!rawToken || !professorId) return;
     setTurmasLoading(true);
@@ -282,7 +274,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     if (professorId && turmas == null) reloadTurmas();
   }, [professorId, turmas, reloadTurmas]);
 
-  // Carrega payload principal do perfil
   useEffect(() => {
     if (!rawToken) return;
     let cancel = false;
@@ -306,7 +297,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     return () => { cancel = true; };
   }, [targetId, rawToken, headers]);
 
-  // Carrega solicitações quando a sub-aba estiver ativa
   useEffect(() => {
     if (aba !== "atletas" || subAba !== "solicitacoes" || !rawToken) return;
 
@@ -329,7 +319,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     return () => window.removeEventListener("focus", onFocus);
   }, [aba, subAba, rawToken, headers]);
 
-  // Carrega atletas vinculados (com fallback de parâmetros)
   const fetchVinculados = useCallback(async () => {
     if (!rawToken) return;
     const h = { Authorization: `Bearer ${rawToken}` };
@@ -375,7 +364,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     setVinculados(unique);
   }, [rawToken, isOwn, data?.professor?.id, data?.usuario?.id]);
 
-  // Primeira carga de vinculados e atividades
   useEffect(() => {
     if (!rawToken) return;
     const cancel = { v: false };
@@ -418,7 +406,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     if (aba === "atletas") {
       if (subAba === "vinculados")   fetchVinculados();
       if (subAba === "observados")   fetchObservados();
-      // "solicitações" é carregado em outro effect
     }
 
     return () => { cancel.v = true; };
@@ -456,7 +443,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
   const handleCloseTurmas = () => {
     setTurmasOpen(false);
-    reloadTurmas(); // ao fechar, atualiza a listagem
+    reloadTurmas(); 
   };
 
   return (
@@ -576,7 +563,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
                     Criar novo treino
                   </Link>
 
-                  {/* NOVO: botão para turmas */}
                   <button
                     onClick={() => setTurmasOpen(true)}
                     className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
@@ -592,7 +578,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
             </SectionCard>
           )}
 
-          {/* NOVO: Seção de Turmas do Professor */}
           <SectionCard
             title="Turmas do Professor"
             right={
@@ -818,7 +803,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         </div>
       )}
 
-      {/* ---- Turmas Manager embutido ---- */}
       <TurmasManager
         open={turmasOpen}
         onClose={handleCloseTurmas}

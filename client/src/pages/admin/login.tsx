@@ -16,7 +16,6 @@ const ChevronUp = (p: SvgProps) => (
   </svg>
 );
 
-/* Ícones do olho */
 const Eye = (p: SvgProps) => (
   <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}>
     <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" />
@@ -167,7 +166,6 @@ export default function AdminLogin() {
                 className="w-full border border-gray-300 rounded px-3 py-2 mb-4"
               />
 
-              {/* Campo de senha com olhinho */}
               <div className="relative mb-4">
                 <input
                   type={mostrarSenha ? "text" : "password"}
@@ -198,7 +196,6 @@ export default function AdminLogin() {
 
               {erro && <p className="text-red-600 text-sm mt-3 text-center">{erro}</p>}
 
-              {/* Link para login principal */}
               <div className="mt-4 text-center text-sm">
                 <button
                   type="button"

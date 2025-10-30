@@ -38,18 +38,17 @@ import {
   type Tier,
 } from "../lib/achievementsCatalog.js";
 import { FaRetweet } from "react-icons/fa";
+import { http } from "@/services/http.js";
 
 interface Usuario {
   id: string;
   nome: string;
   foto?: string | null;
 }
-async function getUsuariosMutuos(token: string): Promise<Usuario[]> {
-  const res = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error("Erro ao buscar usuários mútuos");
-  return await res.json();
+
+async function getUsuariosMutuos(): Promise<Usuario[]> {
+  const { data } = await http.get<Usuario[]>("/api/seguidores/mutuos");
+  return data;
 }
 
 function HeaderSliderLite({
@@ -314,19 +313,32 @@ function PaginaFeed(): JSX.Element {
 
   useEffect(() => {
     async function carregar() {
-      const dados = await getFeedPosts(filtro);
-      if (!dados) return;
+      try {
+        const dados: PostagemComUsuario[] = await getFeedPosts(filtro);
 
-      const uid = Storage.usuarioId;
-      const filtrado =
-        filtro === "todos" && uid
-          ? dados.filter((p) => p.usuario?.id !== uid && (p as any).usuarioId !== uid)
-          : filtro === "meus" && uid
-          ? dados.filter((p) => p.usuario?.id === uid || (p as any).usuarioId === uid)
-          : dados;
+        const uid = Storage.usuarioId ?? null;
 
-      const unicos = Array.from(new Map(filtrado.map((p) => [p.id, p])).values());
-      setPosts(unicos);
+        let filtrado: PostagemComUsuario[] = dados;
+        if (uid && filtro === "todos") {
+          filtrado = dados.filter(
+            (p) => p.usuario?.id !== uid && (p as any).usuarioId !== uid
+          );
+        } else if (uid && filtro === "meus") {
+          filtrado = dados.filter(
+            (p) => p.usuario?.id === uid || (p as any).usuarioId === uid
+          );
+        }
+
+        const unicos: PostagemComUsuario[] = Array.from(
+          new Map<string, PostagemComUsuario>(
+            filtrado.map((p) => [p.id, p] as const)
+          ).values()
+        );
+
+        setPosts(unicos);
+      } catch (e) {
+        console.error("Falha ao carregar feed:", e);
+      }
     }
     carregar();
   }, [filtro]);
@@ -386,12 +398,10 @@ function PaginaFeed(): JSX.Element {
     setLinkCompartilhado(link);
     setIdCompartilhado(postId);
     setModalAberto(true);
-
     try {
       setCarregandoMutuos(true);
       setSelecionados(new Set());
-      const token = Storage.token || "";
-      const lista = await getUsuariosMutuos(token);
+      const lista = await getUsuariosMutuos(); 
       setUsuariosMutuos(lista);
     } catch (e) {
       console.error(e);

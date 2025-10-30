@@ -32,6 +32,7 @@ model Usuario {
   EmailVerification        EmailVerification[]
   assinatura               Assinatura?
   administrador            Administrador?
+
   amigosDe                 Amigo[]                   @relation("AmigoUsuario")
   amigos                   Amigo[]                   @relation("UsuarioAmigo")
   atividadesRecentes       AtividadeRecente[]
@@ -64,6 +65,7 @@ model Usuario {
   treinoRealizado          TreinoRealizado[]
   desafiosEmGrupo          DesafioEmGrupo[]          @relation("MembrosDesafioEmGrupo")
   Consentimento            Consentimento[]
+  Turmas                   TurmaUsuario[] 
 }
 
 model EmailVerification {
@@ -79,7 +81,7 @@ model EmailVerification {
 model Assinatura {
   id         String    @id @default(uuid())
   usuarioId  String    @unique
-  plano      String // "FREE" | "PRO" | "ELITE"
+  plano      String 
   startsAt   DateTime  @default(now())
   canceledAt DateTime?
   ativo      Boolean   @default(true)
@@ -108,7 +110,8 @@ model Professor {
   escolinhaId         String?
   clubeId             String?
   organizacaoId       String?
-
+  email               String?  @db.VarChar(191)
+  
   escolinha Escolinha? @relation(fields: [escolinhaId], references: [id])
   clube     Clube?     @relation(fields: [clubeId], references: [id])
   Turma     Turma[]
@@ -1087,20 +1090,32 @@ model Turma {
   categoria String?
   descricao String?
   ativo     Boolean @default(true)
-
-  // Dono da turma (um de dois): Escolinha OU Clube
   escolinhaId String?
   escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id])
 
   clubeId String?
   clube   Clube?  @relation(fields: [clubeId], references: [id])
 
-  // Professor responsável (opcional e trocável)
   professorId String?
   professor   Professor? @relation(fields: [professorId], references: [id])
 
+  membros     TurmaUsuario[]  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model TurmaUsuario {
+  id        String  @id @default(uuid())
+  turmaId   String
+  usuarioId String
+
+  turma   Turma   @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([turmaId, usuarioId])
+  @@index([turmaId])
+  @@index([usuarioId])
 }
 
 enum TreinoStatus {

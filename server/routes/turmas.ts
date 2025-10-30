@@ -1,16 +1,21 @@
 import { Router } from "express";
-import { authenticateToken } from "../middlewares/auth.js";
 import {
-  listTurmas, createTurma, updateTurma, setProfessorTurma, deleteTurma, professoresDisponiveis
+  listarTurmas,
+  criarTurma,
+  obterAlunosTurma,
+  substituirAlunosTurma,
+  vincularProfessor,
 } from "../controllers/turmasController.js";
+import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
 
-router.get("/professores-disponiveis", authenticateToken, professoresDisponiveis);
-router.get("/", authenticateToken, listTurmas);
-router.post("/", authenticateToken, createTurma);
-router.put("/:id/atribuir-professor", authenticateToken, setProfessorTurma);
-router.put("/:id", authenticateToken, updateTurma);
-router.delete("/:id", authenticateToken, deleteTurma);
+router.get("/", authenticateToken, listarTurmas);
+router.post("/", authenticateToken, criarTurma);
+
+router.get("/:id/alunos", authenticateToken, obterAlunosTurma);
+router.post("/:id/alunos", authenticateToken, substituirAlunosTurma);
+
+router.put("/:id/vincular-professor", authenticateToken, vincularProfessor);
 
 export default router;
