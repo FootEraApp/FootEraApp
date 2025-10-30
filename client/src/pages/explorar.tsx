@@ -21,7 +21,6 @@ import {
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 
-/* ---------------- types ---------------- */
 type UsuarioBasic = { id: string; nome: string; foto?: string | null };
 
 type AtletaItem = {
@@ -83,7 +82,6 @@ type RankItem = {
   usuario: { id: string; nome: string; foto?: string | null };
 };
 
-/* ---------------- utils ---------------- */
 const CAT_LABEL: Record<string, string> = {
   Sub9: "Sub-9",
   Sub11: "Sub-11",
@@ -107,7 +105,6 @@ const mapIdadeParaCategoria = (idade?: number | null): string | null => {
   return "Profissional";
 };
 
-/* ---------------- tiny UI kit ---------------- */
 function Pill({
   children,
   tone = "emerald",
@@ -156,7 +153,6 @@ function Tab({
   );
 }
 
-/* ---------------- component ---------------- */
 function Explorar() {
   const [busca, setBusca] = useState("");
   const [aba, setAba] = useState<"atletas" | "escolas" | "clubes" | "profissionais">("atletas");
@@ -455,7 +451,6 @@ function Explorar() {
         </div>
       </div>
 
-      {/* Modal de filtros */}
       {showFilters && (
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowFilters(false)} />
