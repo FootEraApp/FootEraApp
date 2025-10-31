@@ -1,3 +1,4 @@
+// server/utils/mailer
 import nodemailer from "nodemailer";
 
 type Transporter = nodemailer.Transporter;
@@ -28,8 +29,8 @@ export async function createTransport(): Promise<Transporter> {
       maxConnections: 2,
       rateDelta: 1000,
       rateLimit: 14,
-      logger: true,
-      debug: true,
+      logger: process.env.NODE_ENV !== "production",
+      debug: process.env.NODE_ENV !== "production",
     } as any);
   }
 
@@ -74,15 +75,14 @@ export async function sendEmailVerification(opts: {
   const transporter = await createTransport();
 
   const support = opts.supportEmail ?? process.env.SUPPORT_EMAIL ?? SUPPORT_FALLBACK;
-  const subject = opts.isResponsavel
-    ? "Confirme o e-mail do responsável – FootEra"
-    : "Confirme seu e-mail – FootEra";
-
+  const subject = opts.isResponsavel ? "Confirme o e-mail do responsável – FootEra" : "Confirme seu e-mail – FootEra";
   const aviso = `Se não foi você quem criou a conta, NÃO clique em validar e contate: ${support}`;
+  const PUBLIC_WEB_BASE = (process.env.WEB_BASE_URL || "https://footera.app.br").replace(/\/+$/, "");
+  const LOGO_URL = `${PUBLIC_WEB_BASE}/assets/usuarios/footera-logo-fundo-verde.png`;
 
   const html = `
   <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:20px">
-    <img src="https://footera.com.br/assets/usuarios/footera-logo.png" alt="FootEra" style="height:48px;margin-bottom:8px"/>
+    <img src="${LOGO_URL}" alt="FootEra" style="height:48px;margin-bottom:8px"/>
     <h2 style="margin:8px 0 2px">Olá, ${opts.isResponsavel ? "Responsável" : opts.nome}!</h2>
     <p style="margin:4px 0 14px;line-height:1.5">
       ${
