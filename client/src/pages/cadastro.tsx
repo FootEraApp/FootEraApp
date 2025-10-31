@@ -24,7 +24,6 @@ function ChevronUp(props: SvgProps) {
 type TipoPerfil = "Atleta" | "Professor" | "Escolinha" | "Clube" | "Olheiro";
 type Etapa = 1 | 2 | 3;
 
-type CamposAtleta = { idade: number | ""; categoria: string; treinaEscolinha: "sim" | "nao" | "" };
 type CamposProfessor = { treinaEscolinha: "sim" | "nao" | ""; areaFormacao: string; cref?: string; statusCref?: "Ativo" | "Desativo" | "Pendente" };
 type CamposClube = { cnpjClube: string; cidadeClube: string };
 type CamposEscolinha = { cnpjEscolinha: string; cidadeEscolinha: string };
@@ -36,6 +35,14 @@ type CamposVinculo = { desejaVinculo: boolean; tipoAlvo: "Professor" | "Escolinh
 type ResultadoBusca = { id: string; tipo: "Professor" | "Escolinha" | "Clube"; nome: string; username: string; fotoUrl: string | null };
 type Responsavel = { nome: string; email: string; telefone?: string };
 
+const CATEGORIAS_ATLETA = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"] as const;
+type CategoriaAtleta = typeof CATEGORIAS_ATLETA[number];
+
+type CamposAtleta = {
+  idade: number | "";
+  categoria: CategoriaAtleta | "";
+  treinaEscolinha: "sim" | "nao" | "";
+ };
 const PLACEHOLDER_AVATAR = logo;
 
 function debounce<T extends (...args: any[]) => void>(fn: T, ms = 400) {
@@ -96,6 +103,8 @@ export default function Cadastro() {
   const [sucesso, setSucesso] = useState("");
   const [etapa, setEtapa] = useState<Etapa>(1);
   const [infoAberto, setInfoAberto] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
 
   const [atleta, setAtleta] = useState<CamposAtleta>({ idade: "", categoria: "", treinaEscolinha: "" });
   const [professor, setProfessor] = useState<CamposProfessor>({ treinaEscolinha: "", areaFormacao: "", statusCref: "Pendente", cref: "" });
@@ -133,7 +142,7 @@ export default function Cadastro() {
   const verificarEmail = useMemo(() => debounce(async (e: string) => {
     if (!e || !EMAIL_RE.test(e)) return setEmailDisp(null);
     try {
-      const r = await fetch(`${API.BASE_URL}/api/cadastro/check/email?email=${encodeURIComponent(e)}`);
+      const r = await fetch(`${API.BASE_URL}/api/auth/cadastro/check/email?email=${encodeURIComponent(e)}`);
       const j = await r.json();
       setEmailDisp(Boolean(j?.disponivel));
     } catch { setEmailDisp(null); }
@@ -142,7 +151,7 @@ export default function Cadastro() {
   const verificarUsername = useMemo(() => debounce(async (u: string) => {
     if (!u || !USER_RE.test(u)) return setUserDisp(null);
     try {
-      const r = await fetch(`${API.BASE_URL}/api/cadastro/check/username?username=${encodeURIComponent(u)}`);
+      const r = await fetch(`${API.BASE_URL}/api/auth/cadastro/check/username?username=${encodeURIComponent(u)}`);
       const j = await r.json();
       setUserDisp(Boolean(j?.disponivel));
     } catch { setUserDisp(null); }
@@ -200,6 +209,9 @@ export default function Cadastro() {
     if (tipoPerfil === "Atleta") {
       if (idade === null) return setErro("Informe a data de nascimento do atleta."), false;
       if (!atleta.categoria) return setErro("Selecione a categoria do atleta."), false;
+      if (atleta.categoria && !CATEGORIAS_ATLETA.includes(atleta.categoria)) {
+        return setErro("Categoria inválida."), false;
+      }
     }
     if (tipoPerfil === "Professor") {
       if (!professor.areaFormacao.trim()) return setErro("Informe a área de formação."), false;
@@ -228,6 +240,28 @@ export default function Cadastro() {
     return true;
   };
 
+  async function reenviarVerificacao() {
+    try {
+      setResendLoading(true);
+      setResendMsg("");
+      const r = await fetch(`${API.BASE_URL}/api/auth/cadastro/resend-verification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email?.trim().toLowerCase(),
+          nomeDeUsuario: nomeDeUsuario?.trim().toLowerCase(),
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.message || "Falha ao reenviar e-mail.");
+      setResendMsg(`Reenviado para: ${j?.emailDestino || email}`);
+    } catch (e: any) {
+      setResendMsg(e?.message || "Falha ao reenviar e-mail.");
+    } finally {
+      setResendLoading(false);
+    }
+  }
+
   const handleFinalizar = async () => {
     setErro("");
     setSucesso("");
@@ -247,7 +281,7 @@ export default function Cadastro() {
 
       if (tipoPerfil === "Atleta") {
         payload.idade = idade ?? 0;
-        payload.categoria = atleta.categoria ? [atleta.categoria] : [];
+        payload.categorias = atleta.categoria ? [atleta.categoria] : [];
         payload.treinaEscolinha = atleta.treinaEscolinha || "nao";
       }
       if (tipoPerfil === "Professor") {
@@ -282,7 +316,8 @@ export default function Cadastro() {
         };
       }
 
-      const res = await fetch(`${API.BASE_URL}/api/cadastro/cadastro`, {
+      // antes (errado em alguns pontos): /api/cadastro/cadastro ou /api/auth/cadastro/cadastro
+      const res = await fetch(`${API.BASE_URL}/api/auth/cadastro`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -340,7 +375,7 @@ export default function Cadastro() {
   const buscarAlvo = useMemo(() => debounce(async (q: string, tipoAlvo: string) => {
     setResultadosBusca([]); if (!q) return;
     try {
-      const url = `${API.BASE_URL}/api/cadastro/buscar?query=${encodeURIComponent(q)}&tipo=${encodeURIComponent(tipoAlvo || "Todos")}`;
+      const url = `${API.BASE_URL}/api/auth/cadastro/buscar?query=${encodeURIComponent(q)}&tipo=${encodeURIComponent(tipoAlvo || "Todos")}`;
       const r = await fetch(url);
       if (r.ok) {
         const j = await r.json();
@@ -611,11 +646,20 @@ export default function Cadastro() {
                     )}
 
                     <div>
-                      <label className="block text-sm font-medium mb-1">Categoria</label>
-                      <select className="w-full border rounded px-3 py-2" value={atleta.categoria} onChange={(e) => setAtleta(p => ({ ...p, categoria: e.target.value }))}>
-                        <option value="">Selecione</option><option value="Sub9">Sub9</option><option value="Sub11">Sub11</option><option value="Sub13">Sub13</option><option value="Sub15">Sub15</option><option value="Sub17">Sub17</option><option value="Sub20">Sub20</option><option value="Livre">Livre</option>
-                      </select>
-                    </div>
+                       <label className="block text-sm font-medium mb-1">Categoria</label>
+                       <select
+                         className="w-full border rounded px-3 py-2"
+                         value={atleta.categoria}
+                         onChange={(e) =>
+                           setAtleta((p) => ({ ...p, categoria: e.target.value as CategoriaAtleta }))
+                         }
+                       >
+                         <option value="">Selecione</option>
+                         {CATEGORIAS_ATLETA.map((c) => (
+                           <option key={c} value={c}>{c}</option>
+                         ))}
+                       </select>
+                     </div>
                   </div>
                 </>
               )}
@@ -720,7 +764,7 @@ export default function Cadastro() {
                       <textarea className="w-full border rounded px-3 py-2" rows={3} placeholder="Fale um pouco sobre seu trabalho como olheiro…" value={olheiro.descricao} onChange={(e) => setOlheiro(p => ({ ...p, descricao: e.target.value }))} />
                     </div>
                     <div>
-                      <label className="block textsm font-medium mb-1">Colaboração com Clube (ID opcional)</label>
+                      <label className="block text-sm font-medium mb-1">Colaboração com Clube (ID opcional)</label>
                       <input className="w-full border rounded px-3 py-2" placeholder="UUID do clube (se houver)" value={olheiro.colaboracaoClubeId || ""} onChange={(e) => setOlheiro(p => ({ ...p, colaboracaoClubeId: e.target.value }))} />
                     </div>
                   </div>
