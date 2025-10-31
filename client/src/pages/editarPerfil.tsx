@@ -524,15 +524,16 @@ useEffect(() => {
                   }
                 }
                   try {
-                    await axios.put(
-                      `${API.BASE_URL}/api/perfil/${usuarioId}`,
-                      {
-                        usuario: { ...dadosUsuario, foto: fotoUrl },
-                        tipo,
-                        tipoUsuario: String(tipoUsuarioOriginal).toLowerCase(),
-                      },
-                      { headers: { Authorization: `Bearer ${token}` } }
-                    );
+                   await axios.put(
+                    `${API.BASE_URL}/api/perfil/${usuarioId}`,
+                    {
+                      usuario: { ...dadosUsuario, foto: fotoUrl },
+                      tipo,
+                      // força "escolinha" -> "escola" no payload
+                      tipoUsuario: String(tipoUsuarioOriginal).toLowerCase().replace(/^escolinha$/, "escola"),
+                    },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                  );
                   } catch (err: any) {
                     console.error("[EditarPerfil] PUT /perfil erro:", err?.response?.status, err?.response?.data, err?.message);
                     alert(err?.response?.data?.error || err?.message || "Erro ao salvar os dados (PUT).");

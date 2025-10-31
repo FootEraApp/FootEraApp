@@ -751,6 +751,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
   const fotoFinal: string | null = file ? `/uploads/${file.filename}` : (usuario.foto ?? null);
 
   try {
+    // Atualiza dados básicos do Usuario
     await prisma.usuario.update({
       where: { id },
       data: {
@@ -765,7 +766,11 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
       }
     });
 
-    switch (tipoUsuario) {
+    // 🔧 Normalização do tipo (aceita "escola" e "escolinha")
+    const tipoKey = String(tipoUsuario).toLowerCase();
+    const tipoNorm = (tipoKey === "escolinha") ? "escola" : tipoKey;
+
+    switch (tipoNorm) {
       case "atleta": {
         let escolinhaId =
           pickId(tipo.escolinhaId) ??
@@ -793,49 +798,41 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         if (typeof escolinhaId !== "undefined") data.escolinhaId = escolinhaId;
         if (typeof clubeId !== "undefined") data.clubeId = clubeId;
 
-          const atletaRow = await prisma.atleta.findUnique({
-            where: { usuarioId: id },
-            select: { id: true },
-          });
-          if (!atletaRow) {
-            return res.status(404).json({ error: "Atleta não encontrado para este usuário." });
-          }
-          const atletaId = atletaRow.id;
-
-          await prisma.$transaction(async (tx) => {
-            await tx.atleta.update({ where: { usuarioId: id }, data });
-
-            if (typeof escolinhaId !== "undefined") {
-              await tx.relacaoTreinamento.deleteMany({
-                where: { atletaId, escolinhaId: { not: escolinhaId } },
-              });
-              if (escolinhaId) {
-                const existe = await tx.relacaoTreinamento.findFirst({
-                  where: { atletaId, escolinhaId },
-                });
-                if (!existe) {
-                  await tx.relacaoTreinamento.create({ data: { atletaId, escolinhaId } });
-                }
-              }
-            }
-
-            if (typeof clubeId !== "undefined") {
-              await tx.relacaoTreinamento.deleteMany({
-                where: { atletaId, clubeId: { not: clubeId } },
-              });
-              if (clubeId) {
-                const existe = await tx.relacaoTreinamento.findFirst({
-                  where: { atletaId, clubeId },
-                });
-                if (!existe) {
-                  await tx.relacaoTreinamento.create({ data: { atletaId, clubeId } });
-                }
-              }
-            }
-          });
-
-          break;
+        const atletaRow = await prisma.atleta.findUnique({
+          where: { usuarioId: id },
+          select: { id: true },
+        });
+        if (!atletaRow) {
+          return res.status(404).json({ error: "Atleta não encontrado para este usuário." });
         }
+        const atletaId = atletaRow.id;
+
+        await prisma.$transaction(async (tx) => {
+          await tx.atleta.update({ where: { usuarioId: id }, data });
+
+          if (typeof escolinhaId !== "undefined") {
+            await tx.relacaoTreinamento.deleteMany({
+              where: { atletaId, escolinhaId: { not: escolinhaId } },
+            });
+            if (escolinhaId) {
+              const existe = await tx.relacaoTreinamento.findFirst({ where: { atletaId, escolinhaId } });
+              if (!existe) await tx.relacaoTreinamento.create({ data: { atletaId, escolinhaId } });
+            }
+          }
+
+          if (typeof clubeId !== "undefined") {
+            await tx.relacaoTreinamento.deleteMany({
+              where: { atletaId, clubeId: { not: clubeId } },
+            });
+            if (clubeId) {
+              const existe = await tx.relacaoTreinamento.findFirst({ where: { atletaId, clubeId } });
+              if (!existe) await tx.relacaoTreinamento.create({ data: { atletaId, clubeId } });
+            }
+          }
+        });
+
+        break;
+      }
 
       case "professor":
         await prisma.professor.update({
@@ -847,7 +844,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             escola: tipo.escola,
             qualificacoes: Array.isArray(tipo.qualificacoes) ? tipo.qualificacoes : tipo.qualificacoes?.split(',').map((q: string) => q.trim()),
             certificacoes: Array.isArray(tipo.certificacoes) ? tipo.certificacoes : tipo.certificacoes?.split(',').map((c: string) => c.trim()),
-            fotoUrl: fotoFinal,    
+            fotoUrl: fotoFinal,
           }
         });
         break;
@@ -871,7 +868,7 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
           cep: tipo.cep ?? null,
           descricao: tipo.descricao ?? null,
           responsavel: tipo.responsavel ?? null,
-          logo: fotoFinal,        
+          logo: fotoFinal,
         };
         if (Array.isArray(tipo.categorias)) data.categorias = { set: tipo.categorias };
 
@@ -880,27 +877,27 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
       }
 
       case "olheiro": {
-        const anos =
-          typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== ""
-            ? Number(tipo.anosExperiencia)
-            : tipo.anosExperiencia;
+        const anos = (typeof tipo.anosExperiencia === "string" && tipo.anosExperiencia !== "")
+          ? Number(tipo.anosExperiencia)
+          : tipo.anosExperiencia;
 
         await prisma.olheiro.update({
-          where: { usuarioId: id },  
+          where: { usuarioId: id },
           data: {
-            headline:         tipo.headline ?? null,
-            descricao:        tipo.descricao ?? null,
-            areaAtuacao:      tipo.areaAtuacao ?? null,
-            anosExperiencia:  Number.isFinite(anos) ? (anos as number) : undefined,
-            emailPublico:     tipo.emailPublico ?? null,
-            telefonePublico:  tipo.telefonePublico ?? null,
-            siteOuLinkedin:   tipo.siteOuLinkedin ?? null,
-            fotoUrl:          fotoFinal,
+            headline:        tipo.headline ?? null,
+            descricao:       tipo.descricao ?? null,
+            areaAtuacao:     tipo.areaAtuacao ?? null,
+            anosExperiencia: Number.isFinite(anos) ? (anos as number) : undefined,
+            emailPublico:    tipo.emailPublico ?? null,
+            telefonePublico: tipo.telefonePublico ?? null,
+            siteOuLinkedin:  tipo.siteOuLinkedin ?? null,
+            fotoUrl:         fotoFinal,
           },
         });
         break;
       }
 
+      // ✅ aceita "escola" e "escolinha"
       case "escola":
         await prisma.escolinha.update({
           where: { usuarioId: id },
@@ -919,13 +916,13 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             estado: tipo.estado,
             pais: tipo.pais,
             cep: tipo.cep,
-            logo: fotoFinal,      
+            logo: fotoFinal,
           }
         });
         break;
 
       default:
-        return res.status(400).json({ error: `Tipo de usuário inválido: ${tipoUsuario}` });
+        return res.status(400).json({ error: `Tipo de usuário inválido: ${tipoUsuario} (aceitos: atleta, professor, clube, escola/escolinha, olheiro)` });
     }
 
     return res.status(200).json({ message: "Perfil atualizado com sucesso." });

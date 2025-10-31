@@ -1,5 +1,6 @@
 import { useContext } from "react";
 import { UserContext } from "../context/UserContext.js";
+import { API } from "@/config.js";
 
 interface User {
   id: number;
@@ -45,7 +46,7 @@ export function useAuth() {
   async function login(nomeDeUsuario: string, senha: string) {
     safeSetIsLoading(true);
     try {
-      const response = await fetch("http://localhost:3001/api/auth/login", {
+      const response = await fetch(`${API.BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nomeDeUsuario, senha }),
