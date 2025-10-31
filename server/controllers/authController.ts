@@ -39,10 +39,11 @@ export async function login(req: Request, res: Response) {
     }
 
     if (!usuario.verified) {
-      return res.status(403).json({
-        message: "Verifique seu e-mail para concluir o cadastro.",
+      return res.json({
+        ok: false,
         needVerification: true,
         emailDestino: usuario.responsavelEmail ?? usuario.email,
+        message: "Verifique seu e-mail para concluir o cadastro.",
       });
     }
 
@@ -62,6 +63,7 @@ export async function login(req: Request, res: Response) {
     );
 
     return res.json({
+      ok: true,
       message: "Login bem-sucedido",
       token,
       tipo: usuario.tipo,

@@ -1,16 +1,14 @@
-import { API, APP } from "@/config.js";
+import { API } from "@/config.js";
 
-export function publicImgUrl(raw?: string | null): string | null {
-  if (!raw) return null;
-  let s = String(raw).trim();
-  if (!s) return null;
+const RX_LOCALHOST = /^https?:\/\/localhost:3001/i;
 
-  if (/^(https?:)?\/\//i.test(s) || s.startsWith("data:") || s.startsWith("blob:")) return s;
-
-  if (s.startsWith("/uploads/")) return `${API.BASE_URL}${s}`;
-  if (s.startsWith("uploads/"))  return `${API.BASE_URL}/${s}`;
-  if (s.startsWith("/assets/"))  return `${APP.FRONTEND_BASE_URL}${s}`;
-  if (s.startsWith("assets/"))   return `${APP.FRONTEND_BASE_URL}/${s}`;
-
-  return null;
+export function publicImgUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  const s = String(path).trim();
+  if (/^data:|^blob:/i.test(s)) return s;
+  if (/^https?:\/\//i.test(s)) return s.replace(RX_LOCALHOST, API.BASE_URL);
+  if (s.startsWith("/uploads")) return `${API.BASE_URL}${s}`;
+  if (s.startsWith("uploads/")) return `${API.BASE_URL}/${s}`;
+  if (s.startsWith("/assets/") || s.startsWith("assets/")) return s.startsWith("/") ? s : `/${s}`;
+  return s;
 }
