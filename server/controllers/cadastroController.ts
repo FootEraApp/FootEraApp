@@ -1,3 +1,4 @@
+// server/controllers/cadastroController
 import { Request, Response } from "express";
 import { PrismaClient, TipoUsuario, Nivel, StatusCref } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -7,13 +8,21 @@ import { sendEmailVerification } from "../utils/mailer.js";
 
 const prisma = new PrismaClient();
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
-const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3001";
+const FRONTEND_URL = (process.env.WEB_BASE_URL || "http://localhost:5173").replace(/\/+$/, "");
+const API_BASE_URL  = (process.env.APP_BASE_URL  || "http://localhost:3001").replace(/\/+$/, "");
+
 const JWT_SECRET: jwt.Secret = (process.env.JWT_SECRET || "defaultsecret");
 const JWT_VERIFY_TTL = process.env.JWT_VERIFY_TTL || "2d";
 
 function addHours(d: Date, h: number) {
   return new Date(d.getTime() + h * 60 * 60 * 1000);
+}
+
+function absUrl(p?: string | null) {
+  if (!p) return null;
+  if (/^https?:\/\//i.test(p)) return p;
+  const base = p.startsWith("/uploads") ? API_BASE_URL : FRONTEND_URL;
+  return `${base}${p}`;
 }
 
 function verificationEmailHtml(link: string) {
@@ -45,7 +54,7 @@ async function issueEmailVerification(params: {
     create: { usuarioId: params.userId, token: raw, expiraEm: addHours(new Date(), 24) },
   });
 
-  const verifyUrl = `${API_BASE_URL.replace(/\/+$/, "")}/api/auth/cadastro/verify?token=${raw}`;
+  const verifyUrl = `${API_BASE_URL}/api/cadastro/verify?token=${raw}`;
 
   await sendEmailVerification({
     to: params.emailDestino,
@@ -58,7 +67,6 @@ async function issueEmailVerification(params: {
     estado: params.estado,
   });
 }
-
 
 export const getCadastroIndex = async (_req: Request, res: Response) => {
   res.json({ message: "Tela de cadastro inicial" });
@@ -106,20 +114,13 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
     const q = String(req.query.query ?? "").trim();
     if (!q) return res.json([]);
 
-    const BASE_URL = process.env.BASE_URL || process.env.APP_BASE_URL || "";
-
     const normProfessor = (rows: any[]) =>
       rows.map((p) => ({
         id: p.id as string,
         tipo: "Professor" as const,
         nome: p.nome as string,
         username: p.usuario?.nomeDeUsuario ?? "",
-        fotoUrl:
-          p.fotoUrl
-            ? `${BASE_URL}${p.fotoUrl}`
-            : p.usuario?.foto
-              ? `${BASE_URL}${p.usuario.foto}`
-              : null,
+        fotoUrl: absUrl(p.fotoUrl) ?? absUrl(p.usuario?.foto),
       }));
 
     const normClube = (rows: any[]) =>
@@ -128,12 +129,7 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
         tipo: "Clube" as const,
         nome: c.nome as string,
         username: c.usuario?.nomeDeUsuario ?? "",
-        fotoUrl:
-          c.logo
-            ? `${BASE_URL}${c.logo}`
-            : c.usuario?.foto
-              ? `${BASE_URL}${c.usuario.foto}`
-              : null,
+        fotoUrl: absUrl(c.logo) ?? absUrl(c.usuario?.foto),
       }));
 
     const normEscolinha = (rows: any[]) =>
@@ -142,12 +138,7 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
         tipo: "Escolinha" as const,
         nome: e.nome as string,
         username: e.usuario?.nomeDeUsuario ?? "",
-        fotoUrl:
-          e.logo
-            ? `${BASE_URL}${e.logo}`
-            : e.usuario?.foto
-              ? `${BASE_URL}${e.usuario.foto}`
-              : null,
+        fotoUrl: absUrl(e.logo) ?? absUrl(e.usuario?.foto),
       }));
 
     const normOlheiro = (rows: any[]) =>
@@ -156,12 +147,7 @@ export async function buscarPerfisPublico(req: Request, res: Response) {
         tipo: "Olheiro" as const,
         nome: o.usuario?.nome ?? "",
         username: o.usuario?.nomeDeUsuario ?? "",
-        fotoUrl:
-          o.fotoUrl
-            ? `${BASE_URL}${o.fotoUrl}`
-            : o.usuario?.foto
-              ? `${BASE_URL}${o.usuario.foto}`
-              : null,
+        fotoUrl: absUrl(o.fotoUrl) ?? absUrl(o.usuario?.foto),
       }));
 
     const results: any[] = [];
@@ -345,7 +331,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         break;
       }
       case TipoUsuario.Clube: {
-        const emailNorm = String(email).trim().toLowerCase(); 
+        const emailNormLocal = String(email).trim().toLowerCase();
         const clube = await prisma.clube.create({
           data: {
             usuarioId: usuario.id,
@@ -353,7 +339,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             cnpj: cnpjClube ?? null,
             telefone1: telefone1Clube ?? null,
             telefone2: telefone2Clube ?? null,
-            email: (emailClube ?? emailNorm) || null,
+            email: (emailClube ?? emailNormLocal) || null,
             siteOficial: siteOficialClube ?? null,
             sede: sedeClube ?? null,
             logradouro: logradouroClube ?? null,
@@ -374,7 +360,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       }
 
       case TipoUsuario.Escolinha: {
-        const emailNorm = String(email).trim().toLowerCase();
+        const emailNormLocal = String(email).trim().toLowerCase();
         const escolinha = await prisma.escolinha.create({
           data: {
             usuarioId: usuario.id,
@@ -382,7 +368,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             cnpj: cnpjEscolinha ?? null,
             telefone1: telefone1Escolinha ?? null,
             telefone2: telefone2Escolinha ?? null,
-            email: (emailEscolinha ?? emailNorm) || null,
+            email: (emailEscolinha ?? emailNormLocal) || null,
             siteOficial: siteOficialEscolinha ?? null,
             sede: sedeEscolinha ?? null,
             logradouro: logradouroEscolinha ?? null,
@@ -459,10 +445,10 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     }
 
     let token: string | null = null;
-    if (process.env.JWT_SECRET) {
+    if (JWT_SECRET) {
       token = jwt.sign(
         { userId: usuario.id, tipo: usuario.tipo },
-        process.env.JWT_SECRET,
+        JWT_SECRET,
         { expiresIn: "7d" }
       );
     }
@@ -517,13 +503,13 @@ export async function verificarEmail(req: Request, res: Response) {
   try {
     const rec = await prisma.emailVerification.findFirst({ where: { token: String(token) } });
     if (!rec) return res.status(400).send("Token inválido.");
-    if (rec.usadoEm) return res.redirect(302, `${FRONTEND_URL.replace(/\/+$/, "")}/login?verified=1`);
+    if (rec.usadoEm) return res.redirect(302, `${FRONTEND_URL}/login?verified=1`);
     if (rec.expiraEm && rec.expiraEm < new Date()) return res.status(400).send("Token expirado. Solicite novo envio.");
 
     await prisma.usuario.update({ where: { id: rec.usuarioId }, data: { verified: true } });
     await prisma.emailVerification.update({ where: { usuarioId: rec.usuarioId }, data: { usadoEm: new Date() } });
 
-    const redirect = `${FRONTEND_URL.replace(/\/+$/, "")}/login?verified=1`;
+    const redirect = `${FRONTEND_URL}/login?verified=1`;
     return res.redirect(302, redirect);
   } catch (err) {
     console.error("Erro ao verificar e-mail:", err);
@@ -567,7 +553,7 @@ export async function resendVerification(req: Request, res: Response) {
     const destino = (isMenor && usuario.responsavelEmail) ? usuario.responsavelEmail : usuario.email;
     if (!destino) return res.status(400).json({ message: "Usuário sem e-mail cadastrado." });
 
-    const verifyUrl = `${API_BASE_URL.replace(/\/+$/, "")}/api/auth/cadastro/verify?token=${raw}`;
+    const verifyUrl = `${API_BASE_URL}/api/cadastro/verify?token=${raw}`;
     await sendEmailVerification({
       to: destino,
       verifyUrl,
@@ -585,8 +571,6 @@ export async function resendVerification(req: Request, res: Response) {
     return res.status(500).json({ message: "Falha ao reenviar e-mail de verificação." });
   }
 }
-
-
 
 function stringParaTipoUsuario(v: any): TipoUsuario | null {
   const s = String(v ?? "").toLowerCase();
