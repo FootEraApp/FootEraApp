@@ -166,6 +166,7 @@ app.get("/resetar-senha", (req, res) => {
   res.redirect(302, dest);
 });
 
+app.use("/api/auth/cadastro", cadastroRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/cadastro", cadastroRoutes);
 app.use("/api/termos", termoRoutes);
