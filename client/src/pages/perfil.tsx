@@ -1,3 +1,4 @@
+// client/src/pages/perfil
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";

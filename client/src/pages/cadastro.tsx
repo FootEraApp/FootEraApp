@@ -1,3 +1,4 @@
+// client/src/pages/cadastro
 import { useEffect, useMemo, useState, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";

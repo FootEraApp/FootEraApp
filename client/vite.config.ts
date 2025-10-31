@@ -9,8 +9,8 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectReagister: 'script',
-      devOptions: { enabled: false },
+      injectRegister: 'script',
+      devOptions: { enabled: true },
       manifest: {
         name: 'FootEra',
         short_name: 'FootEra',

@@ -785,9 +785,9 @@ const toggleTreino = async () => {
                 )}
                 {usuariosMutuos.map((u) => {
                   const selecionado = selecionados.has(u.id);
-                  const fotoSrc = u.foto?.startsWith("http")
-                    ? u.foto
-                    : `${API.BASE_URL}${u.foto?.startsWith("/") ? "" : "/"}${u.foto || "default-user.png"}`;
+
+                  const fotoSrc =
+                    (u.foto ? formatarUrlFoto(u.foto, "usuarios") : "/assets/usuarios/default-user.png");
 
                   return (
                     <button
