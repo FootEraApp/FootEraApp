@@ -1,9 +1,10 @@
-import { useMemo } from "react";
-import { API } from "../../config.js";
+// client/src/components/shared/Avatar.tsx
+import { useMemo, useEffect } from "react";
+import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 
 type Props = {
   foto?: string | File | null;
-  alt: string;
+  alt?: string;
   className?: string;
   size?: number;
 };
@@ -18,32 +19,22 @@ const FALLBACK =
     </svg>`
   );
 
-export default function Avatar({ foto, alt, className = "w-10 h-10", size = 40 }: Props) {
+export default function Avatar({ foto, alt = "", className = "w-10 h-10", size = 40 }: Props) {
   const src = useMemo<string>(() => {
     if (!foto) return FALLBACK;
-
     if (typeof File !== "undefined" && foto instanceof File) {
       return URL.createObjectURL(foto);
     }
-
-    const s = String(foto);
-
-    if (/^(https?:|data:|blob:)/i.test(s)) return s;
-
-    if (s.startsWith("/uploads/") || s.startsWith("/assets/")) {
-      return `${API.BASE_URL}${s}`;
-    }
-    if (s.startsWith("assets/")) {
-      return `${API.BASE_URL}/${s}`;
-    }
-
-    if (s.startsWith("/usuarios/")) {
-      return `${API.BASE_URL}/uploads${s}`;
-    }
-
-    const clean = s.replace(/^\/+/, "");
-    return `${API.BASE_URL}/uploads/usuarios/${clean}`;
+    return formatarUrlFoto(String(foto), "usuarios") || FALLBACK;
   }, [foto]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof File !== "undefined" && foto instanceof File) {
+        try { URL.revokeObjectURL(src); } catch {}
+      }
+    };
+  }, [foto, src]);
 
   return (
     <img
