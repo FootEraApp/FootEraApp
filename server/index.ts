@@ -110,12 +110,19 @@ const FRONT_PORT = Number(process.env.FRONT_PORT) || 5173;
 
 app.use(helmet({ crossOriginResourcePolicy: false }));
 
-const ALLOWED = new Set([
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "https://footera.app.br",
-  "https://www.footera.app.br",
-]);
+const norm = (s?: string) => (s ? s.replace(/\/+$/, "") : s);
+const fromEnv = norm(process.env.FRONTEND_URL);
+const fromEnvWww = fromEnv ? fromEnv.replace("://", "://www.") : undefined;
+const ALLOWED = new Set(
+  [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://footera.app.br",
+    "https://www.footera.app.br",
+    fromEnv,
+    fromEnvWww,
+  ].filter(Boolean) as string[]
+);
 
 app.use(cors({
   origin(origin, cb) {

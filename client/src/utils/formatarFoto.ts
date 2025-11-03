@@ -1,7 +1,6 @@
-// client/src/utils/formatarFoto.js
 import { API } from "@/config.js";
 
-const RX_LOCALHOST = /^https?:\/\/localhost:3001/i;
+const RX_DEV_HOST = /^https?:\/\/(?:localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(?::\d+)?/i;
 
 export function formatarUrlFoto(
   foto: string | null | undefined,
@@ -12,8 +11,8 @@ export function formatarUrlFoto(
   let s = String(foto).trim();
 
   // troca base antiga de dev por produção
-  if (RX_LOCALHOST.test(s)) s = s.replace(RX_LOCALHOST, API.BASE_URL);
-
+  if (RX_DEV_HOST.test(s)) s = s.replace(RX_DEV_HOST, API.BASE_URL);
+  
   // já é absoluta ou data/blob
   if (/^(https?:|data:|blob:)/i.test(s)) return s;
 
