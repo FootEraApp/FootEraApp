@@ -37,7 +37,7 @@ export default function TreinoLivreNovo() {
         return alert("Não foi possível salvar o treino.");
       }
       alert("Treino livre registrado!");
-      navigate("/treinos/livre");
+      navigate("/treinos/livre/historico");
     } catch (e) {
       console.error(e);
       alert("Erro inesperado.");
