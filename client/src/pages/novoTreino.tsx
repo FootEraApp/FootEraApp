@@ -1,3 +1,4 @@
+// client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from "lucide-react";
@@ -30,9 +31,9 @@ const PONTOS = {
 
 function resolveVideoUrl(raw?: string) {
   if (!raw) return "";
-  const p = raw.replace(/\\/g, "/");             
-  if (p.startsWith("http")) return p;       
-  if (p.startsWith("/assets/")) return p;        
+  const p = raw.replace(/\\/g, "/");
+  if (p.startsWith("http")) return p;
+  if (p.startsWith("/assets/")) return p;
   return `${API.BASE_URL}${p.startsWith("/") ? p : `/${p}`}`;
 }
 
@@ -106,6 +107,131 @@ type TreinoAgendadoResp = {
 };
 
 const SAVE_KEY = "novoTreinoState";
+
+// ---------- helpers p/ Treino Salvo (gaveta) ----------
+const MAX_SLOTS_TREINOS_SALVOS = 5;
+
+function toCategoriaEnum(val?: string | null): string | null {
+  if (!val) return null;
+  // normaliza "SUB13" / "sub-13" -> "Sub13"
+  const m = String(val).match(/sub[\s\-]?(\d{1,2})/i);
+  if (m) return `Sub${m[1]}`;
+  if (/^livre$/i.test(String(val))) return "Livre";
+  return val;
+}
+
+function authHeaders() {
+  const token =
+    (Storage as any).token ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") || "";
+  const headers: any = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+async function apiListarTreinosSalvos(ownerTipo: "professor" | "clube" | "escolinha", ownerId: string) {
+  const headers = authHeaders();
+  const url = `${API.BASE_URL}/api/treinos-salvos?tipoUsuario=${encodeURIComponent(ownerTipo)}&tipoUsuarioId=${encodeURIComponent(ownerId)}&includePublic=0`;
+  const r = await fetch(url, { headers });
+  if (!r.ok) throw new Error("Falha ao listar treinos salvos");
+  const j = await r.json();
+  const meus = Array.isArray(j?.meus) ? j.meus : [];
+  return meus as Array<{ id: string; titulo: string; atualizadoEm?: string; expiraEm?: string | null }>;
+}
+
+async function apiDeletarTreinoSalvo(id: string) {
+  const headers = authHeaders();
+  const r = await fetch(`${API.BASE_URL}/api/treinos-salvos/${encodeURIComponent(id)}`, { method: "DELETE", headers });
+  if (!r.ok) throw new Error("Falha ao apagar treino salvo");
+  return true;
+}
+
+async function apiCriarTreinoSalvo(body: any) {
+  const headers = authHeaders();
+  const r = await fetch(`${API.BASE_URL}/api/treinos-salvos`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(t || "Falha ao criar treino salvo");
+  }
+  return r.json();
+}
+
+async function tentarSalvarComoTreinoSalvo(payload: TreinoCreatePayload, scoreTotal: number) {
+  try {
+    const ownerTipo = payload.tipoUsuario; // 'professor' | 'clube' | 'escolinha'
+    const ownerId = payload.tipoUsuarioId;
+
+    if (!ownerTipo || !ownerId) return { saved: false, reason: "sem-dono" as const };
+
+    // 1) verifica slots atuais
+    const meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
+
+    // 2) se já tem 5, perguntar qual apagar
+    if (meus.length >= MAX_SLOTS_TREINOS_SALVOS) {
+      const lista = meus
+        .map((m, i) => {
+          const dt = m.atualizadoEm || m.expiraEm || "";
+          return `${i + 1}) ${m.titulo} ${dt ? `(${dt})` : ""} [${m.id}]`;
+        })
+        .join("\n");
+
+      const escolha = window.prompt(
+        `Você já possui ${MAX_SLOTS_TREINOS_SALVOS} treinos salvos.\n` +
+          `Escolha um número para apagar e liberar espaço OU deixe vazio para não salvar este novo treino.\n\n${lista}\n\nDigite 1-${meus.length}, ou deixe em branco para pular:`
+      );
+
+      const idx = Number(escolha);
+      if (!escolha || !Number.isFinite(idx) || idx < 1 || idx > meus.length) {
+        // usuário preferiu não salvar
+        return { saved: false, reason: "usuario-pulou" as const };
+      }
+
+      const apagar = meus[idx - 1];
+      try {
+        await apiDeletarTreinoSalvo(apagar.id);
+      } catch {
+        alert("Não foi possível apagar o treino selecionado. O novo não será salvo na Gaveta.");
+        return { saved: false, reason: "falha-apagar" as const };
+      }
+    }
+
+    // 3) monta body e cria treino salvo
+    const categorias = Array.isArray(payload.categoria) ? payload.categoria.map(toCategoriaEnum).filter(Boolean) : [];
+    const body = {
+      titulo: payload.nome,
+      descricao: payload.descricao ?? null,
+      nivel: payload.nivel ?? null,
+      tipoTreino: payload.tipoTreino ?? null,
+      categoria: categorias, // ex.: ["Sub13"]
+      duracao: payload.duracao ?? null,
+      dicas: Array.isArray(payload.dicas) ? payload.dicas : [],
+      conteudo: {
+        objetivo: payload.objetivo ?? null,
+        exercicios: payload.exercicios, // já vem de montarExerciciosParaPayload
+        pontuacao: scoreTotal ?? null,
+        dataAgendada: payload.dataAgendada ?? null,
+      },
+      publico: false,
+      parceiro: false,
+      naoExpira: false, // usa TTL de 30 dias no backend
+      tipoUsuario: ownerTipo,
+      tipoUsuarioId: ownerId,
+      criadoPorUsuarioId: payload.usuarioId ?? null,
+    };
+
+    await apiCriarTreinoSalvo(body);
+    return { saved: true as const };
+  } catch (e) {
+    console.warn("tentarSalvarComoTreinoSalvo falhou:", e);
+    return { saved: false, reason: "erro" as const };
+  }
+}
+// ---------- fim helpers Treino Salvo ----------
 
 function safeParse<T>(str: string | null, fallback: T): T {
   try {
@@ -224,7 +350,7 @@ export default function NovoTreino() {
     () => calcularPontuacaoTreino(nivel, tipoTreino, duracao, exerciciosSelecionados, dicas),
     [nivel, tipoTreino, duracao, exerciciosSelecionados, dicas]
   );
-  
+
   function normalizaTreinos(raw: any[]): TreinoProgramado[] {
     return raw.map((t: any) => ({
       id: t.id,
@@ -293,7 +419,7 @@ export default function NovoTreino() {
     })();
 
     return () => { cancel = true; };
-  }, []); 
+  }, []);
   useEffect(() => {
     (async () => {
       try {
@@ -389,7 +515,7 @@ export default function NovoTreino() {
             nivel: e.nivel ?? e.dificuldade ?? "",
           }));
           setExerciciosDisponiveis(itens);
-          return; 
+          return;
         }
 
         setExerciciosDisponiveis([]);
@@ -401,15 +527,16 @@ export default function NovoTreino() {
   }, [orgSelecionada]);
 
   useEffect(() => {
-    const tipoPersistido = (
-      localStorage.getItem("tipoUsuario") ??
-      sessionStorage.getItem("tipoUsuario") ??
-      (Storage as any).tipoSalvo ??
-      ""
-    )
-      .toString()
-      .trim()
-      .toLowerCase();
+    const tipoPersistido =
+      (
+        localStorage.getItem("tipoUsuario") ??
+        sessionStorage.getItem("tipoUsuario") ??
+        (Storage as any).tipoSalvo ??
+        ""
+      )
+        .toString()
+        .trim()
+        .toLowerCase();
 
     const tipoNormalizado = tipoPersistido === "escolinha" ? "escola" : tipoPersistido;
     const permitidos = ["escola", "clube", "professor", "atleta"] as const;
@@ -460,55 +587,55 @@ export default function NovoTreino() {
   }, []);
 
   useEffect(() => {
-  (async () => {
-    try {
-      const token = (Storage as any).token || localStorage.getItem("token") || sessionStorage.getItem("token") || "";
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+    (async () => {
+      try {
+        const token = (Storage as any).token || localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-      const professorTipoId =
-        (Storage as any).tipoUsuarioId ||
-        localStorage.getItem("tipoUsuarioId") ||
-        sessionStorage.getItem("tipoUsuarioId") || "";
+        const professorTipoId =
+          (Storage as any).tipoUsuarioId ||
+          localStorage.getItem("tipoUsuarioId") ||
+          sessionStorage.getItem("tipoUsuarioId") || "";
 
-      if (!professorTipoId) { setOrgsVinculadas([]); return; }
+        if (!professorTipoId) { setOrgsVinculadas([]); return; }
 
-      const tentativas = [
-        `${API.BASE_URL}/api/professores/${professorTipoId}/vinculos`,
-        `${API.BASE_URL}/api/organizacoes?vinculadasAoProfessorId=${professorTipoId}`,
-        `${API.BASE_URL}/api/vinculos?tipo=Professor&id=${professorTipoId}`,
-      ];
+        const tentativas = [
+          `${API.BASE_URL}/api/professores/${professorTipoId}/vinculos`,
+          `${API.BASE_URL}/api/organizacoes?vinculadasAoProfessorId=${professorTipoId}`,
+          `${API.BASE_URL}/api/vinculos?tipo=Professor&id=${professorTipoId}`,
+        ];
 
-      let arr: any[] = [];
-      for (const url of tentativas) {
-        const r = await fetch(url, { headers });
-        if (!r.ok) continue;
-        const j = await r.json();
-        const list = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
-        if (Array.isArray(list) && list.length) { arr = list; break; }
+        let arr: any[] = [];
+        for (const url of tentativas) {
+          const r = await fetch(url, { headers });
+          if (!r.ok) continue;
+          const j = await r.json();
+          const list = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
+          if (Array.isArray(list) && list.length) { arr = list; break; }
+        }
+
+        const normalizada: Organizacao[] = (arr || []).map((o: any) => {
+          const tipo: Organizacao["tipo"] =
+            String(o.tipo ?? o.kind ?? o.categoria ?? "")
+              .toLowerCase()
+              .includes("clube")
+              ? "Clube"
+              : "Escolinha";
+
+          return {
+            id: String(o.escolinhaId ?? o.clubeId ?? o.id ?? o.organizacaoId),
+            nome: String(o.nome ?? o.titulo ?? "Organização"),
+            tipo,
+          };
+        }).filter((x) => x.id);
+
+        setOrgsVinculadas(normalizada);
+        if (!orgSelecionada && normalizada.length === 1) setOrgSelecionada(normalizada[0].id);
+      } catch {
+        setOrgsVinculadas([]);
       }
-
-      const normalizada: Organizacao[] = (arr || []).map((o: any) => {
-        const tipo: Organizacao["tipo"] =
-          String(o.tipo ?? o.kind ?? o.categoria ?? "")
-            .toLowerCase()
-            .includes("clube")
-            ? "Clube"
-            : "Escolinha";
-
-        return {
-          id: String(o.escolinhaId ?? o.clubeId ?? o.id ?? o.organizacaoId), 
-          nome: String(o.nome ?? o.titulo ?? "Organização"),
-          tipo,
-        };
-      }).filter((x) => x.id);
-
-      setOrgsVinculadas(normalizada);
-      if (!orgSelecionada && normalizada.length === 1) setOrgSelecionada(normalizada[0].id);
-    } catch {
-      setOrgsVinculadas([]);
-    }
-  })();
-}, []);
+    })();
+  }, []);
 
   useEffect(() => {
     let cancel = false;
@@ -540,8 +667,8 @@ export default function NovoTreino() {
         }
 
         const tipoUsuarioId =
-          orgSelecionada ||                     
-          (Storage as any).tipoUsuarioId ||      
+          orgSelecionada ||
+          (Storage as any).tipoUsuarioId ||
           localStorage.getItem("tipoUsuarioId") ||
           sessionStorage.getItem("tipoUsuarioId") || "";
 
@@ -608,8 +735,8 @@ export default function NovoTreino() {
 
       const tentativas = [
         { url: `${API.BASE_URL}/api/treinos/elencos`, method: "POST" },
-        { url: `${API.BASE_URL}/api/elencos`, method: "POST" },  
-        { url: `${API.BASE_URL}/api/turmas`, method: "POST" },   
+        { url: `${API.BASE_URL}/api/elencos`, method: "POST" },
+        { url: `${API.BASE_URL}/api/turmas`, method: "POST" },
       ];
 
       let ok = false, created: any = null;
@@ -624,7 +751,7 @@ export default function NovoTreino() {
         const r = await fetch(t.url, { method: t.method, headers, body: JSON.stringify(body) });
 
         const txt = await r.text();
-        
+
         if (!r.ok) continue;
         created = txt ? JSON.parse(txt) : null;
         ok = true;
@@ -798,7 +925,13 @@ export default function NovoTreino() {
 
       const mapNivel = (s: string) => ({ Base: "Base", Avancado: "Avancado", Performance: "Performance" } as const)[s] ?? "Base";
       const mapTipoTreino = (s: string) => ({ Tecnico: "Tecnico", Fisico: "Fisico", Tatico: "Tatico" } as const)[s] ?? null;
-      const mapCategoria = (s: string) => (s ? s.replace("-", "").toUpperCase() : "Sub13");
+      const mapCategoria = (s: string) => {
+        // produz "Sub13" p/ backend principal
+        const m = String(s || "").match(/sub[\s\-]?(\d{1,2})/i);
+        if (m) return `Sub${m[1]}`;
+        if (/^livre$/i.test(String(s))) return "Livre";
+        return s;
+      };
 
       const codigo =
         `${nome}`.trim()
@@ -813,7 +946,7 @@ export default function NovoTreino() {
         usuarioId,
         tipoUsuario: tipoUsuarioNorm,
         tipoUsuarioId,
-        categoria: categoria ? [mapCategoria(categoria)] : [],
+        categoria: categoria ? [mapCategoria(categoria)!] : [],
         tipoTreino: mapTipoTreino(tipoTreino),
         objetivo: objetivo || null,
         duracao: duracao ? Number(duracao) : null,
@@ -826,6 +959,7 @@ export default function NovoTreino() {
         pontuacao: Math.max(0, Math.floor(score.total)),
       };
 
+      // valida duplicados
       const vistosId = new Set<string>();
       const vistosNome = new Set<string>();
       const duplicados: string[] = [];
@@ -848,11 +982,45 @@ export default function NovoTreino() {
         alert(`Remova os exercícios repetidos antes de salvar: ${duplicados.join(", ")}`);
         return;
       }
+
+      // 1) cria Treino Programado (como já fazia)
       await TreinosApi.criar(payload);
-      alert("Treino criado com sucesso!");
+
+      // 2) tenta salvar também na Gaveta (Treino Salvo)
+      const resultadoSalvar = await tentarSalvarComoTreinoSalvo(payload, score.total);
+
+      if (resultadoSalvar.saved) {
+        alert("Treino criado e salvo na sua Gaveta (treinos salvos).");
+      } else {
+        if (resultadoSalvar.reason === "usuario-pulou") {
+          alert("Treino criado. Você optou por NÃO salvar na Gaveta (limite de 5).");
+        } else if (resultadoSalvar.reason === "falha-apagar") {
+          alert("Treino criado, mas não foi possível liberar espaço na Gaveta. Novo treino NÃO salvo na Gaveta.");
+        } else if (resultadoSalvar.reason === "sem-dono") {
+          // sem dono não é erro: apenas não salva na gaveta
+          console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
+        } else {
+          // erro genérico ao salvar
+          console.warn("Treino Salvo: erro ao salvar, seguindo sem gaveta.");
+        }
+      }
+
+      // limpa estado e sessão local
       sessionStorage.removeItem(SAVE_KEY);
       setEtapa(1);
       setCompletedUntil(1);
+      setNome("");
+      setDescricao("");
+      setNivel("Base");
+      setDuracao(60);
+      setDataTreino("");
+      setCategoria("Sub13");
+      setTipoTreino("Tecnico");
+      setObjetivo("");
+      setExerciciosSelecionados([]);
+      setDicas([]);
+      setDicaAtual("");
+      setAtletasSelecionados([]);
     } catch (e: any) {
       console.error("Falha inesperada ao criar treino:", e?.response?.data || e);
       alert(e?.response?.data?.error || e?.response?.data?.message || "Erro inesperado ao criar treino.");
