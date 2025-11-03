@@ -14,6 +14,7 @@ import { UPLOADS_ROOT, ensureUploadDirs } from "./utils/uploads.js";
 import { gerarSnapshotRanking } from "./jobs/rankingSnapshot.js";
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 import { authenticateToken } from "./middlewares/auth.js";
+import { limparTreinosSalvosExpirados } from "./controllers/treinosSalvosController.js";
 
 import adminRoutes from "./routes/admin.js";
 import adminModeracaoRoutes from "./routes/adminModeracao.js";
@@ -75,6 +76,7 @@ import adminAdminsRoutes from "./routes/adminAdmins.js";
 import analisesRoutes from "./routes/analises.js";
 import adminAssinantesRoutes from "./routes/admin.assinantes.js";
 import assinaturasRoutes from "./routes/assinaturas.js";
+import treinosSalvosRoutes from "./routes/treinosSalvos.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -231,6 +233,7 @@ app.use("/api/turmas", authenticateToken, turmasRoutes);
 app.use("/api/treinos-elencos", authenticateToken, treinosElencosRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
+app.use("/api/treinosSalvos", treinosSalvosRoutes);
 
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
@@ -251,3 +254,7 @@ cron.schedule("0 2 * * *", async () => {
 
 process.on("unhandledRejection", (reason) => console.error("Unhandled Rejection:", reason));
 process.on("uncaughtException", (err) => console.error("Uncaught Exception:", err));
+
+setInterval(async () => {
+  try { await limparTreinosSalvosExpirados({} as any, { json(){} } as any); } catch {}
+}, 24 * 60 * 60 * 1000);

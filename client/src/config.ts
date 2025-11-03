@@ -42,6 +42,7 @@ const FRONTEND_BASE = stripTrailingSlash(
 
 export const API = {
   BASE_URL: API_BASE,
+  REST: `${API_BASE}/api`,
   UPLOADS_URL: API_BASE ? `${API_BASE}/uploads` : "",
 } as const;
 
