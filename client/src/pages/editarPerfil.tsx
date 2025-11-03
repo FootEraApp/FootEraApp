@@ -8,11 +8,29 @@ import { Link } from 'wouter';
 
 type ResultadoBuscaClube = { id: string; nome: string; username?: string; fotoUrl?: string | null; };
 type OptionMin = { id: string; nome: string };
+type PosicaoCampo =
+  | "GOL" | "LD" | "ZD" | "ZE" | "LE"
+  | "VOL1" | "VOL2" | "MEI"
+  | "PD" | "CA" | "PE";
 
 function nullIfEmpty<T>(v: T) {
   // @ts-ignore
   return v === "" ? null : v;
 }
+
+const POSICOES: Array<{ value: PosicaoCampo; label: string }> = [
+  { value: "GOL",  label: "Goleiro (GOL)" },
+  { value: "LD",   label: "Lateral Direito (LD)" },
+  { value: "ZD",   label: "Zagueiro Direito (ZD)" },
+  { value: "ZE",   label: "Zagueiro Esquerdo (ZE)" },
+  { value: "LE",   label: "Lateral Esquerdo (LE)" },
+  { value: "VOL1", label: "Volante 1 (VOL1)" },
+  { value: "VOL2", label: "Volante 2 (VOL2)" },
+  { value: "MEI",  label: "Meia (MEI)" },
+  { value: "PD",   label: "Ponta Direita (PD)" },
+  { value: "CA",   label: "Centroavante (CA)" },
+  { value: "PE",   label: "Ponta Esquerda (PE)" },
+];
 
 const EditarPerfil = () => {
   const usuarioId = Storage.usuarioId;
@@ -148,7 +166,9 @@ useEffect(() => {
     return <div className="text-center text-red-600 mt-10">Erro ao carregar o perfil.</div>;
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
     if (name.startsWith('tipo_')) {
       setDadosTipo({ ...dadosTipo, [name.replace('tipo_', '')]: value });
@@ -159,6 +179,26 @@ useEffect(() => {
 
   const renderCamposEspecificos = () => {
     if (!dadosTipo) return null;
+
+    const renderSelect = (label: string, name: string, options: Array<{value: string; label: string}>) => {
+      const value = dadosTipo[name] ?? "";
+      return (
+        <div className="mb-4" key={name}>
+          <label className="block text-sm font-medium">{label}</label>
+          <select
+            name={`tipo_${name}`}
+            value={value}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded bg-white"
+          >
+            <option value="">Selecione...</option>
+            {options.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      );
+    };
 
     const renderInput = (label: string, name: string, type = "text") => {
       const raw = dadosTipo[name];
@@ -192,7 +232,7 @@ useEffect(() => {
             {renderInput("Telefone 2", "telefone2")}
             {renderInput("Nacionalidade", "nacionalidade")}
             {renderInput("Naturalidade", "naturalidade")}
-            {renderInput("Posição", "posicao")}
+            {renderSelect("Posição", "posicao", POSICOES)}
             {renderInput("Altura (cm)", "altura", "number")}
             {renderInput("Peso (kg)", "peso", "number")}
             {renderInput("Selo de Qualidade", "seloQualidade")}
@@ -524,15 +564,16 @@ useEffect(() => {
                   }
                 }
                   try {
-                    await axios.put(
-                      `${API.BASE_URL}/api/perfil/${usuarioId}`,
-                      {
-                        usuario: { ...dadosUsuario, foto: fotoUrl },
-                        tipo,
-                        tipoUsuario: String(tipoUsuarioOriginal).toLowerCase(),
-                      },
-                      { headers: { Authorization: `Bearer ${token}` } }
-                    );
+                   await axios.put(
+                    `${API.BASE_URL}/api/perfil/${usuarioId}`,
+                    {
+                      usuario: { ...dadosUsuario, foto: fotoUrl },
+                      tipo,
+                      // força "escolinha" -> "escola" no payload
+                      tipoUsuario: String(tipoUsuarioOriginal).toLowerCase().replace(/^escolinha$/, "escola"),
+                    },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                  );
                   } catch (err: any) {
                     console.error("[EditarPerfil] PUT /perfil erro:", err?.response?.status, err?.response?.data, err?.message);
                     alert(err?.response?.data?.error || err?.message || "Erro ao salvar os dados (PUT).");

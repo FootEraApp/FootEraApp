@@ -901,12 +901,21 @@ useEffect(() => {
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify(payload),
         });
+
         if (resp.ok) {
           const saved: Mensagem = await resp.json();
           reconcilePrivadaByClientId(saved);
+        } else {
+          console.error("POST /api/mensagem falhou:", resp.status, await resp.text());
+          // rollback da bolha otimista + aviso
+          setMensagensPrivadas(prev => prev.filter(m => m.clientMsgId !== clientMsgId));
+          alert("Não foi possível enviar a mensagem agora.");
         }
       } catch (e) {
         console.error("POST /api/mensagem erro:", e);
+        // rollback da bolha otimista + aviso
+        setMensagensPrivadas(prev => prev.filter(m => m.clientMsgId !== clientMsgId));
+        alert("Não foi possível enviar a mensagem agora.");
       }
       setNovaMensagem("");
     } else {
@@ -1059,18 +1068,21 @@ useEffect(() => {
       } catch {}
     }
 
-    const isDataUrl = typeof msg.conteudo === "string" && msg.conteudo.startsWith("data:image/");
-    const isAbs = typeof msg.conteudo === "string" && /^https?:\/\//i.test(msg.conteudo);
-    const path = isDataUrl ? msg.conteudo : (isAbs ? msg.conteudo : `${API.BASE_URL}${msg.conteudo.startsWith("/") ? "" : "/"}${msg.conteudo}`);
-    return Shell(<img src={path} alt="Card do atleta" className="w-56 h-auto rounded" />);
-    }
+          const isDataUrl =
+        typeof msg.conteudo === "string" && msg.conteudo.startsWith("data:image/");
+
+      // Usa nosso helper que já troca localhost -> produção e prefixa /uploads
+      const path = isDataUrl ? msg.conteudo : publicImgUrl(msg.conteudo)!;
+
+      return Shell(<img src={path} alt="Card do atleta" className="w-56 h-auto rounded" />);
+  } // <— FECHA o if (msg.tipo === "CARD")
 
     if (msg.tipo === "POST") {
       const post = postsCache[msg.conteudo];
       if (!post) return Shell(<div className="text-sm">Carregando post...</div>);
 
-      const img = post.imagemUrl ? (post.imagemUrl.startsWith("http") ? post.imagemUrl : `${API.BASE_URL}${post.imagemUrl}`) : null;
-      const video = !img && post.videoUrl ? (post.videoUrl.startsWith("http") ? post.videoUrl : `${API.BASE_URL}${post.videoUrl}`) : null;
+      const img = post.imagemUrl ? publicImgUrl(post.imagemUrl) : null;
+      const video = !img && post.videoUrl ? publicImgUrl(post.videoUrl) : null;
 
       return Shell(
         <div onClick={() => navigate(`/post/${post.id}`)} className="cursor-pointer">
