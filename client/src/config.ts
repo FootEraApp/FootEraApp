@@ -17,7 +17,7 @@ const API_BASE =
     ? (location.hostname.endsWith("app.br")
         ? "https://api.footera.app.br"
         : "http://localhost:3001")
-    : (isDev ? "http://localhost:3001" : ""));
+    : (isDev ? "http://localhost:3001" : "https://api.footera.app.br"));
 
 export const API = { BASE_URL: API_BASE };
 
@@ -25,8 +25,8 @@ const FRONTEND_BASE =
   strip(viteEnv?.VITE_FRONTEND_URL) ||
   (typeof window !== "undefined"
     ? window.location.origin
-    : (isDev ? "http://localhost:5173" : ""));
-
+    : (isDev ? "http://localhost:5173" : "https://footera.app.br"));
+    
 export const APP = { FRONTEND_BASE_URL: FRONTEND_BASE };
 
 export function appUrl(path: string = "/") {
