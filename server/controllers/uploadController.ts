@@ -41,8 +41,12 @@ export const uploadFotoPerfil = [
         });
       }
 
-      const base = process.env.APP_URL || "http://localhost:3001";
-      const urlAbsoluta = `${base}${caminhoPublico}`;
+      const base =
+        process.env.BACKEND_URL ||
+        process.env.API_BASE_URL ||
+        process.env.APP_URL ||
+        `${req.protocol}://${req.get("host")}`;
+      const urlAbsoluta = `${String(base).replace(/\/+$/, "")}${caminhoPublico}`;
 
       res.json({ sucesso: true, caminho: caminhoPublico, url: urlAbsoluta });
     } catch (err) {
