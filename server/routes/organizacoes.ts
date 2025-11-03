@@ -7,7 +7,7 @@ const router = express.Router();
 type OrgTipo = "Escolinha" | "Clube";
 type OrgOut  = { id: string; nome: string; tipo: OrgTipo };
 
-router.get("/", async (req, res) => {
+async function listOrganizacoes(req: express.Request, res: express.Response) {
   try {
     const tipos = String(req.query.tipos ?? "");
     const vinculadasAoProfessorId = req.query.vinculadasAoProfessorId as string | undefined;
@@ -54,6 +54,10 @@ router.get("/", async (req, res) => {
     console.error(e);
     res.status(500).json({ error: "Falha ao listar organizações" });
   }
-});
+}
+
+// alias para não quebrar quem chama /disponiveis
+router.get("/disponiveis", listOrganizacoes);
+router.get("/", listOrganizacoes);
 
 export default router;
