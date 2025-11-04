@@ -53,8 +53,8 @@ type PayloadProfessor = {
 
 type AtletaItem = {
   id: string;
-  usuarioId?: string | null;   // antes: string
-  atletaId?: string | null;    // antes: string
+  usuarioId?: string | null;  
+  atletaId?: string | null; 
   nome: string;
   foto?: string | null;
   posicao?: string | null;
@@ -153,7 +153,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
   const professorId = data?.professor?.id;
 
-  // abas sempre visíveis (visitante vê Atletas em modo leitura)
   const abas = [
     { id: "visao", label: "Visão Geral" },
     { id: "atletas", label: `Atletas` },
@@ -210,13 +209,12 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
   const h = { Authorization: `Bearer ${rawToken}` };
 
-  // tenta por professorId (modelo mais comum), com fallback por usuario criador
   const profId       = data?.professor?.id ?? Storage.tipoUsuarioId ?? null;
   const usuarioCriou = data?.usuario?.id     ?? Storage.usuarioId     ?? null;
 
   const candidates = [
     { professorId: profId, order: "desc", limit: 6 },
-    { criadoPorId: usuarioCriou, order: "desc", limit: 6 }, // fallback
+    { criadoPorId: usuarioCriou, order: "desc", limit: 6 },
   ].filter(p => Object.values(p)[0]);
 
   if (candidates.length === 0) return;
@@ -245,7 +243,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   setTreinosCriados(parsed);
 }, [rawToken, data?.professor?.id, data?.usuario?.id]);
 
-  /** >>> Corrigido: carrega turmas com owner quando existir; fallback para professorId puro (evita 400). */
   const reloadTurmas = useCallback(async () => {
     if (!rawToken || !professorId) return;
     setTurmasLoading(true);
@@ -304,7 +301,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
       { usuarioId: usuarioTarget, incluirPontuacao: 1 },
     ].filter(p => Object.values(p)[0]);
 
-    if (candidates.length === 0) return; // aguarda dados do perfil chegarem
+    if (candidates.length === 0) return;
 
     let lista: any[] = [];
     for (const params of candidates) {
@@ -367,12 +364,10 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     return () => { cancel.v = true; };
   }, [aba, subAba, rawToken, targetId, data?.usuario?.id, data?.professor?.id, vinculados, treinosCriados, fetchVinculados, fetchTreinosCriados, headers, isOwn]);
 
-  // define seleção inicial quando o perfil chegar/alterar
   useEffect(() => {
     setOrgSelecionada(data?.professor?.escolinhaId ?? data?.professor?.clubeId ?? "");
   }, [data?.professor?.escolinhaId, data?.professor?.clubeId]);
 
-  // carrega organizações e vínculos do professor
   useEffect(() => {
     if (!rawToken || !professorId) return;
 
@@ -385,7 +380,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
     (async () => {
       try {
-        // Tenta endpoints consolidados
         const [disp, vinc] = await Promise.all([
           axios.get(`${API.BASE_URL}/api/organizacoes/disponiveis`, { headers }),
           axios.get(`${API.BASE_URL}/api/professores/${professorId}/vinculos`, { headers }),
@@ -395,7 +389,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         setOrgsDisponiveis(d1.map((o: any) => parseOrg(o)));
         setOrgsVinculadas(v1.map((o: any) => parseOrg(o)));
       } catch {
-        // Fallback: lista separada
         try {
           const [es, cl] = await Promise.all([
             axios.get(`${API.BASE_URL}/api/escolinhas`, { headers }),
@@ -577,7 +570,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
             </SectionCard>
           )}
 
-          {/* >>> Esta seção agora é somente leitura para visitantes. Botões aparecem só para o dono/admin. */}
           <SectionCard
             title="Turmas do Professor"
             right={
@@ -624,7 +616,16 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
             )}
           </SectionCard>
 
-          <SectionCard title="Treinos criados recentemente" right={<Link href="/treinos" className="text-sm text-green-800">Ver todos</Link>}>
+          <SectionCard
+            title="Treinos criados recentemente"
+            right={
+              canEdit
+                ? <Link href="/treinos" className="text-sm text-green-800">Ver todos</Link>
+                : data.professor?.id
+                  ? <Link href={`/treinos?professorId=${encodeURIComponent(data.professor.id)}`} className="text-sm text-green-800">Ver todos</Link>
+                  : null
+            }
+          >
             {treinosCriados && treinosCriados.length > 0 ? (
               <ul className="space-y-3">
                 {treinosCriados.slice(0, 6).map((t) => (
@@ -780,7 +781,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         </div>
       )}
 
-      {/* >>> Importantíssimo: o gerenciador de turmas só abre para o próprio professor/admin */}
       <TurmasManager
         open={turmasOpen && canEdit}
         onClose={handleCloseTurmas}

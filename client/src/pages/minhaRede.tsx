@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
-import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { Link } from 'wouter';
 

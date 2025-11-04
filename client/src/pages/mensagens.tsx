@@ -4,12 +4,12 @@ import { Send, Share2, Volleyball, User, UserPlus, CirclePlus, Search, House, Us
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import socket from "../services/socket.js";
-import { ModalGrupos } from "@/components/modal/ModalGrupos.js";
-import { ModalDesafiosGrupo } from "@/components/modal/ModalDesafiosGrupos.js";
-import { MensagemItemGrupo } from "@/components/chat/GroupDesafioCards.js";
-import CardAtletaShield from "@/components/cards/CardAtletaShield.js";
+import { ModalGrupos } from "../components/modal/ModalGrupos.js";
+import { ModalDesafiosGrupo } from "../components/modal/ModalDesafiosGrupos.js";
+import { MensagemItemGrupo } from "../components/chat/GroupDesafioCards.js";
+import CardAtletaShield from "../components/cards/CardAtletaShield.js";
 import * as htmlToImage from "html-to-image";
-import { publicImgUrl } from "@/utils/publicUrl.js";
+import { publicImgUrl } from "../utils/publicUrl.js";
 import { FLAGS } from "../config.js";
 
 interface Usuario {
@@ -907,13 +907,11 @@ useEffect(() => {
           reconcilePrivadaByClientId(saved);
         } else {
           console.error("POST /api/mensagem falhou:", resp.status, await resp.text());
-          // rollback da bolha otimista + aviso
           setMensagensPrivadas(prev => prev.filter(m => m.clientMsgId !== clientMsgId));
           alert("Não foi possível enviar a mensagem agora.");
         }
       } catch (e) {
         console.error("POST /api/mensagem erro:", e);
-        // rollback da bolha otimista + aviso
         setMensagensPrivadas(prev => prev.filter(m => m.clientMsgId !== clientMsgId));
         alert("Não foi possível enviar a mensagem agora.");
       }
@@ -1071,12 +1069,10 @@ useEffect(() => {
           const isDataUrl =
         typeof msg.conteudo === "string" && msg.conteudo.startsWith("data:image/");
 
-      // Usa nosso helper que já troca localhost -> produção e prefixa /uploads
       const path = isDataUrl ? msg.conteudo : publicImgUrl(msg.conteudo)!;
 
       return Shell(<img src={path} alt="Card do atleta" className="w-56 h-auto rounded" />);
-  } // <— FECHA o if (msg.tipo === "CARD")
-
+  } 
     if (msg.tipo === "POST") {
       const post = postsCache[msg.conteudo];
       if (!post) return Shell(<div className="text-sm">Carregando post...</div>);

@@ -1,6 +1,6 @@
 import axios from "axios";
-import { API } from "@/config.js";
-import { readToken } from "@/utils/auth.js";
+import { API } from "../config.js";
+import { readToken } from "../utils/auth.js";
 
 const api = axios.create({ baseURL: API.BASE_URL });
 

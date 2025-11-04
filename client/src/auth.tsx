@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Redirect } from "wouter";
-import { readToken } from "@/utils/auth.js";
+import { readToken } from "./utils/auth.js";
 
 export function Private({ children }: { children: ReactNode }) {
   const token = readToken();
