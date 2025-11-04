@@ -1,4 +1,4 @@
-import { API } from "@/config.js";
+import { API } from "../config.js";
 
 const RX_DEV_HOST = /^https?:\/\/(?:localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(?::\d+)?/i;
 

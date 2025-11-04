@@ -1,4 +1,3 @@
-// server/controllers/perfilController
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
@@ -752,7 +751,6 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
   const fotoFinal: string | null = file ? `/uploads/${file.filename}` : (usuario.foto ?? null);
 
   try {
-    // Atualiza dados básicos do Usuario
     await prisma.usuario.update({
       where: { id },
       data: {
@@ -767,7 +765,6 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
       }
     });
 
-    // 🔧 Normalização do tipo (aceita "escola" e "escolinha")
     const tipoKey = String(tipoUsuario).toLowerCase();
     const tipoNorm = (tipoKey === "escolinha") ? "escola" : tipoKey;
 
@@ -898,7 +895,6 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
         break;
       }
 
-      // ✅ aceita "escola" e "escolinha"
       case "escola":
         await prisma.escolinha.update({
           where: { usuarioId: id },

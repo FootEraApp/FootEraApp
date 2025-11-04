@@ -1,4 +1,3 @@
-// server/controllers/configuracoesController.ts
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import jwt from "jsonwebtoken";
@@ -77,7 +76,6 @@ export const excluirConta = async (req: Request, res: Response) => {
       });
     }
 
-    // 1) Desvincular reposts que apontem para posts do usuário
     const posts = await prisma.postagem.findMany({
       where: { usuarioId: userId },
       select: { id: true },
@@ -91,7 +89,6 @@ export const excluirConta = async (req: Request, res: Response) => {
           data: { repostOfId: null },
         });
       }
-      // 2) Excluir usuário (demais “filhos” dependem do seu onDelete no schema)
       await tx.usuario.delete({ where: { id: userId } });
     });
 

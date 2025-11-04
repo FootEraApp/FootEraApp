@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { formatarUrlFoto } from '@/utils/formatarFoto.js';
+import { formatarUrlFoto } from '../utils/formatarFoto.js';
 import Storage from "../../../server/utils/storage.js";
 import { API } from '../config.js';
 import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
@@ -569,7 +569,6 @@ useEffect(() => {
                     {
                       usuario: { ...dadosUsuario, foto: fotoUrl },
                       tipo,
-                      // força "escolinha" -> "escola" no payload
                       tipoUsuario: String(tipoUsuarioOriginal).toLowerCase().replace(/^escolinha$/, "escola"),
                     },
                     { headers: { Authorization: `Bearer ${token}` } }

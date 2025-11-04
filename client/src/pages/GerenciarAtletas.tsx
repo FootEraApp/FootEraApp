@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
-import TurmasManager from "@/components/turmas/TurmasManager.js";
+import TurmasManager from "../components/turmas/TurmasManager.js";
 
 export type CategoriaBase =
   | "Sub-9"

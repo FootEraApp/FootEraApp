@@ -1,4 +1,3 @@
-// client/src/pages/configuracoesPerfil.tsx
 import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
@@ -12,10 +11,8 @@ export default function ConfiguracoesPerfil() {
   const [mensagens, setMensagens] = useState(true);
   const [mostrarEmail, setMostrarEmail] = useState(false);
 
-  // Frase de confirmação (case-sensitive)
   const REQUIRED_PHRASE = "Excluir Conta Footera";
 
-  // modal excluir conta
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -86,7 +83,6 @@ export default function ConfiguracoesPerfil() {
         <ArrowLeft className="h-5 w-5" />
       </Link>
 
-      {/* ----- Conta ----- */}
       <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <h2 className="text-gray-800 font-bold mb-3">Conta</h2>
         <div className="flex justify-between py-2 items-start border-b">
@@ -114,7 +110,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       </div>
 
-      {/* ----- Dados e Privacidade ----- */}
       <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <h2 className="text-gray-800 font-bold mb-3">Dados e Privacidade</h2>
 
@@ -134,7 +129,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       </div>
 
-      {/* ----- Ações da Conta (Sair) ----- */}
       <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <h2 className="text-gray-800 font-bold mb-3">Ações da Conta</h2>
         <button
@@ -145,8 +139,7 @@ export default function ConfiguracoesPerfil() {
         </button>
       </div>
 
-      {/* ----- QUADRADO ESPECÍFICO: Excluir Conta ----- */}
-      <div className="mx-4 mb-4 rounded-xl shadow bg-red-50 border border-red-200 p-4">
+      <div className="mx-4 mb-4 rounded-xl shadow bg-white border border-red-200 p-4">
         <h3 className="text-red-700 font-bold text-lg">Excluir conta</h3>
         <p className="text-sm text-red-700 mt-1">
           Esta ação é <strong>irreversível</strong>. Todos os seus dados e conteúdos serão removidos.
@@ -166,7 +159,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       </div>
 
-      {/* Modal de confirmação de exclusão */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-5">

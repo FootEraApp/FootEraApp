@@ -1,4 +1,3 @@
-// client/src/pages/cadastro
 import { useEffect, useMemo, useState, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import logo from "/assets/usuarios/footera-logo.png";
@@ -317,7 +316,6 @@ export default function Cadastro() {
         };
       }
 
-      // antes (errado em alguns pontos): /api/cadastro/cadastro ou /api/auth/cadastro/cadastro
       const res = await fetch(`${API.BASE_URL}/api/auth/cadastro`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

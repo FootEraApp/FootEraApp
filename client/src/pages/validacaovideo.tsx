@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { API } from "../config.js";
-import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import { formatarUrlFoto } from "../utils/formatarFoto.js";
 
 type ModeracaoItem = {
   id: string;

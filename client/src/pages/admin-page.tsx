@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { API } from "../config.js";
-import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import ValidacaoVideo from "./validacaovideo.js";
 import { FLAGS } from "../config.js";
 

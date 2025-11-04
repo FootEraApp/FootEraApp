@@ -1,5 +1,5 @@
-import { API } from "@/config.js";
-import { logout } from "@/utils/session.js";
+import { API } from "../config.js";
+import { logout } from "../utils/session.js";
 import Storage  from "../../../server/utils/storage.js";
 
 export async function apiFetch(

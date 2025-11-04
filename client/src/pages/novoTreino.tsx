@@ -1,4 +1,3 @@
-// client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from "lucide-react";
@@ -108,12 +107,10 @@ type TreinoAgendadoResp = {
 
 const SAVE_KEY = "novoTreinoState";
 
-// ---------- helpers p/ Treino Salvo (gaveta) ----------
 const MAX_SLOTS_TREINOS_SALVOS = 5;
 
 function toCategoriaEnum(val?: string | null): string | null {
   if (!val) return null;
-  // normaliza "SUB13" / "sub-13" -> "Sub13"
   const m = String(val).match(/sub[\s\-]?(\d{1,2})/i);
   if (m) return `Sub${m[1]}`;
   if (/^livre$/i.test(String(val))) return "Livre";
@@ -163,15 +160,13 @@ async function apiCriarTreinoSalvo(body: any) {
 
 async function tentarSalvarComoTreinoSalvo(payload: TreinoCreatePayload, scoreTotal: number) {
   try {
-    const ownerTipo = payload.tipoUsuario; // 'professor' | 'clube' | 'escolinha'
+    const ownerTipo = payload.tipoUsuario;
     const ownerId = payload.tipoUsuarioId;
 
     if (!ownerTipo || !ownerId) return { saved: false, reason: "sem-dono" as const };
 
-    // 1) verifica slots atuais
     const meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
 
-    // 2) se já tem 5, perguntar qual apagar
     if (meus.length >= MAX_SLOTS_TREINOS_SALVOS) {
       const lista = meus
         .map((m, i) => {
@@ -187,7 +182,6 @@ async function tentarSalvarComoTreinoSalvo(payload: TreinoCreatePayload, scoreTo
 
       const idx = Number(escolha);
       if (!escolha || !Number.isFinite(idx) || idx < 1 || idx > meus.length) {
-        // usuário preferiu não salvar
         return { saved: false, reason: "usuario-pulou" as const };
       }
 
@@ -200,25 +194,24 @@ async function tentarSalvarComoTreinoSalvo(payload: TreinoCreatePayload, scoreTo
       }
     }
 
-    // 3) monta body e cria treino salvo
     const categorias = Array.isArray(payload.categoria) ? payload.categoria.map(toCategoriaEnum).filter(Boolean) : [];
     const body = {
       titulo: payload.nome,
       descricao: payload.descricao ?? null,
       nivel: payload.nivel ?? null,
       tipoTreino: payload.tipoTreino ?? null,
-      categoria: categorias, // ex.: ["Sub13"]
+      categoria: categorias,
       duracao: payload.duracao ?? null,
       dicas: Array.isArray(payload.dicas) ? payload.dicas : [],
       conteudo: {
         objetivo: payload.objetivo ?? null,
-        exercicios: payload.exercicios, // já vem de montarExerciciosParaPayload
+        exercicios: payload.exercicios,
         pontuacao: scoreTotal ?? null,
         dataAgendada: payload.dataAgendada ?? null,
       },
       publico: false,
       parceiro: false,
-      naoExpira: false, // usa TTL de 30 dias no backend
+      naoExpira: false, 
       tipoUsuario: ownerTipo,
       tipoUsuarioId: ownerId,
       criadoPorUsuarioId: payload.usuarioId ?? null,
@@ -231,7 +224,6 @@ async function tentarSalvarComoTreinoSalvo(payload: TreinoCreatePayload, scoreTo
     return { saved: false, reason: "erro" as const };
   }
 }
-// ---------- fim helpers Treino Salvo ----------
 
 function safeParse<T>(str: string | null, fallback: T): T {
   try {
@@ -926,7 +918,6 @@ export default function NovoTreino() {
       const mapNivel = (s: string) => ({ Base: "Base", Avancado: "Avancado", Performance: "Performance" } as const)[s] ?? "Base";
       const mapTipoTreino = (s: string) => ({ Tecnico: "Tecnico", Fisico: "Fisico", Tatico: "Tatico" } as const)[s] ?? null;
       const mapCategoria = (s: string) => {
-        // produz "Sub13" p/ backend principal
         const m = String(s || "").match(/sub[\s\-]?(\d{1,2})/i);
         if (m) return `Sub${m[1]}`;
         if (/^livre$/i.test(String(s))) return "Livre";
@@ -959,7 +950,6 @@ export default function NovoTreino() {
         pontuacao: Math.max(0, Math.floor(score.total)),
       };
 
-      // valida duplicados
       const vistosId = new Set<string>();
       const vistosNome = new Set<string>();
       const duplicados: string[] = [];
@@ -983,10 +973,8 @@ export default function NovoTreino() {
         return;
       }
 
-      // 1) cria Treino Programado (como já fazia)
       await TreinosApi.criar(payload);
 
-      // 2) tenta salvar também na Gaveta (Treino Salvo)
       const resultadoSalvar = await tentarSalvarComoTreinoSalvo(payload, score.total);
 
       if (resultadoSalvar.saved) {
@@ -997,15 +985,12 @@ export default function NovoTreino() {
         } else if (resultadoSalvar.reason === "falha-apagar") {
           alert("Treino criado, mas não foi possível liberar espaço na Gaveta. Novo treino NÃO salvo na Gaveta.");
         } else if (resultadoSalvar.reason === "sem-dono") {
-          // sem dono não é erro: apenas não salva na gaveta
           console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
         } else {
-          // erro genérico ao salvar
           console.warn("Treino Salvo: erro ao salvar, seguindo sem gaveta.");
         }
       }
 
-      // limpa estado e sessão local
       sessionStorage.removeItem(SAVE_KEY);
       setEtapa(1);
       setCompletedUntil(1);

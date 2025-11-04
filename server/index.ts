@@ -77,6 +77,7 @@ import analisesRoutes from "./routes/analises.js";
 import adminAssinantesRoutes from "./routes/admin.assinantes.js";
 import assinaturasRoutes from "./routes/assinaturas.js";
 import treinosSalvosRoutes from "./routes/treinosSalvos.js";
+import analyticsRoute from "./routes/analytics.js"
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

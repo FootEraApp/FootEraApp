@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { publicImgUrl } from "@/utils/publicUrl.js";
 import { API } from "@/config.js";
 
 const SHIELD_W_DESK = 150;
