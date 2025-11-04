@@ -6,7 +6,7 @@ import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import CardAtletaShield from "../components/cards/CardAtletaShield.js";
 import * as htmlToImage from "html-to-image";
-import { publicImgUrl } from "@/utils/publicUrl.js";
+import { publicImgUrl } from "../utils/publicUrl.js";
 import api from "../lib/api.js";
 
 type PerfilResp = {

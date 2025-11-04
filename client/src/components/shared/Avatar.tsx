@@ -1,4 +1,3 @@
-// client/src/components/shared/Avatar.tsx
 import { useMemo, useEffect } from "react";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 

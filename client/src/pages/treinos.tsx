@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API, FLAGS } from "../config.js";
-import { Badge } from "@/components/ui/badge.js";
-import HealthBanner from "@/components/legal/HealthBanner.js";
+import { Badge } from "../components/ui/badge.js";
+import HealthBanner from "../components/legal/HealthBanner.js";
 
 interface Exercicio {
   id: string;
@@ -552,17 +552,59 @@ useEffect(() => {
         "";
 
       const tipo = String(rawTipo).toLowerCase();
-
       const tipoUsuarioId = (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
       const token = (Storage as any).token ?? localStorage.getItem("token");
 
-      if (tipo === "atleta" && tipoUsuarioId && token) {
-        carregarMinhasSubmissoes(tipoUsuarioId);
+      const qs = new URLSearchParams(window.location.search);
+      const professorIdFromQuery = qs.get("professorId");
 
-         const resTreinos = await fetch(
-            `${API.BASE_URL}/api/treinos/agendados?usuarioId=${(Storage as any).usuarioId}`,
+      if (professorIdFromQuery && token) {
+        try {
+          const res = await fetch(
+            `${API.BASE_URL}/api/treinos/programados?professorId=${encodeURIComponent(professorIdFromQuery)}`,
             { headers: { Authorization: `Bearer ${token}` } }
           );
+
+          if (res.ok) {
+            const data = await res.json();
+            const lista = Array.isArray(data) ? data : (data?.items ?? data?.data ?? []);
+
+            const normTreinos = lista.map((t: any) => ({
+              id: t.id,
+              nome: t.nome,
+              descricao: t.descricao ?? undefined,
+              nivel: t.nivel,
+              dataAgendada: t.dataAgendada ?? undefined,
+              duracao: t.duracao ?? undefined,
+              objetivo: t.objetivo ?? undefined,
+              dicas: Array.isArray(t.dicas) ? t.dicas : [],
+              professorId: t.professorId ?? undefined,
+              escolinhaId: t.escolinhaId ?? undefined,
+              clubeId: t.clubeId ?? undefined,
+              pontuacao: t.pontuacao ?? undefined,
+              exercicios: (t.exercicios ?? []).map((ex: any) => ({
+                id: ex.exercicio?.id ?? ex.id ?? "",
+                nome: ex.exercicio?.nome ?? ex.nome ?? "",
+                repeticoes: ex.repeticoes ?? undefined,
+              })),
+            }));
+
+            setTreinos(normTreinos);
+          }
+        } catch (e) {
+          console.error("Falha ao carregar treinos por professorId:", e);
+        }
+      }
+
+      if (tipo === "atleta" && token) {
+        if (tipoUsuarioId) {
+          carregarMinhasSubmissoes(tipoUsuarioId);
+        }
+
+        const resTreinos = await fetch(
+          `${API.BASE_URL}/api/treinos/agendados?usuarioId=${(Storage as any).usuarioId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
           if (!resTreinos.ok) {
             console.error("/treinos/agendados", resTreinos.status, await resTreinos.text());
             return;
@@ -710,8 +752,8 @@ useEffect(() => {
       const tipoUsuarioId = (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
 
       const t = String(tipoSalvo || "").toLowerCase();
-      if (["admin", "atleta", "escola", "escolinha", "clube", "professor", "olheiro"].includes(t) && usuarioId && tipoUsuarioId) {
-        setUsuario({ tipo: t as any, usuarioId, tipoUsuarioId });
+      if (["admin", "atleta", "escola", "escolinha", "clube", "professor", "olheiro"].includes(t) && usuarioId) {
+        setUsuario({ tipo: t as any, usuarioId, tipoUsuarioId: tipoUsuarioId ?? "" });
       } else {
         console.warn("Tipo/IDs inválidos", { tipoSalvo, usuarioId, tipoUsuarioId });
       }

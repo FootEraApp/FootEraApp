@@ -73,12 +73,11 @@ export default function PaginaLogin() {
       const url = `${API.BASE_URL}/api/auth/login`;
       const resp = await axios.post(url, { nomeDeUsuario, senha });
       const data = resp.data ?? {};
-      // usuário existe mas NÃO está verificado (backend agora retorna 200 com ok:false)
       if (data?.ok === false && data?.needVerification) {
         setNeedVerify(true);
         setEmailDestino(data.emailDestino ?? null);
         setErro(data.message ?? "Verifique seu e-mail para concluir o cadastro.");
-        return; // não prossegue para salvar token
+        return; 
       }
 
       const usuario = data.usuario ?? {};

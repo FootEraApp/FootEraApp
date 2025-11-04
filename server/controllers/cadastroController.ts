@@ -1,4 +1,3 @@
-// server/controllers/cadastroController
 import { Request, Response } from "express";
 import { PrismaClient, TipoUsuario, Nivel, StatusCref } from "@prisma/client";
 import bcrypt from "bcryptjs";

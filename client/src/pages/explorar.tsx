@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";
-import { formatarUrlFoto } from "@/utils/formatarFoto.js";
+import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import {
   Volleyball,
   User,
@@ -366,14 +366,12 @@ function Explorar() {
 
   return (
     <div className="min-h-screen bg-[#FEFBE9] text-green-900 pb-28 sm:pb-24">
-      {/* Header (menor no mobile) */}
       <div className="h-16 sm:h-20 bg-green-900 text-white flex items-center">
         <div className="max-w-5xl mx-auto w-full px-4 sm:px-5">
           <h1 className="text-lg sm:text-xl font-extrabold tracking-wide text-center">Explorar</h1>
         </div>
       </div>
 
-      {/* Busca + Filtros */}
       <div className="max-w-5xl mx-auto px-4 sm:px-5 mt-3 sm:mt-4">
         <div className="flex gap-2 items-center">
           <div className="flex-1 relative">
@@ -387,7 +385,6 @@ function Explorar() {
             />
           </div>
 
-          {/* Botão filtros: ícone no mobile, texto no desktop */}
           {aba === "atletas" && (
             <>
               <button
@@ -414,9 +411,7 @@ function Explorar() {
           )}
         </div>
 
-        {/* Abas: carrossel no mobile, grid no desktop */}
         <div className="mt-3 sm:mt-4">
-          {/* mobile */}
           <div className="-mx-4 px-4 sm:hidden">
             <div className="flex gap-2 overflow-x-auto pb-1">
               <Tab active={aba === "atletas"} onClick={() => setAba("atletas")} icon={<Trophy className="h-4 w-4" />} className="min-w-[110px]">
@@ -433,7 +428,6 @@ function Explorar() {
               </Tab>
             </div>
           </div>
-          {/* desktop */}
           <div className="hidden sm:grid sm:grid-cols-4 sm:gap-2">
             <Tab active={aba === "atletas"} onClick={() => setAba("atletas")} icon={<Trophy className="h-4 w-4" />}>
               Atletas
@@ -604,7 +598,6 @@ function Explorar() {
         </div>
       )}
 
-      {/* Conteúdo */}
       <div className="max-w-5xl mx-auto px-4 sm:px-5 mt-3 sm:mt-4">
         {aba === "atletas" && (
           <>
@@ -688,7 +681,6 @@ function Explorar() {
                   )}
                 </div>
 
-                {/* Ranking */}
                 <h2 className="text-base sm:text-lg font-bold mt-6 mb-2">Top da semana (geral)</h2>
                 {topGeral.length === 0 ? (
                   <p className="text-gray-600 mb-4">Sem dados desta semana.</p>
@@ -902,7 +894,6 @@ function Explorar() {
         )}
       </div>
 
-      {/* bottom nav com safe-area */}
       <nav
         className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md"
         style={{ paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}

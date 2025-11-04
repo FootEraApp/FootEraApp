@@ -7,7 +7,7 @@ import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
 import { CircleX, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
-import PostImage from "@/components/PostImage.js";
+import PostImage from "../components/PostImage.js";
 import { publicImgUrl } from "@/utils/publicUrl.js";
 import { FaRetweet } from "react-icons/fa";
 import { repostPost } from "../services/feedService.js";
