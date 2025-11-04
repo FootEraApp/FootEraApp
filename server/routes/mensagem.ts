@@ -54,7 +54,6 @@ router.post("/", authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "Este usuário não aceita DMs (apenas contas verificadas/permitidas)." });
     }
 
-    // Encaminha para o controller (que já usa req.userId!)
     return enviarMensagem(req as any, res);
   } catch (e) {
     console.error("POST /api/mensagem erro:", e);

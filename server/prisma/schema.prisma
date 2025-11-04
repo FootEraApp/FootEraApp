@@ -121,6 +121,11 @@ model Professor {
   TreinoSalvo      TreinoSalvo[]
   TreinoSalvoReuso TreinoSalvoReuso[]
 
+  estatExerciciosRecomendados EstatisticaExercicio[] @relation("ExEstRec_Rec")
+  estatExerciciosUltimo       EstatisticaExercicio[] @relation("ExEstRec_Ult")
+  TreinoAgendado              TreinoAgendado[]
+  TreinoProfessorUso          TreinoProfessorUso[]
+
   @@index([escolinhaId])
   @@index([clubeId])
   @@index([organizacaoId])
@@ -265,6 +270,8 @@ model TreinoProgramado {
   exercicios               TreinoProgramadoExercicio[]
   TreinoProgramadoRecebido TreinoProgramadoRecebido[]
   realizados               TreinoRealizado[]
+  EstatisticaTreino        EstatisticaTreino[]
+  TreinoProfessorUso       TreinoProfessorUso[]
 }
 
 model TreinoProgramadoExercicio {
@@ -292,6 +299,7 @@ model Exercicio {
   categorias                 Categoria[]
   videoDemonstrativoUrl      String?                     @unique
   treinoProgramadoExercicios TreinoProgramadoExercicio[]
+  EstatisticaExercicio       EstatisticaExercicio[]
 }
 
 model ExercicioTemporario {
@@ -309,20 +317,20 @@ model ExercicioTemporario {
 }
 
 model DesafioOficial {
-  id                 String             @id @default(uuid())
-  titulo             String             @unique
-  descricao          String
-  imagemUrl          String?            @unique
-  nivel              Nivel
-  categoria          Categoria[]
-  createdAt          DateTime           @default(now())
-  prazoSubmissao     DateTime?
-  pontuacao          Int?
-  regras             String?
-  tipoMetrificacao   String?            @map("tipoMetrificação")
-  desafiosEmGrupo    DesafioEmGrupo[]   @relation("DesafioOficial_EmGrupo")
-  mensagens          Mensagem[]         @relation("DesafioMensagemReferencia")
-  submissoes         SubmissaoDesafio[]
+  id               String             @id @default(uuid())
+  titulo           String             @unique
+  descricao        String
+  imagemUrl        String?            @unique
+  nivel            Nivel
+  categoria        Categoria[]
+  createdAt        DateTime           @default(now())
+  prazoSubmissao   DateTime?
+  pontuacao        Int?
+  regras           String?
+  tipoMetrificacao String?            @map("tipoMetrificação")
+  desafiosEmGrupo  DesafioEmGrupo[]   @relation("DesafioOficial_EmGrupo")
+  mensagens        Mensagem[]         @relation("DesafioMensagemReferencia")
+  submissoes       SubmissaoDesafio[]
 }
 
 model Seguidor {
@@ -671,16 +679,21 @@ model Curtida {
 }
 
 model TreinoAgendado {
-  id                 String            @id @default(uuid())
-  titulo             String            @unique
-  local              String?
-  atletaId           String
-  treinoProgramadoId String?
-  dataTreino         DateTime?
-  dataExpiracao      DateTime?
-  submissaoTreinos   SubmissaoTreino[]
-  atleta             Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  treinoProgramado   TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id])
+  id                   String            @id @default(uuid())
+  titulo               String            @unique
+  local                String?
+  atletaId             String
+  treinoProgramadoId   String?
+  dataTreino           DateTime?
+  dataExpiracao        DateTime?
+  submissaoTreinos     SubmissaoTreino[]
+  criadoPorProfessorId String?
+  criadoPorProfessor   Professor?        @relation(fields: [criadoPorProfessorId], references: [id], onDelete: SetNull)
+
+  atleta           Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  treinoProgramado TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id])
+
+  @@index([criadoPorProfessorId])
 }
 
 model TreinoLivre {
@@ -1185,9 +1198,46 @@ model TreinoSalvoReuso {
   @@index([professorId])
 }
 
-/**
- * ============================ ENUMS ============================
- */
+model EstatisticaTreino {
+  treinoId        String    @id
+  usosProfessores Int       @default(0)
+  feitosAlunos    Int       @default(0) 
+  ultimoUsoEm     DateTime?
+  ultimoFeitoEm   DateTime?
+
+  treino TreinoProgramado @relation(fields: [treinoId], references: [id], onDelete: Cascade)
+}
+
+model TreinoProfessorUso {
+  id          String   @id @default(uuid())
+  treinoId    String
+  professorId String
+  usos        Int      @default(0)
+  ultimoUsoEm DateTime @default(now())
+
+  treino    TreinoProgramado @relation(fields: [treinoId], references: [id], onDelete: Cascade)
+  professor Professor        @relation(fields: [professorId], references: [id], onDelete: Cascade)
+
+  @@unique([treinoId, professorId])
+  @@index([professorId])
+  @@index([treinoId])
+}
+
+model EstatisticaExercicio {
+  exercicioId               String    @id
+  inclusoesEmTreinos        Int       @default(0)
+  ultimoIncluidoEm          DateTime?
+  recomendadoPorProfessorId String?
+  ultimoProfessorId         String?
+
+  exercicio Exercicio @relation(fields: [exercicioId], references: [id], onDelete: Cascade)
+
+  recomendadoPorProfessor Professor? @relation("ExEstRec_Rec", fields: [recomendadoPorProfessorId], references: [id], onDelete: SetNull)
+  ultimoProfessor         Professor? @relation("ExEstRec_Ult", fields: [ultimoProfessorId], references: [id], onDelete: SetNull)
+
+  @@index([recomendadoPorProfessorId])
+  @@index([ultimoProfessorId])
+}
 
 enum TreinoStatus {
   PENDING

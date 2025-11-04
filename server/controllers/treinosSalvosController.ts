@@ -28,14 +28,12 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
       tipoUsuario, tipoUsuarioId, criadoPorUsuarioId,
     } = req.body || {};
 
-    // valida dono
     const owner = ownerWhere(tipoUsuario, tipoUsuarioId);
     const ownerKeys = Object.keys(owner);
     if (ownerKeys.length !== 1) {
       return res.status(400).json({ message: "Informe exatamente um dono: professorId OU escolinhaId OU clubeId (via tipoUsuario + tipoUsuarioId)." });
     }
 
-    // limita 5 por dono (ativos e não expirados)
     const ativosCount = await prisma.treinoSalvo.count({
       where: {
         ...owner,
@@ -50,7 +48,6 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Título e pelo menos 1 exercício são obrigatórios." });
     }
 
-    // expiração padrão de 30 dias para não públicos
     const expiraEm = publico || naoExpira ? null : addDays(new Date(), TTL_DIAS);
 
     const created = await prisma.treinoSalvo.create({
@@ -99,7 +96,6 @@ export const listarTreinosSalvos = async (req: Request, res: Response) => {
         where: {
           publico: true,
           parceiro: true,
-          // nunca expiram por padrão, mas se vierem com expiração, filtra também
           OR: [{ expiraEm: null }, { expiraEm: { gt: new Date() } }],
         },
         orderBy: [{ atualizadoEm: "desc" }],
@@ -129,13 +125,11 @@ export const reutilizarTreinoSalvo = async (req: Request, res: Response) => {
     const treino = await prisma.treinoSalvo.findUnique({ where: { id } });
     if (!treino) return res.status(404).json({ message: "Treino salvo não encontrado." });
 
-    // registra professor distinto
     try {
       await prisma.treinoSalvoReuso.create({
         data: { treinoSalvoId: id, professorId },
       });
     } catch {
-      // se já existe (unique), ignoramos
     }
 
     const totalProfessores = await prisma.treinoSalvoReuso.count({
@@ -146,7 +140,6 @@ export const reutilizarTreinoSalvo = async (req: Request, res: Response) => {
       reutilizacoesProfessores: totalProfessores,
     };
 
-    // renova TTL se não for “naoExpira”
     if (!treino.naoExpira) {
       updateData.expiraEm = addDays(new Date(), TTL_DIAS);
     }

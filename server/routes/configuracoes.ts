@@ -1,4 +1,3 @@
-// server/routes/configuracoes.ts
 import express from "express";
 import {
   getConfiguracoes,

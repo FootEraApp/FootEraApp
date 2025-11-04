@@ -56,7 +56,6 @@ async function listOrganizacoes(req: express.Request, res: express.Response) {
   }
 }
 
-// alias para não quebrar quem chama /disponiveis
 router.get("/disponiveis", listOrganizacoes);
 router.get("/", listOrganizacoes);
 

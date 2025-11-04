@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { PrismaClient, Categoria, Nivel, TipoTreino } from "@prisma/client";
+import { onExercicioIncluidoNoTreino } from "../services/statsService.js";
 
 const prisma = new PrismaClient();
 
@@ -147,6 +148,26 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
     });
 
     try {
+      const professorIdForStats =
+        normalizarTipoUsuario(tipoUsuario) === "Professor" ? String(tipoUsuarioId) : undefined;
+
+      await Promise.all(
+        (itens || [])
+          .map((i) => i.exercicioId)
+          .filter((id) => typeof id === "string" && id)
+          .map((exercicioId: string) =>
+            onExercicioIncluidoNoTreino({
+              treinoId: treinoCriado.id,
+              exercicioId,
+              professorId: professorIdForStats,
+            })
+          )
+      );
+    } catch (e) {
+      console.warn("stats (exercício incluído) createTreinoProgramado:", e);
+    }
+
+    try {
       const elencosParaBuscar = [
         ...new Set([...(Array.isArray(elencosIds) ? elencosIds : []), ...(elencoId ? [elencoId] : [])]),
       ];
@@ -247,6 +268,14 @@ export async function updateTreino(req: Request, res: Response) {
       repeticoes: toRepeticoes(e.series, e.repeticoes),
     }));
 
+    const antigos = await prisma.treinoProgramadoExercicio.findMany({
+      where: { treinoProgramadoId: id },
+      select: { exercicioId: true },
+    });
+    const antigosSet = new Set(
+      antigos.map(a => a.exercicioId).filter(Boolean) as string[]
+    );
+
     await prisma.$transaction([
       prisma.treinoProgramadoExercicio.deleteMany({ where: { treinoProgramadoId: id } }),
       prisma.treinoProgramado.update({
@@ -272,6 +301,27 @@ export async function updateTreino(req: Request, res: Response) {
         },
       }),
     ]);
+
+    const novosOficiais = (Array.isArray(exercicios) ? exercicios : [])
+      .map((e: any) => e.exercicioId ?? e.id)
+      .filter((v: any) => typeof v === "string" && v);
+
+    const apenasNovos = novosOficiais.filter((id: string) => !antigosSet.has(id));
+
+    if (apenasNovos.length) {
+      const dono = normalizarTipoUsuario(tipoUsuario);
+      const professorIdForStats = dono === "Professor" ? String(tipoUsuarioId) : undefined;
+
+      await Promise.all(
+        apenasNovos.map((exercicioId: string) =>
+          onExercicioIncluidoNoTreino({
+            treinoId: id,
+            exercicioId,
+            professorId: professorIdForStats,
+          })
+        )
+      );
+    }
 
     res.setHeader("X-TPR-Handler", "treinosprogramados.put.v2");
     return res.json({ ok: true, id, updated: true });

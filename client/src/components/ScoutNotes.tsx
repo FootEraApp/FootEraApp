@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API } from "@/config.js";
+import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 
 export default function ScoutNotes({ atletaId }: { atletaId: string }) {

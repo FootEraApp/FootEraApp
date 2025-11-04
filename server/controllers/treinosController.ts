@@ -4,6 +4,7 @@ import { getIO } from "../socket.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
 import { sanitizeText, basicModerationFails } from "../utils/moderation.js";
+import { onTreinoUsadoPorProfessor, onExercicioIncluidoNoTreino, onTreinoFeitoPorAlunoFromSubmissao } from "../services/statsService.js";
 
 const prisma = new PrismaClient();
 
@@ -219,21 +220,30 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
     const tp = await prisma.treinoProgramado.findUnique({ where: { id: treinoProgramadoId } });
     if (!tp) return res.status(404).json({ message: "Treino programado não encontrado." });
 
-    const novo = await prisma.treinoAgendado.create({
+    const tituloFinal = (typeof titulo === "string" && titulo.trim()) ? titulo : (tp.nome ?? "Treino");
+    const atletaIdStr = String(atletaId);  
+    const dataTreinoDate = new Date(dataTreino);
+
+    const criado = await prisma.treinoAgendado.create({
       data: {
-        atletaId,
+        titulo: tituloFinal,      
+        atletaId: atletaIdStr,    
         treinoProgramadoId,
-        titulo: titulo ?? tp.nome,
-        dataTreino: new Date(dataTreino),
-        dataExpiracao: dataExpiracao ? new Date(dataExpiracao) : null,
-      },
-      include: {
-        treinoProgramado: { include: { exercicios: { include: { exercicio: true, exercicioTemporario: true } } } },
+        dataTreino: dataTreinoDate,  
+        criadoPorProfessorId: req.user?.tipo === "Professor" ? req.user.tipoUsuarioId : null,
       },
     });
 
-    await notificarNovoTreino(deUsuarioId, atletaId, novo.id, novo.titulo ?? tp.nome);
-    return res.status(201).json(novo);
+    if (criado.treinoProgramadoId) {
+      await onTreinoUsadoPorProfessor({
+        treinoId: criado.treinoProgramadoId,
+        professorId: req.user?.tipo === "Professor" ? req.user.tipoUsuarioId : undefined,
+      });
+    }
+
+    await notificarNovoTreino(deUsuarioId, atletaIdStr, criado.id, tituloFinal);
+
+    return res.status(201).json(criado);
   } catch (error) {
     console.error("Erro ao agendar treino:", error);
     return res.status(500).json({ message: "Erro ao agendar treino." });
@@ -1119,6 +1129,14 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
     const exsBanco = exs.filter(e => e.exercicioId);
     const exsTemp  = exs.filter(e => !e.exercicioId && e.nome);
 
+    const antigos = await prisma.treinoProgramadoExercicio.findMany({
+      where: { treinoProgramadoId: id },
+      select: { exercicioId: true },
+    });
+    const antigosSet = new Set(
+      antigos.map(a => a.exercicioId).filter(Boolean) as string[]
+    );
+
     await prisma.$transaction(async (tx) => {
       await tx.treinoProgramadoExercicio.deleteMany({ where: { treinoProgramadoId: id } });
       await tx.exercicioTemporario.deleteMany({ where: { treinoProgramadoId: id } });
@@ -1154,6 +1172,36 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
             ordem: e.ordem ?? i + 1,
           })),
         });
+      }
+
+      if (exsBanco.length) {
+        const professorIdForStats =
+          (typeof tipoUsuario === "string" && String(tipoUsuario).toLowerCase() === "professor")
+            ? String(tipoUsuarioId)
+            : undefined;
+
+        const novosOficiais = (Array.isArray(exercicios) ? exercicios : [])
+          .map((e: any) => e.exercicioId)
+          .filter((id: any) => typeof id === "string" && id);
+
+        const apenasNovos = novosOficiais.filter((id: string) => !antigosSet.has(id));
+
+        if (apenasNovos.length) {
+          const professorIdForStats =
+            (typeof tipoUsuario === "string" && String(tipoUsuario).toLowerCase() === "professor")
+              ? String(tipoUsuarioId)
+              : undefined;
+
+          await Promise.all(
+            apenasNovos.map((exercicioId: string) =>
+              onExercicioIncluidoNoTreino({
+                treinoId: id,
+                exercicioId,
+                professorId: professorIdForStats,
+              })
+            )
+          );
+        }
       }
 
       for (const [i, e] of exsTemp.entries()) {
@@ -1245,6 +1293,14 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
       return res.status(403).json({ message: "Você não possui vínculo/direito para validar esta submissão." });
     }
 
+    if (sub.aprovado === true) {
+      try {
+        await onTreinoFeitoPorAlunoFromSubmissao(sub.id);
+      } catch (e) {
+        console.warn("stats (feito por aluno) pós-conclusão auto-aprovada falhou:", e);
+      }
+    }
+
     const checklist = (req.body?.checklist ?? null) as {
       templateId: string,
       answers: { itemId: string; value: any; comment?: string }[]
@@ -1317,6 +1373,13 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
       },
     });
 
+    if (aprovado === true) {
+      try {
+        await onTreinoFeitoPorAlunoFromSubmissao(sub.id);
+      } catch (e) {
+        console.warn("stats (feito por aluno) na aprovação falhou:", e);
+      }
+    }
 
     try {
       await recomputePontuacaoAtleta(sub.atletaId);

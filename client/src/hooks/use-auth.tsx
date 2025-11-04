@@ -1,6 +1,6 @@
 import { useContext } from "react";
 import { UserContext } from "../context/UserContext.js";
-import { API } from "@/config.js";
+import { API } from "../config.js";
 
 interface User {
   id: number;

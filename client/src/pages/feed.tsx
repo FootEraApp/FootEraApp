@@ -29,16 +29,16 @@ import { format } from "date-fns";
 import { Link, useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
-import { formatarUrlFoto } from "@/utils/formatarFoto.js";
-import { publicImgUrl } from "@/utils/publicUrl.js";
-import socket from "@/services/socket.js";
+import { formatarUrlFoto } from "../utils/formatarFoto.js";
+import { publicImgUrl } from "../utils/publicUrl.js";
+import socket from "../services/socket.js";
 import {
   ALL_ACHIEVEMENTS,
   type AchievementLite,
   type Tier,
 } from "../lib/achievementsCatalog.js";
 import { FaRetweet } from "react-icons/fa";
-import { http } from "@/services/http.js";
+import { http } from "../services/http.js";
 
 interface Usuario {
   id: string;
