@@ -17,7 +17,11 @@
     "prisma:studio": "prisma studio --schema server/prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema server/prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema server/prisma/schema.prisma",
-    "prisma:seed": "prisma db seed --schema server/prisma/schema.prisma"
+    "prisma:seed": "prisma db seed --schema server/prisma/schema.prisma",
+
+    "seed:ex": "tsx server/prisma/seed_exercicios.ts",
+    "seed:base": "tsx server/prisma/seed.ts",
+    "seed:all": "npm run seed:ex && npm run seed:base"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.4",
@@ -157,7 +161,7 @@
     "bufferutil": "^4.0.8"
   },
   "prisma": {
-    "seed": "tsx server/prisma/seed.ts",
+    "seed": "npm run seed:all",
     "schema": "server/prisma/schema.prisma"
   }
 }
