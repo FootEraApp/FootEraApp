@@ -1201,7 +1201,7 @@ model TreinoSalvoReuso {
 model EstatisticaTreino {
   treinoId        String    @id
   usosProfessores Int       @default(0)
-  feitosAlunos    Int       @default(0) 
+  feitosAlunos    Int       @default(0)
   ultimoUsoEm     DateTime?
   ultimoFeitoEm   DateTime?
 
