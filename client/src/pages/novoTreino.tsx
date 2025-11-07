@@ -90,6 +90,8 @@ interface TreinoProgramado {
     repeticoes?: string;
   }[];
   pontuacao?: number | null;
+  treinoProgramadoId?: string | null;
+  origemId?: string | null;
 }
 
 interface Elenco {
@@ -106,7 +108,6 @@ type TreinoAgendadoResp = {
 };
 
 const SAVE_KEY = "novoTreinoState";
-
 const MAX_SLOTS_TREINOS_SALVOS = 5;
 
 function toCategoriaEnum(val?: string | null): string | null {
@@ -211,7 +212,7 @@ async function tentarSalvarComoTreinoSalvo(payload: TreinoCreatePayload, scoreTo
       },
       publico: false,
       parceiro: false,
-      naoExpira: false, 
+      naoExpira: false,
       tipoUsuario: ownerTipo,
       tipoUsuarioId: ownerId,
       criadoPorUsuarioId: payload.usuarioId ?? null,
@@ -344,18 +345,30 @@ export default function NovoTreino() {
   );
 
   function normalizaTreinos(raw: any[]): TreinoProgramado[] {
-    return raw.map((t: any) => ({
-      id: t.id,
-      nome: t.nome ?? t.titulo ?? "(sem nome)",
-      descricao: t.descricao ?? t.resumo ?? "",
-      nivel: t.nivel ?? t.dificuldade ?? "-",
-      pontuacao: t.pontuacao ?? null,
-      exercicios: (t.exercicios ?? t.exs ?? []).map((ex: any, i: number) => ({
-        id: ex.id ?? ex.exercicioId ?? String(i),
-        nome: ex.nome ?? ex.titulo ?? ex?.exercicio?.nome ?? ex?.exercicioTemporario?.nome ?? "",
-        repeticoes: ex.repeticoes ?? ex.reps ?? ex.qtde ?? "",
-      })),
-    }));
+    return raw.map((t: any) => {
+      const programadoId =
+        t.treinoProgramadoId ??
+        t.programadoId ??
+        t.programado?.id ??
+        t.id;
+
+      return {
+        id: String(programadoId),
+        nome: t.nome ?? t.titulo ?? "(sem nome)",
+        descricao: t.descricao ?? t.resumo ?? "",
+        nivel: t.nivel ?? t.dificuldade ?? "-",
+        pontuacao: t.pontuacao ?? null,
+        exercicios: (t.exercicios ?? t.exs ?? []).map((ex: any, i: number) => ({
+          id: ex.id ?? ex.exercicioId ?? String(i),
+          nome: ex.nome ?? ex.titulo ?? ex?.exercicio?.nome ?? ex?.exercicioTemporario?.nome ?? "",
+          repeticoes: ex.repeticoes ?? ex.reps ?? ex.qtde ?? "",
+        })),
+        // @ts-ignore
+        treinoProgramadoId: t.treinoProgramadoId ?? t.programadoId ?? t.programado?.id ?? null,
+        // @ts-ignore
+        origemId: t.id ?? null,
+      };
+    });
   }
 
   function mapAtletas(items: any[]): AtletaVinculado[] {
@@ -366,6 +379,7 @@ export default function NovoTreino() {
     })).filter(x => x.id);
   }
 
+  // Lista treinos disponíveis apenas para ATLETA
   useEffect(() => {
     const tipo =
       (Storage as any).tipoSalvo ??
@@ -412,6 +426,8 @@ export default function NovoTreino() {
 
     return () => { cancel = true; };
   }, []);
+
+  // Elencos / turmas por organização
   useEffect(() => {
     (async () => {
       try {
@@ -442,7 +458,7 @@ export default function NovoTreino() {
             })));
             return;
           }
-        } catch { }
+        } catch {}
 
         const ownerId = orgSelecionada;
         const urls = [
@@ -472,6 +488,7 @@ export default function NovoTreino() {
     })();
   }, [orgSelecionada]);
 
+  // Exercícios
   useEffect(() => {
     (async () => {
       try {
@@ -518,6 +535,7 @@ export default function NovoTreino() {
     })();
   }, [orgSelecionada]);
 
+  // Boot + restore
   useEffect(() => {
     const tipoPersistido =
       (
@@ -578,10 +596,14 @@ export default function NovoTreino() {
     setIniciado(true);
   }, []);
 
+  // Organizações vinculadas (professor)
   useEffect(() => {
     (async () => {
       try {
-        const token = (Storage as any).token || localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+        const token =
+          (Storage as any).token ||
+          localStorage.getItem("token") ||
+          sessionStorage.getItem("token") || "";
         const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
         const professorTipoId =
@@ -629,6 +651,7 @@ export default function NovoTreino() {
     })();
   }, []);
 
+  // Atletas vinculados
   useEffect(() => {
     let cancel = false;
 
@@ -680,6 +703,7 @@ export default function NovoTreino() {
     return () => { cancel = true; };
   }, [orgSelecionada]);
 
+  // Persist
   useEffect(() => {
     saveState({
       etapa,
@@ -723,7 +747,10 @@ export default function NovoTreino() {
         ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
         : { "Content-Type": "application/json" };
 
-      const ownerTipo = orgsVinculadas.find(o => o.id === orgSelecionada)?.tipo;
+      let ok = false, created: any = null;
+
+      const ownerTipoRaw = orgsVinculadas.find(o => o.id === orgSelecionada)?.tipo; // "Clube" | "Escolinha"
+      const tipoUsuario = (ownerTipoRaw || "").toLowerCase() === "clube" ? "clube" : "escolinha";
 
       const tentativas = [
         { url: `${API.BASE_URL}/api/treinos/elencos`, method: "POST" },
@@ -731,17 +758,15 @@ export default function NovoTreino() {
         { url: `${API.BASE_URL}/api/turmas`, method: "POST" },
       ];
 
-      let ok = false, created: any = null;
-
       for (const t of tentativas) {
-        const base = { nome: novaTurmaNome.trim(), atletasIds: atletasSelecionados, ownerTipo };
+        const base = { nome: novaTurmaNome.trim(), atletasIds: atletasSelecionados };
         const body =
           t.url.includes("/api/treinos/elencos")
-            ? { ...base, tipoUsuarioId: orgSelecionada }
+            ? { ...base, tipoUsuario, tipoUsuarioId: orgSelecionada }   // <- AQUI!
             : { ...base, organizacaoId: orgSelecionada };
 
         const r = await fetch(t.url, { method: t.method, headers, body: JSON.stringify(body) });
-
+        
         const txt = await r.text();
 
         if (!r.ok) continue;
@@ -950,6 +975,7 @@ export default function NovoTreino() {
         pontuacao: Math.max(0, Math.floor(score.total)),
       };
 
+      // valida duplicados
       const vistosId = new Set<string>();
       const vistosNome = new Set<string>();
       const duplicados: string[] = [];
@@ -970,6 +996,13 @@ export default function NovoTreino() {
 
       if (duplicados.length) {
         alert(`Remova os exercícios repetidos antes de salvar: ${duplicados.join(", ")}`);
+        return;
+      }
+
+      // bloquear treino sem exercícios válidos
+      const exValidos = exerciciosSelecionados.filter(x => x.idCatalogo || (x.nome && x.nome.trim()));
+      if (exValidos.length === 0) {
+        alert("Adicione pelo menos 1 exercício válido antes de salvar.");
         return;
       }
 
@@ -1016,28 +1049,20 @@ export default function NovoTreino() {
     try {
       const atletaId = (Storage as any).tipoUsuarioId;
       const token = (Storage as any).token;
-
-      if (!atletaId || !token) {
-        alert("Sessão expirada. Faça login novamente.");
-        return;
-      }
+      if (!atletaId || !token) { alert("Sessão expirada. Faça login novamente."); return; }
 
       const prazoSelecionado = prazos[t.id];
-      const quandoISO = prazoSelecionado
-        ? new Date(prazoSelecionado).toISOString()
-        : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const quando = prazoSelecionado ? new Date(prazoSelecionado) : new Date(Date.now() + 24*60*60*1000);
+      const expira = new Date(quando.getTime() + 7*24*60*60*1000);
 
       const res = await fetch(`${API.BASE_URL}/api/treinos/agendados`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           titulo: t.nome,
-          dataTreino: quandoISO,
-          dataExpiracao: quandoISO,
-          atletaId,
+          dataTreino: quando.toISOString(),
+          dataExpiracao: expira.toISOString(),
+          atletaId,                 // <- manda o id que você tem no cliente
           treinoProgramadoId: t.id,
         }),
       });
@@ -1053,11 +1078,14 @@ export default function NovoTreino() {
       sessionStorage.setItem("lastAgendamento", JSON.stringify(novo));
       setIdsProgramadosBloqueados(prev => new Set(prev).add(novo.treinoProgramadoId));
       navigate("/treinos");
-
-      setTimeout(() => {
+      // dispara só quando /treinos sinalizar que montou
+      const once = () => {
+        window.removeEventListener("treinos:ready", once as any);
         window.dispatchEvent(new CustomEvent("treino:agendado", { detail: novo }));
-      }, 50);
+      };
+      window.addEventListener("treinos:ready", once as any);
 
+      setTimeout(() => window.dispatchEvent(new CustomEvent("treino:agendado", { detail: novo })), 50);
       setPrazos(({ [t.id]: _, ...rest }) => rest);
       alert("Treino agendado com sucesso!");
     } catch (e) {
