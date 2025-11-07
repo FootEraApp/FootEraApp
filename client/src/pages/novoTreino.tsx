@@ -379,7 +379,6 @@ export default function NovoTreino() {
     })).filter(x => x.id);
   }
 
-  // Lista treinos disponíveis apenas para ATLETA
   useEffect(() => {
     const tipo =
       (Storage as any).tipoSalvo ??
@@ -427,7 +426,6 @@ export default function NovoTreino() {
     return () => { cancel = true; };
   }, []);
 
-  // Elencos / turmas por organização
   useEffect(() => {
     (async () => {
       try {
@@ -488,7 +486,6 @@ export default function NovoTreino() {
     })();
   }, [orgSelecionada]);
 
-  // Exercícios
   useEffect(() => {
     (async () => {
       try {
@@ -535,7 +532,6 @@ export default function NovoTreino() {
     })();
   }, [orgSelecionada]);
 
-  // Boot + restore
   useEffect(() => {
     const tipoPersistido =
       (
@@ -596,7 +592,6 @@ export default function NovoTreino() {
     setIniciado(true);
   }, []);
 
-  // Organizações vinculadas (professor)
   useEffect(() => {
     (async () => {
       try {
@@ -651,7 +646,6 @@ export default function NovoTreino() {
     })();
   }, []);
 
-  // Atletas vinculados
   useEffect(() => {
     let cancel = false;
 
@@ -703,7 +697,6 @@ export default function NovoTreino() {
     return () => { cancel = true; };
   }, [orgSelecionada]);
 
-  // Persist
   useEffect(() => {
     saveState({
       etapa,
@@ -749,7 +742,7 @@ export default function NovoTreino() {
 
       let ok = false, created: any = null;
 
-      const ownerTipoRaw = orgsVinculadas.find(o => o.id === orgSelecionada)?.tipo; // "Clube" | "Escolinha"
+      const ownerTipoRaw = orgsVinculadas.find(o => o.id === orgSelecionada)?.tipo;
       const tipoUsuario = (ownerTipoRaw || "").toLowerCase() === "clube" ? "clube" : "escolinha";
 
       const tentativas = [
@@ -762,7 +755,7 @@ export default function NovoTreino() {
         const base = { nome: novaTurmaNome.trim(), atletasIds: atletasSelecionados };
         const body =
           t.url.includes("/api/treinos/elencos")
-            ? { ...base, tipoUsuario, tipoUsuarioId: orgSelecionada }   // <- AQUI!
+            ? { ...base, tipoUsuario, tipoUsuarioId: orgSelecionada } 
             : { ...base, organizacaoId: orgSelecionada };
 
         const r = await fetch(t.url, { method: t.method, headers, body: JSON.stringify(body) });
@@ -975,7 +968,6 @@ export default function NovoTreino() {
         pontuacao: Math.max(0, Math.floor(score.total)),
       };
 
-      // valida duplicados
       const vistosId = new Set<string>();
       const vistosNome = new Set<string>();
       const duplicados: string[] = [];
@@ -999,7 +991,6 @@ export default function NovoTreino() {
         return;
       }
 
-      // bloquear treino sem exercícios válidos
       const exValidos = exerciciosSelecionados.filter(x => x.idCatalogo || (x.nome && x.nome.trim()));
       if (exValidos.length === 0) {
         alert("Adicione pelo menos 1 exercício válido antes de salvar.");
@@ -1062,8 +1053,7 @@ export default function NovoTreino() {
           titulo: t.nome,
           dataTreino: quando.toISOString(),
           dataExpiracao: expira.toISOString(),
-          atletaId,                 // <- manda o id que você tem no cliente
-          treinoProgramadoId: t.id,
+          atletaId,                         treinoProgramadoId: t.id,
         }),
       });
 
@@ -1078,7 +1068,6 @@ export default function NovoTreino() {
       sessionStorage.setItem("lastAgendamento", JSON.stringify(novo));
       setIdsProgramadosBloqueados(prev => new Set(prev).add(novo.treinoProgramadoId));
       navigate("/treinos");
-      // dispara só quando /treinos sinalizar que montou
       const once = () => {
         window.removeEventListener("treinos:ready", once as any);
         window.dispatchEvent(new CustomEvent("treino:agendado", { detail: novo }));

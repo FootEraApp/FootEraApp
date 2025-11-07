@@ -49,6 +49,7 @@ import PaginaIndicarClube from "./pages/olheiro/indicar.js";
 import PaginaTreinoLivreNovo from "./pages/treinoLivreNovo.js";
 import PaginaTreinoLivresHistorico from "./pages/treinoLivreHistorico.js"
 import PaginaCreateAdmin from "./pages/createAdmin.js";
+import PaginaPagamentos from "./pages/pagamentos/index.js";
 
 export function AppRoutes() {
   return (
@@ -66,6 +67,7 @@ export function AppRoutes() {
       </Route>
 
       <Route path="/admin/login"><PaginaLoginAdmin /></Route>
+      <Route path="/pagamentos"><PaginaPagamentos /></Route>
 
       {FLAGS.DESAFIOS_ENABLED ? (
         <Route path="/admin/desafios/create">
