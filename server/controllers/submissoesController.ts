@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient, TipoMidia } from "@prisma/client";
+import { PrismaClient, TipoMidia, TipoTreino } from "@prisma/client";
 import { aplicarEstatisticasPosSubmissao } from "./submissoes/utilsEstatistica.js";
 import { inferirTipoTreino } from "../utils/inferirTipoTreino.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
@@ -26,6 +26,7 @@ async function atletaTemVinculo(atletaId: string) {
   return !!(a.clubeId || a.escolinhaId || relCount > 0);
 }
 
+/** --------- TREINO (upload ou gravação) --------- */
 export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
   try {
     const {
@@ -34,7 +35,7 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
       atletaId,
       aprovado,
       duracaoMinutos,
-      tempoSeg,
+      tempoSeg,        // <- aceito do front
       repeticoes,
     } = req.body as {
       observacao?: string;
@@ -42,20 +43,26 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
       atletaId: string;
       aprovado?: boolean | string;
       duracaoMinutos?: number | string;
-      tempoSeg?: number | string;
+      tempoSeg?: number | string;      // <- “alias” para duracaoSegundos
       repeticoes?: number | string;
     };
 
     const file = (req as any).file as Express.Multer.File | undefined;
-    if (!treinoAgendadoId || !atletaId || !file) {
-      return res.status(400).json({ error: "Dados obrigatórios ausentes." });
+
+    if (!treinoAgendadoId || !atletaId) {
+      return res.status(400).json({ error: "Informe atletaId e treinoAgendadoId." });
+    }
+    if (!file) {
+      return res.status(400).json({ error: "Envie um arquivo de imagem/vídeo do treino." });
     }
 
     const temVinculo = await atletaTemVinculo(atletaId);
     const aprovadoNormalizado = temVinculo ? (String(aprovado) === "true") : true;
 
     const assetUrl = `/uploads/${file.filename}`;
-    const isVideo = file.mimetype?.startsWith("video");
+    const isVideo = !!file.mimetype?.startsWith("video");
+
+    // Campos da mídia compatíveis com o seu schema
     const midia = {
       url: assetUrl,
       tipo: isVideo ? TipoMidia.Video : TipoMidia.Imagem,
@@ -66,6 +73,7 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
 
     const usuarioIdForActivity = await resolveUsuarioIdForActivity((req as any).userId, atletaId);
 
+    // Normalizações
     const tempoSegNum =
       tempoSeg != null ? Number(tempoSeg)
       : duracaoMinutos != null ? Math.round(Number(duracaoMinutos) * 60)
@@ -80,22 +88,28 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
         observacao,
         usuarioId: typeof (req as any).userId === "string" ? (req as any).userId : undefined,
         duracaoMinutos: duracaoMinutos ? Number(duracaoMinutos) : undefined,
+
+        // ⚠️ nome correto no schema:
+        duracaoSegundos: tempoSegNum,
+
         aprovado: aprovadoNormalizado,
         pontuacaoSnapshot: temVinculo ? undefined : 0,
         pontosCreditados: temVinculo ? undefined : 0,
-        tempoSeg: tempoSegNum,
         repeticoes: repeticoesNum,
+
         midias: { create: [midia] },
       },
       select: { id: true, aprovado: true },
     });
 
     if (usuarioIdForActivity) {
+      // atividade recente (silenciosa se falhar)
       await prisma.atividadeRecente.create({
         data: { usuarioId: usuarioIdForActivity, tipo: "treino", imagemUrl: assetUrl },
       }).catch(() => {});
     }
 
+    // Atualiza snapshot de "tipo de treino" preferido do atleta, se der para inferir
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id: treinoAgendadoId },
       include: { treinoProgramado: true },
@@ -109,7 +123,7 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
 
     if (tipoStr) {
       const v = tipoStr.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-      const map: Record<string, any> = {
+      const map: Record<string, TipoTreino> = {
         fisico: "Fisico",
         tecnico: "Tecnico",
         tatico: "Tatico",
@@ -124,16 +138,14 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
       }
     }
 
+    // Se aprovado, aplica estatísticas e recálculo de pontuação
     if (created.aprovado) {
-      await aplicarEstatisticasPosSubmissao(
-        created.id,
-        atletaId,
-        treinoAgendadoId,
-        duracaoMinutos ? Number(duracaoMinutos) :
-        tempoSegNum != null ? Math.round(tempoSegNum / 60) :
-        undefined
-      ).catch(() => {});
+      const minutosParaEstat =
+        duracaoMinutos ? Number(duracaoMinutos)
+        : tempoSegNum != null ? Math.round(tempoSegNum / 60)
+        : undefined;
 
+      await aplicarEstatisticasPosSubmissao(created.id, atletaId, treinoAgendadoId, minutosParaEstat).catch(() => {});
       await recomputePontuacaoAtleta(atletaId).catch(() => {});
 
       const atleta = await prisma.atleta.findUnique({ where: { id: atletaId }, select: { usuarioId: true } });
@@ -145,18 +157,18 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
       id: created.id,
       autoAprovado: !temVinculo,
       temVinculo,
-      mensagem:
-        temVinculo
-          ? "Submissão enviada. Aguarde validação do responsável."
-          : "Submissão aprovada automaticamente (sem pontuação) por ausência de vínculo.",
+      mensagem: temVinculo
+        ? "Submissão enviada. Aguarde validação do responsável."
+        : "Submissão aprovada automaticamente (sem pontuação) por ausência de vínculo.",
     });
 
   } catch (error) {
     console.error("Erro ao salvar submissão de treino:", error);
-    return res.status(500).json({ error: "Erro ao salvar submissão de treino" });
+    return res.status(500).json({ error: "Erro ao salvar submissão de treino." });
   }
 }
 
+/** --------- DESAFIO (gravação com tentativas) --------- */
 export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
   try {
     const {
@@ -188,9 +200,7 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
     const atleta = await prisma.atleta.findUnique({ where: { id: atletaId } });
     if (!atleta) return res.status(400).json({ message: "Atleta inválido ou não encontrado." });
 
-    const tentativas = await prisma.submissaoDesafio.count({
-      where: { atletaId, desafioId },
-    });
+    const tentativas = await prisma.submissaoDesafio.count({ where: { atletaId, desafioId } });
     if (tentativas >= 2) {
       return res.status(400).json({ message: "Limite de 2 tentativas atingido." });
     }
@@ -217,9 +227,9 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
         desafioId,
         videoUrl: finalVideoUrl,
         observacao,
-        aprovado: false,            
+        aprovado: false,
         tempoMs: tempoMsNum,
-        repeticoes: repeticoesNum,  
+        repeticoes: repeticoesNum,
         ...(uploadedUrl
           ? {
               midias: {
@@ -249,7 +259,7 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
     return res.status(201).json({
       ok: true,
       id: created.id,
-      tentativaNumero,              
+      tentativaNumero,
       tentativasRestantes: Math.max(0, 2 - tentativaNumero),
       mensagem: "Submissão enviada para validação. Aguarde aprovação.",
     });
@@ -259,6 +269,7 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
   }
 }
 
+/** --------- ÚLTIMA SUBMISSÃO DO TREINO --------- */
 export async function getUltimaSubmissaoTreino(req: Request, res: Response) {
   try {
     const { atletaId, treinoAgendadoId } = req.query as {
@@ -266,13 +277,13 @@ export async function getUltimaSubmissaoTreino(req: Request, res: Response) {
       treinoAgendadoId?: string;
     };
     if (!atletaId || !treinoAgendadoId) {
-      return res.status(400).json({ message: "Informe atletaId e treinoAgendadoId" });
+      return res.status(400).json({ message: "Informe atletaId e treinoAgendadoId." });
     }
 
     const s = await prisma.submissaoTreino.findFirst({
       where: { atletaId, treinoAgendadoId },
       orderBy: { criadoEm: "desc" },
-      select: { tempoSeg: true, repeticoes: true, aprovado: true, criadoEm: true },
+      select: { duracaoSegundos: true, repeticoes: true, aprovado: true, criadoEm: true },
     });
 
     return res.json(s);
