@@ -69,6 +69,7 @@ model Usuario {
   TreinoUsuario          TreinoUsuario[]
   SubmissionChecklist    SubmissionChecklist[]
   TreinoSalvo            TreinoSalvo[]
+  TreinoRotina           TreinoRotina[]
 }
 
 model EmailVerification {
@@ -125,6 +126,7 @@ model Professor {
   estatExerciciosUltimo       EstatisticaExercicio[] @relation("ExEstRec_Ult")
   TreinoAgendado              TreinoAgendado[]
   TreinoProfessorUso          TreinoProfessorUso[]
+  TreinoRotina                TreinoRotina[]
 
   @@index([escolinhaId])
   @@index([clubeId])
@@ -237,6 +239,7 @@ model Atleta {
   VinculoFormacao              VinculoFormacao[]
   TransferenciaFormador        TransferenciaFormador[]
   DocumentoFormador            DocumentoFormador[]
+  TreinoRotinaAtribuicao       TreinoRotinaAtribuicao[]
 
   @@index([perfilTipoTreino])
 }
@@ -272,6 +275,7 @@ model TreinoProgramado {
   realizados               TreinoRealizado[]
   EstatisticaTreino        EstatisticaTreino[]
   TreinoProfessorUso       TreinoProfessorUso[]
+  TreinoRotinaItem         TreinoRotinaItem[]
 }
 
 model TreinoProgramadoExercicio {
@@ -357,19 +361,20 @@ model RelacaoTreinamento {
 }
 
 model AtletaObservado {
-  id           String     @id @default(uuid())
-  professorId  String?
-  escolinhaId  String?
-  clubeId      String?
-  atletaId     String
-  criadoEm     DateTime   @default(now())
-  atualizadoEm DateTime   @updatedAt
-  olheiroId    String?
-  atleta       Atleta     @relation("ObservacaoAtleta", fields: [atletaId], references: [id], onDelete: Cascade)
-  clube        Clube?     @relation("ObservacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
-  escolinha    Escolinha? @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
-  olheiro      Olheiro?   @relation(fields: [olheiroId], references: [id], onDelete: SetNull)
-  professor    Professor? @relation("ObservacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
+  id                     String                   @id @default(uuid())
+  professorId            String?
+  escolinhaId            String?
+  clubeId                String?
+  atletaId               String
+  criadoEm               DateTime                 @default(now())
+  atualizadoEm           DateTime                 @updatedAt
+  olheiroId              String?
+  atleta                 Atleta                   @relation("ObservacaoAtleta", fields: [atletaId], references: [id], onDelete: Cascade)
+  clube                  Clube?                   @relation("ObservacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha              Escolinha?               @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
+  olheiro                Olheiro?                 @relation(fields: [olheiroId], references: [id], onDelete: SetNull)
+  professor              Professor?               @relation("ObservacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
+  TreinoRotinaAtribuicao TreinoRotinaAtribuicao[]
 
   @@unique([professorId, escolinhaId, clubeId, olheiroId, atletaId], map: "AtletaObservado_owner_atleta_key")
   @@index([atletaId])
@@ -461,6 +466,7 @@ model Escolinha {
   Professor           Professor[]
   Turma               Turma[]
   TreinoSalvo         TreinoSalvo[]
+  TreinoRotina        TreinoRotina[]
 }
 
 model Comentario {
@@ -518,6 +524,7 @@ model Clube {
   Professor           Professor[]
   Turma               Turma[]
   TreinoSalvo         TreinoSalvo[]
+  TreinoRotina        TreinoRotina[]
 }
 
 model SolicitacaoVinculo {
@@ -578,11 +585,13 @@ model SubmissaoTreino {
   pontuacaoSnapshot    Int?
   tipoTreinoSnapshot   TipoTreino?
   treinoTituloSnapshot String?
+  midiaUrl             String?
+  midiaTipo            TipoMidia?
   midias               Midia[]        @relation("Midias_SubmissaoTreino")
   atleta               Atleta         @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   treinoAgendado       TreinoAgendado @relation(fields: [treinoAgendadoId], references: [id])
   Usuario              Usuario?       @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
-  tempoSeg             Int?
+  duracaoSegundos      Int?
   repeticoes           Int?
 }
 
@@ -679,48 +688,48 @@ model Curtida {
 }
 
 model TreinoAgendado {
-  id                   String   @id @default(uuid())
-  titulo               String   // REMOVIDO o @unique — títulos podem se repetir
+  id                 String  @id @default(uuid())
+  titulo             String
+  local              String?
+  atletaId           String
+  treinoProgramadoId String?
 
-  local                String?
-  atletaId             String
-  treinoProgramadoId   String?
+  dataTreino    DateTime?
+  dataExpiracao DateTime?
 
-  dataTreino           DateTime?
-  dataExpiracao        DateTime?
+  // Status de presença/agenda
+  status         TreinoAgendadoStatus @default(AGENDADO)
+  dataOriginal   DateTime?
+  reagendamentos Int                  @default(0)
 
-  // NOVO: controle de status/presença
-  status               TreinoAgendadoStatus @default(AGENDADO)
-  // data originalmente prevista (permite auditar remarcações)
-  dataOriginal         DateTime?
-  // número de vezes que foi remarcado (pra aplicar regra do <= 7 dias/no máx X remarcações, se quiser)
-  reagendamentos       Int      @default(0)
+  // Ligação com rotina (se veio de rotina)
+  treinoRotinaAtribuicaoId String?
+  treinoRotinaAtribuicao   TreinoRotinaAtribuicao? @relation(fields: [treinoRotinaAtribuicaoId], references: [id], onDelete: SetNull)
 
-  // NOVO: ligação com rotina (se veio da rotina)
-  rotinaAtribuicaoId   String?
-  rotinaAtribuicao     RotinaTreinoAtribuicao? @relation(fields: [rotinaAtribuicaoId], references: [id], onDelete: SetNull)
-
-  // NOVO: cadeia de remarcação (opcional)
-  reagendadoDeId       String?
-  reagendadoDe         TreinoAgendado? @relation("Reagendamento", fields: [reagendadoDeId], references: [id], onDelete: SetNull)
+  // Cadeia de remarcações
+  reagendadoDeId        String?
+  reagendadoDe          TreinoAgendado?  @relation("Reagendamento", fields: [reagendadoDeId], references: [id], onDelete: SetNull)
   reagendamentosGerados TreinoAgendado[] @relation("Reagendamento")
 
-  // já existiam
+  // Autor e progresso de execução (adição da sua amiga)
   criadoPorProfessorId String?
-  criadoPorProfessor   Professor?        @relation(fields: [criadoPorProfessorId], references: [id], onDelete: SetNull)
+  criadoPorProfessor   Professor? @relation(fields: [criadoPorProfessorId], references: [id], onDelete: SetNull)
+
+  execucaoStatus  TreinoStatus @default(PENDING)
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  duracaoSegundos Int?
 
   atleta           Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   treinoProgramado TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id])
   submissaoTreinos SubmissaoTreino[]
 
+  @@unique([atletaId, treinoProgramadoId, dataTreino])
+  @@index([criadoPorProfessorId])
   @@index([status])
   @@index([dataTreino])
-  @@index([rotinaAtribuicaoId])
-
-  // evita duplicar a MESMA ocorrência pro mesmo atleta no mesmo dia para o mesmo treino
-  @@unique([atletaId, treinoProgramadoId, dataTreino])
+  @@index([treinoRotinaAtribuicaoId])
 }
-
 
 model TreinoLivre {
   id             String           @id @default(cuid())
@@ -1265,68 +1274,86 @@ model EstatisticaExercicio {
   @@index([ultimoProfessorId])
 }
 
-model RotinaTreino {
-  id                String   @id @default(uuid())
-  nome              String
-  descricao         String?
-  periodoInicio     DateTime
-  periodoFim        DateTime
-  criadoEm          DateTime @default(now())
+/**
+ * =========================
+ * ROTINA DE TREINO (unificado)
+ * Mantém adições da sua amiga (TreinoRotina/TreinoRotinaItem)
+ * e adiciona atribuição a atletas + autoria explícita
+ * =========================
+ */
 
+model TreinoRotina {
+  id        String @id @default(uuid())
+  nome      String
+  ownerTipo String // ex.: "Professor" | "Clube" | "Escolinha" (adição da sua amiga)
+  ownerId   String // id do dono (livre)
+
+  // Período (mês, por ex.)
+  inicio DateTime
+  fim    DateTime
+
+  // Autoria explícita (opcional)
   criadoPorUsuarioId String?
   criadoPorUsuario   Usuario? @relation(fields: [criadoPorUsuarioId], references: [id], onDelete: SetNull)
 
-  professorId  String?
-  escolinhaId  String?
-  clubeId      String?
-  professor    Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
-  escolinha    Escolinha? @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
-  clube        Clube?     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  professorId String?
+  escolinhaId String?
+  clubeId     String?
+  professor   Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
+  escolinha   Escolinha? @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  clube       Clube?     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
 
-  itens        RotinaTreinoItem[]
-  atribuicoes  RotinaTreinoAtribuicao[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@index([periodoInicio])
-  @@index([periodoFim])
+  itens       TreinoRotinaItem[]
+  atribuicoes TreinoRotinaAtribuicao[]
+
+  @@index([inicio])
+  @@index([fim])
 }
 
-model RotinaTreinoItem {
-  id               String @id @default(uuid())
-  rotinaId         String
+model TreinoRotinaItem {
+  id                 String    @id @default(uuid())
+  rotinaId           String
   treinoProgramadoId String
+  data               DateTime? // opcional: data fixa
+  diaDaSemana        Int? // opcional: 0..6 (Dom..Sáb)
 
-  diaSemana        Int
-  horarioMinuto    Int?
-
-  rotina           RotinaTreino     @relation(fields: [rotinaId], references: [id], onDelete: Cascade)
-  treinoProgramado TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id])
+  rotina TreinoRotina     @relation(fields: [rotinaId], references: [id], onDelete: Cascade)
+  treino TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
 
   @@index([rotinaId])
   @@index([treinoProgramadoId])
-  @@index([diaSemana])
+  @@index([diaDaSemana])
 }
 
-model RotinaTreinoAtribuicao {
-  id           String   @id @default(uuid())
-  rotinaId     String
-  atletaId     String
-
+model TreinoRotinaAtribuicao {
+  id                String  @id @default(uuid())
+  rotinaId          String
+  atletaId          String
   atletaObservadoId String?
 
-  ativo        Boolean  @default(true)
-  criadoEm     DateTime @default(now())
+  ativo    Boolean  @default(true)
+  criadoEm DateTime @default(now())
 
-  rotina       RotinaTreino   @relation(fields: [rotinaId], references: [id], onDelete: Cascade)
-  atleta       Atleta         @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  observado    AtletaObservado? @relation(fields: [atletaObservadoId], references: [id], onDelete: SetNull)
+  rotina    TreinoRotina     @relation(fields: [rotinaId], references: [id], onDelete: Cascade)
+  atleta    Atleta           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  observado AtletaObservado? @relation(fields: [atletaObservadoId], references: [id], onDelete: SetNull)
 
-  ocorrencias  TreinoAgendado[]
+  // Ocorrências (agendamentos) geradas a partir desta atribuição
+  ocorrencias TreinoAgendado[]
 
   @@unique([rotinaId, atletaId])
   @@index([atletaId])
   @@index([atletaObservadoId])
 }
 
+/**
+ * =========================
+ * ENUMS
+ * =========================
+ */
 
 enum TreinoStatus {
   PENDING
