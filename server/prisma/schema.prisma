@@ -272,6 +272,7 @@ model TreinoProgramado {
   realizados               TreinoRealizado[]
   EstatisticaTreino        EstatisticaTreino[]
   TreinoProfessorUso       TreinoProfessorUso[]
+  TreinoRotinaItem         TreinoRotinaItem[]
 }
 
 model TreinoProgramadoExercicio {
@@ -578,11 +579,13 @@ model SubmissaoTreino {
   pontuacaoSnapshot    Int?
   tipoTreinoSnapshot   TipoTreino?
   treinoTituloSnapshot String?
+  midiaUrl             String?
+  midiaTipo            TipoMidia?
   midias               Midia[]        @relation("Midias_SubmissaoTreino")
   atleta               Atleta         @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   treinoAgendado       TreinoAgendado @relation(fields: [treinoAgendadoId], references: [id])
   Usuario              Usuario?       @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
-  tempoSeg             Int?
+  duracaoSegundos      Int?
   repeticoes           Int?
 }
 
@@ -679,21 +682,27 @@ model Curtida {
 }
 
 model TreinoAgendado {
-  id                   String            @id @default(uuid())
-  titulo               String            @unique
+  id                   String       @id @default(uuid())
+  titulo               String
   local                String?
   atletaId             String
   treinoProgramadoId   String?
   dataTreino           DateTime?
   dataExpiracao        DateTime?
-  submissaoTreinos     SubmissaoTreino[]
   criadoPorProfessorId String?
-  criadoPorProfessor   Professor?        @relation(fields: [criadoPorProfessorId], references: [id], onDelete: SetNull)
+  criadoPorProfessor   Professor?   @relation(fields: [criadoPorProfessorId], references: [id], onDelete: SetNull)
+  status               TreinoStatus @default(PENDING)
+  startedAt            DateTime?
+  finishedAt           DateTime?
+  duracaoSegundos      Int?
+
+  submissaoTreinos SubmissaoTreino[]
 
   atleta           Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   treinoProgramado TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id])
 
   @@index([criadoPorProfessorId])
+  @@index([atletaId, treinoProgramadoId, dataTreino])
 }
 
 model TreinoLivre {
@@ -1201,7 +1210,7 @@ model TreinoSalvoReuso {
 model EstatisticaTreino {
   treinoId        String    @id
   usosProfessores Int       @default(0)
-  feitosAlunos    Int       @default(0) 
+  feitosAlunos    Int       @default(0)
   ultimoUsoEm     DateTime?
   ultimoFeitoEm   DateTime?
 
@@ -1237,6 +1246,28 @@ model EstatisticaExercicio {
 
   @@index([recomendadoPorProfessorId])
   @@index([ultimoProfessorId])
+}
+
+model TreinoRotina {
+  id        String             @id @default(uuid())
+  nome      String
+  ownerTipo String 
+  ownerId   String
+  inicio    DateTime
+  fim       DateTime
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  itens     TreinoRotinaItem[]
+}
+
+model TreinoRotinaItem {
+  id                 String           @id @default(uuid())
+  rotinaId           String
+  treinoProgramadoId String
+  data               DateTime? 
+  diaDaSemana        Int? 
+  rotina             TreinoRotina     @relation(fields: [rotinaId], references: [id], onDelete: Cascade)
+  treino             TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
 }
 
 enum TreinoStatus {

@@ -1,13 +1,64 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 
 export default function PaginaSubmissao() {
+  // ---- constantes ----
   const ATTEMPT_LIMIT = 2;
   const STORAGE_KEY_PREFIX = "footera:desafioAttempts";
+  const IDB_NAME = "footera-media";
+  const IDB_STORE = "desafio-videos";
+  const IDB_VERSION = 1;
 
+  // ---- URL/estado base ----
+  const [treinoAgendadoId, setTreinoAgendadoId] = useState<string | null>(null);
+  const [desafioId, setDesafioId] = useState<string | null>(null);
+  const [modeParam, setModeParam] = useState<"camera" | "galeria" | null>(null);
+
+  // ---- identidade do atleta ----
+  const [atletaId, setAtletaId] = useState<string | null>(null);
+
+  // ---- campos comuns ----
+  const [observacao, setObservacao] = useState("");
+  const [tempoTexto, setTempoTexto] = useState("");
+  const [reps, setReps] = useState<string>("");
+
+  // ---- upload direto (treino) ----
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  // ---- gravação (desafio, com limite) ----
+  const [isRecording, setIsRecording] = useState(false);
+  const [attemptsUsed, setAttemptsUsed] = useState<number>(0);
+  const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [recError, setRecError] = useState<string | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const liveVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // ---- gravação (treino, sem limite) ----
+  const [treinoMode, setTreinoMode] = useState<"upload" | "live">("upload");
+  const [treinoIsRecording, setTreinoIsRecording] = useState(false);
+  const [treinoRecordedBlob, setTreinoRecordedBlob] = useState<Blob | null>(null);
+  const [treinoRecordedUrl, setTreinoRecordedUrl] = useState<string | null>(null);
+  const [treinoRecError, setTreinoRecError] = useState<string | null>(null);
+  const treinoMediaStreamRef = useRef<MediaStream | null>(null);
+  const treinoMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const treinoChunksRef = useRef<BlobPart[]>([]);
+  const treinoLiveVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  const isDesafio = Boolean(desafioId);
+  const isTreino = Boolean(treinoAgendadoId);
+
+  const isSecureContext =
+    typeof window !== "undefined" &&
+    (window.location.protocol === "https:" || window.location.hostname === "localhost");
+
+  /* ---------- helpers ---------- */
   const dualStorage = {
     getItem(key: string): string | null {
       let a: string | null = null;
@@ -31,23 +82,41 @@ export default function PaginaSubmissao() {
     },
   };
 
-  const attemptKey = (desafioId: string, atletaId: string) =>
-    `${STORAGE_KEY_PREFIX}:${desafioId}:${atletaId}`;
+  const attemptKey = (dId: string, aId: string) =>
+    `${STORAGE_KEY_PREFIX}:${dId}:${aId}`;
 
-  const loadAttempts = (desafioId: string, atletaId: string): number => {
-    const raw = dualStorage.getItem(attemptKey(desafioId, atletaId));
+  const loadAttempts = (dId: string, aId: string): number => {
+    const raw = dualStorage.getItem(attemptKey(dId, aId));
     const n = raw ? Number(raw) : 0;
     return Number.isFinite(n) ? Math.min(ATTEMPT_LIMIT, Math.max(0, n)) : 0;
   };
 
-  const saveAttempts = (desafioId: string, atletaId: string, n: number) => {
-    dualStorage.setItem(attemptKey(desafioId, atletaId), String(Math.min(ATTEMPT_LIMIT, Math.max(0, n))));
-  };
+  const saveAttempts = (dId: string, aId: string, n: number) =>
+    dualStorage.setItem(attemptKey(dId, aId), String(Math.min(ATTEMPT_LIMIT, Math.max(0, n))));
 
-  const IDB_NAME = "footera-media";
-  const IDB_STORE = "desafio-videos";
-  const IDB_VERSION = 1;
+  function parseTempoToSeconds(v: string): number | undefined {
+    const s = v.trim();
+    if (!s) return undefined;
+    if (s.includes(":")) {
+      const [mRaw, secRaw] = s.split(":");
+      const m = Number(mRaw);
+      const sec = Number(secRaw);
+      if (Number.isFinite(m) && Number.isFinite(sec)) return m * 60 + sec;
+      return undefined;
+    }
+    const n = Number(s);
+    return Number.isFinite(n) ? n : undefined;
+  }
 
+  function secondsToMMSS(total: number): string {
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    const mm = String(m).padStart(2, "0");
+    const ss = String(s).padStart(2, "0");
+    return `${mm}:${ss}`;
+  }
+
+  // ---------- IndexedDB p/ vídeo do desafio ----------
   type SavedVideo = { blob: Blob; type: string; createdAt: number };
 
   function openIDB(): Promise<IDBDatabase> {
@@ -100,19 +169,19 @@ export default function PaginaSubmissao() {
     db.close();
   }
 
-  const videoKey = (desafioId: string, atletaId: string) => `desafioVideo:${desafioId}:${atletaId}`;
+  const videoKey = (dId: string, aId: string) => `desafioVideo:${dId}:${aId}`;
 
-  async function saveRecordedVideo(desafioId: string, atletaId: string, blob: Blob) {
+  async function saveRecordedVideo(dId: string, aId: string, blob: Blob) {
     try {
-      await idbPut(videoKey(desafioId, atletaId), { blob, type: blob.type || "video/webm", createdAt: Date.now() });
+      await idbPut(videoKey(dId, aId), { blob, type: blob.type || "video/webm", createdAt: Date.now() });
     } catch (e) {
       console.warn("Falha ao salvar vídeo no IDB", e);
     }
   }
 
-  async function loadRecordedVideo(desafioId: string, atletaId: string): Promise<Blob | null> {
+  async function loadRecordedVideo(dId: string, aId: string): Promise<Blob | null> {
     try {
-      const saved = await idbGet(videoKey(desafioId, atletaId));
+      const saved = await idbGet(videoKey(dId, aId));
       return saved?.blob ?? null;
     } catch (e) {
       console.warn("Falha ao ler vídeo do IDB", e);
@@ -120,68 +189,124 @@ export default function PaginaSubmissao() {
     }
   }
 
-  async function clearRecordedVideo(desafioId: string, atletaId: string) {
-    try {
-      await idbDel(videoKey(desafioId, atletaId));
-    } catch {}
+  async function clearRecordedVideo(dId: string, aId: string) {
+    try { await idbDel(videoKey(dId, aId)); } catch {}
   }
 
-  const [observacao, setObservacao] = useState("");
-  const [treinoAgendadoId, setTreinoAgendadoId] = useState<string | null>(null);
-  const [desafioId, setDesafioId] = useState<string | null>(null);
-  const [atletaId, setAtletaId] = useState<string | null>(null);
-  const [tempoTexto, setTempoTexto] = useState("");
-  const [reps, setReps] = useState<string>("");
-  const [arquivo, setArquivo] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [attemptsUsed, setAttemptsUsed] = useState<number>(0);
-  const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const [recError, setRecError] = useState<string | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
-  const liveVideoRef = useRef<HTMLVideoElement | null>(null);
-  const [treinoMode, setTreinoMode] = useState<"upload" | "live">("upload");
-  const [treinoIsRecording, setTreinoIsRecording] = useState(false);
-  const [treinoRecordedBlob, setTreinoRecordedBlob] = useState<Blob | null>(null);
-  const [treinoRecordedUrl, setTreinoRecordedUrl] = useState<string | null>(null);
-  const [treinoRecError, setTreinoRecError] = useState<string | null>(null);
-  const treinoMediaStreamRef = useRef<MediaStream | null>(null);
-  const treinoMediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const treinoChunksRef = useRef<BlobPart[]>([]);
-  const treinoLiveVideoRef = useRef<HTMLVideoElement | null>(null);
+  /* ---------- Permissões / Câmera ---------- */
 
-  const [location] = useLocation();
-
-  const isDesafio = Boolean(desafioId);
-  const isTreino = Boolean(treinoAgendadoId);
-
-  function parseTempoToSeconds(v: string): number | undefined {
-    const s = v.trim();
-    if (!s) return undefined;
-    if (s.includes(":")) {
-      const [mRaw, secRaw] = s.split(":");
-      const m = Number(mRaw);
-      const sec = Number(secRaw);
-      if (Number.isFinite(m) && Number.isFinite(sec)) return m * 60 + sec;
-      return undefined;
+  function pickBestMimeType(): string | undefined {
+    const recAny = MediaRecorder as any;
+    const sup = recAny?.isTypeSupported?.bind(MediaRecorder);
+    const candidates = [
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+      "video/mp4", // iOS mais novo pode aceitar
+    ];
+    for (const c of candidates) {
+      if (sup?.(c)) return c;
     }
-    const n = Number(s);
-    return Number.isFinite(n) ? n : undefined;
+    return undefined;
   }
 
+  function describeGUMError(err: any) {
+    const n = err?.name || err?.toString?.() || "";
+    if (!isSecureContext) {
+      return "Para usar a câmera, acesse via HTTPS (ou localhost em desenvolvimento).";
+    }
+    if (n.includes("NotAllowedError") || n.includes("PermissionDeniedError")) {
+      return "Permissão negada. Clique no ícone de câmera no navegador e selecione 'Permitir'.";
+    }
+    if (n.includes("NotFoundError") || n.includes("DevicesNotFoundError")) {
+      return "Nenhuma câmera/microfone foi encontrada ou está desativada no sistema.";
+    }
+    if (n.includes("NotReadableError") || n.includes("TrackStartError")) {
+      return "A câmera/microfone está em uso por outro aplicativo.";
+    }
+    if (n.includes("OverconstrainedError")) {
+      return "A câmera solicitada não existe neste dispositivo.";
+    }
+    return "Não foi possível acessar a câmera/microfone.";
+  }
+
+  async function openMediaStream(preferBack = true): Promise<MediaStream> {
+    if (!isSecureContext) {
+      throw new Error("InsecureContext");
+    }
+
+    const tries: MediaStreamConstraints[] = [
+      { video: { facingMode: preferBack ? { ideal: "environment" } : { ideal: "user" } }, audio: true },
+      { video: { facingMode: { ideal: "user" } }, audio: true },
+      { video: true, audio: true },
+      { video: true, audio: false },
+    ];
+
+    let lastErr: any;
+    for (const c of tries) {
+      try {
+        return await navigator.mediaDevices.getUserMedia(c);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+
+    try {
+      const devs = await navigator.mediaDevices.enumerateDevices();
+      const hasCam = devs.some((d) => d.kind === "videoinput");
+      if (!hasCam) throw new Error("Nenhuma câmera encontrada no dispositivo.");
+    } catch {}
+    throw lastErr;
+  }
+
+  /** Apenas solicita a permissão e mostra a prévia, sem iniciar gravação */
+  async function habilitarCameraLive(kind: "treino" | "desafio") {
+    const setErr = kind === "treino" ? setTreinoRecError : setRecError;
+    const videoRef = kind === "treino" ? treinoLiveVideoRef : liveVideoRef;
+    const streamRef = kind === "treino" ? treinoMediaStreamRef : mediaStreamRef;
+
+    setErr(null);
+    try {
+      const stream = await openMediaStream(true);
+      streamRef.current = stream;
+      if (videoRef.current) {
+        (videoRef.current as any).srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+    } catch (err: any) {
+      console.error(err);
+      setErr(describeGUMError(err));
+    }
+  }
+
+  /* ---------- efeitos ---------- */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const treinoId = params.get("treinoAgendadoId");
-    const desafioParam = params.get("desafioId");
+    const tId = params.get("treinoAgendadoId");
+    const dId = params.get("desafioId");
+    const mode = params.get("mode") as "camera" | "galeria" | null;
+    const tempoSegParam = Number(params.get("tempoSeg") || 0);
 
-    if (treinoId) setTreinoAgendadoId(treinoId);
-    if (desafioParam) setDesafioId(desafioParam);
+    setTreinoAgendadoId(tId);
+    setDesafioId(dId);
+    setModeParam(mode);
+
+    if (Number.isFinite(tempoSegParam) && tempoSegParam > 0) {
+      setTempoTexto(secondsToMMSS(tempoSegParam));
+    }
 
     const tipoId = (Storage as any)?.tipoUsuarioId ?? (Storage as any)?.tipoUserId ?? null;
     if (tipoId) setAtletaId(String(tipoId));
+
+    // Auto-prompt se veio com mode=camera
+    if (mode === "camera") {
+      // só abre a permissão/preview; o usuário inicia a gravação depois
+      if (dId) habilitarCameraLive("desafio");
+      if (tId) {
+        setTreinoMode("live");
+        habilitarCameraLive("treino");
+      }
+    }
 
     return () => {
       stopStream();
@@ -190,13 +315,15 @@ export default function PaginaSubmissao() {
       if (treinoRecordedUrl) URL.revokeObjectURL(treinoRecordedUrl);
       if (preview) URL.revokeObjectURL(preview);
     };
-  }, [location]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (desafioId && atletaId) {
       const n = loadAttempts(desafioId, atletaId);
       if (n !== attemptsUsed) setAttemptsUsed(n);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [desafioId, atletaId]);
 
   useEffect(() => {
@@ -220,18 +347,7 @@ export default function PaginaSubmissao() {
     return () => { cancelled = true; };
   }, [desafioId, atletaId]);
 
-  const handleArquivoChange = (file: File | null) => {
-    setArquivo(file);
-    if (preview) {
-      URL.revokeObjectURL(preview);
-      setPreview(null);
-    }
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setPreview(url);
-    }
-  };
-
+  /* ---------- gravação desafio ---------- */
   async function startRecording() {
     setRecError(null);
     try {
@@ -251,10 +367,7 @@ export default function PaginaSubmissao() {
         setRecordedUrl(null);
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: true,
-      });
+      const stream = await openMediaStream(true);
       mediaStreamRef.current = stream;
 
       if (liveVideoRef.current) {
@@ -262,14 +375,8 @@ export default function PaginaSubmissao() {
         await liveVideoRef.current.play().catch(() => {});
       }
 
-      const mimeType =
-        (MediaRecorder as any).isTypeSupported?.("video/webm;codecs=vp9,opus")
-          ? "video/webm;codecs=vp9,opus"
-          : (MediaRecorder as any).isTypeSupported?.("video/webm;codecs=vp8,opus")
-          ? "video/webm;codecs=vp8,opus"
-          : "video/webm";
-
-      const recorder = new MediaRecorder(stream, { mimeType });
+      const best = pickBestMimeType();
+      const recorder = best ? new MediaRecorder(stream, { mimeType: best }) : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (ev: BlobEvent) => {
@@ -278,7 +385,7 @@ export default function PaginaSubmissao() {
 
       recorder.onstop = async () => {
         try {
-          const blob = new Blob(chunksRef.current, { type: mimeType });
+          const blob = new Blob(chunksRef.current, { type: best || undefined });
           setRecordedBlob(blob);
           const url = URL.createObjectURL(blob);
           setRecordedUrl(url);
@@ -306,7 +413,7 @@ export default function PaginaSubmissao() {
       setIsRecording(true);
     } catch (err: any) {
       console.error(err);
-      setRecError("Não foi possível acessar a câmera/microfone.");
+      setRecError(describeGUMError(err));
     }
   }
 
@@ -343,6 +450,23 @@ export default function PaginaSubmissao() {
     }
   }
 
+  /* ---------- gravação treino (ilimitada) ---------- */
+  function handleVideo(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] || null;
+    handleArquivoChange(f);
+  }
+  const handleArquivoChange = (file: File | null) => {
+    setArquivo(file);
+    if (preview) {
+      URL.revokeObjectURL(preview);
+      setPreview(null);
+    }
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setPreview(url);
+    }
+  };
+
   async function startRecordingTreino() {
     setTreinoRecError(null);
     try {
@@ -358,10 +482,7 @@ export default function PaginaSubmissao() {
         setTreinoRecordedUrl(null);
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: true,
-      });
+      const stream = await openMediaStream(true);
       treinoMediaStreamRef.current = stream;
 
       if (treinoLiveVideoRef.current) {
@@ -369,14 +490,8 @@ export default function PaginaSubmissao() {
         await treinoLiveVideoRef.current.play().catch(() => {});
       }
 
-      const mimeType =
-        (MediaRecorder as any).isTypeSupported?.("video/webm;codecs=vp9,opus")
-          ? "video/webm;codecs=vp9,opus"
-          : (MediaRecorder as any).isTypeSupported?.("video/webm;codecs=vp8,opus")
-          ? "video/webm;codecs=vp8,opus"
-          : "video/webm";
-
-      const recorder = new MediaRecorder(stream, { mimeType });
+      const best = pickBestMimeType();
+      const recorder = best ? new MediaRecorder(stream, { mimeType: best }) : new MediaRecorder(stream);
       treinoMediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (ev: BlobEvent) => {
@@ -385,7 +500,7 @@ export default function PaginaSubmissao() {
 
       recorder.onstop = async () => {
         try {
-          const blob = new Blob(treinoChunksRef.current, { type: mimeType });
+          const blob = new Blob(treinoChunksRef.current, { type: best || undefined });
           setTreinoRecordedBlob(blob);
           const url = URL.createObjectURL(blob);
           setTreinoRecordedUrl(url);
@@ -401,7 +516,7 @@ export default function PaginaSubmissao() {
       setTreinoIsRecording(true);
     } catch (err: any) {
       console.error(err);
-      setTreinoRecError("Não foi possível acessar a câmera/microfone.");
+      setTreinoRecError(describeGUMError(err));
     }
   }
 
@@ -434,6 +549,7 @@ export default function PaginaSubmissao() {
     setTreinoRecordedBlob(null);
   }
 
+  /* ---------- envio ---------- */
   const handleEnviar = async () => {
     if (!atletaId || (!treinoAgendadoId && !desafioId)) {
       alert("Preencha todos os campos obrigatórios.");
@@ -463,8 +579,9 @@ export default function PaginaSubmissao() {
 
       formData.append("treinoAgendadoId", treinoAgendadoId!);
 
-      const tempoSeg = parseTempoToSeconds(tempoTexto);
-      if (tempoSeg != null) formData.append("tempoSeg", String(tempoSeg));
+      // Back entende "tempoSeg" e converte para duracaoSegundos
+      const seg = parseTempoToSeconds(tempoTexto);
+      if (seg != null) formData.append("tempoSeg", String(seg));
       if (reps) formData.append("repeticoes", String(Number(reps)));
 
       url = `${API.BASE_URL}/api/submissoes/treino`;
@@ -493,23 +610,19 @@ export default function PaginaSubmissao() {
       const js = await res.json().catch(() => ({}));
 
       if (res.ok) {
-        const msg = js?.autoAprovado
+        const msg = (js as any)?.autoAprovado
           ? "Submissão enviada e aprovada automaticamente (sem pontuação por ausência de vínculo)."
-          : js?.mensagem || "Submissão enviada com sucesso! Aguarde validação.";
+          : (js as any)?.mensagem || "Submissão enviada com sucesso! Aguarde validação.";
         alert(msg);
 
         if (isTreino) {
           setArquivo(null);
-          if (preview) {
-            URL.revokeObjectURL(preview);
-            setPreview(null);
-          }
+          if (preview) { URL.revokeObjectURL(preview); setPreview(null); }
           if (treinoRecordedUrl) URL.revokeObjectURL(treinoRecordedUrl);
           setTreinoRecordedUrl(null);
           setTreinoRecordedBlob(null);
           setTreinoIsRecording(false);
           stopTreinoStream();
-
           setTempoTexto("");
           setReps("");
         }
@@ -519,15 +632,13 @@ export default function PaginaSubmissao() {
           setRecordedBlob(null);
           setIsRecording(false);
           stopStream();
-          if (desafioId && atletaId) {
-            await clearRecordedVideo(desafioId, atletaId);
-          }
+          if (desafioId && atletaId) { await clearRecordedVideo(desafioId, atletaId); }
         }
 
         setObservacao("");
       } else {
         console.error("Erro:", js);
-        alert(js?.erro || "Erro ao enviar submissão.");
+        alert((js as any)?.erro || (js as any)?.message || "Erro ao enviar submissão.");
       }
     } catch (err) {
       console.error("Erro no envio:", err);
@@ -535,12 +646,19 @@ export default function PaginaSubmissao() {
     }
   };
 
+  /* ---------- UI ---------- */
   return (
-    <div className="min-h-screen bg-yellow-transparent pb-24 px-4 pt-6">
+    <div className="min-h-screen bg-transparent pb-24 px-4 pt-6">
       <div className="max-w-xl mx-auto bg-white rounded-xl shadow-lg p-6">
         <h1 className="text-2xl font-bold mb-6 text-green-800 text-center">
           {isDesafio ? "Desafio (Submissão ao Vivo)" : "Enviar Submissão"}
         </h1>
+
+        {!isSecureContext && (
+          <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 p-3 rounded">
+            Para acessar a câmera, abra esta página via <strong>HTTPS</strong> (ou em <code>localhost</code> durante o desenvolvimento).
+          </div>
+        )}
 
         <label className="block text-sm font-medium mb-1 text-gray-700">Comentário</label>
         <textarea
@@ -596,16 +714,18 @@ export default function PaginaSubmissao() {
 
               {treinoMode === "upload" ? (
                 <>
-                  <label className="block text-sm font-medium mb-1 text-gray-700">Imagem ou Vídeo</label>
+                  <label className="block text-sm font-medium mb-1"> Enviar Vídeo</label>
                   <input
                     type="file"
-                    accept="image/*,video/*"
-                    onChange={(e) => handleArquivoChange(e.target.files?.[0] || null)}
-                    className="mb-4"
+                    accept="video/*;capture=camcorder"
+                    // forçar abrir câmera em mobile, se possível
+                    // @ts-ignore
+                    capture={modeParam === "camera" ? "environment" : undefined}
+                    onChange={handleVideo}
                   />
 
                   {preview && (
-                    <div className="mb-4">
+                    <div className="mt-4">
                       {arquivo?.type?.startsWith("image") ? (
                         <img src={preview} alt="Preview" className="w-full h-auto rounded border object-contain" />
                       ) : (
@@ -634,12 +754,20 @@ export default function PaginaSubmissao() {
 
                   <div className="flex flex-wrap gap-3">
                     {!treinoIsRecording && !treinoRecordedUrl && (
-                      <button
-                        onClick={startRecordingTreino}
-                        className="px-4 py-2 rounded font-semibold text-white bg-green-700 hover:bg-green-600"
-                      >
-                        Começar a gravar
-                      </button>
+                      <>
+                        <button
+                          onClick={() => habilitarCameraLive("treino")}
+                          className="px-4 py-2 rounded font-semibold border border-gray-300 hover:bg-gray-50"
+                        >
+                          Habilitar câmera
+                        </button>
+                        <button
+                          onClick={startRecordingTreino}
+                          className="px-4 py-2 rounded font-semibold text-white bg-green-700 hover:bg-green-600"
+                        >
+                          Começar a gravar
+                        </button>
+                      </>
                     )}
 
                     {treinoIsRecording && (
@@ -696,15 +824,23 @@ export default function PaginaSubmissao() {
 
             <div className="flex flex-wrap gap-3">
               {!isRecording && !recordedUrl && (
-                <button
-                  onClick={startRecording}
-                  disabled={attemptsUsed >= ATTEMPT_LIMIT}
-                  className={`px-4 py-2 rounded font-semibold text-white ${
-                    attemptsUsed >= ATTEMPT_LIMIT ? "bg-gray-400" : "bg-green-700 hover:bg-green-600"
-                  }`}
-                >
-                  Começar a gravar
-                </button>
+                <>
+                  <button
+                    onClick={() => habilitarCameraLive("desafio")}
+                    className="px-4 py-2 rounded font-semibold border border-gray-300 hover:bg-gray-50"
+                  >
+                    Habilitar câmera
+                  </button>
+                  <button
+                    onClick={startRecording}
+                    disabled={attemptsUsed >= ATTEMPT_LIMIT}
+                    className={`px-4 py-2 rounded font-semibold text-white ${
+                      attemptsUsed >= ATTEMPT_LIMIT ? "bg-gray-400" : "bg-green-700 hover:bg-green-600"
+                    }`}
+                  >
+                    Começar a gravar
+                  </button>
+                </>
               )}
 
               {isRecording && (
