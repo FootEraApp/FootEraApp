@@ -21,6 +21,10 @@ async function main() {
     'aaaaa': 'aaaaa123',
     'admin': 'admin123',
     'olheiro_joao': 'olheiro123',
+    // perfil adicionado p teste em admin
+    // nomeusuario: adminTeste
+    // email: adminTeste@gmail.com
+    // senha: adminteste1
   } as const;
 
   const H = Object.fromEntries(
@@ -205,55 +209,86 @@ async function main() {
   });
 
   await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'mateus.furieri' },
-  update: {},
-  create: {
-    nome: 'Mateus Barbarioli Furieri',
-    nomeDeUsuario: 'mateus.furieri',
-    email: 'mateus.furieri@example.com',
-    senhaHash: H['mateus.furieri'],
-    tipo: TipoUsuario.Professor,
-    estado: 'ES',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/prof-teste.png',
-    professor: {
-      create: {
-        codigo: 'PROF001',
-        cref: '015293-G/ES',
-        areaFormacao: '',
-        escola: '',
-        qualificacoes: [],
-        certificacoes: [],
-        fotoUrl: '/assets/usuarios/prof-teste.png',
-        nome: 'Mateus Barbarioli Furieri'
-      }
-    }
-  }
-});
+    where: { nomeDeUsuario: 'admin' },
+    create: {
+      nome: 'Administrador do Sistema',
+      nomeDeUsuario: 'admin',
+      email: 'admin@footera.example.com',
+      senhaHash: H['admin'],
+      tipo: TipoUsuario.Admin,
+      verified: true,
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/profa-teste.png',
+      administrador: {
+        create: {
+          cargo: 'Super Admin',          
+          nivel: Nivel.Performance,
+          fotoUrl: '/assets/usuarios/profa-teste.png',
+        },
+      },
+    },
+    update: {
+      tipo: TipoUsuario.Admin,              
+      verified: true,
+      administrador: {
+        upsert: {
+          create: {
+            cargo: 'Super Admin',
+            nivel: Nivel.Performance,
+            fotoUrl: '/assets/usuarios/profa-teste.png',
+          },
+          update: {
+            cargo: 'Super Admin',
+            nivel: Nivel.Performance,
+            fotoUrl: '/assets/usuarios/profa-teste.png',
+          },
+        },
+      },
+    },
+  });
 
-await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'admin' },
-  update: {},
-  create: {
-    nome: 'Administrador do Sistema',
-    nomeDeUsuario: 'admin',
-    email: 'admin@footera.example.com',
-    senhaHash: H['admin'], 
-    tipo: TipoUsuario.Admin,
-    verified: true,
-    cidade: 'São Paulo',
-    estado: 'SP',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/profa-teste.png',
-    administrador: {
-      create: {
-        cargo: 'Super Admin',
-        nivel: Nivel.Performance,
-        fotoUrl: '/assets/usuarios/profa-teste.png',
+  await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'admin' },
+    create: {
+      nome: 'Administrador do Sistema',
+      nomeDeUsuario: 'admin',
+      email: 'admin@footera.example.com',
+      senhaHash: H['admin'],
+      tipo: TipoUsuario.Admin,
+      verified: true,
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/profa-teste.png',
+      administrador: {
+        create: {
+          cargo: 'superadmin',             
+          nivel: Nivel.Performance,
+          fotoUrl: '/assets/usuarios/profa-teste.png',
+        }
+      }
+    },
+    update: {
+      tipo: TipoUsuario.Admin,             
+      verified: true,
+      administrador: {
+        upsert: {                           
+          create: {
+            cargo: 'superadmin',
+            nivel: Nivel.Performance,
+            fotoUrl: '/assets/usuarios/profa-teste.png',
+          },
+          update: {
+            cargo: 'superadmin',
+            nivel: Nivel.Performance,
+            fotoUrl: '/assets/usuarios/profa-teste.png',
+          }
+        }
       }
     }
-  }
-});
+  });
 
   const clube1Db = await prisma.clube.findFirst({
     where: { usuario: { nomeDeUsuario: "clube_footera" } }
@@ -362,6 +397,10 @@ await prisma.usuario.upsert({
       }
     }
   });
+
+  const TODAS_CATEGORIAS_SEED: Categoria[] = [
+    Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre
+  ];
 
   const exercicios = [
     {
@@ -603,7 +642,1567 @@ await prisma.usuario.upsert({
     nivel: Nivel.Avancado,
     categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
     videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-lateral-bola.mp4'
-  }
+  },
+  {
+    codigo: 'EX031',
+    nome: 'Coordenação na Escada 1',
+    descricao: 'Sequência simples na escada para ritmo de pés e coordenação.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-1.mp4',
+  },
+  {
+    codigo: 'EX032',
+    nome: 'Coordenação na Escada 2',
+    descricao: 'Variação in-in-out com entradas e saídas rápidas para controle lateral.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-2.mp4',
+  },
+  {
+    codigo: 'EX033',
+    nome: 'Coordenação na Escada 3',
+    descricao: 'Variação diagonal/crossover com trocas rápidas de apoio.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-3.mp4',
+  },
+  {
+    codigo: 'EX034',
+    nome: 'Coordenação na Escada 4',
+    descricao: 'Sequência hopscotch (um-dois-um) com saltos rápidos e estabilidade.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-4.mp4',
+  },
+  {
+    codigo: 'EX035',
+    nome: 'Coordenação na Escada 5',
+    descricao: 'Padrão Ickey shuffle lateral contínuo para ritmo e controle de tronco.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-5.mp4',
+  },
+  {
+    codigo: 'EX036',
+    nome: 'Coordenação na Escada 6',
+    descricao: 'Padrão lateral com pivô de 180° ao final, focando reatividade.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-6.mp4',
+  },
+  {
+    codigo: 'EX037',
+    nome: 'Coordenação na Escada 7',
+    descricao: 'Sequência unipodal em alta cadência para equilíbrio e força reativa.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-7.mp4',
+  },
+  {
+    codigo: 'EX038',
+    nome: 'Coordenação na Escada 8',
+    descricao: 'Padrão carioquinha/grapevine com cruzados e mobilidade de quadril.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-8.mp4',
+  },
+  {
+    codigo: 'EX039',
+    nome: 'Coordenação na Escada 9',
+    descricao: 'Progressão frente-trás (avança dois, recua um) para mudança de direção.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-9.mp4',
+  },
+  {
+    codigo: 'EX040',
+    nome: 'Coordenação na Escada 10',
+    descricao: 'Ali shuffle alternando entradas e saídas no mesmo quadrado.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-10.mp4',
+  },
+  {
+    codigo: 'EX041',
+    nome: 'Coordenação na Escada 11',
+    descricao: 'Padrão 2-in/2-out à frente, focando rapidez e core estável.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-na-escada-11.mp4',
+  },
+  {
+    codigo: 'EX042',
+    nome: 'Movimento Zig-Zag',
+    descricao: 'Cortes curtos alternando lados em sequência para agilidade.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/movimento-zig-zag.mp4',
+  },
+  {
+    codigo: 'EX043',
+    nome: 'Movimento Zig-Zag para Trás',
+    descricao: 'Backpedal em zigue-zague com cortes e desaceleração controlada.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/movimento-zig-zag-para-tras.mp4',
+  },
+  {
+    codigo: 'EX044',
+    nome: 'Salto Unipodal',
+    descricao: 'Saltos em um pé com aterrissagem controlada para potência elástica.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/salto-unipodal.mp4',
+  },
+  {
+    codigo: 'EX045',
+    nome: 'Salto Unipodal + Coordenação',
+    descricao: 'Saltos em um pé integrados a padrão de pés/escada.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: "/assets/videos/exercicios/salto-unipodal-coordenacao.mp4",
+  },
+  {
+    codigo: 'EX046',
+    nome: 'Salto Unipodal + Pliometria',
+    descricao: 'Saltos unipodais com estímulos pliométricos (altura/distância).',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/salto-unipodal-poliometria.mp4',
+  },
+  {
+    codigo: 'EX047',
+    nome: 'Salto Pliometria + Coordenação',
+    descricao: 'Saltos reativos combinados com padrão de pés para ritmo e potência.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: "/assets/videos/exercicios/salto-poliometria-coordenacao.mp4",
+  },
+  {
+    codigo: 'EX048',
+    nome: 'Agachamento',
+    descricao: 'Flexão de quadris e joelhos mantendo calcanhares no chão.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento.mp4',
+  },
+  {
+    codigo: 'EX049',
+    nome: 'Agachamento em Isometria',
+    descricao: 'Manter o agachamento a ~90° por tempo para força e estabilidade.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento-em-isometria.mp4',
+  },
+  {
+    codigo: 'EX050',
+    nome: 'Agachamento Sumo',
+    descricao: 'Base afastada, pés abertos e joelhos alinhados para adutores e glúteos.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento-sumo.mp4',
+  },
+  {
+    codigo: 'EX051',
+    nome: 'Agachamento Lateral Alternado',
+    descricao: 'Desloca o peso lateralmente mantendo quadril para trás.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento-lateral-alternado.mp4',
+  },
+  {
+    codigo: 'EX052',
+    nome: 'Agachamento com Deslocamento Lateral',
+    descricao: 'Agache enquanto se desloca de lado com tronco erguido.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/agachamento-com-deslocamento-lateral.mp4',
+  },
+  {
+    codigo: 'EX053',
+    nome: 'Afundo',
+    descricao: 'Passo à frente/atrás com tronco erguido e joelho alinhado.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/afundo.mp4',
+  },
+  {
+    codigo: 'EX054',
+    nome: 'Afundo Isométrico',
+    descricao: 'Sustentar a posição de afundo com quadril estável.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/afundo-isometrico.mp4',
+  },
+  {
+    codigo: 'EX055',
+    nome: 'Afundo Explosivo',
+    descricao: 'Afundo com salto trocando as pernas no ar, aterrissando estável.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/afundo-explosivo.mp4',
+  },
+  {
+    codigo: 'EX056',
+    nome: 'Avanço',
+    descricao: 'Walking lunge alternando passos com controle e equilíbrio.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/avanco.mp4',
+  },
+  {
+    codigo: 'EX057',
+    nome: 'Salto Explosivo',
+    descricao: 'Saltos verticais a partir do agachamento com aterrissagem controlada.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/salto-explosivo.mp4',
+  },
+  {
+    codigo: 'EX058',
+    nome: 'Suicídio (Shuttle Run)',
+    descricao: 'Sprints de ida e volta tocando marcas progressivas.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/suicidio.mp4',
+  },
+  {
+    codigo: 'EX059',
+    nome: 'Mudança de Direção 1',
+    descricao: 'Acelera, freia e corta em ângulos curtos com apoio firme.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/mudanca-de-direcao-1.mp4',
+  },
+  {
+    codigo: 'EX060',
+    nome: 'Mudança de Direção 2',
+    descricao: 'Cortes de 90°/180° com desaceleração e reaceleração rápidas.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/mudanca-de-direcao-2.mp4',
+  },
+  {
+    codigo: 'EX061',
+    nome: 'Deslocamento Lateral',
+    descricao: 'Shuffles laterais com base baixa e apoio na ponta dos pés.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/deslocamento-lateral.mp4',
+  },
+  {
+    codigo: 'EX062',
+    nome: 'Deslocamento Lateral (Voltando)',
+    descricao: 'Shuffles de ida e volta com paradas rápidas.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/deslocamento-lateral-voltando.mp4',
+  },
+  {
+    codigo: 'EX063',
+    nome: 'Frente - Costas',
+    descricao: 'Alterna corrida à frente e recuo com transições rápidas.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas.mp4',
+  },
+  {
+    codigo: 'EX064',
+    nome: 'Elevação Pélvica',
+    descricao: 'Eleve o quadril alinhando ombros-quadris-joelhos contraindo glúteos.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/elevacao-pelvica.mp4',
+  },
+  {
+    codigo: 'EX065',
+    nome: 'Elevação Pélvica Unilateral',
+    descricao: 'Eleve o quadril apoiando apenas um pé, mantendo alinhamento.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/elevacao-pelvica-unilateral.mp4',
+  },
+  {
+    codigo: 'EX066',
+    nome: 'Abdominal',
+    descricao: 'Flexione o tronco tirando as omoplatas do chão com controle.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/abdominal.mp4',
+  },
+  {
+    codigo: 'EX067',
+    nome: 'Abdominal Remador',
+    descricao: 'Estenda e flexione tronco e joelhos em sincronia (remo no solo).',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/adominal-remador.mp4',
+  },
+  {
+    codigo: 'EX068',
+    nome: 'Prancha Isométrica',
+    descricao: 'Apoio em antebraços e ponta dos pés com corpo alinhado.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/prancha-isometrica.mp4',
+  },
+  {
+    codigo: 'EX069',
+    nome: 'Prancha Lateral Isométrica',
+    descricao: 'Apoio lateral elevando o quadril e mantendo alinhamento.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/prancha-lateral-isometrica.mp4',
+  },
+  {
+    codigo: 'EX070',
+    nome: 'Prancha Alternada',
+    descricao: 'Transições antebraço-mão ou toques no ombro com quadril estável.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/prancha-alternada.mp4',
+  },
+    {
+    codigo: 'EX071',
+    nome: 'Coordenação + Salto + Mudança de Direção',
+    descricao: 'Sequência que combina escada de agilidade, salto sobre obstáculo e corte rápido para trocar de direção, finalizando com aceleração curta. Trabalha coordenação motora, potência de salto e reatividade nas transições.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-salto-mudanca-direcao.mp4'
+  },
+  {
+    codigo: 'EX072',
+    nome: 'Passe + Movimentação em V',
+    descricao: 'Troca de passes com “toca e sai” formando um V, recebendo de frente com primeiro toque orientado para acelerar a próxima ação. Desenvolve criação de ângulo, tempo de desmarque e controle/passe rápido sob pressão.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/passe-movimentacao-em-V.mp4'
+  },
+  {
+    codigo: 'EX073',
+    nome: 'Coordenação + Domínio Orientado 001',
+    descricao: 'Sequência com escada/cones para ritmo de pés e troca de apoios, seguida de recepção com primeiro toque orientado para o espaço livre e passe/saída. Desenvolve coordenação fina, orientação corporal e decisão rápida ao receber a bola.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-dominio-orientado-001.mp4'
+  },
+  {
+    codigo: 'EX074',
+    nome: 'Coordenação + Passe Alto 001',
+    descricao: 'Combina ritmo de pés em escada/cones com recepção de bola aérea (amortecer no peito ou cabecear suave) e devolução em passe alto dirigido. Desenvolve coordenação, leitura de trajetória e timing de apoio, além do gesto técnico do passe alto com precisão.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-passe-alto-001.mp4'
+  },
+  {
+    codigo: 'EX075',
+    nome: 'Salto Unilateral + Passe Alto + Cabeceio',
+    descricao: 'Sequência com salto em um apoio para estabilizar e atacar a bola alta, recebendo passe levantado e finalizando de cabeça ao alvo. Trabalha potência unilateral, equilíbrio, timing de impulsão/cabeceio e aterrissagem segura.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/salto-unilateral-passe-alto-cabeceio.mp4'
+  },
+  {
+    codigo: 'EX076',
+    nome: 'Passe Curto + Longo + Domínio Orientado',
+    descricao: 'Alterna passe curto para apoio, virada de corpo e passe longo diagonal; recebe e orienta o primeiro toque para o espaço antes de devolver. Melhora leitura de jogo, perfil corporal, qualidade do primeiro toque e variação de distância do passe.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/passe-curto-longo-dominio-orientado.mp4'
+  },
+  {
+    codigo: 'EX077',
+    nome: 'Passe + Domínio Orientado no Quadrante',
+    descricao: 'Recepção dentro do quadrante, primeiro toque para sair da zona pressionada e passe de progressão alternando lados. Desenvolve leitura espacial, perfil corporal e precisão/tempo de passe ao mudar rapidamente de corredor.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/passe-dominio-orientado-no-quadrante.mp4'
+  },
+  {
+    codigo: 'EX078',
+    nome: 'Coordenativo Podal',
+    descricao: 'Sequência de ritmo de pés com alternância direita–esquerda, toques curtos e variações (dentro/fora, frente/trás) em escada ou cones mantendo cadência alta. Trabalha coordenação neuromuscular, agilidade de tornozelo e precisão de apoios para acelerar mudanças de direção.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-podal.mp4'
+  },
+  {
+    codigo: 'EX079',
+    nome: 'Coordenação + Passe Alto',
+    descricao: 'Ritmo de pés em escada/cones seguido de recepção/controle da bola alta e devolução em passe elevado ao alvo. Trabalha coordenação de apoios, leitura de trajetória e gesto técnico do passe alto com precisão e timing.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-passe-alto.mp4'
+  },
+  {
+    codigo: 'EX080',
+    nome: 'Frente–Costas em V + Passe 001',
+    descricao: 'Deslocamentos frente–costas formando um V, com variação de ritmo e giro de quadril para receber e tocar de primeira no apoio. Desenvolve coordenação de apoios, aceleração após a mudança de direção e qualidade do passe em movimento.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas-em-V-passe-001.mp4'
+  },
+  {
+    codigo: 'EX081',
+    nome: 'Frente–Costas em V + Passe Alto + Cabeceio',
+    descricao: 'Deslocamentos frente–costas em V para criar tempo/ângulo, seguido de passe levantado e finalização de cabeça ao alvo. Trabalha coordenação de apoios, timing de impulsão/cabeceio e estabilidade na aterrissagem.',
+    nivel: Nivel.Performance,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas-em-V-passe-alto-cabeceio.mp4'
+  },
+  {
+    codigo: 'EX082',
+    nome: 'Frente–Costas em V + Passe + Domínio Orientado',
+    descricao: 'Alterna deslocamentos frente–costas em V para criar ângulo; ao receber, orienta o primeiro toque para sair da pressão e devolve com precisão. Desenvolve coordenação de apoios, perfil corporal, leitura espacial e progressão rápida sob pressão.',
+    nivel: Nivel.Avancado,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas-em-V-passe-dominio-orientado.mp4'
+  },
+  {
+    codigo: 'EX083',
+    nome: 'Passe + Domínio',
+    descricao: 'Troca de passes curtos com recepção limpa e primeiro toque orientado para preparar a próxima ação. Desenvolve controle de bola, perfil corporal e precisão/tempo do passe sob ritmo.',
+    nivel: Nivel.Base,
+    categorias: [Categoria.Sub9, Categoria.Sub11, Categoria.Sub13, Categoria.Sub15, Categoria.Sub17, Categoria.Sub20, Categoria.Livre],
+    videoDemonstrativoUrl: '/assets/videos/exercicios/passe-dominio.mp4'
+  },
+  {
+    codigo: "EX084",
+    nome: "Coordenativo com Bola 001",
+    descricao: "Conduções curtas com alternância de pés e mudanças rápidas de direção mantendo a bola próxima. Foco em coordenação, ritmo e controle em espaço reduzido.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/coordenativo-bola.mp4",
+  },
+  {
+    codigo: "EX085",
+    nome: "Coordenativo com Bola 002",
+    descricao: "Condução em zigue-zague alternando pés e ritmos, mantendo a bola próxima. Trabalho de coordenação, equilíbrio e mudanças rápidas de direção em espaço curto.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/coordenativo-bola-002.mp4",
+  },
+  {
+    codigo: "EX086",
+    nome: "Coordenativo (Pé Não Dominante)",
+    descricao: "Condução e toques curtos somente com o pé não dominante, alternando interno/externo e mudando de direção. Foco em coordenação, precisão e confiança do pé fraco em espaço reduzido.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/coordenativo-bola-pe-nao-dominante.mp4",
+  },
+  {
+    codigo: "EX087",
+    nome: "Coordenativo Alternado",
+    descricao: "Conduções curtas alternando pé direito/esquerdo e faces do pé (interno/externo) a cada toque. Foco em coordenação bilateral, ritmo e controle próximo da bola em mudanças rápidas de direção.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/coordenativo-bola-alternado.mp4",
+  },
+  {
+    codigo: "EX088",
+    nome: "Tic-Tac Central",
+    descricao: "Toques rápidos “tic-tac” com o interno dos pés, alternando direita/esquerda e mantendo a bola centralizada. Foco em ritmo, coordenação bilateral e controle próximo em espaço curto.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/tictac.mp4",
+  },
+  {
+    codigo: "EX089",
+    nome: "Tic-Tac Lateral (Perna Dominante)",
+    descricao: "Sequência “tic-tac” lateral usando só a perna dominante, conduzindo a bola ao lado do corpo com toques curtos (interno/externo). Foco em ritmo, controle próximo e deslocamento lateral rápido mantendo a bola colada.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/tictac-lateral-perna-dominante.mp4",
+  },
+  {
+    codigo: "EX090",
+    nome: "Condução Pisando na Bola",
+    descricao: "Condução usando a sola, “pisando” e arrastando a bola à frente e de lado. Foco em ritmo, proteção e controle fino sob pressão em espaço curto.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-pisando-na-bola.mp4",
+  },
+  {
+    codigo: "EX091",
+    nome: "Condução Penteando (Pé Não Dominante)",
+    descricao: "Condução “penteando” a bola com a sola do pé não dominante em toques contínuos. Foco em coordenação do pé fraco, sensibilidade e mudança de direção suave.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-penteando-nao-dominante.mp4",
+  },
+  {
+    codigo: "EX092",
+    nome: "Condução Penteando (Pé Dominante)",
+    descricao: "Condução “penteando” com a sola do pé dominante, mantendo a bola colada. Ênfase em ritmo, aceleração curta e domínio no arraste frontal/lateral.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-penteando-dominante.mp4",
+  },
+  {
+    codigo: "EX093",
+    nome: "Condução Perna Alternada",
+    descricao: "Condução alternando pés a cada toque, variando interno/externo. Foco em coordenação bilateral, ritmo e mudanças rápidas de direção.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-perna-alternada.mp4",
+  },
+  {
+    codigo: "EX094",
+    nome: "Condução (Pé Não Dominante)",
+    descricao: "Condução apenas com o pé não dominante em toques curtos e controlados. Ênfase em precisão, confiança e condução em linhas retas e curvas.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-perna-nao-dominante.mp4",
+  },
+  {
+    codigo: "EX095",
+    nome: "Condução (Pé Dominante)",
+    descricao: "Condução apenas com o pé dominante, mantendo a bola próxima do corpo. Foco em ritmo, aceleração curta e controle em espaço reduzido.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-perna-dominante.mp4",
+  },
+  {
+    codigo: "EX096",
+    nome: "Tic-Tac Lateral (Pé Não Dominante)",
+    descricao: "Sequência “tic-tac” lateral usando só o pé não dominante (interno/externo). Foco em ritmo, estabilidade e deslocamento lateral mantendo a bola colada.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/tictac-lateral-perna-nao-dominante.mp4",
+  },
+  {
+    codigo: "EX097",
+    nome: "Zigue-Zague Costurando",
+    descricao: "Condução em zigue-zague “costurando” entre marcadores com toques curtos. Foco em mudanças de direção ágeis, ritmo contínuo e controle próximo.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/zigzag-costurando.mp4",
+  },
+  {
+    codigo: "EX098",
+    nome: "Zigue-Zague Sobre a Bola",
+    descricao: "Deslocamento em zigue-zague com passadas por cima da bola a cada mudança. Foco em coordenação, equilíbrio e fluidez na variação de direção.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/zigzag-sobre-bola.mp4",
+  },
+  {
+    codigo: "EX099",
+    nome: "Zigue-Zague Parte Interna",
+    descricao: "Condução em zigue-zague usando apenas a parte interna dos pés. Ênfase em precisão do toque, corpo baixo e ângulos curtos.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/zigzag-parte-interna.mp4",
+  },
+  {
+    codigo: "EX100",
+    nome: "Zigue-Zague Alternado",
+    descricao: "Zigue-zague alternando pés e faces do pé a cada toque. Foco em coordenação bilateral, ritmo e acelerações curtas.",
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/zigzag-alternado.mp4",
+  },
+  {
+    codigo: "EX101",
+    nome: "Zigue-Zague (Perna Esquerda)",
+    descricao: "Condução em zigue-zague usando somente a perna esquerda (interno/externo). Ênfase em controle, equilíbrio e mudanças rápidas de direção.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/zigzag-perna-esquerda.mp4",
+  },
+  {
+    codigo: "EX102",
+    nome: "Zigue-Zague (Perna Direita)",
+    descricao: "Condução em zigue-zague usando apenas a perna direita (interno/externo). Foco em controle próximo, estabilidade e cortes rápidos.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/zigzag-perna-direita.mp4",
+  },
+  {
+    codigo: "EX103",
+    nome: "Trajetória em 8 (Perna Alternada)",
+    descricao: "Trajetória em “8” conduzindo e alternando as pernas em cada curva. Foco em leitura de trajetória, controle fino e transições rápidas.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/consumacao-em-8-perna-alternada.mp4",
+  },
+  {
+    codigo: "EX104",
+    nome: "Trajetória em 8 (Perna Esquerda)",
+    descricao: "Trajetória em “8” conduzindo só com a perna esquerda. Ênfase em precisão no arco, equilíbrio e domínio do pé.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/consumacao-em-8-perna-esquerda.mp4",
+  },
+  {
+    codigo: "EX105",
+    nome: "Trajetória em 8 (Perna Direita)",
+    descricao: "Trajetória em “8” conduzindo apenas com a perna direita. Foco em controle direcional, estabilidade e cadência constante.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/consumacao-em-8-perna-direita.mp4",
+  },
+  {
+    codigo: "EX106",
+    nome: "Condução + Drible + Passe",
+    descricao: "Condução com finta e passe final, variando o ritmo antes da execução. Foco em desequilíbrio do marcador, mudança de direção e precisão no passe.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-drible-passe.mp4",
+  },
+  {
+    codigo: "EX107",
+    nome: "Condução com Step-Over",
+    descricao: "Condução com passadas por cima da bola (step-overs) durante o deslocamento. Ênfase em coordenação, sincronização tronco-pernas e controle fino.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/coordenativo-conducao-por-cima-bola.mp4",
+  },
+  {
+    codigo: "EX108",
+    nome: "Condução em X + Passe",
+    descricao: "Trajeto em “X” conduzindo até os vértices e finalizando com passe. Foco em orientação corporal, ângulos de passe e tempo de execução.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-em-X-mais-passe.mp4",
+  },
+  {
+    codigo: "EX109",
+    nome: "Pisando + Tic-Tac",
+    descricao: "Combina “pisar” com a sola e sequência tic-tac (interno/externo) mantendo a bola próxima. Ênfase em ritmo, coordenação e controle sob pressão.",
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-pisando-tictac.mp4",
+  },
+  {
+    codigo: "EX110",
+    nome: "Mudança de Direção 002",
+    descricao: "Condução com cortes e mudanças bruscas de direção em pontos marcados. Foco em acelera/desacelera, centro de gravidade baixo e primeiro toque.",
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-com-mudança-direcao-002.mp4",
+  },
+  {
+    codigo: "EX111",
+    nome: "Condução Velocidade (Esquerda, Alternada)",
+    descricao: "Condução só com a esquerda alternando velocidades (lento/rápido) por trechos. Ênfase em controle do pé fraco, cadência e explosões curtas.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-alternando-velocidade-perna-esquerda.mp4",
+  },
+  {
+    codigo: "EX112",
+    nome: "Condução com Mudança de Direção",
+    descricao: "Condução com mudanças de direção usando interno/externo e proteção do corpo. Foco em leitura de espaço, corte eficiente e retomada rápida.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-com-mudança-direcao.mp4",
+  },
+  {
+    codigo: "EX113",
+    nome: "Condução Velocidade (Direita, Alternada)",
+    descricao: "Condução só com a direita alternando tempos de passada e intensidade. Ênfase em controle próximo, variação de ritmo e arranques curtos.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-alternando-velocidade-perna-direita.mp4",
+  },
+  {
+    codigo: "EX114",
+    nome: "Condução em Velocidade (Esquerda)",
+    descricao: "Condução contínua com a perna esquerda, progredindo de velocidade moderada a alta. Foco em estabilidade, passada eficiente e controle em aceleração.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-velocidade-perna-esquerda.mp4",
+  },
+  {
+    codigo: "EX115",
+    nome: "Condução em Velocidade (Direita)",
+    descricao: "Condução contínua com a perna direita, elevando gradualmente a velocidade. Ênfase em controle sob velocidade, precisão do toque e equilíbrio.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/conducao-velocidade-perna-direita.mp4",
+  },
+{
+    codigo: "EX116",
+    nome: "Elevação Frontal + Desenvolvimento Lateral + Passe Alto",
+    descricao: "Sequência coordenativa com elevação frontal e desenvolvimento lateral da bola, finalizando em passe alto dirigido. Foco em sincronização tronco–braços, tempo de apoio e precisão aérea.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/elevacao-frontal-desenvolvimento-lateral-passe-alto.mp4",
+  },
+  {
+    codigo: "EX117",
+    nome: "Zig-Zag + Passe + Domínio",
+    descricao: "Condução em zigue-zague, passe e retorno com domínio orientado para o espaço livre. Ênfase em mudanças de direção, primeiro toque e qualidade do passe.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/zigzag-passe-dominio.mp4",
+  },
+  {
+    codigo: "EX118",
+    nome: "Deslocamento Lateral + Passe Orientado",
+    descricao: "Shuffles laterais para criar ângulo, passe e primeiro toque orientado na recepção. Foco em perfil corporal, tempo de desmarque e continuidade da jogada.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/deslocamento-lateral-passe-orientado.mp4",
+  },
+  {
+    codigo: "EX119",
+    nome: "Deslocamento Lateral + Cabeceio",
+    descricao: "Deslocamento lateral para ajuste de posição e cabeceio ao alvo. Ênfase em tempo de impulsão, equilíbrio na aterrissagem e direção do cabeceio.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/deslocamento-lateral-cabeceio.mp4",
+  },
+  {
+    codigo: "EX120",
+    nome: "Deslocamento Lateral + Passe Alto",
+    descricao: "Shuffles laterais seguidos de passe alto controlado ao alvo. Foco em leitura de trajetória, gesto técnico e precisão do lançamento.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/deslocamento-lateral-passe-alto.mp4",
+  },
+  {
+    codigo: "EX121",
+    nome: "Deslocamento Lateral + Passe Rasteiro",
+    descricao: "Deslocamento lateral para abrir linha e passe rasteiro firme no alvo. Ênfase em ângulo de corpo, tempo de execução e precisão no chão.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/deslocamento-lateral-passe-rasteiro.mp4",
+  },
+  {
+    codigo: "EX122",
+    nome: "Deslocamento + Domínio Orientado + Passe",
+    descricao: "Deslocamento para criar linha; recepção com primeiro toque orientado e passe rápido. Foco em perfil corporal, tempo de desmarque e precisão na saída.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/deslocamento-dominio-orientado-passe.mp4",
+  },
+  {
+    codigo: "EX123",
+    nome: "Salto + Passe Alto + Cabeceio (Quadrante)",
+    descricao: "Salto para estabilizar, passe alto ao quadrante e finalização de cabeça. Ênfase em timing de impulsão, leitura de trajetória e direção do cabeceio.",
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/salto-passe-alto-cabeceio-quadrante.mp4",
+  },
+  {
+    codigo: "EX124",
+    nome: "Salto + Deslocamento + Passe Alto (Quadrante)",
+    descricao: "Sequência de salto, deslocamento curto e passe alto ao alvo no quadrante. Foco em potência reativa, ajuste de base e precisão do lançamento.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/salto-deslocamento-passe-alto-quadrante.mp4",
+  },
+  {
+    codigo: "EX125",
+    nome: "Salto + Deslocamento + Passe (Dentro do Quadrante)",
+    descricao: "Salto seguido de deslocamento e passe rasteiro/chapa dentro do quadrante. Ênfase em estabilização na aterrissagem, ângulo de corpo e tempo de execução.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/salto-deslocamento-passe-dentro-quadrante.mp4",
+  },
+  {
+    codigo: "EX126",
+    nome: "Deslocamento + Salto Unilateral + Passe Alto (Chapa)",
+    descricao: "Deslocamento lateral, salto em um apoio para estabilizar e passe alto de chapa. Foco em equilíbrio unilateral, controle de força e precisão do gesto.",
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/deslocamento-salto-unilateral-passe-alto-chapa.mp4",
+  },
+  {
+    codigo: "EX127",
+    nome: "Deslocamento + Passe + Salto + Cabeceio",
+    descricao: "Deslocamento para abrir ângulo, passe e sequência de salto com cabeceio. Ênfase em coordenação, timing de impulsão e direção da bola.",
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/deslocamento-passe-salto-cabeceio.mp4",
+  },
+  {
+    codigo: "EX128",
+    nome: "Coordenativo + Domínio Alto + Passe de Chapa",
+    descricao: "Sequência coordenativa com domínio de bola alta e passe de chapa no chão. Foco em leitura de trajetória, primeiro toque amortecido e precisão do passe.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/coordenativo-dominio-alto-passe-chapa.mp4",
+  },
+  {
+    codigo: "EX129",
+    nome: "Coordenativo + Passe de Chapa",
+    descricao: "Coordenação de apoios seguida de passe de chapa firme e direcionado. Ênfase em ritmo, perfil corporal e qualidade do passe rasteiro.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/coordenativo-passe-chapa.mp4",
+  },
+  {
+    codigo: "EX130",
+    nome: "Frente–Costas + Cabeceio + Passe Alto (Chapa)",
+    descricao: "Deslocamentos frente–costas para ajustar posição, cabeceio ao alvo e passe alto de chapa na sequência. Foco em tempo de impulsão, leitura de trajetória e precisão do levantamento.",
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/movimentacao-frente-costas-cabeceio-passe-alto-chapa.mp4",
+  },
+  {
+    codigo: "EX131",
+    nome: "Frente–Costas + Passe",
+    descricao: "Deslocamento frente–costas para criar ângulo e passe firme no apoio. Ênfase em transição rápida, perfil corporal e precisão na saída.",
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/deslocamento-frente-costas-passe.mp4",
+  },
+  {
+    codigo: "EX132",
+    nome: "Mudança de Direção + Passe de Chapa",
+    descricao: "Cortes curtos com mudança de direção seguidos de passe de chapa no chão. Foco em desaceleração/aceleração, primeiro toque e qualidade do passe.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/mudanca-direcao-passe-chapa.mp4",
+  },
+  {
+    codigo: "EX133",
+    nome: "Mudança de Direção + Passe",
+    descricao: "Mudanças de direção para abrir linha e executar o passe com precisão. Ênfase em leitura de espaço, orientação de corpo e tempo de execução.",
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/mudanca-direcao-passe.mp4",
+  },
+  {
+    codigo: "EX134",
+    nome: "Salto Unilateral + Passe Alto (Chapa)",
+    descricao: "Salto em um apoio para estabilizar e passe alto de chapa ao alvo. Foco em equilíbrio unilateral, controle de força e gesto técnico do levantamento.",
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/salto-unilateral-passe-alto-chapa.mp4",
+  },
+  {
+    codigo: "EX135",
+    nome: "Salto + Coordenativo + Chapa + Explosão",
+    descricao: "Sequência coordenativa com salto e passe de chapa, finalizando com arrancada explosiva. Ênfase em reatividade, estabilidade na aterrissagem e aceleração curta.",
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: "/assets/videos/exercicios/salto-coordentivo-chapa-explosao.mp4",
+  },
+  {
+  codigo: 'EX136',
+  nome: 'Alongamento Quadríceps Deitado (Dir/Esq)',
+  descricao: 'Alongamento do quadríceps em decúbito com pega no tornozelo. Foco em quadril alinhado e respiração.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/quadriceps-deitado-perna-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX137',
+  nome: 'Alongamento Glúteo Unilateral (Dir/Esq)',
+  descricao: 'Flexão e rotação de quadril para alongar glúteos. Manter coluna neutra e respiração contínua.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-gluteo-unilateral-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX138',
+  nome: 'Mobilidade Rotação de Tórax (Dir/Esq)',
+  descricao: 'Rotações controladas para mobilizar coluna torácica. Evite compensar na lombar; amplitude confortável.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-rotacao-torax-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX139',
+  nome: 'Mobilidade Passiva Tornozelo–Joelho–Quadril (Dir/Esq)',
+  descricao: 'Aberturas passivas guiadas para liberar cadeia inferior. Trabalha amplitude articular sem carga.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-mobilidade-tornozelo-joelho-quadril-passivo-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX140',
+  nome: 'Mobilidade Ativa Tornozelo–Joelho–Quadril (Dir/Esq)',
+  descricao: 'Sequência ativa com controle e estabilidade. Ganho de amplitude com força e consciência corporal.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-mobilidade-tornozelo-joelho-quadril-ativo-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX141',
+  nome: 'Mobilidade Passiva Lateral (Tornozelo–Joelho–Quadril)',
+  descricao: 'Alongamentos laterais passivos para adutores e quadril. Manter joelho alinhado e respiração fluida.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-mobilidade-tornozelo-joelho-quadril-passivo-lateral-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX142',
+  nome: 'Mobilidade Ativa Lateral (Tornozelo–Joelho–Quadril)',
+  descricao: 'Aberturas laterais ativas com tronco estável. Trabalha adutores, controle e mobilidade de quadril.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-mobilidade-tornozelo-joelho-quadril-ativo-lateral-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX143',
+  nome: 'Alongamento Panturrilha Passivo (Dir/Esq)',
+  descricao: 'Sustentação para gastrocnêmio/solear com calcanhar no chão. Atenção ao alinhamento do joelho.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-panturrilha-passivo-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX144',
+  nome: 'Alongamento de Quadríceps (Foto) Dir/Esq',
+  descricao: 'Em pé, puxe o tornozelo ao glúteo sem inclinar o tronco. Mantenha joelhos alinhados.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-quadriceps-direita-esquerda.jpeg'
+},
+{
+  codigo: 'EX145',
+  nome: 'Quadríceps + Cadeia Posterior (Foto) Dir/Esq',
+  descricao: 'Sequência para quadríceps e posterior com controle de quadril. Postura neutra e respiração cadenciada.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-quadriceps-cadeia-posterior-direita-esquerda.jpeg'
+},
+{
+  codigo: 'EX146',
+  nome: 'Cadeia Posterior + Panturrilha',
+  descricao: 'Sustentação para ísquios e panturrilha com leve dorsiflexão. Coluna neutra e progressão suave.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-cadeia-posterior-panturrilha.mp4'
+},
+{
+  codigo: 'EX147',
+  nome: 'Condução Zig-Zag + Passe na Parede',
+  descricao: 'Zigue-zague entre marcas e passe rápido na parede. Mudanças de direção e precisão do passe.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-zigzag-passe-parede.mp4'
+},
+{
+  codigo: 'EX148',
+  nome: 'Coordenativo – Condução por Cima da Bola 002',
+  descricao: 'Passadas por cima da bola mantendo controle e ritmo. Coordenação, equilíbrio e fluidez.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-conducao-por-cima-bola-002.mp4'
+},
+{
+  codigo: 'EX149',
+  nome: 'Coordenativo – Condução por Cima 001',
+  descricao: 'Variação de step-over contínuo com condução curta. Cadência alta e sincronia tronco-pernas.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-conducao-por-cima-bola-001.mp4'
+},
+{
+  codigo: 'EX150',
+  nome: 'Corrida + Mudança de Direção (Dir.)',
+  descricao: 'Acelera, corta e conduz curto com a direita. Desaceleração eficiente e nova aceleração.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/corrida-mudanca-direcao-conducao-curta-direita.mp4'
+},
+{
+  codigo: 'EX151',
+  nome: 'Corrida + Mudança de Direção (Esq.)',
+  descricao: 'Acelera, corta e conduz curto com a esquerda. Controle do pé fraco e cortes rápidos.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/corrida-mudanca-direcao-conducao-curta-esquerda.mp4'
+},
+{
+  codigo: 'EX152',
+  nome: 'Frente–Costas + Condução Lateral por Cima',
+  descricao: 'Alterna frente–costas e passadas por cima da bola. Coordenação de apoios e transições rápidas.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/frente-costas-conducao-lateral-por-cima-bola.mp4'
+},
+{
+  codigo: 'EX153',
+  nome: 'Condução em 8 por Cima + Passe Curto',
+  descricao: 'Trajetória em “8” com step-overs e passe curto. Orientação corporal e precisão.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-8-por-cima-bola-passe-curto.mp4'
+},
+{
+  codigo: 'EX154',
+  nome: 'Condução Curta + Passada Lateral + Sprint',
+  descricao: 'Condução próxima, passada lateral e sprint final. Troca de ritmos e explosão.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-curta-passada-lateral-sprint.mp4'
+},
+{
+  codigo: 'EX155',
+  nome: 'Alongamento Panturrilha Ativo (Dir/Esq)',
+  descricao: 'Mobilização ativa do tornozelo para panturrilha. Controle de movimento e amplitude segura.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/alongamento-panturrilha-ativo-direita-esquerda.mp4'
+},
+{
+  codigo: 'EX156',
+  nome: 'Condução em Cruz (Perímetro) – Direita',
+  descricao: 'Percurso em cruz conduzindo com a direita no quadrante. Ângulos curtos e primeiro toque preciso.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-em-cruz-dentro-perimetro-direita.mp4'
+},
+{
+  codigo: 'EX157',
+  nome: 'Condução em Cruz (Perímetro) – Esquerda',
+  descricao: 'Percurso em cruz só com a esquerda mantendo bola próxima. Coordenação e domínio do pé não dominante.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-em-cruz-dentro-perimetro-esquerda.mp4'
+},
+{
+  codigo: 'EX158',
+  nome: 'Condução em Cruz (Perímetro) – Alternado',
+  descricao: 'Alterna pés a cada segmento do trajeto em cruz. Ritmo, mudanças de direção e controle fino.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-em-cruz-dentro-perimetro-alternado.mp4'
+},
+{
+  codigo: 'EX159',
+  nome: 'Condução por Cima + Sprint Curto',
+  descricao: 'Sequência de step-overs seguida de arranque curto. Coordenação e explosão na saída.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-por-cima-bola-sprint-curto.mp4'
+},
+{
+  codigo: 'EX160',
+  nome: 'Situação de Jogo – Finalização 003',
+  descricao: 'Ataque ao espaço e finalização após corte. Ênfase em aceleração e gesto de chute.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-003.mp4'
+},
+{
+  codigo: 'EX161',
+  nome: 'Situação de Jogo – Finalização 004',
+  descricao: 'Recepção sob pressão e finalização cruzada. Primeiro toque e mira ao canto.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-004.mp4'
+},
+{
+  codigo: 'EX162',
+  nome: 'Situação de Jogo – Finalização 005',
+  descricao: 'Condução curta + finta e batida rápida. Desequilibra o marcador e define com precisão.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-005.mp4'
+},
+{
+  codigo: 'EX163',
+  nome: 'Situação de Jogo – Finalização 006',
+  descricao: 'Finalização de primeira após passe/cruzamento. Tempo de bola e posicionamento.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-006.mp4'
+},
+{
+  codigo: 'EX164',
+  nome: 'Situação de Jogo – Finalização 007',
+  descricao: 'Ajeitada curta e chute de média distância. Ajuste de corpo e potência controlada.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-007.mp4'
+},
+{
+  codigo: 'EX165',
+  nome: 'Situação de Jogo – Finalização 008',
+  descricao: 'Gira sobre o eixo e finaliza ao canto. Perfil corporal e rapidez na execução.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-008.mp4'
+},
+{
+  codigo: 'EX166',
+  nome: 'Situação de Jogo – Finalização 001',
+  descricao: 'Recebe, orienta o corpo e finaliza rápido. Decisão e precisão da batida.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-001.mp4'
+},
+{
+  codigo: 'EX167',
+  nome: 'Situação de Jogo – Finalização 002',
+  descricao: 'Combinação curta antes do chute, ajustando apoio e direção. Timing e definição.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/situacao-jogo-finalizacao-002.mp4'
+},
+{
+  codigo: 'EX168',
+  nome: 'Domínio Orientado + Finalização (Direita)',
+  descricao: 'Primeiro toque orientado com a direita e batida rápida. Perfil corporal, aceleração e precisão.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-orientado-finalizacao-direita.mp4'
+},
+{
+  codigo: 'EX169',
+  nome: 'Domínio Orientado + Finalização (Esquerda)',
+  descricao: 'Primeiro toque com a esquerda e chute imediato. Leitura do espaço, equilíbrio e precisão.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-orientado-finalizacao-esquerda.mp4'
+},
+{
+  codigo: 'EX170',
+  nome: 'Domínio no Alto + Finalização (Direita)',
+  descricao: 'Controle aéreo (amortecer) e finalizar com a direita. Tempo de bola e gesto técnico.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-no-alto-finalizacao-direita.mp4'
+},
+{
+  codigo: 'EX171',
+  nome: 'Domínio no Alto + Finalização (Esquerda)',
+  descricao: 'Amortecer bola alta e concluir com a esquerda. Timing, apoio e precisão.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/dominio-no-alto-finalizacao-esquerda.mp4'
+},
+{
+  codigo: 'EX172',
+  nome: 'Reação Rápida + Finalização (Cor) 001',
+  descricao: 'Responder ao comando de cor e finalizar rápido. Percepção, decisão e explosão.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/reacao-rapida-finalizacao-escolha-cor-001.mp4'
+},
+{
+  codigo: 'EX173',
+  nome: 'Reação Rápida + Finalização (Cor) 002',
+  descricao: 'Variação de estímulo por cor com rota e chute imediato. Reatividade e definição.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/reacao-rapida-finalizacao-escolha-cor-002.mp4'
+},
+{
+  codigo: 'EX174',
+  nome: 'Finalização de Primeira',
+  descricao: 'Passe/cruzamento e batida de primeira sem domínio. Timing de ataque à bola e técnica.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/finalizacao-de-primeira.mp4'
+},
+{
+  codigo: 'EX175',
+  nome: 'Ativação MI — Alternado Dinâmico',
+  descricao: 'Aquecimento global das pernas com alternância de apoios. Ritmo contínuo, tronco firme e pouso suave.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/ativacao-membros-inferiores-alternado-dinamico.mp4',
+},
+{
+  codigo: 'EX176',
+  nome: 'Ativação MI — Elevando por Perna',
+  descricao: 'Elevações unilaterais para recrutar glúteo/quadríceps. Mantenha alinhamento joelho-pé e core ativo.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/ativacao-membros-inferiores-elevando-por-perna.mp4',
+},
+{
+  codigo: 'EX177',
+  nome: 'Ativação MI — Isometria Elevado (por perna)',
+  descricao: 'Segure a posição com apoio elevado para estabilidade. Respire, quadril neutro, sem colapsar o joelho.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/ativacao-membros-inferiores-isometria-elevado-por-perna.mp4',
+},
+{
+  codigo: 'EX178',
+  nome: 'Ativação MI — Lateral Dinâmico',
+  descricao: 'Deslocamentos laterais rápidos para acordar adutores/abdutores. Passos curtos, base baixa, controle de joelho.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/ativacao-membros-inferiores-lateral-dinamico.mp4',
+},
+{
+  codigo: 'EX179',
+  nome: 'Ativação MI — Lateral (por perna)',
+  descricao: 'Sustentação lateral unilateral focando glúteo médio. Segure 20–30s mantendo joelho alinhado.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/ativacao-membros-inferiores-lateral-por-perna.mp4',
+},
+{
+  codigo: 'EX180',
+  nome: 'Ativação MI — Unilateral',
+  descricao: 'Apoio em uma perna para propriocepção e equilíbrio. Olhar à frente e estabilize o tornozelo.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/ativacao-membros-inferiores-por-perna.mp4',
+},
+{
+  codigo: 'EX181',
+  nome: 'Ativação — Posterior de Coxa (por perna)',
+  descricao: 'Contração/elevação focada em isquiotibiais. Evite compensar com lombar; controle o quadril.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/ativacao-posterior-coxa-por-perna.mp4',
+},
+{
+  codigo: 'EX182',
+  nome: 'Ativação — Quadríceps',
+  descricao: 'Extensões/semiflexões para preparar joelho. Cadência controlada e pés paralelos.',
+  nivel: Nivel.Base,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/ativacao-quadriceps.mp4',
+},
+{
+  codigo: 'EX183',
+  nome: 'Ativação — Vastos Laterais',
+  descricao: 'Ênfase no vasto lateral para estabilizar patela. Desça pouco e mantenha joelho sobre o segundo dedo.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/ativacao-vastos-laterais.mp4',
+},
+{
+  codigo: 'EX184',
+  nome: 'Ativação — Quadríceps Isométrico (cada perna)',
+  descricao: 'Segure ângulo de 30–45°. Respiração contínua e core firme.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/ativacao-quadriceps-isometria-cada-perna.mp4',
+},
+{
+  codigo: 'EX185',
+  nome: 'Salto Alternado em Zig-Zag (de costas)',
+  descricao: 'Potência e orientação espacial recuando em zig-zag. Aterrisse no antepé e evite valgo.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/salto-alternado-zigzag-costas.mp4',
+},
+{
+  codigo: 'EX186',
+  nome: 'Salto Alternado Coordenativo',
+  descricao: 'Alternância rítmica de pés para coordenação e leve pliometria. Braços em balanço e pouso silencioso.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/salto-alternado-coordenativo.mp4',
+},
+{
+  codigo: 'EX187',
+  nome: 'Salto Unipodal (pernas alternadas)',
+  descricao: 'Saltos à frente trocando a perna a cada contato. Joelho estável e tronco alinhado.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/salto-unipodal-pernas-alternadas.mp4',
+},
+{
+  codigo: 'EX188',
+  nome: 'Salto Unipodal na Chapa',
+  descricao: 'Subir/estabilizar e descer controlado na mesma perna. Altura baixa e alinhamento do joelho.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/salto-unipodal-chapa.mp4',
+},
+{
+  codigo: 'EX189',
+  nome: 'Pliometria Unipodal',
+  descricao: 'Contatos rápidos no solo para reatividade. Amplitude curta e rigidez de tornozelo.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/pilometria-unipodal.mp4',
+},
+{
+  codigo: 'EX190',
+  nome: 'Pliometria Unipodal na Chapa',
+  descricao: 'Toques rápidos solo↔plataforma na mesma perna. Cadência alta e controle do joelho.',
+  nivel: Nivel.Performance,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/pilometria-unipodal-chapa.mp4',
+},
+{
+  codigo: 'EX191',
+  nome: 'Velocidade com Mudança de Direção',
+  descricao: 'Sprints com freio e cortes a 90–135°. Base baixa para mudar e reacelerar.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/trabalho-de-velocidade-mudanca-direcao.mp4',
+},
+{
+  codigo: 'EX192',
+  nome: 'Condução + Troca de Direção + Sprint Curto',
+  descricao: 'Conduza, corte e acelere no final. Toques curtos e último toque à frente.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/conducao-de-bola-troca-direcao-sprint-curto.mp4',
+},
+{
+  codigo: 'EX193',
+  nome: 'Isometria — Vastos Laterais (cada perna)',
+  descricao: 'Segure semiflexão focando lateral do quadríceps. Não deixe o joelho cair para dentro.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/ativacao-isometria-vastos-laterais-cada-perna.mp4',
+},
+{
+  codigo: 'EX194',
+  nome: 'Isometria — Posterior de Coxa (cada perna)',
+  descricao: 'Puxe o calcanhar “contra o chão” sem mover. Quadril neutro e abdômen ativo.',
+  nivel: Nivel.Avancado,
+  categorias: TODAS_CATEGORIAS_SEED,
+  videoDemonstrativoUrl: '/assets/videos/exercicios/ativacao-isometria-posterior-coxa-cada-perna.mp4',
+},
+  {
+    codigo: 'EX195',
+    nome: 'Deslocamento + Domínio Orientado + Finalização 001',
+    descricao: 'Desloca pra abrir ângulo, orienta o primeiro toque e finaliza rápido ao alvo. Foco em perfil corporal, tempo de execução e precisão.',
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/deslocamento-dominio-orientado-finalizacao-001.mp4',
+  },
+  {
+    codigo: 'EX196',
+    nome: 'Deslocamento + Domínio Orientado + Finalização 002',
+    descricao: 'Variante com mudança de direção mais brusca antes do chute. Trabalha desaceleração/aceleração, primeiro toque e definição.',
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/deslocamento-dominio-orientado-finalizacao-002.mp4',
+  },
+  {
+    codigo: 'EX197',
+    nome: 'Coordenativo + Passe 002',
+    descricao: 'Sequência coordenativa de pés seguida de passe firme e direcionado. Ritmo, sincronismo e qualidade do gesto do passe.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-passe-002.mp4',
+  },
+  {
+    codigo: 'EX198',
+    nome: 'Goleiro — Pegada de Punho (Simples)',
+    descricao: 'Técnica de soco para afastar bolas aéreas com segurança. Ênfase em tempo de impulsão, braço estendido e queda equilibrada.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/goleiro-pegada-de-punho-simples.mp4',
+  },
+  {
+    codigo: 'EX199',
+    nome: 'Goleiro — Pegada de Punho c/ Passada Lateral',
+    descricao: 'Soco com passada lateral para ajustar o corpo sob cruzamentos. Trabalha leitura de trajetória, apoio e alcance.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/goleiro-pegada-de-punho-passada-lateral.mp4',
+  },
+  {
+    codigo: 'EX200',
+    nome: 'Goleiro — Saída do Gol + Reposição Rápida',
+    descricao: 'Saída firme do gol e reposição veloz para contra-ataque. Foco em decisão, bloqueio do espaço e distribuição precisa.',
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/goleiro-saida-do-gol-reposicao-rapida.mp4',
+  },
+  {
+    codigo: 'EX201',
+    nome: 'Cognitivo + Finalização',
+    descricao: 'Resposta a estímulos (visual/sonoro/cor) e finalização imediata. Treina percepção, decisão e velocidade de execução.',
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/cognitivo-finalizacao.mp4',
+  },
+  {
+    codigo: 'EX202',
+    nome: 'Coordenação + Finalização',
+    descricao: 'Padrão de coordenação (escada/cones) seguido de batida ao alvo. Integra ritmo de pés, equilíbrio e precisão na finalização.',
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenacao-finalizacao.mp4',
+  },
+  {
+    codigo: 'EX203',
+    nome: 'Coordenativo + Chapa',
+    descricao: 'Sequência coordenativa com toques de chapa rasteiros. Foco em ritmo, perfil corporal e precisão curta.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-chapa.mp4',
+  },
+  {
+    codigo: 'EX204',
+    nome: 'Movimentação Lateral + Cabeceio',
+    descricao: 'Deslocamento lateral para ajustar posição e cabecear ao alvo. Trabalha tempo de impulsão e direção da testada.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/movimentacao-lateral-cabeceio.mp4',
+  },
+  {
+    codigo: 'EX205',
+    nome: 'Goleiro — Coordenativo + Pegada de Punho',
+    descricao: 'Passos coordenados e ataque à bola alta com punhos. Treina tempo de salto, extensão e segurança aérea.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/goleiro-coordenativo-pegada-de-punho.mp4',
+  },
+  {
+    codigo: 'EX206',
+    nome: 'Goleiro — Coordenativo + Saída de Gol',
+    descricao: 'Leitura e saída de gol em velocidade. Ênfase no primeiro passo explosivo, ângulo de ataque e firmeza na intervenção.',
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/goleiro-coordenativo-saida-de-gol.mp4',
+  },
+  {
+    codigo: 'EX207',
+    nome: 'Goleiro — Coordenativo + Entrada Completa',
+    descricao: 'Entrada completa com queda técnica protegendo a bola. Trabalha base, deslocamento curto e absorção do impacto.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/goleiro-coordenativo-entrada-completa.mp4',
+  },
+  {
+    codigo: 'EX208',
+    nome: 'Goleiro — Coordenativo + Entrada Baixa',
+    descricao: 'Entrada baixa com joelho de segurança e mão por trás da bola. Foco em alinhamento e aproximação segura.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/goleiro-coordenativo-entrada.mp4',
+  },
+  {
+    codigo: 'EX209',
+    nome: 'Movimentação + Domínio Orientado',
+    descricao: 'Movimentação para criar ângulo e primeiro toque orientado. Desenvolve perfil corporal, leitura de espaço e aceleração.',
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/movimentacao-dominio-orientado.mp4',
+  },
+  {
+    codigo: 'EX210',
+    nome: 'Movimentação + Cabeceio',
+    descricao: 'Deslocamentos e cabeceio em diferentes alturas. Treina tempo de bola, impulsão e precisão da direção.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/movimentacao-cabeceio.mp4',
+  },
+  {
+    codigo: 'EX211',
+    nome: 'Coordenativo + Passe',
+    descricao: 'Ritmo de pés seguido de passe firme e direcionado. Foco em cadência, estabilização e precisão do gesto.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-passe.mp4',
+  },
+  {
+    codigo: 'EX212',
+    nome: 'Movimentação + Chapa + Cabeceio',
+    descricao: 'Movimentação com passes de chapa e cabeceio ao final. Desenvolve leitura de trajetória, tempo de impulsão e precisão curta.',
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/movimentacao-cabeceio-chapa.mp4',
+  },
+  {
+    codigo: 'EX213',
+    nome: 'Movimentação Lateral com Chapa',
+    descricao: 'Deslocamento lateral seguido de passe de chapa. Foco em perfil corporal, ajuste de apoio e precisão no chão.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/movimentacao-lateral-chapa.mp4',
+  },
+  {
+    codigo: 'EX214',
+    nome: 'Movimentação Lateral e Passe',
+    descricao: 'Movimentação lateral para receber e soltar o passe. Trabalha orientação corporal, tomada de decisão e ritmo.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/movimentacao-lateral-passe.mp4',
+  },
+  {
+    codigo: 'EX215',
+    nome: 'Movimento, Passe e Chapa',
+    descricao: 'Sequência de movimento curto, passe e finalização de chapa. Treina cadência, controle e execução limpa.',
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/movimentacao-passe-chapa.mp4',
+  },
+  {
+    codigo: 'EX216',
+    nome: 'Coordenativo: Salto + Domínio Orientado + Passe',
+    descricao: 'Circuito coordenativo com saltos, domínio orientado e passe. Integra ritmo de pés, primeiro toque e precisão.',
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-salto-dominio-orientado-passe.mp4',
+  },
+  {
+    codigo: 'EX217',
+    nome: 'Salto Lateral, Aproximação e Passe',
+    descricao: 'Saltos laterais, aproximação e passe em progressão. Ênfase em impulsão, equilíbrio e leitura de espaço.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/salto-lateral-aproximaao-passe.mp4',
+  },
+  {
+    codigo: 'EX218',
+    nome: 'Salto + Aproximação + Peito + Chapa',
+    descricao: 'Salto e aproximação seguidos de domínio no peito e passe de chapa. Desenvolve controle aéreo, absorção e sequência rápida.',
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/salto-aproximacao-dominio-peito-chapa.mp4',
+  },
+  {
+    codigo: 'EX219',
+    nome: 'Salto Lateral, Aproximação e Cabeceio',
+    descricao: 'Saltos laterais seguidos de aproximação e cabeceio ao alvo. Trabalha tempo de impulsão, ajuste corporal e queda equilibrada.',
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/salto-lateral-aproximacao-cabeceio.mp4',
+  },
+  {
+    codigo: 'EX220',
+    nome: 'Coordenativo de Antecipação',
+    descricao: 'Sequência coordenativa para antecipar a jogada e interceptar a bola. Desenvolve leitura, primeiro passo explosivo e decisão rápida.',
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo-antecipacao.mp4',
+  },
+  {
+    codigo: 'EX221',
+    nome: 'Sequência: Salto, Movimentação e Cabeceio',
+    descricao: 'Combinação de saltos, deslocamento e cabeceio. Foco em ritmo, impulsão e direção precisa da testada.',
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/sequencia-salto-movimentacao-cabeceio.mp4',
+  },
+  {
+    codigo: 'EX222',
+    nome: 'Aproximação, Domínio e Cruzamento',
+    descricao: 'Aproximação com domínio orientado e cruzamento para a área. Treina perfil corporal, levantamento preciso e leitura de espaço.',
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/aproximacao-dominio-cruzamento.mp4',
+  },
+  {
+    codigo: 'EX223',
+    nome: 'Deslocamento Lateral + Domínio Orientado (Dupla)',
+    descricao: 'Deslocamento lateral e primeiro toque orientado em dupla. Ênfase em abrir ângulo, comunicação e passe rápido.',
+    nivel: Nivel.Avancado,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/deslocamento-lateral-dominio-orientado-dupla.mp4',
+  },
+  {
+    codigo: 'EX224',
+    nome: 'Mov. Lateral + Domínio Orientado e Troca de Passes',
+    descricao: 'Movimentação lateral com domínio orientado e troca de passes. Trabalha tempo de apoio, aceleração curta e precisão.',
+    nivel: Nivel.Base,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/movimentacao-lateral-dominio-orientado-troca-passe.mp4',
+  },
+  {
+    codigo: 'EX225',
+    nome: 'Passe Diagonal + Sprint e Recepção Zig-Zag',
+    descricao: 'Passe diagonal, sprint curto, recepção em zigue-zague e novo passe. Integra mudança de direção, controle orientado e velocidade de execução.',
+    nivel: Nivel.Performance,
+    categorias: TODAS_CATEGORIAS_SEED,
+    videoDemonstrativoUrl: '/assets/videos/exercicios/passe-diagonal-sprint-curto-recepcao-zigzag-passe.mp4',
+  },
   ];
   for (const ex of exercicios) {
     await prisma.exercicio.upsert({
@@ -612,7 +2211,6 @@ await prisma.usuario.upsert({
       create: ex
     });
   }
-
   
 const professorMateus = await prisma.professor.findFirst({
   where: { usuario: { nomeDeUsuario: 'mateus.furieri' } }
@@ -652,6 +2250,66 @@ if (professorMateus && ex1 && ex2 && ex3 && ex4 && ex5) {
         ]
       }
     }
+  });
+}
+
+const ex031 = await prisma.exercicio.findUnique({ where: { codigo: 'EX031' } }); 
+const ex032 = await prisma.exercicio.findUnique({ where: { codigo: 'EX032' } }); 
+const ex035 = await prisma.exercicio.findUnique({ where: { codigo: 'EX035' } }); 
+const ex041 = await prisma.exercicio.findUnique({ where: { codigo: 'EX041' } }); 
+const ex042 = await prisma.exercicio.findUnique({ where: { codigo: 'EX042' } });
+const ex057 = await prisma.exercicio.findUnique({ where: { codigo: 'EX057' } });
+const ex061 = await prisma.exercicio.findUnique({ where: { codigo: 'EX061' } });
+const ex068 = await prisma.exercicio.findUnique({ where: { codigo: 'EX068' } }); 
+
+if (
+  professorMateus &&
+  ex031 && ex032 && ex035 && ex041 && ex042 && ex057 && ex061 && ex068
+) {
+  await prisma.treinoProgramado.upsert({
+    where: { codigo: 'TR003' },
+    update: {
+      tipoTreino: TipoTreino.Fisico,
+      dataAgendada: prazo25Out,
+      exercicios: {
+        deleteMany: {},
+        create: [
+          { exercicioId: ex031.id, ordem: 1, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex032.id, ordem: 2, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex041.id, ordem: 3, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex042.id, ordem: 4, repeticoes: '4x 15m (zig-zag)' },
+          { exercicioId: ex057.id, ordem: 5, repeticoes: '4x 6 saltos' },
+          { exercicioId: ex061.id, ordem: 6, repeticoes: '3x 20s (shuffle)' },
+          { exercicioId: ex035.id, ordem: 7, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex068.id, ordem: 8, repeticoes: '3x 40s (isometria)' },
+        ],
+      },
+    },
+    create: {
+      codigo: 'TR003',
+      nome: 'Agilidade & Core (Escada + Pliometria)',
+      descricao: 'Circuito integrado de escada, mudanças de direção, pliometria e core.',
+      nivel: Nivel.Avancado,
+      categoria: [Categoria.Livre],
+      duracao: 50,
+      tipoTreino: TipoTreino.Fisico,
+      professorId: professorMateus.id,
+      dataAgendada: prazo25Out,
+      imagemUrl: '/assets/treinos/agilidade.jpg',
+      pontuacao: 14,
+      exercicios: {
+        create: [
+          { exercicioId: ex031.id, ordem: 1, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex032.id, ordem: 2, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex041.id, ordem: 3, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex042.id, ordem: 4, repeticoes: '4x 15m (zig-zag)' },
+          { exercicioId: ex057.id, ordem: 5, repeticoes: '4x 6 saltos' },
+          { exercicioId: ex061.id, ordem: 6, repeticoes: '3x 20s (shuffle)' },
+          { exercicioId: ex035.id, ordem: 7, repeticoes: '3x 20s + 20s descanso' },
+          { exercicioId: ex068.id, ordem: 8, repeticoes: '3x 40s (isometria)' },
+        ],
+      },
+    },
   });
 }
 
@@ -717,30 +2375,30 @@ if (atletaFormado && escolinhaEstrelasDb) {
   }
 }
 
-  const desafios = [
-    {
-      titulo: 'Desafio Controle Aéreo',
-      descricao: 'Mantenha a bola no ar pelo maior tempo possível usando diferentes partes do corpo.',
-      imagemUrl: '/assets/controle-aereo.jpg',
-      nivel: Nivel.Avancado,
-      pontuacao: 10,
-      categoria: [Categoria.Sub15]
-    },
-    {
-      titulo: 'Desafio Equilíbrio e Agilidade',
-      descricao: 'Supere um percurso de obstáculos mantendo o controle da bola.',
-      imagemUrl: '/assets/treino-agilidade.webp',
-      nivel: Nivel.Avancado,
-      pontuacao: 8,
-      categoria: [Categoria.Sub13]
-    }
-  ];
-  for (const desafio of desafios) {
-    const exists = await prisma.desafioOficial.findFirst({ where: { titulo: desafio.titulo } });
-    if (!exists) {
-      await prisma.desafioOficial.create({ data: desafio });
-    }
-  }
+  // const desafios = [
+  //   {
+  //     titulo: 'Desafio Controle Aéreo',
+  //     descricao: 'Mantenha a bola no ar pelo maior tempo possível usando diferentes partes do corpo.',
+  //     imagemUrl: '/assets/controle-aereo.jpg',
+  //     nivel: Nivel.Avancado,
+  //     pontuacao: 10,
+  //     categoria: [Categoria.Sub15]
+  //   },
+  //   {
+  //     titulo: 'Desafio Equilíbrio e Agilidade',
+  //     descricao: 'Supere um percurso de obstáculos mantendo o controle da bola.',
+  //     imagemUrl: '/assets/treino-agilidade.webp',
+  //     nivel: Nivel.Avancado,
+  //     pontuacao: 8,
+  //     categoria: [Categoria.Sub13]
+  //   }
+  // ];
+  // for (const desafio of desafios) {
+  //   const exists = await prisma.desafioOficial.findFirst({ where: { titulo: desafio.titulo } });
+  //   if (!exists) {
+  //     await prisma.desafioOficial.create({ data: desafio });
+  //   }
+  // }
 
   const professorArthur = await prisma.professor.findFirst({
     where: { usuario: { nomeDeUsuario: 'arthur.persio' } }
@@ -845,11 +2503,11 @@ if (atletaFormado && escolinhaEstrelasDb) {
 
   await prisma.atividadeRecente.createMany({
     data: [
-      {
-        usuarioId: usuarioTeste.id,
-        tipo: "Desafio",
-        imagemUrl: "/assets/desafios/velocidade.jpg",
-      },
+      // {
+      //   usuarioId: usuarioTeste.id,
+      //   tipo: "Desafio",
+      //   imagemUrl: "/assets/desafios/velocidade.jpg",
+      // },
       {
         usuarioId: usuarioTeste.id,
         tipo: "Treino",
@@ -864,49 +2522,53 @@ if (atletaFormado && escolinhaEstrelasDb) {
     skipDuplicates: true,
   });
 
-  const desafioExtra = await prisma.desafioOficial.upsert({
-    where: { titulo: "Desafio de Velocidade" },
-    update: {},
-    create: {
-      titulo: "Desafio de Velocidade",
-      descricao: "Complete um circuito em tempo recorde.",
-      nivel: Nivel.Performance,
-      pontuacao: 15,
-      categoria: [Categoria.Sub17],
-      imagemUrl: "/assets/desafios/velocidade.jpg"
-    }
-  });
+  // const desafioExtra = await prisma.desafioOficial.upsert({
+  //   where: { titulo: "Desafio de Velocidade" },
+  //   update: {},
+  //   create: {
+  //     titulo: "Desafio de Velocidade",
+  //     descricao: "Complete um circuito em tempo recorde.",
+  //     nivel: Nivel.Performance,
+  //     pontuacao: 15,
+  //     categoria: [Categoria.Sub17],
+  //     imagemUrl: "/assets/desafios/velocidade.jpg"
+  //   }
+  // });
 
-  await prisma.submissaoDesafio.create({
-    data: {
-      atletaId: atletaTeste.id,
-      desafioId: desafioExtra.id,
-      videoUrl: "https://www.google.com/imgres?q=desafio%20velocidade%20futebol&imgurl=https%3A%2F%2Fwww.tiktok.com%2Fapi%2Fimg%2F%3FitemId%3D7358856354527857926%26location%3D0%26aid%3D1988&imgrefurl=https%3A%2F%2Fwww.tiktok.com%2F%40adonias%2Fvideo%2F7358856354527857926&docid=Q3i_9CrrR3OQFM&tbnid=3SL_XXb6IEl1zM&vet=12ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA..i&w=1080&h=1920&hcb=2&ved=2ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA",
-      aprovado: true,
-    }
-  });
+  // await prisma.submissaoDesafio.upsert({
+  //   where: { videoUrl: "https://www.google.com/imgres?q=desafio%20velocidade%20futebol&imgurl=https%3A%2F%2Fwww.tiktok.com%2Fapi%2Fimg%2F%3FitemId%3D7358856354527857926%26location%3D0%26aid%3D1988&imgrefurl=https%3A%2F%2Fwww.tiktok.com%2F%40adonias%2Fvideo%2F7358856354527857926&docid=Q3i_9CrrR3OQFM&tbnid=3SL_XXb6IEl1zM&vet=12ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA..i&w=1080&h=1920&hcb=2&ved=2ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA" },
+  //   update: {},
+  //   create: {
+  //     atletaId: atletaTeste.id,
+  //     desafioId: desafioExtra.id,
+  //     videoUrl: "https://www.google.com/imgres?q=desafio%20velocidade%20futebol&imgurl=https%3A%2F%2Fwww.tiktok.com%2Fapi%2Fimg%2F%3FitemId%3D7358856354527857926%26location%3D0%26aid%3D1988&imgrefurl=https%3A%2F%2Fwww.tiktok.com%2F%40adonias%2Fvideo%2F7358856354527857926&docid=Q3i_9CrrR3OQFM&tbnid=3SL_XXb6IEl1zM&vet=12ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA..i&w=1080&h=1920&hcb=2&ved=2ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA",
+  //     aprovado: true,
+  //   },
+  // });
 
-const desafioTeste2 = await prisma.desafioOficial.upsert({
-  where: { titulo: "Desafio de Controle Avançado" },
-  update: {},
-  create: {
-    titulo: "Desafio de Controle Avançado",
-    descricao: "Mantenha a posse da bola com domínio total durante 60 segundos.",
-    nivel: Nivel.Performance,
-    pontuacao: 20,
-    categoria: [Categoria.Sub15],
-    imagemUrl: "/assets/desafios/controle-avancado.jpg",
-  },
-});
+// const desafioTeste2 = await prisma.desafioOficial.upsert({
+//   where: { titulo: "Desafio de Controle Avançado" },
+//   update: {},
+//   create: {
+//     titulo: "Desafio de Controle Avançado",
+//     descricao: "Mantenha a posse da bola com domínio total durante 60 segundos.",
+//     nivel: Nivel.Performance,
+//     pontuacao: 20,
+//     categoria: [Categoria.Sub15],
+//     imagemUrl: "/assets/desafios/controle-avancado.jpg",
+//   },
+// });
 
-await prisma.submissaoDesafio.create({
-  data: {
-    atletaId: atletaTeste!.id,
-    desafioId: desafioTeste2.id,
-    videoUrl: "https://www.youtube.com/watch?v=controle_avancado",
-    aprovado: true,
-  },
-});
+// await prisma.submissaoDesafio.upsert({
+//   where: { videoUrl: "https://www.youtube.com/watch?v=controle_avancado" },
+//   update: {},
+//   create: {
+//     atletaId: atletaTeste!.id,
+//     desafioId: desafioTeste2.id,
+//     videoUrl: "https://www.youtube.com/watch?v=controle_avancado",
+//     aprovado: true,
+//   },
+// });
 
 await prisma.atividadeRecente.createMany({
   data: [
@@ -915,11 +2577,11 @@ await prisma.atividadeRecente.createMany({
       tipo: "Treino",
       imagemUrl: "/assets/treinos/controle.jpg",
     },
-    {
-      usuarioId: atletaTeste!.usuarioId,
-      tipo: "Desafio",
-      imagemUrl: "/assets/desafios/controle-avancado.jpg",
-    },
+    // {
+    //   usuarioId: atletaTeste!.usuarioId,
+    //   tipo: "Desafio",
+    //   imagemUrl: "/assets/desafios/controle-avancado.jpg",
+    // },
   ],
   skipDuplicates: true,
 });
@@ -1035,29 +2697,29 @@ if (atletaAaaaa && professorArthur) {
     },
   });
 
-  const desafio = await prisma.desafioOficial.upsert({
-    where: { titulo: "Desafio Técnica com Bola" },
-    update: {},
-    create: {
-      titulo: "Desafio Técnica com Bola",
-      descricao: "Controle e passes curtos",
-      nivel: Nivel.Base,
-      categoria: [Categoria.Sub9],
-      pontuacao: 15,
-      imagemUrl: "/assets/desafios/tecnico-bola.jpg"
-    },
-  });
+  // const desafio = await prisma.desafioOficial.upsert({
+  //   where: { titulo: "Desafio Técnica com Bola" },
+  //   update: {},
+  //   create: {
+  //     titulo: "Desafio Técnica com Bola",
+  //     descricao: "Controle e passes curtos",
+  //     nivel: Nivel.Base,
+  //     categoria: [Categoria.Sub9],
+  //     pontuacao: 15,
+  //     imagemUrl: "/assets/desafios/tecnico-bola.jpg"
+  //   },
+  // });
 
-  await prisma.submissaoDesafio.upsert({
-    where: { videoUrl: "https://video.url/desafio.mp4" },
-    update: {},
-    create: {
-      atleta: { connect: { id: atletaAaaaa.id } },
-      desafio: { connect: { id: desafio.id } },
-      videoUrl: "https://video.url/desafio.mp4",
-      aprovado: true,
-    },
-  });
+  // await prisma.submissaoDesafio.upsert({
+  //   where: { videoUrl: "https://video.url/desafio.mp4" },
+  //   update: {},
+  //   create: {
+  //     atleta: { connect: { id: atletaAaaaa.id } },
+  //     desafio: { connect: { id: desafio.id } },
+  //     videoUrl: "https://video.url/desafio.mp4",
+  //     aprovado: true,
+  //   },
+  // });
 
   await prisma.atividadeRecente.createMany({
     data: [
@@ -1066,15 +2728,19 @@ if (atletaAaaaa && professorArthur) {
         tipo: "Treino",
         imagemUrl: "/assets/treinos/resistencia.jpg",
       },
-      {
-        usuarioId: atletaAaaaa.usuarioId,
-        tipo: "Desafio",
-        imagemUrl: "/assets/desafios/tecnico-bola.jpg",
-      },
+      // {
+      //   usuarioId: atletaAaaaa.usuarioId,
+      //   tipo: "Desafio",
+      //   imagemUrl: "/assets/desafios/tecnico-bola.jpg",
+      // },
     ],
     skipDuplicates: true,
   });
 }
+  // garanta que TODOS os usuários fiquem verificados
+  await prisma.usuario.updateMany({
+    data: { verified: true },
+  });
 
   console.log("✅ Seed completo executado com sucesso!");
 }

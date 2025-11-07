@@ -1,4 +1,4 @@
-import React, { useEffect, useState, type SVGProps } from "react";
+import React, { useEffect, useRef, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
   CalendarClock,
@@ -111,6 +111,17 @@ type WeekStatus = {
 };
 
 const PLACEHOLDER_USER = "/assets/default-user.png";
+
+// --- Timer helpers ---
+const TIMER_KEY = (treinoAgendadoId: string) => `footera:treinoTimerStart:${treinoAgendadoId}`;
+
+function formatHHMMSS(totalSec: number) {
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = Math.floor(totalSec % 60);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
 
 const CHECKLIST_KEY = (treinoAgendadoId: string) => `footera:treinoChecklist:${treinoAgendadoId}`;
 
@@ -276,6 +287,59 @@ export default function PaginaTreinos() {
   const [checklistByTreino, setChecklistByTreino] = useState<Record<string, Checklist>>({});
   const [semanasDesafio, setSemanasDesafio] = useState<WeekStatus[]>([]);
 
+  // tempo decorrido por treino (em segundos)
+  const [elapsedByTreino, setElapsedByTreino] = useState<Record<string, number>>({});
+  const tickRef = useRef<number | null>(null);
+
+  const [dataAgendarById, setDataAgendarById] = useState<Record<string, string>>({});
+  const [obsById, setObsById] = useState<Record<string, string>>({});
+
+  // antes:
+// async function agendarTreinoProgramado(treinoProgramadoId: string, dataSelecionadaISO: string, observacao?: string) {
+
+// depois:
+  async function agendarTreinoProgramado(treino: TreinoProgramado, dataSelecionadaISO: string, observacao?: string) {
+    const token = getToken();
+    const atletaId = (Storage as any).tipoUsuarioId || (Storage as any).atletaId;
+
+    if (!token || !atletaId) {
+      alert("Sessão expirada. Faça login novamente.");
+      return;
+    }
+
+    const dia = (dataSelecionadaISO || new Date(Date.now()+86400000).toISOString()).slice(0,10);
+    const quandoISO = `${dia}T23:59:59.000Z`;
+
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          titulo: treino.nome,
+          dataTreino: quandoISO,
+          dataExpiracao: null,       // deixe o back calcular se quiser
+          atletaId,
+          treinoProgramadoId: treino.id,
+          observacao: observacao ?? null,
+        }),
+      });
+
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        if (r.status === 409) return alert("Você já tem um agendamento futuro desse treino.");
+        console.error("Falha ao agendar:", r.status, txt);
+        return alert("Não foi possível agendar o treino.");
+      }
+
+      const novo = await r.json();
+      window.dispatchEvent(new CustomEvent("treino:agendado", { detail: novo }));
+      alert("Treino agendado!");
+    } catch (e) {
+      console.error(e);
+      alert("Erro inesperado ao agendar treino.");
+    }
+  }
+
   const carregarChecklist = (treinoId: string, exerciciosIds: string[]) => {
     try {
       const raw = getStore().getItem(CHECKLIST_KEY(treinoId));
@@ -379,6 +443,47 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
   }, [treinosAgendados]);
 
   useEffect(() => {
+    // inicia/para o tick global de 1s conforme existam treinos em progresso
+    const inProgressIds = Object.keys(statusPorTreino).filter(
+      (id) => (statusPorTreino[id]?.status as TreinoStatus | undefined) === "IN_PROGRESS"
+    );
+
+    if (inProgressIds.length === 0) {
+      if (tickRef.current) {
+        clearInterval(tickRef.current as any);
+        tickRef.current = null;
+      }
+      return;
+    }
+
+    if (tickRef.current) return; // já rodando
+
+    tickRef.current = window.setInterval(() => {
+      setElapsedByTreino((prev) => {
+        const now = Date.now();
+        const next = { ...prev };
+        for (const id of inProgressIds) {
+          const st = statusPorTreino[id];
+          const startedIso =
+            (st?.startedAt as string | undefined) ?? localStorage.getItem(TIMER_KEY(id)) ?? undefined;
+          const startedMs = startedIso ? Date.parse(startedIso) : NaN;
+          if (Number.isFinite(startedMs)) {
+            next[id] = Math.max(0, Math.floor((now - startedMs) / 1000));
+          }
+        }
+        return next;
+      });
+    }, 1000) as any;
+
+    return () => {
+      if (tickRef.current) {
+        clearInterval(tickRef.current as any);
+        tickRef.current = null;
+      }
+    };
+  }, [statusPorTreino]);
+
+  useEffect(() => {
     const next: Record<string, Checklist> = {};
     for (const t of treinosAgendados) {
       const exIds = (t.treinoProgramado?.exercicios ?? []).map((e) => e.exercicio.id);
@@ -388,9 +493,37 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
   }, [treinosAgendados]);
 
   useEffect(() => {
-    const handler = (e: any) => setTreinosAgendados((prev) => [e.detail, ...prev]);
+    const handler = (e: any) => setTreinosAgendados(prev => [e.detail, ...prev]);
     window.addEventListener("treino:agendado", handler as EventListener);
+    // sinaliza que a tela está pronta p/ receber o evento
+    window.dispatchEvent(new Event("treinos:ready"));
     return () => window.removeEventListener("treino:agendado", handler as EventListener);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("lastAgendamento");
+      if (!raw) return;
+      const novo = JSON.parse(raw); // { id, titulo, dataTreino, treinoProgramadoId }
+
+      setTreinosAgendados(prev => {
+        if (prev.some(t => t.id === novo.id)) return prev;
+        return [
+          {
+            id: novo.id,
+            titulo: novo.titulo,
+            dataTreino: novo.dataTreino,
+            prazoEnvio: novo.dataTreino, // fallback p/ render
+            treinoProgramado: undefined,
+            nivel: null,
+            duracaoMinutos: null,
+          },
+          ...prev,
+        ];
+      });
+
+      sessionStorage.removeItem("lastAgendamento");
+    } catch {}
   }, []);
 
   async function concluir(
@@ -428,6 +561,13 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
       });
 
       alert("Treino concluído!");
+      // limpar âncora de timer local
+      try { localStorage.removeItem(TIMER_KEY(treinoAgendadoId)); } catch {}
+      setElapsedByTreino((prev) => {
+        const n = { ...prev };
+        delete n[treinoAgendadoId];
+        return n;
+      });
     } catch (e) {
       console.error(e);
       alert("Erro inesperado ao concluir o treino.");
@@ -456,13 +596,41 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
       return;
     }
 
+     let startedAtIso: string | null = null;
+      try {
+        const js = await r.json();
+        startedAtIso = js?.startedAt ?? js?.started?.startedAt ?? null;
+      } catch {
+        startedAtIso = null;
+      }
+      if (!startedAtIso) startedAtIso = new Date().toISOString();
+      try { localStorage.setItem(TIMER_KEY(treinoAgendadoId), startedAtIso); } catch {}
+
     setStatusPorTreino((prev) => ({
       ...prev,
       [treinoAgendadoId]: {
         ...(prev[treinoAgendadoId] ?? {}),
         status: "IN_PROGRESS",
+        startedAt: startedAtIso,
       },
     }));
+  }
+
+  async function finalizarEEnviar(treino: TreinoAgendado) {
+    // Apenas coleta o tempo e envia para a página de submissão,
+    // onde o POST /agendados/:id/finalizar será feito junto com o upload.
+    const elapsed = elapsedByTreino[treino.id] ?? 0;
+    if (!statusPorTreino[treino.id] || statusPorTreino[treino.id]?.status !== "IN_PROGRESS") {
+      alert("Inicie o treino antes de finalizar.");
+      return;
+    }
+    const usarCamera = window.confirm("Quer gravar agora com a câmera? (OK=câmera • Cancelar=galeria)");
+    const qs = new URLSearchParams({
+      treinoAgendadoId: treino.id,
+      tempoSeg: String(elapsed),
+      mode: usarCamera ? "camera" : "galeria",
+    });
+    navigate(`/submissao?${qs.toString()}`);
   }
 
   useEffect(() => {
@@ -597,40 +765,43 @@ useEffect(() => {
       }
 
       if (tipo === "atleta" && token) {
-        if (tipoUsuarioId) {
-          carregarMinhasSubmissoes(tipoUsuarioId);
-        }
+  if (tipoUsuarioId) {
+    carregarMinhasSubmissoes(tipoUsuarioId);
+  }
 
-        const resTreinos = await fetch(
-          `${API.BASE_URL}/api/treinos/agendados?usuarioId=${(Storage as any).usuarioId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-          if (!resTreinos.ok) {
-            console.error("/treinos/agendados", resTreinos.status, await resTreinos.text());
-            return;
-          }
+  const headers: HeadersInit = { Authorization: `Bearer ${token}` };
+  const atletaId = tipoUsuarioId || (Storage as any).atletaId;
 
-        const treinosJson = await resTreinos.json();
-        
-        const normalizados = (Array.isArray(treinosJson) ? treinosJson : []).map((t: any) => ({
-          id: t.id,
-          titulo: t.titulo,
-          dataTreino: t.dataTreino ?? null,
-          prazoEnvio: t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t.treinoProgramado?.dataAgendada ?? null,
-          nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
-          duracaoMinutos: t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
-          treinoProgramado: t.treinoProgramado ?? null,
-        }));
-        
-        const agora = Date.now();
-        const apenasVigentes = normalizados.filter((t) => {
-          if (!t.prazoEnvio) return true;
-          const ts = Date.parse(t.prazoEnvio);
-          return Number.isFinite(ts) ? ts >= agora : true;
-        });
+  if (atletaId) {
+    const r = await fetch(
+      // depois
+    `${API.BASE_URL}/api/treinos/agendados?atletaId=${encodeURIComponent(atletaId)}`,
+      { headers }
+    );
 
-        setTreinosAgendados(apenasVigentes);
-        if (FLAGS.DESAFIOS_ENABLED) {
+    if (!r.ok) {
+      console.error("/treinos/agendados", r.status, await r.text().catch(() => ""));
+      setTreinosAgendados([]);
+    } else {
+      const treinosJson = await r.json();
+      const normalizados = (Array.isArray(treinosJson) ? treinosJson : []).map((t: any) => ({
+        id: t.id,
+        titulo: t.titulo,
+        dataTreino: t.dataTreino ?? null,
+        prazoEnvio: t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t.treinoProgramado?.dataAgendada ?? null,
+        nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
+        duracaoMinutos: t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
+        treinoProgramado: t.treinoProgramado ?? null,
+      }));
+
+      const agora = Date.now();
+
+      setTreinosAgendados(normalizados);
+    }
+  } else {
+    setTreinosAgendados([]);
+  }
+   if (FLAGS.DESAFIOS_ENABLED) {
     const resDesafios = await fetch(
       `${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -925,6 +1096,34 @@ const renderDesafioCard = (desafio: Desafio) => (
           <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">+{treino.pontuacao} pts</span>
         )}
       </div>
+
+      <div className="mt-3 flex flex-col gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="date"
+            className="px-3 py-2 border rounded-lg"
+            value={dataAgendarById[treino.id] ?? ""}
+            onChange={(e) => setDataAgendarById((p) => ({ ...p, [treino.id]: e.target.value }))}
+          />
+          <input
+            type="text"
+            placeholder="Observação (opcional)"
+            className="px-3 py-2 border rounded-lg flex-1"
+            value={obsById[treino.id] ?? ""}
+            onChange={(e) => setObsById((p) => ({ ...p, [treino.id]: e.target.value }))}
+          />
+          <button
+            onClick={() => {
+              const iso = dataAgendarById[treino.id] || new Date().toISOString().slice(0,10);
+              agendarTreinoProgramado(treino, iso, obsById[treino.id]);
+            }}
+            className="bg-green-800 text-white px-3 py-2 rounded-lg"
+          >
+            Agendar treino
+          </button>
+        </div>
+      </div>
+
       {treino.descricao && <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>}
 
       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700">
@@ -962,6 +1161,7 @@ const renderDesafioCard = (desafio: Desafio) => (
         </div>
       )}
     </div>
+    
   );
 
   const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
@@ -1132,7 +1332,7 @@ const renderDesafioCard = (desafio: Desafio) => (
           </div>
         )}
 
-        <div className="mt-4 flex gap-2 justify-end">
+        <div className="mt-4 flex flex-wrap items-center gap-2 justify-end">
           {(st === undefined || st === "PENDING") && (
             <button onClick={() => iniciar(treino.id)} className="bg-green-700 text-white px-3 py-2 rounded-lg">
               Iniciar
@@ -1140,26 +1340,41 @@ const renderDesafioCard = (desafio: Desafio) => (
           )}
 
           {st === "IN_PROGRESS" && (
-            <button
-              onClick={() => {
-                const t = prompt("Tempo em segundos (opcional):") ?? "";
-                const r = prompt("Repetições (opcional):") ?? "";
-                concluir(treino.id, {
-                  tempoSeg: t ? Number(t) : undefined,
-                  repeticoes: r ? Number(r) : undefined,
-                });
-              }}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg"
-            >
-              Concluir agora
-            </button>
+            <>
+              <span className="mr-auto text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                ⏱ {formatHHMMSS(elapsedByTreino[treino.id] ?? 0)}
+              </span>
+
+              <button
+                onClick={() => marcarTodos(treino.id, exIds, true)}
+                className="text-xs px-2.5 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+              >
+                Marcar todos
+              </button>
+              <button
+                onClick={() => limparChecklist(treino.id)}
+                className="text-xs px-2.5 py-1 rounded bg-white border text-gray-700 hover:bg-gray-50"
+              >
+                Limpar
+              </button>
+
+              <button
+                onClick={() => finalizarEEnviar(treino)}
+                disabled={!allChecked}
+                className={`px-3 py-2 rounded-lg text-white ${allChecked ? "bg-emerald-700 hover:bg-emerald-800" : "bg-gray-400 cursor-not-allowed"}`}
+                title={allChecked ? "Finalizar e enviar submissão" : "Complete todos os exercícios para finalizar"}
+              >
+                Finalizar e enviar
+              </button>
+            </>
           )}
 
           {st === "COMPLETED" && (
             <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Concluído</span>
           )}
 
-          {!jaSubmetido && (
+          {/* só mostra "Fazer Submissão" se ainda não submetido E não estiver em progresso (a finalização já navega) */}
+          {!jaSubmetido && st !== "IN_PROGRESS" && (
             <button
               onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
               className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg"
@@ -1168,6 +1383,7 @@ const renderDesafioCard = (desafio: Desafio) => (
             </button>
           )}
         </div>
+
       </div>
     );
   };
