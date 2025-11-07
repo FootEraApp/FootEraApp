@@ -77,7 +77,8 @@ import analisesRoutes from "./routes/analises.js";
 import adminAssinantesRoutes from "./routes/admin.assinantes.js";
 import assinaturasRoutes from "./routes/assinaturas.js";
 import treinosSalvosRoutes from "./routes/treinosSalvos.js";
-import analyticsRoute from "./routes/analytics.js"
+import analyticsRoutes from "./routes/analytics.js"
+import billingRoutes from "./routes/billing.js"
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -133,7 +134,7 @@ app.use(cors({
     cb(null, ALLOWED.has(origin));
   },
   methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "authorization"], // inclui minúsculo
+  allowedHeaders: ["Content-Type", "Authorization", "authorization"],
   credentials: true,
   maxAge: 86400,
 }));
@@ -240,9 +241,11 @@ app.use("/api/checklists", authenticateToken, checklistRoutes);
 app.use("/api/organizacoes", authenticateToken, organizacoesRoutes);
 app.use("/api/turmas", authenticateToken, turmasRoutes);
 app.use("/api/treinos-elencos", authenticateToken, treinosElencosRoutes);
+app.use("/api/treinosSalvos", treinosSalvosRoutes);
+app.use("/api/analytics", authenticateToken, analyticsRoutes);
+app.use("/api/billing", authenticateToken, billingRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
-app.use("/api/treinosSalvos", treinosSalvosRoutes);
 
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
