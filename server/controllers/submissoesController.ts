@@ -26,7 +26,6 @@ async function atletaTemVinculo(atletaId: string) {
   return !!(a.clubeId || a.escolinhaId || relCount > 0);
 }
 
-/** --------- TREINO (upload ou gravação) --------- */
 export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
   try {
     const {
@@ -35,7 +34,7 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
       atletaId,
       aprovado,
       duracaoMinutos,
-      tempoSeg,        // <- aceito do front
+      tempoSeg,   
       repeticoes,
     } = req.body as {
       observacao?: string;
@@ -43,7 +42,7 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
       atletaId: string;
       aprovado?: boolean | string;
       duracaoMinutos?: number | string;
-      tempoSeg?: number | string;      // <- “alias” para duracaoSegundos
+      tempoSeg?: number | string;     
       repeticoes?: number | string;
     };
 
@@ -62,7 +61,6 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
     const assetUrl = `/uploads/${file.filename}`;
     const isVideo = !!file.mimetype?.startsWith("video");
 
-    // Campos da mídia compatíveis com o seu schema
     const midia = {
       url: assetUrl,
       tipo: isVideo ? TipoMidia.Video : TipoMidia.Imagem,
@@ -73,7 +71,6 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
 
     const usuarioIdForActivity = await resolveUsuarioIdForActivity((req as any).userId, atletaId);
 
-    // Normalizações
     const tempoSegNum =
       tempoSeg != null ? Number(tempoSeg)
       : duracaoMinutos != null ? Math.round(Number(duracaoMinutos) * 60)
@@ -89,7 +86,6 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
         usuarioId: typeof (req as any).userId === "string" ? (req as any).userId : undefined,
         duracaoMinutos: duracaoMinutos ? Number(duracaoMinutos) : undefined,
 
-        // ⚠️ nome correto no schema:
         duracaoSegundos: tempoSegNum,
 
         aprovado: aprovadoNormalizado,
@@ -103,13 +99,11 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
     });
 
     if (usuarioIdForActivity) {
-      // atividade recente (silenciosa se falhar)
       await prisma.atividadeRecente.create({
         data: { usuarioId: usuarioIdForActivity, tipo: "treino", imagemUrl: assetUrl },
       }).catch(() => {});
     }
 
-    // Atualiza snapshot de "tipo de treino" preferido do atleta, se der para inferir
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id: treinoAgendadoId },
       include: { treinoProgramado: true },
@@ -138,7 +132,6 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
       }
     }
 
-    // Se aprovado, aplica estatísticas e recálculo de pontuação
     if (created.aprovado) {
       const minutosParaEstat =
         duracaoMinutos ? Number(duracaoMinutos)
@@ -168,7 +161,6 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
   }
 }
 
-/** --------- DESAFIO (gravação com tentativas) --------- */
 export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
   try {
     const {
@@ -269,7 +261,6 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
   }
 }
 
-/** --------- ÚLTIMA SUBMISSÃO DO TREINO --------- */
 export async function getUltimaSubmissaoTreino(req: Request, res: Response) {
   try {
     const { atletaId, treinoAgendadoId } = req.query as {

@@ -112,7 +112,6 @@ type WeekStatus = {
 
 const PLACEHOLDER_USER = "/assets/default-user.png";
 
-// --- Timer helpers ---
 const TIMER_KEY = (treinoAgendadoId: string) => `footera:treinoTimerStart:${treinoAgendadoId}`;
 
 function formatHHMMSS(totalSec: number) {
@@ -287,17 +286,12 @@ export default function PaginaTreinos() {
   const [checklistByTreino, setChecklistByTreino] = useState<Record<string, Checklist>>({});
   const [semanasDesafio, setSemanasDesafio] = useState<WeekStatus[]>([]);
 
-  // tempo decorrido por treino (em segundos)
   const [elapsedByTreino, setElapsedByTreino] = useState<Record<string, number>>({});
   const tickRef = useRef<number | null>(null);
 
   const [dataAgendarById, setDataAgendarById] = useState<Record<string, string>>({});
   const [obsById, setObsById] = useState<Record<string, string>>({});
 
-  // antes:
-// async function agendarTreinoProgramado(treinoProgramadoId: string, dataSelecionadaISO: string, observacao?: string) {
-
-// depois:
   async function agendarTreinoProgramado(treino: TreinoProgramado, dataSelecionadaISO: string, observacao?: string) {
     const token = getToken();
     const atletaId = (Storage as any).tipoUsuarioId || (Storage as any).atletaId;
@@ -317,7 +311,7 @@ export default function PaginaTreinos() {
         body: JSON.stringify({
           titulo: treino.nome,
           dataTreino: quandoISO,
-          dataExpiracao: null,       // deixe o back calcular se quiser
+          dataExpiracao: null,    
           atletaId,
           treinoProgramadoId: treino.id,
           observacao: observacao ?? null,
@@ -443,7 +437,6 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
   }, [treinosAgendados]);
 
   useEffect(() => {
-    // inicia/para o tick global de 1s conforme existam treinos em progresso
     const inProgressIds = Object.keys(statusPorTreino).filter(
       (id) => (statusPorTreino[id]?.status as TreinoStatus | undefined) === "IN_PROGRESS"
     );
@@ -456,7 +449,7 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
       return;
     }
 
-    if (tickRef.current) return; // já rodando
+    if (tickRef.current) return;
 
     tickRef.current = window.setInterval(() => {
       setElapsedByTreino((prev) => {
@@ -495,7 +488,6 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
   useEffect(() => {
     const handler = (e: any) => setTreinosAgendados(prev => [e.detail, ...prev]);
     window.addEventListener("treino:agendado", handler as EventListener);
-    // sinaliza que a tela está pronta p/ receber o evento
     window.dispatchEvent(new Event("treinos:ready"));
     return () => window.removeEventListener("treino:agendado", handler as EventListener);
   }, []);
@@ -504,7 +496,7 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
     try {
       const raw = sessionStorage.getItem("lastAgendamento");
       if (!raw) return;
-      const novo = JSON.parse(raw); // { id, titulo, dataTreino, treinoProgramadoId }
+      const novo = JSON.parse(raw);
 
       setTreinosAgendados(prev => {
         if (prev.some(t => t.id === novo.id)) return prev;
@@ -513,7 +505,7 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
             id: novo.id,
             titulo: novo.titulo,
             dataTreino: novo.dataTreino,
-            prazoEnvio: novo.dataTreino, // fallback p/ render
+            prazoEnvio: novo.dataTreino,
             treinoProgramado: undefined,
             nivel: null,
             duracaoMinutos: null,
@@ -561,7 +553,6 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
       });
 
       alert("Treino concluído!");
-      // limpar âncora de timer local
       try { localStorage.removeItem(TIMER_KEY(treinoAgendadoId)); } catch {}
       setElapsedByTreino((prev) => {
         const n = { ...prev };
@@ -617,8 +608,6 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
   }
 
   async function finalizarEEnviar(treino: TreinoAgendado) {
-    // Apenas coleta o tempo e envia para a página de submissão,
-    // onde o POST /agendados/:id/finalizar será feito junto com o upload.
     const elapsed = elapsedByTreino[treino.id] ?? 0;
     if (!statusPorTreino[treino.id] || statusPorTreino[treino.id]?.status !== "IN_PROGRESS") {
       alert("Inicie o treino antes de finalizar.");
@@ -774,7 +763,6 @@ useEffect(() => {
 
   if (atletaId) {
     const r = await fetch(
-      // depois
     `${API.BASE_URL}/api/treinos/agendados?atletaId=${encodeURIComponent(atletaId)}`,
       { headers }
     );
@@ -1373,7 +1361,6 @@ const renderDesafioCard = (desafio: Desafio) => (
             <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Concluído</span>
           )}
 
-          {/* só mostra "Fazer Submissão" se ainda não submetido E não estiver em progresso (a finalização já navega) */}
           {!jaSubmetido && st !== "IN_PROGRESS" && (
             <button
               onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
