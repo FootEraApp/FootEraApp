@@ -679,22 +679,48 @@ model Curtida {
 }
 
 model TreinoAgendado {
-  id                   String            @id @default(uuid())
-  titulo               String            @unique
+  id                   String   @id @default(uuid())
+  titulo               String   // REMOVIDO o @unique — títulos podem se repetir
+
   local                String?
   atletaId             String
   treinoProgramadoId   String?
+
   dataTreino           DateTime?
   dataExpiracao        DateTime?
-  submissaoTreinos     SubmissaoTreino[]
+
+  // NOVO: controle de status/presença
+  status               TreinoAgendadoStatus @default(AGENDADO)
+  // data originalmente prevista (permite auditar remarcações)
+  dataOriginal         DateTime?
+  // número de vezes que foi remarcado (pra aplicar regra do <= 7 dias/no máx X remarcações, se quiser)
+  reagendamentos       Int      @default(0)
+
+  // NOVO: ligação com rotina (se veio da rotina)
+  rotinaAtribuicaoId   String?
+  rotinaAtribuicao     RotinaTreinoAtribuicao? @relation(fields: [rotinaAtribuicaoId], references: [id], onDelete: SetNull)
+
+  // NOVO: cadeia de remarcação (opcional)
+  reagendadoDeId       String?
+  reagendadoDe         TreinoAgendado? @relation("Reagendamento", fields: [reagendadoDeId], references: [id], onDelete: SetNull)
+  reagendamentosGerados TreinoAgendado[] @relation("Reagendamento")
+
+  // já existiam
   criadoPorProfessorId String?
   criadoPorProfessor   Professor?        @relation(fields: [criadoPorProfessorId], references: [id], onDelete: SetNull)
 
   atleta           Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   treinoProgramado TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id])
+  submissaoTreinos SubmissaoTreino[]
 
-  @@index([criadoPorProfessorId])
+  @@index([status])
+  @@index([dataTreino])
+  @@index([rotinaAtribuicaoId])
+
+  // evita duplicar a MESMA ocorrência pro mesmo atleta no mesmo dia para o mesmo treino
+  @@unique([atletaId, treinoProgramadoId, dataTreino])
 }
+
 
 model TreinoLivre {
   id             String           @id @default(cuid())
@@ -1239,6 +1265,69 @@ model EstatisticaExercicio {
   @@index([ultimoProfessorId])
 }
 
+model RotinaTreino {
+  id                String   @id @default(uuid())
+  nome              String
+  descricao         String?
+  periodoInicio     DateTime
+  periodoFim        DateTime
+  criadoEm          DateTime @default(now())
+
+  criadoPorUsuarioId String?
+  criadoPorUsuario   Usuario? @relation(fields: [criadoPorUsuarioId], references: [id], onDelete: SetNull)
+
+  professorId  String?
+  escolinhaId  String?
+  clubeId      String?
+  professor    Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
+  escolinha    Escolinha? @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  clube        Clube?     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+
+  itens        RotinaTreinoItem[]
+  atribuicoes  RotinaTreinoAtribuicao[]
+
+  @@index([periodoInicio])
+  @@index([periodoFim])
+}
+
+model RotinaTreinoItem {
+  id               String @id @default(uuid())
+  rotinaId         String
+  treinoProgramadoId String
+
+  diaSemana        Int
+  horarioMinuto    Int?
+
+  rotina           RotinaTreino     @relation(fields: [rotinaId], references: [id], onDelete: Cascade)
+  treinoProgramado TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id])
+
+  @@index([rotinaId])
+  @@index([treinoProgramadoId])
+  @@index([diaSemana])
+}
+
+model RotinaTreinoAtribuicao {
+  id           String   @id @default(uuid())
+  rotinaId     String
+  atletaId     String
+
+  atletaObservadoId String?
+
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+
+  rotina       RotinaTreino   @relation(fields: [rotinaId], references: [id], onDelete: Cascade)
+  atleta       Atleta         @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  observado    AtletaObservado? @relation(fields: [atletaObservadoId], references: [id], onDelete: SetNull)
+
+  ocorrencias  TreinoAgendado[]
+
+  @@unique([rotinaId, atletaId])
+  @@index([atletaId])
+  @@index([atletaObservadoId])
+}
+
+
 enum TreinoStatus {
   PENDING
   IN_PROGRESS
@@ -1365,5 +1454,12 @@ enum EventoTipo {
 enum EventoStatus {
   ABERTO
   ENCERRADO
+  CANCELADO
+}
+
+enum TreinoAgendadoStatus {
+  AGENDADO
+  CONCLUIDO
+  FALTOU
   CANCELADO
 }
