@@ -1648,6 +1648,51 @@ export async function statusDesafiosSemanais(req: AuthenticatedRequest, res: Res
   }
 }
 
+export async function listarAtletasVinculados(req: Request, res: Response) {
+  try {
+    const tipoUsuarioId = String(req.query.tipoUsuarioId || "");
+    const turmaId = req.query.turmaId ? String(req.query.turmaId) : undefined;
+
+    if (!tipoUsuarioId) {
+      return res.status(400).json({ error: "tipoUsuarioId obrigatório" });
+    }
+
+    // Base: atletas vinculados ao dono (professor/clube/escolinha), use a tua regra atual
+    const whereBase: Prisma.AtletaWhereInput = {
+      OR: [
+        { relacoesTreinamento: { some: { professorId: tipoUsuarioId } } },
+        { clubeId: tipoUsuarioId },
+        { escolinhaId: tipoUsuarioId },
+      ],
+    };
+
+    // Filtro por turma (via TurmaUsuario -> Usuario -> Atleta.usuarioId)
+    if (turmaId) {
+      const membros = await prisma.turmaUsuario.findMany({
+        where: { turmaId },
+        select: { usuarioId: true },
+      });
+      const usuarioIds = membros.map(m => m.usuarioId);
+
+      // se a turma não tiver ninguém, force a retornar vazio
+      whereBase.usuarioId = { in: usuarioIds.length ? usuarioIds : ["__none__"] };
+    }
+
+    const atletas = await prisma.atleta.findMany({
+      where: whereBase,
+      select: {
+        id: true, usuarioId: true, nome: true, foto: true, idade: true, posicao: true,
+      },
+      orderBy: { nome: "asc" },
+    });
+
+    return res.json(atletas);
+  } catch (e) {
+    console.error("[listarAtletasVinculados]", e);
+    return res.status(500).json({ error: "Erro ao listar atletas vinculados" });
+  }
+}
+
 export async function listarAgendados(req: Request, res: Response) {
   try {
     const atletaId = String(req.query.atletaId);
