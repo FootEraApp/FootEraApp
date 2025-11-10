@@ -1,4 +1,3 @@
-// client/src/hooks/useTreinoTimer.ts
 import { useEffect, useRef, useState } from "react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
@@ -8,7 +7,6 @@ export function useTreinoTimer(treinoAgendadoId: string) {
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef<number | null>(null);
 
-  // recarrega estado do localStorage (caso usuário feche/abra)
   useEffect(() => {
     const saved = localStorage.getItem(`treino:${treinoAgendadoId}:startedAt`);
     if (saved) setStartedAt(saved);

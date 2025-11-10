@@ -5,31 +5,25 @@ import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 
 export default function PaginaSubmissao() {
-  // ---- constantes ----
   const ATTEMPT_LIMIT = 2;
   const STORAGE_KEY_PREFIX = "footera:desafioAttempts";
   const IDB_NAME = "footera-media";
   const IDB_STORE = "desafio-videos";
   const IDB_VERSION = 1;
 
-  // ---- URL/estado base ----
   const [treinoAgendadoId, setTreinoAgendadoId] = useState<string | null>(null);
   const [desafioId, setDesafioId] = useState<string | null>(null);
   const [modeParam, setModeParam] = useState<"camera" | "galeria" | null>(null);
 
-  // ---- identidade do atleta ----
   const [atletaId, setAtletaId] = useState<string | null>(null);
 
-  // ---- campos comuns ----
   const [observacao, setObservacao] = useState("");
   const [tempoTexto, setTempoTexto] = useState("");
   const [reps, setReps] = useState<string>("");
 
-  // ---- upload direto (treino) ----
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
-  // ---- gravação (desafio, com limite) ----
   const [isRecording, setIsRecording] = useState(false);
   const [attemptsUsed, setAttemptsUsed] = useState<number>(0);
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
@@ -40,7 +34,6 @@ export default function PaginaSubmissao() {
   const chunksRef = useRef<BlobPart[]>([]);
   const liveVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // ---- gravação (treino, sem limite) ----
   const [treinoMode, setTreinoMode] = useState<"upload" | "live">("upload");
   const [treinoIsRecording, setTreinoIsRecording] = useState(false);
   const [treinoRecordedBlob, setTreinoRecordedBlob] = useState<Blob | null>(null);
@@ -58,7 +51,6 @@ export default function PaginaSubmissao() {
     typeof window !== "undefined" &&
     (window.location.protocol === "https:" || window.location.hostname === "localhost");
 
-  /* ---------- helpers ---------- */
   const dualStorage = {
     getItem(key: string): string | null {
       let a: string | null = null;
@@ -116,7 +108,6 @@ export default function PaginaSubmissao() {
     return `${mm}:${ss}`;
   }
 
-  // ---------- IndexedDB p/ vídeo do desafio ----------
   type SavedVideo = { blob: Blob; type: string; createdAt: number };
 
   function openIDB(): Promise<IDBDatabase> {
@@ -193,8 +184,6 @@ export default function PaginaSubmissao() {
     try { await idbDel(videoKey(dId, aId)); } catch {}
   }
 
-  /* ---------- Permissões / Câmera ---------- */
-
   function pickBestMimeType(): string | undefined {
     const recAny = MediaRecorder as any;
     const sup = recAny?.isTypeSupported?.bind(MediaRecorder);
@@ -202,7 +191,7 @@ export default function PaginaSubmissao() {
       "video/webm;codecs=vp9,opus",
       "video/webm;codecs=vp8,opus",
       "video/webm",
-      "video/mp4", // iOS mais novo pode aceitar
+      "video/mp4",
     ];
     for (const c of candidates) {
       if (sup?.(c)) return c;
@@ -259,7 +248,6 @@ export default function PaginaSubmissao() {
     throw lastErr;
   }
 
-  /** Apenas solicita a permissão e mostra a prévia, sem iniciar gravação */
   async function habilitarCameraLive(kind: "treino" | "desafio") {
     const setErr = kind === "treino" ? setTreinoRecError : setRecError;
     const videoRef = kind === "treino" ? treinoLiveVideoRef : liveVideoRef;
@@ -279,7 +267,6 @@ export default function PaginaSubmissao() {
     }
   }
 
-  /* ---------- efeitos ---------- */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tId = params.get("treinoAgendadoId");
@@ -298,9 +285,7 @@ export default function PaginaSubmissao() {
     const tipoId = (Storage as any)?.tipoUsuarioId ?? (Storage as any)?.tipoUserId ?? null;
     if (tipoId) setAtletaId(String(tipoId));
 
-    // Auto-prompt se veio com mode=camera
     if (mode === "camera") {
-      // só abre a permissão/preview; o usuário inicia a gravação depois
       if (dId) habilitarCameraLive("desafio");
       if (tId) {
         setTreinoMode("live");
@@ -347,7 +332,6 @@ export default function PaginaSubmissao() {
     return () => { cancelled = true; };
   }, [desafioId, atletaId]);
 
-  /* ---------- gravação desafio ---------- */
   async function startRecording() {
     setRecError(null);
     try {
@@ -450,7 +434,6 @@ export default function PaginaSubmissao() {
     }
   }
 
-  /* ---------- gravação treino (ilimitada) ---------- */
   function handleVideo(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] || null;
     handleArquivoChange(f);
@@ -549,7 +532,6 @@ export default function PaginaSubmissao() {
     setTreinoRecordedBlob(null);
   }
 
-  /* ---------- envio ---------- */
   const handleEnviar = async () => {
     if (!atletaId || (!treinoAgendadoId && !desafioId)) {
       alert("Preencha todos os campos obrigatórios.");
@@ -579,7 +561,6 @@ export default function PaginaSubmissao() {
 
       formData.append("treinoAgendadoId", treinoAgendadoId!);
 
-      // Back entende "tempoSeg" e converte para duracaoSegundos
       const seg = parseTempoToSeconds(tempoTexto);
       if (seg != null) formData.append("tempoSeg", String(seg));
       if (reps) formData.append("repeticoes", String(Number(reps)));
@@ -646,7 +627,6 @@ export default function PaginaSubmissao() {
     }
   };
 
-  /* ---------- UI ---------- */
   return (
     <div className="min-h-screen bg-transparent pb-24 px-4 pt-6">
       <div className="max-w-xl mx-auto bg-white rounded-xl shadow-lg p-6">
@@ -718,7 +698,6 @@ export default function PaginaSubmissao() {
                   <input
                     type="file"
                     accept="video/*;capture=camcorder"
-                    // forçar abrir câmera em mobile, se possível
                     // @ts-ignore
                     capture={modeParam === "camera" ? "environment" : undefined}
                     onChange={handleVideo}
