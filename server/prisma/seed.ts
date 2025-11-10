@@ -859,13 +859,21 @@ if (atletaAaaaa && professorArthur) {
     },
   });
 
+  const dataTreino = new Date();
+
   const treinoAgendado = await prisma.treinoAgendado.upsert({
-    where: { titulo: treino.nome },
+    where: {
+      atletaId_treinoProgramadoId_dataTreino: {
+        atletaId: atletaAaaaa.id,
+        treinoProgramadoId: treino.id,
+        dataTreino, // mesma data usada no create
+      },
+    },
     update: {},
     create: {
       titulo: treino.nome,
-      dataExpiracao: new Date(),
-      dataTreino: new Date(),
+      dataExpiracao: dataTreino,
+      dataTreino,
       local: "Quadra A",
       atleta: { connect: { id: atletaAaaaa.id } },
       treinoProgramado: { connect: { id: treino.id } },
