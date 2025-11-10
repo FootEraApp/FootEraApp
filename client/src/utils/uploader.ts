@@ -1,4 +1,3 @@
-// client/src/utils/uploader.ts
 import { API } from "@/config.js";
 import Storage from "../../../server/utils/storage.js";
 
@@ -28,7 +27,6 @@ export async function uploadBlob(blob: Blob) {
   return uploadFile(blob);
 }
 
-// Use esta se quiser fechar o fluxo “upload + finalizar treino” num só lugar:
 export async function finalizarComMidia({
   treinoAgendadoId,
   file,
