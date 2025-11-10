@@ -12,8 +12,9 @@ import { API } from "../config.js";
 import { Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
 
-const ELENCOS_BASE = `${API.BASE_URL}/api/treinos/elencos`;
+const ELENCOS_BASE = `${API.BASE_URL}/api/elencos`;
 const PONTOS_BASE  = `${API.BASE_URL}/api/treinos/pontuacoes`;
+const TURMAS_BASE  = `${API.BASE_URL}/api/turmas/minhas`;
 
 type PontuacaoDTO = {
   atletaId: string;
@@ -140,7 +141,7 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
 }) => {
   const W = size?.w ?? SHIELD_W_DESK;
   const H = size?.h ?? SHIELD_H_DESK;
-  const clipId = `shieldClip-${atleta.atletaId}`;
+  const clipId = `shieldClip-${atleta.atletaId}-${size?.w}x${size?.h}`;
   const fotoUrl = atleta.foto ? `${atleta.foto}` : "/default-avatar.png";
 
   const ovrShow  = Number.isFinite(ovr)  ? Math.round(Number(ovr))  : 0;
@@ -254,6 +255,9 @@ function normalizeAtletas(raw: any): Atleta[] {
 export default function PaginaElenco() {
   const isMobile = useIsMobile();
 
+  const [turmas, setTurmas] = useState<Array<{ id: string; nome: string }>>([]);
+  const [turmaId, setTurmaId] = useState<string>("");
+
   const [atletas, setAtletas] = useState<Atleta[]>([]);
   const [posicoes, setPosicoes] = useState<Record<PosicaoCampo, Atleta | null>>(
     () => POSICOES.reduce((acc, p) => ({ ...acc, [p.id]: null }), {} as Record<PosicaoCampo, Atleta | null>)
@@ -343,6 +347,33 @@ export default function PaginaElenco() {
     setAtletas(listaAtletas.filter((a) => !usados.has(a.atletaId)));
     fetchPontuacoes(Array.from(usados));
   };
+
+   useEffect(() => {
+    const t = String((Storage as any).tipoSalvo || "").toLowerCase();
+    if (t === "atleta") {
+      window.location.replace("/treinos");
+    }
+  }, []);
+
+  // carregar turmas do dono
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = Storage.token;
+        const tipoUsuarioId = Storage.tipoUsuarioId;
+        if (!token || !tipoUsuarioId) return;
+        const r = await axios.get(TURMAS_BASE, {
+          params: { tipoUsuarioId },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const lista = Array.isArray(r.data?.items) ? r.data.items : [];
+        setTurmas(lista);
+        if (!turmaId && lista.length) setTurmaId(lista[0].id);
+      } catch (e) {
+        console.error("Erro ao listar turmas:", e);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -469,23 +500,24 @@ export default function PaginaElenco() {
 
     if (isLista(source.droppableId) && isPosicao(destination.droppableId)) {
       const posId = destination.droppableId.replace("pos:", "") as PosicaoCampo;
-      const ocupados = elencoAtual.length;
-      if (ocupados >= maxElenco && !posicoes[posId]) {
+
+      if (elencoAtual.length >= maxElenco && !posicoes[posId]) {
         alert(`O elenco já tem ${maxElenco} jogadores.`);
         return;
       }
 
-      const origem = Array.from(atletas);
-      const [atleta] = origem.splice(source.index, 1);
+      const atleta = atletas[source.index];
 
-      setAtletas(origem);
-      setPosicoes((prev) => {
-        const anterior = prev[posId];
-        const novo = { ...prev, [posId]: atleta };
-        if (anterior) {
-          setAtletas((lista) => [anterior, ...lista]);
-        }
-        return novo;
+      // coloca no slot (guardei o antigo sem depender da ordem de setState)
+      const anterior = posicoes[posId];
+      setPosicoes(prev => ({ ...prev, [posId]: atleta }));
+
+      // tira da lista e, se o slot tinha alguém, devolve-o pra lista
+      setAtletas(prev => {
+        const nova = prev.slice();
+        nova.splice(source.index, 1);
+        if (anterior) nova.unshift(anterior);
+        return nova;
       });
 
       if (!pontos[atleta.atletaId]) fetchPontuacoes([atleta.atletaId]);
@@ -526,51 +558,37 @@ export default function PaginaElenco() {
   const salvarElenco = async () => {
     try {
       const token = Storage.token;
-
       const tipoUsuarioId = Storage.tipoUsuarioId;
-      const tipoUsuario = (Storage.tipoSalvo || "").toLowerCase() as
+      const tipoUsuario = String(Storage.tipoSalvo || "").toLowerCase() as
         | "professor" | "escolinha" | "clube";
 
-      if (!token) {
-        alert("Você não está autenticado. Faça login novamente.");
-        return;
-      }
-      if (!tipoUsuarioId || !tipoUsuario) {
-        alert("Não foi possível identificar seu tipo de usuário.");
-        return;
-      }
+      if (!token) return alert("Você não está autenticado. Faça login novamente.");
+      if (!tipoUsuarioId || !tipoUsuario) return alert("Não foi possível identificar seu tipo de usuário.");
+      if (!turmaId) return alert("Selecione uma turma.");
 
-      const escala: Record<PosicaoCampo, string | null> = POSICOES.reduce(
-        (acc, p) => {
-          acc[p.id] = posicoes[p.id]?.atletaId ?? null;
-          return acc;
-        },
-        {} as Record<PosicaoCampo, string | null>
-      );
+      const escala: Record<PosicaoCampo, string | null> = POSICOES.reduce((acc, p) => {
+        acc[p.id] = posicoes[p.id]?.atletaId ?? null;
+        return acc;
+      }, {} as Record<PosicaoCampo, string | null>);
 
-      const payload: ElencoSalvarPayload = {
+      const payload: ElencoSalvarPayload & { turmaId: string } = {
         nome: elencoNome,
-        professorId: Storage.tipoSalvo === "Professor" ? tipoUsuarioId : undefined,
-        clubeId: Storage.tipoSalvo === "Clube" ? tipoUsuarioId : undefined,
-        escolinhaId: Storage.tipoSalvo === "Escolinha" ? tipoUsuarioId : undefined,
-        atletasIds: (POSICOES.map((p) => posicoes[p.id]).filter(Boolean) as Atleta[]).map(
-          (a) => a.atletaId
-        ),
+        professorId: tipoUsuario === "professor" ? (Storage.tipoUsuarioId ?? undefined) : undefined,
+        clubeId:     tipoUsuario === "clube"     ? (Storage.tipoUsuarioId ?? undefined) : undefined,
+        escolinhaId: tipoUsuario === "escolinha" ? (Storage.tipoUsuarioId ?? undefined) : undefined,
+        atletasIds:  POSICOES.map(p => posicoes[p.id]).filter(Boolean).map(a => a!.atletaId),
         maxJogadores: maxElenco,
         escala,
         tipoUsuario,
-        tipoUsuarioId,
+        tipoUsuarioId: (Storage.tipoUsuarioId ?? undefined),
+        turmaId,
       };
 
       if (elencoId) {
-        await axios.put(`${ELENCOS_BASE}/${elencoId}`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await axios.put(`${ELENCOS_BASE}/${elencoId}`, payload, { headers: { Authorization: `Bearer ${token}` } });
         alert("Elenco atualizado com sucesso!");
       } else {
-        const res = await axios.post(ELENCOS_BASE, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await axios.post(ELENCOS_BASE, payload, { headers: { Authorization: `Bearer ${token}` } });
         if (res.data?.id) setElencoId(res.data.id);
         alert("Elenco criado com sucesso!");
       }
@@ -580,59 +598,59 @@ export default function PaginaElenco() {
     }
   };
 
-  const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) => {
-    const a = posicoes[pos];
-    const pts = a ? pontos[a.atletaId] : undefined;
-    const ovr  = pts?.mediaGeral ?? 0;
-    const perf = pts?.performance ?? 0;
-    const disc = pts?.disciplina ?? 0;
-    const resp = pts?.responsabilidade ?? 0;
 
-    return (
-      <Droppable droppableId={`pos:${pos}`} type="ATLETA">
-        {(provided, snapshot) => (
-          <div
-            ref={provided.innerRef}
-            {...provided.droppableProps}
-            className={`rounded-xl border-2 border-dashed overflow-hidden flex flex-col items-center justify-between p-1
-              ${snapshot.isDraggingOver ? "bg-green-300/70" : "bg-green-100/70"}`}
-            style={{ width: SHIELD_W + 12, height: SHIELD_H + SLOT_EXTRA_H }}
-          >
-            <span className="text-[10px] sm:text-xs font-semibold opacity-80">{label}</span>
+ const Slot = React.memo(function Slot({
+  pos,
+  label,
+}: { pos: PosicaoCampo; label: string }) {
+  const a = posicoes[pos];
+  const pts = a ? pontos[a.atletaId] : undefined;
+  const ovr  = pts?.mediaGeral ?? 0;
+  const perf = pts?.performance ?? 0;
+  const disc = pts?.disciplina ?? 0;
+  const resp = pts?.responsabilidade ?? 0;
 
-            {a ? (
-              <Draggable draggableId={String(a.id)} index={0}>
-                {(provided2, snapshot2) => (
-                  <div
-                    ref={provided2.innerRef}
-                    {...provided2.draggableProps}
-                    {...provided2.dragHandleProps}
-                    className={`${snapshot2.isDragging ? "shadow-2xl scale-105 z-50" : ""}`}
-                  >
-                    <CardAtletaShield
-                      atleta={a}
-                      ovr={ovr}
-                      perf={perf}
-                      disc={disc}
-                      resp={resp}
-                      size={{ w: SHIELD_W, h: SHIELD_H }}
-                      goldenMinOVR={GOLDEN_MIN_OVR}
-                    />
-                  </div>
-                )}
-              </Draggable>
-            ) : (
-              <div className="w-full flex-1 flex items-center justify-center text-[10px] sm:text-xs text-green-700/70">
-                Solte aqui
-              </div>
-            )}
+  return (
+    <Droppable droppableId={`pos:${pos}`} type="ATLETA">
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.droppableProps}
+          className={`rounded-xl border-2 border-dashed overflow-hidden flex flex-col items-center justify-between p-1
+            ${snapshot.isDraggingOver ? "bg-green-300/70" : "bg-green-100/70"}`}
+          style={{ width: SHIELD_W + 12, height: SHIELD_H + SLOT_EXTRA_H }}
+        >
+          <span className="text-[10px] sm:text-xs font-semibold opacity-80">{label}</span>
 
-            {provided.placeholder}
-          </div>
-        )}
-      </Droppable>
-    );
-  };
+          {a && (
+            <Draggable key={String(a.id)} draggableId={String(a.id)} index={0}>
+              {(provided2, snapshot2) => (
+                <div
+                  ref={provided2.innerRef}
+                  {...provided2.draggableProps}
+                  {...provided2.dragHandleProps}
+                  className={`${snapshot2.isDragging ? "shadow-2xl scale-105 z-50" : ""}`}
+                >
+                  <CardAtletaShield
+                    atleta={a}
+                    ovr={ovr}
+                    perf={perf}
+                    disc={disc}
+                    resp={resp}
+                    size={{ w: SHIELD_W, h: SHIELD_H }}
+                    goldenMinOVR={GOLDEN_MIN_OVR}
+                  />
+                </div>
+              )}
+            </Draggable>
+          )}
+
+          {provided.placeholder}
+        </div>
+      )}
+    </Droppable>
+  );
+});
 
   const listaClasses =
     (isMobile
@@ -673,6 +691,17 @@ export default function PaginaElenco() {
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="order-1 md:order-2 flex-1 flex flex-col items-center p-3 md:p-5">
           <div className="flex flex-wrap items-center gap-3 md:gap-4 mb-3 md:mb-5">
+            <select
+                value={turmaId}
+                onChange={(e) => setTurmaId(e.target.value)}
+                className="border rounded p-1 text-sm md:text-base"
+                title="Turma"
+            >
+                {turmas.map(t => (
+                  <option value={t.id} key={t.id}>{t.nome}</option>
+                ))}
+            </select>
+
             <input
               type="text"
               value={elencoNome}

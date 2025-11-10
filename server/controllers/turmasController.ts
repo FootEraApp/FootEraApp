@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
+import type { AuthenticatedRequest } from "../middlewares/auth.js";
 
 const prisma = new PrismaClient();
 
@@ -199,6 +200,26 @@ export async function obterAlunosTurma(req: Request, res: Response) {
     select: { usuarioId: true },
   });
   return res.json({ usuarioIds: membros.map(m => m.usuarioId) });
+}
+
+export async function listarMinhasTurmas(req: AuthenticatedRequest, res: Response) {
+  try {
+    const tipoUsuarioId = String(req.query.tipoUsuarioId || "");
+    if (!tipoUsuarioId) return res.status(400).json({ error: "tipoUsuarioId obrigatório" });
+
+    const turmas = await prisma.turma.findMany({
+      where: {
+        OR: [{ clubeId: tipoUsuarioId }, { escolinhaId: tipoUsuarioId }, { professorId: tipoUsuarioId }],
+      },
+      select: { id: true, nome: true },
+      orderBy: { nome: "asc" },
+    });
+
+    return res.json({ items: turmas });
+  } catch (e) {
+    console.error("[listarMinhasTurmas] erro:", e);
+    return res.status(500).json({ error: "Erro ao listar turmas" });
+  }
 }
 
 export async function listarTurmas(req: Request, res: Response) {

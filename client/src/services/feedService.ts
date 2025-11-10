@@ -12,7 +12,8 @@ export interface Comentarios {
   id: string;
   conteudo: string;
   dataCriacao: string;
-  usuario: { nome: string; foto?: string };
+  usuarioId: string; // <- este campo é o que o feed.tsx usa
+  usuario?: { id?: string; nome: string; foto?: string | null };
 }
 
 export type PostagemComUsuario = {
@@ -24,12 +25,7 @@ export type PostagemComUsuario = {
   videoUrl?: string | null;
   tipoMidia?: "Imagem" | "Video" | "Documento" | null;
   curtidas: { usuarioId: string }[];
-  comentarios: {
-    id: string;
-    conteudo: string;
-    dataCriacao: string;
-    usuario?: { nome: string; foto?: string | null };
-  }[];
+  comentarios: Comentarios[],
   compartilhamentos?: number | null;
   reposts?: number | null;
   repostOf?: PostagemComUsuario | null;
