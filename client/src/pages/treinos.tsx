@@ -292,6 +292,9 @@ export default function PaginaTreinos() {
   const [dataAgendarById, setDataAgendarById] = useState<Record<string, string>>({});
   const [obsById, setObsById] = useState<Record<string, string>>({});
 
+  const tipoAtual = (usuario?.tipo ?? "").toLowerCase();
+  const podeGerirElenco = ["professor", "clube", "escolinha", "escola"].includes(tipoAtual);
+
   async function agendarTreinoProgramado(treino: TreinoProgramado, dataSelecionadaISO: string, observacao?: string) {
     const token = getToken();
     const atletaId = (Storage as any).tipoUsuarioId || (Storage as any).atletaId;
@@ -1066,7 +1069,6 @@ const renderDesafioCard = (desafio: Desafio) => (
 
   if (!usuario) return <p className="text-center p-4">Carregando...</p>;
 
-  const tipoAtual = (usuario?.tipo ?? "").toLowerCase();
   const isGestor = ["professor", "admin", "escola", "escolinha", "clube"].includes(tipoAtual);
   const isOlheiro = tipoAtual === "olheiro";
 
@@ -1491,14 +1493,17 @@ const renderDesafioCard = (desafio: Desafio) => (
               <div className="text-lg font-semibold text-green-900">Treinos</div>
             )}
 
-            <Link
-              href="/treinos/elenco"
-              aria-label="Ir para o elenco (campo)"
-              title="Elenco (campo)"
-              className="flex-shrink-0 inline-flex items-center justify-center p-2.5 rounded-full bg-white text-green-800 border border-green-200 shadow hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600"
-            >
-              <SoccerFieldIcon className="w-5 h-5" />
-            </Link>
+            {podeGerirElenco && (
+              <Link
+                href="/treinos/elenco"
+                aria-label="Ir para o elenco (campo)"
+                title="Elenco (campo)"
+                className="flex-shrink-0 inline-flex items-center justify-center p-2.5 rounded-full bg-white text-green-800 border border-green-200 shadow hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600"
+              >
+                <SoccerFieldIcon className="w-5 h-5" />
+              </Link>
+            )}
+
           </div>
         </div>
 

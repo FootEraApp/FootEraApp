@@ -906,10 +906,19 @@ model Elenco {
   clubeId       String?
   escolinhaId   String?
   atletasIds    String[]
+  escala        Json?
   maxJogadores  Int            @default(11)
   ativo         Boolean        @default(true)
   dataCriacao   DateTime       @default(now())
   atletasElenco AtletaElenco[]
+
+  turmaId String? // se quiser, pode tornar obrigatório
+  turma   Turma?  @relation(fields: [turmaId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([turmaId])
 }
 
 model AtletaElenco {
@@ -1160,6 +1169,7 @@ model Turma {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  Elenco    Elenco[]
 }
 
 model TurmaUsuario {
