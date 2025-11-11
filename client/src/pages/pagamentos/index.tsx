@@ -10,7 +10,7 @@ type Plan = {
   id: string;
   title: string;
   monthly: number;
-  annual: number;
+  annual: number | null;
   benefits: string[];
 };
 
@@ -83,24 +83,32 @@ export default function PagamentosPage() {
 
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" }), [token]);
 
+  type RoleKey = keyof typeof roleToDefaultPlan;
+
+  useEffect(() => {
+    setCupomPreview(null); // força revalidar
+  }, [selectedPlan, period]);
+
   useEffect(() => {
     (async () => {
       try {
         const cat = await fetch(`${API.BASE_URL}/api/billing/plans`, { headers });
-        const { plans } = await cat.json();
-        setPlans(plans);
+        const { plans: apiPlans } = await cat.json();
+        setPlans(apiPlans);
+
+        // plano inicial pela role (fallback: 1º plano retornado)
+        const initialPlan: string =
+          (typeof tipo === "string" && (tipo as RoleKey) in roleToDefaultPlan)
+            ? roleToDefaultPlan[tipo as RoleKey]
+            : (apiPlans?.[0]?.id ?? "ATLETA_PRO");
+
+        setSelectedPlan(initialPlan);
+        if (initialPlan === "ESCOLINHA_PRO") setPeriod("Mensal");
 
         const me = await fetch(`${API.BASE_URL}/api/billing/me`, { headers });
         const data = await me.json();
         setAssinatura(data.assinatura || null);
         setPagamentos(data.pagamentos || []);
-
-        type RoleKey = keyof typeof roleToDefaultPlan;
-        const defaultPlanForRole =
-          (typeof tipo === "string" && (tipo as string) in roleToDefaultPlan
-            ? roleToDefaultPlan[tipo as RoleKey]
-            : undefined);
-        setSelectedPlan(defaultPlanForRole ?? plans?.[0]?.id ?? "ATLETA_PRO");
       } catch (e) {
         console.error(e);
       } finally {
@@ -112,7 +120,8 @@ export default function PagamentosPage() {
   const currentPlanPrice = useMemo(() => {
     const p = plans.find(p => p.id === selectedPlan);
     if (!p) return 0;
-    return period === "Mensal" ? p.monthly : p.annual;
+    if (selectedPlan === "ESCOLINHA_PRO") return p.monthly; // apenas mensal
+    return period === "Mensal" ? p.monthly : (p.annual ?? p.monthly);
   }, [plans, selectedPlan, period]);
 
   async function previewCoupon() {
@@ -330,8 +339,13 @@ export default function PagamentosPage() {
   }
 
   const p = plans.find(x => x.id === selectedPlan);
-  const priceBase = currentPlanPrice;
   const total = totalComCupom();
+  const selectedObj = useMemo(
+    () => plans.find(p => p.id === selectedPlan),
+    [plans, selectedPlan]
+  );
+  const anualDisponivel =
+    selectedPlan !== "ESCOLINHA_PRO" && !!selectedObj?.annual && (selectedObj.annual as number) > 0;
 
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-8">
@@ -339,6 +353,13 @@ export default function PagamentosPage() {
       <p className="text-sm text-gray-600 mb-6">
         Bem-vindo(a)! Aqui você escolhe seu plano, aplica cupons e acompanha o histórico.
       </p>
+      <div className="mb-6 rounded-lg border bg-emerald-50 text-emerald-900 p-3 text-sm">
+        <ul className="list-disc pl-4 space-y-1">
+          <li>Rede social aberta: posts/DMs ilimitados para todos. Vídeos ≤ 60s.</li>
+          <li>Vinculação do atleta com 1 escolinha e 1 professor é sempre grátis.</li>
+          <li>Limites valem para dados operacionais (treinos, templates, agendamentos), não para posts/DMs.</li>
+        </ul>
+      </div>
 
       <section className="mb-8 p-4 border rounded-xl bg-white shadow-sm">
         <div className="flex items-center gap-2 mb-2">
@@ -375,7 +396,10 @@ export default function PagamentosPage() {
           {plans.map((pl) => (
             <button
               key={pl.id}
-              onClick={() => setSelectedPlan(pl.id)}
+              onClick={() => {
+                setSelectedPlan(pl.id);
+                if (pl.id === "ESCOLINHA_PRO") setPeriod("Mensal"); // sem anual
+              }}
               className={`px-3 py-2 rounded-lg border ${selectedPlan === pl.id ? "bg-green-700 text-white border-green-600" : "bg-white text-gray-800"}`}
             >
               {pl.title}
@@ -386,12 +410,19 @@ export default function PagamentosPage() {
         <div className="flex items-center gap-3 mb-4">
           <label className="flex items-center gap-2">
             <input type="radio" checked={period === "Mensal"} onChange={() => setPeriod("Mensal")} />
-            Mensal ({brl(plans.find(p => p.id === selectedPlan)?.monthly || 0)})
+            Mensal ({brl(selectedObj?.monthly ?? 0)})
           </label>
-          <label className="flex items-center gap-2">
-            <input type="radio" checked={period === "Anual"} onChange={() => setPeriod("Anual")} />
-            Anual ({brl(plans.find(p => p.id === selectedPlan)?.annual || 0)})
-          </label>
+
+          {anualDisponivel ? (
+            <label className="flex items-center gap-2">
+              <input type="radio" checked={period === "Anual"} onChange={() => setPeriod("Anual")} />
+              Anual ({brl(selectedObj?.annual ?? 0)})
+            </label>
+          ) : (
+            selectedPlan === "ESCOLINHA_PRO" && (
+              <span className="text-sm text-gray-500">* Plano da organização é apenas mensal.</span>
+            )
+          )}
         </div>
 
         {p && (
@@ -435,11 +466,11 @@ export default function PagamentosPage() {
             </label>
             <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="CREDITO"?"bg-green-50 border-green-300":""}`}>
               <input type="radio" className="hidden" checked={method==="CREDITO"} onChange={() => setMethod("CREDITO")} />
-              <CreditCard className="w-4 h-4" /> Cartão Credito
+              <CreditCard className="w-4 h-4" /> Cartão de Crédito
             </label>
             <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="DEBITO"?"bg-green-50 border-green-300":""}`}>
               <input type="radio" className="hidden" checked={method==="DEBITO"} onChange={() => setMethod("DEBITO")} />
-              <CreditCard className="w-4 h-4" /> Cartão Debito
+              <CreditCard className="w-4 h-4" /> Cartão de Débito
             </label>
             <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="BOLETO"?"bg-green-50 border-green-300":""}`}>
               <input type="radio" className="hidden" checked={method==="BOLETO"} onChange={() => setMethod("BOLETO")} />
@@ -628,7 +659,11 @@ export default function PagamentosPage() {
           <div className="text-sm text-gray-600">
             Total a pagar: <b className="text-gray-900">{brl(total)}</b>
           </div>
-          <button onClick={startCheckout} className="px-4 py-2 rounded-lg bg-green-800 text-white">
+          <button
+            onClick={startCheckout}
+            className="px-4 py-2 rounded-lg bg-green-800 text-white disabled:opacity-60"
+            disabled={polling}
+          >
             Assinar agora
           </button>
         </div>
