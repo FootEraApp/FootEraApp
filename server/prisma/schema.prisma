@@ -1430,6 +1430,21 @@ model CupomResgate {
   @@index([usuarioId])
 }
 
+model UsageCounter {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  periodRef String
+  window    String
+  value     Int      @default(0)
+  meta      Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key, periodRef])
+  @@index([key, periodRef])
+}
+
 enum Periodicidade {
   Mensal
   Anual
