@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronUp,
   Play,
+  MoreVertical, // novo
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, FLAGS } from "../../config.js";
@@ -77,6 +78,11 @@ const PLACEHOLDER_USER = "/assets/default-user.png";
 const TIMER_KEY = (treinoAgendadoId: string) => `footera:treinoTimerStart:${treinoAgendadoId}`;
 const CHECKLIST_KEY = (treinoAgendadoId: string) => `footera:treinoChecklist:${treinoAgendadoId}`;
 
+// --- limites e tamanhos das listas ---
+const VISIBLE_TREINOS = 6;      // quantos itens ficam visíveis sem rolar
+const ROW_ESTIMATE_PX = 72;     // altura aproximada de cada <li> (ajuste fino se precisar)
+const DESAFIOS_MAX_PX = 240;    // altura máx. do card de Desafios (se ativo)
+
 function formatHHMMSS(totalSec: number) {
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
@@ -109,7 +115,6 @@ function toYouTubeEmbed(u: string) {
     if (url.hostname.includes("youtube.com")) {
       const id = url.searchParams.get("v") || "";
       if (id) return `https://www.youtube.com/embed/${id}`;
-      // /shorts/ID
       const shorts = url.pathname.match(/\/shorts\/([^/]+)/);
       if (shorts?.[1]) return `https://www.youtube.com/embed/${shorts[1]}`;
     }
@@ -249,6 +254,9 @@ export default function TreinosAtletas() {
   // full-screen de treino (novo)
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
 
+  // menu (3 pontinhos) no header do fullscreen
+  const [menuOpen, setMenuOpen] = useState(false);
+
   // modal de vídeo por exercício (novo)
   const [videoModal, setVideoModal] = useState<{ exercicioId: string; nome: string; url: string } | null>(null);
   const [videoCarregando, setVideoCarregando] = useState(false);
@@ -266,6 +274,41 @@ export default function TreinosAtletas() {
   const tipo = String((Storage as any).tipoSalvo ?? localStorage.getItem("tipo") ?? "").toLowerCase();
   const canVerElenco = ["professor", "clube", "escolinha"].includes(tipo);
   const isOlheiro = tipo === "olheiro";
+
+  // ===== medidas para card rolável =====
+  const bottomNavRef = useRef<HTMLElement | null>(null);
+  const agendadosCardRef = useRef<HTMLDivElement | null>(null);
+  const [agendadosMaxH, setAgendadosMaxH] = useState<number>(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const calc = () => {
+      if (!agendadosCardRef.current) return;
+      const rect = agendadosCardRef.current.getBoundingClientRect();
+      const bottomH = bottomNavRef.current?.offsetHeight ?? 64;
+
+      // reservar espaço para o card de Desafios (quando ativo)
+      const reserveDesafios = FLAGS.DESAFIOS_ENABLED ? (DESAFIOS_MAX_PX + 16) : 0;
+
+      // espaço do topo do card até a barra inferior
+      const available = Math.floor(window.innerHeight - rect.top - bottomH - 16 - reserveDesafios);
+
+      // limitar a ~6 linhas visíveis
+      const capByRows = VISIBLE_TREINOS * ROW_ESTIMATE_PX;
+
+      setAgendadosMaxH(Math.max(200, Math.min(available, capByRows)));
+    };
+
+    calc();
+    window.addEventListener("resize", calc);
+    const i = window.setInterval(calc, 400); // reage a pequenas mudanças no layout
+
+    return () => {
+      window.removeEventListener("resize", calc);
+      window.clearInterval(i);
+    };
+  }, [treinosAgendados.length, desafios.length]);
 
   // ---------- carregamento inicial ----------
   useEffect(() => {
@@ -577,7 +620,6 @@ export default function TreinosAtletas() {
     }
   }
 
-  const [, nav] = useLocation();
   async function finalizarEEnviar(treino: TreinoAgendado) {
     const elapsed = elapsedByTreino[treino.id] ?? 0;
     if (!statusPorTreino[treino.id] || statusPorTreino[treino.id]?.status !== "IN_PROGRESS") {
@@ -586,7 +628,7 @@ export default function TreinosAtletas() {
     }
     const usarCamera = window.confirm("Quer gravar agora com a câmera? (OK=câmera • Cancelar=galeria)");
     const qs = new URLSearchParams({ treinoAgendadoId: treino.id, tempoSeg: String(elapsed), mode: usarCamera ? "camera" : "galeria" });
-    nav(`/submissao?${qs.toString()}`);
+    navigate(`/submissao?${qs.toString()}`);
   }
 
   async function removerTreinoAgendado(id: string) {
@@ -926,10 +968,18 @@ export default function TreinosAtletas() {
                 const id = ex.exercicio.id;
                 const checked = !!ck[id];
                 return (
-                  <div key={id} className="flex items-start gap-2 border-b pb-2 last:border-b-0">
+                  <div key={id} className="flex items-start gap-2 border-b pb-2 last:border-b-0 min-w-0">
                     {/* checkbox */}
-                    <label className="cursor-pointer select-none flex items-start gap-2 flex-1" title={ex.exercicio.nome}>
-                      <input type="checkbox" checked={checked} onChange={() => toggleItemChecklist(treino.id, id)} className="sr-only peer" />
+                    <label className="cursor-pointer select-none flex items-start gap-2 flex-1 min-w-0" title={ex.exercicio.nome}>
+                      <input
+                        type="checkbox"
+                        id={`ex-${id}`}
+                        name={`ex-${id}`}
+                        aria-label={`Marcar exercício ${ex.exercicio.nome}`}
+                        checked={checked}
+                        onChange={() => toggleItemChecklist(treino.id, id)}
+                        className="sr-only peer"
+                      />
                       <span
                         className="mt-0.5 relative h-5 w-5 rounded-md border-2 border-emerald-600 bg-white flex items-center justify-center transition-all duration-150
                                    peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-400/60 peer-checked:border-emerald-700
@@ -950,11 +1000,15 @@ export default function TreinosAtletas() {
                         </svg>
                       </span>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-medium">{i + 1}.</span>
-                          <span className={`truncate ${checked ? "line-through text-gray-500" : ""}`}>{ex.exercicio.nome}</span>
-                          {!!ex.repeticoes && <span className="text-[11px] text-gray-500">({ex.repeticoes})</span>}
-                        </div>
+   <div className="flex items-center gap-2 min-w-0">
+     <span className="font-medium shrink-0">{i + 1}.</span>
+     <span className={`flex-1 basis-0 min-w-0 truncate ${checked ? "line-through text-gray-500" : ""}`}>
+       {ex.exercicio.nome}
+     </span>
+     {!!ex.repeticoes && (
+       <span className="text-[11px] text-gray-500 shrink-0 whitespace-nowrap">({ex.repeticoes})</span>
+     )}
+   </div>
                       </div>
                     </label>
 
@@ -985,76 +1039,79 @@ export default function TreinosAtletas() {
           </div>
         )}
 
-        {/* Ações do treino */}
-        <div className="mt-5 flex flex-wrap items-center gap-2 justify-end">
-          {(!statusPorTreino[treino.id] || statusPorTreino[treino.id]?.status === "PENDING") && (
-            <>
-              <button onClick={() => iniciar(treino.id)} className="bg-green-700 text-white px-3 py-2 rounded-lg">
-                Iniciar
-              </button>
-              <button onClick={() => remarcarTreino(treino)} className="border px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50">
-                Remarcar (≤ 7 dias)
-              </button>
-            </>
-          )}
-
-{statusPorTreino[treino.id]?.status === "IN_PROGRESS" && (
-  <>
-    <button onClick={() => marcarTodos(treino.id, exIds, true)} className="text-xs px-2.5 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700">
-      Marcar todos
-    </button>
-    <button onClick={() => limparChecklist(treino.id)} className="text-xs px-2.5 py-1 rounded bg-white border text-gray-700 hover:bg-gray-50">
-      Limpar
-    </button>
-
-    <button
-      onClick={() => finalizarEEnviar(treino)}
-      disabled={(treino.treinoProgramado?.exercicios?.length ?? 0) > 0 && !((treino.treinoProgramado?.exercicios ?? []).every((e) => (checklistByTreino[treino.id] ?? {})[e.exercicio.id]))}
-      className={`ml-auto px-3 py-2 rounded-lg text-white ${
-        (treino.treinoProgramado?.exercicios?.length ?? 0) > 0 &&
-        !((treino.treinoProgramado?.exercicios ?? []).every((e) => (checklistByTreino[treino.id] ?? {})[e.exercicio.id]))
-          ? "bg-gray-400 cursor-not-allowed"
-          : "bg-emerald-700 hover:bg-emerald-800"
-      }`}
-      title="Finalizar e enviar submissão"
-    >
-      Finalizar e enviar
-    </button>
-  </>
-)}
-
-
-          {statusPorTreino[treino.id]?.status === "COMPLETED" && (
-            <>
-              <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Concluído</span>
-              {!jaSubmetido && (
-                <button onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)} className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg">
-                  Fazer Submissão
+        {/* Ações do treino (escondidas no fullscreen; a barra fixa cuida disso) */}
+        {fullscreenId !== treino.id && (
+          <div className="mt-5 flex flex-wrap items-center gap-2 justify-end">
+            {(!statusPorTreino[treino.id] || statusPorTreino[treino.id]?.status === "PENDING") && (
+              <>
+                <button onClick={() => iniciar(treino.id)} className="bg-green-700 text-white px-3 py-2 rounded-lg">
+                  Iniciar
                 </button>
-              )}
-            </>
-          )}
-        </div>
+                <button onClick={() => remarcarTreino(treino)} className="border px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50">
+                  Remarcar (≤ 7 dias)
+                </button>
+              </>
+            )}
 
-        {/* Remover */}
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={() => removerTreinoAgendado(treino.id)}
-            title="Remover treino"
-            className="shrink-0 px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 inline-flex items-center gap-2"
-          >
-            <Trash2 className="w-4 h-4" />
-            Remover
-          </button>
-        </div>
+            {statusPorTreino[treino.id]?.status === "IN_PROGRESS" && (
+              <>
+                <button onClick={() => marcarTodos(treino.id, exIds, true)} className="text-xs px-2.5 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700">
+                  Marcar todos
+                </button>
+                <button onClick={() => limparChecklist(treino.id)} className="text-xs px-2.5 py-1 rounded bg-white border text-gray-700 hover:bg-gray-50">
+                  Limpar
+                </button>
+
+                <button
+                  onClick={() => finalizarEEnviar(treino)}
+                  disabled={(treino.treinoProgramado?.exercicios?.length ?? 0) > 0 && !((treino.treinoProgramado?.exercicios ?? []).every((e) => (checklistByTreino[treino.id] ?? {})[e.exercicio.id]))}
+                  className={`ml-auto px-3 py-2 rounded-lg text-white ${
+                    (treino.treinoProgramado?.exercicios?.length ?? 0) > 0 &&
+                    !((treino.treinoProgramado?.exercicios ?? []).every((e) => (checklistByTreino[treino.id] ?? {})[e.exercicio.id]))
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-emerald-700 hover:bg-emerald-800"
+                  }`}
+                  title="Finalizar e enviar submissão"
+                >
+                  Finalizar e enviar
+                </button>
+              </>
+            )}
+
+            {statusPorTreino[treino.id]?.status === "COMPLETED" && (
+              <>
+                <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Concluído</span>
+                {!jaSubmetido && (
+                  <button onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)} className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg">
+                    Fazer Submissão
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Remover (escondido no fullscreen) */}
+        {fullscreenId !== treino.id && (
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={() => removerTreinoAgendado(treino.id)}
+              title="Remover treino"
+              className="shrink-0 px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 inline-flex items-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Remover
+            </button>
+          </div>
+        )}
       </>
     );
   };
 
   // ===================== Render =====================
   return (
-    <div className="min-h-screen bg-neutral-50 pb-24">
-      <div className="mx-auto w-full max-w-3xl lg:max-w-4xl px-3 sm:px-4">
+    <div className="min-h-screen bg-neutral-50 pb-24 overflow-hidden">
+      <div className="mx-auto w-full max-w-3xl lg:max-w-4xl px-3 sm:px-4 overflow-hidden">
         <div className="max-w-3xl mx-auto px-4 pt-3">
           <HealthBanner />
         </div>
@@ -1113,6 +1170,7 @@ export default function TreinosAtletas() {
                   onClick={() => {
                     setExpandedId((prev) => (prev === tl.id ? null : tl.id));
                     setFullscreenId(tl.id);
+                    setMenuOpen(false);
                   }}
                   className={`snap-center shrink-0 min-w-[180px] max-w-[220px] text-left rounded-xl border px-3 py-2 ${tl.statusClass} ${tl.borderClass} hover:opacity-95`}
                   title={tl.titulo}
@@ -1135,63 +1193,70 @@ export default function TreinosAtletas() {
           )}
         </div>
 
-{/* Treinos agendados */}
-<div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-  <h3 className="text-lg font-semibold mb-3">Treinos agendados</h3>
+        {/* Treinos agendados */}
+        <div ref={agendadosCardRef} className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
+          <h3 className="text-lg font-semibold mb-3">Treinos agendados</h3>
 
-  {ordenados.length === 0 ? (
-    <p className="text-gray-500">Nenhum treino disponível ainda.</p>
-  ) : (
-    <ul className="divide-y">
-      {ordenados.map((t) => {
-        const d = t.dataTreino ? new Date(t.dataTreino) : null;
-        const isHoje = d ? sameDay(d, hoje) : false;
-        const diaStr = d ? String(d.getDate()).padStart(2, "0") : "—";
-        const subtitulo =
-          d ? d.toLocaleDateString("pt-BR", { weekday: "short", month: "short" }) : "Sem data";
+          <div
+            className="overflow-y-auto overscroll-contain -mr-2 pr-2"
+            style={{ maxHeight: agendadosMaxH ? `${agendadosMaxH}px` : undefined }}
+          >
+            {ordenados.length === 0 ? (
+              <p className="text-gray-500">Nenhum treino disponível ainda.</p>
+            ) : (
+              <ul className="divide-y">
+                {ordenados.map((t) => {
+                  const d = t.dataTreino ? new Date(t.dataTreino) : null;
+                  const isHoje = d ? sameDay(d, hoje) : false;
+                  const diaStr = d ? String(d.getDate()).padStart(2, "0") : "—";
+                  const subtitulo =
+                    d ? d.toLocaleDateString("pt-BR", { weekday: "short", month: "short" }) : "Sem data";
 
-        return (
-          <li key={t.id} className="py-2">
-            <button
-              onClick={() => setFullscreenId(t.id)}
-              className="w-full flex items-center justify-between gap-3 text-left"
-              aria-label="Expandir treino"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                {/* Círculo com dia */}
-                <div
-                  className={[
-                    "flex items-center justify-center rounded-full border h-12 w-12",
-                    "text-base font-bold shrink-0",
-                    isHoje
-                      ? "bg-emerald-100 border-emerald-300 text-emerald-800 ring-2 ring-emerald-300"
-                      : "bg-gray-50 border-gray-300 text-gray-800",
-                  ].join(" ")}
-                >
-                  {diaStr}
-                </div>
+                  return (
+                    <li key={t.id} className="py-2">
+                      <button
+                        onClick={() => { setFullscreenId(t.id); setMenuOpen(false); }}
+                        className="w-full flex items-center justify-between gap-3 text-left"
+                        aria-label="Expandir treino"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* Círculo com dia */}
+                          <div
+                            className={[
+                              "flex items-center justify-center rounded-full border h-12 w-12",
+                              "text-base font-bold shrink-0",
+                              isHoje
+                                ? "bg-emerald-100 border-emerald-300 text-emerald-800 ring-2 ring-emerald-300"
+                                : "bg-gray-50 border-gray-300 text-gray-800",
+                            ].join(" ")}
+                          >
+                            {diaStr}
+                          </div>
 
-                {/* Título + subtítulo (sem quebrar layout) */}
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{t.titulo}</div>
-                  <div className="text-xs text-gray-500">{subtitulo}</div>
-                </div>
-              </div>
+                          {/* Título + subtítulo (sem quebrar layout) */}
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{t.titulo}</div>
+                            <div className="text-xs text-gray-500">{subtitulo}</div>
+                          </div>
+                        </div>
 
-              {/* Chevron de expandir */}
-              <ChevronDown className="w-5 h-5 text-gray-500 shrink-0" />
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-  )}
-</div>
-
+                        {/* Chevron de expandir */}
+                        <ChevronDown className="w-5 h-5 text-gray-500 shrink-0" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
 
         {/* Desafios (mantidos) */}
         {FLAGS.DESAFIOS_ENABLED && (
-          <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mt-6">
+          <div
+            className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mt-6"
+            style={{ maxHeight: DESAFIOS_MAX_PX, overflowY: "auto" }}
+          >
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-lg font-semibold">Desafios</h3>
               <div className="ml-3 shrink-0 [&>div]:mb-0 [&>div>div:first-child]:hidden">
@@ -1253,7 +1318,10 @@ export default function TreinosAtletas() {
       </div>
 
       {/* bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-[0_-4px_12px_-6px_rgba(0,0,0,0.3)]">
+      <nav
+        ref={bottomNavRef}
+        className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-[0_-4px_12px_-6px_rgba(0,0,0,0.3)]"
+      >
         <Link href="/feed" className="hover:opacity-90" aria-label="Feed">
           <House />
         </Link>
@@ -1274,44 +1342,88 @@ export default function TreinosAtletas() {
       {/* ==== FULL-SCREEN DO TREINO ==== */}
       {fullscreenId && (
         <div className="fixed inset-0 z-40 bg-white flex flex-col">
-{/* header */}
-<div className="sticky top-0 z-10 px-4 py-3 border-b bg-white/95 backdrop-blur">
-  {(() => {
-    const atual = ordenados.find((t) => t.id === fullscreenId);
-    const st = fullscreenId ? (statusPorTreino[fullscreenId]?.status as TreinoStatus | undefined) : undefined;
-    const elapsed = fullscreenId ? (elapsedByTreino[fullscreenId] ?? 0) : 0;
+          {/* header */}
+          <div className="sticky top-0 z-10 px-4 py-3 border-b bg-white/95 backdrop-blur">
+            {(() => {
+              const atual = ordenados.find((t) => t.id === fullscreenId);
+              const st = fullscreenId ? (statusPorTreino[fullscreenId]?.status as TreinoStatus | undefined) : undefined;
+              const elapsed = fullscreenId ? (elapsedByTreino[fullscreenId] ?? 0) : 0;
 
-    return (
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => setFullscreenId(null)}
-          className="inline-flex items-center justify-center p-2 rounded-md border bg-white hover:bg-gray-50"
-          aria-label="Fechar"
-        >
-          <X className="w-5 h-5" />
-        </button>
+              // para habilitar/desabilitar “Finalizar” no menu
+              const exList = (atual?.treinoProgramado?.exercicios ?? []);
+              const exIds = exList.map((e) => e.exercicio.id);
+              const ck = fullscreenId ? (checklistByTreino[fullscreenId] ?? {}) : {};
+              const total = exIds.length;
+              const allChecked = total > 0 && exIds.every((id) => ck[id]);
 
-        <div className="flex-1 min-w-0 text-center">
-          {st === "IN_PROGRESS" ? (
-            <div className="font-mono font-extrabold text-2xl sm:text-3xl tracking-widest text-emerald-700">
-              {formatHHMMSS(elapsed)}
-            </div>
-          ) : (
-            <div className="text-base sm:text-lg font-semibold text-green-900 truncate">
-              {atual?.titulo ?? "Treino"}
-            </div>
-          )}
-        </div>
+              return (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => { setMenuOpen(false); setFullscreenId(null); }}
+                    className="inline-flex items-center justify-center p-2 rounded-md border bg-white hover:bg-gray-50"
+                    aria-label="Fechar"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
 
-        <div className="w-9" /> {/* spacer */}
-      </div>
-    );
-  })()}
-</div>
+                  <div className="flex-1 min-w-0 text-center">
+                    {st === "IN_PROGRESS" ? (
+                      <div className="font-mono font-extrabold text-2xl sm:text-3xl tracking-widest text-emerald-700">
+                        {formatHHMMSS(elapsed)}
+                      </div>
+                    ) : (
+                      <div className="text-base sm:text-lg font-semibold text-green-900 truncate max-w-[70vw] mx-auto">
+                        {atual?.titulo ?? "Treino"}
+                      </div>
+                    )}
+                  </div>
 
+                  {/* 3 pontinhos */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setMenuOpen((v) => !v)}
+                      className="inline-flex items-center justify-center p-2 rounded-md border bg-white hover:bg-gray-50"
+                      aria-label="Mais opções"
+                    >
+                      <MoreVertical className="w-5 h-5" />
+                    </button>
+
+                    {menuOpen && (
+                      <div className="absolute right-0 mt-2 w-56 bg-white border rounded-lg shadow-lg z-10 overflow-hidden">
+                        {/* Finalizar (se em progresso) */}
+                        {st === "IN_PROGRESS" && (
+                          <button
+                            onClick={() => { setMenuOpen(false); if (atual) finalizarEEnviar(atual); }}
+                            disabled={(total > 0) && !allChecked}
+                            className={`w-full text-left px-3 py-2 text-sm ${((total > 0) && !allChecked) ? "text-gray-400 cursor-not-allowed" : "hover:bg-gray-50"}`}
+                          >
+                            Finalizar e enviar
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => { setMenuOpen(false); if (atual) remarcarTreino(atual); }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                        >
+                          Remarcar (≤ 7 dias)
+                        </button>
+
+                        <button
+                          onClick={() => { setMenuOpen(false); if (atual) removerTreinoAgendado(atual.id); }}
+                          className="w-full text-left px-3 py-2 text-sm text-red-700 hover:bg-red-50"
+                        >
+                          Excluir treino
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
 
           {/* conteúdo */}
-          <div className="flex-1 overflow-y-auto px-4 py-4">
+          <div className="flex-1 overflow-y-auto px-4 py-4 pb-28">
             {ordenados
               .filter((t) => t.id === fullscreenId)
               .map((treino) => (
@@ -1321,6 +1433,58 @@ export default function TreinosAtletas() {
                 </div>
               ))}
           </div>
+
+          {/* barra inferior do fullscreen */}
+          {(() => {
+            const t = ordenados.find((x) => x.id === fullscreenId);
+            if (!t) return null;
+
+            const st = statusPorTreino[fullscreenId!]?.status as TreinoStatus | undefined;
+
+            const exList = (t.treinoProgramado?.exercicios ?? []);
+            const exIds = exList.map((e) => e.exercicio.id);
+            const ck = checklistByTreino[fullscreenId!] ?? {};
+            const total = exIds.length;
+            const allChecked = total > 0 && exIds.every((id) => ck[id]);
+
+            const iniciarOuFinalizar = () => {
+              if (st === "IN_PROGRESS") return finalizarEEnviar(t);
+              return iniciar(t.id);
+            };
+
+            const labelCentral = st === "IN_PROGRESS" ? "Finalizar" : "Iniciar";
+            const disabledCentral = st === "IN_PROGRESS" && total > 0 && !allChecked;
+
+            return (
+              <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur border-t px-4 py-3">
+                <div className="max-w-3xl mx-auto flex items-center gap-2">
+                  <button
+                    onClick={() => remarcarTreino(t)}
+                    className="h-11 px-3 rounded-lg border text-gray-700 bg-white hover:bg-gray-50 flex-1"
+                  >
+                    Remarcar
+                  </button>
+
+                  <button
+                    onClick={iniciarOuFinalizar}
+                    disabled={disabledCentral}
+                    className={`h-12 px-4 rounded-xl text-white font-medium flex-[1.4]
+                      ${st === "IN_PROGRESS" ? "bg-emerald-700 hover:bg-emerald-800" : "bg-green-700 hover:bg-green-800"}
+                      ${disabledCentral ? "opacity-60 cursor-not-allowed" : ""}`}
+                  >
+                    {labelCentral}
+                  </button>
+
+                  <button
+                    onClick={() => removerTreinoAgendado(t.id)}
+                    className="h-11 px-3 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 flex-1"
+                  >
+                    Excluir
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
