@@ -79,6 +79,7 @@ import assinaturasRoutes from "./routes/assinaturas.js";
 import treinosSalvosRoutes from "./routes/treinosSalvos.js";
 import analyticsRoutes from "./routes/analytics.js"
 import billingRoutes from "./routes/billing.js"
+import scheduleRoutes from "./routes/schedule.routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -244,6 +245,7 @@ app.use("/api/treinos-elencos", authenticateToken, treinosElencosRoutes);
 app.use("/api/treinosSalvos", treinosSalvosRoutes);
 app.use("/api/analytics", authenticateToken, analyticsRoutes);
 app.use("/api/billing", authenticateToken, billingRoutes);
+app.use("/api/schedule", scheduleRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
 
