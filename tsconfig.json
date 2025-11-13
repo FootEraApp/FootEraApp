@@ -13,17 +13,16 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true,
+    "resolveJsonModule": false,
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
-    "types": ["node", "vite/client"],
+    "typeRoots": ["./server/types", "./node_modules/@types"],
+    "types": ["node", "express"],
     "jsx": "react-jsx"
   },
   "include": [
     "server/**/*.ts",
-    "client/**/*.ts",
-    "client/**/*.tsx",
-    "client/**/*.js"
+    "server"
   ],
   "exclude": [
     "node_modules",
