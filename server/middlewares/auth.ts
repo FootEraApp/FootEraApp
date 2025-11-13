@@ -1,23 +1,44 @@
-// server/src/middlewares/auth.ts
-import { Request, Response, NextFunction, RequestHandler } from "express";
+import { RequestHandler } from "express";
 import jwt from "jsonwebtoken";
 import { PrismaClient, TipoUsuario } from "@prisma/client";
+import { resolveUserContext } from "../services/planResolver.js";
+import type { Request, Response, NextFunction } from "express";
+import type { ParamsDictionary } from "express-serve-static-core";
+import type { ParsedQs } from "qs";
 
 const prisma = new PrismaClient();
 const SECRET = process.env.JWT_SECRET || "footera_secret";
 
-export type PlanoName = "FREE" | "PRO";
+export type PlanoName = "FREE" | "PRO" | "ORG";
+
 export interface AuthUser {
   id: string;
-  tipo: TipoUsuario | "Atleta" | "Professor" | "Clube" | "Escolinha" | "Admin";
+  // Prisma exporta como union de strings; comparar com "Professor" etc. funciona
+  tipo: TipoUsuario;
   tipoUsuarioId?: string | null;
   plano?: PlanoName | null;
   isAdmin?: boolean;
 }
 
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest<
+  P = ParamsDictionary,
+  ResBody = any,
+  ReqBody = any,
+  ReqQuery = ParsedQs
+> extends Request<P, ResBody, ReqBody, ReqQuery> {
   userId?: string;
-  user?: AuthUser;
+  user?: AuthUser; // mantém shape único aqui
+}
+
+function toTipoUsuario(s: string): TipoUsuario {
+  switch (s.toLowerCase()) {
+    case "admin": return TipoUsuario.Admin;
+    case "professor": return TipoUsuario.Professor;
+    case "clube": return TipoUsuario.Clube;
+    case "escolinha": return TipoUsuario.Escolinha;
+    case "olheiro": return TipoUsuario.Olheiro;
+    default: return TipoUsuario.Atleta;
+  }
 }
 
 export const authenticateToken: RequestHandler = async (req, res, next) => {
@@ -30,39 +51,20 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
     const userId = payload.id || payload.sub;
     if (!userId) return res.status(401).json({ message: "Invalid token payload" });
 
-    req.userId = userId;
+    (req as AuthenticatedRequest).userId = userId;
 
-    let tipo: AuthUser["tipo"] | undefined = payload.tipo;
-    let plano: AuthUser["plano"] | undefined = payload.plano;
-    let tipoUsuarioId: string | undefined = payload.tipoUsuarioId;
-    let isAdmin: boolean | undefined = !!payload.isAdmin;
+    // fonte única de verdade de usuário/plano
+    const ctx = await resolveUserContext(userId);
 
-    if (!tipo || !tipoUsuarioId || plano === undefined || isAdmin === undefined) {
-      const u = await prisma.usuario.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          tipo: true,
-          administrador: { select: { id: true } },
-          assinatura: { select: { ativo: true, plano: true } },
-          atleta: { select: { id: true } },
-          professor: { select: { id: true } },
-          clube: { select: { id: true } },
-          escolinha: { select: { id: true } },
-        },
-      });
+    const user: AuthUser = {
+      id: userId,
+      tipo: toTipoUsuario(ctx.tipo),
+      tipoUsuarioId: ctx.tipoUsuarioId ?? null,
+      plano: (ctx.plano as PlanoName) ?? null,
+      isAdmin: !!ctx.isAdmin,
+    };
 
-      if (!u) return res.status(401).json({ message: "Usuário inválido" });
-
-      tipo = (u.tipo as any) ?? "Atleta";
-      isAdmin = !!u.administrador;
-      // Regra simples: se tem assinatura ativa, considere PRO; caso contrário FREE
-      plano = u.assinatura?.ativo ? "PRO" : "FREE";
-      tipoUsuarioId =
-        u.atleta?.id ?? u.professor?.id ?? u.clube?.id ?? u.escolinha?.id ?? undefined;
-    }
-
-    req.user = { id: userId, tipo: (tipo as any) || "Atleta", tipoUsuarioId, plano, isAdmin };
+    (req as AuthenticatedRequest).user = user;
     return next();
   } catch (err: any) {
     console.error("JWT verify fail:", err.name, err.message);
