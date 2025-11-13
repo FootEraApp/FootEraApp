@@ -80,6 +80,7 @@ import treinosSalvosRoutes from "./routes/treinosSalvos.js";
 import analyticsRoutes from "./routes/analytics.js"
 import billingRoutes from "./routes/billing.js"
 import scheduleRoutes from "./routes/schedule.routes.js";
+import templatesRoutes from "./routes/templates.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -193,7 +194,7 @@ app.use("/api/analises", analisesRoutes);
 app.use("/api/admin/assinantes", adminAssinantesRoutes);
 app.use("/api/assinaturas", assinaturasRoutes);
 
-import { requireAdmin } from "./middlewares/requireAdmin.js";
+import { requireAdmin } from "./middlewares/guards.js";
 
 app.use("/api/admin/moderacao", authenticateToken, requireAdmin, adminModeracaoRoutes);
 app.use("/api/olheiros", authenticateToken, olheirosRouter);
@@ -246,6 +247,7 @@ app.use("/api/treinosSalvos", treinosSalvosRoutes);
 app.use("/api/analytics", authenticateToken, analyticsRoutes);
 app.use("/api/billing", authenticateToken, billingRoutes);
 app.use("/api/schedule", scheduleRoutes);
+app.use("/api/templates", templatesRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
 

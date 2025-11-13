@@ -18,7 +18,6 @@
     "prisma:generate": "prisma generate --schema server/prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema server/prisma/schema.prisma",
     "prisma:seed": "prisma db seed --schema server/prisma/schema.prisma",
-
     "seed:ex": "tsx server/prisma/seed_exercicios.ts",
     "seed:base": "tsx server/prisma/seed.ts",
     "seed:all": "npm run seed:ex && npm run seed:base"
@@ -123,21 +122,22 @@
     "@types/bcryptjs": "^3.0.0",
     "@types/connect-pg-simple": "^7.0.3",
     "@types/cors": "^2.8.19",
-    "@types/express": "^4.17.21",
+    "@types/express": "^4.17.25",
+    "@types/express-serve-static-core": "^5.1.0",
     "@types/express-session": "^1.18.0",
     "@types/fs-extra": "^11.0.4",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/jwt-decode": "^3.1.0",
     "@types/leo-profanity": "^1.5.4",
     "@types/multer": "^2.0.0",
-    "@types/node": "^20.19.11",
+    "@types/node": "^20.19.25",
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^6.4.17",
     "@types/passport": "^1.0.16",
     "@types/passport-local": "^1.0.38",
     "@types/qrcode-terminal": "^0.12.2",
-    "@types/react": "^18.3.0",
-    "@types/react-dom": "^18.3.0",
+    "@types/react": "^18.3.26",
+    "@types/react-dom": "^18.3.7",
     "@types/sanitize-html": "^2.16.0",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",
@@ -154,8 +154,8 @@
     "tailwindcss": "^3.4.17",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.4",
-    "typescript": "^5.9.2",
-    "vite": "^5.4.19"
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"

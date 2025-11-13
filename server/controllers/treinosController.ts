@@ -1,14 +1,28 @@
-import { Response, Request } from "express";
 import { PrismaClient, PosicaoCampo, Categoria, TipoTreino, TreinoStatus, TipoMidia, TreinoAgendadoStatus } from "@prisma/client";
 import { getIO } from "../socket.js";
-import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
 import { sanitizeText, basicModerationFails } from "../utils/moderation.js";
 import { onExercicioIncluidoNoTreino, onTreinoFeitoPorAlunoFromSubmissao } from "../services/statsService.js";
 import type { Prisma } from "@prisma/client";
 import { incAndCheck } from "../lib/usage.js";
+import type { Request as ExpressRequest, Response } from "express";
+import { can } from "server/services/entitlements.js";
+
+type CanKey = Parameters<typeof can>[1];
+
+const FEAT = {
+  TREINOS_ILIMITADOS: "treinos.ilimitados" as CanKey,
+  ROTINAS_ILIMITADAS: "rotinas.ilimitadas" as CanKey,
+  AGENDAMENTO_LOTE:   "agendamento.lote"   as CanKey,
+};
 
 const prisma = new PrismaClient();
+type Request = ExpressRequest;
+
+type AuthenticatedRequest = ExpressRequest & {
+  userId?: string;
+  user?: Express.UserPayload;
+};
 
 async function atletaTemVinculo(atletaId: string) {
   const a = await prisma.atleta.findUnique({
@@ -544,17 +558,18 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
       repeticoes: Number.isFinite(Number(repeticoes)) ? Number(repeticoes) : undefined,
       observacao: obs ?? undefined,
     };
-
-      const u = req.user!;
-      if (u.tipo === "Atleta" && u.plano !== "PRO") {
+  
+    if (!can(req.user as any, FEAT.TREINOS_ILIMITADOS)) {
       const chk = await incAndCheck(req.userId!, "treinos_semana", 3, "week");
       if (!chk.allowed) {
         return res.status(429).json({
-          message: "Limite semanal de 3 treinos no plano Free. Assine Pro para ilimitado.",
+          code: "USAGE_LIMIT",
+          message: "Limite semanal atingido para seu plano. Faça upgrade para desbloquear ilimitado.",
           remaining: chk.remaining,
         });
       }
     }
+    
     const submissao = existenteSub
       ? await prisma.submissaoTreino.update({ where: { id: existenteSub.id }, data: dataCommon })
       : await prisma.submissaoTreino.create({ data: { atletaId, treinoAgendadoId, ...dataCommon } });
@@ -577,6 +592,7 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
     res.status(500).json({ error: "Erro ao concluir treino" });
   }
 }
+
 
 export async function iniciarTreino(req: AuthenticatedRequest, res: Response) {
   try {
@@ -649,9 +665,9 @@ export async function getPontuacoes(req: Request, res: Response) {
   }
 }
 
-export async function getEscalaPorElencoId(req: Request, res: Response) {
+async function getEscalaCore(elencoId: string, res: Response) {
   try {
-    const { id } = req.params;
+    const id = elencoId;
 
     const elenco = await prisma.elenco.findUnique({ where: { id } });
     if (!elenco) return res.status(404).json({ error: "Elenco não encontrado" });
@@ -702,6 +718,10 @@ export async function getEscalaPorElencoId(req: Request, res: Response) {
   }
 }
 
+export async function getEscalaPorElencoId(req: Request, res: Response) {
+  return getEscalaCore(req.params.id, res);
+}
+
 export async function getEscalaPorDono(req: Request, res: Response) {
   try {
     const raw = (req.query.tipoUsuarioId ?? "") as string;
@@ -717,9 +737,7 @@ export async function getEscalaPorDono(req: Request, res: Response) {
     });
 
     if (!elenco) return res.json(null);
-
-    req.params.id = elenco.id;
-    return getEscalaPorElencoId(req, res);
+    return getEscalaCore(elenco.id, res);
   } catch (err) {
     console.error("Erro ao buscar escala por dono:", err);
     return res.status(500).json({ error: "Erro ao buscar escala por dono" });
@@ -1121,21 +1139,21 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
       return res.status(400).json({ error: "Categoria(s) inválida(s)" });
     }
 
-    if (req.user?.tipo === "Professor" && req.user?.plano !== "PRO") {
-      // planos/rotinas ativas (free: 5)
+    if (req.user?.tipo === "Professor" && !can(req.user as any, FEAT.ROTINAS_ILIMITADAS)) {
       const ativos = await prisma.treinoProgramado.count({
         where: { professorId: String(tipoUsuarioId) }
       });
-      if (ativos >= 5) {
-        return res.status(402).json({ message: "Limite Free: até 5 planos/rotinas ativas. Assine Pro para mais." });
+      const MAX_ROTINAS_ATIVAS = 5; // mantenha este número também na sua matriz de entitlements
+      if (ativos >= MAX_ROTINAS_ATIVAS) {
+        return res.status(402).json({ code: "UPGRADE_REQUIRED", message: `Limite do seu plano: até ${MAX_ROTINAS_ATIVAS} planos/rotinas ativas.` });
       }
 
-      // templates salvos (free: 10) – ajuste a query conforme seu modelo de “template”
       const templates = await prisma.treinoProgramado.count({
-        where: { professorId: String(tipoUsuarioId), naoExpira: true } // ou outra flag que identifique “template”
+        where: { professorId: String(tipoUsuarioId), naoExpira: true }
       });
-      if (templates >= 10) {
-        return res.status(402).json({ message: "Limite Free: até 10 templates salvos. Assine Pro para mais." });
+      const MAX_TEMPLATES = 10; // idem: declare na matriz de entitlements
+      if (templates >= MAX_TEMPLATES) {
+        return res.status(402).json({ code: "UPGRADE_REQUIRED", message: `Limite do seu plano: até ${MAX_TEMPLATES} templates salvos.` });
       }
     }
 
@@ -1771,8 +1789,8 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
       incluirObservados?: boolean;
     };
 
-    if (req.user?.tipo === "Professor" && req.user?.plano !== "PRO") {
-      return res.status(402).json({ message: "Recurso Pro: Agendamento em lote" });
+    if (!can(req.user as any, "agendamento.lote")) {
+      return res.status(402).json({ code: "UPGRADE_REQUIRED", message: "Recurso disponível apenas em planos superiores (agendamento em lote)." });
     }
 
     if (!treinoProgramadoId || !Array.isArray(datas) || datas.length === 0) {
@@ -1939,16 +1957,17 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
   if (ag.atletaId !== atletaId) return res.status(403).json({ message: "Não autorizado." });
   if (!ag.startedAt) return res.status(400).json({ message: "Treino ainda não foi iniciado." });
 
-    const u = req.user!;
-    if (u.tipo === "Atleta" && u.plano !== "PRO") {
+   if (!can(req.user as any, FEAT.TREINOS_ILIMITADOS)) {
     const chk = await incAndCheck(req.userId!, "treinos_semana", 3, "week");
     if (!chk.allowed) {
       return res.status(429).json({
-        message: "Limite semanal de 3 treinos no plano Free. Assine Pro para ilimitado.",
+        code: "USAGE_LIMIT",
+        message: "Limite semanal atingido para seu plano. Faça upgrade para desbloquear ilimitado.",
         remaining: chk.remaining,
       });
     }
   }
+
   const finishedAt = new Date();
   const duracao = Math.max(
     0,
