@@ -14,6 +14,7 @@ import {
   Trash2,
   Check,
   X,
+  BookMarked
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API, FLAGS } from "../config.js";
@@ -45,12 +46,13 @@ interface TreinoProgramado {
 interface TreinoAgendado {
   id: string;
   titulo: string;
-  dataTreino: string;
+  dataTreino: string | null;
   dataExpiracao?: string | null;
   nivel?: string | null;
   prazoEnvio?: string | null;
   duracaoMinutos?: number | null;
   treinoProgramado?: {
+    id: string;
     descricao?: string;
     nivel: string;
     dicas?: string[];
@@ -1113,6 +1115,16 @@ const renderDesafioCard = (desafio: Desafio) => (
           </button>
         </div>
       </div>
+      <div className="mt-2">
+        <button
+          type="button"
+          onClick={() => salvarTreinoNaBiblioteca(treino.id)}
+          className="inline-flex items-center px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-800 text-xs sm:text-sm bg-white hover:bg-emerald-50"
+        >
+          <BookMarked className="w-4 h-4 mr-1" />
+          Salvar na biblioteca
+        </button>
+      </div>
 
       {treino.descricao && <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>}
 
@@ -1178,6 +1190,17 @@ const renderDesafioCard = (desafio: Desafio) => (
           >
             {treino.titulo}
           </h4>
+
+          {programado?.id && (
+            <button
+              type="button"
+              onClick={() => salvarTreinoNaBiblioteca(programado.id)}
+              className="inline-flex items-center px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-800 text-xs sm:text-sm bg-white hover:bg-emerald-50"
+            >
+              <BookMarked className="w-4 h-4 mr-1" />
+              Salvar na biblioteca
+            </button>
+          )}
 
           <div className="flex items-center gap-2">
             {typeof pontos === "number" && pontos > 0 && (
@@ -1376,6 +1399,58 @@ const renderDesafioCard = (desafio: Desafio) => (
       </div>
     );
   };
+
+async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
+  const token = getToken();
+
+  if (!token) {
+    alert("Sessão expirada. Faça login novamente.");
+    return;
+  }
+
+  try {
+    const r = await fetch(`${API.BASE_URL}/api/treinos/biblioteca`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ treinoProgramadoId }),
+    });
+
+    if (!r.ok) {
+      let payload: any = null;
+      try {
+        payload = await r.json();
+      } catch {
+        // se não conseguir parsear JSON, mantém payload = null
+      }
+
+      // 🧱 Gating de limite: 5 TreinoSalvo Free
+      if (r.status === 403 && payload?.code === "LIMIT_REACHED" && payload?.feature === "TREINO_SALVO") {
+        alert(
+          payload.message ||
+            "Você atingiu o limite de treinos salvos na sua biblioteca no plano Free."
+        );
+        return;
+      }
+
+      if (r.status === 409) {
+        alert("Esse treino já está na sua biblioteca.");
+        return;
+      }
+
+      console.error("Falha ao salvar na biblioteca:", r.status, payload || (await r.text().catch(() => "")));
+      alert("Não foi possível salvar o treino na biblioteca.");
+      return;
+    }
+
+    alert("Treino salvo na sua biblioteca!");
+  } catch (e) {
+    console.error(e);
+    alert("Erro inesperado ao salvar o treino na biblioteca.");
+  }
+}
 
   async function removerTreinoAgendado(id: string) {
     const token = Storage.token;
