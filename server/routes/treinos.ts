@@ -31,6 +31,7 @@ import {
   expirarTreinosVencidos,
   iniciarTreinoAgendado,
   finalizarTreinoAgendado,
+  atualizarAgendamento
 } from "server/controllers/treinosController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
 import { requireCapability, requireOrgSeat } from "server/middlewares/guards.js";
@@ -58,7 +59,7 @@ router.post("/agendados/:id/iniciar", iniciarTreino);
 router.delete("/agendados/:id", excluirTreinoAgendado);
 router.post("/agendados/:id/complete", concluirTreino);
 router.get("/agendados", getTreinosAgendados);
-
+router.put("/agendados/:id", atualizarAgendamento); // <--- adicionar
 router.post(
   "/agendados",
   requireCapability("agendamento:pessoal"),
