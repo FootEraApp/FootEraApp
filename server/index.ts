@@ -85,7 +85,7 @@ import usageRouter from './routes/usage.js';
 import agendamentosRouter from './routes/agendamentos.js';
 import listasOlheiroRoutes from './routes/listaOlheiro.js';
 import auditoriaRouter from "./routes/auditoria.js";
-
+import adsRoutes from "./routes/ads.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -256,6 +256,7 @@ app.use('/api/usage', usageRouter);
 app.use('/api/agendamentos', agendamentosRouter);
 app.use("/api/olheiro/listas", listasOlheiroRoutes);
 app.use("/api/auditoria", auditoriaRouter);
+app.use("/api/ads", adsRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
 
