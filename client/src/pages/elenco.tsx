@@ -1,3 +1,4 @@
+// client/src/pages/elenco.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   DragDropContext,
@@ -10,7 +11,7 @@ import axios from "axios";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { Link } from "wouter";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus, X, ListFilter, Trash2 } from "lucide-react";
 
 const ELENCOS_BASE = `${API.BASE_URL}/api/treinos/elencos`;
 const PONTOS_BASE  = `${API.BASE_URL}/api/treinos/pontuacoes`;
@@ -26,8 +27,8 @@ type PontuacaoDTO = {
 };
 
 interface Atleta {
-  id: string;       
-  atletaId: string; 
+  id: string;
+  atletaId: string;
   nome: string;
   foto?: string | null;
   idade?: number | null;
@@ -53,27 +54,6 @@ const POSICOES: { id: PosicaoCampo; label: string }[] = [
   { id: "GOL",  label: "Goleiro" },
 ];
 
-interface ElencoSalvarPayload {
-  id?: string;
-  nome: string;
-  professorId?: string;
-  clubeId?: string;
-  escolinhaId?: string;
-  atletasIds: string[];
-  maxJogadores: number;
-  escala?: Record<PosicaoCampo, string | null>;
-  tipoUsuario?: "professor" | "escolinha" | "clube";
-  tipoUsuarioId?: string;
-}
-
-type ElencoServidor = {
-  id: string;
-  nome: string;
-  maxJogadores: number;
-  escala?: Record<PosicaoCampo, string | null>;
-  atletasElenco?: { atletaId: string; posicao: PosicaoCampo }[];
-};
-
 type EscalaItem = {
   atletaId: string;
   usuarioId: string;
@@ -84,15 +64,40 @@ type EscalaItem = {
 };
 type EscalaEnriquecida = Record<PosicaoCampo, EscalaItem | null>;
 
+type ElencoServidor = {
+  id: string;
+  nome: string;
+  maxJogadores: number;
+  escala?: Record<PosicaoCampo, string | null>;
+  atletasElenco?: { atletaId: string; posicao: PosicaoCampo }[];
+};
+
+type ElencoUI = {
+  id: string | null;
+  nome: string;
+  maxJogadores: number;
+  posicoes: Record<PosicaoCampo, Atleta | null>;
+  livres: Atleta[];
+};
+
 function useIsMobile(breakpointPx = 768) {
   const [isMobile, setIsMobile] = useState<boolean>(
     typeof window !== "undefined" ? window.innerWidth <= breakpointPx : false
   );
+
   useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth <= breakpointPx);
+    if (typeof window === "undefined") return;
+
+    const onResize = () => {
+      setIsMobile(window.innerWidth <= breakpointPx);
+    };
+
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+    };
   }, [breakpointPx]);
+
   return isMobile;
 }
 
@@ -125,19 +130,12 @@ const GOLDEN_MIN_OVR = 100;
 const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
   (Number.isFinite(ovr) ? Number(ovr) : 0) >= min;
 
-type CardAtletaShieldProps = {
+const CardAtletaShield: React.FC<{
   atleta: Atleta;
-  ovr?: number;
-  perf?: number;
-  disc?: number;
-  resp?: number;
+  ovr?: number; perf?: number; disc?: number; resp?: number;
   size?: { w: number; h: number };
   goldenMinOVR?: number;
-};
-
-const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
-  atleta, ovr, perf, disc, resp, size, goldenMinOVR,
-}) => {
+}> = ({ atleta, ovr, perf, disc, resp, size, goldenMinOVR }) => {
   const W = size?.w ?? SHIELD_W_DESK;
   const H = size?.h ?? SHIELD_H_DESK;
   const clipId = `shieldClip-${atleta.atletaId}`;
@@ -153,18 +151,15 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
     <svg width={W} height={H} viewBox="0 0 184 260" className="block select-none">
       <defs>
         <clipPath id={clipId}><path d={SHIELD_PATH} /></clipPath>
-
         <linearGradient id="cardGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="rgba(5,10,30,0.12)" />
           <stop offset="55%" stopColor="rgba(5,10,30,0.40)" />
           <stop offset="100%" stopColor="rgba(5,10,30,0.7)" />
         </linearGradient>
-
         <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#f3c969" />
           <stop offset="100%" stopColor="#9fc5ff" />
         </linearGradient>
-
         <linearGradient id="goldOverlay" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%"  stopColor="#daa520" stopOpacity="0.45" />
           <stop offset="55%" stopColor="#daa520" stopOpacity="0.25" />
@@ -199,7 +194,7 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
         <text x={154} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{Math.round(resp ?? 0)}</text>
       </g>
 
-      <text x={92} y={204} textAnchor="middle" fontSize="13" fontWeight={700} fill="#ffffff">
+      <text x="92" y="204" textAnchor="middle" fontSize="13" fontWeight={700} fill="#ffffff">
         {atleta.nome?.toUpperCase()}
       </text>
       <line x1={68} x2={116} y1={224} y2={224} stroke="#d7b46a" strokeWidth="2" strokeLinecap="round" />
@@ -208,7 +203,7 @@ const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
 };
 
 const CardAtleta: React.FC<{ atleta: Atleta }> = ({ atleta }) => (
-  <div className="p-2 bg-white rounded-md shadow w-[180px] sm:w-[200px] flex items-center gap-3">
+  <div className="p-2 bg-white rounded-md shadow w-[180px] sm:w-[200px] flex items-center gap-3 will-change-transform">
     <img
       src={atleta.foto ? `${atleta.foto}` : "/default-avatar.png"}
       alt={atleta.nome}
@@ -225,11 +220,9 @@ const CardAtleta: React.FC<{ atleta: Atleta }> = ({ atleta }) => (
 const safeUUID = () => {
   try {
     const c: any = (globalThis as any).crypto;
-    if (c && typeof c.randomUUID === "function") {
-      return c.randomUUID();
-    }
+    if (c && typeof c.randomUUID === "function") return c.randomUUID();
   } catch {}
-   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`;
 };
 
 function normalizeAtletas(raw: any): Atleta[] {
@@ -240,7 +233,6 @@ function normalizeAtletas(raw: any): Atleta[] {
     : Array.isArray(raw?.atletas)
     ? raw.atletas
     : [];
-
   return list.map((a: any) => ({
     id: String(a.id ?? a.usuarioId ?? a.atletaId ?? safeUUID()),
     atletaId: String(a.atletaId ?? a.usuarioId ?? a.id ?? ""),
@@ -251,30 +243,47 @@ function normalizeAtletas(raw: any): Atleta[] {
   }));
 }
 
+const emptyPosicoes = (): Record<PosicaoCampo, Atleta | null> =>
+  POSICOES.reduce((acc, p) => { acc[p.id] = null; return acc; }, {} as Record<PosicaoCampo, Atleta | null>);
+
 export default function PaginaElenco() {
   const isMobile = useIsMobile();
 
-  const [atletas, setAtletas] = useState<Atleta[]>([]);
-  const [posicoes, setPosicoes] = useState<Record<PosicaoCampo, Atleta | null>>(
-    () => POSICOES.reduce((acc, p) => ({ ...acc, [p.id]: null }), {} as Record<PosicaoCampo, Atleta | null>)
-  );
   const [pontos, setPontos] = useState<Record<string, PontuacaoDTO>>({});
-  const [maxElenco, setMaxElenco] = useState<number>(11);
-  const [elencoNome, setElencoNome] = useState<string>("Elenco Principal");
-  const [elencoId, setElencoId] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
+  const [todosAtletas, setTodosAtletas] = useState<Atleta[]>([]);
+  const [elencos, setElencos] = useState<ElencoUI[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [filtro, setFiltro] = useState("");
+
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const ativo = elencos[activeIndex];
+  const posicoesAtivas = ativo?.posicoes ?? emptyPosicoes();
+  const atletasLivresAtivo = (ativo?.livres ?? []).filter(a => {
+    if (!filtro) return true;
+    const f = filtro.toLowerCase();
+    return (
+      a.nome?.toLowerCase().includes(f) ||
+      a.posicao?.toLowerCase().includes(f)
+    );
+  });
+
   const elencoAtual = useMemo(
-    () => POSICOES.map((p) => posicoes[p.id]).filter(Boolean) as Atleta[],
-    [posicoes]
+    () => POSICOES.map((p) => posicoesAtivas[p.id]).filter(Boolean) as Atleta[],
+    [posicoesAtivas]
   );
 
   const fetchPontuacoes = async (ids: string[]) => {
     const token = Storage.token;
-    if (!ids.length || !token) return;
+    const faltando = ids.filter(id => !pontos[id]);
+    if (!faltando.length || !token) return;
     try {
       const res = await axios.get<PontuacaoDTO[]>(PONTOS_BASE, {
-        params: { atletaIds: ids.join(",") },
+        params: { atletaIds: faltando.join(",") },
         headers: { Authorization: `Bearer ${token}` },
       });
       const map = Object.fromEntries(res.data.map((r) => [r.atletaId, r]));
@@ -284,294 +293,322 @@ export default function PaginaElenco() {
     }
   };
 
-  const aplicarEscalaNasPosicoes = (
-    escala: Record<PosicaoCampo, string | null>,
-    listaAtletas: Atleta[]
-  ) => {
-    const novoMapa: Record<PosicaoCampo, Atleta | null> = { ...posicoes };
+  function buildElencoUI(
+    raw: ElencoServidor | { id?: string; nome?: string; maxJogadores?: number; escala?: any },
+    baseAtletas: Atleta[]
+  ): ElencoUI {
+    const posicoesPreenchidas: Record<PosicaoCampo, Atleta | null> = emptyPosicoes();
     const usados = new Set<string>();
 
-    POSICOES.forEach(({ id }) => {
-      const atletaId = escala?.[id] ?? null;
-      if (atletaId) {
-        const a = listaAtletas.find((x) => x.atletaId === atletaId) || null;
-        novoMapa[id] = a;
+    const tryFillFromEscala = (esc: Record<PosicaoCampo, any>) => {
+      POSICOES.forEach(({ id }) => {
+        const v = esc?.[id];
+        let a: Atleta | null = null;
+
+        if (v && typeof v === "object") {
+          const item = v as EscalaItem;
+          a =
+            baseAtletas.find(x => x.atletaId === String(item.atletaId)) ||
+            baseAtletas.find(x => x.id === String(item.usuarioId)) ||
+            {
+              id: String(item.usuarioId ?? item.atletaId ?? safeUUID()),
+              atletaId: String(item.atletaId ?? item.usuarioId ?? ""),
+              nome: item.nome ?? "",
+              foto: item.foto ?? null,
+              idade: item.idade ?? null,
+              posicao: item.posicao ?? null,
+            };
+        } else if (typeof v === "string") {
+          a = baseAtletas.find(x => x.atletaId === v) || null;
+        } else if (v != null) {
+          const s = String(v);
+          a = baseAtletas.find(x => x.atletaId === s) || null;
+        }
+
+        posicoesPreenchidas[id] = a;
         if (a) usados.add(a.atletaId);
-      } else {
-        novoMapa[id] = null;
-      }
-    });
+      });
+    };
 
-    const restantes = listaAtletas.filter((a) => !usados.has(a.atletaId));
-    setPosicoes(novoMapa);
-    setAtletas(restantes);
-    fetchPontuacoes(Array.from(usados));
-  };
+    if ((raw as any).escala) {
+      tryFillFromEscala((raw as any).escala as Record<PosicaoCampo, any>);
+    } else if (Array.isArray((raw as any).atletasElenco)) {
+      const built = POSICOES.reduce((acc, p) => { acc[p.id] = null; return acc; }, {} as Record<PosicaoCampo, string | null>);
+      for (const v of (raw as any).atletasElenco) built[v.posicao] = v.atletaId ?? null;
+      tryFillFromEscala(built as any);
+    }
 
-  const aplicarEscalaEnriquecida = (
-    escala: EscalaEnriquecida,
-    listaAtletas: Atleta[]
-  ) => {
-    const novoMapa: Record<PosicaoCampo, Atleta | null> = { ...posicoes };
-    const usados = new Set<string>();
+    const livres = baseAtletas.filter(a => !usados.has(a.atletaId));
+    if (usados.size) fetchPontuacoes(Array.from(usados));
 
-    POSICOES.forEach(({ id }) => {
-      const item = escala?.[id] ?? null;
-      if (!item) { novoMapa[id] = null; return; }
-
-      let a =
-        listaAtletas.find((x) => x.atletaId === item.atletaId) ||
-        listaAtletas.find((x) => x.id === item.usuarioId) ||
-        null;
-
-      if (!a) {
-        a = {
-          id: item.usuarioId,
-          atletaId: item.atletaId,
-          nome: item.nome,
-          foto: item.foto ?? null,
-          idade: item.idade ?? null,
-          posicao: item.posicao ?? null,
-        };
-      }
-
-      novoMapa[id] = a;
-      usados.add(a.atletaId);
-    });
-
-    setPosicoes(novoMapa);
-    setAtletas(listaAtletas.filter((a) => !usados.has(a.atletaId)));
-    fetchPontuacoes(Array.from(usados));
-  };
+    return {
+      id: (raw as any).id ?? null,
+      nome: (raw as any).nome ?? "Elenco",
+      maxJogadores: (raw as any).maxJogadores ?? 11,
+      posicoes: posicoesPreenchidas,
+      livres,
+    };
+  }
 
   useEffect(() => {
     (async () => {
       try {
         const tipoUsuarioId = Storage.tipoUsuarioId;
         const token = Storage.token;
+        if (!token) { setLoading(false); return; }
 
+        // 1) atletas vinculados
         const resAtletas = await axios.get(
           `${API.BASE_URL}/api/treinos/atletas-vinculados`,
           { params: { tipoUsuarioId }, headers: { Authorization: `Bearer ${token}` } }
         );
-        const lista = normalizeAtletas(resAtletas.data);
-        setAtletas(lista);
+        const baseAtletas = normalizeAtletas(resAtletas.data);
+        setTodosAtletas(baseAtletas);
 
-        const resEscala = await axios.get(`${ELENCOS_BASE}/escala-por-dono`, {
+        // 2) elencos
+        const resElencos = await axios.get(ELENCOS_BASE, {
           params: { tipoUsuarioId },
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        if (resEscala.data) {
-          const { id, nome, maxJogadores, escala } = resEscala.data as {
-            id: string;
-            nome: string;
-            maxJogadores: number;
-            escala: EscalaEnriquecida;
-          };
-          setElencoId(id);
-          setElencoNome(nome ?? "Elenco Principal");
-          setMaxElenco(maxJogadores ?? 11);
+        const data = resElencos.data as ElencoServidor | ElencoServidor[] | null | undefined;
+        let lista: ElencoServidor[] = [];
+        if (Array.isArray(data)) lista = data;
+        else if (data && (data as ElencoServidor).id) lista = [data as ElencoServidor];
 
-          if (escala) {
-            aplicarEscalaEnriquecida(escala, lista);
-            setLoading(false);
-            return;
-          }
+        let elencosUI: ElencoUI[] = [];
+        if (lista.length) {
+          elencosUI = lista.slice(0, 10).map(e => buildElencoUI(e, baseAtletas));
+        } else {
+          elencosUI = [{
+            id: null,
+            nome: "Elenco 1",
+            maxJogadores: 11,
+            posicoes: emptyPosicoes(),
+            livres: baseAtletas.slice(),
+          }];
         }
 
-        const resElenco = await axios.get(ELENCOS_BASE, {
-          params: { tipoUsuarioId },
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        setElencos(elencosUI);
+        setActiveIndex(0);
 
-        const data = resElenco.data as ElencoServidor | ElencoServidor[] | null | undefined;
-        const elencoExistente: ElencoServidor | null =
-          Array.isArray(data)
-            ? (data[0] ?? null)
-            : data && (data as ElencoServidor).id
-            ? (data as ElencoServidor)
-            : null;
+        // 3) re-aplicar escala por dono (opcional)
+        try {
+          const resEscala = await axios.get(`${ELENCOS_BASE}/escala-por-dono`, {
+            params: { tipoUsuarioId },
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const enriched = resEscala.data as { id?: string; nome?: string; maxJogadores?: number; escala?: EscalaEnriquecida } | null;
 
-        if (elencoExistente) {
-          setElencoId(elencoExistente.id);
-          setElencoNome(elencoExistente.nome ?? "Elenco Principal");
-          setMaxElenco(elencoExistente.maxJogadores ?? 11);
-
-          let escalaToApply: Record<PosicaoCampo, string | null> | null = null;
-
-          if (elencoExistente.escala) {
-            escalaToApply = elencoExistente.escala;
-          } else if (Array.isArray(elencoExistente.atletasElenco)) {
-            const built = POSICOES.reduce((acc, p) => {
-              acc[p.id] = null;
-              return acc;
-            }, {} as Record<PosicaoCampo, string | null>);
-
-            for (const v of elencoExistente.atletasElenco) {
-              built[v.posicao] = v.atletaId ?? null;
-            }
-            escalaToApply = built;
+          if (enriched?.escala) {
+            setElencos(prev => {
+              if (!prev.length) return prev;
+              const idx = enriched.id ? prev.findIndex(e => e.id === enriched.id) : 0;
+              const targetIdx = idx >= 0 ? idx : 0;
+              const updated = buildElencoUI(
+                {
+                  id: prev[targetIdx]?.id ?? (enriched.id ?? null),
+                  nome: enriched.nome ?? prev[targetIdx]?.nome,
+                  maxJogadores: enriched.maxJogadores ?? prev[targetIdx]?.maxJogadores ?? 11,
+                  escala: enriched.escala,
+                } as any,
+                baseAtletas
+              );
+              const arr = [...prev];
+              arr[targetIdx] = updated;
+              return arr;
+            });
           }
-
-          if (escalaToApply) {
-            aplicarEscalaNasPosicoes(escalaToApply, lista);
-          }
-        }
+        } catch {}
       } catch (err) {
-        console.error("Erro ao carregar elenco/atletas:", err);
+        console.error("Erro ao carregar elencos/atletas:", err);
       } finally {
         setLoading(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fieldBox = useSize<HTMLDivElement>();
 
-  const rowsHeights = 4;
-  const maxCols = 4;
-  const gapY = 20;
-  const gapX = 12;
+  // layout estável (scale baseado só na largura)
+  const gapY = isMobile ? 12 : 20;
+  const gapX = isMobile ? 8 : 12;
 
   const BASE_W = isMobile ? SHIELD_W_MOB : SHIELD_W_DESK;
   const BASE_H = isMobile ? SHIELD_H_MOB : SHIELD_H_DESK;
-
-  const BASE_SLOT_EXTRA = isMobile ? 48 : 64;
+  const BASE_SLOT_EXTRA = isMobile ? 40 : 64;
 
   const baseSlotW = BASE_W + 12;
-  const baseSlotH = BASE_H + BASE_SLOT_EXTRA;
-
+  const maxCols = 4;
   const needW = maxCols * baseSlotW + (maxCols - 1) * gapX;
-  const needH = rowsHeights * baseSlotH + (rowsHeights - 1) * gapY;
 
   const availW = Math.max(0, fieldBox.size.w - 8);
-  const availH = Math.max(0, fieldBox.size.h - 8);
-
-  const scale = Math.max(0.6, Math.min(availW / needW, availH / needH));
+  const minScale = isMobile ? 0.48 : 0.6;
+  const scale = Math.max(minScale, Math.min(availW / needW, 1));
   const SHIELD_W = Math.round(BASE_W * scale);
   const SHIELD_H = Math.round(BASE_H * scale);
   const SLOT_EXTRA_H = Math.round(BASE_SLOT_EXTRA * scale);
 
+  const addElenco = () => {
+    if (elencos.length >= 10) {
+      alert("Você já possui 10 elencos. Exclua um para criar outro.");
+      return;
+    }
+    setElencos(prev => {
+      const novo: ElencoUI = {
+        id: null,
+        nome: `Elenco ${prev.length + 1}`,
+        maxJogadores: 11,
+        posicoes: emptyPosicoes(),
+        livres: todosAtletas.slice(),
+      };
+      const arr = [...prev, novo];
+      setActiveIndex(arr.length - 1);
+      return arr;
+    });
+  };
+
+  const removeElenco = (index: number) => {
+    setElencos(prev => {
+      if (prev.length <= 1) return prev;
+      const arr = prev.slice();
+      arr.splice(index, 1);
+      if (activeIndex >= arr.length) setActiveIndex(arr.length - 1);
+      return arr;
+    });
+  };
+
   const handleDragEnd = (result: DropResult) => {
+    if (!ativo) return;
     const { source, destination } = result;
     if (!destination) return;
 
-    const isLista = (id: string) => id === "atletas";
+    const isLista = (id: string) => id === "atletasDesk" || id === "atletasMob";
     const isPosicao = (id: string) => id.startsWith("pos:");
 
-    if (source.droppableId === "atletas" && destination.droppableId === "atletas") {
-      const nova = Array.from(atletas);
-      const [movido] = nova.splice(source.index, 1);
-      nova.splice(destination.index, 0, movido);
-      setAtletas(nova);
+    // reordenar dentro da lista
+    if (isLista(source.droppableId) && isLista(destination.droppableId)) {
+      setElencos(prev => {
+        const arr = [...prev];
+        const e = { ...arr[activeIndex] };
+        const nova = Array.from(e.livres);
+        const [movido] = nova.splice(source.index, 1);
+        nova.splice(destination.index, 0, movido);
+        e.livres = nova;
+        arr[activeIndex] = e;
+        return arr;
+      });
       return;
     }
 
+    // lista -> posição
     if (isLista(source.droppableId) && isPosicao(destination.droppableId)) {
       const posId = destination.droppableId.replace("pos:", "") as PosicaoCampo;
       const ocupados = elencoAtual.length;
-      if (ocupados >= maxElenco && !posicoes[posId]) {
-        alert(`O elenco já tem ${maxElenco} jogadores.`);
-        return;
-      }
 
-      const origem = Array.from(atletas);
-      const [atleta] = origem.splice(source.index, 1);
-
-      setAtletas(origem);
-      setPosicoes((prev) => {
-        const anterior = prev[posId];
-        const novo = { ...prev, [posId]: atleta };
-        if (anterior) {
-          setAtletas((lista) => [anterior, ...lista]);
+      setElencos(prev => {
+        const arr = [...prev];
+        const e = { ...arr[activeIndex] };
+        if (ocupados >= e.maxJogadores && !e.posicoes[posId]) {
+          alert(`O elenco já tem ${e.maxJogadores} jogadores.`);
+          return prev;
         }
-        return novo;
-      });
+        const livres = Array.from(e.livres);
+        const [atleta] = livres.splice(source.index, 1);
 
-      if (!pontos[atleta.atletaId]) fetchPontuacoes([atleta.atletaId]);
+        const anterior = e.posicoes[posId];
+        e.posicoes = { ...e.posicoes, [posId]: atleta };
+        if (anterior) livres.unshift(anterior);
+
+        e.livres = livres;
+        arr[activeIndex] = e;
+
+        if (atleta && !pontos[atleta.atletaId]) fetchPontuacoes([atleta.atletaId]);
+
+        return arr;
+      });
       return;
     }
 
+    // posição -> lista
     if (isPosicao(source.droppableId) && isLista(destination.droppableId)) {
       const posId = source.droppableId.replace("pos:", "") as PosicaoCampo;
-      const atleta = posicoes[posId];
-      if (!atleta) return;
+      setElencos(prev => {
+        const arr = [...prev];
+        const e = { ...arr[activeIndex] };
+        const atleta = e.posicoes[posId];
+        if (!atleta) return prev;
 
-      setPosicoes((prev) => ({ ...prev, [posId]: null }));
-      setAtletas((lista) => {
-        const nova = Array.from(lista);
-        nova.splice(Math.min(destination.index, nova.length), 0, atleta);
-        return nova;
+        const livres = Array.from(e.livres);
+        livres.splice(Math.min(destination.index, livres.length), 0, atleta);
+
+        e.posicoes = { ...e.posicoes, [posId]: null };
+        e.livres = livres;
+        arr[activeIndex] = e;
+        return arr;
       });
       return;
     }
 
+    // posição -> posição
     if (isPosicao(source.droppableId) && isPosicao(destination.droppableId)) {
       const from = source.droppableId.replace("pos:", "") as PosicaoCampo;
       const to = destination.droppableId.replace("pos:", "") as PosicaoCampo;
       if (from === to) return;
 
-      setPosicoes((prev) => {
-        const novo = { ...prev };
-        const a = prev[from];
-        const b = prev[to];
-        novo[to] = a;
-        novo[from] = b || null;
-        return novo;
+      setElencos(prev => {
+        const arr = [...prev];
+        const e = { ...arr[activeIndex] };
+        const a = e.posicoes[from];
+        const b = e.posicoes[to];
+        e.posicoes = { ...e.posicoes, [to]: a ?? null, [from]: b ?? null };
+        arr[activeIndex] = e;
+        return arr;
       });
       return;
     }
   };
 
-  const salvarElenco = async () => {
+  const salvarElencoAtivo = async () => {
+    const token = Storage.token;
+    const tipoUsuarioId = Storage.tipoUsuarioId;
+    const tipoUsuario = (Storage.tipoSalvo || "").toLowerCase() as "professor" | "escolinha" | "clube";
+    const e = ativo;
+    if (!e) return;
+
+    if (!token) { alert("Você não está autenticado. Faça login novamente."); return; }
+    if (!tipoUsuarioId || !tipoUsuario) { alert("Não foi possível identificar seu tipo de usuário."); return; }
+
+    const escala: Record<PosicaoCampo, string | null> = POSICOES.reduce((acc, p) => {
+      acc[p.id] = e.posicoes[p.id]?.atletaId ?? null;
+      return acc;
+    }, {} as Record<PosicaoCampo, string | null>);
+
+    const payload = {
+      nome: e.nome,
+      professorId: Storage.tipoSalvo === "Professor" ? tipoUsuarioId : undefined,
+      clubeId:     Storage.tipoSalvo === "Clube"     ? tipoUsuarioId : undefined,
+      escolinhaId: Storage.tipoSalvo === "Escolinha" ? tipoUsuarioId : undefined,
+      atletasIds: (POSICOES.map((p) => e.posicoes[p.id]).filter(Boolean) as Atleta[]).map(a => a.atletaId),
+      maxJogadores: e.maxJogadores,
+      escala,
+      tipoUsuario,
+      tipoUsuarioId,
+    };
+
     try {
-      const token = Storage.token;
-
-      const tipoUsuarioId = Storage.tipoUsuarioId;
-      const tipoUsuario = (Storage.tipoSalvo || "").toLowerCase() as
-        | "professor" | "escolinha" | "clube";
-
-      if (!token) {
-        alert("Você não está autenticado. Faça login novamente.");
-        return;
-      }
-      if (!tipoUsuarioId || !tipoUsuario) {
-        alert("Não foi possível identificar seu tipo de usuário.");
-        return;
-      }
-
-      const escala: Record<PosicaoCampo, string | null> = POSICOES.reduce(
-        (acc, p) => {
-          acc[p.id] = posicoes[p.id]?.atletaId ?? null;
-          return acc;
-        },
-        {} as Record<PosicaoCampo, string | null>
-      );
-
-      const payload: ElencoSalvarPayload = {
-        nome: elencoNome,
-        professorId: Storage.tipoSalvo === "Professor" ? tipoUsuarioId : undefined,
-        clubeId: Storage.tipoSalvo === "Clube" ? tipoUsuarioId : undefined,
-        escolinhaId: Storage.tipoSalvo === "Escolinha" ? tipoUsuarioId : undefined,
-        atletasIds: (POSICOES.map((p) => posicoes[p.id]).filter(Boolean) as Atleta[]).map(
-          (a) => a.atletaId
-        ),
-        maxJogadores: maxElenco,
-        escala,
-        tipoUsuario,
-        tipoUsuarioId,
-      };
-
-      if (elencoId) {
-        await axios.put(`${ELENCOS_BASE}/${elencoId}`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+      if (e.id) {
+        await axios.put(`${ELENCOS_BASE}/${e.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
         alert("Elenco atualizado com sucesso!");
       } else {
-        const res = await axios.post(ELENCOS_BASE, payload, {
-          headers: { Authorization: `Bearer ${token}` },
+        const res = await axios.post(ELENCOS_BASE, payload, { headers: { Authorization: `Bearer ${token}` } });
+        const newId = res.data?.id ?? null;
+        setElencos(prev => {
+          const arr = [...prev];
+          arr[activeIndex] = { ...arr[activeIndex], id: newId };
+          return arr;
         });
-        if (res.data?.id) setElencoId(res.data.id);
         alert("Elenco criado com sucesso!");
       }
     } catch (err) {
@@ -581,7 +618,7 @@ export default function PaginaElenco() {
   };
 
   const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) => {
-    const a = posicoes[pos];
+    const a = posicoesAtivas[pos];
     const pts = a ? pontos[a.atletaId] : undefined;
     const ovr  = pts?.mediaGeral ?? 0;
     const perf = pts?.performance ?? 0;
@@ -596,7 +633,7 @@ export default function PaginaElenco() {
             {...provided.droppableProps}
             className={`rounded-xl border-2 border-dashed overflow-hidden flex flex-col items-center justify-between p-1
               ${snapshot.isDraggingOver ? "bg-green-300/70" : "bg-green-100/70"}`}
-            style={{ width: SHIELD_W + 12, height: SHIELD_H + SLOT_EXTRA_H }}
+            style={{ width: SHIELD_W + 12, height: SHIELD_H + SLOT_EXTRA_H, flex: "0 0 auto" }}
           >
             <span className="text-[10px] sm:text-xs font-semibold opacity-80">{label}</span>
 
@@ -607,7 +644,7 @@ export default function PaginaElenco() {
                     ref={provided2.innerRef}
                     {...provided2.draggableProps}
                     {...provided2.dragHandleProps}
-                    className={`${snapshot2.isDragging ? "shadow-2xl scale-105 z-50" : ""}`}
+                    className={`${snapshot2.isDragging ? "shadow-2xl scale-105 z-50" : ""} will-change-transform`}
                   >
                     <CardAtletaShield
                       atleta={a}
@@ -626,137 +663,373 @@ export default function PaginaElenco() {
                 Solte aqui
               </div>
             )}
-
-            {provided.placeholder}
+            {/* sem placeholder nos slots para evitar “pulos” */}
           </div>
         )}
       </Droppable>
     );
   };
 
-  const listaClasses =
-    (isMobile
-      ? "flex flex-row gap-3 overflow-x-auto py-2"
-      : "flex flex-col gap-3 overflow-y-auto") + " min-h-[100px]";
+  const ElencoPickerModal: React.FC<{
+    open: boolean;
+    onClose: () => void;
+    elencos: ElencoUI[];
+    activeIndex: number;
+    onSelect: (idx: number) => void;
+    onCreate: () => void;
+    onDelete: (idx: number) => void;
+  }> = ({ open, onClose, elencos, activeIndex, onSelect, onCreate, onDelete }) => {
+    if (!open) return null;
 
-  const listaWrapperClasses = isMobile
-    ? "w-full bg-white shadow-md p-3 order-2 md:order-1"
-    : "w-full md:w-1/4 bg-white shadow-md p-4 order-1 md:h-full";
+    const canDelete = elencos.length > 1;
+
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+        role="dialog"
+        aria-modal="true"
+        onClick={onClose}
+      >
+        <div className="absolute inset-0 bg-black/50" />
+        <div
+          className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-4 sm:p-6 mx-0 sm:mx-4 max-h-[90dvh] overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-bold">Selecionar elenco</h3>
+            <button
+              onClick={onClose}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 hover:bg-gray-50"
+              aria-label="Fechar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="overflow-y-auto pr-1 space-y-2 max-h-[60dvh]">
+            {elencos.map((e, idx) => (
+              <div
+                key={idx}
+                className={`flex items-center justify-between gap-2 border rounded-lg px-3 py-2 ${
+                  idx === activeIndex ? "border-green-600/70 bg-green-50" : "border-gray-200"
+                }`}
+              >
+                <button
+                  className="text-left flex-1 truncate"
+                  title={e.nome}
+                  onClick={() => onSelect(idx)}
+                >
+                  <div className="font-medium truncate">
+                    {e.nome || `Elenco ${idx + 1}`}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Máximo {e.maxJogadores} • {Object.values(e.posicoes).filter(Boolean).length}/11
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => onDelete(idx)}
+                  disabled={!canDelete}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-sm border ${
+                    canDelete
+                      ? "border-red-300 text-red-700 hover:bg-red-50"
+                      : "border-gray-200 text-gray-400 cursor-not-allowed"
+                  }`}
+                  title={canDelete ? "Excluir elenco" : "Mantenha pelo menos 1 elenco"}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Excluir
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 flex items-center justify-between">
+            <button
+              onClick={onCreate}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700"
+            >
+              <Plus className="h-4 w-4" />
+              Novo elenco
+            </button>
+            <button
+              onClick={onClose}
+              className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const direction: DroppableProps["direction"] = isMobile ? "horizontal" : "vertical";
 
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-green-100">
-        <span className="text-green-800 font-semibold">Carregando elenco...</span>
+        <span className="text-green-800 font-semibold">Carregando elencos...</span>
       </div>
     );
   }
 
   return (
-      <div className="min-h-screen bg-green-100 flex flex-col">
-        <div className="p-3">
-           <Link
+    <div className="min-h-[100dvh] bg-green-100 flex flex-col">
+      {/* HEADER */}
+      <div className="sticky top-0 z-20 bg-green-100/95 backdrop-blur supports-[backdrop-filter]:bg-green-100/80 border-b border-green-300">
+        <div className="p-3 flex items-center justify-between">
+          <Link
             href="/treinos"
             aria-label="Voltar para treinos"
             title="Voltar para explorar"
             className="inline-flex h-10 w-10 items-center justify-center
               rounded-full border border-green-800 bg-white text-green-900
-              shadow-sm hover:bg-green-50 focus:outline-none
-              focus:ring-2 focus:ring-green-700/30 mt-2 ml-2"
-            >
+              shadow-sm hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-700/30"
+          >
             <ArrowLeft className="h-5 w-5" />
           </Link>
-        </div>
 
-    <div className="flex flex-col md:flex-row h-screen bg-green-100">
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="order-1 md:order-2 flex-1 flex flex-col items-center p-3 md:p-5">
-          <div className="flex flex-wrap items-center gap-3 md:gap-4 mb-3 md:mb-5">
-            <input
-              type="text"
-              value={elencoNome}
-              onChange={(e) => setElencoNome(e.target.value)}
-              className="border rounded p-1 text-base md:text-lg font-bold"
-            />
-            <div className="flex items-center gap-2">
-              <label className="text-sm">Máximo:</label>
-              <input
-                type="number"
-                value={maxElenco}
-                min={5}
-                max={30}
-                onChange={(e) => setMaxElenco(Number(e.target.value))}
-                className="w-16 border rounded p-1"
-              />
-            </div>
+          {/* Botão único que abre o seletor de elencos */}
+          <div className="flex-1 flex items-center justify-center px-3">
             <button
-              onClick={salvarElenco}
-              className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+              onClick={() => setPickerOpen(true)}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-full border text-sm bg-white text-green-900 border-green-300 hover:bg-green-50"
+              title="Selecionar elenco"
             >
-              {elencoId ? "Atualizar" : "Salvar"}
+              <ListFilter className="w-4 h-4" />
+              {ativo?.nome ? `Elenco: ${ativo.nome}` : "Selecionar elenco"}
             </button>
           </div>
 
-          <div
-            ref={fieldBox.ref}
-            className="w-full flex-1 rounded-2xl p-3 md:p-5 bg-gradient-to-b from-green-300 to-green-600 shadow-inner flex flex-col justify-between"
-          >
-            <div className="grid grid-cols-3 gap-3 md:gap-4 place-items-center">
-              <Slot pos="PD" label="Atacante (PD)" />
-              <Slot pos="CA" label="Atacante (CA)" />
-              <Slot pos="PE" label="Atacante (PE)" />
-            </div>
+          {/* espaço à direita (vazio, exclusão agora é no modal) */}
+          <div className="w-10" />
+        </div>
 
-            <div className="grid grid-cols-3 gap-3 md:gap-4 place-items-center" style={{ marginTop: 20 * scale }}>
-              <Slot pos="VOL1" label="Volante" />
-              <Slot pos="MEI"  label="Meia" />
-              <Slot pos="VOL2" label="Volante" />
+        {ativo && (
+          <div className="px-3 pb-3 flex flex-wrap items-center gap-3 md:gap-4">
+            <label htmlFor="elencoNome" className="sr-only">Nome do elenco</label>
+            <input
+              id="elencoNome"
+              name="elencoNome"
+              type="text"
+              value={ativo.nome}
+              onChange={(e) =>
+                setElencos(prev => {
+                  const arr = [...prev];
+                  arr[activeIndex] = { ...arr[activeIndex], nome: e.target.value };
+                  return arr;
+                })
+              }
+              className="border rounded px-3 py-2 text-base md:text-lg font-bold bg-white"
+              placeholder="Nome do elenco"
+            />
+            <div className="flex items-center gap-2">
+              <label htmlFor="maxJog" className="text-sm">Máximo:</label>
+              <input
+                id="maxJog"
+                name="maxJog"
+                type="number"
+                value={ativo.maxJogadores}
+                min={5}
+                max={30}
+                onChange={(e) =>
+                  setElencos(prev => {
+                    const arr = [...prev];
+                    arr[activeIndex] = { ...arr[activeIndex], maxJogadores: Number(e.target.value) };
+                    return arr;
+                  })
+                }
+                className="w-20 border rounded px-2 py-2 bg-white"
+              />
             </div>
+            <button
+              onClick={salvarElencoAtivo}
+              className="ml-auto md:ml-0 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 active:scale-[0.99]"
+            >
+              {ativo.id ? "Atualizar" : "Salvar"}
+            </button>
+            <button
+              onClick={() => setDrawerOpen(v => !v)}
+              className="md:hidden bg-white border border-green-400 text-green-800 px-3 py-2 rounded-lg"
+            >
+              {drawerOpen ? "Ocultar atletas" : "Mostrar atletas"}
+            </button>
+          </div>
+        )}
+      </div>
 
-            <div className="grid grid-cols-4 gap-2 md:gap-3 place-items-center" style={{ marginTop: 20 * scale }}>
-              <Slot pos="LE" label="Lateral Esq." />
-              <Slot pos="ZE" label="Zagueiro Esq." />
-              <Slot pos="ZD" label="Zagueiro Dir." />
-              <Slot pos="LD" label="Lateral Dir." />
-            </div>
+      {/* CONTEÚDO */}
+      <div className="flex-1 flex md:flex-row flex-col">
+        <DragDropContext onDragEnd={handleDragEnd}>
+          {/* Campo */}
+          <div className="order-1 md:order-2 flex-1 flex flex-col items-center p-3 md:p-5">
+            <div
+              ref={fieldBox.ref}
+              className="w-full flex-1 min-h-[360px] rounded-2xl p-3 md:p-5 bg-gradient-to-b from-green-300 to-green-600 shadow-inner
+                         flex flex-col gap-2 md:gap-4 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+120px)] md:pb-0"
+            >
+              <div className="grid grid-cols-3 gap-2 md:gap-4 place-items-center">
+                <Slot pos="PD" label="Atacante (PD)" />
+                <Slot pos="CA" label="Atacante (CA)" />
+                <Slot pos="PE" label="Atacante (PE)" />
+              </div>
 
-            <div className="grid grid-cols-1 place-items-center" style={{ marginTop: 20 * scale }}>
-              <Slot pos="GOL" label="Goleiro" />
+              <div className="grid grid-cols-3 gap-2 md:gap-4 place-items-center">
+                <Slot pos="VOL1" label="Volante" />
+                <Slot pos="MEI"  label="Meia" />
+                <Slot pos="VOL2" label="Volante" />
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 md:gap-3 place-items-center">
+                <Slot pos="LE" label="Lateral Esq." />
+                <Slot pos="ZE" label="Zagueiro Esq." />
+                <Slot pos="ZD" label="Zagueiro Dir." />
+                <Slot pos="LD" label="Lateral Dir." />
+              </div>
+
+              <div className="grid grid-cols-1 place-items-center">
+                <Slot pos="GOL" label="Goleiro" />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className={listaWrapperClasses}>
-          <h2 className="text-base md:text-lg font-bold mb-2 md:mb-3">Atletas Vinculados</h2>
-          <Droppable droppableId="atletas" type="ATLETA" direction={direction}>
-            {(provided) => (
-              <div ref={provided.innerRef} {...provided.droppableProps} className={listaClasses}>
-                {(Array.isArray(atletas) ? atletas : []).map((atleta, index) => (
-                  <Draggable
-                    key={String(atleta.id ?? atleta.atletaId)}
-                    draggableId={String(atleta.id ?? atleta.atletaId)}
-                    index={index}
-                  >
-                    {(provided2, snapshot) => (
-                      <div
-                        ref={provided2.innerRef}
-                        {...provided2.draggableProps}
-                        {...provided2.dragHandleProps}
-                        className={`cursor-grab ${snapshot.isDragging ? "shadow-2xl scale-105 z-50" : ""}`}
-                      >
-                        <CardAtleta atleta={atleta} />
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
+          {/* Lista (desktop) */}
+          <div className="hidden md:block w-full md:w-80 bg-white shadow-md p-4 border-l border-green-200">
+            <h2 className="text-lg font-bold mb-3">Atletas Vinculados</h2>
+            <label htmlFor="buscaDesk" className="sr-only">Buscar por nome/posição</label>
+            <input
+              id="buscaDesk"
+              name="buscaDesk"
+              value={filtro}
+              onChange={(e) => setFiltro(e.target.value)}
+              placeholder="Buscar por nome/posição"
+              className="w-full mb-3 border rounded px-3 py-2"
+            />
+            <Droppable droppableId="atletasDesk" type="ATLETA" direction="vertical">
+              {(provided) => (
+                <div
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  className="flex flex-col gap-3 overflow-y-auto max-h-[calc(100dvh-240px)] pr-1"
+                >
+                  {atletasLivresAtivo.map((atleta, index) => (
+                    <Draggable
+                      key={String(atleta.id ?? atleta.atletaId)}
+                      draggableId={String(atleta.id ?? atleta.atletaId)}
+                      index={index}
+                    >
+                      {(provided2, snapshot) => (
+                        <div
+                          ref={provided2.innerRef}
+                          {...provided2.draggableProps}
+                          {...provided2.dragHandleProps}
+                          className={`cursor-grab ${snapshot.isDragging ? "shadow-2xl scale-105 z-50" : ""} will-change-transform`}
+                        >
+                          <CardAtleta atleta={atleta} />
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </div>
+
+          {/* Gaveta (mobile) */}
+          <div
+            className={`md:hidden fixed left-0 right-0 z-30 transition-transform duration-200
+              ${drawerOpen ? "translate-y-0" : "translate-y-[calc(100%_-_52px)]"}
+              bottom-0`}
+          >
+            <div className="mx-3 rounded-t-2xl border border-green-300 bg-white shadow-2xl overflow-hidden pb-[env(safe-area-inset-bottom)]">
+              <button
+                onClick={() => setDrawerOpen(v => !v)}
+                className="w-full py-2 active:opacity-80"
+                aria-label="Alternar lista de atletas"
+              >
+                <div className="mx-auto h-1.5 w-12 rounded-full bg-green-300" />
+              </button>
+
+              <div className="px-3 pb-2 flex items-center gap-2">
+                <h2 className="text-base font-bold">Atletas Vinculados</h2>
+                <span className="text-xs text-green-700/80">({atletasLivresAtivo.length})</span>
               </div>
-            )}
-          </Droppable>
-        </div>
-      </DragDropContext>
-    </div>
+
+              <div className="px-3 pb-2">
+                <label htmlFor="buscaMob" className="sr-only">Buscar por nome/posição</label>
+                <input
+                  id="buscaMob"
+                  name="buscaMob"
+                  value={filtro}
+                  onChange={(e) => setFiltro(e.target.value)}
+                  placeholder="Buscar por nome/posição"
+                  className="w-full border rounded px-3 py-2"
+                />
+              </div>
+
+              <Droppable droppableId="atletasMob" type="ATLETA" direction={direction}>
+                {(provided) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="flex flex-row gap-3 overflow-x-auto px-3 py-2 snap-x snap-mandatory"
+                  >
+                    {atletasLivresAtivo.map((atleta, index) => (
+                      <Draggable
+                        key={String(atleta.id ?? atleta.atletaId)}
+                        draggableId={String(atleta.id ?? atleta.atletaId)}
+                        index={index}
+                      >
+                        {(provided2, snapshot) => (
+                          <div
+                            ref={provided2.innerRef}
+                            {...provided2.draggableProps}
+                            {...provided2.dragHandleProps}
+                            className={`cursor-grab snap-start ${snapshot.isDragging ? "shadow-2xl scale-105 z-50" : ""} will-change-transform`}
+                          >
+                            <CardAtleta atleta={atleta} />
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </div>
+          </div>
+        </DragDropContext>
+      </div>
+
+      {/* Modal seletor de elencos */}
+      <ElencoPickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        elencos={elencos}
+        activeIndex={activeIndex}
+        onSelect={(idx) => {
+          setActiveIndex(idx);
+          setPickerOpen(false);
+        }}
+        onCreate={() => {
+          setPickerOpen(false);
+          addElenco();
+        }}
+        onDelete={(idx) => {
+          const alvo = elencos[idx];
+          if (!alvo) return;
+          if (elencos.length <= 1) return;
+          if (confirm(`Excluir "${alvo.nome}"? Essa ação não poderá ser desfeita.`)) {
+            if (idx === activeIndex) {
+              const novoAtivo = Math.max(0, Math.min(activeIndex - 1, elencos.length - 2));
+              setActiveIndex(novoAtivo);
+            }
+            removeElenco(idx);
+          }
+        }}
+      />
     </div>
   );
 }

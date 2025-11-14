@@ -1,3 +1,4 @@
+// server/controllers/submissoesController
 import { Request, Response } from "express";
 import { PrismaClient, TipoMidia, TipoTreino } from "@prisma/client";
 import { aplicarEstatisticasPosSubmissao } from "./submissoes/utilsEstatistica.js";

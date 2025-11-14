@@ -1420,6 +1420,44 @@ model CupomResgate {
   @@index([usuarioId])
 }
 
+model EventoElenco {
+  id            String        @id @default(uuid())
+  titulo        String
+  tipo          EventoChaveTipo @default(MATA_MATA)
+  status        String        @default("ABERTO")
+  participantes String[]
+  ownerTipo     String
+  ownerId       String
+  criadoEm      DateTime      @default(now())
+  atualizadoEm  DateTime      @updatedAt
+
+  Partida PartidaElenco[]
+}
+
+model PartidaElenco {
+  id                  String     @id @default(uuid())
+  eventoId            String
+  fase                Int
+  ordem               Int
+  elencoAId           String?
+  elencoBId           String?
+  placarA             Int        @default(0)
+  placarB             Int        @default(0)
+  faltasA             Int        @default(0)
+  faltasB             Int        @default(0)
+  status              JogoStatus @default(PENDENTE)
+  iniciadoEm          DateTime?
+  finalizadoEm        DateTime?
+  vencedorElencoId    String?
+  proximaPartidaId    String?
+  proximaPartidaSlot  String?    // "A" ou "B"
+
+  evento EventoElenco @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+
+  @@index([eventoId, fase])
+  @@index([proximaPartidaId])
+}
+
 enum Periodicidade {
   Mensal
   Anual
@@ -1581,4 +1619,14 @@ enum TreinoAgendadoStatus {
   FALTOU
   CANCELADO
   EM_ANDAMENTO
+}
+
+enum EventoChaveTipo {
+  MATA_MATA
+}
+
+enum JogoStatus {
+  PENDENTE
+  EM_ANDAMENTO
+  ENCERRADO
 }
