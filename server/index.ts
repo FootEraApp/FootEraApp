@@ -79,6 +79,7 @@ import assinaturasRoutes from "./routes/assinaturas.js";
 import treinosSalvosRoutes from "./routes/treinosSalvos.js";
 import analyticsRoutes from "./routes/analytics.js"
 import billingRoutes from "./routes/billing.js"
+import jogosElencoRoutes from "./routes/jogosElencoRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -246,6 +247,7 @@ app.use("/api/analytics", authenticateToken, analyticsRoutes);
 app.use("/api/billing", authenticateToken, billingRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
+app.use("/api/jogos-elenco", jogosElencoRoutes);
 
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
