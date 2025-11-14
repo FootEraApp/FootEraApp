@@ -50,6 +50,7 @@ import PaginaTreinoLivreNovo from "./pages/treinoLivreNovo.js";
 import PaginaTreinoLivresHistorico from "./pages/treinoLivreHistorico.js"
 import PaginaCreateAdmin from "./pages/createAdmin.js";
 import PaginaPagamentos from "./pages/pagamentos/index.js";
+import PaginaJogosElenco from "./pages/jogos-elenco.js"
 
 export function AppRoutes() {
   return (
@@ -143,6 +144,7 @@ export function AppRoutes() {
       <Route path="/treinos/livre/novo" component={PaginaTreinoLivreNovo} />
       <Route path="/treinos/livre/historico" component={PaginaTreinoLivresHistorico} />
       <Route path="/treinos/elenco"><Private><PaginaElenco /></Private></Route>
+      <Route path="/treinos/elenco/jogos"><Private><PaginaJogosElenco/></Private></Route>
       <Route path="/treinos/novo"><PaginaNovoTreino /></Route>
       <Route path="/treinos/unico"><Private><PaginaTreinoUnico /></Private></Route>
       <Route path="/treinos"><Private><PaginaTreinos /></Private></Route>
