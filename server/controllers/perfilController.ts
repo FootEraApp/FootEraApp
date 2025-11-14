@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
+import { requireUsage } from "server/lib/usage.js";
 
 const prisma = new PrismaClient();
 
@@ -1433,8 +1434,16 @@ export async function getPerfilEscola(req: Request, res: Response) {
 }
 
 export async function getPerfilOlheiro(req: Request, res: Response) {
+  if (req.user?.tipo === 'Olheiro') {
+    await requireUsage(req, res, 'perfis_vistos_dia'); // 20/dia no Free
+  }
   try {
     const { id } = req.params;
+    
+    if (req.user?.tipo === "Olheiro" && req.user?.plano !== "PRO") {
+      const ok = await requireUsage(req, res, "listas_salvas_total");
+      if (!ok) return;
+    }
 
     const olheiro: any = await resolveByUsuarioOrEntity({
       entity: "olheiro",
