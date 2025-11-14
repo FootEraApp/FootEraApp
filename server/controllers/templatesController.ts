@@ -85,8 +85,15 @@ export async function criarTemplate(req: Request, res: Response) {
       return res.status(400).json({ error: "Campos obrigatórios: titulo, conteudo." });
     }
 
+    // ID sintético só para satisfazer o campo obrigatório e o unique (usuarioId, treinoProgramadoId)
+    const fakeTreinoProgramadoId = `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
     const created = await prisma.treinoSalvo.create({
       data: {
+        // obrigatórios em TreinoSalvo
+        usuarioId: user.id,
+        treinoProgramadoId: fakeTreinoProgramadoId,
+
         titulo,
         descricao: descricao ?? null,
         nivel: nivel ?? null,

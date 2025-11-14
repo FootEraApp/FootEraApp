@@ -23,26 +23,44 @@ function ownerWhere(tipoUsuario?: string, tipoUsuarioId?: string) {
 }
 
 export const criarTreinoSalvo = async (req: Request, res: Response) => {
-  await enforceTotalLimit(req, res, 'treinos_salvos_total', async () => {
-    const where = { criadoPorUsuarioId: req.user!.id };
+  await enforceTotalLimit(req, res, "treinos_salvos_total", async () => {
+    const where = { criadoPorUsuarioId: (req as any).user!.id };
     return prisma.treinoSalvo.count({ where });
   });
+
   try {
-    if (req.user?.tipo === "Atleta" && req.user?.plano !== "PRO") {
+    const user = (req as any).user as { id: string; tipo: string; plano?: string };
+
+    if (user?.tipo === "Atleta" && user?.plano !== "PRO") {
       const ok = await requireUsage(req, res, "treinos_salvos_total");
       if (!ok) return;
     }
-    
+
     const {
-      titulo, descricao, nivel, tipoTreino, categoria, duracao, dicas,
-      conteudo, publico, parceiro, naoExpira,
-      tipoUsuario, tipoUsuarioId, criadoPorUsuarioId,
+      titulo,
+      descricao,
+      nivel,
+      tipoTreino,
+      categoria,
+      duracao,
+      dicas,
+      conteudo,
+      publico,
+      parceiro,
+      naoExpira,
+      tipoUsuario,
+      tipoUsuarioId,
+      criadoPorUsuarioId,
+      treinoProgramadoId, // se no futuro você quiser atrelar a um treino real
     } = req.body || {};
 
     const owner = ownerWhere(tipoUsuario, tipoUsuarioId);
     const ownerKeys = Object.keys(owner);
     if (ownerKeys.length !== 1) {
-      return res.status(400).json({ message: "Informe exatamente um dono: professorId OU escolinhaId OU clubeId (via tipoUsuario + tipoUsuarioId)." });
+      return res.status(400).json({
+        message:
+          "Informe exatamente um dono: professorId OU escolinhaId OU clubeId (via tipoUsuario + tipoUsuarioId).",
+      });
     }
 
     const ativosCount = await prisma.treinoSalvo.count({
@@ -52,17 +70,35 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
       },
     });
     if (!publico && ativosCount >= MAX_SLOTS) {
-      return res.status(400).json({ message: `Limite de ${MAX_SLOTS} treinos salvos atingido para este dono.` });
+      return res
+        .status(400)
+        .json({ message: `Limite de ${MAX_SLOTS} treinos salvos atingido para este dono.` });
     }
 
-    if (!titulo || !conteudo?.exercicios || !Array.isArray(conteudo.exercicios) || conteudo.exercicios.length === 0) {
-      return res.status(400).json({ message: "Título e pelo menos 1 exercício são obrigatórios." });
+    if (
+      !titulo ||
+      !conteudo?.exercicios ||
+      !Array.isArray(conteudo.exercicios) ||
+      conteudo.exercicios.length === 0
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Título e pelo menos 1 exercício são obrigatórios." });
     }
 
     const expiraEm = publico || naoExpira ? null : addDays(new Date(), TTL_DIAS);
 
+    // ID sintético se não vier um treinoProgramadoId real
+    const effectiveTreinoProgramadoId =
+      treinoProgramadoId ??
+      `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
     const created = await prisma.treinoSalvo.create({
       data: {
+        // obrigatórios
+        usuarioId: user.id,
+        treinoProgramadoId: String(effectiveTreinoProgramadoId),
+
         titulo,
         descricao: descricao ?? null,
         nivel: nivel ?? null,
@@ -75,7 +111,7 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
         parceiro: Boolean(parceiro),
         naoExpira: Boolean(naoExpira),
         expiraEm,
-        criadoPorUsuarioId: criadoPorUsuarioId ?? null,
+        criadoPorUsuarioId: criadoPorUsuarioId ?? user.id,
         ...owner,
       },
     });
@@ -83,7 +119,9 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
     res.status(201).json(created);
   } catch (err: any) {
     console.error("criarTreinoSalvo", err);
-    res.status(500).json({ message: "Erro ao criar treino salvo", error: String(err?.message || err) });
+    res
+      .status(500)
+      .json({ message: "Erro ao criar treino salvo", error: String(err?.message || err) });
   }
 };
 

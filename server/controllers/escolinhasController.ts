@@ -1,8 +1,53 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { touchFairUse } from "server/lib/usage.js";
+import { aplicarCorteEscolinha, getRangeFromQuery } from "../utils/analyticsWindow.js";
 
 const prisma = new PrismaClient();
+
+export async function relatorioRetencaoEscolinha(req: Request, res: Response) {
+  try {
+    const escolinhaId = String(req.query.escolinhaId || "").trim();
+    if (!escolinhaId) {
+      return res.status(400).json({ message: "escolinhaId é obrigatório." });
+    }
+
+    // lê from/to (se não vier, últimos 12 meses)
+    let { from, to } = getRangeFromQuery(req.query, 365);
+
+    // aqui NÃO dá erro, só corta pra no máximo 12 meses
+    ({ from, to } = aplicarCorteEscolinha(from, to));
+
+    const alunosAtivos = await prisma.relacaoTreinamento.count({
+      where: {
+        escolinhaId,
+        criadoEm: { gte: from, lte: to },
+        // se você depois tornar encerradoEm opcional, pode filtrar só os ativos:
+        // encerradoEm: null,
+      },
+    });
+
+    const alunosCancelados = await prisma.relacaoTreinamento.count({
+      where: {
+        escolinhaId,
+        encerradoEm: { gte: from, lte: to },
+      },
+    });
+
+    return res.json({
+      range: { from, to },
+      metrics: {
+        ativos: alunosAtivos,
+        cancelados: alunosCancelados,
+      },
+    });
+  } catch (err) {
+    console.error("relatorioRetencaoEscolinha", err);
+    return res
+      .status(500)
+      .json({ message: "Erro ao montar relatório de retenção." });
+  }
+}
 
 // Helper para setar os headers de fair-use quando precisar
 async function setFairUseHeadersIfNeeded(res: Response, escolinhaId?: string) {

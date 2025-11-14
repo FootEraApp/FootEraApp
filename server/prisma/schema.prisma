@@ -362,6 +362,7 @@ model RelacaoTreinamento {
   clube       Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha   Escolinha? @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
   professor   Professor? @relation("RelacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
+  encerradoEm DateTime?  @default(now())
 
   @@unique([professorId, atletaId, escolinhaId, clubeId])
 }
@@ -436,7 +437,6 @@ model Midia {
   submissaoTreinoId  String?
   criadoEm           DateTime  @default(now())
 
-  // NOVOS METADADOS
   durationSec Int?
   width       Int?
   height      Int?
@@ -939,8 +939,8 @@ model Elenco {
   dataCriacao   DateTime       @default(now())
   atletasElenco AtletaElenco[]
 
-  turmaId String? // se quiser, pode tornar obrigatório
-  turma   Turma?  @relation(fields: [turmaId], references: [id])
+  turmaId       String?
+  turma         Turma?  @relation(fields: [turmaId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1016,7 +1016,7 @@ model ListaOlheiro {
   olheiro   Olheiro            @relation(fields: [olheiroId], references: [id], onDelete: Cascade)
   itens     ListaOlheiroItem[]
 
-  @@unique([olheiroId, nome]) // evita listas duplicadas por olheiro
+  @@unique([olheiroId, nome])
   @@index([olheiroId, createdAt])
 }
 
@@ -1030,7 +1030,7 @@ model ListaOlheiroItem {
   lista  ListaOlheiro @relation(fields: [listaId], references: [id], onDelete: Cascade)
   atleta Atleta       @relation(fields: [atletaId], references: [id], onDelete: Cascade)
 
-  @@unique([listaId, atletaId]) // cada atleta 1x por lista
+  @@unique([listaId, atletaId])
   @@index([atletaId])
 }
 
@@ -1243,8 +1243,7 @@ model TurmaUsuario {
 }
 
 model TreinoSalvo {
-  id String @id @default(uuid())
-
+  id         String @id @default(uuid())
   titulo     String
   descricao  String?
   nivel      Nivel?
@@ -1252,6 +1251,9 @@ model TreinoSalvo {
   categoria  Categoria[]
   duracao    Int?
   dicas      String[]
+  usuarioId          String  
+  treinoProgramadoId String
+  createdAt          DateTime @default(now())
 
   conteudo Json
 
@@ -1277,6 +1279,8 @@ model TreinoSalvo {
   atualizadoEm DateTime @updatedAt
 
   reutilizadoPor TreinoSalvoReuso[]
+
+  @@unique([usuarioId, treinoProgramadoId])  
 
   @@index([professorId])
   @@index([escolinhaId])

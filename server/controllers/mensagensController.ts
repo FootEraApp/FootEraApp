@@ -1,9 +1,51 @@
+// server/controllers/mensagensController.ts
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { getIO } from "../socket.js";
 import fs from "fs/promises";
 import path from "path";
+import { getDailyUsage } from "../services/usage.js";
+
+const ADS_CAP_PER_DAY = 5;
+const AD_EVERY_N = 10;
+
+async function isProUser(userId: string) {
+  const assinatura = await prisma.assinatura.findUnique({
+    where: { usuarioId: userId },
+    select: { ativo: true, plano: true },
+  });
+
+  return !!assinatura?.ativo;
+}
+
+async function getAdsConfigForUser(userId?: string) {
+  if (!userId) {
+    return {
+      adsEnabled: false,
+      adEveryN: null,
+      adsRemainingToday: 0,
+    };
+  }
+
+  const pro = await isProUser(userId);
+  if (pro) {
+    return {
+      adsEnabled: false,
+      adEveryN: null,
+      adsRemainingToday: 0,
+    };
+  }
+
+  const usedToday = await getDailyUsage(userId, "ads_impressions_day");
+  const remaining = Math.max(0, ADS_CAP_PER_DAY - usedToday);
+
+  return {
+    adsEnabled: remaining > 0,
+    adEveryN: AD_EVERY_N,
+    adsRemainingToday: remaining,
+  };
+}
 
 async function salvarDataUrlComoPng(dataUrl: string, sub = "cards") {
   const [meta, b64] = dataUrl.split(",");
@@ -76,8 +118,8 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
 
     const io = getIO();
     if (io) {
-     io.to(`u:${paraId}`).emit("novaMensagem", payload);
-     io.to(`u:${req.userId!}`).emit("novaMensagem", payload);
+      io.to(`u:${paraId}`).emit("novaMensagem", payload);
+      io.to(`u:${req.userId!}`).emit("novaMensagem", payload);
     }
 
     return res.json(payload);
@@ -89,7 +131,7 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
 
 export const buscarMensagens = async (req: any, res: Response) => {
   try {
-    const me = req.userId;
+    const me = req.userId as string | undefined;
     const otherId = String(
       req.query.otherId ?? req.query.paraId ?? req.query.deId ?? ""
     );
@@ -109,12 +151,20 @@ export const buscarMensagens = async (req: any, res: Response) => {
       ...(cursor ? { skip: 1, cursor: { id: String(cursor) } } : {}),
     });
 
-    res.json(mensagens);
+    const ads = await getAdsConfigForUser(me);
+
+    return res.json({
+      items: mensagens,
+      meta: {
+        adsEnabled: ads.adsEnabled,
+        adEveryN: ads.adsEnabled ? ads.adEveryN : null,
+        adsRemainingToday: ads.adsRemainingToday,
+      },
+    });
   } catch {
     res.status(500).json({ error: "Erro ao buscar mensagens" });
   }
 };
-
 
 export async function listarConversas(req: any, res: Response) {
   const me: string | undefined = req.user?.id || req.userId;
@@ -131,7 +181,16 @@ export async function listarConversas(req: any, res: Response) {
   );
 
   if (partnerIds.length === 0) {
-    return res.json({ totalNaoLidas: 0, conversas: [] });
+    const ads = await getAdsConfigForUser(me);
+    return res.json({
+      totalNaoLidas: 0,
+      conversas: [],
+      meta: {
+        adsEnabled: ads.adsEnabled,
+        adEveryN: ads.adsEnabled ? ads.adEveryN : null,
+        adsRemainingToday: ads.adsRemainingToday,
+      },
+    });
   }
 
   const unread = await prisma.mensagem.groupBy({
@@ -164,7 +223,18 @@ export async function listarConversas(req: any, res: Response) {
     .sort((a, b) => (b.ultimaMensagemEm?.getTime() ?? 0) - (a.ultimaMensagemEm?.getTime() ?? 0));
 
   const totalNaoLidas = unread.reduce((s, r) => s + r._count._all, 0);
-  return res.json({ totalNaoLidas, conversas });
+
+  const ads = await getAdsConfigForUser(me);
+
+  return res.json({
+    totalNaoLidas,
+    conversas,
+    meta: {
+      adsEnabled: ads.adsEnabled,
+      adEveryN: ads.adsEnabled ? ads.adEveryN : null,
+      adsRemainingToday: ads.adsRemainingToday,
+    },
+  });
 }
 
 export const listarMensagensGrupo = async (req: AuthenticatedRequest, res: Response) => {

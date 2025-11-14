@@ -116,6 +116,20 @@ export function denyUsage(
   key: UsageKey,
   ctx: { limit: number; used: number; remaining: number; window: Window }
 ) {
+  // caso especial para desafios do mês -> força 402 + UPGRADE_REQUIRED
+  if (key === "desafios_mes") {
+    return res.status(402).json({
+      code: "UPGRADE_REQUIRED",
+      key,
+      message: MSG[key], // "Limite mensal de desafios atingido no plano Free (2 por mês)..."
+      limit: ctx.limit,
+      used: ctx.used,
+      remaining: ctx.remaining,
+      window: ctx.window,
+    });
+  }
+
+  // padrão para os outros limites
   return res.status(429).json({
     code: "USAGE_LIMIT",
     key,
