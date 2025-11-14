@@ -73,6 +73,7 @@ model Usuario {
   Pagamento              Pagamento[]
   Cupom                  Cupom[]
   CupomResgate           CupomResgate[]
+  LogAuditoria           LogAuditoria[]
 }
 
 model EmailVerification {
@@ -166,6 +167,7 @@ model Olheiro {
   Indicacao          Indicacao[]
   colaboracaoClube   Clube?            @relation(fields: [colaboracaoClubeId], references: [id], onDelete: SetNull)
   usuario            Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  ListaOlheiro       ListaOlheiro[]
 
   @@index([areaAtuacao])
   @@index([colaboracaoClubeId])
@@ -243,6 +245,7 @@ model Atleta {
   TransferenciaFormador        TransferenciaFormador[]
   DocumentoFormador            DocumentoFormador[]
   TreinoRotinaAtribuicao       TreinoRotinaAtribuicao[]
+  ListaOlheiroItem             ListaOlheiroItem[]
 
   @@index([perfilTipoTreino])
 }
@@ -419,10 +422,10 @@ model Postagem {
 }
 
 model Midia {
-  id                 String            @id @default(uuid())
-  url                String            @unique
+  id                 String    @id @default(uuid())
+  url                String    @unique
   tipo               TipoMidia
-  dataCriacao        DateTime          @default(now())
+  dataCriacao        DateTime  @default(now())
   dataEnvio          DateTime
   descricao          String
   titulo             String
@@ -431,12 +434,19 @@ model Midia {
   clubeId            String?
   submissaoDesafioId String?
   submissaoTreinoId  String?
-  criadoEm           DateTime          @default(now())
-  atleta             Atleta?           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  clube              Clube?            @relation(fields: [clubeId], references: [id], onDelete: SetNull)
-  escolinha          Escolinha?        @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
-  submissaoDesafio   SubmissaoDesafio? @relation("Midias_SubmissaoDesafio", fields: [submissaoDesafioId], references: [id], onDelete: Cascade)
-  submissaoTreino    SubmissaoTreino?  @relation("Midias_SubmissaoTreino", fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
+  criadoEm           DateTime  @default(now())
+
+  // NOVOS METADADOS
+  durationSec Int?
+  width       Int?
+  height      Int?
+  sizeBytes   Int?
+
+  atleta           Atleta?           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  clube            Clube?            @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha        Escolinha?        @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  submissaoDesafio SubmissaoDesafio? @relation("Midias_SubmissaoDesafio", fields: [submissaoDesafioId], references: [id], onDelete: Cascade)
+  submissaoTreino  SubmissaoTreino?  @relation("Midias_SubmissaoTreino", fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
 }
 
 model Escolinha {
@@ -660,6 +670,23 @@ model Administrador {
   nivel     Nivel
   fotoUrl   String?
   usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model LogAuditoria {
+  id         String   @id @default(uuid())
+  usuarioId  String
+  acao       String
+  entidade   String?
+  entidadeId String?
+  descricao  String?
+  ip         String?
+  userAgent  String?
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, acao, createdAt])
 }
 
 model LogErro {
@@ -974,6 +1001,36 @@ model Indicacao {
 
   @@index([olheiroId, status])
   @@index([clubeId])
+  @@index([atletaId])
+}
+
+model ListaOlheiro {
+  id        String   @id @default(uuid())
+  olheiroId String
+  nome      String
+  descricao String?
+  publico   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  olheiro   Olheiro            @relation(fields: [olheiroId], references: [id], onDelete: Cascade)
+  itens     ListaOlheiroItem[]
+
+  @@unique([olheiroId, nome]) // evita listas duplicadas por olheiro
+  @@index([olheiroId, createdAt])
+}
+
+model ListaOlheiroItem {
+  id         String   @id @default(uuid())
+  listaId    String
+  atletaId   String
+  observacao String?
+  criadoEm   DateTime @default(now())
+
+  lista  ListaOlheiro @relation(fields: [listaId], references: [id], onDelete: Cascade)
+  atleta Atleta       @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+
+  @@unique([listaId, atletaId]) // cada atleta 1x por lista
   @@index([atletaId])
 }
 
@@ -1431,18 +1488,21 @@ model CupomResgate {
 }
 
 model UsageCounter {
-  id        String   @id @default(cuid())
-  userId    String
-  key       String
-  periodRef String
-  window    String
-  value     Int      @default(0)
-  meta      Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String
+  key         String
+  periodRef   String
+  windowKind  String
+  windowStart DateTime
+  windowEnd   DateTime
+  count       Int      @default(0)
+  value       Int      @default(0)
+  meta        Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  @@unique([userId, key, periodRef])
-  @@index([key, periodRef])
+  @@unique([userId, key, windowKind, windowStart])
+  @@index([key, windowKind, windowStart])
 }
 
 enum Periodicidade {

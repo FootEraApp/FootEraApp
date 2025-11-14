@@ -4,6 +4,7 @@ import { aplicarEstatisticasPosSubmissao } from "./submissoes/utilsEstatistica.j
 import { inferirTipoTreino } from "../utils/inferirTipoTreino.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
 import { atualizarCachePontuacao } from "server/services/pontuacao.service.js";
+import { requireUsage } from "server/lib/usage.js";
 
 const prisma = new PrismaClient();
 
@@ -27,6 +28,9 @@ async function atletaTemVinculo(atletaId: string) {
 }
 
 export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
+  if (req.user?.tipo === 'Atleta') {
+    await requireUsage(req, res, 'treinos_semana'); // 3/semana no Free
+  }
   try {
     const {
       observacao,
@@ -162,6 +166,9 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
 }
 
 export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
+  if (req.user?.tipo === 'Atleta') {
+    await requireUsage(req, res, 'desafios_mes'); // 2/mês no Free
+  }
   try {
     const {
       desafioId,
@@ -182,6 +189,12 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
 
     const file = (req as any).file as Express.Multer.File | undefined;
 
+    
+    if (req.user?.tipo === "Atleta" && req.user?.plano !== "PRO") {
+      const ok = await requireUsage(req, res, "desafios_mes");
+      if (!ok) return;
+    }
+    
     if (!desafioId || !atletaId) {
       return res.status(400).json({ message: "Dados obrigatórios ausentes." });
     }
