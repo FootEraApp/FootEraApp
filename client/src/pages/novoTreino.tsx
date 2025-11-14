@@ -1,6 +1,7 @@
+// client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Volleyball, User, CirclePlus, Search as SearchIcon, House, Check } from "lucide-react";
+import { ArrowLeft, Volleyball, User, CirclePlus, Search as SearchIcon, House, Check, ChevronLeft, ChevronRight, Calendar as CalendarIcon, } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { TreinosApi } from "../utils/treinosApi.js";
@@ -27,6 +28,30 @@ const PONTOS = {
   POR_DICA: 1,
   DICAS_MAX: 5,
 };
+
+const NOMES_MESES_PT = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
+const DIAS_SEMANA_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+// Formata yyyy-MM-dd
+function formatYMD(ano: number, mesZeroBased: number, dia: number): string {
+  const m = String(mesZeroBased + 1).padStart(2, "0");
+  const d = String(dia).padStart(2, "0");
+  return `${ano}-${m}-${d}`;
+}
 
 function resolveVideoUrl(raw?: string) {
   if (!raw) return "";
@@ -336,6 +361,39 @@ export default function NovoTreino() {
   const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
   const [orgSelecionada, setOrgSelecionada] = useState<string>("");
   const [novaTurmaNome, setNovaTurmaNome] = useState<string>("");
+  const [datasAgendamento, setDatasAgendamento] = useState<string[]>([]);
+
+  const jaSincronizouCalendarioComDatas = useRef(false);
+
+  const [mesCalendario, setMesCalendario] = useState<{ ano: number; mes: number }>(() => {
+    const base =
+      (typeof window !== "undefined" &&
+        (sessionStorage.getItem("novoTreino-dataTreinoBase") || "")) ||
+      "";
+    const hoje = new Date();
+    const d = base ? new Date(base) : hoje;
+    return { ano: d.getFullYear(), mes: d.getMonth() };
+  });
+
+  useEffect(() => {
+    if (dataTreino) {
+      const soData = dataTreino.includes("T") ? dataTreino.split("T")[0] : dataTreino;
+      sessionStorage.setItem("novoTreino-dataTreinoBase", soData);
+    }
+  }, [dataTreino]);
+
+  useEffect(() => {
+    if (!jaSincronizouCalendarioComDatas.current && datasAgendamento.length > 0) {
+      const primeira = datasAgendamento[0];
+      const d = new Date(primeira);
+      if (!isNaN(d.getTime())) {
+        setMesCalendario({ ano: d.getFullYear(), mes: d.getMonth() });
+      }
+      jaSincronizouCalendarioComDatas.current = true;
+    }
+  }, [datasAgendamento]);
+
+
 
   const MOSTRAR_TODOS = "__todos__";
 
@@ -585,6 +643,7 @@ export default function NovoTreino() {
         setExerciciosSelecionados(exUi);
         setDicas(saved.dicas ?? []);
         setAtletasSelecionados(saved.atletasSelecionados ?? []);
+        setDatasAgendamento(saved.datasAgendamento ?? []);
       }
       restoredRef.current = true;
     }
@@ -711,6 +770,7 @@ export default function NovoTreino() {
       exerciciosSelecionados,
       dicas,
       atletasSelecionados,
+      datasAgendamento,
     });
   }, [
     etapa,
@@ -725,6 +785,7 @@ export default function NovoTreino() {
     exerciciosSelecionados,
     dicas,
     atletasSelecionados,
+    datasAgendamento,
   ]);
 
   const criarTurmaComSelecionados = async () => {
@@ -795,6 +856,22 @@ export default function NovoTreino() {
       el.atletasIds!.forEach(id => set.add(id));
       return Array.from(set);
     });
+  };
+
+  const adicionarDataAgendamento = () => {
+    setDatasAgendamento(prev => [...prev, ""]);
+  };
+
+  const atualizarDataAgendamento = (index: number, valor: string) => {
+    setDatasAgendamento(prev => {
+      const copia = [...prev];
+      copia[index] = valor;
+      return copia;
+    });
+  };
+
+  const removerDataAgendamento = (index: number) => {
+    setDatasAgendamento(prev => prev.filter((_, i) => i !== index));
   };
 
   const [completedUntil, setCompletedUntil] = useState<number>(1);
@@ -910,6 +987,72 @@ export default function NovoTreino() {
     return v === "professor" || v === "clube" || v === "escolinha";
   }
 
+  async function agendarTreinoEmLote(treinoProgramadoId: string) {
+    try {
+      // Datas escolhidas no passo 4
+      const datasValidas = datasAgendamento.filter(d => d && d.trim());
+
+      // Se não tiver datas em lote, tenta usar a data da etapa 1 (dataTreino)
+      const datasBase = datasValidas.length
+        ? datasValidas
+        : (dataTreino ? [dataTreino] : []);
+
+      if (!datasBase.length || !atletasSelecionados.length) {
+        // Nada para agendar
+        return 0;
+      }
+
+      const token =
+        (Storage as any).token ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token") || "";
+
+      const headers: any = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      // Pega a hora da dataTreino, se tiver, senão assume 18:00
+      const baseTime =
+        dataTreino && dataTreino.includes("T")
+          ? dataTreino.split("T")[1].slice(0, 5) // "HH:MM"
+          : "18:00";
+
+      const datasISO = datasBase.map(d => {
+        if (d.includes("T")) {
+          return new Date(d).toISOString();
+        }
+        const dt = new Date(`${d}T${baseTime}`);
+        return dt.toISOString();
+      });
+
+      const res = await fetch(`${API.BASE_URL}/api/treinos/agendados/lote`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          treinoProgramadoId,
+          atletasIds: atletasSelecionados,
+          datas: datasISO,
+          tituloPadrao: nome || "Treino",
+        }),
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Falha ao agendar treino em lote:", res.status, txt);
+        return 0;
+      }
+
+      const json = await res.json().catch(() => null);
+      // backend pode retornar { count: X }
+      return typeof json?.count === "number"
+        ? json.count
+        : datasISO.length * atletasSelecionados.length;
+    } catch (e) {
+      console.error("Erro em agendarTreinoEmLote:", e);
+      return 0;
+    }
+  }
+
+
   const criarTreino = async () => {
     try {
       const { tipoUsuario, tipoUsuarioId } = getDono();
@@ -997,21 +1140,39 @@ export default function NovoTreino() {
         return;
       }
 
-      await TreinosApi.criar(payload);
+      // IMPORTANTE: garantir que TreinosApi.criar retorne o treino criado com "id"
+      const criado: any = await TreinosApi.criar(payload);
+
+      let qtdAgendados = 0;
+      const treinoProgramadoId = criado?.id ?? criado?.treinoProgramadoId ?? criado?.data?.id ?? null;
+
+      if (treinoProgramadoId) {
+        qtdAgendados = await agendarTreinoEmLote(String(treinoProgramadoId));
+      } else {
+        console.warn("TreinosApi.criar não retornou id do treino programado. Agendamento em lote foi pulado.");
+      }
 
       const resultadoSalvar = await tentarSalvarComoTreinoSalvo(payload, score.total);
 
       if (resultadoSalvar.saved) {
-        alert("Treino criado e salvo na sua Gaveta (treinos salvos).");
+        if (qtdAgendados > 0) {
+          alert(`Treino criado, salvo na Gaveta e ${qtdAgendados} agendamentos gerados para seus atletas.`);
+        } else {
+          alert("Treino criado e salvo na sua Gaveta (treinos salvos).");
+        }
       } else {
-        if (resultadoSalvar.reason === "usuario-pulou") {
+        if (qtdAgendados > 0) {
+          alert(`Treino criado e ${qtdAgendados} agendamentos gerados para seus atletas.`);
+        } else if (resultadoSalvar.reason === "usuario-pulou") {
           alert("Treino criado. Você optou por NÃO salvar na Gaveta (limite de 5).");
         } else if (resultadoSalvar.reason === "falha-apagar") {
           alert("Treino criado, mas não foi possível liberar espaço na Gaveta. Novo treino NÃO salvo na Gaveta.");
         } else if (resultadoSalvar.reason === "sem-dono") {
           console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
+          alert("Treino criado (sem Gaveta configurada).");
         } else {
           console.warn("Treino Salvo: erro ao salvar, seguindo sem gaveta.");
+          alert("Treino criado (não foi possível salvar na Gaveta).");
         }
       }
 
@@ -1030,6 +1191,8 @@ export default function NovoTreino() {
       setDicas([]);
       setDicaAtual("");
       setAtletasSelecionados([]);
+      setDatasAgendamento([]);
+
     } catch (e: any) {
       console.error("Falha inesperada ao criar treino:", e?.response?.data || e);
       alert(e?.response?.data?.error || e?.response?.data?.message || "Erro inesperado ao criar treino.");
@@ -1190,7 +1353,7 @@ export default function NovoTreino() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pb-24">
       <div className="p-4 sm:p-6 max-w-3xl mx-auto">
         <div className="grid grid-cols-3 items-center mb-3 sm:mb-4">
           <h2 className="text-lg sm:text-xl font-bold col-start-1">Criar Novo Treino</h2>
@@ -1633,6 +1796,162 @@ export default function NovoTreino() {
                 </button>
               </div>
             </div>
+
+            <div className="my-4 p-3 border rounded-md bg-gray-50">
+              <div className="flex items-start gap-2 mb-3">
+                <div className="mt-[2px]">
+                  <CalendarIcon className="w-5 h-5 text-green-700" />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-800 font-semibold">
+                    Dias para agendar este treino automaticamente
+                  </label>
+                  <p className="text-xs text-gray-600">
+                    Toque nos dias do calendário FootEra para marcar ou desmarcar.
+                    Se você não escolher datas aqui, o treino será criado sem agendamento automático
+                    (ou usará apenas a data agendada da etapa 1, se preenchida).
+                  </p>
+                </div>
+              </div>
+
+              {/* Header do calendário: mês/ano + navegação */}
+              <div className="flex items-center justify-between mb-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMesCalendario((prev) => {
+                      const novoMes = prev.mes - 1;
+                      if (novoMes < 0) {
+                        return { ano: prev.ano - 1, mes: 11 };
+                      }
+                      return { ano: prev.ano, mes: novoMes };
+                    })
+                  }
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-100"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Anterior</span>
+                </button>
+
+                <div className="text-sm sm:text-base font-semibold text-green-800">
+                  {NOMES_MESES_PT[mesCalendario.mes]} {mesCalendario.ano}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMesCalendario((prev) => {
+                      const novoMes = prev.mes + 1;
+                      if (novoMes > 11) {
+                        return { ano: prev.ano + 1, mes: 0 };
+                      }
+                      return { ano: prev.ano, mes: novoMes };
+                    })
+                  }
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-100"
+                >
+                  <span>Próximo</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Cabeçalho dos dias da semana */}
+              <div className="grid grid-cols-7 gap-1 text-center text-[11px] sm:text-xs text-gray-500 mb-1">
+                {DIAS_SEMANA_PT.map((d) => (
+                  <div key={d} className="uppercase tracking-tight">
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              {/* Grade de dias */}
+              {(() => {
+                const { ano, mes } = mesCalendario;
+                const primeiroDia = new Date(ano, mes, 1);
+                // Começando em segunda-feira (0 = segunda)
+                const weekdaySundayBased = primeiroDia.getDay(); // 0 = domingo
+                const firstWeekday = (weekdaySundayBased + 6) % 7; // 0 = segunda
+                const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+
+                const dias: Array<number | null> = [];
+                for (let i = 0; i < firstWeekday; i++) dias.push(null);
+                for (let d = 1; d <= diasNoMes; d++) dias.push(d);
+
+                const semanas: Array<Array<number | null>> = [];
+                for (let i = 0; i < dias.length; i += 7) {
+                  semanas.push(dias.slice(i, i + 7));
+                }
+
+                const toggleDia = (dia: number) => {
+                  const dateStr = formatYMD(ano, mes, dia);
+                  setDatasAgendamento((prev) => {
+                    if (prev.includes(dateStr)) {
+                      return prev.filter((d) => d !== dateStr);
+                    }
+                    const next = [...prev, dateStr];
+                    // ordena por data só pra ficar organizado
+                    return next.sort();
+                  });
+                };
+
+                return (
+                  <div className="grid grid-rows-6 gap-1 mb-2">
+                    {semanas.map((semana, idxSemana) => (
+                      <div key={idxSemana} className="grid grid-cols-7 gap-1">
+                        {semana.map((dia, idxDia) => {
+                          if (!dia) {
+                            return <div key={idxDia} className="h-8 sm:h-9" />;
+                          }
+                          const dateStr = formatYMD(ano, mes, dia);
+                          const selecionado = datasAgendamento.includes(dateStr);
+
+                          return (
+                            <button
+                              key={idxDia}
+                              type="button"
+                              onClick={() => toggleDia(dia)}
+                              className={[
+                                "h-8 sm:h-9 text-xs sm:text-sm flex items-center justify-center rounded-full border transition-all",
+                                selecionado
+                                  ? "bg-green-700 text-white border-green-700 shadow-sm"
+                                  : "bg-white text-gray-800 border-gray-300 hover:bg-green-50",
+                              ].join(" ")}
+                            >
+                              {dia}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Resumo de dias selecionados */}
+              {datasAgendamento.length > 0 && (
+                <div className="mt-2 text-xs text-gray-700">
+                  <span className="font-semibold">Dias selecionados:</span>{" "}
+                  {datasAgendamento
+                    .slice()
+                    .sort()
+                    .map((str) => {
+                      const d = new Date(str);
+                      if (isNaN(d.getTime())) return str;
+                      return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+                    })
+                    .join(", ")}
+                </div>
+              )}
+
+              {datasAgendamento.length > 0 && atletasSelecionados.length === 0 && (
+                <p className="mt-2 text-xs text-amber-700">
+                  Você já escolheu datas, mas ainda não selecionou atletas.
+                  O treino só será agendado para quem estiver selecionado acima.
+                </p>
+              )}
+            </div>
+
+
 
             <div className="flex flex-col sm:flex-row justify-between gap-2 mt-6">
               <button onClick={() => goTo(3)} className="bg-gray-200 px-4 py-2 rounded w-full sm:w-auto">

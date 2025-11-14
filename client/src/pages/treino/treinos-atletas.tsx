@@ -18,14 +18,15 @@ import {
   ChevronDown,
   ChevronUp,
   Play,
-  MoreVertical, // novo
+  MoreVertical,
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, FLAGS } from "../../config.js";
-import { Badge } from "../../components/ui/badge.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
 
 /* ===================== Tipos ===================== */
+type TreinoStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "EXPIRED";
+
 interface TreinoAgendado {
   id: string;
   titulo: string;
@@ -34,6 +35,11 @@ interface TreinoAgendado {
   nivel?: string | null;
   prazoEnvio?: string | null;
   duracaoMinutos?: number | null;
+  // novos do backend:
+  meuStatus?: TreinoStatus | string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  submissao?: { enviados: number; aprovados: number; feito: boolean } | null;
   treinoProgramado?: {
     id?: string;
     descricao?: string;
@@ -57,7 +63,6 @@ interface Desafio {
   pontuacao: number;
   imagemUrl?: string;
 }
-type TreinoStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "EXPIRED";
 type Checklist = Record<string, boolean>;
 type WeekStatus = {
   index: number;
@@ -78,10 +83,9 @@ const PLACEHOLDER_USER = "/assets/default-user.png";
 const TIMER_KEY = (treinoAgendadoId: string) => `footera:treinoTimerStart:${treinoAgendadoId}`;
 const CHECKLIST_KEY = (treinoAgendadoId: string) => `footera:treinoChecklist:${treinoAgendadoId}`;
 
-// --- limites e tamanhos das listas ---
-const VISIBLE_TREINOS = 6;      // quantos itens ficam visíveis sem rolar
-const ROW_ESTIMATE_PX = 72;     // altura aproximada de cada <li> (ajuste fino se precisar)
-const DESAFIOS_MAX_PX = 240;    // altura máx. do card de Desafios (se ativo)
+const VISIBLE_TREINOS = 6;
+const ROW_ESTIMATE_PX = 72;
+const DESAFIOS_MAX_PX = 240;
 
 function formatHHMMSS(totalSec: number) {
   const h = Math.floor(totalSec / 3600);
@@ -251,18 +255,18 @@ export default function TreinosAtletas() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
 
-  // full-screen de treino (novo)
+  // full-screen de treino
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
 
   // menu (3 pontinhos) no header do fullscreen
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // modal de vídeo por exercício (novo)
+  // modal de vídeo por exercício
   const [videoModal, setVideoModal] = useState<{ exercicioId: string; nome: string; url: string } | null>(null);
   const [videoCarregando, setVideoCarregando] = useState(false);
   const [videoErro, setVideoErro] = useState<string | null>(null);
 
-  // compartilhamento por DM (desafios)
+  // compartilhar desafio
   const [modalAberto, setModalAberto] = useState(false);
   const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
@@ -282,28 +286,18 @@ export default function TreinosAtletas() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-
     const calc = () => {
       if (!agendadosCardRef.current) return;
       const rect = agendadosCardRef.current.getBoundingClientRect();
       const bottomH = bottomNavRef.current?.offsetHeight ?? 64;
-
-      // reservar espaço para o card de Desafios (quando ativo)
       const reserveDesafios = FLAGS.DESAFIOS_ENABLED ? (DESAFIOS_MAX_PX + 16) : 0;
-
-      // espaço do topo do card até a barra inferior
       const available = Math.floor(window.innerHeight - rect.top - bottomH - 16 - reserveDesafios);
-
-      // limitar a ~6 linhas visíveis
       const capByRows = VISIBLE_TREINOS * ROW_ESTIMATE_PX;
-
       setAgendadosMaxH(Math.max(200, Math.min(available, capByRows)));
     };
-
     calc();
     window.addEventListener("resize", calc);
-    const i = window.setInterval(calc, 400); // reage a pequenas mudanças no layout
-
+    const i = window.setInterval(calc, 400);
     return () => {
       window.removeEventListener("resize", calc);
       window.clearInterval(i);
@@ -326,7 +320,7 @@ export default function TreinosAtletas() {
     if (!token) return;
 
     (async () => {
-      // minhas submissões
+      // minhas submissões (fallback)
       try {
         const urls: string[] = [];
         if (atletaId) urls.push(`${API.BASE_URL}/api/treinos/minhas-submissoes?atletaId=${encodeURIComponent(atletaId)}`);
@@ -347,14 +341,18 @@ export default function TreinosAtletas() {
               : [];
           if (arr.length > 0) {
             const setAg = new Set<string>();
-            for (const s of arr) if (s.treinoAgendadoId) setAg.add(s.treinoAgendadoId);
+            for (const s of arr) {
+              if (s.treinoAgendadoId && s.aprovado === true) {
+                setAg.add(s.treinoAgendadoId);
+              }
+            }
             setIdsAgendadosSubmetidos(setAg);
             break;
           }
         }
       } catch {}
 
-      // treinos agendados
+      // treinos agendados (agora com status e submissões do backend)
       try {
         const urls: string[] = [];
         if (atletaId) urls.push(`${API.BASE_URL}/api/treinos/agendados?atletaId=${encodeURIComponent(atletaId)}`);
@@ -383,11 +381,37 @@ export default function TreinosAtletas() {
               nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
               duracaoMinutos: t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
               treinoProgramado: t.treinoProgramado ?? null,
+              // novos
+              meuStatus: t.meuStatus ?? t.status ?? "PENDING",
+              startedAt: t.startedAt ?? null,
+              completedAt: t.completedAt ?? null,
+              submissao: t.submissao ?? { enviados: 0, aprovados: 0, feito: false },
             }));
             break;
           }
         }
+
         setTreinosAgendados(normalizados);
+
+        // popular statusPorTreino a partir do backend (sem chamar /status N vezes)
+        setStatusPorTreino((prev) => {
+          const next = { ...prev };
+          for (const t of normalizados) {
+            next[t.id] = {
+              status: (t.meuStatus as TreinoStatus) || "PENDING",
+              startedAt: t.startedAt ?? null,
+              completedAt: t.completedAt ?? null,
+            };
+          }
+          return next;
+        });
+
+        // setar submetidos a partir dos counts do backend
+        const setSub = new Set<string>();
+        for (const t of normalizados) {
+          if (t.submissao?.aprovados! > 0 || t.submissao?.feito) setSub.add(t.id);
+        }
+        if (setSub.size > 0) setIdsAgendadosSubmetidos(setSub);
       } catch {
         setTreinosAgendados([]);
       }
@@ -428,29 +452,29 @@ export default function TreinosAtletas() {
     })();
   }, []);
 
-  // ouvir criação de agendamento (gatilhado por outras telas)
+  // NÃO precisamos mais forçar carregar /status para todos;
+  // se algum vier sem meuStatus (improvável), ainda dá pra tentar:
   useEffect(() => {
-    const handler = (e: any) => setTreinosAgendados((prev) => [e.detail, ...prev]);
-    window.addEventListener("treino:agendado", handler as EventListener);
-    window.dispatchEvent(new Event("treinos:ready"));
-    return () => window.removeEventListener("treino:agendado", handler as EventListener);
-  }, []);
+    const faltando = treinosAgendados.filter((t) => !t.meuStatus);
+    if (faltando.length === 0) return;
+    faltando.forEach((t) => carregarStatus(t.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [treinosAgendados]);
 
-  // carrega status de cada treino
+  // carrega status de um treino (fallback apenas)
   async function carregarStatus(id: string) {
     const token = getToken();
     if (!token) return;
-    const r = await fetch(`${API.BASE_URL}/api/treinos/${id}/status`, { headers: { Authorization: `Bearer ${token}` } });
-    if (r.ok) {
-      const js = await r.json();
-      setStatusPorTreino((prev) => ({ ...prev, [id]: js }));
-    }
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/treinos/${id}/status`, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) {
+        const js = await r.json();
+        setStatusPorTreino((prev) => ({ ...prev, [id]: js }));
+      }
+    } catch {}
   }
-  useEffect(() => {
-    treinosAgendados.forEach((t) => carregarStatus(t.id));
-  }, [treinosAgendados]);
 
-  // ticking do timer
+  // ticking do timer (usa startedAt vindo do backend quando IN_PROGRESS)
   useEffect(() => {
     const inProgressIds = Object.keys(statusPorTreino).filter(
       (id) => (statusPorTreino[id]?.status as TreinoStatus | undefined) === "IN_PROGRESS",
@@ -706,7 +730,6 @@ export default function TreinosAtletas() {
     setVideoCarregando(true);
     const token = getToken();
 
-    // tenta buscar detalhes do exercício
     async function buscarUrlViaExercicio(): Promise<string | null> {
       try {
         const r = await fetch(`${API.BASE_URL}/api/exercicios/${encodeURIComponent(exercicioId)}`, {
@@ -728,8 +751,6 @@ export default function TreinosAtletas() {
         return null;
       }
     }
-
-    // fallback: tenta /api/videos?exercicioId=
     async function buscarUrlViaVideos(): Promise<string | null> {
       try {
         const r = await fetch(`${API.BASE_URL}/api/videos?exercicioId=${encodeURIComponent(exercicioId)}`, {
@@ -831,14 +852,12 @@ export default function TreinosAtletas() {
   const now = new Date();
   const hoje = startOfDay(now);
 
-  // ordena por dia
   const ordenados = [...treinosAgendados].sort((a, b) => {
     const ad = a.dataTreino ? +new Date(a.dataTreino) : 0;
     const bd = b.dataTreino ? +new Date(b.dataTreino) : 0;
     return ad - bd;
   });
 
-  // auxiliares para o strip (quadrados/dia)
   type TileInfo = {
     id: string;
     date: Date | null;
@@ -851,75 +870,90 @@ export default function TreinosAtletas() {
     isMissed: boolean;
   };
 
-  function computeTile(t: TreinoAgendado): TileInfo {
-    const d = t.dataTreino ? new Date(t.dataTreino) : null;
-    const prazo = (t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino) ? new Date(String(t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino)) : null;
+function computeTile(t: TreinoAgendado): TileInfo {
+  const d = t.dataTreino ? new Date(t.dataTreino) : null;
 
-    const st = statusPorTreino[t.id]?.status as TreinoStatus | undefined;
-    const submitted = idsAgendadosSubmetidos.has(t.id);
-    const hojeFlag = d ? sameDay(d, hoje) : false;
+  // status vindo do backend
+  const st = statusPorTreino[t.id]?.status as TreinoStatus | undefined;
 
-    const passouPrazo = prazo ? endOfDay(prazo) < now : (d ? endOfDay(d) < now : false);
-    const missed = !submitted && st !== "COMPLETED" && passouPrazo;
+  // se tem submissão aprovada ou já marcada como "feito"
+  const submitted =
+    (t.submissao?.aprovados ?? 0) > 0 ||
+    idsAgendadosSubmetidos.has(t.id) ||
+    t.submissao?.feito === true;
 
-    let statusClass = "bg-gray-100 text-gray-700";
-    let borderClass = "border-gray-200";
-    let dotClass = "bg-gray-400";
-    let label = "Pendente";
+  const hojeFlag = d ? sameDay(d, hoje) : false;
 
-    if (submitted) {
-      statusClass = "bg-emerald-100 text-emerald-800";
-      borderClass = "border-emerald-200";
-      dotClass = "bg-emerald-500";
-      label = "Submetido";
-    } else if (st === "COMPLETED") {
-      statusClass = "bg-rose-100 text-rose-800";
-      borderClass = "border-rose-200";
-      dotClass = "bg-rose-500";
-      label = "Concluído";
-    } else if (missed) {
-      statusClass = "bg-red-200 text-red-900";
-      borderClass = "border-red-300";
-      dotClass = "bg-red-600";
-      label = "Faltou";
-    } else if (st === "IN_PROGRESS") {
-      statusClass = "bg-blue-100 text-blue-800";
-      borderClass = "border-blue-200";
-      dotClass = "bg-blue-500";
-      label = "Em progresso";
-    }
+  // 💥 REGRA NOVA: "faltou" = dia do treino já passou e não houve submissão/conclusão
+  const diaPassou = d ? endOfDay(d) < now : false;
 
-    return {
-      id: t.id,
-      date: d,
-      titulo: t.titulo,
-      statusClass,
-      borderClass,
-      dotClass,
-      label,
-      isToday: hojeFlag,
-      isMissed: missed,
-    };
+  // caso o backend marque como EXPIRED no futuro, também conta como faltou
+  const expiradoBackend =
+    (st as string) === "EXPIRED" ||
+    (t as any).execucaoStatus === "EXPIRED";
+
+  const missed = !submitted && (diaPassou || expiradoBackend) && st !== "COMPLETED";
+
+  let statusClass = "bg-gray-100 text-gray-700";
+  let borderClass = "border-gray-200";
+  let dotClass = "bg-gray-400";
+  let label = "Pendente";
+
+  if (submitted) {
+    statusClass = "bg-emerald-100 text-emerald-800";
+    borderClass = "border-emerald-200";
+    dotClass = "bg-emerald-500";
+    label = "Submetido";
+  } else if (st === "COMPLETED") {
+    statusClass = "bg-rose-100 text-rose-800";
+    borderClass = "border-rose-200";
+    dotClass = "bg-rose-500";
+    label = "Concluído";
+  } else if (missed) {
+    statusClass = "bg-red-200 text-red-900";
+    borderClass = "border-red-300";
+    dotClass = "bg-red-600";
+    label = "Faltou";
+  } else if (st === "IN_PROGRESS") {
+    statusClass = "bg-blue-100 text-blue-800";
+    borderClass = "border-blue-200";
+    dotClass = "bg-blue-500";
+    label = "Em progresso";
   }
+
+  return {
+    id: t.id,
+    date: d,
+    titulo: t.titulo,
+    statusClass,
+    borderClass,
+    dotClass,
+    label,
+    isToday: hojeFlag,
+    isMissed: missed,
+  };
+}
+
+
 
   const tiles: TileInfo[] = ordenados.map(computeTile);
 
-  // centraliza o tile de hoje quando carregar
-  useEffect(() => {
-    if (!tiles.length) return;
-    const todayTile = tiles.find((x) => x.isToday);
-    if (!todayTile) return;
-    const el = document.getElementById(`tile-${todayTile.id}`);
-    if (todayTile) {
-      setExpandedId(todayTile.id);
-      setFullscreenId(todayTile.id); // já abre o full-screen no "de hoje"
-    }
-    if (el && stripRef.current) {
-      el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-    }
-  }, [tiles.length]);
+useEffect(() => {
+  if (!tiles.length) return;
 
-  // ===================== UI: detalhes do treino (usado no full-screen) =====================
+  const todayTile = tiles.find((x) => x.isToday);
+  if (!todayTile) return;
+
+  const el = document.getElementById(`tile-${todayTile.id}`);
+
+  setExpandedId(todayTile.id);
+
+  if (el && stripRef.current) {
+    el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }
+}, [tiles.length, tiles]);
+
+  // ===================== UI: detalhes do treino (conteúdo do full-screen) =====================
   const renderTreinoDetalhesConteudo = (treino: TreinoAgendado) => {
     const programado = treino.treinoProgramado;
     const nivel = treino.nivel ?? treino.treinoProgramado?.nivel ?? "-";
@@ -1000,15 +1034,15 @@ export default function TreinosAtletas() {
                         </svg>
                       </span>
                       <div className="flex-1 min-w-0">
-   <div className="flex items-center gap-2 min-w-0">
-     <span className="font-medium shrink-0">{i + 1}.</span>
-     <span className={`flex-1 basis-0 min-w-0 truncate ${checked ? "line-through text-gray-500" : ""}`}>
-       {ex.exercicio.nome}
-     </span>
-     {!!ex.repeticoes && (
-       <span className="text-[11px] text-gray-500 shrink-0 whitespace-nowrap">({ex.repeticoes})</span>
-     )}
-   </div>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-medium shrink-0">{i + 1}.</span>
+                          <span className={`flex-1 basis-0 min-w-0 truncate ${checked ? "line-through text-gray-500" : ""}`}>
+                            {ex.exercicio.nome}
+                          </span>
+                          {!!ex.repeticoes && (
+                            <span className="text-[11px] text-gray-500 shrink-0 whitespace-nowrap">({ex.repeticoes})</span>
+                          )}
+                        </div>
                       </div>
                     </label>
 
@@ -1156,39 +1190,53 @@ export default function TreinosAtletas() {
             </div>
           </div>
 
-          {/* Faixa mensal (mantida) */}
+          {/* Faixa mensal */}
           {tiles.length > 0 && (
             <div
               ref={stripRef}
               className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory"
               style={{ scrollBehavior: "smooth" }}
             >
-              {tiles.map((tl) => (
-                <button
-                  id={`tile-${tl.id}`}
-                  key={tl.id}
-                  onClick={() => {
-                    setExpandedId((prev) => (prev === tl.id ? null : tl.id));
-                    setFullscreenId(tl.id);
-                    setMenuOpen(false);
-                  }}
-                  className={`snap-center shrink-0 min-w-[180px] max-w-[220px] text-left rounded-xl border px-3 py-2 ${tl.statusClass} ${tl.borderClass} hover:opacity-95`}
-                  title={tl.titulo}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-block h-2.5 w-2.5 rounded-full ${tl.dotClass}`} />
-                      <span className="font-semibold text-sm">
-                        {tl.date ? tl.date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : "Sem data"}
-                      </span>
-                      {tl.isToday && <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/70 border">Hoje</span>}
-                    </div>
-                    {expandedId === tl.id ? <ChevronUp className="w-4 h-4 opacity-70" /> : <ChevronDown className="w-4 h-4 opacity-70" />}
-                  </div>
-                  <div className="mt-1 text-sm line-clamp-2">{tl.titulo}</div>
-                  <div className="mt-1 text-[11px] opacity-80">{tl.label}</div>
-                </button>
-              ))}
+{tiles.map((tl) => {
+  const disabled = tl.isMissed;
+
+  return (
+    <button
+      id={`tile-${tl.id}`}
+      key={tl.id}
+      onClick={() => {
+        if (disabled) return;
+        setExpandedId((prev) => (prev === tl.id ? null : tl.id));
+        setFullscreenId(tl.id);
+        setMenuOpen(false);
+      }}
+      className={`snap-center shrink-0 min-w-[180px] max-w-[220px] text-left rounded-xl border px-3 py-2 ${
+        tl.statusClass
+      } ${tl.borderClass} ${disabled ? "cursor-default" : "hover:opacity-95"}`}
+      aria-disabled={disabled}
+      title={tl.titulo}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className={`inline-block h-2.5 w-2.5 rounded-full ${tl.dotClass}`} />
+          <span className="font-semibold text-sm">
+            {tl.date ? tl.date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : "Sem data"}
+          </span>
+          {tl.isToday && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/70 border">Hoje</span>
+          )}
+        </div>
+        {expandedId === tl.id && !disabled ? (
+          <ChevronUp className="w-4 h-4 opacity-70" />
+        ) : (
+          <ChevronDown className="w-4 h-4 opacity-70" />
+        )}
+      </div>
+      <div className="mt-1 text-sm line-clamp-2">{tl.titulo}</div>
+      <div className="mt-1 text-[11px] opacity-80">{tl.label}</div>
+    </button>
+  );
+})}
             </div>
           )}
         </div>
@@ -1205,53 +1253,88 @@ export default function TreinosAtletas() {
               <p className="text-gray-500">Nenhum treino disponível ainda.</p>
             ) : (
               <ul className="divide-y">
-                {ordenados.map((t) => {
-                  const d = t.dataTreino ? new Date(t.dataTreino) : null;
-                  const isHoje = d ? sameDay(d, hoje) : false;
-                  const diaStr = d ? String(d.getDate()).padStart(2, "0") : "—";
-                  const subtitulo =
-                    d ? d.toLocaleDateString("pt-BR", { weekday: "short", month: "short" }) : "Sem data";
+{ordenados.map((t) => {
+  const d = t.dataTreino ? new Date(t.dataTreino) : null;
+  const isHoje = d ? sameDay(d, hoje) : false;
+  const diaStr = d ? String(d.getDate()).padStart(2, "0") : "—";
+  const subtitulo =
+    d ? d.toLocaleDateString("pt-BR", { weekday: "short", month: "short" }) : "Sem data";
 
-                  return (
-                    <li key={t.id} className="py-2">
-                      <button
-                        onClick={() => { setFullscreenId(t.id); setMenuOpen(false); }}
-                        className="w-full flex items-center justify-between gap-3 text-left"
-                        aria-label="Expandir treino"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          {/* Círculo com dia */}
-                          <div
-                            className={[
-                              "flex items-center justify-center rounded-full border h-12 w-12",
-                              "text-base font-bold shrink-0",
-                              isHoje
-                                ? "bg-emerald-100 border-emerald-300 text-emerald-800 ring-2 ring-emerald-300"
-                                : "bg-gray-50 border-gray-300 text-gray-800",
-                            ].join(" ")}
-                          >
-                            {diaStr}
-                          </div>
+  // ===== mesma lógica do computeTile =====
+  const st = statusPorTreino[t.id]?.status as TreinoStatus | undefined;
 
-                          {/* Título + subtítulo (sem quebrar layout) */}
-                          <div className="min-w-0">
-                            <div className="font-medium truncate">{t.titulo}</div>
-                            <div className="text-xs text-gray-500">{subtitulo}</div>
-                          </div>
-                        </div>
+  const submitted =
+    (t.submissao?.aprovados ?? 0) > 0 ||
+    idsAgendadosSubmetidos.has(t.id) ||
+    t.submissao?.feito === true;
 
-                        {/* Chevron de expandir */}
-                        <ChevronDown className="w-5 h-5 text-gray-500 shrink-0" />
-                      </button>
-                    </li>
-                  );
-                })}
+  const diaPassou = d ? endOfDay(d) < now : false;
+  const expiradoBackend =
+    (st as string) === "EXPIRED" ||
+    (t as any).execucaoStatus === "EXPIRED";
+
+  const isMissedTreino =
+    !submitted && (diaPassou || expiradoBackend) && st !== "COMPLETED";
+
+  // classes do círculo
+  let circleClass =
+    "flex items-center justify-center rounded-full border h-12 w-12 text-base font-bold shrink-0 bg-gray-50 border-gray-300 text-gray-800";
+  let titleClass = "font-medium truncate text-gray-900";
+
+  if (submitted || st === "COMPLETED") {
+    // VERDE: treino feito / submetido
+    circleClass =
+      "flex items-center justify-center rounded-full border h-12 w-12 text-base font-bold shrink-0 bg-emerald-50 border-emerald-300 text-emerald-800";
+    titleClass = "font-medium truncate text-emerald-800";
+  } else if (isMissedTreino) {
+    // VERMELHO: faltou
+    circleClass =
+      "flex items-center justify-center rounded-full border h-12 w-12 text-base font-bold shrink-0 bg-red-50 border-red-300 text-red-700";
+    titleClass = "font-medium truncate text-red-700";
+  } else if (isHoje) {
+    // hoje, mas ainda pendente -> só um anel, mantém cinza
+    circleClass += " ring-2 ring-emerald-300";
+  }
+
+  return (
+    <li key={t.id} className="py-2">
+      <button
+        onClick={() => {
+          if (isMissedTreino) return; // treino perdido não abre mais
+          setFullscreenId(t.id);
+          setMenuOpen(false);
+        }}
+        aria-label="Expandir treino"
+        aria-disabled={isMissedTreino}
+        className={`w-full flex items-center justify-between gap-3 text-left ${
+          isMissedTreino ? "opacity-60 cursor-not-allowed" : ""
+        }`}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          {/* Círculo com dia */}
+          <div className={circleClass}>
+            {diaStr}
+          </div>
+
+          {/* Título + subtítulo */}
+          <div className="min-w-0">
+            <div className={titleClass}>{t.titulo}</div>
+            <div className="text-xs text-gray-500">{subtitulo}</div>
+          </div>
+        </div>
+
+        <ChevronDown className="w-5 h-5 text-gray-500 shrink-0" />
+      </button>
+    </li>
+  );
+})}
+
               </ul>
             )}
           </div>
         </div>
 
-        {/* Desafios (mantidos) */}
+        {/* Desafios */}
         {FLAGS.DESAFIOS_ENABLED && (
           <div
             className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mt-6"
@@ -1357,21 +1440,30 @@ export default function TreinosAtletas() {
               const allChecked = total > 0 && exIds.every((id) => ck[id]);
 
               return (
-                <div className="flex items-center gap-3">
+                <div className="relative flex items-center gap-3">
+                  {/* Timer gigante central sobrepondo o header quando em progresso */}
+                  {st === "IN_PROGRESS" && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div
+                        className="font-mono font-black text-4xl sm:text-5xl leading-none tracking-[.15em] text-emerald-700 drop-shadow-sm"
+                        aria-live="polite"
+                      >
+                        {formatHHMMSS(elapsed)}
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     onClick={() => { setMenuOpen(false); setFullscreenId(null); }}
-                    className="inline-flex items-center justify-center p-2 rounded-md border bg-white hover:bg-gray-50"
+                    className="inline-flex items-center justify-center p-2 rounded-md border bg-white hover:bg-gray-50 relative z-10"
                     aria-label="Fechar"
                   >
                     <X className="w-5 h-5" />
                   </button>
 
-                  <div className="flex-1 min-w-0 text-center">
-                    {st === "IN_PROGRESS" ? (
-                      <div className="font-mono font-extrabold text-2xl sm:text-3xl tracking-widest text-emerald-700">
-                        {formatHHMMSS(elapsed)}
-                      </div>
-                    ) : (
+                  {/* Título aparece somente quando NÃO está em progresso */}
+                  <div className="flex-1 min-w-0 text-center relative z-0">
+                    {st !== "IN_PROGRESS" && (
                       <div className="text-base sm:text-lg font-semibold text-green-900 truncate max-w-[70vw] mx-auto">
                         {atual?.titulo ?? "Treino"}
                       </div>
@@ -1379,7 +1471,7 @@ export default function TreinosAtletas() {
                   </div>
 
                   {/* 3 pontinhos */}
-                  <div className="relative">
+                  <div className="relative z-10">
                     <button
                       onClick={() => setMenuOpen((v) => !v)}
                       className="inline-flex items-center justify-center p-2 rounded-md border bg-white hover:bg-gray-50"
