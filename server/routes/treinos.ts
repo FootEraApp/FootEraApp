@@ -31,7 +31,10 @@ import {
   expirarTreinosVencidos,
   iniciarTreinoAgendado,
   finalizarTreinoAgendado,
-  atualizarAgendamento
+  atualizarAgendamento,
+  agendarTreinoLote,
+  agendarTreinoPessoal,
+  salvarTreinoNaBiblioteca
 } from "server/controllers/treinosController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
 import { requireCapability, requireOrgSeat } from "server/middlewares/guards.js";
@@ -77,6 +80,13 @@ router.put(
 router.delete("/programados/:id", deletarTreinoProgramado);
 router.get("/programados", listarTodosTreinosProgramados);
 
+// --- NOVO: agendamento em lote (usa MESMA capability que vc já usa acima nos elencos/rotina) ---
+router.post(
+  "/agendar-lote",
+  requireCapability("agendamento:lote"),
+  agendarTreinoLote
+);
+
 /* ===== SUBMISSÕES / STATUS ===== */
 router.get("/minhas-submissoes", listarMinhasSubmissoesTreino);
 router.post("/submissoes/:id/validar", validarSubmissaoTreino);
@@ -110,12 +120,21 @@ router.post(
   agendarRotinaMensal
 );
 
-/* aliases / fallback */
+// --- NOVO: agendamento pessoal do atleta (usa mesma capability já usada em /agendados) ---
 router.post(
-  "/",
-  requireOrgSeat(req => (req.body?.escolinhaId as string) || (req.body?.clubeId as string)),
-  criarTreinoProgramado
+  "/agendar-pessoal",
+  requireCapability("agendamento:pessoal"),
+  agendarTreinoPessoal
 );
+router.post(
+  "/biblioteca",
+  authenticateToken,
+  salvarTreinoNaBiblioteca
+);
+/* aliases / fallback para criar treino programado
+   Aqui não precisa de requireCapability porque o próprio controller
+   já faz o gate com plano/capabilities. */
+router.post("/", criarTreinoProgramado);
 router.get("/", listarTodosTreinosProgramados);
 
 export default router;

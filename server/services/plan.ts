@@ -15,7 +15,6 @@ export async function getUserPlan(userId: string): Promise<Plan> {
   return 'Free';
 }
 
-// chaves e limites
 const INF = Number.POSITIVE_INFINITY;
 export const LIMITS: Record<Plan, Record<string, number>> = {
   Free: {
@@ -43,12 +42,12 @@ export function planLimitFor(plan: Plan, key: string): number {
   return p[key] ?? INF;
 }
 
-// capability gate (ex.: agendamento_lote)
+// capability gate antigo (se ainda estiver usando em algum lugar)
 export function ensureCapability(req: any, res: any, capability: 'agendamento_lote') {
   const plan: Plan = req.user?.plan || 'Free';
   const allowed =
     capability === 'agendamento_lote'
-      ? plan !== 'Free' // só acima do Free
+      ? plan !== 'Free'
       : true;
 
   if (!allowed) {
