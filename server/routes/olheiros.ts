@@ -9,8 +9,21 @@ import {
   patchColaboracao,
 } from "../controllers/olheirosController.js";
 import { listarObservadosPorOlheiro } from "../controllers/atletaObservadoController.js";
+import {
+  criarLista,
+  minhasListas,
+  deletarLista,
+  adicionarAtleta,
+  removerAtleta,
+} from "server/controllers/listasOlheiroController.js";
 
 const router = Router();
+
+router.delete("/listas/:id", deletarLista);
+router.post("/listas/:id/itens", adicionarAtleta);
+router.delete("/listas/:id/itens/:atletaId", removerAtleta);
+router.post("/listas", criarLista);
+router.get("/listas", minhasListas);
 
 router.get("/:id/indicacoes", getIndicacoes);
 router.get("/perfil/olheiro/:id", authenticateToken, perfilOlheiro);

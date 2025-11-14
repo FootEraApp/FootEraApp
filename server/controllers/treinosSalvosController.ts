@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import { PrismaClient, Categoria, Nivel, TipoTreino } from "@prisma/client";
+import { requireUsage } from "server/lib/usage.js";
+import { enforceTotalLimit } from "server/services/usage.js";
 
 const prisma = new PrismaClient();
 const MAX_SLOTS = 5;
@@ -21,7 +23,16 @@ function ownerWhere(tipoUsuario?: string, tipoUsuarioId?: string) {
 }
 
 export const criarTreinoSalvo = async (req: Request, res: Response) => {
+  await enforceTotalLimit(req, res, 'treinos_salvos_total', async () => {
+    const where = { criadoPorUsuarioId: req.user!.id };
+    return prisma.treinoSalvo.count({ where });
+  });
   try {
+    if (req.user?.tipo === "Atleta" && req.user?.plano !== "PRO") {
+      const ok = await requireUsage(req, res, "treinos_salvos_total");
+      if (!ok) return;
+    }
+    
     const {
       titulo, descricao, nivel, tipoTreino, categoria, duracao, dicas,
       conteudo, publico, parceiro, naoExpira,
