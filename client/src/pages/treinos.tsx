@@ -1,17 +1,12 @@
-// client/src/pages/treinos.tsx
 import React, { useEffect, useRef, useState, type SVGProps, useMemo } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import {
   CalendarClock,
   Volleyball,
   User,
   CirclePlus,
-  Search,
   House,
-  CircleX,
   CircleCheck,
-  Send,
-  Share2,
   Trash2,
   Check,
   X,
@@ -23,6 +18,7 @@ import Storage from "../../../server/utils/storage.js";
 import { API, FLAGS } from "../config.js";
 import { Badge } from "../components/ui/badge.js";
 import HealthBanner from "../components/legal/HealthBanner.js";
+import { TreinosApi } from "../utils/treinosApi.js";
 
 interface Exercicio {
   id: string;
@@ -63,11 +59,13 @@ interface TreinoAgendado {
     duracao?: number;
     dataAgendada?: string | null;
     pontuacao?: number | null;
+    capaUrl?: string | null;
+    videoUrl?: string | null;
     exercicios: {
       exercicio: { id: string; nome: string };
       repeticoes: string;
     }[];
-  };
+  } | null;
 }
 
 interface Desafio {
@@ -85,34 +83,22 @@ interface UsuarioLogado {
   tipoUsuarioId: string;
 }
 
-interface SubmissaoParaValidacao {
-  id: string;
-  criadoEm: string;
-  aprovado: boolean | null;
-  pontosSugeridos: number;
-  atleta: { id: string; usuarioId: string; nome: string; foto?: string | null };
-  treino: { agendadoId: string; titulo: string; programadoId?: string | null };
-  midias: string[];
-  observacao?: string | null;
-}
-
 type AgendaTipo = "TREINO" | "DESAFIO" | "EVENTO" | "JOGO" | "PENEIRA" | "OUTRO";
 
 type AgendaItem = {
   id: string;
   tipo: AgendaTipo;
   titulo: string;
-  inicio: string; // ISO (data+hora)
-  fim?: string | null; // opcional
-  origem: string; // tipo de origem (TREINO_AGENDADO, EVENTO, etc)
+  inicio: string;
+  fim?: string | null;
+  origem: string; 
 };
 
-// 🔹 Novo tipo para eventos/peneiras que vêm do backend
 interface EventoAtleta {
   id: string;
-  tipo?: string | null; // ex: "PENEIRA" | "EVENTO" | outro
+  tipo?: string | null;
   titulo: string;
-  inicio: string; // ISO
+  inicio: string;
   fim?: string | null;
 }
 
@@ -134,8 +120,6 @@ type WeekStatus = {
   status: "success" | "fail" | "none";
   count: { total: number; approved: number; rejected: number };
 };
-
-const PLACEHOLDER_USER = "/assets/default-user.png";
 
 const TIMER_KEY = (treinoAgendadoId: string) => `footera:treinoTimerStart:${treinoAgendadoId}`;
 
@@ -213,14 +197,6 @@ const getStore = (): Storage => {
     },
   } as any as Storage;
 };
-
-function inferWeekStatus(w: WeekStatus, nowMs = Date.now()): WeekStatus["status"] {
-  const approved = Number(w?.count?.approved ?? 0);
-  const endMs = Date.parse(w.end);
-  if (approved > 0) return "success";
-  if (Number.isFinite(endMs) && nowMs >= endMs) return "fail";
-  return "none";
-}
 
 function weekOfMonthIndex(dateLike: string | number | Date): 1 | 2 | 3 | 4 {
   const d = new Date(dateLike);
@@ -317,7 +293,7 @@ function CalendarAgenda({ items }: { items: AgendaItem[] }) {
 
   const firstDayOfMonth = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const startWeekday = firstDayOfMonth.getDay(); // 0 = domingo
+  const startWeekday = firstDayOfMonth.getDay();
 
   const cells: (Date | null)[] = [];
   for (let i = 0; i < startWeekday; i++) cells.push(null);
@@ -491,23 +467,17 @@ export default function PaginaTreinos() {
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
   const [desafios, setDesafios] = useState<Desafio[]>([]);
   const [, navigate] = useLocation();
-  const [abaProfessor, setAbaProfessor] = useState<"avaliar" | "criar">("avaliar");
   const [treinosAgendados, setTreinosAgendados] = useState<TreinoAgendado[]>([]);
 
-  const [modalAberto, setModalAberto] = useState(false);
-  const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
-  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
-  const [enviandoDM, setEnviandoDM] = useState(false);
-  const [carregandoMutuos, setCarregandoMutuos] = useState(false);
-  const [desafioParaCompartilhar, setDesafioParaCompartilhar] = useState<string | null>(null);
-
-  const [submissoesPendentes, setSubmissoesPendentes] = useState<SubmissaoParaValidacao[]>([]);
-  const [carregandoSubmissoes, setCarregandoSubmissoes] = useState(false);
-  const [page, setPage] = useState({ total: 0, limit: 20, offset: 0 });
-
-  const [idsAgendadosSubmetidos, setIdsAgendadosSubmetidos] = useState<Set<string>>(new Set());
-  const [idsProgramadosSubmetidos, setIdsProgramadosSubmetidos] = useState<Set<string>>(new Set());
-  const [idsDesafiosSubmetidos, setIdsDesafiosSubmetidos] = useState<Set<string>>(new Set());
+  const [idsAgendadosSubmetidos, setIdsAgendadosSubmetidos] = useState<Set<string>>(
+    new Set()
+  );
+  const [idsProgramadosSubmetidos, setIdsProgramadosSubmetidos] = useState<Set<string>>(
+    new Set()
+  );
+  const [idsDesafiosSubmetidos, setIdsDesafiosSubmetidos] = useState<Set<string>>(
+    new Set()
+  );
 
   const [statusPorTreino, setStatusPorTreino] =
     useState<
@@ -523,28 +493,24 @@ export default function PaginaTreinos() {
   const [elapsedByTreino, setElapsedByTreino] = useState<Record<string, number>>({});
   const tickRef = useRef<number | null>(null);
 
-  const [dataAgendarById, setDataAgendarById] = useState<Record<string, string>>({});
-  const [obsById, setObsById] = useState<Record<string, string>>({});
-
-  const tipoAtual = (usuario?.tipo ?? "").toLowerCase();
-  const podeGerirElenco = ["professor", "clube", "escolinha", "escola"].includes(tipoAtual);
-
   const [viewAtleta, setViewAtleta] = useState<"lista" | "calendario">("lista");
 
-  // 🔹 Estado para eventos/peneiras relevantes pro atleta
   const [eventosAtleta, setEventosAtleta] = useState<EventoAtleta[]>([]);
 
-  // 🔹 Agenda agregada: treinos agendados + desafios + eventos/peneiras
+  const [agendaFromApi, setAgendaFromApi] = useState<AgendaItem[]>([]);
+
+  const tipoAtual = (usuario?.tipo ?? "").toLowerCase();
+
   const agendaItemsAtleta: AgendaItem[] = useMemo(() => {
     const items: AgendaItem[] = [];
 
-    // Treinos agendados -> tipo TREINO
+    if (agendaFromApi.length) {
+      items.push(...agendaFromApi);
+    }
+
     for (const t of treinosAgendados) {
       const inicioIso =
-        t.dataTreino ??
-        t.prazoEnvio ??
-        t.treinoProgramado?.dataAgendada ??
-        null;
+        t.dataTreino ?? t.prazoEnvio ?? t.treinoProgramado?.dataAgendada ?? null;
 
       if (!inicioIso) continue;
 
@@ -558,14 +524,10 @@ export default function PaginaTreinos() {
       });
     }
 
-    // Desafios -> tipo DESAFIO (somente se tiver algum campo de data)
     for (const d of desafios) {
       const anyD = d as any;
       const inicioIso: string | null =
-        anyD.inicio ??
-        anyD.dataInicio ??
-        anyD.dataLimite ??
-        null;
+        anyD.inicio ?? anyD.dataInicio ?? anyD.dataLimite ?? null;
 
       if (!inicioIso) continue;
 
@@ -579,7 +541,6 @@ export default function PaginaTreinos() {
       });
     }
 
-    // 🔹 Eventos / Peneiras -> tipo EVENTO/PENEIRA
     for (const ev of eventosAtleta) {
       if (!ev || !ev.inicio) continue;
 
@@ -593,10 +554,25 @@ export default function PaginaTreinos() {
       });
     }
 
-    // Futuro: JOGOS, etc.
-
     return items.sort((a, b) => a.inicio.localeCompare(b.inicio));
-  }, [treinosAgendados, desafios, eventosAtleta]);
+  }, [treinosAgendados, desafios, eventosAtleta, agendaFromApi]);
+
+  const agendaProximos7 = useMemo(() => {
+    const hoje = new Date();
+    const limite = new Date();
+    limite.setDate(hoje.getDate() + 7);
+
+    const startMs = hoje.getTime();
+    const endMs = limite.getTime();
+
+    return (agendaItemsAtleta || [])
+      .filter((item) => {
+        const t = Date.parse(item.inicio);
+        if (!Number.isFinite(t)) return false;
+        return t >= startMs && t <= endMs;
+      })
+      .sort((a, b) => a.inicio.localeCompare(b.inicio));
+  }, [agendaItemsAtleta]);
 
   async function agendarTreinoProgramado(
     treino: TreinoProgramado,
@@ -838,60 +814,40 @@ export default function PaginaTreinos() {
     } catch {}
   }, []);
 
-  async function concluir(
-    treinoAgendadoId: string,
-    payload?: { observacao?: string; duracaoMinutos?: number; tempoSeg?: number; repeticoes?: number }
-  ) {
-    const token = getToken();
-    if (!token) return alert("Sessão expirada. Faça login novamente.");
-
-    try {
-      const r = await fetch(
-        `${API.BASE_URL}/api/treinos/agendados/${treinoAgendadoId}/complete`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ treinoAgendadoId, ...(payload || {}) }),
-        }
-      );
-
-      if (!r.ok) {
-        const txt = await r.text().catch(() => "");
-        console.error("Falha ao concluir treino:", r.status, txt);
-        return alert("Não foi possível concluir o treino.");
-      }
-
-      setStatusPorTreino((prev) => ({
-        ...prev,
-        [treinoAgendadoId]: {
-          ...(prev[treinoAgendadoId] ?? {}),
-          status: "COMPLETED",
-          completedAt: new Date().toISOString(),
-        },
-      }));
-      setIdsAgendadosSubmetidos((prev) => {
-        const s = new Set(prev);
-        s.add(treinoAgendadoId);
-        return s;
-      });
-
-      alert("Treino concluído!");
-      try {
-        localStorage.removeItem(TIMER_KEY(treinoAgendadoId));
-      } catch {}
-      setElapsedByTreino((prev) => {
-        const n = { ...prev };
-        delete n[treinoAgendadoId];
-        return n;
-      });
-    } catch (e) {
-      console.error(e);
-      alert("Erro inesperado ao concluir o treino.");
-    }
+  async function cancelarTreinoAgendado(treinoAgendadoId: string) {
+  const token = getToken();
+  if (!token) {
+    alert("Sessão expirada. Faça login novamente.");
+    return;
   }
+
+  const confirma = window.confirm(
+    "Tem certeza que deseja cancelar este treino agendado?"
+  );
+  if (!confirma) return;
+
+  try {
+    const r = await fetch(
+      `${API.BASE_URL}/api/treinos/agendados/${treinoAgendadoId}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      console.error("Erro ao cancelar treino agendado:", r.status, txt);
+      return alert("Não foi possível cancelar o treino.");
+    }
+
+    setTreinosAgendados((prev) => prev.filter((t) => t.id !== treinoAgendadoId));
+    alert("Treino cancelado com sucesso.");
+  } catch (e) {
+    console.error(e);
+    alert("Erro inesperado ao cancelar treino.");
+  }
+}
 
   async function iniciar(treinoAgendadoId: string) {
     const token = getToken();
@@ -980,8 +936,7 @@ export default function PaginaTreinos() {
 
   async function carregarMinhasSubmissoes(atletaId: string) {
     try {
-      const token =
-        (Storage as any).token ?? localStorage.getItem("token");
+      const token = (Storage as any).token ?? localStorage.getItem("token");
       const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
       const r = await fetch(
@@ -1034,7 +989,6 @@ export default function PaginaTreinos() {
 
   useEffect(() => {
     if (!semanasDesafio.length) return;
-    const now = new Date();
     const patched = semanasDesafio.map((b) => {
       if (b.count.approved > 0) return { ...b, status: "success" as const };
       const ended = Date.now() >= Date.parse(b.end);
@@ -1045,6 +999,30 @@ export default function PaginaTreinos() {
   }, [semanasDesafio]);
 
   useEffect(() => {
+    const carregarUsuario = () => {
+      const tipoSalvo =
+        (Storage as any).tipoSalvo ??
+        (Storage as any).tipoUsuario ??
+        (Storage as any).tipo ??
+        localStorage.getItem("tipoUsuario") ??
+        sessionStorage.getItem("tipoUsuario");
+
+      const usuarioId =
+        (Storage as any).usuarioId ?? localStorage.getItem("usuarioId");
+      const tipoUsuarioId =
+        (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
+
+      const t = String(tipoSalvo || "").toLowerCase();
+      if (
+        ["admin", "atleta", "escola", "escolinha", "clube", "professor", "olheiro"].includes(t) &&
+        usuarioId
+      ) {
+        setUsuario({ tipo: t as any, usuarioId, tipoUsuarioId: tipoUsuarioId ?? "" });
+      } else {
+        console.warn("Tipo/IDs inválidos", { tipoSalvo, usuarioId, tipoUsuarioId });
+      }
+    };
+
     const carregar = async () => {
       const rawTipo =
         (Storage as any).tipoSalvo ??
@@ -1053,12 +1031,10 @@ export default function PaginaTreinos() {
         localStorage.getItem("tipoUsuario") ??
         sessionStorage.getItem("tipoUsuario") ??
         "";
-
       const tipo = String(rawTipo).toLowerCase();
       const tipoUsuarioId =
-        (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
-      const token =
-        (Storage as any).token ?? localStorage.getItem("token");
+        (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId") ?? "";
+      const token = (Storage as any).token ?? localStorage.getItem("token") ?? "";
 
       const qs = new URLSearchParams(window.location.search);
       const professorIdFromQuery = qs.get("professorId");
@@ -1074,9 +1050,7 @@ export default function PaginaTreinos() {
 
           if (res.ok) {
             const data = await res.json();
-            const lista = Array.isArray(data)
-              ? data
-              : data?.items ?? data?.data ?? [];
+            const lista = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
 
             const normTreinos = lista.map((t: any) => ({
               id: t.id,
@@ -1105,15 +1079,35 @@ export default function PaginaTreinos() {
         }
       }
 
-      if (tipo === "atleta" && token) {
-        if (tipoUsuarioId) {
-          carregarMinhasSubmissoes(tipoUsuarioId);
-        }
+      if (tipoUsuarioId) {
+        carregarMinhasSubmissoes(tipoUsuarioId);
+      }
 
-        const headers: HeadersInit = {
-          Authorization: `Bearer ${token}`,
-        };
-        const atletaId = tipoUsuarioId || (Storage as any).atletaId;
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const atletaId = tipoUsuarioId || (Storage as any).atletaId;
+
+      if (tipo === "atleta" && token) {
+        try {
+          const hoje = new Date();
+          const daqui30 = new Date();
+          daqui30.setDate(hoje.getDate() + 30);
+
+          const rows = await TreinosApi.getCalendario(hoje, daqui30);
+          const normalizados: AgendaItem[] = (Array.isArray(rows) ? rows : []).map(
+            (item: any) => ({
+              id: item.id,
+              tipo: (item.tipo as AgendaTipo) ?? "OUTRO",
+              titulo: item.titulo ?? "Atividade",
+              inicio: item.inicio ?? item.start ?? item.data ?? new Date().toISOString(),
+              fim: item.fim ?? item.end ?? item.dataFim ?? null,
+              origem: item.origem ?? "API",
+            })
+          );
+          setAgendaFromApi(normalizados);
+        } catch (e) {
+          console.error("Falha ao carregar calendário API:", e);
+          setAgendaFromApi([]);
+        }
 
         if (atletaId) {
           const r = await fetch(
@@ -1132,24 +1126,22 @@ export default function PaginaTreinos() {
             setTreinosAgendados([]);
           } else {
             const treinosJson = await r.json();
-            const normalizados = (Array.isArray(treinosJson)
-              ? treinosJson
-              : []
-            ).map((t: any) => ({
-              id: t.id,
-              titulo: t.titulo,
-              dataTreino: t.dataTreino ?? null,
-              prazoEnvio:
-                t.prazoEnvio ??
-                t.dataExpiracao ??
-                t.dataTreino ??
-                t.treinoProgramado?.dataAgendada ??
-                null,
-              nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
-              duracaoMinutos:
-                t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
-              treinoProgramado: t.treinoProgramado ?? null,
-            }));
+            const normalizados = (Array.isArray(treinosJson) ? treinosJson : []).map(
+              (t: any) => ({
+                id: t.id,
+                titulo: t.titulo,
+                dataTreino: t.dataTreino ?? null,
+                prazoEnvio:
+                  t.prazoEnvio ??
+                  t.dataExpiracao ??
+                  t.dataTreino ??
+                  t.treinoProgramado?.dataAgendada ??
+                  null,
+                nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
+                duracaoMinutos: t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
+                treinoProgramado: t.treinoProgramado ?? null,
+              })
+            );
 
             setTreinosAgendados(normalizados);
           }
@@ -1157,10 +1149,10 @@ export default function PaginaTreinos() {
           setTreinosAgendados([]);
         }
 
-        if (FLAGS.DESAFIOS_ENABLED) {
+        if (FLAGS.DESAFIOS_ENABLED && tipoUsuarioId) {
           const resDesafios = await fetch(
             `${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`,
-            { headers: { Authorization: `Bearer ${token}` } }
+            { headers }
           );
           if (resDesafios.ok) {
             const desafiosJson = await resDesafios.json();
@@ -1172,15 +1164,13 @@ export default function PaginaTreinos() {
           try {
             const resSem = await fetch(
               `${API.BASE_URL}/api/treinos/desafios-semanais?tipoUsuarioId=${encodeURIComponent(
-                tipoUsuarioId ?? ""
+                tipoUsuarioId
               )}`,
-              { headers: { Authorization: `Bearer ${token}` } }
+              { headers }
             );
             if (resSem.ok) {
               const js = await resSem.json();
-              const rawWeeks: WeekStatus[] = Array.isArray(js?.weeks)
-                ? js.weeks
-                : [];
+              const rawWeeks: WeekStatus[] = Array.isArray(js?.weeks) ? js.weeks : [];
               setSemanasDesafio(computeMonthlyWeeks(rawWeeks, new Date()));
             } else {
               setSemanasDesafio(buildMonthBuckets(new Date()));
@@ -1193,11 +1183,9 @@ export default function PaginaTreinos() {
           setSemanasDesafio([]);
         }
 
-        // 🔹 Buscar eventos/peneiras relevantes pro atleta
         try {
           const alvoId = tipoUsuarioId || atletaId;
           if (alvoId) {
-            // Ajuste a URL/params abaixo conforme sua API real de eventos
             const resEvt = await fetch(
               `${API.BASE_URL}/api/eventos/minha-agenda?alvoId=${encodeURIComponent(
                 alvoId
@@ -1210,21 +1198,17 @@ export default function PaginaTreinos() {
                 ? dataEvt
                 : dataEvt?.items ?? dataEvt?.data ?? [];
 
-              const normalizados: EventoAtleta[] = lista
+              const normalizadosEv: EventoAtleta[] = lista
                 .map((ev: any) => ({
                   id: ev.id,
                   tipo: ev.tipo ?? ev.categoria ?? null,
                   titulo: ev.titulo ?? ev.nome ?? "Evento",
                   inicio: ev.inicio ?? ev.dataInicio ?? ev.data ?? null,
-                  fim:
-                    ev.fim ??
-                    ev.dataFim ??
-                    ev.dataLimite ??
-                    null,
+                  fim: ev.fim ?? ev.dataFim ?? null,
                 }))
                 .filter((ev: EventoAtleta) => !!ev.inicio);
 
-              setEventosAtleta(normalizados);
+              setEventosAtleta(normalizadosEv);
             } else {
               setEventosAtleta([]);
             }
@@ -1232,1316 +1216,500 @@ export default function PaginaTreinos() {
             setEventosAtleta([]);
           }
         } catch (e) {
-          console.error("Falha ao carregar eventos do atleta:", e);
+          console.error("Falha ao carregar eventos/peneiras:", e);
           setEventosAtleta([]);
         }
-      } else if (tipo === "admin" && token) {
-        const resTreinos = await fetch(
-          `${API.BASE_URL}/api/treinos/programados`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        if (!resTreinos.ok)
-          throw new Error(`Falha /treinos/programados: ${resTreinos.status}`);
-        const jsonTreinos = await resTreinos.json();
-
-        const normTreinos = (Array.isArray(jsonTreinos)
-          ? jsonTreinos
-          : []
-        ).map((t: any) => ({
-          id: t.id,
-          nome: t.nome,
-          descricao: t.descricao ?? undefined,
-          nivel: t.nivel,
-          dataAgendada: t.dataAgendada ?? undefined,
-          duracao: t.duracao ?? undefined,
-          objetivo: t.objetivo ?? undefined,
-          dicas: Array.isArray(t.dicas) ? t.dicas : [],
-          professorId: t.professorId ?? undefined,
-          escolinhaId: t.escolinhaId ?? undefined,
-          clubeId: t.clubeId ?? undefined,
-          pontuacao: t.pontuacao ?? undefined,
-          exercicios: (t.exercicios ?? []).map((ex: any) => ({
-            id: ex.exercicio?.id ?? ex.id ?? "",
-            nome: ex.exercicio?.nome ?? ex.nome ?? "",
-            repeticoes: ex.repeticoes ?? undefined,
-          })),
-        }));
-        setTreinos(normTreinos);
-
-        if (FLAGS.DESAFIOS_ENABLED) {
-          const resDesafios = await fetch(`${API.BASE_URL}/api/desafios`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!resDesafios.ok)
-            throw new Error(`/desafios: ${resDesafios.status}`);
-          const jsonDesafios = await resDesafios.json();
-          setDesafios(jsonDesafios?.desafiosOficiais ?? jsonDesafios ?? []);
-        } else {
-          setDesafios([]);
-        }
-      } else if (
-        ["professor", "clube", "escolinha", "escola"].includes(String(tipo)) &&
-        token
-      ) {
-        const resTreinos = await fetch(
-          `${API.BASE_URL}/api/treinos/programados`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        if (!resTreinos.ok)
-          throw new Error(`/treinos/programados: ${resTreinos.status}`);
-        const jsonTreinos = await resTreinos.json();
-
-        const normTreinos = (Array.isArray(jsonTreinos)
-          ? jsonTreinos
-          : []
-        ).map((t: any) => ({
-          id: t.id,
-          nome: t.nome,
-          descricao: t.descricao ?? undefined,
-          nivel: t.nivel,
-          dataAgendada: t.dataAgendada ?? undefined,
-          duracao: t.duracao ?? undefined,
-          objetivo: t.objetivo ?? undefined,
-          dicas: Array.isArray(t.dicas) ? t.dicas : [],
-          professorId: t.professorId ?? undefined,
-          escolinhaId: t.escolinhaId ?? undefined,
-          clubeId: t.clubeId ?? undefined,
-          pontuacao: t.pontuacao ?? undefined,
-          exercicios: (t.exercicios ?? []).map((ex: any) => ({
-            id: ex.exercicio?.id ?? ex.id ?? "",
-            nome: ex.exercicio?.nome ?? ex.nome ?? "",
-            repeticoes: ex.repeticoes ?? undefined,
-          })),
-        }));
-        setTreinos(normTreinos);
-
-        if (FLAGS.DESAFIOS_ENABLED) {
-          const resDesafios = await fetch(
-            `${API.BASE_URL}/api/desafios?tipoUsuarioId=${
-              (Storage as any).tipoUsuarioId
-            }`,
-            { headers: { Authorization: `Bearer ${token}` } }
+        try {
+          const resTreinos = await fetch(
+            `${API.BASE_URL}/api/treinos/programados/disponiveis?alvoId=${encodeURIComponent(
+              tipoUsuarioId || atletaId
+            )}`,
+            { headers }
           );
-          if (!resDesafios.ok)
-            throw new Error(`/desafios: ${resDesafios.status}`);
-          const jsonDesafios = await resDesafios.json();
-          setDesafios(jsonDesafios ?? []);
-        } else {
-          setDesafios([]);
+
+          if (resTreinos.ok) {
+            const data = await resTreinos.json();
+            const lista = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+
+            const normTreinos: TreinoProgramado[] = lista.map((t: any) => ({
+              id: t.id,
+              nome: t.nome,
+              descricao: t.descricao ?? undefined,
+              nivel: t.nivel,
+              dataAgendada: t.dataAgendada ?? undefined,
+              duracao: t.duracao ?? undefined,
+              objetivo: t.objetivo ?? undefined,
+              dicas: Array.isArray(t.dicas) ? t.dicas : [],
+              professorId: t.professorId ?? undefined,
+              escolinhaId: t.escolinhaId ?? undefined,
+              clubeId: t.clubeId ?? undefined,
+              pontuacao: t.pontuacao ?? undefined,
+              exercicios: (t.exercicios ?? []).map((ex: any) => ({
+                id: ex.exercicio?.id ?? ex.id ?? "",
+                nome: ex.exercicio?.nome ?? ex.nome ?? "",
+                repeticoes: ex.repeticoes ?? undefined,
+              })),
+            }));
+
+            setTreinos(normTreinos);
+          } else {
+            setTreinos([]);
+          }
+        } catch (e) {
+          console.error("Falha ao carregar treinos programados disponíveis:", e);
+          setTreinos([]);
         }
-      }
-    };
-
-    const carregarUsuario = () => {
-      const tipoSalvo =
-        (Storage as any).tipoSalvo ??
-        (Storage as any).tipoUsuario ??
-        (Storage as any).tipo ??
-        localStorage.getItem("tipoUsuario") ??
-        sessionStorage.getItem("tipoUsuario");
-
-      const usuarioId =
-        (Storage as any).usuarioId ?? localStorage.getItem("usuarioId");
-      const tipoUsuarioId =
-        (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
-
-      const t = String(tipoSalvo || "").toLowerCase();
-      if (
-        [
-          "admin",
-          "atleta",
-          "escola",
-          "escolinha",
-          "clube",
-          "professor",
-          "olheiro",
-        ].includes(t) &&
-        usuarioId
-      ) {
-        setUsuario({ tipo: t as any, usuarioId, tipoUsuarioId: tipoUsuarioId ?? "" });
       } else {
-        console.warn("Tipo/IDs inválidos", { tipoSalvo, usuarioId, tipoUsuarioId });
+        setTreinosAgendados([]);
+        setAgendaFromApi([]);
+        setEventosAtleta([]);
       }
     };
-    carregar();
+
     carregarUsuario();
+    void carregar();
   }, []);
 
   useEffect(() => {
-    if ((usuario?.tipo ?? "").toLowerCase() === "olheiro") {
-      window.location.replace("/olheiros");
-    }
-  }, [usuario?.tipo]);
+  const agora = Date.now();
 
-  useEffect(() => {
-    if (!usuario) return;
-    if (
-      usuario.tipo === "professor" ||
-      usuario.tipo === "clube" ||
-      usuario.tipo === "escolinha" ||
-      usuario.tipo === "escola" ||
-      usuario.tipo === "admin"
-    ) {
-      if (abaProfessor === "avaliar") carregarSubmissoes();
-    }
-  }, [abaProfessor, usuario?.tipoUsuarioId]);
+  setTreinosAgendados((prev) =>
+    prev.filter((t) => {
+      const dataRef =
+        t.dataTreino ??
+        t.prazoEnvio ??
+        t.dataExpiracao ??
+        t.treinoProgramado?.dataAgendada ??
+        null;
 
-  async function carregarSubmissoes(append = false) {
-    const token = (Storage as any).token ?? localStorage.getItem("token");
-    if (!token || !usuario) return;
+      if (!dataRef) return true;
+      const ms = Date.parse(dataRef);
+      if (!Number.isFinite(ms)) return true;
 
-    const limit = page.limit;
-    const offset = append ? page.offset + page.limit : 0;
-
-    setCarregandoSubmissoes(true);
-    try {
-      const res = await fetch(
-        `${API.BASE_URL}/api/treinos/submissoes?tipoUsuarioId=${
-          usuario.tipoUsuarioId
-        }&status=pendente&limit=${limit}&offset=${offset}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!res.ok)
-        throw new Error(`Falha /treinos/submissoes: ${res.status}`);
-      const data = await res.json();
-      const items = Array.isArray(data) ? data : data.items ?? [];
-
-      setSubmissoesPendentes((prev) => (append ? [...prev, ...items] : items));
-      setPage({
-        total: data.total ?? items.length,
-        limit: data.limit ?? limit,
-        offset,
-      });
-    } catch (e) {
-      console.error(e);
-      if (!append) setSubmissoesPendentes([]);
-    } finally {
-      setCarregandoSubmissoes(false);
-    }
-  }
-
-  async function validarSubmissao(
-    id: string,
-    aprovado: boolean,
-    pontosSug?: number
-  ) {
-    const token = (Storage as any).token ?? localStorage.getItem("token");
-    if (!token || !usuario) return;
-
-    let pontos = 0;
-    if (aprovado) {
-      const inp = prompt(
-        "Pontos a creditar para este treino:",
-        String(pontosSug ?? 0)
-      );
-      if (inp === null) return;
-      const n = Number(inp);
-      pontos = Number.isFinite(n) && n >= 0 ? n : 0;
-    }
-
-    try {
-      const res = await fetch(
-        `${API.BASE_URL}/api/treinos/submissoes/${id}/validar?tipoUsuarioId=${usuario.tipoUsuarioId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ aprovado, pontos }),
-        }
-      );
-      if (!res.ok) {
-        const txt = await res.text();
-        console.error("Falha ao validar:", res.status, txt);
-        return alert("Não foi possível validar a submissão.");
-      }
-      setSubmissoesPendentes((prev) => prev.filter((s) => s.id !== id));
-      alert(
-        aprovado
-          ? "Submissão aprovada e pontos creditados!"
-          : "Submissão reprovada."
-      );
-    } catch (e) {
-      console.error(e);
-      alert("Erro inesperado ao validar.");
-    }
-  }
-
-  const aprovar = (id: string, pontos?: number) =>
-    validarSubmissao(id, true, pontos);
-  const reprovar = (id: string) => validarSubmissao(id, false, 0);
-
-  const formatarDataHora = (iso?: string | null) =>
-    iso
-      ? new Date(iso).toLocaleString("pt-BR", {
-          dateStyle: "short",
-          timeStyle: "short",
-        })
-      : "";
-
-  const formatarData = (data?: string) =>
-    data ? new Date(data).toLocaleDateString("pt-BR") : "";
-
-  const treinosAgendadosVisiveis = treinosAgendados.filter(
-    (t) => !idsAgendadosSubmetidos.has(t.id)
+      return ms >= agora;
+    })
   );
-  const desafiosVisiveis = desafios.filter(
-    (d) => !idsDesafiosSubmetidos.has(d.id)
-  );
+}, [statusPorTreino]);
 
-  const renderDesafioCard = (desafio: Desafio) => (
-    <div
-      key={desafio.id}
-      className="bg-white p-4 rounded-xl shadow-sm border border-yellow-300/60 mb-3"
-    >
-      <h4 className="font-bold text-yellow-700 text-lg mb-1">
-        <Link href={`/desafios/${desafio.id}`} className="hover:underline">
-          {desafio.titulo}
-        </Link>
-      </h4>
-
-      <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
-      <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-        <span>Nível: {desafio.nivel}</span>
-        <span className="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs">
-          {desafio.pontuacao} pts
-        </span>
-      </div>
-
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <button
-          onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
-          className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-800 hover:bg-green-900 text-white"
-          title="Fazer Submissão"
-        >
-          <span className="sm:hidden">Submeter</span>
-          <span className="hidden sm:inline">Fazer Submissão</span>
-        </button>
-
-        <button
-          onClick={() => navigate(`/desafios/${desafio.id}`)}
-          className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white border border-green-300 text-green-800 hover:bg-green-50"
-          title="Ver desafio"
-        >
-          Ver desafio
-        </button>
-
-        <button
-          onClick={() => abrirModalCompartilhar(desafio.id)}
-          className="w-full inline-flex items-center justify-center gap-1 text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white"
-          title="Compartilhar"
-        >
-          <Share2 className="w-4 h-4" />
-          <span className="truncate">Compartilhar</span>
-        </button>
-      </div>
-    </div>
-  );
-
-  if (!usuario) return <p className="text-center p-4">Carregando...</p>;
-
-  const isGestor = ["professor", "admin", "escola", "escolinha", "clube"].includes(
-    tipoAtual
-  );
-  const isOlheiro = tipoAtual === "olheiro";
-
-  const renderTreinoCard = (treino: TreinoProgramado) => (
-    <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
-      <div className="flex items-start justify-between gap-3">
-        <h4
-          className="font-bold text-lg text-green-800 cursor-pointer hover:underline"
-          onClick={() => navigate(`/treinos/unico?programadoId=${treino.id}`)}
-        >
-          {treino.nome}
-        </h4>
-
-        {typeof treino.pontuacao === "number" && (
-          <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
-            +{treino.pontuacao} pts
-          </span>
-        )}
-      </div>
-
-      <div className="mt-3 flex flex-col gap-2">
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            type="date"
-            className="px-3 py-2 border rounded-lg"
-            value={dataAgendarById[treino.id] ?? ""}
-            onChange={(e) =>
-              setDataAgendarById((p) => ({ ...p, [treino.id]: e.target.value }))
-            }
-          />
-          <input
-            type="text"
-            placeholder="Observação (opcional)"
-            className="px-3 py-2 border rounded-lg flex-1"
-            value={obsById[treino.id] ?? ""}
-            onChange={(e) =>
-              setObsById((p) => ({ ...p, [treino.id]: e.target.value }))
-            }
-          />
-          <button
-            onClick={() => {
-              const iso =
-                dataAgendarById[treino.id] ||
-                new Date().toISOString().slice(0, 10);
-              agendarTreinoProgramado(treino, iso, obsById[treino.id]);
-            }}
-            className="bg-green-800 text-white px-3 py-2 rounded-lg"
-          >
-            Agendar treino
-          </button>
-        </div>
-      </div>
-      <div className="mt-2">
-        <button
-          type="button"
-          onClick={() => salvarTreinoNaBiblioteca(treino.id)}
-          className="inline-flex items-center px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-800 text-xs sm:text-sm bg-white hover:bg-emerald-50"
-        >
-          <BookMarked className="w-4 h-4 mr-1" />
-          Salvar na biblioteca
-        </button>
-      </div>
-
-      {treino.descricao && (
-        <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>
-      )}
-
-      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700">
-        <p>
-          <strong>Nível:</strong> {treino.nivel}
-        </p>
-        {treino.dataAgendada && (
-          <p>
-            <strong>Data:</strong> {formatarData(treino.dataAgendada)}
-          </p>
-        )}
-        {typeof treino.duracao === "number" && (
-          <p>
-            <strong>Duração:</strong> {treino.duracao} min
-          </p>
-        )}
-        {treino.objetivo && (
-          <p className="sm:col-span-2">
-            <strong>Objetivo:</strong> {treino.objetivo}
-          </p>
-        )}
-      </div>
-
-      {treino.exercicios?.length > 0 && (
-        <div className="mt-3">
-          <strong className="text-sm text-gray-800">Exercícios:</strong>
-          <div className="max-h-40 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
-            {treino.exercicios.map((ex, i) => (
-              <div
-                key={ex.id || `${i}-${ex.nome || "ex"}`}
-                className="border-b pb-1 last:border-b-0"
-              >
-                <strong>{i + 1}.</strong> {ex.nome}{" "}
-                {ex.repeticoes && (
-                  <span className="text-gray-500">({ex.repeticoes})</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
-    const programado = treino.treinoProgramado;
-    const nivel = treino.nivel ?? treino.treinoProgramado?.nivel ?? "-";
-    const prazoIso =
-      treino.prazoEnvio ??
-      treino.dataTreino ??
-      treino.treinoProgramado?.dataAgendada ??
-      null;
-    const exercicios = programado?.exercicios ?? [];
-    const exIds = exercicios.map((e) => e.exercicio.id);
-    const pontos = programado?.pontuacao ?? null;
-    const jaSubmetido = idsAgendadosSubmetidos.has(treino.id);
-    const st = statusPorTreino[treino.id]?.status as TreinoStatus | undefined;
-
-    const ck = checklistByTreino[treino.id] ?? {};
-    const done = exIds.filter((id) => ck[id]).length;
-    const total = exIds.length;
-    const allChecked = total > 0 && done === total;
-
-    return (
-      <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
-        <div className="flex items-start justify-between gap-3">
-          <h4
-            className="font-bold text-lg text-green-800 cursor-pointer hover:underline"
-            onClick={() => navigate(`/treinos/unico?agendadoId=${treino.id}`)}
-          >
-            {treino.titulo}
-          </h4>
-
-          {programado?.id && (
-            <button
-              type="button"
-              onClick={() => salvarTreinoNaBiblioteca(programado.id)}
-              className="inline-flex items-center px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-800 text-xs sm:text-sm bg-white hover:bg-emerald-50"
-            >
-              <BookMarked className="w-4 h-4 mr-1" />
-              Salvar na biblioteca
-            </button>
-          )}
-
-          <div className="flex items-center gap-2">
-            {typeof pontos === "number" && pontos > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
-                +{pontos} pts
-              </span>
-            )}
-            <button
-              onClick={() => removerTreinoAgendado(treino.id)}
-              title="Remover"
-              className="shrink-0 p-2 rounded-full bg-red-100 text-red-700 hover:bg-red-200"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {programado?.descricao && (
-          <p className="text-sm text-gray-700 mt-1">{programado.descricao}</p>
-        )}
-
-        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700">
-          <p>
-            <strong>Nível:</strong> {nivel}
-          </p>
-
-          {programado?.duracao && (
-            <p>
-              <strong>Duração:</strong> {programado.duracao} min
-            </p>
-          )}
-
-          {programado?.objetivo && (
-            <p className="sm:col-span-2">
-              <strong>Objetivo:</strong> {programado.objetivo}
-            </p>
-          )}
-
-          {prazoIso && (
-            <div className="sm:col-span-2 flex items-center text-gray-700">
-              <CalendarClock className="h-4 w-4 mr-1" />
-              Prazo para envio:
-              <Badge
-                variant="outline"
-                className="ml-2 text-[11px] bg-green-100 text-green-700 border-green-200"
-              >
-                {formatarDataHora(prazoIso)}
-              </Badge>
-            </div>
-          )}
-        </div>
-
-        {exercicios.length > 0 && (
-          <div className="mt-3">
-            <div className="flex items-center justify-between mb-1">
-              <strong className="text-sm text-gray-800">Exercícios</strong>
-              <div className="text-xs text-gray-600">
-                Progresso:{" "}
-                <span
-                  className={`font-semibold ${
-                    allChecked ? "text-emerald-700" : "text-gray-800"
-                  }`}
-                >
-                  {done}/{total}
-                </span>
-              </div>
-            </div>
-
-            <div className="max-h-56 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
-              {exercicios.map((ex, i) => {
-                const id = ex.exercicio.id;
-                const checked = !!ck[id];
-                return (
-                  <label
-                    key={id}
-                    className="flex items-start gap-2 border-b pb-2 last:border-b-0 cursor-pointer select-none"
-                    title={ex.exercicio.nome}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleItemChecklist(treino.id, id)}
-                      className="sr-only peer"
-                    />
-
-                    <span
-                      className="
-                        mt-0.5 relative h-5 w-5 rounded-md
-                        border-2 border-emerald-600 bg-white
-                        flex items-center justify-center
-                        transition-all duration-150
-                        peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-400/60
-                        peer-checked:border-emerald-700
-                        peer-checked:[&>svg]:opacity-100
-                        peer-checked:[&>svg]:scale-100
-                      "
-                      aria-hidden="true"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="
-                          absolute h-3.5 w-3.5
-                          text-emerald-700
-                          opacity-0 scale-75
-                          transition duration-150
-                          pointer-events-none
-                        "
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={3}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        role="presentation"
-                      >
-                        <path d="M20 6L9 17l-5-5" />
-                      </svg>
-                    </span>
-
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{i + 1}.</span>
-                        <span
-                          className={`truncate ${
-                            checked ? "line-through text-gray-500" : ""
-                          }`}
-                        >
-                          {ex.exercicio.nome}
-                        </span>
-                        {!!ex.repeticoes && (
-                          <span className="text-[11px] text-gray-500">
-                            ({ex.repeticoes})
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                onClick={() => marcarTodos(treino.id, exIds, true)}
-                className="text-xs px-2.5 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
-              >
-                Marcar todos
-              </button>
-              <button
-                onClick={() => marcarTodos(treino.id, exIds, false)}
-                className="text-xs px-2.5 py-1 rounded bg-white border text-gray-700 hover:bg-gray-50"
-              >
-                Desmarcar todos
-              </button>
-              <button
-                onClick={() => limparChecklist(treino.id)}
-                className="text-xs px-2.5 py-1 rounded bg-white border text-gray-700 hover:bg-gray-50"
-              >
-                Limpar checklist
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="mt-4 flex flex-wrap items-center gap-2 justify-end">
-          {(st === undefined || st === "PENDING") && (
-            <button
-              onClick={() => iniciar(treino.id)}
-              className="bg-green-700 text-white px-3 py-2 rounded-lg"
-            >
-              Iniciar
-            </button>
-          )}
-
-          {st === "IN_PROGRESS" && (
-            <>
-              <span className="mr-auto text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                ⏱ {formatHHMMSS(elapsedByTreino[treino.id] ?? 0)}
-              </span>
-
-              <button
-                onClick={() => marcarTodos(treino.id, exIds, true)}
-                className="text-xs px-2.5 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
-              >
-                Marcar todos
-              </button>
-              <button
-                onClick={() => limparChecklist(treino.id)}
-                className="text-xs px-2.5 py-1 rounded bg-white border text-gray-700 hover:bg-gray-50"
-              >
-                Limpar
-              </button>
-
-              <button
-                onClick={() => finalizarEEnviar(treino)}
-                disabled={!allChecked}
-                className={`px-3 py-2 rounded-lg text-white ${
-                  allChecked
-                    ? "bg-emerald-700 hover:bg-emerald-800"
-                    : "bg-gray-400 cursor-not-allowed"
-                }`}
-                title={
-                  allChecked
-                    ? "Finalizar e enviar submissão"
-                    : "Complete todos os exercícios para finalizar"
-                }
-              >
-                Finalizar e enviar
-              </button>
-            </>
-          )}
-
-          {st === "COMPLETED" && (
-            <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-              Concluído
-            </span>
-          )}
-
-          {!jaSubmetido && st !== "IN_PROGRESS" && (
-            <button
-              onClick={() =>
-                navigate(`/submissao?treinoAgendadoId=${treino.id}`)
-              }
-              className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg"
-            >
-              Fazer Submissão
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
-    const token = getToken();
-
-    if (!token) {
-      alert("Sessão expirada. Faça login novamente.");
-      return;
-    }
-
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/treinos/biblioteca`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ treinoProgramadoId }),
-      });
-
-      if (!r.ok) {
-        let payload: any = null;
-        try {
-          payload = await r.json();
-        } catch {}
-
-        if (
-          r.status === 403 &&
-          payload?.code === "LIMIT_REACHED" &&
-          payload?.feature === "TREINO_SALVO"
-        ) {
-          alert(
-            payload.message ||
-              "Você atingiu o limite de treinos salvos na sua biblioteca no plano Free."
-          );
-          return;
-        }
-
-        if (r.status === 409) {
-          alert("Esse treino já está na sua biblioteca.");
-          return;
-        }
-
-        console.error(
-          "Falha ao salvar na biblioteca:",
-          r.status,
-          payload || (await r.text().catch(() => ""))
-        );
-        alert("Não foi possível salvar o treino na biblioteca.");
-        return;
-      }
-
-      alert("Treino salvo na sua biblioteca!");
-    } catch (e) {
-      console.error(e);
-      alert("Erro inesperado ao salvar o treino na biblioteca.");
-    }
-  }
-
-  async function removerTreinoAgendado(id: string) {
-    const token = Storage.token;
-    if (!token) return alert("Sessão expirada.");
-    if (!confirm("Remover este treino dos seus treinos?")) return;
-
-    try {
-      const res = await fetch(
-        `${API.BASE_URL}/api/treinos/agendados/${id}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (!res.ok) {
-        const txt = await res.text();
-        console.error("Falha ao excluir:", res.status, txt);
-        return alert("Não foi possível excluir.");
-      }
-      setTreinosAgendados((prev) => prev.filter((t) => t.id !== id));
-    } catch (e) {
-      console.error(e);
-      alert("Erro inesperado ao excluir.");
-    }
-  }
-
-  async function carregarUsuariosMutuos() {
-    const token = Storage.token;
-    setCarregandoMutuos(true);
-    try {
-      const res = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Erro ao buscar usuários mutuos");
-      const data = await res.json();
-      setUsuariosMutuos(data);
-    } catch (err) {
-      console.error(err);
-      setUsuariosMutuos([]);
-    } finally {
-      setCarregandoMutuos(false);
-    }
-  }
-
-  function abrirModalCompartilhar(desafioId: string) {
-    setDesafioParaCompartilhar(desafioId);
-    setModalAberto(true);
-    carregarUsuariosMutuos();
-    setSelecionados(new Set());
-  }
-
-  function toggleSelecionado(idUsuario: string) {
-    setSelecionados((prev) => {
-      const novo = new Set(prev);
-      if (novo.has(idUsuario)) novo.delete(idUsuario);
-      else novo.add(idUsuario);
-      return novo;
-    });
-  }
-
-  async function enviarCompartilhamentoPorDM() {
-    if (selecionados.size === 0 || !desafioParaCompartilhar) {
-      alert("Selecione ao menos uma pessoa para compartilhar.");
-      return;
-    }
-    const token = Storage.token;
-
-    try {
-      setEnviandoDM(true);
-      await Promise.all(
-        Array.from(selecionados).map((paraId) =>
-          fetch(`${API.BASE_URL}/api/mensagem`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              paraId,
-              conteudo: desafioParaCompartilhar,
-              tipo: "DESAFIO",
-            }),
-          })
-        )
-      );
-
-      alert("Desafio compartilhado por mensagem!");
-      setModalAberto(false);
-    } catch (e) {
-      console.error(e);
-      alert("Falha ao enviar mensagens.");
-    } finally {
-      setEnviandoDM(false);
-    }
-  }
+  const isAtleta = tipoAtual === "atleta";
 
   return (
-    <div className="min-h-screen bg-neutral-50 pb-24">
-      <div className="mx-auto w-full max-w-3xl lg:max-w-4xl px-3 sm:px-4">
-        <div className="max-w-3xl mx-auto px-4 pt-3">
-          <HealthBanner />
+    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-emerald-50 pb-20">
+      <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-emerald-100">
+        <div className="max-w-3xl mx-auto flex items-center justify-between px-4 py-3">
+          <button
+            type="button"
+            onClick={() => navigate("/feed")}
+            className="flex items-center gap-1 text-emerald-800 text-sm font-medium"
+          >
+            <House className="w-4 h-4" />
+            <span>Início</span>
+          </button>
+
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <CalendarClock className="w-4 h-4 text-emerald-700" />
+            <span>Agenda de treinos</span>
+          </div>
+
+          <div className="flex items-center gap-1 text-xs text-gray-400">
+            <User className="w-3 h-3" />
+            <span>{usuario?.tipo ?? "Visitante"}</span>
+          </div>
         </div>
-        <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
-          <div className="flex items-center justify-between gap-2">
-            {isGestor ? (
-              <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full max-w-[420px]">
+      </header>
+
+      <main className="max-w-3xl mx-auto px-4 pt-4 pb-10">
+        <HealthBanner />
+
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-xl font-semibold text-green-900 flex items-center gap-2">
+              <SoccerFieldIcon className="w-6 h-6 text-emerald-700" />
+              Meus treinos
+            </h1>
+            <p className="text-xs text-gray-500 mt-1">
+              Acompanhe sua agenda, conclua treinos e veja o que vem pela frente.
+            </p>
+          </div>
+
+          {isAtleta && (
+            <button
+              type="button"
+              onClick={() => navigate("/treinos/novo")}
+              className="inline-flex items-center gap-1 rounded-full bg-emerald-700 text-white px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-emerald-800"
+            >
+              <CirclePlus className="w-4 h-4" />
+              Agendar novo treino
+            </button>
+          )}
+        </div>
+
+        {isAtleta && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <div className="inline-flex items-center bg-white rounded-full p-1 border border-emerald-100 shadow-sm">
                 <button
-                  onClick={() => setAbaProfessor("avaliar")}
-                  className={`px-4 py-2 rounded-lg border text-sm ${
-                    abaProfessor === "avaliar"
-                      ? "bg-green-800 text-white border-green-900"
-                      : "bg-white text-gray-800 border-gray-200"
+                  type="button"
+                  onClick={() => setViewAtleta("lista")}
+                  className={`px-3 py-1.5 text-xs rounded-full flex items-center gap-1 ${
+                    viewAtleta === "lista"
+                      ? "bg-emerald-700 text-white"
+                      : "text-emerald-800 hover:bg-emerald-50"
                   }`}
                 >
-                  Avaliar Treinos
+                  <Volleyball className="w-3 h-3" />
+                  Lista
                 </button>
                 <button
-                  onClick={() => setAbaProfessor("criar")}
-                  className={`px-4 py-2 rounded-lg border text-sm ${
-                    abaProfessor === "criar"
-                      ? "bg-green-800 text-white border-green-900"
-                      : "bg-white text-gray-800 border-gray-200"
+                  type="button"
+                  onClick={() => setViewAtleta("calendario")}
+                  className={`px-3 py-1.5 text-xs rounded-full flex items-center gap-1 ${
+                    viewAtleta === "calendario"
+                      ? "bg-emerald-700 text-white"
+                      : "text-emerald-800 hover:bg-emerald-50"
                   }`}
                 >
-                  Meus Treinos
+                  <BookMarked className="w-3 h-3" />
+                  Calendário
                 </button>
+              </div>
+
+              {agendaProximos7.length > 0 && (
+                <span className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-1 flex items-center gap-1">
+                  <CalendarClock className="w-3 h-3" />
+                  Próximos 7 dias: {agendaProximos7.length} atividade(s)
+                </span>
+              )}
+            </div>
+
+            {viewAtleta === "calendario" ? (
+              <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm px-3 py-3">
+                {semanasDesafio.length > 0 && <WeeklyChecker weeks={semanasDesafio} />}
+                <CalendarAgenda items={agendaItemsAtleta} />
               </div>
             ) : (
-              <div className="text-lg font-semibold text-green-900">
-                Treinos
-              </div>
-            )}
-
-            {podeGerirElenco && (
-              <Link
-                href="/treinos/elenco"
-                aria-label="Ir para o elenco (campo)"
-                title="Elenco (campo)"
-                className="flex-shrink-0 inline-flex items-center justify-center p-2.5 rounded-full bg-white text-green-800 border border-green-200 shadow hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600"
-              >
-                <SoccerFieldIcon className="w-5 h-5" />
-              </Link>
-            )}
-          </div>
-        </div>
-
-        <>
-          {usuario.tipo === "atleta" && (
-            <div className="space-y-6">
-              <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
-                  <h3 className="text-lg font-semibold">Meus Treinos</h3>
-
-                  <div className="flex flex-wrap items-center gap-2">
+              <section>
+                {treinosAgendados.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-emerald-200 bg-white px-4 py-6 text-center text-sm text-gray-500">
+                    Nenhum treino agendado ainda.{" "}
                     <button
-                      className="bg-green-800 text-white px-4 py-2 rounded-lg text-sm"
-                      onClick={() => navigate("/treinos/novo")}
+                      type="button"
+                      onClick={() => navigate("treinos/novo")}
+                      className="text-emerald-700 font-semibold underline underline-offset-2"
                     >
-                      Agendar novo treino
+                      Agende seu primeiro treino
                     </button>
-
-                    <button
-                      className="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm"
-                      onClick={() => navigate("/treinos/livre/novo")}
-                    >
-                      Registrar treino livre
-                    </button>
-
-                    <button
-                      className="bg-white border border-emerald-300 text-emerald-800 px-4 py-2 rounded-lg text-sm"
-                      onClick={() => navigate("/treinos/livre/historico")}
-                    >
-                      Histórico de treinos livres
-                    </button>
+                    .
                   </div>
-                </div>
-
-                <div className="flex gap-2 mb-3">
-                  <button
-                    type="button"
-                    onClick={() => setViewAtleta("lista")}
-                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm border ${
-                      viewAtleta === "lista"
-                        ? "bg-green-800 text-white border-green-900"
-                        : "bg-white text-gray-800 border-gray-200"
-                    }`}
-                  >
-                    Lista
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewAtleta("calendario")}
-                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm border inline-flex items-center gap-1 ${
-                      viewAtleta === "calendario"
-                        ? "bg-green-800 text-white border-green-900"
-                        : "bg-white text-gray-800 border-gray-200"
-                    }`}
-                  >
-                    <CalendarClock className="w-4 h-4" />
-                    Calendário
-                  </button>
-                </div>
-
-                {viewAtleta === "lista" ? (
-                  treinosAgendadosVisiveis.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {treinosAgendadosVisiveis.map(renderTreinoAgendadoCard)}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500">
-                      Nenhum treino disponível ainda.
-                    </p>
-                  )
                 ) : (
-                  <CalendarAgenda items={agendaItemsAtleta} />
-                )}
-              </div>
+                  <div className="space-y-3">
+                    {treinosAgendados.map((t) => {
+                      const status = statusPorTreino[t.id]?.status as
+                        | TreinoStatus
+                        | undefined;
+                      const tempo = elapsedByTreino[t.id] ?? 0;
+                      const isCompleted = status === "COMPLETED";
+                      const isInProgress = status === "IN_PROGRESS";
+                      const jaEnviado = idsAgendadosSubmetidos.has(t.id);
+                      const exercicios =
+                        t.treinoProgramado?.exercicios?.map((e) => ({
+                          id: e.exercicio.id,
+                          nome: e.exercicio.nome,
+                          repeticoes: e.repeticoes,
+                        })) ?? [];
 
-              {FLAGS.DESAFIOS_ENABLED && (
-                <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-lg font-semibold">Desafios</h3>
-                    <div className="ml-3 shrink-0 [&>div]:mb-0 [&>div>div:first-child]:hidden">
-                      <WeeklyChecker weeks={semanasDesafio} />
-                    </div>
-                  </div>
+                      const checklist = checklistByTreino[t.id] ?? {};
 
-                  {desafiosVisiveis.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {desafiosVisiveis.map(renderDesafioCard)}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500">
-                      Nenhum desafio disponível no momento.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                      const dataLabel = t.dataTreino
+                        ? new Date(t.dataTreino).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "sem data definida";
 
-          {isGestor && (
-            <div className="space-y-6">
-              {abaProfessor === "avaliar" && (
-                <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-                  <h3 className="text-lg font-semibold mb-3">
-                    Treinos dos atletas afiliados
-                  </h3>
+                        const isExpired = status === "EXPIRED";
 
-                  {carregandoSubmissoes ? (
-                    <p className="text-gray-500">
-                      Carregando submissões pendentes...
-                    </p>
-                  ) : submissoesPendentes.length === 0 ? (
-                    <p className="text-gray-500">
-                      Nenhum treino pendente para avaliação no momento.
-                    </p>
-                  ) : (
-                    <>
-                      <ul className="space-y-3">
-                        {submissoesPendentes.map((s) => {
-                          const foto = s.atleta?.foto
-                            ? resolveUploadUrl(s.atleta.foto)
-                            : PLACEHOLDER_USER;
-                          const midias = (Array.isArray(s.midias) ? s.midias : []).map(
-                            resolveUploadUrl
-                          );
+                        const midiaUrl =
+                          t.treinoProgramado?.capaUrl ?? t.treinoProgramado?.videoUrl ?? null;
+                        
+                      const url = resolveUploadUrl(midiaUrl); 
 
-                          return (
-                            <li
-                              key={s.id}
-                              className="rounded-xl border bg-white shadow-sm hover:shadow-md transition p-3 sm:p-4"
-                            >
-                              <div className="flex items-start gap-3 sm:gap-4">
-                                <img
-                                  src={foto}
-                                  alt={s.atleta?.nome}
-                                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border"
-                                  onError={(e) => {
-                                    const el =
-                                      e.currentTarget as HTMLImageElement;
-                                    (el as any).onerror = null;
-                                    el.src = PLACEHOLDER_USER;
-                                  }}
-                                />
+                      return (
+                        <div
+                          key={t.id}
+                          className="bg-white rounded-2xl border border-emerald-100 shadow-sm px-4 py-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <h2 className="text-sm font-semibold text-green-900">
+                                  {t.titulo}
+                                </h2>
 
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <div className="font-semibold text-green-900 truncate">
-                                      {s.treino.titulo}
-                                    </div>
-                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                      +{s.pontosSugeridos ?? 0} pts
-                                    </span>
+                                {t.nivel && (
+                                  <Badge className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] px-2 py-0.5">
+                                    {t.nivel}
+                                  </Badge>
+                                )}
 
-                                    <div className="ml-auto flex items-center gap-2 w-full sm:w-auto">
-                                      <button
-                                        onClick={() =>
-                                          aprovar(
-                                            s.id,
-                                            s.pontosSugeridos
-                                          )
-                                        }
-                                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
-                                        title="Aprovar e creditar pontos"
-                                      >
-                                        <Check className="w-4 h-4" /> Aprovar
-                                      </button>
-                                      <button
-                                        onClick={() => reprovar(s.id)}
-                                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200"
-                                        title="Reprovar"
-                                      >
-                                        <X className="w-4 h-4" /> Reprovar
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  <div className="text-sm text-gray-600 truncate">
-                                    {s.atleta?.nome}
-                                  </div>
-                                  <div className="text-xs text-gray-500">
-                                    {formatarDataHora(s.criadoEm)}
-                                  </div>
-
-                                  {!!s.observacao && (
-                                    <p className="mt-1 text[13px] italic text-gray-700 leading-snug">
-                                      “{s.observacao}”
-                                    </p>
-                                  )}
-                                </div>
+                                {isExpired && (
+                                  <span className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full bg-red-50 text-red-700 border border-red-200">
+                                    Expirado
+                                  </span>
+                                )}
                               </div>
 
-                              {!!midias.length && (
-                                <div className="mt-3 sm:mt-4">
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                                    {midias.map((src, idx) => {
-                                      const isVid = isVideoUrl(src);
-                                      return isVid ? (
-                                        <div
-                                          key={`${src}-${idx}`}
-                                          className="relative w-full overflow-hidden rounded-lg bg-black border pt-[56.25%]"
-                                        >
-                                          <video
-                                            src={src}
-                                            className="absolute inset-0 h-full w-full object-cover group-hover:scale-[1.02] transition"
-                                            controls
-                                            playsInline
-                                            muted
-                                            aria-label={`mídia ${idx + 1}`}
-                                            preload="metadata"
-                                          />
-                                        </div>
-                                      ) : (
-                                        <a
-                                          key={`${src}-${idx}`}
-                                          href={src}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="block group"
-                                          title="Abrir imagem"
-                                        >
-                                          <div className="relative w-full overflow-hidden rounded-lg border bg-gray-50 pt-[56.25%]">
-                                            <img
-                                              src={src}
-                                              alt={`mídia ${idx + 1}`}
-                                              className="absolute inset-0 h-full w-full object-cover group-hover:scale-[1.02] transition"
-                                              loading="lazy"
-                                              decoding="async"
-                                            />
-                                          </div>
-                                        </a>
-                                      );
-                                    })}
-                                  </div>
+                              <div className="text-[11px] text-gray-500 flex items-center gap-1">
+                                <CalendarClock className="w-3 h-3" />
+                                <span>{dataLabel}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-1">
+                              {isInProgress && (
+                                <div className="text-xs font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-1">
+                                  {formatHHMMSS(tempo)}
                                 </div>
                               )}
-                            </li>
-                          );
-                        })}
-                      </ul>
+                              <div className="flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => cancelarTreinoAgendado(t.id)}
+                                  className="p-1 rounded-full border border-gray-200 text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-300"
+                                  title="Cancelar treino"
+                                  disabled={isCompleted || jaEnviado}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
 
-                      {submissoesPendentes.length < page.total && (
-                        <div className="mt-3 flex justify-center">
-                          <button
-                            onClick={() => carregarSubmissoes(true)}
-                            className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
-                          >
-                            Carregar mais
-                          </button>
+                                {!status || status === "PENDING" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => iniciar(t.id)}
+                                    disabled={jaEnviado}
+                                    className={`text-xs px-2 py-1 rounded-full ${
+                                      jaEnviado
+                                        ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                        : "bg-emerald-700 text-white hover:bg-emerald-800"
+                                    }`}
+                                  >
+                                    {jaEnviado ? "Já enviado" : "Iniciar"}
+                                  </button>
+                                ) : isInProgress ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => finalizarEEnviar(t)}
+                                    disabled={jaEnviado}
+                                    className="text-xs px-2 py-1 rounded-full bg-emerald-700 text-white hover:bg-emerald-800"
+                                  >
+                                    Enviar submissão
+                                  </button>
+                                ) : isCompleted ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                    <CircleCheck className="w-3 h-3" />
+                                    Concluído
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {url && (
+                            <div className="mt-2 mb-1">
+                              {isVideoUrl(url) ? (
+                                <video
+                                  src={url}
+                                  controls
+                                  className="w-full rounded-xl border border-gray-200 max-h-60 object-cover"
+                                />
+                              ) : (
+                                <img
+                                  src={url}
+                                  alt={t.titulo}
+                                  className="w-full rounded-xl border border-gray-200 max-h-60 object-cover"
+                                />
+                              )}
+                            </div>
+                          )}
+
+                          {exercicios.length > 0 && (
+                            <div className="mt-3 border-t border-gray-100 pt-2">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[11px] font-medium text-gray-700">
+                                  Checklist de exercícios
+                                </span>
+                                <div className="flex gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      marcarTodos(
+                                        t.id,
+                                        exercicios.map((e) => e.id),
+                                        true
+                                      )
+                                    }
+                                    className="text-[10px] px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-800 bg-emerald-50"
+                                  >
+                                    Marcar tudo
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      marcarTodos(
+                                        t.id,
+                                        exercicios.map((e) => e.id),
+                                        false
+                                      )
+                                    }
+                                    className="text-[10px] px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 bg-white"
+                                  >
+                                    Limpar
+                                  </button>
+                                </div>
+                              </div>
+                              <ul className="space-y-1">
+                                {exercicios.map((ex) => (
+                                  <li
+                                    key={ex.id}
+                                    className="flex items-center gap-2 text-xs text-gray-700"
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        toggleItemChecklist(t.id, ex.id)
+                                      }
+                                      className={`w-4 h-4 rounded-md border flex items-center justify-center ${
+                                        checklist[ex.id]
+                                          ? "bg-emerald-600 border-emerald-700 text-white"
+                                          : "bg-white border-gray-300 text-transparent"
+                                      }`}
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </button>
+                                    <span className="truncate">
+                                      {ex.nome}
+                                      {ex.repeticoes && (
+                                        <span className="text-[10px] text-gray-500 ml-1">
+                                          • {ex.repeticoes}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+              
+            )}
+            {treinos.length > 0 && (
+              <section className="mt-6">
+                <h2 className="text-sm font-semibold text-green-900 mb-2 flex items-center gap-2">
+                  <Volleyball className="w-4 h-4 text-emerald-700" />
+                  Treinos disponíveis para agendar
+                </h2>
+
+                <div className="space-y-2">
+                  {treinos.map((t) => (
+                    <div
+                      key={t.id}
+                      className="bg-white rounded-2xl border border-emerald-100 shadow-sm px-4 py-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-sm font-semibold text-green-900">
+                              {t.nome}
+                            </h3>
+                            {t.nivel && (
+                              <Badge className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] px-2 py-0.5">
+                                {t.nivel}
+                              </Badge>
+                            )}
+                          </div>
+
+                          {t.objetivo && (
+                            <p className="text-[11px] text-gray-600 mb-1">
+                              {t.objetivo}
+                            </p>
+                          )}
+
+                          {t.duracao && (
+                            <p className="text-[11px] text-gray-500">
+                              Duração estimada: {t.duracao} min
+                            </p>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const dia = window.prompt(
+                              "Escolha a data do treino (formato AAAA-MM-DD):",
+                              new Date().toISOString().slice(0, 10)
+                            );
+                            if (!dia) return;
+
+                            const iso = `${dia}T23:59:59.000Z`;
+                            await agendarTreinoProgramado(t, iso);
+                          }}
+                          className="text-xs px-3 py-1.5 rounded-full bg-emerald-700 text-white hover:bg-emerald-800"
+                        >
+                          Agendar treino
+                        </button>
+                      </div>
+
+                      {t.exercicios?.length > 0 && (
+                        <div className="mt-2 border-t border-gray-100 pt-2">
+                          <p className="text-[11px] font-medium text-gray-700 mb-1">
+                            Exercícios deste treino:
+                          </p>
+                          <ul className="space-y-0.5">
+                            {t.exercicios.map((ex) => (
+                              <li
+                                key={ex.id}
+                                className="text-[11px] text-gray-700 flex items-center gap-1"
+                              >
+                                <span>• {ex.nome}</span>
+                                {ex.repeticoes && (
+                                  <span className="text-[10px] text-gray-500">
+                                    ({ex.repeticoes})
+                                  </span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       )}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {abaProfessor === "criar" && (
-                <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                    <h3 className="text-lg font-semibold">
-                      {usuario.tipo === "admin"
-                        ? "Todos os Treinos"
-                        : "Treinos que você criou"}
-                    </h3>
-                    <button
-                      className="bg-green-800 text-white px-4 py-2 rounded-lg"
-                      onClick={() => navigate("/treinos/novo")}
-                    >
-                      Criar novo treino
-                    </button>
-                  </div>
-
-                  {(
-                    usuario.tipo === "admin"
-                      ? treinos
-                      : treinos.filter(
-                          (t) =>
-                            t.professorId === usuario.tipoUsuarioId ||
-                            t.escolinhaId === usuario.tipoUsuarioId ||
-                            t.clubeId === usuario.tipoUsuarioId
-                        )
-                  ).length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {(
-                        usuario.tipo === "admin"
-                          ? treinos
-                          : treinos.filter(
-                              (t) =>
-                                t.professorId === usuario.tipoUsuarioId ||
-                                t.escolinhaId === usuario.tipoUsuarioId ||
-                                t.clubeId === usuario.tipoUsuarioId
-                            )
-                      ).map(renderTreinoCard)}
                     </div>
-                  ) : (
-                    <p className="text-gray-500">
-                      {usuario.tipo === "admin"
-                        ? "Nenhum treino cadastrado."
-                        : "Você ainda não criou nenhum treino."}
-                    </p>
-                  )}
+                  ))}
                 </div>
-              )}
-            </div>
-          )}
-        </>
-      </div>
+              </section>
+            )}
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-[0_-4px_12px_-6px_rgba(0,0,0,0.3)]">
-        <Link href="/feed" className="hover:opacity-90" aria-label="Feed">
-          <House />
-        </Link>
-        <Link href="/explorar" className="hover:opacity-90" aria-label="Explorar">
-          <Search />
-        </Link>
-        <Link href="/post" className="hover:opacity-90" aria-label="Novo post">
-          <CirclePlus />
-        </Link>
-        <Link
-          href={isOlheiro ? "/olheiros" : "/treinos"}
-          className="hover:opacity-90"
-          aria-label="Treinos"
-        >
-          <Volleyball />
-        </Link>
-        <Link href="/perfil" className="hover:opacity-90" aria-label="Perfil">
-          <User />
-        </Link>
-      </nav>
+          </>
+        )}
 
-      {modalAberto && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-lg relative">
-            <h2 className="text-lg font-bold mb-4 text-center">
-              Compartilhar Desafio
-            </h2>
-
-            <div className="mb-4">
-              <p className="text-sm text-gray-700 mb-2">
-                Enviar por mensagem:
-              </p>
-
-              <div className="flex gap-3 overflow-x-auto pb-2">
-                {carregandoMutuos && (
-                  <span className="text-sm text-gray-500">
-                    Carregando contatos...
-                  </span>
-                )}
-
-                {!carregandoMutuos && usuariosMutuos.length === 0 && (
-                  <span className="text-sm text-gray-500">
-                    Você ainda não tem contatos mútuos.
-                  </span>
-                )}
-
-                {usuariosMutuos.map((u) => {
-                  const selecionado = selecionados.has(u.id);
-                  const fotoSrc = u.foto
-                    ? resolveUploadUrl(u.foto)
-                    : PLACEHOLDER_USER;
-                  return (
-                    <button
-                      key={u.id}
-                      onClick={() => toggleSelecionado(u.id)}
-                      title={u.nome}
-                      className={`relative shrink-0 rounded-full border-2 ${
-                        selecionado ? "border-green-600" : "border-transparent"
-                      }`}
-                    >
-                      <img
-                        src={fotoSrc}
-                        alt={u.nome}
-                        className="w-14 h-14 rounded-full object-cover"
-                        loading="lazy"
-                        decoding="async"
-                        onError={(e) => {
-                          const el = e.currentTarget as HTMLImageElement;
-                          (el as any).onerror = null;
-                          el.src = PLACEHOLDER_USER;
-                        }}
-                      />
-                      {selecionado && (
-                        <span className="absolute -bottom-1 -right-1 bg-white rounded-full">
-                          <CircleCheck className="w-5 h-5 text-green-600" />
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                disabled={selecionados.size === 0 || enviandoDM}
-                onClick={enviarCompartilhamentoPorDM}
-                className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded-lg 
-                    ${
-                      selecionados.size === 0 || enviandoDM
-                        ? "bg-gray-300 text-gray-600"
-                        : "bg-green-700 text-white hover:bg-green-800"
-                    }`}
-              >
-                <Send className="w-4 h-4" />
-                {enviandoDM
-                  ? "Enviando..."
-                  : `Enviar para ${selecionados.size} contato(s)`}
-              </button>
-            </div>
-
-            <button
-              onClick={() => setModalAberto(false)}
-              className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl"
-              aria-label="Fechar modal"
-            >
-              <CircleX />
-            </button>
+        {!isAtleta && (
+          <div className="mt-6 bg-white rounded-2xl border border-emerald-100 shadow-sm px-4 py-6 text-sm text-gray-600">
+            <p>
+              Em breve, um painel específico de treinos para o tipo de usuário{" "}
+              <strong>{usuario?.tipo ?? "atual"}</strong>.
+            </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Enquanto isso, você já pode criar treinos salvos e programados na aba
+              correspondente do painel.
+            </p>
           </div>
-        </div>
-      )}
+        )}
+      </main>
     </div>
   );
 }

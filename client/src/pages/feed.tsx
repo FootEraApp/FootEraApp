@@ -39,6 +39,8 @@ import {
 } from "../lib/achievementsCatalog.js";
 import { FaRetweet } from "react-icons/fa";
 import { http } from "../services/http.js";
+import { TreinosApi } from "../utils/treinosApi.js";
+import { CalendarClock } from "lucide-react";
 
 interface Usuario {
   id: string;
@@ -108,7 +110,6 @@ function HeaderSliderLite({
 
   return (
     <div ref={wrapRef} className="relative h-16 sm:h-20 -mx-4 px-4 sm:mx-0 mb-2">
-      {/* botão de mensagens no topo direito */}
       <div className="absolute right-2 top-1/2 -translate-y-1/2 z-20">
         <Link
           href="/mensagens"
@@ -174,6 +175,17 @@ function HeaderSliderLite({
     </div>
   );
 }
+
+type AgendaTipo = "TREINO" | "DESAFIO" | "EVENTO" | "JOGO" | "PENEIRA" | "OUTRO";
+
+type AgendaItem = {
+  id: string;
+  tipo: AgendaTipo;
+  titulo: string;
+  inicio: string;
+  fim?: string | null;
+  origem: string;
+};
 
 type ParsedAchievement = {
   ach?: AchievementLite;
@@ -322,6 +334,39 @@ function PaginaFeed(): JSX.Element {
 
   const [idCompartilhado, setIdCompartilhado] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<"todos" | "seguindo" | "favoritos" | "meus">("todos");
+  const [agendaFeed, setAgendaFeed] = useState<AgendaItem[]>([]);
+  const [carregandoAgenda, setCarregandoAgenda] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setCarregandoAgenda(true);
+
+        const hoje = new Date();
+        const daqui7 = new Date();
+        daqui7.setDate(hoje.getDate() + 7);
+
+        const rows = await TreinosApi.getCalendario(hoje, daqui7);
+
+        const normalizados: AgendaItem[] = (Array.isArray(rows) ? rows : []).map((item: any) => ({
+          id: item.id,
+          tipo: (item.tipo as AgendaTipo) ?? "OUTRO",
+          titulo: item.titulo ?? "Atividade",
+          inicio: item.inicio ?? item.start ?? item.data ?? new Date().toISOString(),
+          fim: item.fim ?? item.end ?? item.dataFim ?? null,
+          origem: item.origem ?? "API",
+        }));
+
+        normalizados.sort((a, b) => a.inicio.localeCompare(b.inicio));
+        setAgendaFeed(normalizados);
+      } catch (e) {
+        console.error("Erro ao carregar agenda do feed:", e);
+        setAgendaFeed([]);
+      } finally {
+        setCarregandoAgenda(false);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     async function carregar() {
@@ -517,6 +562,71 @@ function PaginaFeed(): JSX.Element {
           </button>
         ))}
       </div>
+
+      <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="w-5 h-5 text-green-800" />
+          <h3 className="text-sm font-semibold text-green-900">
+            Minha agenda (próximos 7 dias)
+          </h3>
+        </div>
+        {carregandoAgenda && (
+          <span className="text-[11px] text-gray-500">Carregando...</span>
+        )}
+      </div>
+
+      {agendaFeed.length === 0 && !carregandoAgenda && (
+        <p className="text-xs text-gray-500">
+          Nenhuma atividade agendada para os próximos dias.
+        </p>
+      )}
+
+      {agendaFeed.length > 0 && (
+        <ul className="space-y-2 text-xs">
+          {agendaFeed.slice(0, 5).map((item) => (
+            <li
+              key={`${item.origem}-${item.id}`}
+              className="flex items-start gap-2 rounded-lg border bg-white px-3 py-2"
+            >
+              <span
+                className={`
+                  px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0
+                  ${
+                    item.tipo === "TREINO"
+                      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                      : item.tipo === "DESAFIO"
+                      ? "bg-amber-100 text-amber-800 border border-amber-200"
+                      : item.tipo === "EVENTO" || item.tipo === "PENEIRA"
+                      ? "bg-blue-100 text-blue-800 border-blue-200"
+                      : "bg-gray-100 text-gray-700 border-gray-200"
+                  }
+                `}
+              >
+                {item.tipo}
+              </span>
+
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-green-900 truncate">
+                  {item.titulo}
+                </div>
+                <div className="text-[11px] text-gray-600">
+                  {new Date(item.inicio).toLocaleDateString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                  })}{" "}
+                  às{" "}
+                  {new Date(item.inicio).toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
 
       {posts.length === 0 && (
         <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">

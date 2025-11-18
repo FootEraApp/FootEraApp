@@ -13,7 +13,6 @@ AWS.config.update({
 
 const s3 = new AWS.S3();
 
-// uso atual: upload direto do buffer do Multer
 export const s3Service = {
   async uploadFileAsync(
     file: Express.Multer.File,
@@ -34,7 +33,6 @@ export const s3Service = {
   },
 };
 
-// uso para o transcoder: subir arquivo a partir de um caminho no disco
 export async function uploadToS3(
   filePath: string,
   contentType: string,

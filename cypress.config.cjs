@@ -1,4 +1,3 @@
-// cypress.config.cjs
 const { defineConfig } = require("cypress");
 
 module.exports = defineConfig({
@@ -9,7 +8,6 @@ module.exports = defineConfig({
     viewportHeight: 844,
     video: false,
     setupNodeEvents(on, config) {
-      // aqui você pode adicionar plugins depois, se quiser
       return config;
     },
   },
