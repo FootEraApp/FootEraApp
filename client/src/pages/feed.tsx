@@ -108,6 +108,18 @@ function HeaderSliderLite({
 
   return (
     <div ref={wrapRef} className="relative h-16 sm:h-20 -mx-4 px-4 sm:mx-0 mb-2">
+      {/* botão de mensagens no topo direito */}
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 z-20">
+        <Link
+          href="/mensagens"
+          aria-label="Abrir mensagens"
+          className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center
+                    rounded-full bg-white border shadow-lg hover:bg-gray-50 active:scale-95"
+        >
+          <Send className="w-5 h-5 text-green-900" />
+        </Link>
+      </div>
+
       <div className="absolute inset-0 z-0">
         <div
           className={`absolute inset-y-2 left-0 right-0 rounded-full border overflow-hidden transition-colors duration-150 ${
@@ -555,14 +567,20 @@ function PaginaFeed(): JSX.Element {
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <img
-                  src={
-                    publicImgUrl(post.usuario.foto) ||
-                    `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
-                  }
-                  alt="avatar"
-                  className="w-10 h-10 rounded-full object-cover"
-                />
+                <Link
+                  href={`/perfil/${post.usuario.id}`}
+                  title={`Ver perfil de ${post.usuario.nome}`}
+                  className="shrink-0"
+                >
+                  <img
+                    src={
+                      publicImgUrl(post.usuario.foto) ||
+                      `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
+                    }
+                    alt={post.usuario.nome}
+                    className="w-10 h-10 rounded-full object-cover cursor-pointer"
+                  />
+                </Link>
                 <div>
                   <p className="font-semibold">{post.usuario.nome}</p>
                   <p className="text-xs text-gray-500">
@@ -603,14 +621,20 @@ function PaginaFeed(): JSX.Element {
 
                   <div className="border rounded-xl p-3 bg-gray-50">
                     <div className="flex items-center gap-2 mb-1">
-                      <img
-                        src={
-                          publicImgUrl(post.repostOf.usuario?.foto) ||
-                          `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
-                        }
-                        alt="avatar original"
-                        className="w-7 h-7 rounded-full object-cover"
-                      />
+                      <Link
+                        href={`/perfil/${post.repostOf.usuario?.id ?? ""}`}
+                        title={`Ver perfil de ${post.repostOf.usuario?.nome ?? "Usuário"}`}
+                        className="shrink-0"
+                      >
+                        <img
+                          src={
+                            publicImgUrl(post.repostOf.usuario?.foto) ||
+                            `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
+                          }
+                          alt={post.repostOf.usuario?.nome || "avatar original"}
+                          className="w-7 h-7 rounded-full object-cover cursor-pointer"
+                        />
+                      </Link>
                       <div>
                         <p className="text-sm font-semibold">
                           {post.repostOf.usuario?.nome}
@@ -745,14 +769,20 @@ function PaginaFeed(): JSX.Element {
                   <div className="mt-2 space-y-2">
                     {post.comentarios.map((comentario) => (
                       <div key={comentario.id} className="flex gap-2 items-start">
-                        <img
-                          src={
-                            publicImgUrl(comentario.usuario?.foto) ||
-                            `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
-                          }
-                          alt="avatar"
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
+                        <Link
+                          href={`/perfil/${comentario.usuarioId ?? ""}`}
+                          title={`Ver perfil de ${comentario.usuario?.nome ?? "Usuário"}`}
+                          className="shrink-0"
+                        >
+                          <img
+                            src={
+                              publicImgUrl(comentario.usuario?.foto) ||
+                              `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
+                            }
+                            alt={comentario.usuario?.nome || "avatar"}
+                            className="w-8 h-8 rounded-full object-cover cursor-pointer"
+                          />
+                        </Link>
                         <div className="bg-gray-100 rounded-lg px-3 py-2 w-full">
                           <div className="flex justify-between text-sm text-gray-600">
                             <span className="font-semibold">
@@ -943,11 +973,17 @@ function PaginaFeed(): JSX.Element {
 
                 {postSelecionado.comentarios.map((comentario) => (
                   <div key={comentario.id} className="flex gap-3">
-                    <img
-                      src={formatarUrlFoto(comentario.usuario?.foto)}
-                      alt={comentario.usuario?.nome || "avatar"}
-                      className="w-9 h-9 rounded-full object-cover flex-shrink-0"
-                    />
+                    <Link
+                      href={`/perfil/${comentario.usuarioId ?? ""}`}
+                      title={`Ver perfil de ${comentario.usuario?.nome ?? "Usuário"}`}
+                      className="shrink-0"
+                    >
+                      <img
+                        src={formatarUrlFoto(comentario.usuario?.foto)}
+                        alt={comentario.usuario?.nome || "avatar"}
+                        className="w-9 h-9 rounded-full object-cover flex-shrink-0 cursor-pointer"
+                      />
+                    </Link>
                     <div className="flex-1 bg-gray-50 border rounded-xl px-3 py-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-semibold text-gray-800">
