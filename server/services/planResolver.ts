@@ -2,18 +2,22 @@
 import { PrismaClient, TipoUsuario } from "@prisma/client";
 
 const prisma = new PrismaClient();
-export type PlanoName = "FREE" | "PRO" | "ORG";
+
+export type PlanoName = string;
+
+export interface UserPayload {
+  id: string;
+  tipo: TipoUsuario;
+  tipoUsuarioId?: string | null;
+  plano?: PlanoName | null;   // 👈 opcional/nulo
+  isAdmin?: boolean;
+}
 
 function asPlano(p?: string | null): PlanoName {
   const s = String(p || "").toUpperCase();
   return s === "ORG" ? "ORG" : s === "PRO" ? "PRO" : "FREE";
 }
 
-// Regras:
-// - Dono de Escolinha/Clube ou Professor lotado em org => ORG
-// - Senão, Assinatura {ativo:true} e (canceledAt null) => PRO
-// - Senão, último Pagamento APROVADO ainda válido pela periodicidade => PRO
-// - Senão => FREE
 export async function getPlano(usuarioId: string): Promise<PlanoName> {
   const [escolinha, clube, prof] = await Promise.all([
     prisma.escolinha.findFirst({ where: { usuarioId }, select: { id: true } }),
@@ -46,38 +50,29 @@ export async function getPlano(usuarioId: string): Promise<PlanoName> {
   return "FREE";
 }
 
-export async function resolveUserContext(usuarioId: string) {
-  // Busca tipo + ids relacionados de forma compatível com o schema
-  const u = await prisma.usuario.findUnique({
-    where: { id: usuarioId },
-    select: {
-      id: true,
-      tipo: true,
-      administrador: { select: { id: true } },
-      atleta:    { select: { id: true } },
-      professor: { select: { id: true } },
-      clube:     { select: { id: true } },
-      escolinha: { select: { id: true } },
-      olheiro:   { select: { id: true } },
+export async function resolveUserContext(userId: string): Promise<UserPayload> {
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: userId },
+    include: {
+      assinatura: true,
+      administrador: true,
     },
   });
 
-  if (!u) return { id: usuarioId, tipo: "Atleta" as TipoUsuario, tipoUsuarioId: null, plano: "FREE" as PlanoName, isAdmin: false };
+  if (!usuario) {
+    throw new Error("Usuário não encontrado");
+  }
 
-  const isAdmin =
-    !!u.administrador || u.tipo === "Admin";
+  const plano: PlanoName =
+    usuario.assinatura && usuario.assinatura.ativo
+      ? (usuario.assinatura.plano as PlanoName)
+      : "FREE";
 
-  const tipo: TipoUsuario =
-    u.tipo ??
-    (u.atleta ? "Atleta" :
-     u.professor ? "Professor" :
-     u.clube ? "Clube" :
-     u.escolinha ? "Escolinha" : "Olheiro");
-
-  const tipoUsuarioId =
-    u.atleta?.id ?? u.professor?.id ?? u.clube?.id ?? u.escolinha?.id ?? u.olheiro?.id ?? null;
-
-  const plano = await getPlano(usuarioId);
-
-  return { id: usuarioId, tipo, tipoUsuarioId, plano, isAdmin };
+  return {
+    id: usuario.id,
+    tipo: usuario.tipo,
+    tipoUsuarioId: null, // ou pegar professorId/atletaId se quiser
+    plano,
+    isAdmin: !!usuario.administrador,
+  };
 }
