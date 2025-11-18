@@ -1,11 +1,8 @@
-// 02_vinculo.cy.js
 describe("Cenário 2 — Vínculo de atleta com clube/escolinha/professor", () => {
   it("atleta solicita vínculo e escolinha aprova", () => {
-    // 1) atleta Free entra e pede vínculo
     cy.loginUi("atletaFree");
     cy.visit("/perfil");
 
-    // 🔧 selector do botão "Pedir vínculo"
     cy.contains(/vínculo|vincular|conectar escolinha|clube/i).click();
     cy.get('input[placeholder*="buscar"], input[placeholder*="escolinha"]').type("Escolinha Teste");
     cy.contains(/Escolinha Teste/i).click();
@@ -13,7 +10,6 @@ describe("Cenário 2 — Vínculo de atleta com clube/escolinha/professor", () =
 
     cy.contains(/pedido enviado/i).should("be.visible");
 
-    // 2) escolinha aprova
     cy.logoutUi();
     cy.loginUi("escolinha");
     cy.visit("/perfil/GerenciarAtletas");

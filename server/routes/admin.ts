@@ -1,4 +1,3 @@
-// server/routes/adminRoutes.ts
 import { Router } from "express";
 import { adminDashboard, loginAdmin } from "../controllers/adminController.js";
 import { authenticateToken } from "../middlewares/auth.js";
@@ -11,12 +10,11 @@ import {
   unbanUser,
   removeUserContent,
 } from "../controllers/adminUsersController.js";
-import { strictLimiter } from "../lib/rateLimit.js";   // <-- NOVO
+import { strictLimiter } from "../lib/rateLimit.js"; 
 import { listAuditLogs } from "../controllers/adminAuditController.js";
 
 const router = Router();
 
-// protege contra brute force no login de admin
 router.post("/login", strictLimiter("admin_login"), loginAdmin);
 router.use(authenticateToken, requireAdmin);
 

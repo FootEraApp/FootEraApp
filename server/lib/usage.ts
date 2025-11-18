@@ -1,4 +1,3 @@
-// server/lib/usage.ts
 import { PrismaClient } from "@prisma/client";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
@@ -12,14 +11,13 @@ import {
 const prisma = new PrismaClient();
 
 export type UsageKey =
-  | "treinos_semana"          // Atleta
-  | "desafios_mes"            // Atleta
-  | "treinos_salvos_total"    // Atleta
-  | "planos_ativos_total"     // Professor
-  | "templates_total"         // Professor
-  | "perfis_vistos_dia"       // Olheiro
-  | "listas_salvas_total"     // Olheiro
-  // fair-use (só aviso)
+  | "treinos_semana"          
+  | "desafios_mes"            
+  | "treinos_salvos_total"    
+  | "planos_ativos_total"    
+  | "templates_total"    
+  | "perfis_vistos_dia"    
+  | "listas_salvas_total"    
   | "atletas_vinculados_total"
   | "assentos_coach_total"
   | "turmas_total"
@@ -83,7 +81,6 @@ const LIMITS = {
   },
 } as const;
 
-// mapeia UsageKey -> capability "contratual"
 const CAPABILITY_BY_KEY: Record<UsageKey, string> = {
   treinos_semana: "SUBMISSAO_TREINO",
   desafios_mes: "SUBMISSAO_DESAFIO",
@@ -114,7 +111,6 @@ export function planLimitFor(
   return v === Infinity ? Infinity : Number(v ?? Infinity);
 }
 
-// ---- janela/periodRef compatível com o schema ----
 const WIN_KIND_MAP: Record<Window, "DAY" | "WEEK" | "MONTH" | "TOTAL"> = {
   day: "DAY",
   week: "WEEK",
@@ -148,12 +144,6 @@ function boundsFor(win: Window, ref = new Date()) {
   return { windowStart, windowEnd, periodRef, windowKind: WIN_KIND_MAP[win] };
 }
 
-// ----------------- API principal -----------------
-
-/**
- * requireUsage "de alto nível" pra UsageKey.
- * true = pode continuar, false = já respondeu com limitInfo.
- */
 export async function requireUsage(
   req: AuthenticatedRequest,
   res: Response,
@@ -163,7 +153,6 @@ export async function requireUsage(
   const limit = planLimitFor(plan, key);
   const win = WINDOW_BY_KEY[key];
 
-  // sem limite (Infinity) → sempre OK
   if (!Number.isFinite(limit)) {
     return true;
   }
@@ -197,7 +186,6 @@ export async function requireUsage(
     return false;
   }
 
-  // allowed
   recordCapabilityDecision({ capability, allowed: true });
   return true;
 }
@@ -254,7 +242,6 @@ export function denyUsage(
   });
 }
 
-// alerta “fair-use” (sem bloquear)
 export async function touchFairUse(orgId: string, key: UsageKey) {
   const limit = (LIMITS.ORG as any)[key] ?? (LIMITS.PRO as any)[key] ?? Infinity;
   const win = WINDOW_BY_KEY[key];

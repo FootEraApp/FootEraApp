@@ -73,6 +73,8 @@ function ChevronUp(props: SvgProps) {
     </svg>
   );
 }
+const isE2E = typeof window !== "undefined" && (window as any).Cypress;
+
 
 export default function PaginaLogin() {
   const [nomeDeUsuario, setNomeDeUsuario] = useState("");
@@ -132,18 +134,16 @@ export default function PaginaLogin() {
         String(usuario.tipo).toLowerCase() === "admin";
       const token = data.token;
 
-      // 🔹 Plano vindo do backend – fonte de verdade da assinatura
       const plano =
         usuario.plano ??
         data.plano ??
-        "FREE"; // se backend não mandar, cai em FREE
+        "FREE";
 
       if (!token || !usuarioId)
         throw new Error("Resposta inválida do servidor");
 
       const store = lembrarDeMim ? localStorage : sessionStorage;
 
-      // limpa tudo antes
       [
         "token",
         "usuarioId",
@@ -157,7 +157,6 @@ export default function PaginaLogin() {
         sessionStorage.removeItem(k);
       });
 
-      // sempre guardamos token/usuario em ambos para fallback
       sessionStorage.setItem("token", token);
       localStorage.setItem("token", token);
 
@@ -196,7 +195,6 @@ export default function PaginaLogin() {
         null;
       if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
 
-      // 🔹 salva plano atual da assinatura – usado pelos guards de membership
       store.setItem("plano", String(plano));
       sessionStorage.setItem("plano", String(plano));
       localStorage.setItem("plano", String(plano));
@@ -215,18 +213,21 @@ export default function PaginaLogin() {
     }
   };
 
-  // Se já tem token, redireciona
   useEffect(() => {
+    if (isE2E) return;
+
     const token =
       Storage.token ||
       localStorage.getItem("token") ||
       sessionStorage.getItem("token");
     if (!token) return;
+
     const tipo = (
       localStorage.getItem("tipoUsuario") ||
       sessionStorage.getItem("tipoUsuario") ||
       ""
     ).toLowerCase();
+
     navigate(tipo === "admin" ? "/admin" : "/feed");
   }, []);
 
@@ -340,6 +341,7 @@ export default function PaginaLogin() {
                 Nome de usuário
               </label>
               <input
+                name="nomeDeUsuario"
                 className="w-full border border-gray-300 rounded px-3 py-2"
                 placeholder="Seu nome de usuário"
                 value={nomeDeUsuario}
@@ -351,6 +353,7 @@ export default function PaginaLogin() {
               <label className="block text-sm font-medium mb-1">Senha</label>
               <div className="relative">
                 <input
+                  name="senha"
                   type={mostrarSenha ? "text" : "password"}
                   className="w-full border border-gray-300 rounded px-3 py-2 pr-10"
                   placeholder="Sua senha"

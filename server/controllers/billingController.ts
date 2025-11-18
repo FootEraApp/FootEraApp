@@ -115,7 +115,6 @@ function getUserId(req: Request) {
   const r = req as AuthenticatedRequest as any;
   return r.userId ?? r.authUser?.id ?? r.user?.id;
 }
-// ---- Helpers para sincronizar Pagamento <-> Assinatura ----
 
 async function approvePaymentAndProvisionSubscription(pagamentoId: string) {
   const pagamento = await prisma.pagamento.findUnique({
@@ -533,7 +532,6 @@ export async function providerWebhook(req: Request, res: Response) {
       };
     };
 
-    // 1) Idempotência: se já vimos esse evento, só retorna 200
     const already = await prisma.eventoPagamento.findUnique({
       where: { providerEventId },
     });
@@ -545,7 +543,6 @@ export async function providerWebhook(req: Request, res: Response) {
       data: { providerEventId, tipo },
     });
 
-    // 2) Localizar o pagamento
     let pagamento = null as any;
 
     if (data?.pagamentoId) {
@@ -569,7 +566,6 @@ export async function providerWebhook(req: Request, res: Response) {
 
     const now = new Date();
 
-    // 3) Aplicar efeito no Pagamento + Assinatura
     if (tipo === "payment_approved") {
       pagamento = await prisma.pagamento.update({
         where: { id: pagamento.id },
@@ -579,7 +575,6 @@ export async function providerWebhook(req: Request, res: Response) {
         },
       });
 
-      // provisionar / atualizar assinatura
       await upsertSubscription(pagamento.usuarioId, pagamento.plano);
     } else if (tipo === "payment_canceled") {
       pagamento = await prisma.pagamento.update({

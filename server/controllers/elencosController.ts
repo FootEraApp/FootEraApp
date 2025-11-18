@@ -1,4 +1,3 @@
-// controllers/elencoController.ts
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
@@ -36,7 +35,6 @@ async function montarRespostaElencos(donoId: string, turmaId?: string) {
   }));
 }
 
-// GET /api/treinos/elencos?tipoUsuarioId=...&turmaId=...
 export async function listarElencos(req: Request, res: Response) {
   try {
     const tipoUsuarioId = String(req.query.tipoUsuarioId || "");
@@ -50,7 +48,6 @@ export async function listarElencos(req: Request, res: Response) {
   }
 }
 
-// GET /api/treinos/elencos/minha?turmaId=...
 export async function listarElencosMinha(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.userId;
@@ -66,7 +63,6 @@ export async function listarElencosMinha(req: AuthenticatedRequest, res: Respons
     const donoId = clube?.id || escolinha?.id || professor?.id;
     if (!donoId) return res.json([]);
 
-    // se veio turmaId, valide que essa turma pertence ao dono
     if (turmaId) {
       const turma = await prisma.turma.findUnique({
         where: { id: turmaId },
@@ -87,7 +83,6 @@ export async function listarElencosMinha(req: AuthenticatedRequest, res: Respons
   }
 }
 
-// GET /api/treinos/elencos/escala-por-turma?turmaId=...
 export async function escalaPorTurma(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.userId;
@@ -95,7 +90,6 @@ export async function escalaPorTurma(req: AuthenticatedRequest, res: Response) {
     if (!userId) return res.status(401).json({ error: "Não autenticado" });
     if (!turmaId) return res.status(400).json({ error: "turmaId obrigatório" });
 
-    // autoriza somente professor/clube/escolinha donos da turma
     const [clube, escolinha, professor] = await Promise.all([
       prisma.clube.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
       prisma.escolinha.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
@@ -151,7 +145,6 @@ export async function escalaPorTurma(req: AuthenticatedRequest, res: Response) {
   }
 }
 
-// POST/PUT: inclua turmaId no payload e valide permissão
 export async function criarElenco(req: AuthenticatedRequest, res: Response) {
   try {
     const { nome, maxJogadores, escala, turmaId } = req.body as {

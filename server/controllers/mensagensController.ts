@@ -1,4 +1,3 @@
-// server/controllers/mensagensController.ts
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
@@ -6,7 +5,7 @@ import { getIO } from "../socket.js";
 import fs from "fs/promises";
 import path from "path";
 import { getDailyUsage } from "../services/usage.js";
-import { audit } from "../services/audit.js";   // <-- NOVO
+import { audit } from "../services/audit.js"; 
 
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
@@ -58,7 +57,6 @@ async function salvarDataUrlComoPng(dataUrl: string, sub = "cards") {
   return `/uploads/${sub}/${filename}`;
 }
 
-// helper simples pra checar se é menor de 18 anos
 function isMinor(birth: Date | string | null | undefined): boolean {
   if (!birth) return false;
   const d = new Date(birth);
@@ -113,7 +111,6 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
       clientMsgId?: string;
     };
 
-    // ===================== CONTATO MEDIADO (olheiro x menor) =====================
     const deId = req.userId!;
     const remetente = await prisma.usuario.findUnique({
       where: { id: deId },
@@ -126,7 +123,6 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
     });
 
     if (remetente?.tipo === "Olheiro" && destinatario?.tipo === "Atleta") {
-      // pega info do atleta pelo usuarioId
       const atleta: any = await prisma.atleta.findFirst({
         where: { usuarioId: destinatario.id },
       });
@@ -152,7 +148,6 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
         });
       }
     }
-    // ============================================================================
 
     let conteudoFinal = conteudo;
     if (tipo === "CARD" && typeof conteudo === "string" && conteudo.startsWith("data:image/")) {

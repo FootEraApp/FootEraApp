@@ -26,7 +26,6 @@ async function requireOlheiroId(userId: string) {
   return o?.id || null;
 }
 
-// POST /api/olheiro/listas
 export async function criarLista(req: Request, res: Response) {
   const userId = getUserId(req);
   if (!userId) return res.status(401).json({ code: 'UNAUTHENTICATED' });
@@ -34,11 +33,10 @@ export async function criarLista(req: Request, res: Response) {
   const olheiroId = await requireOlheiroId(userId);
   if (!olheiroId) return res.status(403).json({ code: 'NOT_SCOUT' });
 
-  // Gate: Free 2 listas; Pro ilimitado
   const gate = await enforceTotalLimit(req, res, 'listas_salvas_total', async () =>
     prisma.listaOlheiro.count({ where: { olheiroId } })
   );
-  if (gate === undefined) return; // bloqueou
+  if (gate === undefined) return;
 
   const { nome, descricao, publico = false } = req.body || {};
   if (!nome?.trim()) return res.status(400).json({ message: "Informe 'nome'." });
@@ -57,7 +55,6 @@ export async function criarLista(req: Request, res: Response) {
   }
 }
 
-// GET /api/olheiro/listas?items=1
 export async function minhasListas(req: Request, res: Response) {
   const userId = getUserId(req);
   if (!userId) return res.status(401).json({ code: 'UNAUTHENTICATED' });
@@ -75,7 +72,6 @@ export async function minhasListas(req: Request, res: Response) {
     } : undefined,
   });
 
-  // count rápido por lista
   if (!includeItems) {
     const ids = listas.map(l => l.id);
     const counts = await prisma.listaOlheiroItem.groupBy({
@@ -102,7 +98,6 @@ export async function deletarLista(req: Request, res: Response) {
   const check = await assertListaDoOlheiro(id, olheiroId);
   if (!check.ok) return res.status(check.status).json(check.body);
 
-  // opcional: limpar itens antes (por segurança)
   await prisma.listaOlheiroItem.deleteMany({ where: { listaId: id } });
   await prisma.listaOlheiro.delete({ where: { id } });
 

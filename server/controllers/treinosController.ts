@@ -179,7 +179,7 @@ function startOfToday() {
 
 export async function getCalendarioTreinos(req: Request, res: Response) {
   try {
-    const usuarioId = (req as any).usuarioId; // do middleware de auth
+    const usuarioId = (req as any).usuarioId;
     const { start, end } = req.query;
 
     if (!usuarioId) {
@@ -195,7 +195,6 @@ export async function getCalendarioTreinos(req: Request, res: Response) {
     const startDate = new Date(String(start));
     const endDate = new Date(String(end));
 
-    // Descobrir o atletaId a partir do usuarioId
     const atleta = await prisma.atleta.findUnique({
       where: { usuarioId },
       select: { id: true },
@@ -223,14 +222,13 @@ export async function getCalendarioTreinos(req: Request, res: Response) {
       },
     });
 
-    // Mapeia no formato mais simples pra UI de calendário
     const eventos = treinos.map((t) => ({
       id: t.id,
       titulo: t.titulo,
       start: t.dataTreino,
       end: t.dataExpiracao ?? t.dataTreino,
-      status: t.status,          // TreinoAgendadoStatus
-      execucaoStatus: t.execucaoStatus, // TreinoStatus
+      status: t.status,       
+      execucaoStatus: t.execucaoStatus,
       treinoProgramadoId: t.treinoProgramadoId,
       nivel: t.treinoProgramado?.nivel ?? null,
       categoria: t.treinoProgramado?.categoria ?? [],
@@ -329,7 +327,6 @@ export async function salvarTreinoNaBiblioteca(req: AuthenticatedRequest, res: R
       return res.status(400).json({ message: "treinoProgramadoId é obrigatório." });
     }
 
-    // id do atleta vinculado ao usuário (conceito de “Biblioteca do Atleta”)
     const atletaId = user?.tipoUsuarioId as string | undefined;
     const plano = user?.plano ?? "FREE";
 
@@ -337,7 +334,6 @@ export async function salvarTreinoNaBiblioteca(req: AuthenticatedRequest, res: R
       return res.status(400).json({ message: "atletaId não encontrado para o usuário logado." });
     }
 
-    // garante que o treino existe (e pega dados pra montar titulo/conteudo)
     const treinoProgramado = await prisma.treinoProgramado.findUnique({
       where: { id: treinoProgramadoId },
       select: { nome: true, descricao: true },
@@ -347,7 +343,6 @@ export async function salvarTreinoNaBiblioteca(req: AuthenticatedRequest, res: R
       return res.status(404).json({ message: "Treino programado não encontrado." });
     }
 
-    // 🔒 limite de treinos salvos no plano Free
     await enforceFeatureLimit({
       prisma,
       feature: "TREINO_SALVO",
@@ -356,7 +351,6 @@ export async function salvarTreinoNaBiblioteca(req: AuthenticatedRequest, res: R
       plano,
     });
 
-    // Evitar duplicar o mesmo treino salvo para o mesmo usuário
     const existente = await prisma.treinoSalvo.findFirst({
       where: { usuarioId, treinoProgramadoId },
     });
@@ -365,18 +359,12 @@ export async function salvarTreinoNaBiblioteca(req: AuthenticatedRequest, res: R
       return res.status(409).json({ message: "Esse treino já está na sua biblioteca." });
     }
 
-    // 🔴 AQUI: preencher todos os campos obrigatórios do modelo TreinoSalvo
     const salvo = await prisma.treinoSalvo.create({
       data: {
         usuarioId,
         treinoProgramadoId,
         titulo: treinoProgramado.nome ?? "Treino salvo",
-        conteudo: treinoProgramado.descricao ?? "Treino salvo na sua biblioteca.",
-        // se o teu modelo tiver mais campos obrigatórios, coloca valores padrão aqui
-        // exemplo:
-        // tipoMidia: "Documento",
-        // imagemUrl: null,
-        // videoUrl: null,
+        conteudo: treinoProgramado.descricao ?? "Treino salvo na sua biblioteca."
       },
     });
 
@@ -2285,7 +2273,6 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
       };
     }
 
-    // ✅ AQUI entra o IF que você mandou:
     if (fairUseInfo?.exceeded) {
       return res.status(429).json({
         message: "Limite mensal de agendamentos por turma excedido.",

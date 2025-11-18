@@ -1,4 +1,3 @@
-// server/lib/rateLimit.ts
 import {
   Request,
   Response,
@@ -14,10 +13,8 @@ interface WindowOptions {
 
 type WindowRecord = { count: number; firstHit: number };
 
-// um mapa global simples em memória
 const windowHits = new Map<string, WindowRecord>();
 
-// gera um "window limiter" em memória (IP + userId + feature)
 function buildWindowLimiter(opts: WindowOptions) {
   return function limiter(feature: string): RequestHandler {
     return (
@@ -45,7 +42,6 @@ function buildWindowLimiter(opts: WindowOptions) {
         return next();
       }
 
-      // >>> AQUI: resposta padronizada <<<
       return sendLimitInfo(res, {
         capability: feature,
         window: `${Math.round(opts.windowMs / 1000)}s`,
@@ -56,9 +52,8 @@ function buildWindowLimiter(opts: WindowOptions) {
   };
 }
 
-// presets (pode ajustar os valores à vontade)
-const strictFactory = buildWindowLimiter({ windowMs: 60_000, max: 20 }); // 20 req / min
-const softFactory = buildWindowLimiter({ windowMs: 10_000, max: 60 }); // 60 req / 10s
+const strictFactory = buildWindowLimiter({ windowMs: 60_000, max: 20 });
+const softFactory = buildWindowLimiter({ windowMs: 10_000, max: 60 });
 
 export function strictLimiter(feature: string): RequestHandler {
   return strictFactory(feature);
@@ -68,11 +63,10 @@ export function softLimiter(feature: string): RequestHandler {
   return softFactory(feature);
 }
 
-// rate limit extra combinando IP + user para ações "quentes"
 type Bucket = { count: number; resetAt: number };
 const buckets = new Map<string, Bucket>();
-const WINDOW_MS = 10_000; // 10s
-const MAX_REQ = 20; // por janela
+const WINDOW_MS = 10_000; 
+const MAX_REQ = 20;
 
 export function softRateLimit(feature: string): RequestHandler {
   return (req: Request & { userId?: string; user?: any }, res: Response, next: NextFunction) => {

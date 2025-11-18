@@ -11,20 +11,17 @@ import { requireUsage } from '../services/usage.js';
 
 const router = express.Router();
 
-// listar/buscar
-router.get('/', authenticateToken, getAllTreinos);
 router.get('/:id', authenticateToken, getTreinoById);
+router.get('/', authenticateToken, getAllTreinos);
 
-// criar com cota
 router.post('/', authenticateToken, async (req, res) => {
   const isTemplate = !!req.body?.naoExpira === true;
   const key = isTemplate ? 'templates_total' : 'planos_ativos_total';
   const chk = await requireUsage(req as any, res, key);
-  if (chk === undefined) return; // bloqueado
+  if (chk === undefined) return;
   return createTreinoProgramado(req, res);
 });
 
-// atualizar/excluir
 router.put('/:id', authenticateToken, updateTreino);
 router.delete('/:id', authenticateToken, deleteTreino);
 

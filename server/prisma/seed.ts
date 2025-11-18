@@ -9,24 +9,28 @@ async function hash(p: string) {
 
 async function main() {
   const PASSWORDS = {
-    'clube_footera': 'footera123',
-    'clube_teste': 'clubeteste123',
-    'escola_estrelas': 'escola123',
-    'academia_fc': 'academia123',
-    'arthur.persio': 'prof123',
-    'mateus.furieri': 'prof123',
-    'lucas.ferreira': 'atleta123',
-    'ana.mendes': 'atleta123',
-    'teste': 'teste123',
-    'aaaaa': 'aaaaa123',
-    'admin': 'admin123',
-    'olheiro_joao': 'olheiro123',
-    // perfil adicionado p teste em admin
-    // nomeusuario: adminTeste
-    // email: adminTeste@gmail.com
-    // senha: adminteste1
-  } as const;
+  'clube_footera': 'footera123',
+  'clube_teste': 'clubeteste123',
+  'escola_estrelas': 'escola123',
+  'academia_fc': 'academia123',
+  'arthur.persio': 'prof123',
+  'mateus.furieri': 'prof123',
+  'lucas.ferreira': 'atleta123',
+  'ana.mendes': 'atleta123',
+  'teste': 'teste123',
+  'aaaaa': 'aaaaa123',
+  'admin': 'admin123',
+  'olheiro_joao': 'olheiro123',
 
+  // >>> ADICIONAR AQUI <<<
+  'atleta_free': 'senha123',
+  'atleta_pro': 'senha123',
+  'prof_free': 'senha123',
+  'prof_pro': 'senha123',
+  'scout_free': 'senha123',
+  'scout_pro': 'senha123',
+  'escolinha_01': 'senha123',
+} as const;
   const H = Object.fromEntries(
     await Promise.all(
       Object.entries(PASSWORDS).map(async ([k, v]) => [k, await hash(v)])
@@ -802,6 +806,220 @@ const usuarioAaaaa = await prisma.usuario.upsert({
       }
     }
   }
+});
+
+// ====================== USUÁRIOS DE TESTE CYPRESS ======================
+
+// 1) Atleta Free
+await prisma.usuario.upsert({
+  where: { nomeDeUsuario: 'atleta_free' },
+  update: {},
+  create: {
+    nome: 'Atleta Free',
+    nomeDeUsuario: 'atleta_free',
+    email: 'atleta_free@example.com',
+    senhaHash: H['atleta_free'],
+    tipo: TipoUsuario.Atleta,
+    cidade: 'São Paulo',
+    estado: 'SP',
+    pais: 'Brasil',
+    foto: '/assets/usuarios/teste-atleta-free.png',
+    atleta: {
+      create: {
+        nome: 'Atleta',
+        sobrenome: 'Free',
+        email: 'atleta_free@example.com',
+        idade: 15,
+        posicao: 'MEI',
+        altura: 1.70,
+        peso: 60,
+        nacionalidade: 'Brasileira',
+        naturalidade: 'São Paulo - SP',
+        telefone1: '11999990001',
+        seloQualidade: 'Bronze',
+        categoria: [Categoria.Sub15],
+        foto: '/assets/usuarios/teste-atleta-free.png',
+      },
+    },
+  },
+});
+
+// 2) Atleta Pro
+await prisma.usuario.upsert({
+  where: { nomeDeUsuario: 'atleta_pro' },
+  update: {},
+  create: {
+    nome: 'Atleta Pro',
+    nomeDeUsuario: 'atleta_pro',
+    email: 'atleta_pro@example.com',
+    senhaHash: H['atleta_pro'],
+    tipo: TipoUsuario.Atleta,
+    cidade: 'São Paulo',
+    estado: 'SP',
+    pais: 'Brasil',
+    foto: '/assets/usuarios/teste-atleta-pro.png',
+    atleta: {
+      create: {
+        nome: 'Atleta',
+        sobrenome: 'Pro',
+        email: 'atleta_pro@example.com',
+        idade: 16,
+        posicao: 'CA',
+        altura: 1.75,
+        peso: 65,
+        nacionalidade: 'Brasileira',
+        naturalidade: 'São Paulo - SP',
+        telefone1: '11999990002',
+        seloQualidade: 'Prata',
+        categoria: [Categoria.Sub17],
+        foto: '/assets/usuarios/teste-atleta-pro.png',
+      },
+    },
+  },
+});
+
+// 3) Professor Free
+await prisma.usuario.upsert({
+  where: { nomeDeUsuario: 'prof_free' },
+  update: {},
+  create: {
+    nome: 'Professor Free',
+    nomeDeUsuario: 'prof_free',
+    email: 'prof_free@example.com',
+    senhaHash: H['prof_free'],
+    tipo: TipoUsuario.Professor,
+    cidade: 'Vitória',
+    estado: 'ES',
+    pais: 'Brasil',
+    foto: '/assets/usuarios/teste-prof-free.png',
+    professor: {
+      create: {
+        codigo: 'PROF_FREE',
+        cref: 'ES000001',
+        areaFormacao: 'Educação Física',
+        escola: 'Escola Estrelas',
+        qualificacoes: ['Professor de teste (FREE)'],
+        certificacoes: ['Licença C'],
+        fotoUrl: '/assets/usuarios/teste-prof-free.png',
+        nome: 'Professor Free',
+      },
+    },
+  },
+});
+
+// 4) Professor Pro
+await prisma.usuario.upsert({
+  where: { nomeDeUsuario: 'prof_pro' },
+  update: {},
+  create: {
+    nome: 'Professor Pro',
+    nomeDeUsuario: 'prof_pro',
+    email: 'prof_pro@example.com',
+    senhaHash: H['prof_pro'],
+    tipo: TipoUsuario.Professor,
+    cidade: 'Vitória',
+    estado: 'ES',
+    pais: 'Brasil',
+    foto: '/assets/usuarios/teste-prof-pro.png',
+    professor: {
+      create: {
+        codigo: 'PROF_PRO',
+        cref: 'ES000002',
+        areaFormacao: 'Educação Física',
+        escola: 'Academia FC',
+        qualificacoes: ['Professor de teste (PRO)'],
+        certificacoes: ['Licença B'],
+        fotoUrl: '/assets/usuarios/teste-prof-pro.png',
+        nome: 'Professor Pro',
+      },
+    },
+  },
+});
+
+// 5) Olheiro Free
+await prisma.usuario.upsert({
+  where: { nomeDeUsuario: 'scout_free' },
+  update: {},
+  create: {
+    nome: 'Olheiro Free',
+    nomeDeUsuario: 'scout_free',
+    email: 'scout_free@example.com',
+    senhaHash: H['scout_free'],
+    tipo: TipoUsuario.Olheiro,
+    cidade: 'São Paulo',
+    estado: 'SP',
+    pais: 'Brasil',
+    foto: '/assets/usuarios/teste-scout-free.png',
+    olheiro: {
+      create: {
+        descricao: 'Olheiro de teste (FREE)',
+        areaAtuacao: 'Sudeste',
+        telefonePublico: '11999990003',
+        emailPublico: 'scout_free@example.com',
+        fotoUrl: '/assets/usuarios/teste-scout-free.png',
+      },
+    },
+  },
+});
+
+// 6) Olheiro Pro
+await prisma.usuario.upsert({
+  where: { nomeDeUsuario: 'scout_pro' },
+  update: {},
+  create: {
+    nome: 'Olheiro Pro',
+    nomeDeUsuario: 'scout_pro',
+    email: 'scout_pro@example.com',
+    senhaHash: H['scout_pro'],
+    tipo: TipoUsuario.Olheiro,
+    cidade: 'São Paulo',
+    estado: 'SP',
+    pais: 'Brasil',
+    foto: '/assets/usuarios/teste-scout-pro.png',
+    olheiro: {
+      create: {
+        descricao: 'Olheiro de teste (PRO)',
+        areaAtuacao: 'Sudeste',
+        telefonePublico: '11999990004',
+        emailPublico: 'scout_pro@example.com',
+        fotoUrl: '/assets/usuarios/teste-scout-pro.png',
+      },
+    },
+  },
+});
+
+// 7) Escolinha (escolinha_01)
+await prisma.usuario.upsert({
+  where: { nomeDeUsuario: 'escolinha_01' },
+  update: {},
+  create: {
+    nome: 'Escolinha 01',
+    nomeDeUsuario: 'escolinha_01',
+    email: 'escolinha_01@example.com',
+    senhaHash: H['escolinha_01'],
+    tipo: TipoUsuario.Escolinha,
+    cidade: 'São Paulo',
+    estado: 'SP',
+    pais: 'Brasil',
+    foto: '/assets/usuarios/teste-escolinha-01.png',
+    escolinha: {
+      create: {
+        nome: 'Escolinha 01',
+        cidade: 'São Paulo',
+        estado: 'SP',
+        pais: 'Brasil',
+        email: 'escolinha_01@example.com',
+        cnpj: '11.111.111/0001-11',
+        telefone1: '11999990005',
+        logradouro: 'Rua Teste',
+        numero: '123',
+        bairro: 'Centro',
+        cep: '01000-000',
+        sede: 'São Paulo',
+        logo: '/assets/usuarios/teste-escolinha-01.png',
+      },
+    },
+  },
 });
 
 const atletaAaaaa = await prisma.atleta.findUnique({

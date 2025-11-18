@@ -12,7 +12,7 @@ export interface Comentarios {
   id: string;
   conteudo: string;
   dataCriacao: string;
-  usuarioId: string; // <- este campo é o que o feed.tsx usa
+  usuarioId: string;
   usuario?: { id?: string; nome: string; foto?: string | null };
 }
 

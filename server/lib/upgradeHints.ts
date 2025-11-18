@@ -1,5 +1,3 @@
-// server/lib/upgradeHints.ts
-
 export type CapabilityKey =
   | "SUBMISSAO_TREINO"
   | "SUBMISSAO_DESAFIO"

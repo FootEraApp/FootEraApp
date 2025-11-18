@@ -1,15 +1,12 @@
-// server/lib/blockMessages.ts
 import type { UsageKey } from "./usage.js";
 
-// tudo que pode representar um bloqueio de ação
 export type BlockReason =
-  | UsageKey                // limites de uso
+  | UsageKey              
   | "TREINO_SALVO_FREE"
   | "DM_MENOR_SEM_CONSENTIMENTO"
-  | "OUTRO";                // fallback genérico
+  | "OUTRO";              
 
 export const BLOCK_MESSAGES: Record<BlockReason, string> = {
-  // ---- chaves que são UsageKey ----
   treinos_semana:
     "Limite semanal de treinos atingido no plano Free (3 por semana). Faça upgrade para o Pro para liberar ilimitado.",
   desafios_mes:
@@ -33,7 +30,6 @@ export const BLOCK_MESSAGES: Record<BlockReason, string> = {
   agendamentos_mes:
     "Fair-use: alto volume de agendamentos este mês.",
 
-  // ---- chaves extras de BlockReason (não são UsageKey) ----
   TREINO_SALVO_FREE:
     "Você atingiu o limite de treinos salvos no plano Free. Exclua um ou faça upgrade.",
   DM_MENOR_SEM_CONSENTIMENTO:
