@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
+import { requireUsage } from "server/lib/usage.js";
+import { validarJanelaAtleta, getRangeFromQuery, PlanoAtleta } from "../utils/analyticsWindow.js";
 
 const prisma = new PrismaClient();
 
@@ -79,6 +81,125 @@ function mapGrupoToAtividade(p: any) {
     pontuacao: pontosGrupo(p),
   };
 }
+
+// GET /api/perfil/:id/pontuacao-historico?from=2024-01-01&to=2024-03-01
+export async function historicoPontuacaoAtleta(req: AuthenticatedRequest, res: Response) {
+  try {
+    const atletaParam = req.params.id;
+
+    // aceitar tanto id de atleta quanto usuarioId
+    const atleta = await prisma.atleta.findFirst({
+      where: {
+        OR: [{ id: atletaParam }, { usuarioId: atletaParam }],
+      },
+      select: { id: true },
+    });
+
+    if (!atleta) {
+      return res.status(404).json({ message: "Atleta não encontrado." });
+    }
+
+    const plano = (req.user?.plano ?? "FREE") as PlanoAtleta;
+
+    // Free -> 30 dias, Pro -> 365
+    const defaultDias = plano === "FREE" ? 30 : 365;
+    let { from, to } = getRangeFromQuery(req.query, defaultDias);
+
+    // aqui é onde a regra de janela entra (lança erro se passar do limite)
+    validarJanelaAtleta(plano, from, to);
+
+    const [subsTreino, subsDesafio] = await Promise.all([
+      prisma.submissaoTreino.findMany({
+        where: {
+          atletaId: atleta.id,
+          aprovado: true as any,
+          criadoEm: { gte: from, lte: to },
+        },
+        include: {
+          treinoAgendado: {
+            include: {
+              treinoProgramado: { include: { exercicios: true } },
+            },
+          },
+        },
+        orderBy: { criadoEm: "asc" },
+      }),
+      prisma.submissaoDesafio.findMany({
+        where: {
+          atletaId: atleta.id,
+          aprovado: true as any,
+          createdAt: { gte: from, lte: to },
+        },
+        include: { desafio: true },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+
+    const historicoTreinos = subsTreino.map((s: any) => {
+      const dur =
+        s.duracaoMinutos ??
+        s.treinoAgendado?.treinoProgramado?.duracao ??
+        null;
+
+      const pts =
+        s.pontosCreditados ??
+        s.pontuacaoSnapshot ??
+        s.treinoAgendado?.treinoProgramado?.pontuacao ??
+        s.treinoAgendado?.treinoProgramado?.exercicios?.length ??
+        0;
+
+      const ts = +new Date(s.criadoEm);
+
+      return {
+        tipo: "Treino" as const,
+        status: "Treino Concluído",
+        data: new Date(ts).toLocaleDateString("pt-BR"),
+        ts,
+        duracao: typeof dur === "number" && dur > 0 ? `${dur} min` : undefined,
+        titulo:
+          s.treinoAgendado?.treinoProgramado?.nome ??
+          s.treinoAgendado?.titulo ??
+          "Treino",
+        pontuacao: Number(pts) || 0,
+      };
+    });
+
+    const historicoDesafios = subsDesafio.map((s: any) => {
+      const ts = +new Date(s.createdAt);
+      return {
+        tipo: "Desafio" as const,
+        status: "Desafio Concluído",
+        data: new Date(ts).toLocaleDateString("pt-BR"),
+        ts,
+        titulo: s.desafio?.titulo ?? "Desafio",
+        pontuacao: pontosDesafioInd(s),
+      };
+    });
+
+    const items = [...historicoTreinos, ...historicoDesafios]
+      .sort((a, b) => a.ts - b.ts)
+      .map(({ ts, ...rest }) => rest);
+
+    return res.json({
+      range: { from, to },
+      items,
+    });
+  } catch (err: any) {
+    if (err.code === "WINDOW_TOO_LARGE") {
+      return res.status(422).json({
+        code: err.code,
+        message: err.message,
+        limitDays: err.limiteDias,
+      });
+    }
+
+    console.error("historicoPontuacaoAtleta", err);
+    return res
+      .status(500)
+      .json({ message: "Erro ao buscar histórico de pontuação." });
+  }
+}
+
 
 function mapGrupoToHistorico(p: any) {
   const g = p.desafioEmGrupo;
@@ -1433,8 +1554,16 @@ export async function getPerfilEscola(req: Request, res: Response) {
 }
 
 export async function getPerfilOlheiro(req: Request, res: Response) {
+  if (req.user?.tipo === 'Olheiro') {
+    await requireUsage(req, res, 'perfis_vistos_dia'); // 20/dia no Free
+  }
   try {
     const { id } = req.params;
+    
+    if (req.user?.tipo === "Olheiro" && req.user?.plano !== "PRO") {
+      const ok = await requireUsage(req, res, "listas_salvas_total");
+      if (!ok) return;
+    }
 
     const olheiro: any = await resolveByUsuarioOrEntity({
       entity: "olheiro",

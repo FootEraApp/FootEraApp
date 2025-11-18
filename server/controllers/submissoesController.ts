@@ -5,6 +5,9 @@ import { aplicarEstatisticasPosSubmissao } from "./submissoes/utilsEstatistica.j
 import { inferirTipoTreino } from "../utils/inferirTipoTreino.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
 import { atualizarCachePontuacao } from "server/services/pontuacao.service.js";
+import { requireUsage } from "server/lib/usage.js";
+import { enforceFeatureLimit } from "server/utils/featureLimit.js";
+import { AuthenticatedRequest } from "server/middlewares/auth.js";
 
 const prisma = new PrismaClient();
 
@@ -28,6 +31,10 @@ async function atletaTemVinculo(atletaId: string) {
 }
 
 export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
+  if (req.user?.tipo === "Atleta" && req.user?.plano !== "PRO") {
+    const ok = await requireUsage(req as any, res, "treinos_semana");
+    if (!ok) return; // requireUsage já respondeu (429/402)
+  }
   try {
     const {
       observacao,
@@ -162,18 +169,20 @@ export async function criarSubmissaoTreinoUpload(req: Request, res: Response) {
   }
 }
 
-export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
+export async function criarSubmissaoDesafioUpload(req: AuthenticatedRequest, res: Response) {
   try {
+    const user = req.user as any;
+
     const {
       desafioId,
-      atletaId,
+      atletaId: atletaIdBody,
       observacao,
       videoUrl: rawVideoUrl,
       tempoMs,
       tempoSeg,
     } = req.body as {
       desafioId: string;
-      atletaId: string;
+      atletaId?: string;
       observacao?: string;
       videoUrl?: string;
       tempoMs?: number | string;
@@ -183,9 +192,21 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
 
     const file = (req as any).file as Express.Multer.File | undefined;
 
+    // atletaId preferencialmente do corpo, senão do usuário logado
+    const atletaId = atletaIdBody || (user?.tipoUsuarioId as string | undefined);
+    const plano = user?.plano ?? "FREE";
+
     if (!desafioId || !atletaId) {
-      return res.status(400).json({ message: "Dados obrigatórios ausentes." });
+      return res.status(400).json({ message: "Dados obrigatórios ausentes (desafioId/atletaId)." });
     }
+
+    // 🔒 Gating: 2 submissões de desafio / mês no plano Free
+    await enforceFeatureLimit({
+      prisma,
+      feature: "SUBMISSAO_DESAFIO",
+      atletaId,
+      plano,
+    });
 
     const desafio = await prisma.desafioOficial.findUnique({ where: { id: desafioId } });
     if (!desafio) return res.status(400).json({ message: "Desafio inválido ou não encontrado." });
@@ -193,9 +214,10 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
     const atleta = await prisma.atleta.findUnique({ where: { id: atletaId } });
     if (!atleta) return res.status(400).json({ message: "Atleta inválido ou não encontrado." });
 
+    // Limite de 2 tentativas por desafio (independente do mês) – manteve sua regra antiga
     const tentativas = await prisma.submissaoDesafio.count({ where: { atletaId, desafioId } });
     if (tentativas >= 2) {
-      return res.status(400).json({ message: "Limite de 2 tentativas atingido." });
+      return res.status(400).json({ message: "Limite de 2 tentativas atingido para este desafio." });
     }
     const tentativaNumero = Math.min(2, tentativas + 1);
 
@@ -208,9 +230,11 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
     const isVideo = file ? file.mimetype?.startsWith("video") : true;
 
     const tempoMsNum =
-      tempoMs != null ? Number(tempoMs)
-      : tempoSeg != null ? Math.round(Number(tempoSeg) * 1000)
-      : undefined;
+      tempoMs != null
+        ? Number(tempoMs)
+        : tempoSeg != null
+        ? Math.round(Number(tempoSeg) * 1000)
+        : undefined;
 
     const repeticoesNum = tentativaNumero;
 
@@ -244,9 +268,11 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
 
     const usuarioIdForActivity = await resolveUsuarioIdForActivity((req as any).userId, atletaId);
     if (usuarioIdForActivity && uploadedUrl) {
-      await prisma.atividadeRecente.create({
-        data: { usuarioId: usuarioIdForActivity, tipo: "desafio", imagemUrl: uploadedUrl },
-      }).catch(() => {});
+      await prisma.atividadeRecente
+        .create({
+          data: { usuarioId: usuarioIdForActivity, tipo: "desafio", imagemUrl: uploadedUrl },
+        })
+        .catch(() => {});
     }
 
     return res.status(201).json({
@@ -256,8 +282,17 @@ export async function criarSubmissaoDesafioUpload(req: Request, res: Response) {
       tentativasRestantes: Math.max(0, 2 - tentativaNumero),
       mensagem: "Submissão enviada para validação. Aguarde aprovação.",
     });
-  } catch (error) {
-    console.error("Erro ao criar submissão de desafio:", error);
+  } catch (err: any) {
+    if (err?.code === "LIMIT_REACHED") {
+      return res.status(err.status || 403).json({
+        code: err.code,
+        feature: err.feature,
+        limit: err.limit,
+        message: err.message,
+      });
+    }
+
+    console.error("Erro ao criar submissão de desafio:", err);
     res.status(500).json({ message: "Erro ao criar submissão." });
   }
 }

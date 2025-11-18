@@ -1,5 +1,4 @@
 // server/controllers/treinosController.ts
-import { Response, Request } from "express";
 import {
   PrismaClient,
   PosicaoCampo,
@@ -10,7 +9,6 @@ import {
   TreinoAgendadoStatus,
 } from "@prisma/client";
 import { getIO } from "../socket.js";
-import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
 import { sanitizeText, basicModerationFails } from "../utils/moderation.js";
 import {
@@ -18,8 +16,109 @@ import {
   onTreinoFeitoPorAlunoFromSubmissao,
 } from "../services/statsService.js";
 import type { Prisma } from "@prisma/client";
+import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
+import { can } from "server/services/entitlements.js";
+import { requireUsage, planLimitFor } from "server/lib/usage.js";
+import { audit } from "server/services/audit.js";
+import { enforceFeatureLimit } from "server/utils/featureLimit.js";
 
 const prisma = new PrismaClient();
+type Request = ExpressRequest;
+type Response = ExpressResponse;
+
+type AuthenticatedRequest = ExpressRequest & {
+  userId?: string;
+  user?: any;
+};
+
+const FAIR_USE_TURMA_MES = 30;
+
+
+type CanKey = Parameters<typeof can>[1];
+
+const CAP_CRIAR_TREINO: CanKey = "Treinos:CriarProgramado" as CanKey;
+const FEAT = {
+  TREINOS_ILIMITADOS:  "treinos.ilimitados"   as CanKey,
+  ROTINAS_ILIMITADAS:  "rotinas.ilimitadas"   as CanKey,
+  AGENDAMENTO_LOTE:    "agendamento.lote"     as CanKey,
+  AGENDAMENTO_PESSOAL: "agendamento.pessoal"  as CanKey,  
+} as const;
+
+export async function agendarTreinoPessoal(req: AuthenticatedRequest, res: Response) {
+  const user = req.user as any;
+
+  if (!user || !can(user, FEAT.AGENDAMENTO_PESSOAL)) {
+    return res.status(402).json({
+      code: "UPGRADE_REQUIRED",
+      message: "Agendamento pessoal de treinos está disponível apenas para planos Pro.",
+    });
+  }
+
+  const atletaId = req.user?.atletaId;
+  if (!atletaId) {
+    return res.status(400).json({ message: "Usuário não é atleta." });
+  }
+
+  const { titulo, dataTreino, descricao } = req.body as {
+    titulo: string;
+    dataTreino: string;
+    descricao?: string;
+  };
+
+  if (!titulo || !dataTreino) {
+    return res.status(400).json({ message: "Título e data são obrigatórios." });
+  }
+
+  const treino = await prisma.treinoAgendado.create({
+    data: {
+      titulo,
+      atletaId,
+      dataTreino: new Date(dataTreino),
+      local: null,
+      treinoProgramadoId: null, 
+    },
+  });
+
+  return res.status(201).json(treino);
+}
+
+export async function agendarTreinoLote(req: AuthenticatedRequest, res: Response) {
+  const user = req.user as any;
+
+  if (!user || !can(user, FEAT.AGENDAMENTO_LOTE)) {
+    return res.status(402).json({
+      code: "UPGRADE_REQUIRED",
+      message: "Agendamento em lote está disponível apenas para planos Pro.",
+    });
+  }
+
+  const { treinoProgramadoId, atletasIds, dataTreino } = req.body as {
+    treinoProgramadoId: string;
+    atletasIds: string[];
+    dataTreino: string;
+  };
+
+  if (!treinoProgramadoId || !atletasIds?.length || !dataTreino) {
+    return res.status(400).json({ message: "Dados incompletos para agendamento em lote." });
+  }
+
+  const dt = new Date(dataTreino);
+
+  await prisma.$transaction(
+    atletasIds.map((atletaId) =>
+      prisma.treinoAgendado.create({
+        data: {
+          titulo: "Treino programado",
+          atletaId,
+          treinoProgramadoId,
+          dataTreino: dt,
+        },
+      })
+    )
+  );
+
+  return res.status(201).json({ ok: true });
+}
 
 /* ===================== Helpers ===================== */
 async function atletaTemVinculo(atletaId: string) {
@@ -155,6 +254,87 @@ export async function treinosDisponiveis(_req: AuthenticatedRequest, res: Respon
   }
 }
 
+export async function salvarTreinoNaBiblioteca(req: AuthenticatedRequest, res: Response) {
+  try {
+    const user = req.user as any;
+    const usuarioId = req.userId!;
+    const { treinoProgramadoId } = req.body as { treinoProgramadoId?: string };
+
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado." });
+    }
+
+    if (!treinoProgramadoId) {
+      return res.status(400).json({ message: "treinoProgramadoId é obrigatório." });
+    }
+
+    // id do atleta vinculado ao usuário (conceito de “Biblioteca do Atleta”)
+    const atletaId = user?.tipoUsuarioId as string | undefined;
+    const plano = user?.plano ?? "FREE";
+
+    if (!atletaId) {
+      return res.status(400).json({ message: "atletaId não encontrado para o usuário logado." });
+    }
+
+    // garante que o treino existe (e pega dados pra montar titulo/conteudo)
+    const treinoProgramado = await prisma.treinoProgramado.findUnique({
+      where: { id: treinoProgramadoId },
+      select: { nome: true, descricao: true },
+    });
+
+    if (!treinoProgramado) {
+      return res.status(404).json({ message: "Treino programado não encontrado." });
+    }
+
+    // 🔒 limite de treinos salvos no plano Free
+    await enforceFeatureLimit({
+      prisma,
+      feature: "TREINO_SALVO",
+      atletaId,
+      usuarioId,
+      plano,
+    });
+
+    // Evitar duplicar o mesmo treino salvo para o mesmo usuário
+    const existente = await prisma.treinoSalvo.findFirst({
+      where: { usuarioId, treinoProgramadoId },
+    });
+
+    if (existente) {
+      return res.status(409).json({ message: "Esse treino já está na sua biblioteca." });
+    }
+
+    // 🔴 AQUI: preencher todos os campos obrigatórios do modelo TreinoSalvo
+    const salvo = await prisma.treinoSalvo.create({
+      data: {
+        usuarioId,
+        treinoProgramadoId,
+        titulo: treinoProgramado.nome ?? "Treino salvo",
+        conteudo: treinoProgramado.descricao ?? "Treino salvo na sua biblioteca.",
+        // se o teu modelo tiver mais campos obrigatórios, coloca valores padrão aqui
+        // exemplo:
+        // tipoMidia: "Documento",
+        // imagemUrl: null,
+        // videoUrl: null,
+      },
+    });
+
+    return res.status(201).json(salvo);
+  } catch (err: any) {
+    if (err?.code === "LIMIT_REACHED") {
+      return res.status(err.status || 403).json({
+        code: err.code,
+        feature: err.feature,
+        limit: err.limit,
+        message: err.message,
+      });
+    }
+
+    console.error("salvarTreinoNaBiblioteca", err);
+    return res.status(500).json({ message: "Erro ao salvar treino na biblioteca." });
+  }
+}
+
 export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, res: Response) {
   try {
     const { professorId, clubeId, escolinhaId } = (req.query ?? {}) as Record<
@@ -257,11 +437,14 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
     } = req.body;
 
     const treinoProgramadoId = String(treinoProgramadoIdRaw ?? programadoId ?? "").trim();
-    if (!treinoProgramadoId) return res.status(400).json({ message: "treinoProgramadoId inválido" });
+    if (!treinoProgramadoId) {
+      return res.status(400).json({ message: "treinoProgramadoId inválido" });
+    }
 
     const atletaRef = String(atletaIdBody ?? tipoUsuarioId ?? "").trim();
-    if (!atletaRef || !dataTreino)
+    if (!atletaRef || !dataTreino) {
       return res.status(400).json({ message: "Dados incompletos." });
+    }
 
     const atleta = await prisma.atleta.findFirst({
       where: { OR: [{ id: atletaRef }, { usuarioId: atletaRef }] },
@@ -341,6 +524,15 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
           where: { id: existente.id },
           data: { titulo: tituloFinal, dataTreino: quandoBase, dataExpiracao: exp },
         });
+
+        await audit(req, {
+          acao: "ALTERAR_AGENDA",
+          entidade: "TreinoAgendado",
+          entidadeId: atualizado.id,
+          descricao: "Agendamento remarcado",
+          meta: { atletaId, dataTreino: atualizado.dataTreino, status: "Agendado" },
+        });
+
         return res.status(200).json(atualizado);
       }
     }
@@ -356,6 +548,15 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
           criadoPorProfessorId: req.user?.tipo === "Professor" ? req.user.tipoUsuarioId : null,
         },
       });
+
+      await audit(req, {
+        acao: "ALTERAR_AGENDA",
+        entidade: "TreinoAgendado",
+        entidadeId: criado.id,
+        descricao: "Agendamento criado",
+        meta: { atletaId, dataTreino: criado.dataTreino, status: "Agendado" },
+      });
+
       return res.status(201).json(criado);
     } catch (e: any) {
       if (e.code === "P2002") {
@@ -375,6 +576,15 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
             criadoPorProfessorId: req.user?.tipo === "Professor" ? req.user.tipoUsuarioId : null,
           },
         });
+
+        await audit(req, {
+          acao: "ALTERAR_AGENDA",
+          entidade: "TreinoAgendado",
+          entidadeId: criado2.id,
+          descricao: "Agendamento criado (ajustado)",
+          meta: { atletaId, dataTreino: criado2.dataTreino, status: "Agendado" },
+        });
+
         return res.status(201).json(criado2);
       }
       throw e;
@@ -386,18 +596,31 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
 }
 
 export const excluirTreinoAgendado = async (req: AuthenticatedRequest, res: Response) => {
-  const { id } = req.params;
   try {
+    const { id } = req.params;
+
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id },
       include: { atleta: { select: { usuarioId: true } } },
     });
+
     if (!ag) return res.status(200).json({ message: "Já não existe." });
+
     if (ag.atleta?.usuarioId !== req.userId) {
       return res.status(403).json({ error: "Sem permissão para excluir este treino." });
     }
+
     await prisma.treinoAgendado.delete({ where: { id } });
-    res.status(200).json({ message: "Treino agendado deletado." });
+
+    await audit(req, {
+      acao: "ALTERAR_AGENDA",
+      entidade: "TreinoAgendado",
+      entidadeId: id,
+      descricao: "Agendamento cancelado",
+      meta: { atletaId: ag.atletaId, dataTreino: ag.dataTreino, status: "Cancelado" },
+    });
+
+    return res.status(200).json({ message: "Treino agendado deletado." });
   } catch (error) {
     console.error("Erro ao deletar treino agendado:", error);
     res.status(500).json({ error: "Erro ao excluir treino agendado." });
@@ -478,7 +701,10 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
     }
 
     const rows = await prisma.treinoAgendado.findMany({
-      where: { ...where, OR: [{ dataExpiracao: null }, { dataExpiracao: { gte: new Date() } }] },
+      where: {
+        ...where,
+        OR: [{ dataExpiracao: null }, { dataExpiracao: { gte: new Date() } }],
+      },
       include: {
         treinoProgramado: {
           include: {
@@ -668,6 +894,11 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
       repeticoes: Number.isFinite(Number(repeticoes)) ? Number(repeticoes) : undefined,
       observacao: obs ?? undefined,
     };
+  
+    if (req.user?.plano !== "PRO") {
+      const ok = await requireUsage(req, res, "treinos_semana");
+      if (!ok) return;
+    }
 
     const submissao = existenteSub
       ? await prisma.submissaoTreino.update({ where: { id: existenteSub.id }, data: dataCommon })
@@ -772,80 +1003,63 @@ export async function getPontuacoes(req: Request, res: Response) {
   }
 }
 
-export async function getEscalaPorElencoId(req: Request, res: Response) {
+async function getEscalaCore(elencoId: string, res: Response) {
   try {
-    const { id } = req.params;
-
-    const elenco = await prisma.elenco.findUnique({ where: { id } });
-    if (!elenco) return res.status(404).json({ error: "Elenco não encontrado" });
-
-    const vinculos = await prisma.atletaElenco.findMany({
-      where: { elencoId: id },
-      include: { atleta: { include: { usuario: true } } },
+    const elenco = await prisma.elenco.findUnique({
+      where: { id: elencoId },
+      select: {
+        id: true,
+        nome: true,
+        maxJogadores: true,
+        escala: true,
+        formacao: true,
+      },
     });
 
-    const posicoes: PosicaoCampo[] = [
-      "GOL",
-      "LD",
-      "ZD",
-      "ZE",
-      "LE",
-      "VOL1",
-      "VOL2",
-      "MEI",
-      "PD",
-      "CA",
-      "PE",
-    ];
-
-    const escala = posicoes.reduce((acc, pos) => {
-      acc[pos] = null as any;
-      return acc;
-    }, {} as Record<
-      PosicaoCampo,
-      | {
-          atletaId: string;
-          usuarioId: string;
-          nome: string;
-          foto?: string | null;
-          idade?: number | null;
-          posicao?: string | null;
-        }
-      | null
-    >);
-
-    for (const v of vinculos) {
-      const a = v.atleta;
-      const u = a?.usuario;
-      if (!u) continue;
-      escala[v.posicao] = {
-        atletaId: a.id,
-        usuarioId: u.id,
-        nome: u.nome,
-        foto: u.foto,
-        idade: a.idade ?? null,
-        posicao: a.posicao ?? null,
-      };
+    if (!elenco) {
+      return res.json(null);
     }
+
+    // escala vem como Json, convertemos para um map simples posicao -> atletaId
+    const escala =
+      (elenco.escala as Record<string, string | null> | null) ?? null;
+
+    // formação também Json, { defesa, meio, atacantes }
+    const formacao =
+      (elenco.formacao as
+        | { defesa: number; meio: number; atacantes: number }
+        | null) ?? null;
 
     return res.json({
       id: elenco.id,
       nome: elenco.nome,
       maxJogadores: elenco.maxJogadores,
-      escala,
-      atletasCount: vinculos.length,
+      escala,   // ex: { GOL: "uuidAtleta", LD: "uuidAtleta", ... }
+      formacao, // ex: { defesa: 4, meio: 2, atacantes: 3 }
     });
   } catch (err) {
     console.error("Erro ao buscar escala do elenco:", err);
-    return res.status(500).json({ error: "Erro ao buscar escala do elenco" });
+    return res
+      .status(500)
+      .json({ error: "Erro ao buscar escala do elenco" });
   }
+}
+
+export async function getEscalaPorElencoId(req: Request, res: Response) {
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ error: "id é obrigatório" });
+  return getEscalaCore(id, res);
 }
 
 export async function getEscalaPorDono(req: Request, res: Response) {
   try {
     const raw = (req.query.tipoUsuarioId ?? "") as string;
     const tipoUsuarioId = String(raw).trim();
-    if (!tipoUsuarioId) return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+    if (!tipoUsuarioId) {
+      return res
+        .status(400)
+        .json({ error: "tipoUsuarioId é obrigatório" });
+    }
 
     const elenco = await prisma.elenco.findFirst({
       where: {
@@ -861,11 +1075,13 @@ export async function getEscalaPorDono(req: Request, res: Response) {
 
     if (!elenco) return res.json(null);
 
-    req.params.id = elenco.id;
-    return getEscalaPorElencoId(req, res);
+    // usa o mesmo core para montar resposta (inclui escala + formacao)
+    return getEscalaCore(elenco.id, res);
   } catch (err) {
     console.error("Erro ao buscar escala por dono:", err);
-    return res.status(500).json({ error: "Erro ao buscar escala por dono" });
+    return res
+      .status(500)
+      .json({ error: "Erro ao buscar escala por dono" });
   }
 }
 
@@ -915,7 +1131,7 @@ export async function listarSubmissoesParaValidacao(req: AuthenticatedRequest, r
       case "pendente":
         where.OR = [
           { aprovado: { equals: null } },
-          { AND: [{ aprovado: false }, { OR: [{ pontosCreditados: null }, { pontosCreditados: 0 }] }] },
+          { AND: [{ aprovado: false }, { OR: [{ pontosCreditados: { equals: null } }, { pontosCreditados: 0 }] }] },
         ];
         break;
       case "aprovados":
@@ -1035,6 +1251,7 @@ export async function criarElenco(req: AuthenticatedRequest, res: Response) {
       atletas,
       escala,
       ativo = true,
+      turmaId,
     } = req.body as {
       nome?: string;
       maxJogadores?: number;
@@ -1043,22 +1260,39 @@ export async function criarElenco(req: AuthenticatedRequest, res: Response) {
       atletas?: { atletaId: string; posicao: PosicaoCampo }[];
       escala?: Record<PosicaoCampo, string | null>;
       ativo?: boolean;
+      turmaId?: string | null;
     };
 
     if (!nome) return res.status(400).json({ error: "nome é obrigatório" });
-    if (!tipoUsuarioId) return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+    if (!tipoUsuarioId) {
+      return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
+    }
     if (!tipoUsuario || !["professor", "escolinha", "clube"].includes(tipoUsuario)) {
       return res.status(400).json({ error: "tipoUsuario inválido" });
     }
 
-    const dataCreate: any = { nome, maxJogadores, ativo };
+    // turmaId AGORA É OPCIONAL
+    const turmaIdFinal =
+      typeof turmaId === "string" && turmaId.trim().length > 0
+        ? turmaId.trim()
+        : null;
+
+    const dataCreate: any = {
+      nome,
+      maxJogadores,
+      ativo,
+      turmaId: turmaIdFinal, // pode ser null sem problema
+    };
+
     if (tipoUsuario === "professor") dataCreate.professorId = tipoUsuarioId;
     if (tipoUsuario === "escolinha") dataCreate.escolinhaId = tipoUsuarioId;
     if (tipoUsuario === "clube") dataCreate.clubeId = tipoUsuarioId;
 
     const elenco = await prisma.elenco.create({ data: dataCreate });
 
+    // Monta vínculos a partir de atletas[] ou escala
     let vinculos: { atletaId: string; posicao: PosicaoCampo }[] = [];
+
     if (Array.isArray(atletas) && atletas.length) {
       vinculos = atletas;
     } else if (escala && typeof escala === "object") {
@@ -1088,15 +1322,36 @@ export async function criarElenco(req: AuthenticatedRequest, res: Response) {
   }
 }
 
+export async function atualizarAgendamento(req: AuthenticatedRequest, res: Response) {
+  const { id } = req.params;
+  const { dataTreino } = req.body;
+
+  const row = await prisma.treinoAgendado.update({
+    where: { id },
+    data: { dataTreino: dataTreino ? new Date(dataTreino) : null },
+  });
+
+  await audit(req, {
+    acao: 'ALTERAR_AGENDA',
+    entidade: 'TreinoAgendado',
+    entidadeId: id,
+    descricao: 'Agendamento alterado',
+    meta: { atletaId: row.atletaId, dataTreino: row.dataTreino, status: 'Agendado' },
+  });
+
+  return res.json(row);
+}
+
 export async function atualizarElenco(req: AuthenticatedRequest, res: Response) {
   try {
     const { id } = req.params;
-    const { nome, maxJogadores, ativo, atletas, escala } = req.body as {
+    const { nome, maxJogadores, ativo, atletas, escala, turmaId } = req.body as {
       nome?: string;
       maxJogadores?: number;
       ativo?: boolean;
       atletas?: { atletaId: string; posicao: PosicaoCampo }[];
       escala?: Record<PosicaoCampo, string | null>;
+      turmaId?: string | null;
     };
 
     const exists = await prisma.elenco.findUnique({ where: { id } });
@@ -1118,6 +1373,11 @@ export async function atualizarElenco(req: AuthenticatedRequest, res: Response) 
     if (typeof maxJogadores === "number") dataUpdate.maxJogadores = maxJogadores;
     if (typeof ativo === "boolean") dataUpdate.ativo = ativo;
 
+    // turmaId OPCIONAL no update também
+    if (typeof turmaId === "string") {
+      dataUpdate.turmaId = turmaId.trim().length ? turmaId.trim() : null;
+    }
+
     const elenco = await prisma.elenco.update({ where: { id }, data: dataUpdate });
 
     let vinculos: { atletaId: string; posicao: PosicaoCampo }[] = [];
@@ -1132,16 +1392,24 @@ export async function atualizarElenco(req: AuthenticatedRequest, res: Response) 
         }));
     }
 
+    // zera vínculos antigos e recria
     await prisma.atletaElenco.deleteMany({ where: { elencoId: id } });
+
     if (vinculos.length) {
       await prisma.atletaElenco.createMany({
-        data: vinculos.map((v) => ({ elencoId: id, atletaId: v.atletaId, posicao: v.posicao })),
+        data: vinculos.map((v) => ({
+          elencoId: id,
+          atletaId: v.atletaId,
+          posicao: v.posicao,
+        })),
         skipDuplicates: true,
       });
     }
 
     const setNovos = new Set(vinculos.map((v) => v.atletaId));
-    const removidos = vinculadosAtuais.map((v) => v.atletaId).filter((a) => !setNovos.has(a));
+    const removidos = vinculadosAtuais
+      .map((v) => v.atletaId)
+      .filter((a) => !setNovos.has(a));
 
     if (removidos.length) {
       await prisma.treinoAgendado.updateMany({
@@ -1167,6 +1435,7 @@ export async function atualizarElenco(req: AuthenticatedRequest, res: Response) 
     return res.status(500).json({ error: "Erro ao atualizar elenco" });
   }
 }
+
 
 export const atletasVinculados = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -1261,7 +1530,16 @@ export async function restaurarTreinos(req: Request, res: Response) {
   return res.json({ ok: true, restaurados: nomes.length });
 }
 
-export async function criarTreinoProgramado(req: Request, res: Response) {
+export async function criarTreinoProgramado(req: AuthenticatedRequest, res: Response) {
+  const user = req.user as any;
+  
+  if (!user || !can(user, "Treinos:CriarProgramado" as CanKey)) {
+    return res.status(403).json({
+      code: "FORBIDDEN",
+      message: "Seu plano não permite criar novos treinos programados.",
+    });
+  }
+
   try {
     const {
       nome,
@@ -1283,6 +1561,36 @@ export async function criarTreinoProgramado(req: Request, res: Response) {
       pontuacao,
     } = req.body as any;
 
+    if (user.tipo === "Professor" && !can(user, FEAT.TREINOS_ILIMITADOS)) {
+      const profId = String(tipoUsuarioId);
+      const ativos = await prisma.treinoProgramado.count({
+        where: { professorId: profId, NOT: [{ naoExpira: true }] },
+      });
+
+      const limAtivos = planLimitFor(user.plano ?? "FREE", "planos_ativos_total");
+      if (ativos >= limAtivos) {
+        return res.status(402).json({
+          code: "UPGRADE_REQUIRED",
+          message: "Você atingiu o limite de planos/rotinas ativos para o seu plano.",
+        });
+      }
+    }
+
+    if (user.tipo === "Professor" && !can(user, FEAT.ROTINAS_ILIMITADAS)) {
+      const profId = String(tipoUsuarioId);
+      const templates = await prisma.treinoProgramado.count({
+        where: { professorId: profId, naoExpira: true },
+      });
+
+      const limTpl = planLimitFor(user.plano ?? "FREE", "templates_total");
+      if (templates >= limTpl) {
+        return res.status(402).json({
+          code: "UPGRADE_REQUIRED",
+          message: "Você atingiu o limite de templates salvos para o seu plano.",
+        });
+      }
+    }
+    
     if (!nome || !nivel || !Array.isArray(exercicios) || !usuarioId || !tipoUsuarioId) {
       return res.status(400).json({ error: "Dados inválidos" });
     }
@@ -1445,14 +1753,24 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
 
     let categoriasNorm: Categoria[] | undefined = undefined;
     if (categoria !== undefined) {
-      try {
-        categoriasNorm = normalizeCategorias(categoria);
-      } catch {
+      const arr = Array.isArray(categoria) ? categoria : [categoria];
+      const norm = arr.map((c: any) => String(c).trim());
+      const valid = norm.filter((c: any) => (Object.values(Categoria) as string[]).includes(c));
+      if (valid.length !== norm.length) {
         return res.status(400).json({ message: "Categoria(s) inválida(s)" });
       }
+      categoriasNorm = valid as Categoria[];
     }
 
-    const tipoTreinoNorm = tipoTreino !== undefined ? normalizeTipoTreino(tipoTreino) : undefined;
+    const tipoTreinoNorm = tipoTreino !== undefined ? ((): TipoTreino | undefined => {
+      const s = String(tipoTreino).toLowerCase();
+      if (s === "fisico" || s === "físico") return "Fisico";
+      if (s === "tecnico" || s === "técnico") return "Tecnico";
+      if (s === "tatico" || s === "tático") return "Tatico";
+      if (s === "mental") return "Mental";
+      return (Object.values(TipoTreino) as string[]).includes(String(tipoTreino)) ? tipoTreino as TipoTreino : undefined;
+    })() : undefined;
+
     if (tipoTreino !== undefined && !tipoTreinoNorm) {
       return res.status(400).json({ message: "TipoTreino inválido" });
     }
@@ -1465,8 +1783,9 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
       donoUpdate.escolinha = { disconnect: true };
       if (s === "professor") donoUpdate.professor = { connect: { id: tipoUsuarioId } };
       if (s === "clube") donoUpdate.clube = { connect: { id: tipoUsuarioId } };
-      if (s === "escolinha" || s === "escola")
+      if (s === "escolinha" || s === "escola") {
         donoUpdate.escolinha = { connect: { id: tipoUsuarioId } };
+      }
     }
 
     const exs: any[] = Array.isArray(exercicios) ? exercicios : [];
@@ -1521,11 +1840,8 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
       }
 
       if (exsBanco.length) {
-        const novosOficiais = (Array.isArray(exercicios) ? exercicios : [])
-          .map((e: any) => e.exercicioId)
-          .filter((x: any) => typeof x === "string" && x);
-
-        const apenasNovos = novosOficiais.filter((eid: string) => !antigosSet.has(eid));
+        const novosOficiais = exsBanco.map((e) => e.exercicioId).filter(Boolean) as string[];
+        const apenasNovos = novosOficiais.filter((exId) => !antigosSet.has(exId));
 
         if (apenasNovos.length) {
           const professorIdForStats =
@@ -1545,6 +1861,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
         }
       }
 
+
       for (const [i, e] of exsTemp.entries()) {
         const temp = await tx.exercicioTemporario.create({
           data: {
@@ -1552,7 +1869,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
             codigo: null,
             nome: e.nome,
             descricao: e.descricao ?? null,
-            nivel: nivel,
+            nivel: nivel !== undefined ? nivel : "Base",
             categorias: categoriasNorm ?? [],
           },
         });
@@ -1565,14 +1882,24 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
             ordem: e.ordem ?? exsBanco.length + i + 1,
           },
         });
+
       }
     });
 
-    res.setHeader("X-TPR-Handler", "treinos.put.v2");
-    return res.json({ ok: true, id, updated: true });
-  } catch (error: any) {
-    console.error("ERRO PUT /treinos/:id", error);
-    return res.status(500).json({ message: "Erro ao atualizar treino.", error: error.message });
+    const updated = await prisma.treinoProgramado.findUnique({
+      where: { id },
+      include: {
+        exercicios: { include: { exercicio: true, exercicioTemporario: true } },
+        professor: { select: { nome: true } },
+        clube: { select: { nome: true } },
+        escolinha: { select: { nome: true } },
+      },
+    });
+
+    return res.json(updated);
+  } catch (err) {
+    console.error("Erro em atualizarTreinoProgramado:", err);
+    return res.status(500).json({ message: "Erro ao atualizar treino" });
   }
 }
 
@@ -1763,6 +2090,19 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
       console.warn("recomputePontuacaoAtleta falhou (não é crítico para a aprovação):", e);
     }
 
+    await audit(req, {
+      acao: 'VALIDAR_SUBMISSAO_TREINO',
+      entidade: 'SubmissaoTreino',
+      entidadeId: atualizado.id,
+      descricao: aprovado ? 'Submissão aprovada' : 'Submissão reprovada',
+      meta: {
+        atletaId: sub.atletaId,
+        treinoAgendadoId: sub.treinoAgendadoId,
+        pontos: pontosFinais,
+        aprovado,
+      },
+    });
+
     return res.json({ ok: true, aprovado, pontos: pontosFinais, id: atualizado.id });
   } catch (err) {
     console.error("Erro em validarSubmissaoTreino:", err);
@@ -1908,6 +2248,48 @@ export async function statusDesafiosSemanais(req: AuthenticatedRequest, res: Res
   }
 }
 
+export async function listarAtletasVinculados(req: Request, res: Response) {
+  try {
+    const tipoUsuarioId = String(req.query.tipoUsuarioId || "");
+    const turmaId = req.query.turmaId ? String(req.query.turmaId) : undefined;
+
+    if (!tipoUsuarioId) {
+      return res.status(400).json({ error: "tipoUsuarioId obrigatório" });
+    }
+
+    const whereBase: Prisma.AtletaWhereInput = {
+      OR: [
+        { relacoesTreinamento: { some: { professorId: tipoUsuarioId } } },
+        { clubeId: tipoUsuarioId },
+        { escolinhaId: tipoUsuarioId },
+      ],
+    };
+
+    if (turmaId) {
+      const membros = await prisma.turmaUsuario.findMany({
+        where: { turmaId },
+        select: { usuarioId: true },
+      });
+      const usuarioIds = membros.map(m => m.usuarioId);
+
+      whereBase.usuarioId = { in: usuarioIds.length ? usuarioIds : ["__none__"] };
+    }
+
+    const atletas = await prisma.atleta.findMany({
+      where: whereBase,
+      select: {
+        id: true, usuarioId: true, nome: true, foto: true, idade: true, posicao: true,
+      },
+      orderBy: { nome: "asc" },
+    });
+
+    return res.json(atletas);
+  } catch (e) {
+    console.error("[listarAtletasVinculados]", e);
+    return res.status(500).json({ error: "Erro ao listar atletas vinculados" });
+  }
+}
+
 export async function listarAgendados(req: Request, res: Response) {
   try {
     const atletaId = String(req.query.atletaId);
@@ -1956,6 +2338,13 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
       elencosIds?: string[];
       incluirObservados?: boolean;
     };
+
+     if (!can(req.user as any, FEAT.AGENDAMENTO_LOTE)) {
+      return res.status(402).json({
+        code: "UPGRADE_REQUIRED",
+        message: "Recurso disponível apenas em planos superiores (agendamento em lote).",
+      });
+    }
 
     if (!treinoProgramadoId || !Array.isArray(datas) || datas.length === 0) {
       return res.status(400).json({ message: "Informe treinoProgramadoId e ao menos uma data." });
@@ -2009,6 +2398,37 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
       return res.status(400).json({ message: "Nenhum atleta resolvido para receber a rotina." });
     }
 
+    let fairUseInfo: {
+      exceeded: boolean;
+      current: number;
+      after: number;
+      limit: number;
+    } | null = null;
+
+    if (resolved?.tipo === "escolinha" && elencosIds.length) {
+      const agora = new Date();
+      const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
+      const fimMes    = new Date(agora.getFullYear(), agora.getMonth() + 1, 1);
+
+      const agMes = await prisma.treinoAgendado.count({
+        where: {
+          atletaId: { in: atletaIdsFinal },
+          treinoProgramado: { escolinhaId: resolved.id },
+          dataTreino: { gte: inicioMes, lt: fimMes },
+        },
+      });
+
+      const novos = datas.length * atletaIdsFinal.length;
+      const totalDepois = agMes + novos;
+
+      fairUseInfo = {
+        exceeded: totalDepois > FAIR_USE_TURMA_MES,
+        current: agMes,
+        after: totalDepois,
+        limit: FAIR_USE_TURMA_MES,
+      };
+    }
+
     const payload: Prisma.TreinoAgendadoCreateManyInput[] = [];
 
     for (const d of datas) {
@@ -2044,7 +2464,13 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
       });
       criados += r.count;
     }
-    return res.status(201).json({ ok: true, atletas: atletaIdsFinal.length, datas: datas.length, criados });
+    return res.status(201).json({
+      ok: true,
+      atletas: atletaIdsFinal.length,
+      datas: datas.length,
+      criados,
+      fairUse: fairUseInfo,
+    });
   } catch (e) {
     console.error("agendarRotinaMensal", e);
     return res.status(500).json({ message: "Erro ao agendar rotina." });
@@ -2148,6 +2574,14 @@ export async function iniciarTreinoAgendado(req: AuthenticatedRequest, res: Resp
       }),
     ]);
 
+    await audit(req, {
+      acao: "ALTERAR_AGENDA",
+      entidade: "TreinoAgendado",
+      entidadeId: id,
+      descricao: "Treino agendado iniciado",
+      meta: { atletaId: updated.atletaId, dataTreino: updated.dataTreino, status: "EmAndamento" },
+    });
+
     return res.json({
       ok: true,
       treino: updated,
@@ -2246,6 +2680,14 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
         } as any,
       }),
     ]);
+
+    await audit(req, {
+      acao: "ALTERAR_AGENDA",
+      entidade: "TreinoAgendado",
+      entidadeId: id,
+      descricao: "Treino agendado finalizado",
+      meta: { atletaId: updated.atletaId, dataTreino: updated.dataTreino, status: "Concluido" },
+    });
 
     try {
       await onTreinoFeitoPorAlunoFromSubmissao(sub.id);

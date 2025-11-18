@@ -1,25 +1,24 @@
+// server/types/express.d.ts
 import "express";
-import "express-serve-static-core";
-import { TipoUsuario } from "@prisma/client";
+import type { TipoUsuario } from "@prisma/client";
 
 declare global {
   namespace Express {
+    type PlanoName = "FREE" | "PRO" | "ORG";
+
+    interface UserPayload {
+      id: string;
+      tipo: TipoUsuario | "Admin";
+      tipoUsuarioId?: string | null;
+      plano?: PlanoName | null;
+      isAdmin?: boolean;
+    }
+
+    // isto MERGEIA com o Request do express-serve-static-core
     interface Request {
       userId?: string;
-      tipoUsuarioId?: string;
-      tipoUsuario?: string;
+      user?: UserPayload;
     }
-  }
-}
-
-declare module "express-serve-static-core" {
-  interface Request {
-    user?: {
-      id?: string;
-      usuarioId?: string;
-      tipo?: TipoUsuario | string;
-      tipoUsuarioId?: string | null;
-    };
   }
 }
 

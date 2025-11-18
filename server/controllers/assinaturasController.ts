@@ -39,7 +39,7 @@ export async function updatePlano(req: Request, res: Response) {
     assertAdmin(req);
     const { usuarioId } = req.params;
     const { plano } = req.body || {};
-    if (!plano) return res.status(400).send("Informe o plano (FREE | PRO | ELITE).");
+    if (!plano) return res.status(400).send("Informe o plano (FREE | PRO | ORG).");
 
     const updated = await prisma.assinatura.upsert({
       where: { usuarioId },
