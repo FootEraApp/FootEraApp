@@ -114,21 +114,21 @@ export default function ProfilePage() {
   const assinaturaAtiva = Boolean(assinatura?.ativo);
 
   return (
-    <div className="min-h-screen bg-transparent pb-20">
-      <div className="max-w-3xl mx-auto px-4 pt-3">
+    <div className="min-h-screen bg-transparent pb-20 mt-5">
+      <div className="max-w-3xl px-4 pt-3">
         <HealthBanner />
 
         {isOwnProfile && (
           <div className="mb-3">
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl border bg-white shadow-sm">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between gap-3 p-3 rounded-xl border mt-5 bg-transparent shadow-sm">
+              <div className="flex items-center gap-3 ">
                 {assinaturaAtiva ? (
                   <BadgeCheck className="w-5 h-5 text-green-600" />
                 ) : (
                   <Crown className="w-5 h-5 text-yellow-500" />
                 )}
                 <div className="leading-tight">
-                  <div className="font-semibold">
+                  <div className="font-semibold ">
                     {loadingBilling
                       ? "Carregando assinatura..."
                       : assinaturaAtiva

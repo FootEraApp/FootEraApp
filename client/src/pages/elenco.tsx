@@ -13,8 +13,9 @@ import { API } from "../config.js";
 import { Link } from "wouter";
 import { ArrowLeft, Plus, X, ListFilter, Trash2 } from "lucide-react";
 
-const ELENCOS_BASE = `${API.BASE_URL}/api/treinos/elencos`;
+const ELENCOS_BASE = `${API.BASE_URL}/api/elencos`;
 const PONTOS_BASE  = `${API.BASE_URL}/api/treinos/pontuacoes`;
+const TURMAS_BASE  = `${API.BASE_URL}/api/turmas/minhas`;
 
 type PontuacaoDTO = {
   atletaId: string;
@@ -35,24 +36,138 @@ interface Atleta {
   posicao?: string | null;
 }
 
+/** MESMO ENUM DO PRISMA (versão string) */
 type PosicaoCampo =
-  | "GOL" | "LD" | "ZD" | "ZE" | "LE"
-  | "VOL1" | "VOL2" | "MEI"
-  | "PD" | "CA" | "PE";
+  // Goleiro
+  | "GOL"
 
+  // Linha de defesa
+  | "LD"   // Lateral Direito
+  | "LE"   // Lateral Esquerdo
+  | "ZD"   // Zagueiro Direito
+  | "ZC"   // Zagueiro Central
+  | "ZE"   // Zagueiro Esquerdo
+  | "ALA_D" // Ala Direito (RWB)
+  | "ALA_E" // Ala Esquerdo (LWB)
+
+  // Meio-campo defensivo / central
+  | "VOL1" // Volante 1 (CDM)
+  | "VOL2" // Volante 2 (CDM)
+  | "MC1"  // Meia Central 1 (CM)
+  | "MC2"  // Meia Central 2 (CM)
+
+  // Meio-campo ofensivo / meias abertos
+  | "MEI"      // Meia Ofensivo Central (CAM)
+  | "MEI_D"    // Meia Ofensivo Direita (AMR)
+  | "MEI_E"    // Meia Ofensivo Esquerda (AML)
+  | "MD"       // Meia Direita (RM)
+  | "ME"       // Meia Esquerda (LM)
+
+  // Ataque
+  | "PD"   // Ponta Direita (RW)
+  | "PE"   // Ponta Esquerda (LW)
+  | "SA"   // Segundo Atacante / centroavante recuado
+  | "CA";  // Centroavante (ST)
+
+/** Meta de labels para todas as posições */
 const POSICOES: { id: PosicaoCampo; label: string }[] = [
-  { id: "PD",   label: "Atacante (PD)" },
-  { id: "CA",   label: "Atacante (CA)" },
-  { id: "PE",   label: "Atacante (PE)" },
-  { id: "VOL1", label: "Volante" },
-  { id: "MEI",  label: "Meia" },
-  { id: "VOL2", label: "Volante" },
-  { id: "LE",   label: "Lateral Esq." },
-  { id: "ZE",   label: "Zagueiro Esq." },
-  { id: "ZD",   label: "Zagueiro Dir." },
-  { id: "LD",   label: "Lateral Dir." },
-  { id: "GOL",  label: "Goleiro" },
+  // Goleiro
+  { id: "GOL",   label: "Goleiro" },
+
+  // Defesa
+  { id: "LD",    label: "Lateral Dir." },
+  { id: "LE",    label: "Lateral Esq." },
+  { id: "ZD",    label: "Zagueiro Dir." },
+  { id: "ZC",    label: "Zagueiro Central" },
+  { id: "ZE",    label: "Zagueiro Esq." },
+  { id: "ALA_D", label: "Ala Dir." },
+  { id: "ALA_E", label: "Ala Esq." },
+
+  // Meio
+  { id: "VOL1",  label: "Volante" },
+  { id: "VOL2",  label: "Volante" },
+  { id: "MC1",   label: "Meia Central" },
+  { id: "MC2",   label: "Meia Central" },
+  { id: "MEI",   label: "Meia Ofensivo" },
+  { id: "MEI_D", label: "Meia Ofensivo Dir." },
+  { id: "MEI_E", label: "Meia Ofensivo Esq." },
+  { id: "MD",    label: "Meia Direita" },
+  { id: "ME",    label: "Meia Esquerda" },
+
+  // Ataque
+  { id: "PD",    label: "Ponta Direita" },
+  { id: "PE",    label: "Ponta Esquerda" },
+  { id: "SA",    label: "Segundo Atacante" },
+  { id: "CA",    label: "Centroavante" },
 ];
+
+// "Bases" só pra sabermos o limite máximo de slots por linha
+const DEF_BASE: PosicaoCampo[] = [
+  "LD", "ZD", "ZC", "ZE", "LE", "ALA_D", "ALA_E",
+];
+
+const MID_BASE: PosicaoCampo[] = [
+  "VOL1", "MC1", "MEI", "MC2", "VOL2", "MD", "ME", "MEI_D", "MEI_E",
+];
+
+const ATT_BASE: PosicaoCampo[] = [
+  "PD", "SA", "CA", "PE",
+];
+
+/**
+ * DEFESA – devolve a ordem de posições conforme a quantidade,
+ * sempre tentando ficar simétrico.
+ */
+function getDefPositions(qtd: number): PosicaoCampo[] {
+  switch (qtd) {
+    case 0: return [];
+    case 1: return ["ZC"]; // 1 zagueiro central
+    case 2: return ["ZD", "ZE"]; // dupla de zaga
+    case 3: return ["LD", "ZC", "LE"]; // 2 laterais + 1 zagueiro
+    case 4: return ["LD", "ZD", "ZE", "LE"]; // o que você pediu
+    case 5: return ["LD", "ZD", "ZC", "ZE", "LE"]; // 4 + 1 central
+    case 6: return ["ALA_D", "LD", "ZD", "ZE", "LE", "ALA_E"]; // alas + linha de 4
+    case 7: return ["ALA_D", "LD", "ZD", "ZC", "ZE", "LE", "ALA_E"];
+    default:
+      return DEF_BASE.slice(0, qtd);
+  }
+}
+
+/**
+ * MEIO – padrões razoavelmente simétricos também.
+ */
+function getMidPositions(qtd: number): PosicaoCampo[] {
+  switch (qtd) {
+    case 0: return [];
+    case 1: return ["MEI"]; // 10 clássico
+    case 2: return ["MC1", "MC2"]; // dupla central
+    case 3: return ["VOL1", "MEI", "VOL2"]; // 2 volantes + 10
+    case 4: return ["VOL1", "MC1", "MC2", "VOL2"];
+    case 5: return ["VOL1", "MC1", "MEI", "MC2", "VOL2"];
+    case 6: return ["MD", "VOL1", "MC1", "MC2", "VOL2", "ME"];
+    case 7: return ["MD", "VOL1", "MC1", "MEI", "MC2", "VOL2", "ME"];
+    case 8: return ["MD", "VOL1", "MC1", "MEI", "MC2", "VOL2", "ME", "MEI_D"];
+    case 9: return ["MD", "VOL1", "MC1", "MEI", "MC2", "VOL2", "ME", "MEI_D", "MEI_E"];
+    default:
+      return MID_BASE.slice(0, qtd);
+  }
+}
+
+/**
+ * ATAQUE – simples e simétrico.
+ */
+function getAttPositions(qtd: number): PosicaoCampo[] {
+  switch (qtd) {
+    case 0: return [];
+    case 1: return ["CA"]; // 1 centroavante
+    case 2: return ["PD", "PE"]; // 2 pontas
+    case 3: return ["PD", "SA", "PE"]; // 2 pontas + segundo atacante
+    case 4: return ["PD", "SA", "CA", "PE"]; // linha com 3 centrais
+    default:
+      return ATT_BASE.slice(0, qtd);
+  }
+}
+
 
 type EscalaItem = {
   atletaId: string;
@@ -138,7 +253,7 @@ const CardAtletaShield: React.FC<{
 }> = ({ atleta, ovr, perf, disc, resp, size, goldenMinOVR }) => {
   const W = size?.w ?? SHIELD_W_DESK;
   const H = size?.h ?? SHIELD_H_DESK;
-  const clipId = `shieldClip-${atleta.atletaId}`;
+  const clipId = `shieldClip-${atleta.atletaId}-${size?.w}x${size?.h}`;
   const fotoUrl = atleta.foto ? `${atleta.foto}` : "/default-avatar.png";
 
   const ovrShow  = Number.isFinite(ovr)  ? Math.round(Number(ovr))  : 0;
@@ -244,10 +359,19 @@ function normalizeAtletas(raw: any): Atleta[] {
 }
 
 const emptyPosicoes = (): Record<PosicaoCampo, Atleta | null> =>
-  POSICOES.reduce((acc, p) => { acc[p.id] = null; return acc; }, {} as Record<PosicaoCampo, Atleta | null>);
+  POSICOES.reduce((acc, p) => {
+    acc[p.id] = null;
+    return acc;
+  }, {} as Record<PosicaoCampo, Atleta | null>);
+
+type LinhaFormacao = "atacantes" | "meio" | "defesa";
 
 export default function PaginaElenco() {
   const isMobile = useIsMobile();
+
+  // turmas do dono
+  const [turmas, setTurmas] = useState<Array<{ id: string; nome: string }>>([]);
+  const [turmaId, setTurmaId] = useState<string>("");
 
   const [pontos, setPontos] = useState<Record<string, PontuacaoDTO>>({});
   const [loading, setLoading] = useState<boolean>(true);
@@ -276,6 +400,18 @@ export default function PaginaElenco() {
     () => POSICOES.map((p) => posicoesAtivas[p.id]).filter(Boolean) as Atleta[],
     [posicoesAtivas]
   );
+
+  // Formação dinâmica: defesa-meio-ataque
+  const [formacao, setFormacao] = useState<{ atacantes: number; meio: number; defesa: number }>({
+    atacantes: 3,
+    meio: 3,
+    defesa: 4,
+  });
+
+  // Sempre que mudar de elenco ativo, por enquanto resetamos para 3-3-4
+  useEffect(() => {
+    setFormacao({ atacantes: 3, meio: 3, defesa: 4 });
+  }, [activeIndex]);
 
   const fetchPontuacoes = async (ids: string[]) => {
     const token = Storage.token;
@@ -333,8 +469,29 @@ export default function PaginaElenco() {
     if ((raw as any).escala) {
       tryFillFromEscala((raw as any).escala as Record<PosicaoCampo, any>);
     } else if (Array.isArray((raw as any).atletasElenco)) {
-      const built = POSICOES.reduce((acc, p) => { acc[p.id] = null; return acc; }, {} as Record<PosicaoCampo, string | null>);
-      for (const v of (raw as any).atletasElenco) built[v.posicao] = v.atletaId ?? null;
+      const built: Record<PosicaoCampo, string | null> = POSICOES.reduce(
+        (acc, p) => {
+          acc[p.id] = null;
+          return acc;
+        },
+        {} as Record<PosicaoCampo, string | null>
+      );
+
+      const elencoArray = (raw as any).atletasElenco as {
+        atletaId?: string | null;
+        posicao?: string | null;
+      }[];
+
+      for (const v of elencoArray) {
+        const pos = v.posicao as PosicaoCampo | undefined;
+
+        // garante que a posição é válida antes de indexar
+        if (!pos) continue;
+        if (!POSICOES.some((p) => p.id === pos)) continue;
+
+        built[pos] = v.atletaId ?? null;
+      }
+
       tryFillFromEscala(built as any);
     }
 
@@ -350,6 +507,35 @@ export default function PaginaElenco() {
     };
   }
 
+  // se for atleta, redireciona
+  useEffect(() => {
+    const t = String((Storage as any).tipoSalvo || "").toLowerCase();
+    if (t === "atleta") {
+      window.location.replace("/treinos");
+    }
+  }, []);
+
+  // carregar turmas do dono
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = Storage.token;
+        const tipoUsuarioId = Storage.tipoUsuarioId;
+        if (!token || !tipoUsuarioId) return;
+        const r = await axios.get(TURMAS_BASE, {
+          params: { tipoUsuarioId },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const lista = Array.isArray(r.data?.items) ? r.data.items : [];
+        setTurmas(lista);
+        if (!turmaId && lista.length) setTurmaId(lista[0].id);
+      } catch (e) {
+        console.error("Erro ao listar turmas:", e);
+      }
+    })();
+  }, [turmaId]);
+
+  // carregar elenco/atletas
   useEffect(() => {
     (async () => {
       try {
@@ -432,16 +618,13 @@ export default function PaginaElenco() {
   const fieldBox = useSize<HTMLDivElement>();
 
   // layout estável (scale baseado só na largura)
-  const gapY = isMobile ? 12 : 20;
-  const gapX = isMobile ? 8 : 12;
-
   const BASE_W = isMobile ? SHIELD_W_MOB : SHIELD_W_DESK;
   const BASE_H = isMobile ? SHIELD_H_MOB : SHIELD_H_DESK;
   const BASE_SLOT_EXTRA = isMobile ? 40 : 64;
 
   const baseSlotW = BASE_W + 12;
   const maxCols = 4;
-  const needW = maxCols * baseSlotW + (maxCols - 1) * gapX;
+  const needW = maxCols * baseSlotW + (maxCols - 1) * 8;
 
   const availW = Math.max(0, fieldBox.size.w - 8);
   const minScale = isMobile ? 0.48 : 0.6;
@@ -510,10 +693,13 @@ export default function PaginaElenco() {
       setElencos(prev => {
         const arr = [...prev];
         const e = { ...arr[activeIndex] };
+
+        // não deixa passar do maxJogadores do elenco
         if (ocupados >= e.maxJogadores && !e.posicoes[posId]) {
           alert(`O elenco já tem ${e.maxJogadores} jogadores.`);
           return prev;
         }
+
         const livres = Array.from(e.livres);
         const [atleta] = livres.splice(source.index, 1);
 
@@ -570,52 +756,57 @@ export default function PaginaElenco() {
     }
   };
 
-  const salvarElencoAtivo = async () => {
-    const token = Storage.token;
-    const tipoUsuarioId = Storage.tipoUsuarioId;
-    const tipoUsuario = (Storage.tipoSalvo || "").toLowerCase() as "professor" | "escolinha" | "clube";
-    const e = ativo;
-    if (!e) return;
+const salvarElencoAtivo = async () => {
+  const token = Storage.token;
+  const tipoUsuarioId = Storage.tipoUsuarioId;
+  const tipoUsuario = (Storage.tipoSalvo || "").toLowerCase() as "professor" | "escolinha" | "clube";
+  const e = ativo;
+  if (!e) return;
 
-    if (!token) { alert("Você não está autenticado. Faça login novamente."); return; }
-    if (!tipoUsuarioId || !tipoUsuario) { alert("Não foi possível identificar seu tipo de usuário."); return; }
+  if (!token) { alert("Você não está autenticado. Faça login novamente."); return; }
+  if (!tipoUsuarioId || !tipoUsuario) { alert("Não foi possível identificar seu tipo de usuário."); return; }
 
-    const escala: Record<PosicaoCampo, string | null> = POSICOES.reduce((acc, p) => {
-      acc[p.id] = e.posicoes[p.id]?.atletaId ?? null;
-      return acc;
-    }, {} as Record<PosicaoCampo, string | null>);
+  const escala: Record<PosicaoCampo, string | null> = POSICOES.reduce((acc, p) => {
+    acc[p.id] = e.posicoes[p.id]?.atletaId ?? null;
+    return acc;
+  }, {} as Record<PosicaoCampo, string | null>);
 
-    const payload = {
-      nome: e.nome,
-      professorId: Storage.tipoSalvo === "Professor" ? tipoUsuarioId : undefined,
-      clubeId:     Storage.tipoSalvo === "Clube"     ? tipoUsuarioId : undefined,
-      escolinhaId: Storage.tipoSalvo === "Escolinha" ? tipoUsuarioId : undefined,
-      atletasIds: (POSICOES.map((p) => e.posicoes[p.id]).filter(Boolean) as Atleta[]).map(a => a.atletaId),
-      maxJogadores: e.maxJogadores,
-      escala,
-      tipoUsuario,
-      tipoUsuarioId,
-    };
+  const formacaoStr = `${formacao.defesa}-${formacao.meio}-${formacao.atacantes}`;
 
-    try {
-      if (e.id) {
-        await axios.put(`${ELENCOS_BASE}/${e.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
-        alert("Elenco atualizado com sucesso!");
-      } else {
-        const res = await axios.post(ELENCOS_BASE, payload, { headers: { Authorization: `Bearer ${token}` } });
-        const newId = res.data?.id ?? null;
-        setElencos(prev => {
-          const arr = [...prev];
-          arr[activeIndex] = { ...arr[activeIndex], id: newId };
-          return arr;
-        });
-        alert("Elenco criado com sucesso!");
-      }
-    } catch (err) {
-      console.error("Erro ao salvar elenco:", err);
-      alert("Erro ao salvar elenco.");
-    }
+  const payload = {
+    nome: e.nome,
+    professorId: Storage.tipoSalvo === "Professor" ? tipoUsuarioId : undefined,
+    clubeId:     Storage.tipoSalvo === "Clube"     ? tipoUsuarioId : undefined,
+    escolinhaId: Storage.tipoSalvo === "Escolinha" ? tipoUsuarioId : undefined,
+    atletasIds: (POSICOES.map((p) => e.posicoes[p.id]).filter(Boolean) as Atleta[]).map(a => a.atletaId),
+    maxJogadores: e.maxJogadores,
+    escala,
+    tipoUsuario,
+    tipoUsuarioId,
+    turmaId: turmaId || undefined,
+    formacao: formacaoStr,
   };
+
+  try {
+    if (e.id) {
+      await axios.put(`${ELENCOS_BASE}/${e.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
+      alert("Elenco atualizado com sucesso!");
+    } else {
+      const res = await axios.post(ELENCOS_BASE, payload, { headers: { Authorization: `Bearer ${token}` } });
+      const newId = res.data?.id ?? null;
+      setElencos(prev => {
+        const arr = [...prev];
+        arr[activeIndex] = { ...arr[activeIndex], id: newId };
+        return arr;
+      });
+      alert("Elenco criado com sucesso!");
+    }
+  } catch (err) {
+    console.error("Erro ao salvar elenco:", err);
+    alert("Erro ao salvar elenco.");
+  }
+};
+
 
   const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) => {
     const a = posicoesAtivas[pos];
@@ -632,7 +823,8 @@ export default function PaginaElenco() {
             ref={provided.innerRef}
             {...provided.droppableProps}
             className={`rounded-xl border-2 border-dashed overflow-hidden flex flex-col items-center justify-between p-1
-              ${snapshot.isDraggingOver ? "bg-green-300/70" : "bg-green-100/70"}`}
+              transition-all duration-200
+              ${snapshot.isDraggingOver ? "bg-green-300/70 scale-[1.02]" : "bg-green-100/70"}`}
             style={{ width: SHIELD_W + 12, height: SHIELD_H + SLOT_EXTRA_H, flex: "0 0 auto" }}
           >
             <span className="text-[10px] sm:text-xs font-semibold opacity-80">{label}</span>
@@ -644,7 +836,9 @@ export default function PaginaElenco() {
                     ref={provided2.innerRef}
                     {...provided2.draggableProps}
                     {...provided2.dragHandleProps}
-                    className={`${snapshot2.isDragging ? "shadow-2xl scale-105 z-50" : ""} will-change-transform`}
+                    className={`transition-transform duration-200 ${
+                      snapshot2.isDragging ? "shadow-2xl scale-105 z-50" : ""
+                    } will-change-transform`}
                   >
                     <CardAtletaShield
                       atleta={a}
@@ -766,6 +960,68 @@ export default function PaginaElenco() {
 
   const direction: DroppableProps["direction"] = isMobile ? "horizontal" : "vertical";
 
+const maxSlotsPorLinha: Record<LinhaFormacao, number> = {
+  atacantes: ATT_BASE.length,
+  meio: MID_BASE.length,
+  defesa: DEF_BASE.length,
+};
+
+const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
+  if (!ativo) return;
+
+  if (delta === 1) {
+    // AUMENTAR
+    setFormacao((prev) => {
+      const totalOutfield = prev.atacantes + prev.meio + prev.defesa;
+      const limitOutfield = Math.min(10, (ativo.maxJogadores ?? 11) - 1); // 10 de linha + goleiro
+
+      if (totalOutfield >= limitOutfield) {
+        alert("A formação não pode ter mais de 11 jogadores no total.");
+        return prev;
+      }
+
+      const atual = prev[linha];
+      if (atual >= maxSlotsPorLinha[linha]) return prev;
+
+      return { ...prev, [linha]: atual + 1 };
+    });
+  } else {
+    // DIMINUIR
+    setFormacao((prev) => {
+      const atual = prev[linha];
+      if (atual <= 0) return prev;
+
+      // posições visíveis atualmente nessa linha
+      const linhaPositions =
+        linha === "defesa"
+          ? getDefPositions(atual)
+          : linha === "meio"
+          ? getMidPositions(atual)
+          : getAttPositions(atual);
+
+      const posToClear = linhaPositions[linhaPositions.length - 1];
+
+      // limpa o último slot visível e devolve o jogador pra lista de livres
+      setElencos((prevElencos) => {
+        const arr = [...prevElencos];
+        const e = { ...arr[activeIndex] };
+        const jogador = e.posicoes[posToClear];
+
+        if (jogador) {
+          e.livres = [...e.livres, jogador];
+        }
+
+        e.posicoes = { ...e.posicoes, [posToClear]: null };
+        arr[activeIndex] = e;
+        return arr;
+      });
+
+      return { ...prev, [linha]: atual - 1 };
+    });
+  }
+};
+
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-green-100">
@@ -790,8 +1046,24 @@ export default function PaginaElenco() {
             <ArrowLeft className="h-5 w-5" />
           </Link>
 
-          {/* Botão único que abre o seletor de elencos */}
-          <div className="flex-1 flex items-center justify-center px-3">
+          {/* Botão que abre o seletor de elencos */}
+          <div className="flex-1 flex items-center justify-center px-3 gap-2">
+            {/* select de turma (se tiver) */}
+            {turmas.length > 0 && (
+              <select
+                value={turmaId}
+                onChange={(e) => setTurmaId(e.target.value)}
+                className="border rounded-full px-3 py-1 text-xs sm:text-sm bg-white"
+                title="Turma"
+              >
+                {turmas.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.nome}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <button
               onClick={() => setPickerOpen(true)}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-full border text-sm bg-white text-green-900 border-green-300 hover:bg-green-50"
@@ -802,7 +1074,7 @@ export default function PaginaElenco() {
             </button>
           </div>
 
-          {/* espaço à direita (vazio, exclusão agora é no modal) */}
+          {/* espaço à direita */}
           <div className="w-10" />
         </div>
 
@@ -843,6 +1115,12 @@ export default function PaginaElenco() {
                 className="w-20 border rounded px-2 py-2 bg-white"
               />
             </div>
+
+            {/* Texto da formação atual */}
+            <span className="text-sm font-semibold text-green-900">
+              Formação: {formacao.defesa}-{formacao.meio}-{formacao.atacantes}
+            </span>
+
             <button
               onClick={salvarElencoAtivo}
               className="ml-auto md:ml-0 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 active:scale-[0.99]"
@@ -867,29 +1145,94 @@ export default function PaginaElenco() {
             <div
               ref={fieldBox.ref}
               className="w-full flex-1 min-h-[360px] rounded-2xl p-3 md:p-5 bg-gradient-to-b from-green-300 to-green-600 shadow-inner
-                         flex flex-col gap-2 md:gap-4 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+120px)] md:pb-0"
+                         flex flex-col gap-3 md:gap-5 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+120px)] md:pb-0 transition-all"
             >
-              <div className="grid grid-cols-3 gap-2 md:gap-4 place-items-center">
-                <Slot pos="PD" label="Atacante (PD)" />
-                <Slot pos="CA" label="Atacante (CA)" />
-                <Slot pos="PE" label="Atacante (PE)" />
+              {/* ATAQUE */}
+              <div className="flex items-center gap-2 md:gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleChangeLinha("atacantes", -1)}
+                  className="h-9 w-9 rounded-full bg-white/80 text-green-900 text-xl font-bold flex items-center justify-center shadow-sm active:scale-95"
+                  title="Diminuir atacantes"
+                >
+                  -
+                </button>
+
+<div className="flex-1 flex flex-wrap justify-center gap-2 md:gap-4 transition-all duration-200">
+  {getAttPositions(formacao.atacantes).map((pos) => {
+    const meta = POSICOES.find((p) => p.id === pos)!;
+    return <Slot key={pos} pos={pos} label={meta.label} />;
+  })}
+</div>
+
+                <button
+                  type="button"
+                  onClick={() => handleChangeLinha("atacantes", 1)}
+                  className="h-9 w-9 rounded-full bg-white/80 text-green-900 text-xl font-bold flex items-center justify-center shadow-sm active:scale-95"
+                  title="Aumentar atacantes"
+                >
+                  +
+                </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 md:gap-4 place-items-center">
-                <Slot pos="VOL1" label="Volante" />
-                <Slot pos="MEI"  label="Meia" />
-                <Slot pos="VOL2" label="Volante" />
+              {/* MEIO-CAMPO */}
+              <div className="flex items-center gap-2 md:gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleChangeLinha("meio", -1)}
+                  className="h-9 w-9 rounded-full bg-white/80 text-green-900 text-xl font-bold flex items-center justify-center shadow-sm active:scale-95"
+                  title="Diminuir meio-campo"
+                >
+                  -
+                </button>
+
+<div className="flex-1 flex flex-wrap justify-center gap-2 md:gap-4 transition-all duration-200">
+  {getMidPositions(formacao.meio).map((pos) => {
+    const meta = POSICOES.find((p) => p.id === pos)!;
+    return <Slot key={pos} pos={pos} label={meta.label} />;
+  })}
+</div>
+
+
+                <button
+                  type="button"
+                  onClick={() => handleChangeLinha("meio", 1)}
+                  className="h-9 w-9 rounded-full bg-white/80 text-green-900 text-xl font-bold flex items-center justify-center shadow-sm active:scale-95"
+                  title="Aumentar meio-campo"
+                >
+                  +
+                </button>
               </div>
 
-              <div className="grid grid-cols-4 gap-2 md:gap-3 place-items-center">
-                <Slot pos="LE" label="Lateral Esq." />
-                <Slot pos="ZE" label="Zagueiro Esq." />
-                <Slot pos="ZD" label="Zagueiro Dir." />
-                <Slot pos="LD" label="Lateral Dir." />
+              {/* DEFESA */}
+              <div className="flex items-center gap-2 md:gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleChangeLinha("defesa", -1)}
+                  className="h-9 w-9 rounded-full bg-white/80 text-green-900 text-xl font-bold flex items-center justify-center shadow-sm active:scale-95"
+                  title="Diminuir defesa"
+                >
+                  -
+                </button>
+<div className="flex-1 flex flex-wrap justify-center gap-2 md:gap-3 transition-all duration-200">
+  {getDefPositions(formacao.defesa).map((pos) => {
+    const meta = POSICOES.find((p) => p.id === pos)!;
+    return <Slot key={pos} pos={pos} label={meta.label} />;
+  })}
+</div>
+                <button
+                  type="button"
+                  onClick={() => handleChangeLinha("defesa", 1)}
+                  className="h-9 w-9 rounded-full bg-white/80 text-green-900 text-xl font-bold flex items-center justify-center shadow-sm active:scale-95"
+                  title="Aumentar defesa"
+                >
+                  +
+                </button>
               </div>
 
+              {/* GOLEIRO (fixo) */}
               <div className="grid grid-cols-1 place-items-center">
-                <Slot pos="GOL" label="Goleiro" />
+                <Slot pos="GOL" label={POSICOES.find(p => p.id === "GOL")?.label ?? "Goleiro"} />
               </div>
             </div>
           </div>

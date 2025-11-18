@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient, Prisma, MetodoPagamento, Periodicidade, TipoCupom } from "@prisma/client";
+import { PrismaClient, Prisma, MetodoPagamento, Periodicidade } from "@prisma/client";
 import QRCode from "qrcode";
 
 const prisma = new PrismaClient();
@@ -43,26 +43,27 @@ const PLANS = [
     id: "ATLETA_PRO",
     title: "Atleta Pro",
     monthly: 19.90,
-    annual: 199.00,
+    annual: 199.00, // conforme seção 6 do texto
     benefits: [
-      "Sem anúncios no feed",
-      "Sem limite de treinos físicos",
-      "Desafios premium e estatísticas detalhadas",
-      "Histórico completo com exportação",
-      "Badge Pro no perfil",
+      "Sem anúncios no app",
+      "Registros de treino ilimitados (fair-use)",
+      "Desafios ilimitados",
+      "Biblioteca de treinos pessoal ilimitada (fair-use)",
+      "Agendamento pessoal de treinos",
+      "Analytics pessoal com retenção de 12 meses",
+      "Social aberto: posts/DMs ilimitados • vídeos ≤ 60s"
     ],
   },
   {
     id: "OLHEIRO_PRO",
     title: "Olheiro Pro",
-    monthly: 29.90,
-    annual: 299.00,
+    monthly: 39.90,
+    annual: 399.00, // ajustado para 399/ano
     benefits: [
-      "Sem anúncios no feed",
-      "Listas privadas de observação ilimitadas",
-      "Filtros avançados e relatórios por atleta",
-      "Favoritos ilimitados e contatos diretos",
-      "Badge Pro e suporte prioritário",
+      "Sem anúncios",
+      "Filtros avançados e ver até 200 perfis/dia",
+      "Listas ilimitadas e notas privadas",
+      "Contato mediado com prioridade"
     ],
   },
   {
@@ -71,25 +72,27 @@ const PLANS = [
     monthly: 39.90,
     annual: 399.00,
     benefits: [
-      "Sem anúncios no feed",
-      "Sem limite de treinos pela escolinha",
-      "Rotinas de treino (mensal/semana) e reuso de treinos",
-      "Até 100 Treinos Salvos e analytics de turma",
-      "Mensagens e convites ilimitados",
-      "Exportação (CSV) e suporte prioritário",
+      "Sem anúncios",
+      "Workspace pessoal (fora da organização)",
+      "Planos/rotinas ativas até 1.000",
+      "Templates salvos até 500",
+      "Agendamentos em lote (séries/semestres)"
     ],
   },
   {
     id: "ESCOLINHA_PRO",
-    title: "Escolinha Pro",
-    monthly: 49.90,
-    annual: 499.00,
+    title: "Escolinha (organização)",
+    monthly: 199.00,     // PREÇO ÚNICO MENSAL
+    annual: 0,           // não oferecemos anual; ver regra no priceFor()
     benefits: [
-      "Sem anúncios no feed",
-      "Turmas, treinos e relatórios ilimitados",
-      "Branding (logo) nas páginas de turmas",
-      "Destaque em eventos/peneiras",
-      "Exportações e integrações (CSV), suporte prioritário",
+      "Sem anúncios no contexto da organização",
+      "Painel por times/turmas; importação de atletas",
+      "Comunicação (chat em massa) e presença",
+      "Biblioteca de treinos da organização",
+      "Agendamento por turma/time e por atleta",
+      "Relatórios/analytics com retenção de 12 meses",
+      "Capacidades de referência: 600 atletas, 30 coaches, 30 turmas",
+      "Página pública e vitrine da escolinha"
     ],
   },
 ] as const;
@@ -134,7 +137,13 @@ function findPlan(planoId: string) {
 function priceFor(planoId: string, period: Periodicidade): number {
   const p = findPlan(planoId);
   if (!p) throw new Error("Plano inválido");
-  return period === "Mensal" ? p.monthly : p.annual;
+
+  // Escolinha não tem anual
+  if (planoId === "ESCOLINHA_PRO" && period === "Anual") {
+    throw new Error("ESCOLINHA_PRO é apenas mensal");
+  }
+
+  return period === "Mensal" ? p.monthly : p.annual!;
 }
 
 async function computeCouponDiscount(codigo: string, usuarioId: string, planoId: string, periodicidade: Periodicidade) {
@@ -165,11 +174,25 @@ async function computeCouponDiscount(codigo: string, usuarioId: string, planoId:
 export async function applyCoupon(req: Request, res: Response) {
   try {
     const usuarioId = getUserId(req);
-    const { codigo, planoId, periodicidade } = req.body as { codigo: string, planoId: string, periodicidade: Periodicidade };
+    const { codigo, planoId, periodicidade } = req.body as {
+      codigo: string; planoId: string; periodicidade: Periodicidade
+    };
+
     const pl = findPlan(planoId);
     if (!pl) return res.status(400).json({ message: "Plano inválido" });
 
+    // 1) valide periodicidade primeiro
+    if (!["Mensal", "Anual"].includes(periodicidade as any)) {
+      return res.status(400).json({ message: "Periodicidade inválida" });
+    }
+
+    // 2) bloqueie anual da escolinha antes de chamar priceFor
+    if (planoId === "ESCOLINHA_PRO" && periodicidade === "Anual") {
+      return res.status(400).json({ message: "ESCOLINHA_PRO é apenas mensal" });
+    }
+
     const base = priceFor(planoId, periodicidade);
+
     const check = await computeCouponDiscount(codigo, usuarioId, planoId, periodicidade);
     if (!check.ok || !check.cupom) {
       return res.status(400).json({ message: check.reason || "Cupom inválido" });
@@ -179,7 +202,7 @@ export async function applyCoupon(req: Request, res: Response) {
     let desconto = 0;
     if (c.tipo === "PERCENTUAL" && typeof c.descontoPerc === "number") {
       desconto = Math.max(0, Math.min(100, c.descontoPerc)) * base / 100;
-    } else if (c.tipo === "VALOR" && c.descontoFixo) {
+    } else if (c.tipo === "VALOR" && c.descontoFixo != null) {
       desconto = Number(c.descontoFixo);
     } else if (c.tipo === "PRESENTE") {
       desconto = base;
@@ -187,14 +210,14 @@ export async function applyCoupon(req: Request, res: Response) {
 
     const total = Math.max(0, base - desconto);
 
-    res.json({
+    return res.json({
       planoId, periodicidade, base,
       desconto: Number(desconto.toFixed(2)),
       total: Number(total.toFixed(2)),
       cupom: { codigo: c.codigo, tipo: c.tipo }
     });
   } catch (err) {
-    res.status(500).json({ message: "Erro ao validar cupom", err });
+    return res.status(500).json({ message: "Erro ao validar cupom", err });
   }
 }
 
@@ -207,6 +230,10 @@ export async function startCheckout(req: Request, res: Response) {
     if (!METODOS_VALIDOS.includes(metodo)) {
       return res.status(400).json({ message: "Método de pagamento inválido" });
     }
+    if (planoId === "ESCOLINHA_PRO" && periodicidade === "Anual") {
+      return res.status(400).json({ message: "ESCOLINHA_PRO é apenas mensal" });
+    }
+
     if (!["Mensal", "Anual"].includes(periodicidade)) {
       return res.status(400).json({ message: "Periodicidade inválida" });
     }
@@ -227,7 +254,7 @@ export async function startCheckout(req: Request, res: Response) {
     if (metodo === "CREDITO" || metodo === "DEBITO") {
       const num = onlyDigits(cartao?.numero || "");
       const cvv = onlyDigits(cartao?.cvv || "");
-      const validadeOk = /^[0-1]\d\/\d{2}$/.test(cartao?.validade || "");
+      const validadeOk = /^(0[1-9]|1[0-2])\/\d{2}$/.test(cartao?.validade || "");
       if (!cartao?.nomeImpresso || num.length < 13 || !luhnOk(num) || !validadeOk || !(cvv.length === 3 || cvv.length === 4)) {
         return res.status(400).json({ message: "Dados de cartão inválidos" });
       }
@@ -246,7 +273,7 @@ export async function startCheckout(req: Request, res: Response) {
       cupomRow = check.cupom;
       if (cupomRow.tipo === "PERCENTUAL" && typeof cupomRow.descontoPerc === "number") {
         desconto = Math.max(0, Math.min(100, cupomRow.descontoPerc)) * base / 100;
-      } else if (cupomRow.tipo === "VALOR" && cupomRow.descontoFixo) {
+      } else if (cupomRow.tipo === "VALOR" && cupomRow.descontoFixo != null) {
         desconto = Number(cupomRow.descontoFixo);
       } else if (cupomRow.tipo === "PRESENTE") {
         desconto = base;
@@ -368,6 +395,10 @@ export async function redeemGift(req: Request, res: Response) {
     if (cupom.periodicidade && cupom.periodicidade !== periodicidade) return res.status(400).json({ message: "Presente não válido para esta periodicidade" });
     if (cupom.concedidoParaUsuarioId && cupom.concedidoParaUsuarioId !== usuarioId && !cupom.transferivel) {
       return res.status(400).json({ message: "Este presente não é para este usuário" });
+    }
+
+    if (planoId === "ESCOLINHA_PRO" && periodicidade === "Anual") {
+      return res.status(400).json({ message: "ESCOLINHA_PRO é apenas mensal" });
     }
 
     const pagamento = await prisma.pagamento.create({

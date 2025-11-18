@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { PrismaClient, Categoria, Nivel, TipoTreino } from "@prisma/client";
 import { onExercicioIncluidoNoTreino } from "../services/statsService.js";
+import { enforceTotalLimit } from '../services/usage.js';
+import { audit } from "../services/audit.js";
 
 const prisma = new PrismaClient();
 
@@ -44,6 +46,25 @@ function normCategoria(v?: string): Categoria {
 }
 
 export const createTreinoProgramado = async (req: Request, res: Response) => {
+  const isTemplate = !!req.body?.naoExpira === true;
+
+  if (isTemplate) {
+    await enforceTotalLimit(req, res, 'templates_total', async () =>
+      prisma.treinoProgramado.count({
+        where: { professorId: req.body.professorId, naoExpira: true }
+      })
+    );
+  } else {
+    await enforceTotalLimit(req, res, 'planos_ativos_total', async () =>
+      prisma.treinoProgramado.count({
+        where: {
+          professorId: req.body.professorId,
+          OR: [{ expiraEm: null }, { expiraEm: { gt: new Date() } }],
+          NOT: { naoExpira: true } // não é template
+        }
+      })
+    );
+  }
   try {
     const {
       nome,
@@ -135,7 +156,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         expiraEm: expiraEm ? new Date(expiraEm) : null,
         naoExpira: Boolean(naoExpira),
         ...(dono === "Professor" ? { professor: { connect: { id: tipoUsuarioId } } } : {}),
-        ...(dono === "Clube"     ? { clube:     { connect: { id: tipoUsuarioId } } } : {}),
+        ...(dono === "Clube" ? { clube: { connect: { id: tipoUsuarioId } } } : {}),
         ...(dono === "Escolinha" ? { escolinha: { connect: { id: tipoUsuarioId } } } : {}),
         exercicios: { create: itens },
       },
@@ -147,9 +168,44 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       },
     });
 
-    try {
+    // ---------------- AGENDAMENTO -------------------
+
+    let agendadosCriados = 0;
+
       const professorIdForStats =
-        normalizarTipoUsuario(tipoUsuario) === "Professor" ? String(tipoUsuarioId) : undefined;
+        normalizarTipoUsuario(tipoUsuario) === "Professor"
+          ? String(tipoUsuarioId)
+          : undefined;
+
+      const r = await prisma.treinoAgendado.createMany({
+        data: [],
+        skipDuplicates: true,
+      });
+
+      agendadosCriados = r.count ?? 0;
+
+      if (agendadosCriados > 0) {
+        await audit(req, {
+          acao: "ALTERAR_AGENDA",
+          entidade: "TreinoAgendado",
+          entidadeId: undefined,
+          descricao: `Agendamento em lote gerado pelo TreinoProgramado`,
+          meta: {
+            treinoProgramadoId: treinoCriado.id,
+            criados: agendadosCriados,
+            dataBase: req.body.dataAgendada || null,
+          },
+        });
+
+    // ------s--------- AUDITORIA ---------------------
+
+    await audit(req, {
+      acao: 'PRESCREVER_TREINO',
+      entidade: 'TreinoProgramado',
+      entidadeId: treinoCriado.id,
+      descricao: `Treino criado (${treinoCriado.codigo})`,
+      meta: { nome, codigo, tipoTreino: tipoTreinoNorm, categorias: categoriasNorm },
+    });
 
       await Promise.all(
         (itens || [])
@@ -163,9 +219,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             })
           )
       );
-    } catch (e) {
-      console.warn("stats (exercício incluído) createTreinoProgramado:", e);
-    }
+    } 
 
     try {
       const elencosParaBuscar = [
@@ -202,6 +256,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
     }
 
     return res.status(201).json(treinoCriado);
+
   } catch (error: any) {
     console.error("Erro ao criar treino programado:", error);
     return res.status(500).json({ message: "Erro interno ao criar treino.", error: error.message });
@@ -324,6 +379,12 @@ export async function updateTreino(req: Request, res: Response) {
     }
 
     res.setHeader("X-TPR-Handler", "treinosprogramados.put.v2");
+    await audit(req, {
+      acao: 'ATUALIZAR_TREINO_PROGRAMADO',
+      entidade: 'TreinoProgramado',
+      entidadeId: id,
+      descricao: 'Treino programado atualizado',
+    });
     return res.json({ ok: true, id, updated: true });
   } catch (error: any) {
     console.error("ERRO PUT treinosprogramados:", error);
