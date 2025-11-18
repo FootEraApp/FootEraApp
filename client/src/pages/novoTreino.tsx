@@ -1095,7 +1095,7 @@ export default function NovoTreino() {
     const treinosParaAgendar = treinosDisponiveis.filter(t => !idsProgramadosBloqueados.has(t.id));
 
     return (
-      <div className="p-4 max-w-xl mx-auto mb-5">
+      <div className="p-4 pb-24 max-w-xl mx-auto">
         <Link
           href="/treinos"
           aria-label="Voltar para treinos"
@@ -1190,7 +1190,7 @@ export default function NovoTreino() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pb-24">
       <div className="p-4 sm:p-6 max-w-3xl mx-auto">
         <div className="grid grid-cols-3 items-center mb-3 sm:mb-4">
           <h2 className="text-lg sm:text-xl font-bold col-start-1">Criar Novo Treino</h2>

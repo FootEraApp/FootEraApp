@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState, type SVGProps } from "react";
+// client/src/pages/treinos.tsx
+import React, { useEffect, useRef, useState, type SVGProps, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import {
   CalendarClock,
@@ -14,7 +15,9 @@ import {
   Trash2,
   Check,
   X,
-  BookMarked
+  BookMarked,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API, FLAGS } from "../config.js";
@@ -91,6 +94,26 @@ interface SubmissaoParaValidacao {
   treino: { agendadoId: string; titulo: string; programadoId?: string | null };
   midias: string[];
   observacao?: string | null;
+}
+
+type AgendaTipo = "TREINO" | "DESAFIO" | "EVENTO" | "JOGO" | "PENEIRA" | "OUTRO";
+
+type AgendaItem = {
+  id: string;
+  tipo: AgendaTipo;
+  titulo: string;
+  inicio: string; // ISO (data+hora)
+  fim?: string | null; // opcional
+  origem: string; // tipo de origem (TREINO_AGENDADO, EVENTO, etc)
+};
+
+// 🔹 Novo tipo para eventos/peneiras que vêm do backend
+interface EventoAtleta {
+  id: string;
+  tipo?: string | null; // ex: "PENEIRA" | "EVENTO" | outro
+  titulo: string;
+  inicio: string; // ISO
+  fim?: string | null;
 }
 
 type MinhasSubTreino = {
@@ -212,11 +235,11 @@ function buildMonthBuckets(now = new Date()) {
     new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).toISOString();
 
   const buckets = [
-    { index: 1, start: new Date(y, m, 1),  end: new Date(y, m, 8)  },
-    { index: 2, start: new Date(y, m, 8),  end: new Date(y, m, 15) },
+    { index: 1, start: new Date(y, m, 1), end: new Date(y, m, 8) },
+    { index: 2, start: new Date(y, m, 8), end: new Date(y, m, 15) },
     { index: 3, start: new Date(y, m, 15), end: new Date(y, m, 22) },
     { index: 4, start: new Date(y, m, 22), end: new Date(y, m + 1, 1) },
-  ].map(b => ({
+  ].map((b) => ({
     index: b.index as 1 | 2 | 3 | 4,
     start: toISO(b.start),
     end: toISO(b.end),
@@ -236,20 +259,20 @@ function computeMonthlyWeeks(rawWeeks: WeekStatus[], now = new Date()): WeekStat
     const d = new Date(w.start);
     if (d.getFullYear() !== y || d.getMonth() !== m) continue;
     const idx = weekOfMonthIndex(d) - 1;
-    buckets[idx].count.total    += Number(w.count?.total ?? 0);
+    buckets[idx].count.total += Number(w.count?.total ?? 0);
     buckets[idx].count.approved += Number(w.count?.approved ?? 0);
     buckets[idx].count.rejected += Number(w.count?.rejected ?? 0);
   }
 
   const nowMs = now.getTime();
   for (const b of buckets) {
-    const endMs = Date.parse(b.end); 
+    const endMs = Date.parse(b.end);
     if (b.count.approved > 0) b.status = "success";
-    else if (nowMs >= endMs) b.status = "fail"; 
-    else b.status = "none";                    
+    else if (nowMs >= endMs) b.status = "fail";
+    else b.status = "none";
   }
 
-  return buckets.map(b => ({
+  return buckets.map((b) => ({
     index: b.index,
     start: b.start,
     end: b.end,
@@ -258,6 +281,210 @@ function computeMonthlyWeeks(rawWeeks: WeekStatus[], now = new Date()): WeekStat
   }));
 }
 
+function formatDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function CalendarAgenda({ items }: { items: AgendaItem[] }) {
+  const today = new Date();
+  const [currentMonth, setCurrentMonth] = useState<Date>(
+    () => new Date(today.getFullYear(), today.getMonth(), 1)
+  );
+  const [selectedDate, setSelectedDate] = useState<Date>(() => today);
+
+  const itemsByDay = useMemo(() => {
+    const map: Record<string, AgendaItem[]> = {};
+    for (const item of items) {
+      const start = new Date(item.inicio);
+      if (isNaN(start.getTime())) continue;
+      const key = formatDateKey(start);
+      if (!map[key]) map[key] = [];
+      map[key].push(item);
+    }
+
+    for (const k of Object.keys(map)) {
+      map[k].sort((a, b) => a.inicio.localeCompare(b.inicio));
+    }
+
+    return map;
+  }, [items]);
+
+  const year = currentMonth.getFullYear();
+  const month = currentMonth.getMonth();
+
+  const firstDayOfMonth = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const startWeekday = firstDayOfMonth.getDay(); // 0 = domingo
+
+  const cells: (Date | null)[] = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push(new Date(year, month, d));
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const monthLabel = currentMonth.toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const selectedKey = formatDateKey(selectedDate);
+  const selectedItems = itemsByDay[selectedKey] ?? [];
+
+  const goPrevMonth = () => {
+    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+    setSelectedDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const goNextMonth = () => {
+    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+    setSelectedDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  const weekdayLabels = ["D", "S", "T", "Q", "Q", "S", "S"];
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between mb-3">
+        <button
+          type="button"
+          onClick={goPrevMonth}
+          className="p-2 rounded-full bg-white border border-gray-200 hover:bg-gray-50"
+          aria-label="Mês anterior"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        <div className="text-sm font-semibold text-green-900 uppercase tracking-wide">
+          {monthLabel}
+        </div>
+
+        <button
+          type="button"
+          onClick={goNextMonth}
+          className="p-2 rounded-full bg-white border border-gray-200 hover:bg-gray-50"
+          aria-label="Próximo mês"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 mb-1 text-[11px] text-center text-gray-500">
+        {weekdayLabels.map((lbl) => (
+          <div key={lbl} className="font-medium">
+            {lbl}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((date, idx) => {
+          if (!date) {
+            return <div key={idx} className="h-9" />;
+          }
+
+          const key = formatDateKey(date);
+          const dayNum = date.getDate();
+          const isToday = formatDateKey(date) === formatDateKey(today);
+          const isSelected = formatDateKey(date) === selectedKey;
+          const hasItems = (itemsByDay[key]?.length ?? 0) > 0;
+
+          const baseClasses =
+            "h-9 flex flex-col items-center justify-center rounded-lg text-xs cursor-pointer select-none border";
+          let variant = "bg-white text-gray-800 border-gray-200";
+          if (isSelected) {
+            variant = "bg-green-800 text-white border-green-900";
+          } else if (isToday) {
+            variant = "bg-emerald-50 text-emerald-800 border-emerald-300";
+          }
+
+          return (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => setSelectedDate(date)}
+              className={`${baseClasses} ${variant}`}
+            >
+              <span>{dayNum}</span>
+              {hasItems && (
+                <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4">
+        <div className="text-xs text-gray-600 mb-2">
+          {selectedItems.length > 0 ? (
+            <>
+              {selectedItems.length} atividade(s) em{" "}
+              <strong>{selectedDate.toLocaleDateString("pt-BR")}</strong>
+            </>
+          ) : (
+            <>
+              Nenhuma atividade em{" "}
+              <strong>{selectedDate.toLocaleDateString("pt-BR")}</strong>
+            </>
+          )}
+        </div>
+
+        {selectedItems.length > 0 && (
+          <ul className="space-y-2">
+            {selectedItems.map((item) => (
+              <li
+                key={`${item.origem}-${item.id}`}
+                className="flex items-start gap-2 rounded-lg border bg-white px-3 py-2 text-sm"
+              >
+                <span
+                  className={`
+                    px-2 py-0.5 rounded-full text-[11px] font-semibold shrink-0
+                    ${
+                      item.tipo === "TREINO"
+                        ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                        : item.tipo === "DESAFIO"
+                        ? "bg-amber-100 text-amber-800 border border-amber-200"
+                        : item.tipo === "EVENTO" || item.tipo === "PENEIRA"
+                        ? "bg-blue-100 text-blue-800 border border-blue-200"
+                        : "bg-gray-100 text-gray-700 border border-gray-200"
+                    }
+                  `}
+                >
+                  {item.tipo}
+                </span>
+
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-green-900 truncate">
+                    {item.titulo}
+                  </div>
+                  <div className="text-[11px] text-gray-600">
+                    {new Date(item.inicio).toLocaleTimeString("pt-BR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                    {item.fim && (
+                      <>
+                        {" "}
+                        –{" "}
+                        {new Date(item.fim).toLocaleTimeString("pt-BR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function PaginaTreinos() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
@@ -283,7 +510,12 @@ export default function PaginaTreinos() {
   const [idsDesafiosSubmetidos, setIdsDesafiosSubmetidos] = useState<Set<string>>(new Set());
 
   const [statusPorTreino, setStatusPorTreino] =
-    useState<Record<string, { status: string; startedAt?: string | null; completedAt?: string | null }>>({});
+    useState<
+      Record<
+        string,
+        { status: string; startedAt?: string | null; completedAt?: string | null }
+      >
+    >({});
 
   const [checklistByTreino, setChecklistByTreino] = useState<Record<string, Checklist>>({});
   const [semanasDesafio, setSemanasDesafio] = useState<WeekStatus[]>([]);
@@ -297,7 +529,80 @@ export default function PaginaTreinos() {
   const tipoAtual = (usuario?.tipo ?? "").toLowerCase();
   const podeGerirElenco = ["professor", "clube", "escolinha", "escola"].includes(tipoAtual);
 
-  async function agendarTreinoProgramado(treino: TreinoProgramado, dataSelecionadaISO: string, observacao?: string) {
+  const [viewAtleta, setViewAtleta] = useState<"lista" | "calendario">("lista");
+
+  // 🔹 Estado para eventos/peneiras relevantes pro atleta
+  const [eventosAtleta, setEventosAtleta] = useState<EventoAtleta[]>([]);
+
+  // 🔹 Agenda agregada: treinos agendados + desafios + eventos/peneiras
+  const agendaItemsAtleta: AgendaItem[] = useMemo(() => {
+    const items: AgendaItem[] = [];
+
+    // Treinos agendados -> tipo TREINO
+    for (const t of treinosAgendados) {
+      const inicioIso =
+        t.dataTreino ??
+        t.prazoEnvio ??
+        t.treinoProgramado?.dataAgendada ??
+        null;
+
+      if (!inicioIso) continue;
+
+      items.push({
+        id: t.id,
+        tipo: "TREINO",
+        titulo: t.titulo,
+        inicio: inicioIso,
+        fim: t.dataExpiracao ?? null,
+        origem: "TREINO_AGENDADO",
+      });
+    }
+
+    // Desafios -> tipo DESAFIO (somente se tiver algum campo de data)
+    for (const d of desafios) {
+      const anyD = d as any;
+      const inicioIso: string | null =
+        anyD.inicio ??
+        anyD.dataInicio ??
+        anyD.dataLimite ??
+        null;
+
+      if (!inicioIso) continue;
+
+      items.push({
+        id: d.id,
+        tipo: "DESAFIO",
+        titulo: d.titulo,
+        inicio: inicioIso,
+        fim: null,
+        origem: "DESAFIO",
+      });
+    }
+
+    // 🔹 Eventos / Peneiras -> tipo EVENTO/PENEIRA
+    for (const ev of eventosAtleta) {
+      if (!ev || !ev.inicio) continue;
+
+      items.push({
+        id: ev.id,
+        tipo: ev.tipo === "PENEIRA" ? "PENEIRA" : "EVENTO",
+        titulo: ev.titulo,
+        inicio: ev.inicio,
+        fim: ev.fim ?? null,
+        origem: "EVENTO",
+      });
+    }
+
+    // Futuro: JOGOS, etc.
+
+    return items.sort((a, b) => a.inicio.localeCompare(b.inicio));
+  }, [treinosAgendados, desafios, eventosAtleta]);
+
+  async function agendarTreinoProgramado(
+    treino: TreinoProgramado,
+    dataSelecionadaISO: string,
+    observacao?: string
+  ) {
     const token = getToken();
     const atletaId = (Storage as any).tipoUsuarioId || (Storage as any).atletaId;
 
@@ -306,17 +611,23 @@ export default function PaginaTreinos() {
       return;
     }
 
-    const dia = (dataSelecionadaISO || new Date(Date.now()+86400000).toISOString()).slice(0,10);
+    const dia = (dataSelecionadaISO || new Date(Date.now() + 86400000).toISOString()).slice(
+      0,
+      10
+    );
     const quandoISO = `${dia}T23:59:59.000Z`;
 
     try {
       const r = await fetch(`${API.BASE_URL}/api/treinos/agendados`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           titulo: treino.nome,
           dataTreino: quandoISO,
-          dataExpiracao: null,    
+          dataExpiracao: null,
           atletaId,
           treinoProgramadoId: treino.id,
           observacao: observacao ?? null,
@@ -389,41 +700,43 @@ export default function PaginaTreinos() {
     });
   };
 
-function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
-  if (!weeks || weeks.length === 0) return null;
-  return (
-    <div className="mb-3">
-      <div className="text-sm font-semibold text-green-900 mb-1">Semanas do mês</div>
-      <div className="flex items-center gap-2">
-        {weeks.map((w) => {
-          const base =
-            w.status === "success"
-              ? "bg-emerald-100 border-emerald-300 text-emerald-700"
-              : w.status === "fail"
-              ? "bg-red-100 border-red-300 text-red-700"
-              : "bg-gray-100 border-gray-200 text-gray-500";
-          return (
-            <div
-              key={w.index}
-              className={`h-9 w-9 rounded-full border flex items-center justify-center shrink-0 ${base}`}
-              title={`Semana ${w.index} (${new Date(w.start).toLocaleDateString("pt-BR")} – ${new Date(
-                new Date(w.end).getTime() - 1
-              ).toLocaleDateString("pt-BR")}) • ${w.count.approved} aprov., ${w.count.rejected} reprov.`}
-            >
-              {w.status === "success" ? (
-                <Check className="w-5 h-5" />
-              ) : w.status === "fail" ? (
-                <X className="w-5 h-5" />
-              ) : (
-                <span className="text-xs">{w.index}</span>
-              )}
-            </div>
-          );
-        })}
+  function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
+    if (!weeks || weeks.length === 0) return null;
+    return (
+      <div className="mb-3">
+        <div className="text-sm font-semibold text-green-900 mb-1">Semanas do mês</div>
+        <div className="flex items-center gap-2">
+          {weeks.map((w) => {
+            const base =
+              w.status === "success"
+                ? "bg-emerald-100 border-emerald-300 text-emerald-700"
+                : w.status === "fail"
+                ? "bg-red-100 border-red-300 text-red-700"
+                : "bg-gray-100 border-gray-200 text-gray-500";
+            return (
+              <div
+                key={w.index}
+                className={`h-9 w-9 rounded-full border flex items-center justify-center shrink-0 ${base}`}
+                title={`Semana ${w.index} (${new Date(w.start).toLocaleDateString(
+                  "pt-BR"
+                )} – ${new Date(new Date(w.end).getTime() - 1).toLocaleDateString("pt-BR")}) • ${
+                  w.count.approved
+                } aprov., ${w.count.rejected} reprov.`}
+              >
+                {w.status === "success" ? (
+                  <Check className="w-5 h-5" />
+                ) : w.status === "fail" ? (
+                  <X className="w-5 h-5" />
+                ) : (
+                  <span className="text-xs">{w.index}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   async function carregarStatus(id: string) {
     const token = getToken();
@@ -463,7 +776,9 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
         for (const id of inProgressIds) {
           const st = statusPorTreino[id];
           const startedIso =
-            (st?.startedAt as string | undefined) ?? localStorage.getItem(TIMER_KEY(id)) ?? undefined;
+            (st?.startedAt as string | undefined) ??
+            localStorage.getItem(TIMER_KEY(id)) ??
+            undefined;
           const startedMs = startedIso ? Date.parse(startedIso) : NaN;
           if (Number.isFinite(startedMs)) {
             next[id] = Math.max(0, Math.floor((now - startedMs) / 1000));
@@ -491,7 +806,7 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
   }, [treinosAgendados]);
 
   useEffect(() => {
-    const handler = (e: any) => setTreinosAgendados(prev => [e.detail, ...prev]);
+    const handler = (e: any) => setTreinosAgendados((prev) => [e.detail, ...prev]);
     window.addEventListener("treino:agendado", handler as EventListener);
     window.dispatchEvent(new Event("treinos:ready"));
     return () => window.removeEventListener("treino:agendado", handler as EventListener);
@@ -503,8 +818,8 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
       if (!raw) return;
       const novo = JSON.parse(raw);
 
-      setTreinosAgendados(prev => {
-        if (prev.some(t => t.id === novo.id)) return prev;
+      setTreinosAgendados((prev) => {
+        if (prev.some((t) => t.id === novo.id)) return prev;
         return [
           {
             id: novo.id,
@@ -531,11 +846,17 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
     if (!token) return alert("Sessão expirada. Faça login novamente.");
 
     try {
-      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${treinoAgendadoId}/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ treinoAgendadoId, ...(payload || {}) }),
-      });
+      const r = await fetch(
+        `${API.BASE_URL}/api/treinos/agendados/${treinoAgendadoId}/complete`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ treinoAgendadoId, ...(payload || {}) }),
+        }
+      );
 
       if (!r.ok) {
         const txt = await r.text().catch(() => "");
@@ -558,7 +879,9 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
       });
 
       alert("Treino concluído!");
-      try { localStorage.removeItem(TIMER_KEY(treinoAgendadoId)); } catch {}
+      try {
+        localStorage.removeItem(TIMER_KEY(treinoAgendadoId));
+      } catch {}
       setElapsedByTreino((prev) => {
         const n = { ...prev };
         delete n[treinoAgendadoId];
@@ -577,30 +900,39 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
       return;
     }
 
-    const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${treinoAgendadoId}/iniciar`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const r = await fetch(
+      `${API.BASE_URL}/api/treinos/agendados/${treinoAgendadoId}/iniciar`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
     if (!r.ok) {
       const txt = await r.text().catch(() => "");
       console.error("Falha ao iniciar treino:", r.status, txt);
-      alert(r.status === 401 ? "Sessão expirada. Faça login novamente." : "Não foi possível iniciar o treino.");
+      alert(
+        r.status === 401
+          ? "Sessão expirada. Faça login novamente."
+          : "Não foi possível iniciar o treino."
+      );
       return;
     }
 
-     let startedAtIso: string | null = null;
-      try {
-        const js = await r.json();
-        startedAtIso = js?.startedAt ?? js?.started?.startedAt ?? null;
-      } catch {
-        startedAtIso = null;
-      }
-      if (!startedAtIso) startedAtIso = new Date().toISOString();
-      try { localStorage.setItem(TIMER_KEY(treinoAgendadoId), startedAtIso); } catch {}
+    let startedAtIso: string | null = null;
+    try {
+      const js = await r.json();
+      startedAtIso = js?.startedAt ?? js?.started?.startedAt ?? null;
+    } catch {
+      startedAtIso = null;
+    }
+    if (!startedAtIso) startedAtIso = new Date().toISOString();
+    try {
+      localStorage.setItem(TIMER_KEY(treinoAgendadoId), startedAtIso);
+    } catch {}
 
     setStatusPorTreino((prev) => ({
       ...prev,
@@ -618,7 +950,9 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
       alert("Inicie o treino antes de finalizar.");
       return;
     }
-    const usarCamera = window.confirm("Quer gravar agora com a câmera? (OK=câmera • Cancelar=galeria)");
+    const usarCamera = window.confirm(
+      "Quer gravar agora com a câmera? (OK=câmera • Cancelar=galeria)"
+    );
     const qs = new URLSearchParams({
       treinoAgendadoId: treino.id,
       tempoSeg: String(elapsed),
@@ -628,7 +962,8 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
   }
 
   useEffect(() => {
-    const token = (Storage as any).token ?? localStorage.getItem("token") ?? undefined;
+    const token =
+      (Storage as any).token ?? localStorage.getItem("token") ?? undefined;
     if (!token) return;
 
     (async () => {
@@ -637,71 +972,77 @@ function WeeklyChecker({ weeks }: { weeks: WeekStatus[] }) {
       });
       if (!res.ok) return;
       const rows: Array<{ treinoAgendadoId: string }> = await res.json();
-      setIdsAgendadosSubmetidos(new Set(rows.map((r) => r.treinoAgendadoId).filter(Boolean)));
+      setIdsAgendadosSubmetidos(
+        new Set(rows.map((r) => r.treinoAgendadoId).filter(Boolean))
+      );
     })();
   }, []);
 
-async function carregarMinhasSubmissoes(atletaId: string) {
-  try {
-    const token = (Storage as any).token ?? localStorage.getItem("token");
-    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+  async function carregarMinhasSubmissoes(atletaId: string) {
+    try {
+      const token =
+        (Storage as any).token ?? localStorage.getItem("token");
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
-    const r = await fetch(
-      `${API.BASE_URL}/api/treinos/minhas-submissoes?atletaId=${encodeURIComponent(atletaId)}`,
-      { headers }
-    );
-    if (r.ok) {
-      const arr: MinhasSubTreino[] = await r.json();
-      const setAg = new Set<string>();
-      const setPg = new Set<string>();
-      for (const s of arr) {
-        if (s.treinoAgendadoId) setAg.add(s.treinoAgendadoId);
-        if (s.treinoProgramadoId) setPg.add(s.treinoProgramadoId);
+      const r = await fetch(
+        `${API.BASE_URL}/api/treinos/minhas-submissoes?atletaId=${encodeURIComponent(
+          atletaId
+        )}`,
+        { headers }
+      );
+      if (r.ok) {
+        const arr: MinhasSubTreino[] = await r.json();
+        const setAg = new Set<string>();
+        const setPg = new Set<string>();
+        for (const s of arr) {
+          if (s.treinoAgendadoId) setAg.add(s.treinoAgendadoId);
+          if (s.treinoProgramadoId) setPg.add(s.treinoProgramadoId);
+        }
+        setIdsAgendadosSubmetidos(setAg);
+        setIdsProgramadosSubmetidos(setPg);
+      } else {
+        setIdsAgendadosSubmetidos(new Set());
+        setIdsProgramadosSubmetidos(new Set());
       }
-      setIdsAgendadosSubmetidos(setAg);
-      setIdsProgramadosSubmetidos(setPg);
-    } else {
-      setIdsAgendadosSubmetidos(new Set());
-      setIdsProgramadosSubmetidos(new Set());
-    }
 
-    if (FLAGS.DESAFIOS_ENABLED) {
-      try {
-        const r2 = await fetch(
-          `${API.BASE_URL}/api/desafios/minhas-submissoes?atletaId=${encodeURIComponent(atletaId)}`,
-          { headers }
-        );
-        if (r2.ok) {
-          const arr2: { desafioId: string }[] = await r2.json();
-          setIdsDesafiosSubmetidos(new Set(arr2.map(x => x.desafioId)));
-        } else {
+      if (FLAGS.DESAFIOS_ENABLED) {
+        try {
+          const r2 = await fetch(
+            `${API.BASE_URL}/api/desafios/minhas-submissoes?atletaId=${encodeURIComponent(
+              atletaId
+            )}`,
+            { headers }
+          );
+          if (r2.ok) {
+            const arr2: { desafioId: string }[] = await r2.json();
+            setIdsDesafiosSubmetidos(new Set(arr2.map((x) => x.desafioId)));
+          } else {
+            setIdsDesafiosSubmetidos(new Set());
+          }
+        } catch {
           setIdsDesafiosSubmetidos(new Set());
         }
-      } catch {
+      } else {
         setIdsDesafiosSubmetidos(new Set());
       }
-    } else {
+    } catch {
+      setIdsAgendadosSubmetidos(new Set());
+      setIdsProgramadosSubmetidos(new Set());
       setIdsDesafiosSubmetidos(new Set());
     }
-  } catch {
-    setIdsAgendadosSubmetidos(new Set());
-    setIdsProgramadosSubmetidos(new Set());
-    setIdsDesafiosSubmetidos(new Set());
   }
-}
 
-useEffect(() => {
-  if (!semanasDesafio.length) return;
-  const now = new Date();
-  const patched = semanasDesafio.map(b => {
-    if (b.count.approved > 0) return { ...b, status: "success" as const };
-    const ended = Date.now() >= Date.parse(b.end);
-    return { ...b, status: ended ? ("fail" as const) : ("none" as const) };
-  });
-  const changed = patched.some((w, i) => w.status !== semanasDesafio[i].status);
-  if (changed) setSemanasDesafio(patched);
-}, [semanasDesafio]);
-
+  useEffect(() => {
+    if (!semanasDesafio.length) return;
+    const now = new Date();
+    const patched = semanasDesafio.map((b) => {
+      if (b.count.approved > 0) return { ...b, status: "success" as const };
+      const ended = Date.now() >= Date.parse(b.end);
+      return { ...b, status: ended ? ("fail" as const) : ("none" as const) };
+    });
+    const changed = patched.some((w, i) => w.status !== semanasDesafio[i].status);
+    if (changed) setSemanasDesafio(patched);
+  }, [semanasDesafio]);
 
   useEffect(() => {
     const carregar = async () => {
@@ -714,8 +1055,10 @@ useEffect(() => {
         "";
 
       const tipo = String(rawTipo).toLowerCase();
-      const tipoUsuarioId = (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
-      const token = (Storage as any).token ?? localStorage.getItem("token");
+      const tipoUsuarioId =
+        (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
+      const token =
+        (Storage as any).token ?? localStorage.getItem("token");
 
       const qs = new URLSearchParams(window.location.search);
       const professorIdFromQuery = qs.get("professorId");
@@ -723,13 +1066,17 @@ useEffect(() => {
       if (professorIdFromQuery && token) {
         try {
           const res = await fetch(
-            `${API.BASE_URL}/api/treinos/programados?professorId=${encodeURIComponent(professorIdFromQuery)}`,
+            `${API.BASE_URL}/api/treinos/programados?professorId=${encodeURIComponent(
+              professorIdFromQuery
+            )}`,
             { headers: { Authorization: `Bearer ${token}` } }
           );
 
           if (res.ok) {
             const data = await res.json();
-            const lista = Array.isArray(data) ? data : (data?.items ?? data?.data ?? []);
+            const lista = Array.isArray(data)
+              ? data
+              : data?.items ?? data?.data ?? [];
 
             const normTreinos = lista.map((t: any) => ({
               id: t.id,
@@ -759,151 +1106,236 @@ useEffect(() => {
       }
 
       if (tipo === "atleta" && token) {
-  if (tipoUsuarioId) {
-    carregarMinhasSubmissoes(tipoUsuarioId);
-  }
+        if (tipoUsuarioId) {
+          carregarMinhasSubmissoes(tipoUsuarioId);
+        }
 
-  const headers: HeadersInit = { Authorization: `Bearer ${token}` };
-  const atletaId = tipoUsuarioId || (Storage as any).atletaId;
+        const headers: HeadersInit = {
+          Authorization: `Bearer ${token}`,
+        };
+        const atletaId = tipoUsuarioId || (Storage as any).atletaId;
 
-  if (atletaId) {
-    const r = await fetch(
-    `${API.BASE_URL}/api/treinos/agendados?atletaId=${encodeURIComponent(atletaId)}`,
-      { headers }
-    );
+        if (atletaId) {
+          const r = await fetch(
+            `${API.BASE_URL}/api/treinos/agendados?atletaId=${encodeURIComponent(
+              atletaId
+            )}`,
+            { headers }
+          );
 
-    if (!r.ok) {
-      console.error("/treinos/agendados", r.status, await r.text().catch(() => ""));
-      setTreinosAgendados([]);
-    } else {
-      const treinosJson = await r.json();
-      const normalizados = (Array.isArray(treinosJson) ? treinosJson : []).map((t: any) => ({
-        id: t.id,
-        titulo: t.titulo,
-        dataTreino: t.dataTreino ?? null,
-        prazoEnvio: t.prazoEnvio ?? t.dataExpiracao ?? t.dataTreino ?? t.treinoProgramado?.dataAgendada ?? null,
-        nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
-        duracaoMinutos: t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
-        treinoProgramado: t.treinoProgramado ?? null,
-      }));
+          if (!r.ok) {
+            console.error(
+              "/treinos/agendados",
+              r.status,
+              await r.text().catch(() => "")
+            );
+            setTreinosAgendados([]);
+          } else {
+            const treinosJson = await r.json();
+            const normalizados = (Array.isArray(treinosJson)
+              ? treinosJson
+              : []
+            ).map((t: any) => ({
+              id: t.id,
+              titulo: t.titulo,
+              dataTreino: t.dataTreino ?? null,
+              prazoEnvio:
+                t.prazoEnvio ??
+                t.dataExpiracao ??
+                t.dataTreino ??
+                t.treinoProgramado?.dataAgendada ??
+                null,
+              nivel: t.nivel ?? t.treinoProgramado?.nivel ?? null,
+              duracaoMinutos:
+                t.duracaoMinutos ?? t.treinoProgramado?.duracao ?? null,
+              treinoProgramado: t.treinoProgramado ?? null,
+            }));
 
-      const agora = Date.now();
+            setTreinosAgendados(normalizados);
+          }
+        } else {
+          setTreinosAgendados([]);
+        }
 
-      setTreinosAgendados(normalizados);
-    }
-  } else {
-    setTreinosAgendados([]);
-  }
-   if (FLAGS.DESAFIOS_ENABLED) {
-    const resDesafios = await fetch(
-      `${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (resDesafios.ok) {
-      const desafiosJson = await resDesafios.json();
-      setDesafios(desafiosJson ?? []);
-    } else {
-      setDesafios([]);
-    }
+        if (FLAGS.DESAFIOS_ENABLED) {
+          const resDesafios = await fetch(
+            `${API.BASE_URL}/api/desafios?tipoUsuarioId=${tipoUsuarioId}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (resDesafios.ok) {
+            const desafiosJson = await resDesafios.json();
+            setDesafios(desafiosJson ?? []);
+          } else {
+            setDesafios([]);
+          }
 
-    try {
-      const resSem = await fetch(
-        `${API.BASE_URL}/api/treinos/desafios-semanais?tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (resSem.ok) {
-        const js = await resSem.json();
-        const rawWeeks: WeekStatus[] = Array.isArray(js?.weeks) ? js.weeks : [];
-        setSemanasDesafio(computeMonthlyWeeks(rawWeeks, new Date()));
-      } else {
-        setSemanasDesafio(buildMonthBuckets(new Date()));
-      }
-    } catch {
-      setSemanasDesafio(buildMonthBuckets(new Date()));
-    }
-  } else {
-    setDesafios([]);
-    setSemanasDesafio([]);
-  }
+          try {
+            const resSem = await fetch(
+              `${API.BASE_URL}/api/treinos/desafios-semanais?tipoUsuarioId=${encodeURIComponent(
+                tipoUsuarioId ?? ""
+              )}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (resSem.ok) {
+              const js = await resSem.json();
+              const rawWeeks: WeekStatus[] = Array.isArray(js?.weeks)
+                ? js.weeks
+                : [];
+              setSemanasDesafio(computeMonthlyWeeks(rawWeeks, new Date()));
+            } else {
+              setSemanasDesafio(buildMonthBuckets(new Date()));
+            }
+          } catch {
+            setSemanasDesafio(buildMonthBuckets(new Date()));
+          }
+        } else {
+          setDesafios([]);
+          setSemanasDesafio([]);
+        }
+
+        // 🔹 Buscar eventos/peneiras relevantes pro atleta
+        try {
+          const alvoId = tipoUsuarioId || atletaId;
+          if (alvoId) {
+            // Ajuste a URL/params abaixo conforme sua API real de eventos
+            const resEvt = await fetch(
+              `${API.BASE_URL}/api/eventos/minha-agenda?alvoId=${encodeURIComponent(
+                alvoId
+              )}`,
+              { headers }
+            );
+            if (resEvt.ok) {
+              const dataEvt = await resEvt.json();
+              const lista = Array.isArray(dataEvt)
+                ? dataEvt
+                : dataEvt?.items ?? dataEvt?.data ?? [];
+
+              const normalizados: EventoAtleta[] = lista
+                .map((ev: any) => ({
+                  id: ev.id,
+                  tipo: ev.tipo ?? ev.categoria ?? null,
+                  titulo: ev.titulo ?? ev.nome ?? "Evento",
+                  inicio: ev.inicio ?? ev.dataInicio ?? ev.data ?? null,
+                  fim:
+                    ev.fim ??
+                    ev.dataFim ??
+                    ev.dataLimite ??
+                    null,
+                }))
+                .filter((ev: EventoAtleta) => !!ev.inicio);
+
+              setEventosAtleta(normalizados);
+            } else {
+              setEventosAtleta([]);
+            }
+          } else {
+            setEventosAtleta([]);
+          }
+        } catch (e) {
+          console.error("Falha ao carregar eventos do atleta:", e);
+          setEventosAtleta([]);
+        }
       } else if (tipo === "admin" && token) {
-      const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/programados`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!resTreinos.ok) throw new Error(`Falha /treinos/programados: ${resTreinos.status}`);
-      const jsonTreinos = await resTreinos.json();
-
-      const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
-        id: t.id,
-        nome: t.nome,
-        descricao: t.descricao ?? undefined,
-        nivel: t.nivel,
-        dataAgendada: t.dataAgendada ?? undefined,
-        duracao: t.duracao ?? undefined,
-        objetivo: t.objetivo ?? undefined,
-        dicas: Array.isArray(t.dicas) ? t.dicas : [],
-        professorId: t.professorId ?? undefined,
-        escolinhaId: t.escolinhaId ?? undefined,
-        clubeId: t.clubeId ?? undefined,
-        pontuacao: t.pontuacao ?? undefined,
-        exercicios: (t.exercicios ?? []).map((ex: any) => ({
-          id: ex.exercicio?.id ?? ex.id ?? "",
-          nome: ex.exercicio?.nome ?? ex.nome ?? "",
-          repeticoes: ex.repeticoes ?? undefined,
-        })),
-      }));
-      setTreinos(normTreinos);
-
-      if (FLAGS.DESAFIOS_ENABLED) {
-        const resDesafios = await fetch(`${API.BASE_URL}/api/desafios`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!resDesafios.ok) throw new Error(`/desafios: ${resDesafios.status}`);
-        const jsonDesafios = await resDesafios.json();
-        setDesafios(jsonDesafios?.desafiosOficiais ?? jsonDesafios ?? []);
-      } else {
-        setDesafios([]);
-      }
-      } else if (["professor", "clube", "escolinha", "escola"].includes(String(tipo)) && token) {
-      const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/programados`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!resTreinos.ok) throw new Error(`/treinos/programados: ${resTreinos.status}`);
-      const jsonTreinos = await resTreinos.json();
-
-      const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((t: any) => ({
-        id: t.id,
-        nome: t.nome,
-        descricao: t.descricao ?? undefined,
-        nivel: t.nivel,
-        dataAgendada: t.dataAgendada ?? undefined,
-        duracao: t.duracao ?? undefined,
-        objetivo: t.objetivo ?? undefined,
-        dicas: Array.isArray(t.dicas) ? t.dicas : [],
-        professorId: t.professorId ?? undefined,
-        escolinhaId: t.escolinhaId ?? undefined,
-        clubeId: t.clubeId ?? undefined,
-        pontuacao: t.pontuacao ?? undefined,
-        exercicios: (t.exercicios ?? []).map((ex: any) => ({
-          id: ex.exercicio?.id ?? ex.id ?? "",
-          nome: ex.exercicio?.nome ?? ex.nome ?? "",
-          repeticoes: ex.repeticoes ?? undefined,
-        })),
-      }));
-      setTreinos(normTreinos);
-
-      if (FLAGS.DESAFIOS_ENABLED) {
-        const resDesafios = await fetch(
-          `${API.BASE_URL}/api/desafios?tipoUsuarioId=${(Storage as any).tipoUsuarioId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
+        const resTreinos = await fetch(
+          `${API.BASE_URL}/api/treinos/programados`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
         );
-        if (!resDesafios.ok) throw new Error(`/desafios: ${resDesafios.status}`);
-        const jsonDesafios = await resDesafios.json();
-        setDesafios(jsonDesafios ?? []);
-      } else {
-        setDesafios([]);
+        if (!resTreinos.ok)
+          throw new Error(`Falha /treinos/programados: ${resTreinos.status}`);
+        const jsonTreinos = await resTreinos.json();
+
+        const normTreinos = (Array.isArray(jsonTreinos)
+          ? jsonTreinos
+          : []
+        ).map((t: any) => ({
+          id: t.id,
+          nome: t.nome,
+          descricao: t.descricao ?? undefined,
+          nivel: t.nivel,
+          dataAgendada: t.dataAgendada ?? undefined,
+          duracao: t.duracao ?? undefined,
+          objetivo: t.objetivo ?? undefined,
+          dicas: Array.isArray(t.dicas) ? t.dicas : [],
+          professorId: t.professorId ?? undefined,
+          escolinhaId: t.escolinhaId ?? undefined,
+          clubeId: t.clubeId ?? undefined,
+          pontuacao: t.pontuacao ?? undefined,
+          exercicios: (t.exercicios ?? []).map((ex: any) => ({
+            id: ex.exercicio?.id ?? ex.id ?? "",
+            nome: ex.exercicio?.nome ?? ex.nome ?? "",
+            repeticoes: ex.repeticoes ?? undefined,
+          })),
+        }));
+        setTreinos(normTreinos);
+
+        if (FLAGS.DESAFIOS_ENABLED) {
+          const resDesafios = await fetch(`${API.BASE_URL}/api/desafios`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!resDesafios.ok)
+            throw new Error(`/desafios: ${resDesafios.status}`);
+          const jsonDesafios = await resDesafios.json();
+          setDesafios(jsonDesafios?.desafiosOficiais ?? jsonDesafios ?? []);
+        } else {
+          setDesafios([]);
+        }
+      } else if (
+        ["professor", "clube", "escolinha", "escola"].includes(String(tipo)) &&
+        token
+      ) {
+        const resTreinos = await fetch(
+          `${API.BASE_URL}/api/treinos/programados`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        if (!resTreinos.ok)
+          throw new Error(`/treinos/programados: ${resTreinos.status}`);
+        const jsonTreinos = await resTreinos.json();
+
+        const normTreinos = (Array.isArray(jsonTreinos)
+          ? jsonTreinos
+          : []
+        ).map((t: any) => ({
+          id: t.id,
+          nome: t.nome,
+          descricao: t.descricao ?? undefined,
+          nivel: t.nivel,
+          dataAgendada: t.dataAgendada ?? undefined,
+          duracao: t.duracao ?? undefined,
+          objetivo: t.objetivo ?? undefined,
+          dicas: Array.isArray(t.dicas) ? t.dicas : [],
+          professorId: t.professorId ?? undefined,
+          escolinhaId: t.escolinhaId ?? undefined,
+          clubeId: t.clubeId ?? undefined,
+          pontuacao: t.pontuacao ?? undefined,
+          exercicios: (t.exercicios ?? []).map((ex: any) => ({
+            id: ex.exercicio?.id ?? ex.id ?? "",
+            nome: ex.exercicio?.nome ?? ex.nome ?? "",
+            repeticoes: ex.repeticoes ?? undefined,
+          })),
+        }));
+        setTreinos(normTreinos);
+
+        if (FLAGS.DESAFIOS_ENABLED) {
+          const resDesafios = await fetch(
+            `${API.BASE_URL}/api/desafios?tipoUsuarioId=${
+              (Storage as any).tipoUsuarioId
+            }`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (!resDesafios.ok)
+            throw new Error(`/desafios: ${resDesafios.status}`);
+          const jsonDesafios = await resDesafios.json();
+          setDesafios(jsonDesafios ?? []);
+        } else {
+          setDesafios([]);
+        }
       }
     };
-  }
+
     const carregarUsuario = () => {
       const tipoSalvo =
         (Storage as any).tipoSalvo ??
@@ -912,11 +1344,24 @@ useEffect(() => {
         localStorage.getItem("tipoUsuario") ??
         sessionStorage.getItem("tipoUsuario");
 
-      const usuarioId = (Storage as any).usuarioId ?? localStorage.getItem("usuarioId");
-      const tipoUsuarioId = (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
+      const usuarioId =
+        (Storage as any).usuarioId ?? localStorage.getItem("usuarioId");
+      const tipoUsuarioId =
+        (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
 
       const t = String(tipoSalvo || "").toLowerCase();
-      if (["admin", "atleta", "escola", "escolinha", "clube", "professor", "olheiro"].includes(t) && usuarioId) {
+      if (
+        [
+          "admin",
+          "atleta",
+          "escola",
+          "escolinha",
+          "clube",
+          "professor",
+          "olheiro",
+        ].includes(t) &&
+        usuarioId
+      ) {
         setUsuario({ tipo: t as any, usuarioId, tipoUsuarioId: tipoUsuarioId ?? "" });
       } else {
         console.warn("Tipo/IDs inválidos", { tipoSalvo, usuarioId, tipoUsuarioId });
@@ -955,10 +1400,13 @@ useEffect(() => {
     setCarregandoSubmissoes(true);
     try {
       const res = await fetch(
-        `${API.BASE_URL}/api/treinos/submissoes?tipoUsuarioId=${usuario.tipoUsuarioId}&status=pendente&limit=${limit}&offset=${offset}`,
+        `${API.BASE_URL}/api/treinos/submissoes?tipoUsuarioId=${
+          usuario.tipoUsuarioId
+        }&status=pendente&limit=${limit}&offset=${offset}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (!res.ok) throw new Error(`Falha /treinos/submissoes: ${res.status}`);
+      if (!res.ok)
+        throw new Error(`Falha /treinos/submissoes: ${res.status}`);
       const data = await res.json();
       const items = Array.isArray(data) ? data : data.items ?? [];
 
@@ -976,13 +1424,20 @@ useEffect(() => {
     }
   }
 
-  async function validarSubmissao(id: string, aprovado: boolean, pontosSug?: number) {
+  async function validarSubmissao(
+    id: string,
+    aprovado: boolean,
+    pontosSug?: number
+  ) {
     const token = (Storage as any).token ?? localStorage.getItem("token");
     if (!token || !usuario) return;
 
     let pontos = 0;
     if (aprovado) {
-      const inp = prompt("Pontos a creditar para este treino:", String(pontosSug ?? 0));
+      const inp = prompt(
+        "Pontos a creditar para este treino:",
+        String(pontosSug ?? 0)
+      );
       if (inp === null) return;
       const n = Number(inp);
       pontos = Number.isFinite(n) && n >= 0 ? n : 0;
@@ -993,7 +1448,10 @@ useEffect(() => {
         `${API.BASE_URL}/api/treinos/submissoes/${id}/validar?tipoUsuarioId=${usuario.tipoUsuarioId}`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify({ aprovado, pontos }),
         }
       );
@@ -1003,75 +1461,93 @@ useEffect(() => {
         return alert("Não foi possível validar a submissão.");
       }
       setSubmissoesPendentes((prev) => prev.filter((s) => s.id !== id));
-      alert(aprovado ? "Submissão aprovada e pontos creditados!" : "Submissão reprovada.");
+      alert(
+        aprovado
+          ? "Submissão aprovada e pontos creditados!"
+          : "Submissão reprovada."
+      );
     } catch (e) {
       console.error(e);
       alert("Erro inesperado ao validar.");
     }
   }
 
-  const aprovar = (id: string, pontos?: number) => validarSubmissao(id, true, pontos);
+  const aprovar = (id: string, pontos?: number) =>
+    validarSubmissao(id, true, pontos);
   const reprovar = (id: string) => validarSubmissao(id, false, 0);
 
   const formatarDataHora = (iso?: string | null) =>
-    iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
+    iso
+      ? new Date(iso).toLocaleString("pt-BR", {
+          dateStyle: "short",
+          timeStyle: "short",
+        })
+      : "";
 
-  const formatarData = (data?: string) => (data ? new Date(data).toLocaleDateString("pt-BR") : "");
+  const formatarData = (data?: string) =>
+    data ? new Date(data).toLocaleDateString("pt-BR") : "";
 
-  const treinosAgendadosVisiveis = treinosAgendados.filter((t) => !idsAgendadosSubmetidos.has(t.id));
-  const desafiosVisiveis = desafios.filter((d) => !idsDesafiosSubmetidos.has(d.id));
+  const treinosAgendadosVisiveis = treinosAgendados.filter(
+    (t) => !idsAgendadosSubmetidos.has(t.id)
+  );
+  const desafiosVisiveis = desafios.filter(
+    (d) => !idsDesafiosSubmetidos.has(d.id)
+  );
 
-const renderDesafioCard = (desafio: Desafio) => (
-  <div key={desafio.id} className="bg-white p-4 rounded-xl shadow-sm border border-yellow-300/60 mb-3">
-    <h4 className="font-bold text-yellow-700 text-lg mb-1">
-      <Link href={`/desafios/${desafio.id}`} className="hover:underline">
-        {desafio.titulo}
-      </Link>
-    </h4>
+  const renderDesafioCard = (desafio: Desafio) => (
+    <div
+      key={desafio.id}
+      className="bg-white p-4 rounded-xl shadow-sm border border-yellow-300/60 mb-3"
+    >
+      <h4 className="font-bold text-yellow-700 text-lg mb-1">
+        <Link href={`/desafios/${desafio.id}`} className="hover:underline">
+          {desafio.titulo}
+        </Link>
+      </h4>
 
-    <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
-    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-      <span>Nível: {desafio.nivel}</span>
-      <span className="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs">
-        {desafio.pontuacao} pts
-      </span>
+      <p className="text-sm text-gray-600 mb-2">{desafio.descricao}</p>
+      <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+        <span>Nível: {desafio.nivel}</span>
+        <span className="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs">
+          {desafio.pontuacao} pts
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <button
+          onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
+          className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-800 hover:bg-green-900 text-white"
+          title="Fazer Submissão"
+        >
+          <span className="sm:hidden">Submeter</span>
+          <span className="hidden sm:inline">Fazer Submissão</span>
+        </button>
+
+        <button
+          onClick={() => navigate(`/desafios/${desafio.id}`)}
+          className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white border border-green-300 text-green-800 hover:bg-green-50"
+          title="Ver desafio"
+        >
+          Ver desafio
+        </button>
+
+        <button
+          onClick={() => abrirModalCompartilhar(desafio.id)}
+          className="w-full inline-flex items-center justify-center gap-1 text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white"
+          title="Compartilhar"
+        >
+          <Share2 className="w-4 h-4" />
+          <span className="truncate">Compartilhar</span>
+        </button>
+      </div>
     </div>
-
-<div className="mt-3 grid grid-cols-3 gap-2">
-  <button
-    onClick={() => navigate(`/submissao?desafioId=${desafio.id}`)}
-    className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-800 hover:bg-green-900 text-white"
-    title="Fazer Submissão"
-  >
-    <span className="sm:hidden">Submeter</span>
-    <span className="hidden sm:inline">Fazer Submissão</span>
-  </button>
-
-  <button
-    onClick={() => navigate(`/desafios/${desafio.id}`)}
-    className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white border border-green-300 text-green-800 hover:bg-green-50"
-    title="Ver desafio"
-  >
-    Ver desafio
-  </button>
-
-  <button
-    onClick={() => abrirModalCompartilhar(desafio.id)}
-    className="w-full inline-flex items-center justify-center gap-1 text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white"
-    title="Compartilhar"
-  >
-    <Share2 className="w-4 h-4" />
-    <span className="truncate">Compartilhar</span>
-  </button>
-</div>
-
-     
-  </div>
-);
+  );
 
   if (!usuario) return <p className="text-center p-4">Carregando...</p>;
 
-  const isGestor = ["professor", "admin", "escola", "escolinha", "clube"].includes(tipoAtual);
+  const isGestor = ["professor", "admin", "escola", "escolinha", "clube"].includes(
+    tipoAtual
+  );
   const isOlheiro = tipoAtual === "olheiro";
 
   const renderTreinoCard = (treino: TreinoProgramado) => (
@@ -1085,7 +1561,9 @@ const renderDesafioCard = (desafio: Desafio) => (
         </h4>
 
         {typeof treino.pontuacao === "number" && (
-          <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">+{treino.pontuacao} pts</span>
+          <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+            +{treino.pontuacao} pts
+          </span>
         )}
       </div>
 
@@ -1095,18 +1573,24 @@ const renderDesafioCard = (desafio: Desafio) => (
             type="date"
             className="px-3 py-2 border rounded-lg"
             value={dataAgendarById[treino.id] ?? ""}
-            onChange={(e) => setDataAgendarById((p) => ({ ...p, [treino.id]: e.target.value }))}
+            onChange={(e) =>
+              setDataAgendarById((p) => ({ ...p, [treino.id]: e.target.value }))
+            }
           />
           <input
             type="text"
             placeholder="Observação (opcional)"
             className="px-3 py-2 border rounded-lg flex-1"
             value={obsById[treino.id] ?? ""}
-            onChange={(e) => setObsById((p) => ({ ...p, [treino.id]: e.target.value }))}
+            onChange={(e) =>
+              setObsById((p) => ({ ...p, [treino.id]: e.target.value }))
+            }
           />
           <button
             onClick={() => {
-              const iso = dataAgendarById[treino.id] || new Date().toISOString().slice(0,10);
+              const iso =
+                dataAgendarById[treino.id] ||
+                new Date().toISOString().slice(0, 10);
               agendarTreinoProgramado(treino, iso, obsById[treino.id]);
             }}
             className="bg-green-800 text-white px-3 py-2 rounded-lg"
@@ -1126,7 +1610,9 @@ const renderDesafioCard = (desafio: Desafio) => (
         </button>
       </div>
 
-      {treino.descricao && <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>}
+      {treino.descricao && (
+        <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>
+      )}
 
       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700">
         <p>
@@ -1154,22 +1640,30 @@ const renderDesafioCard = (desafio: Desafio) => (
           <strong className="text-sm text-gray-800">Exercícios:</strong>
           <div className="max-h-40 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
             {treino.exercicios.map((ex, i) => (
-              <div key={ex.id || `${i}-${ex.nome || "ex"}`} className="border-b pb-1 last:border-b-0">
+              <div
+                key={ex.id || `${i}-${ex.nome || "ex"}`}
+                className="border-b pb-1 last:border-b-0"
+              >
                 <strong>{i + 1}.</strong> {ex.nome}{" "}
-                {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
+                {ex.repeticoes && (
+                  <span className="text-gray-500">({ex.repeticoes})</span>
+                )}
               </div>
             ))}
           </div>
         </div>
       )}
     </div>
-    
   );
 
   const renderTreinoAgendadoCard = (treino: TreinoAgendado) => {
     const programado = treino.treinoProgramado;
     const nivel = treino.nivel ?? treino.treinoProgramado?.nivel ?? "-";
-    const prazoIso = treino.prazoEnvio ?? treino.dataTreino ?? treino.treinoProgramado?.dataAgendada ?? null;
+    const prazoIso =
+      treino.prazoEnvio ??
+      treino.dataTreino ??
+      treino.treinoProgramado?.dataAgendada ??
+      null;
     const exercicios = programado?.exercicios ?? [];
     const exIds = exercicios.map((e) => e.exercicio.id);
     const pontos = programado?.pontuacao ?? null;
@@ -1204,7 +1698,9 @@ const renderDesafioCard = (desafio: Desafio) => (
 
           <div className="flex items-center gap-2">
             {typeof pontos === "number" && pontos > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">+{pontos} pts</span>
+              <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                +{pontos} pts
+              </span>
             )}
             <button
               onClick={() => removerTreinoAgendado(treino.id)}
@@ -1216,7 +1712,9 @@ const renderDesafioCard = (desafio: Desafio) => (
           </div>
         </div>
 
-        {programado?.descricao && <p className="text-sm text-gray-700 mt-1">{programado.descricao}</p>}
+        {programado?.descricao && (
+          <p className="text-sm text-gray-700 mt-1">{programado.descricao}</p>
+        )}
 
         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700">
           <p>
@@ -1239,7 +1737,10 @@ const renderDesafioCard = (desafio: Desafio) => (
             <div className="sm:col-span-2 flex items-center text-gray-700">
               <CalendarClock className="h-4 w-4 mr-1" />
               Prazo para envio:
-              <Badge variant="outline" className="ml-2 text-[11px] bg-green-100 text-green-700 border-green-200">
+              <Badge
+                variant="outline"
+                className="ml-2 text-[11px] bg-green-100 text-green-700 border-green-200"
+              >
                 {formatarDataHora(prazoIso)}
               </Badge>
             </div>
@@ -1252,7 +1753,13 @@ const renderDesafioCard = (desafio: Desafio) => (
               <strong className="text-sm text-gray-800">Exercícios</strong>
               <div className="text-xs text-gray-600">
                 Progresso:{" "}
-                <span className={`font-semibold ${allChecked ? "text-emerald-700" : "text-gray-800"}`}>{done}/{total}</span>
+                <span
+                  className={`font-semibold ${
+                    allChecked ? "text-emerald-700" : "text-gray-800"
+                  }`}
+                >
+                  {done}/{total}
+                </span>
               </div>
             </div>
 
@@ -1261,63 +1768,69 @@ const renderDesafioCard = (desafio: Desafio) => (
                 const id = ex.exercicio.id;
                 const checked = !!ck[id];
                 return (
-  <label
-    key={id}
-    className="flex items-start gap-2 border-b pb-2 last:border-b-0 cursor-pointer select-none"
-    title={ex.exercicio.nome}
-  >
-  <input
-    type="checkbox"
-    checked={checked}
-    onChange={() => toggleItemChecklist(treino.id, id)}
-    className="sr-only peer"
-  />
+                  <label
+                    key={id}
+                    className="flex items-start gap-2 border-b pb-2 last:border-b-0 cursor-pointer select-none"
+                    title={ex.exercicio.nome}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleItemChecklist(treino.id, id)}
+                      className="sr-only peer"
+                    />
 
-  <span
-    className="
-      mt-0.5 relative h-5 w-5 rounded-md
-      border-2 border-emerald-600 bg-white
-      flex items-center justify-center
-      transition-all duration-150
-      peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-400/60
-      peer-checked:border-emerald-700
-      peer-checked:[&>svg]:opacity-100
-      peer-checked:[&>svg]:scale-100
-    "
-    aria-hidden="true"
-  >
-    <svg
-      viewBox="0 0 24 24"
-      className="
-        absolute h-3.5 w-3.5
-        text-emerald-700            
-        opacity-0 scale-75
-        transition duration-150
-        pointer-events-none
-      "
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={3}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      role="presentation"
-    >
-      <path d="M20 6L9 17l-5-5" />
-    </svg>
-  </span>
+                    <span
+                      className="
+                        mt-0.5 relative h-5 w-5 rounded-md
+                        border-2 border-emerald-600 bg-white
+                        flex items-center justify-center
+                        transition-all duration-150
+                        peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-400/60
+                        peer-checked:border-emerald-700
+                        peer-checked:[&>svg]:opacity-100
+                        peer-checked:[&>svg]:scale-100
+                      "
+                      aria-hidden="true"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="
+                          absolute h-3.5 w-3.5
+                          text-emerald-700
+                          opacity-0 scale-75
+                          transition duration-150
+                          pointer-events-none
+                        "
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={3}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        role="presentation"
+                      >
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    </span>
 
-  <div className="flex-1">
-    <div className="flex items-center gap-2">
-      <span className="font-medium">{i + 1}.</span>
-      <span className={`truncate ${checked ? "line-through text-gray-500" : ""}`}>
-        {ex.exercicio.nome}
-      </span>
-      {!!ex.repeticoes && <span className="text-[11px] text-gray-500">({ex.repeticoes})</span>}
-    </div>
-  </div>
-</label>
-
-
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{i + 1}.</span>
+                        <span
+                          className={`truncate ${
+                            checked ? "line-through text-gray-500" : ""
+                          }`}
+                        >
+                          {ex.exercicio.nome}
+                        </span>
+                        {!!ex.repeticoes && (
+                          <span className="text-[11px] text-gray-500">
+                            ({ex.repeticoes})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </label>
                 );
               })}
             </div>
@@ -1347,7 +1860,10 @@ const renderDesafioCard = (desafio: Desafio) => (
 
         <div className="mt-4 flex flex-wrap items-center gap-2 justify-end">
           {(st === undefined || st === "PENDING") && (
-            <button onClick={() => iniciar(treino.id)} className="bg-green-700 text-white px-3 py-2 rounded-lg">
+            <button
+              onClick={() => iniciar(treino.id)}
+              className="bg-green-700 text-white px-3 py-2 rounded-lg"
+            >
               Iniciar
             </button>
           )}
@@ -1374,8 +1890,16 @@ const renderDesafioCard = (desafio: Desafio) => (
               <button
                 onClick={() => finalizarEEnviar(treino)}
                 disabled={!allChecked}
-                className={`px-3 py-2 rounded-lg text-white ${allChecked ? "bg-emerald-700 hover:bg-emerald-800" : "bg-gray-400 cursor-not-allowed"}`}
-                title={allChecked ? "Finalizar e enviar submissão" : "Complete todos os exercícios para finalizar"}
+                className={`px-3 py-2 rounded-lg text-white ${
+                  allChecked
+                    ? "bg-emerald-700 hover:bg-emerald-800"
+                    : "bg-gray-400 cursor-not-allowed"
+                }`}
+                title={
+                  allChecked
+                    ? "Finalizar e enviar submissão"
+                    : "Complete todos os exercícios para finalizar"
+                }
               >
                 Finalizar e enviar
               </button>
@@ -1383,74 +1907,82 @@ const renderDesafioCard = (desafio: Desafio) => (
           )}
 
           {st === "COMPLETED" && (
-            <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Concluído</span>
+            <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Concluído
+            </span>
           )}
 
           {!jaSubmetido && st !== "IN_PROGRESS" && (
             <button
-              onClick={() => navigate(`/submissao?treinoAgendadoId=${treino.id}`)}
+              onClick={() =>
+                navigate(`/submissao?treinoAgendadoId=${treino.id}`)
+              }
               className="bg-green-800 hover:bg-green-900 text-white px-3 py-2 rounded-lg"
             >
               Fazer Submissão
             </button>
           )}
         </div>
-
       </div>
     );
   };
 
-async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
-  const token = getToken();
+  async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
+    const token = getToken();
 
-  if (!token) {
-    alert("Sessão expirada. Faça login novamente.");
-    return;
-  }
-
-  try {
-    const r = await fetch(`${API.BASE_URL}/api/treinos/biblioteca`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ treinoProgramadoId }),
-    });
-
-    if (!r.ok) {
-      let payload: any = null;
-      try {
-        payload = await r.json();
-      } catch {
-        // se não conseguir parsear JSON, mantém payload = null
-      }
-
-      // 🧱 Gating de limite: 5 TreinoSalvo Free
-      if (r.status === 403 && payload?.code === "LIMIT_REACHED" && payload?.feature === "TREINO_SALVO") {
-        alert(
-          payload.message ||
-            "Você atingiu o limite de treinos salvos na sua biblioteca no plano Free."
-        );
-        return;
-      }
-
-      if (r.status === 409) {
-        alert("Esse treino já está na sua biblioteca.");
-        return;
-      }
-
-      console.error("Falha ao salvar na biblioteca:", r.status, payload || (await r.text().catch(() => "")));
-      alert("Não foi possível salvar o treino na biblioteca.");
+    if (!token) {
+      alert("Sessão expirada. Faça login novamente.");
       return;
     }
 
-    alert("Treino salvo na sua biblioteca!");
-  } catch (e) {
-    console.error(e);
-    alert("Erro inesperado ao salvar o treino na biblioteca.");
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/treinos/biblioteca`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ treinoProgramadoId }),
+      });
+
+      if (!r.ok) {
+        let payload: any = null;
+        try {
+          payload = await r.json();
+        } catch {}
+
+        if (
+          r.status === 403 &&
+          payload?.code === "LIMIT_REACHED" &&
+          payload?.feature === "TREINO_SALVO"
+        ) {
+          alert(
+            payload.message ||
+              "Você atingiu o limite de treinos salvos na sua biblioteca no plano Free."
+          );
+          return;
+        }
+
+        if (r.status === 409) {
+          alert("Esse treino já está na sua biblioteca.");
+          return;
+        }
+
+        console.error(
+          "Falha ao salvar na biblioteca:",
+          r.status,
+          payload || (await r.text().catch(() => ""))
+        );
+        alert("Não foi possível salvar o treino na biblioteca.");
+        return;
+      }
+
+      alert("Treino salvo na sua biblioteca!");
+    } catch (e) {
+      console.error(e);
+      alert("Erro inesperado ao salvar o treino na biblioteca.");
+    }
   }
-}
 
   async function removerTreinoAgendado(id: string) {
     const token = Storage.token;
@@ -1458,10 +1990,13 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
     if (!confirm("Remover este treino dos seus treinos?")) return;
 
     try {
-      const res = await fetch(`${API.BASE_URL}/api/treinos/agendados/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        `${API.BASE_URL}/api/treinos/agendados/${id}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       if (!res.ok) {
         const txt = await res.text();
         console.error("Falha ao excluir:", res.status, txt);
@@ -1521,8 +2056,15 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
         Array.from(selecionados).map((paraId) =>
           fetch(`${API.BASE_URL}/api/mensagem`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ paraId, conteudo: desafioParaCompartilhar, tipo: "DESAFIO" }),
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              paraId,
+              conteudo: desafioParaCompartilhar,
+              tipo: "DESAFIO",
+            }),
           })
         )
       );
@@ -1550,7 +2092,9 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
                 <button
                   onClick={() => setAbaProfessor("avaliar")}
                   className={`px-4 py-2 rounded-lg border text-sm ${
-                    abaProfessor === "avaliar" ? "bg-green-800 text-white border-green-900" : "bg-white text-gray-800 border-gray-200"
+                    abaProfessor === "avaliar"
+                      ? "bg-green-800 text-white border-green-900"
+                      : "bg-white text-gray-800 border-gray-200"
                   }`}
                 >
                   Avaliar Treinos
@@ -1558,14 +2102,18 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
                 <button
                   onClick={() => setAbaProfessor("criar")}
                   className={`px-4 py-2 rounded-lg border text-sm ${
-                    abaProfessor === "criar" ? "bg-green-800 text-white border-green-900" : "bg-white text-gray-800 border-gray-200"
+                    abaProfessor === "criar"
+                      ? "bg-green-800 text-white border-green-900"
+                      : "bg-white text-gray-800 border-gray-200"
                   }`}
                 >
                   Meus Treinos
                 </button>
               </div>
             ) : (
-              <div className="text-lg font-semibold text-green-900">Treinos</div>
+              <div className="text-lg font-semibold text-green-900">
+                Treinos
+              </div>
             )}
 
             {podeGerirElenco && (
@@ -1578,7 +2126,6 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
                 <SoccerFieldIcon className="w-5 h-5" />
               </Link>
             )}
-
           </div>
         </div>
 
@@ -1590,11 +2137,17 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
                   <h3 className="text-lg font-semibold">Meus Treinos</h3>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <button className="bg-green-800 text-white px-4 py-2 rounded-lg text-sm" onClick={() => navigate("/treinos/novo")}>
+                    <button
+                      className="bg-green-800 text-white px-4 py-2 rounded-lg text-sm"
+                      onClick={() => navigate("/treinos/novo")}
+                    >
                       Agendar novo treino
                     </button>
 
-                    <button className="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm" onClick={() => navigate("/treinos/livre/novo")}>
+                    <button
+                      className="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm"
+                      onClick={() => navigate("/treinos/livre/novo")}
+                    >
                       Registrar treino livre
                     </button>
 
@@ -1606,10 +2159,45 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
                     </button>
                   </div>
                 </div>
-                {treinosAgendadosVisiveis.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{treinosAgendadosVisiveis.map(renderTreinoAgendadoCard)}</div>
+
+                <div className="flex gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setViewAtleta("lista")}
+                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm border ${
+                      viewAtleta === "lista"
+                        ? "bg-green-800 text-white border-green-900"
+                        : "bg-white text-gray-800 border-gray-200"
+                    }`}
+                  >
+                    Lista
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewAtleta("calendario")}
+                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm border inline-flex items-center gap-1 ${
+                      viewAtleta === "calendario"
+                        ? "bg-green-800 text-white border-green-900"
+                        : "bg-white text-gray-800 border-gray-200"
+                    }`}
+                  >
+                    <CalendarClock className="w-4 h-4" />
+                    Calendário
+                  </button>
+                </div>
+
+                {viewAtleta === "lista" ? (
+                  treinosAgendadosVisiveis.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {treinosAgendadosVisiveis.map(renderTreinoAgendadoCard)}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500">
+                      Nenhum treino disponível ainda.
+                    </p>
+                  )
                 ) : (
-                  <p className="text-gray-500">Nenhum treino disponível ainda.</p>
+                  <CalendarAgenda items={agendaItemsAtleta} />
                 )}
               </div>
 
@@ -1627,7 +2215,9 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
                       {desafiosVisiveis.map(renderDesafioCard)}
                     </div>
                   ) : (
-                    <p className="text-gray-500">Nenhum desafio disponível no momento.</p>
+                    <p className="text-gray-500">
+                      Nenhum desafio disponível no momento.
+                    </p>
                   )}
                 </div>
               )}
@@ -1638,28 +2228,42 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
             <div className="space-y-6">
               {abaProfessor === "avaliar" && (
                 <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-                  <h3 className="text-lg font-semibold mb-3">Treinos dos atletas afiliados</h3>
+                  <h3 className="text-lg font-semibold mb-3">
+                    Treinos dos atletas afiliados
+                  </h3>
 
                   {carregandoSubmissoes ? (
-                    <p className="text-gray-500">Carregando submissões pendentes...</p>
+                    <p className="text-gray-500">
+                      Carregando submissões pendentes...
+                    </p>
                   ) : submissoesPendentes.length === 0 ? (
-                    <p className="text-gray-500">Nenhum treino pendente para avaliação no momento.</p>
+                    <p className="text-gray-500">
+                      Nenhum treino pendente para avaliação no momento.
+                    </p>
                   ) : (
                     <>
                       <ul className="space-y-3">
                         {submissoesPendentes.map((s) => {
-                          const foto = s.atleta?.foto ? resolveUploadUrl(s.atleta.foto) : PLACEHOLDER_USER;
-                          const midias = (Array.isArray(s.midias) ? s.midias : []).map(resolveUploadUrl);
+                          const foto = s.atleta?.foto
+                            ? resolveUploadUrl(s.atleta.foto)
+                            : PLACEHOLDER_USER;
+                          const midias = (Array.isArray(s.midias) ? s.midias : []).map(
+                            resolveUploadUrl
+                          );
 
                           return (
-                            <li key={s.id} className="rounded-xl border bg-white shadow-sm hover:shadow-md transition p-3 sm:p-4">
+                            <li
+                              key={s.id}
+                              className="rounded-xl border bg-white shadow-sm hover:shadow-md transition p-3 sm:p-4"
+                            >
                               <div className="flex items-start gap-3 sm:gap-4">
                                 <img
                                   src={foto}
                                   alt={s.atleta?.nome}
                                   className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border"
                                   onError={(e) => {
-                                    const el = e.currentTarget as HTMLImageElement;
+                                    const el =
+                                      e.currentTarget as HTMLImageElement;
                                     (el as any).onerror = null;
                                     el.src = PLACEHOLDER_USER;
                                   }}
@@ -1667,14 +2271,21 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
 
                                 <div className="min-w-0 flex-1">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <div className="font-semibold text-green-900 truncate">{s.treino.titulo}</div>
+                                    <div className="font-semibold text-green-900 truncate">
+                                      {s.treino.titulo}
+                                    </div>
                                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
                                       +{s.pontosSugeridos ?? 0} pts
                                     </span>
 
                                     <div className="ml-auto flex items-center gap-2 w-full sm:w-auto">
                                       <button
-                                        onClick={() => aprovar(s.id, s.pontosSugeridos)}
+                                        onClick={() =>
+                                          aprovar(
+                                            s.id,
+                                            s.pontosSugeridos
+                                          )
+                                        }
                                         className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
                                         title="Aprovar e creditar pontos"
                                       >
@@ -1690,11 +2301,17 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
                                     </div>
                                   </div>
 
-                                  <div className="text-sm text-gray-600 truncate">{s.atleta?.nome}</div>
-                                  <div className="text-xs text-gray-500">{formatarDataHora(s.criadoEm)}</div>
+                                  <div className="text-sm text-gray-600 truncate">
+                                    {s.atleta?.nome}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {formatarDataHora(s.criadoEm)}
+                                  </div>
 
                                   {!!s.observacao && (
-                                    <p className="mt-1 text[13px] italic text-gray-700 leading-snug">“{s.observacao}”</p>
+                                    <p className="mt-1 text[13px] italic text-gray-700 leading-snug">
+                                      “{s.observacao}”
+                                    </p>
                                   )}
                                 </div>
                               </div>
@@ -1705,7 +2322,10 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
                                     {midias.map((src, idx) => {
                                       const isVid = isVideoUrl(src);
                                       return isVid ? (
-                                        <div key={`${src}-${idx}`} className="relative w-full overflow-hidden rounded-lg bg-black border pt-[56.25%]">
+                                        <div
+                                          key={`${src}-${idx}`}
+                                          className="relative w-full overflow-hidden rounded-lg bg-black border pt-[56.25%]"
+                                        >
                                           <video
                                             src={src}
                                             className="absolute inset-0 h-full w-full object-cover group-hover:scale-[1.02] transition"
@@ -1717,7 +2337,14 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
                                           />
                                         </div>
                                       ) : (
-                                        <a key={`${src}-${idx}`} href={src} target="_blank" rel="noreferrer" className="block group" title="Abrir imagem">
+                                        <a
+                                          key={`${src}-${idx}`}
+                                          href={src}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="block group"
+                                          title="Abrir imagem"
+                                        >
                                           <div className="relative w-full overflow-hidden rounded-lg border bg-gray-50 pt-[56.25%]">
                                             <img
                                               src={src}
@@ -1740,7 +2367,10 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
 
                       {submissoesPendentes.length < page.total && (
                         <div className="mt-3 flex justify-center">
-                          <button onClick={() => carregarSubmissoes(true)} className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
+                          <button
+                            onClick={() => carregarSubmissoes(true)}
+                            className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                          >
                             Carregar mais
                           </button>
                         </div>
@@ -1753,33 +2383,47 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
               {abaProfessor === "criar" && (
                 <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                    <h3 className="text-lg font-semibold">{usuario.tipo === "admin" ? "Todos os Treinos" : "Treinos que você criou"}</h3>
-                    <button className="bg-green-800 text-white px-4 py-2 rounded-lg" onClick={() => navigate("/treinos/novo")}>
+                    <h3 className="text-lg font-semibold">
+                      {usuario.tipo === "admin"
+                        ? "Todos os Treinos"
+                        : "Treinos que você criou"}
+                    </h3>
+                    <button
+                      className="bg-green-800 text-white px-4 py-2 rounded-lg"
+                      onClick={() => navigate("/treinos/novo")}
+                    >
                       Criar novo treino
                     </button>
                   </div>
 
-                  {(usuario.tipo === "admin"
-                    ? treinos
-                    : treinos.filter(
-                        (t) =>
-                          t.professorId === usuario.tipoUsuarioId ||
-                          t.escolinhaId === usuario.tipoUsuarioId ||
-                          t.clubeId === usuario.tipoUsuarioId
-                      )
+                  {(
+                    usuario.tipo === "admin"
+                      ? treinos
+                      : treinos.filter(
+                          (t) =>
+                            t.professorId === usuario.tipoUsuarioId ||
+                            t.escolinhaId === usuario.tipoUsuarioId ||
+                            t.clubeId === usuario.tipoUsuarioId
+                        )
                   ).length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {(usuario.tipo === "admin"
-                        ? treinos
-                        : treinos.filter(
-                            (t) =>
-                              t.professorId === usuario.tipoUsuarioId ||
-                              t.escolinhaId === usuario.tipoUsuarioId ||
-                              t.clubeId === usuario.tipoUsuarioId
-                          )).map(renderTreinoCard)}
+                      {(
+                        usuario.tipo === "admin"
+                          ? treinos
+                          : treinos.filter(
+                              (t) =>
+                                t.professorId === usuario.tipoUsuarioId ||
+                                t.escolinhaId === usuario.tipoUsuarioId ||
+                                t.clubeId === usuario.tipoUsuarioId
+                            )
+                      ).map(renderTreinoCard)}
                     </div>
                   ) : (
-                    <p className="text-gray-500">{usuario.tipo === "admin" ? "Nenhum treino cadastrado." : "Você ainda não criou nenhum treino."}</p>
+                    <p className="text-gray-500">
+                      {usuario.tipo === "admin"
+                        ? "Nenhum treino cadastrado."
+                        : "Você ainda não criou nenhum treino."}
+                    </p>
                   )}
                 </div>
               )}
@@ -1798,7 +2442,11 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
         <Link href="/post" className="hover:opacity-90" aria-label="Novo post">
           <CirclePlus />
         </Link>
-        <Link href={isOlheiro ? "/olheiros" : "/treinos"} className="hover:opacity-90" aria-label="Treinos">
+        <Link
+          href={isOlheiro ? "/olheiros" : "/treinos"}
+          className="hover:opacity-90"
+          aria-label="Treinos"
+        >
           <Volleyball />
         </Link>
         <Link href="/perfil" className="hover:opacity-90" aria-label="Perfil">
@@ -1809,21 +2457,33 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
       {modalAberto && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-lg relative">
-            <h2 className="text-lg font-bold mb-4 text-center">Compartilhar Desafio</h2>
+            <h2 className="text-lg font-bold mb-4 text-center">
+              Compartilhar Desafio
+            </h2>
 
             <div className="mb-4">
-              <p className="text-sm text-gray-700 mb-2">Enviar por mensagem:</p>
+              <p className="text-sm text-gray-700 mb-2">
+                Enviar por mensagem:
+              </p>
 
               <div className="flex gap-3 overflow-x-auto pb-2">
-                {carregandoMutuos && <span className="text-sm text-gray-500">Carregando contatos...</span>}
+                {carregandoMutuos && (
+                  <span className="text-sm text-gray-500">
+                    Carregando contatos...
+                  </span>
+                )}
 
                 {!carregandoMutuos && usuariosMutuos.length === 0 && (
-                  <span className="text-sm text-gray-500">Você ainda não tem contatos mútuos.</span>
+                  <span className="text-sm text-gray-500">
+                    Você ainda não tem contatos mútuos.
+                  </span>
                 )}
 
                 {usuariosMutuos.map((u) => {
                   const selecionado = selecionados.has(u.id);
-                  const fotoSrc = u.foto ? resolveUploadUrl(u.foto) : PLACEHOLDER_USER;
+                  const fotoSrc = u.foto
+                    ? resolveUploadUrl(u.foto)
+                    : PLACEHOLDER_USER;
                   return (
                     <button
                       key={u.id}
@@ -1859,14 +2519,24 @@ async function salvarTreinoNaBiblioteca(treinoProgramadoId: string) {
                 disabled={selecionados.size === 0 || enviandoDM}
                 onClick={enviarCompartilhamentoPorDM}
                 className={`mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded-lg 
-                    ${selecionados.size === 0 || enviandoDM ? "bg-gray-300 text-gray-600" : "bg-green-700 text-white hover:bg-green-800"}`}
+                    ${
+                      selecionados.size === 0 || enviandoDM
+                        ? "bg-gray-300 text-gray-600"
+                        : "bg-green-700 text-white hover:bg-green-800"
+                    }`}
               >
                 <Send className="w-4 h-4" />
-                {enviandoDM ? "Enviando..." : `Enviar para ${selecionados.size} contato(s)`}
+                {enviandoDM
+                  ? "Enviando..."
+                  : `Enviar para ${selecionados.size} contato(s)`}
               </button>
             </div>
 
-            <button onClick={() => setModalAberto(false)} className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl" aria-label="Fechar modal">
+            <button
+              onClick={() => setModalAberto(false)}
+              className="absolute top-2 right-3 text-gray-600 hover:text-black text-xl"
+              aria-label="Fechar modal"
+            >
               <CircleX />
             </button>
           </div>
