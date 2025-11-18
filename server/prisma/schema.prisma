@@ -94,6 +94,7 @@ model Assinatura {
   canceledAt DateTime?
   ativo      Boolean   @default(true)
   usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  providerSubscriptionId String?  @unique  // id da assinatura no provedor (Stripe, etc)
 
   @@index([startsAt])
   @@index([canceledAt])
@@ -246,6 +247,10 @@ model Atleta {
   DocumentoFormador            DocumentoFormador[]
   TreinoRotinaAtribuicao       TreinoRotinaAtribuicao[]
   ListaOlheiroItem             ListaOlheiroItem[]
+  dataNascimento                 DateTime?
+  contatoOlheiroPermitido        Boolean  @default(false)
+  contatoOlheiroConsentidoEm     DateTime?
+  contatoOlheiroConsentidoPorId  String?
 
   @@index([perfilTipoTreino])
 }
@@ -436,11 +441,16 @@ model Midia {
   submissaoDesafioId String?
   submissaoTreinoId  String?
   criadoEm           DateTime  @default(now())
-
-  durationSec Int?
-  width       Int?
-  height      Int?
-  sizeBytes   Int?
+  durationSec        Int?
+  width              Int?
+  height             Int?
+  sizeBytes          Int?
+  processedUrl       String?   // 720p/30
+  thumbUrl           String?
+  fps                Int?
+  lastAccessAt       DateTime?
+  storageClass       StorageClass   // "HOT" | "COLD" | etc.
+  atualizadoEm       DateTime @updatedAt
 
   atleta           Atleta?           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   clube            Clube?            @relation(fields: [clubeId], references: [id], onDelete: SetNull)
@@ -1509,6 +1519,31 @@ model UsageCounter {
   @@index([key, windowKind, windowStart])
 }
 
+model EventoPagamento {
+  id              String   @id @default(cuid())
+  providerEventId String   @unique // id do evento no provedor
+  tipo            String
+  recebidoEm      DateTime @default(now())
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  usuarioId    String?
+  ip           String?
+  userAgent    String?
+  acao         String
+  entidade     String?
+  entidadeId   String?
+  descricao    String?
+  meta         Json?
+  criadoEm     DateTime @default(now())
+}
+
+enum StorageClass {
+  HOT
+  COLD
+}
+
 enum Periodicidade {
   Mensal
   Anual
@@ -1569,15 +1604,23 @@ enum IndicacaoStatus {
 enum PosicaoCampo {
   GOL
   LD
-  ZD
-  ZE
   LE
+  ZD
+  ZC
+  ZE
+  ALA_D
+  ALA_E
   VOL1
   VOL2
+  MC1
+  MC2
   MEI
+  MD
+  ME
   PD
+  SA1
+  SA2
   CA
-  PE
 }
 
 enum StatusDesafioGrupo {

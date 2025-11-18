@@ -1,5 +1,6 @@
 // server/services/entitlements.ts
 import type { TipoUsuario } from "@prisma/client";
+import { recordCanLatency, recordCapabilityDecision } from "./observability.js";
 
 export type Plano = "FREE" | "PRO" | "ORG";
 export type Papel =
@@ -73,15 +74,41 @@ function normPapel(t: TipoUsuario | string): Papel {
 }
 
 export function can(user: UserContext, cap: Capability, want = 1): boolean {
-  if (user?.isAdmin) return true;
-  const papel = normPapel(user?.tipo || "atleta");
-  const caps = ENTITLEMENTS[papel]?.[user?.plano || "FREE"];
-  if (!caps) return false;
-  const entry = caps[cap];
-  if (entry === true) return true;
-  if (entry === false || entry == null) return false;
-  const lim = Number(entry);
-  return lim === Infinity || want <= lim;
+  const start = process.hrtime.bigint();
+  let allowed = false;
+
+  // Admin sempre pode tudo
+  if (user?.isAdmin) {
+    allowed = true;
+  } else {
+    const papel = normPapel(user?.tipo || "atleta");
+    const caps = ENTITLEMENTS[papel]?.[user?.plano || "FREE"];
+
+    if (!caps) {
+      allowed = false;
+    } else {
+      const entry = caps[cap];
+
+      if (entry === true) {
+        allowed = true;
+      } else if (entry === false || entry == null) {
+        allowed = false;
+      } else {
+        const lim = Number(entry);
+        allowed = lim === Infinity || want <= lim;
+      }
+    }
+  }
+
+  const end = process.hrtime.bigint();
+  const diffNs = Number(end - start);
+  const ms = diffNs / 1e6;
+
+  // aqui usamos o próprio `cap` como nome da capability
+  recordCanLatency({ capability: cap, latencyMs: ms });
+  recordCapabilityDecision({ capability: cap, allowed });
+
+  return allowed;
 }
 
 export function canDetailed(user: UserContext, cap: Capability, want = 1) {
