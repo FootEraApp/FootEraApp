@@ -1,4 +1,3 @@
-// server/controllers/consentimentoController.ts
 import { Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
@@ -37,7 +36,6 @@ export async function atualizarConsentimentoOlheiro(
       },
     });
 
-    // >>> AQUI entra exatamente o trecho que você perguntou <<<
     await audit(req as any, {
       acao: "CONSENTIMENTO_OLHEIRO_ATUALIZADO",
       entidade: "Atleta",

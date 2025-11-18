@@ -51,7 +51,7 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
       tipoUsuario,
       tipoUsuarioId,
       criadoPorUsuarioId,
-      treinoProgramadoId, // se no futuro você quiser atrelar a um treino real
+      treinoProgramadoId,
     } = req.body || {};
 
     const owner = ownerWhere(tipoUsuario, tipoUsuarioId);
@@ -88,14 +88,12 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
 
     const expiraEm = publico || naoExpira ? null : addDays(new Date(), TTL_DIAS);
 
-    // ID sintético se não vier um treinoProgramadoId real
     const effectiveTreinoProgramadoId =
       treinoProgramadoId ??
       `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const created = await prisma.treinoSalvo.create({
       data: {
-        // obrigatórios
         usuarioId: user.id,
         treinoProgramadoId: String(effectiveTreinoProgramadoId),
 

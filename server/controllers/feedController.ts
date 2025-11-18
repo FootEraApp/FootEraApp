@@ -76,7 +76,6 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
 
     if (filtro === "meus") {
       if (!userId) {
-        // usuário não autenticado → nenhum post e sem ads
         const ads = await getAdsConfigForUser(undefined);
         return res.json({ items: [], meta: ads });
       }
@@ -143,7 +142,6 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
 
     const ads = await getAdsConfigForUser(userId);
 
-    // >>> AQUI entra o formato com meta de ads <<<
     return res.json({
       items: postagens,
       meta: {

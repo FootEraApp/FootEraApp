@@ -1,4 +1,3 @@
-// routes/elencos.js
 import { Router } from "express";
 import { authenticateToken } from "../middlewares/auth.js";
 import { requireMembership } from "../middlewares/requireMembership.js";
@@ -13,7 +12,6 @@ import {
 
 const router = Router();
 
-// ⚠️ Ordem importa: “por-*” vem ANTES de "/:id/escala", senão "/:id" captura "por-clube".
 router.get("/por-escolinha/:escolinhaId/escala", authenticateToken, requireMembership, getEscalaPorDono);
 router.get("/por-clube/:clubeId/escala", authenticateToken, requireMembership, getEscalaPorDono);
 

@@ -60,7 +60,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         where: {
           professorId: req.body.professorId,
           OR: [{ expiraEm: null }, { expiraEm: { gt: new Date() } }],
-          NOT: { naoExpira: true } // não é template
+          NOT: { naoExpira: true }
         }
       })
     );
@@ -168,8 +168,6 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       },
     });
 
-    // ---------------- AGENDAMENTO -------------------
-
     let agendadosCriados = 0;
 
       const professorIdForStats =
@@ -196,8 +194,6 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             dataBase: req.body.dataAgendada || null,
           },
         });
-
-    // ------s--------- AUDITORIA ---------------------
 
     await audit(req, {
       acao: 'PRESCREVER_TREINO',

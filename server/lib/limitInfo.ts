@@ -1,4 +1,3 @@
-// server/lib/limitInfo.ts
 import { Response } from "express";
 
 export type LimitInfoPayload = {
@@ -6,7 +5,6 @@ export type LimitInfoPayload = {
   window: string;
   allowed: number;
   remaining: number;
-  // vamos acrescentar opcional:
   upgradeHint?: string;
 };
 

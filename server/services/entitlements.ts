@@ -1,4 +1,3 @@
-// server/services/entitlements.ts
 import type { TipoUsuario } from "@prisma/client";
 import { recordCanLatency, recordCapabilityDecision } from "./observability.js";
 
@@ -12,7 +11,7 @@ export type Papel =
 
 export type UserContext = {
   id: string;
-  tipo: TipoUsuario | Papel;      // aceito enum do Prisma ou minúsculo
+  tipo: TipoUsuario | Papel;  
   plano: Plano;
   isAdmin?: boolean;
 };
@@ -67,7 +66,7 @@ function normPapel(t: TipoUsuario | string): Papel {
   const s = String(t).toLowerCase();
   if (s === "professor") return "professor";
   if (s === "escolinha") return "escolinha";
-  if (s === "clube")     return "escolinha"; // clube se comporta como org nas regras (ajuste se quiser separar)
+  if (s === "clube")     return "escolinha";
   if (s === "olheiro")   return "olheiro";
   if (s === "admin")     return "admin";
   return "atleta";
@@ -77,7 +76,6 @@ export function can(user: UserContext, cap: Capability, want = 1): boolean {
   const start = process.hrtime.bigint();
   let allowed = false;
 
-  // Admin sempre pode tudo
   if (user?.isAdmin) {
     allowed = true;
   } else {
@@ -104,7 +102,6 @@ export function can(user: UserContext, cap: Capability, want = 1): boolean {
   const diffNs = Number(end - start);
   const ms = diffNs / 1e6;
 
-  // aqui usamos o próprio `cap` como nome da capability
   recordCanLatency({ capability: cap, latencyMs: ms });
   recordCapabilityDecision({ capability: cap, allowed });
 
@@ -115,7 +112,6 @@ export function canDetailed(user: UserContext, cap: Capability, want = 1) {
   const ok = can(user, cap, want);
   if (ok) return { ok: true, http: 200 as const, reason: "ok" };
 
-  // heurística simples p/ http
   const needPlan = (user.plano === "FREE") && ["agendamento.pessoal","agendamento.lote","templates:criar","templates"].includes(cap);
   return {
     ok: false,

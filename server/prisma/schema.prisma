@@ -94,7 +94,7 @@ model Assinatura {
   canceledAt DateTime?
   ativo      Boolean   @default(true)
   usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  providerSubscriptionId String?  @unique  // id da assinatura no provedor (Stripe, etc)
+  providerSubscriptionId String?  @unique 
 
   @@index([startsAt])
   @@index([canceledAt])
@@ -445,11 +445,11 @@ model Midia {
   width              Int?
   height             Int?
   sizeBytes          Int?
-  processedUrl       String?   // 720p/30
+  processedUrl       String? 
   thumbUrl           String?
   fps                Int?
   lastAccessAt       DateTime?
-  storageClass       StorageClass   // "HOT" | "COLD" | etc.
+  storageClass       StorageClass 
   atualizadoEm       DateTime @updatedAt
 
   atleta           Atleta?           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
@@ -1521,7 +1521,7 @@ model UsageCounter {
 
 model EventoPagamento {
   id              String   @id @default(cuid())
-  providerEventId String   @unique // id do evento no provedor
+  providerEventId String   @unique
   tipo            String
   recebidoEm      DateTime @default(now())
 }
