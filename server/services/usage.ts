@@ -1,4 +1,3 @@
-// server/services/usage.ts
 import { PrismaClient } from '@prisma/client';
 import { getUserPlan, planLimitFor } from './plan.js';
 import { USAGE_MESSAGES, WINDOW_BY_KEY, type WindowKind } from './usage.messages.js';
@@ -40,7 +39,7 @@ function startOfMonth(d: Date) {
 }
 function startOfIsoWeek(d: Date) {
   const x = startOfDay(d);
-  const day = x.getDay() || 7; // 1..7 (segunda = 1)
+  const day = x.getDay() || 7;
   if (day !== 1) x.setDate(x.getDate() - (day - 1));
   return x;
 }
@@ -89,7 +88,6 @@ export function windowBounds(kind: WindowKind, now: Date) {
     const m = String(ws.getMonth() + 1).padStart(2, "0");
     return { windowStart: ws, windowEnd: we, periodRef: `${y}-${m}` };
   }
-  // TOTAL
   const ws = new Date(0);
   const we = new Date(8640000000000000);
   return { windowStart: ws, windowEnd: we, periodRef: "TOTAL" };
@@ -108,17 +106,13 @@ function writeUsageHeaders(
   res.setHeader('X-Usage-Window', windowKind);
 }
 
-/**
- * Engine genérico: incrementa contador da janela e,
- * se passar do limite, responde com limitInfo padrão e retorna false.
- */
 export async function requireUsage(
   req: any,
   res: any,
   key: string
 ): Promise<boolean> {
   const windowKind = WINDOW_BY_KEY[key];
-  if (!windowKind) return true; // chave desconhecida → ignora
+  if (!windowKind) return true;
 
   const userId: string = req.user?.id || req.userId;
   if (!userId) {
@@ -158,7 +152,6 @@ export async function requireUsage(
     };
 
   if (Number.isFinite(limit) && used > limit) {
-    // contrato Épico 11
     sendLimitInfo(res, {
       capability: meta.capability,
       window: meta.window,
@@ -171,9 +164,6 @@ export async function requireUsage(
   return true;
 }
 
-/**
- * Para cotas TOTAL. Mesmo padrão de retorno boolean.
- */
 export async function enforceTotalLimit(
   req: any,
   res: any,

@@ -1,4 +1,3 @@
-// server/routes/mensagensRoutes.ts
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateToken } from "../middlewares/auth.js";
@@ -14,8 +13,7 @@ import {
   getUnreadByUser,
   listarConversas,
 } from "../controllers/mensagensController.js";
-import { canOpenDM } from "../utils/permissions.js";
-import { softRateLimit } from "../lib/rateLimit.js"; // <-- aqui, sem "@/"
+import { softRateLimit } from "../lib/rateLimit.js";
 
 const prisma = new PrismaClient();
 const router = Router();

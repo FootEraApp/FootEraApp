@@ -86,7 +86,7 @@ export default function PagamentosPage() {
   type RoleKey = keyof typeof roleToDefaultPlan;
 
   useEffect(() => {
-    setCupomPreview(null); // força revalidar
+    setCupomPreview(null);
   }, [selectedPlan, period]);
 
   useEffect(() => {
@@ -96,7 +96,6 @@ export default function PagamentosPage() {
         const { plans: apiPlans } = await cat.json();
         setPlans(apiPlans);
 
-        // plano inicial pela role (fallback: 1º plano retornado)
         const initialPlan: string =
           (typeof tipo === "string" && (tipo as RoleKey) in roleToDefaultPlan)
             ? roleToDefaultPlan[tipo as RoleKey]
@@ -120,7 +119,7 @@ export default function PagamentosPage() {
   const currentPlanPrice = useMemo(() => {
     const p = plans.find(p => p.id === selectedPlan);
     if (!p) return 0;
-    if (selectedPlan === "ESCOLINHA_PRO") return p.monthly; // apenas mensal
+    if (selectedPlan === "ESCOLINHA_PRO") return p.monthly;
     return period === "Mensal" ? p.monthly : (p.annual ?? p.monthly);
   }, [plans, selectedPlan, period]);
 
@@ -398,7 +397,7 @@ export default function PagamentosPage() {
               key={pl.id}
               onClick={() => {
                 setSelectedPlan(pl.id);
-                if (pl.id === "ESCOLINHA_PRO") setPeriod("Mensal"); // sem anual
+                if (pl.id === "ESCOLINHA_PRO") setPeriod("Mensal");
               }}
               className={`px-3 py-2 rounded-lg border ${selectedPlan === pl.id ? "bg-green-700 text-white border-green-600" : "bg-white text-gray-800"}`}
             >

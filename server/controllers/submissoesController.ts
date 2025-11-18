@@ -44,10 +44,9 @@ export async function criarSubmissaoTreinoUpload(
    req: AuthenticatedRequest,
    res: Response
   ) {
-    // 🔒 Limite semanal de submissões de treino para atleta Free
     if (req.user?.tipo === "Atleta" && req.user?.plano !== "PRO") {
       const ok = await requireUsage(req, res, "treinos_semana");
-      if (!ok) return; // requireUsage já respondeu 429 com limitInfo
+      if (!ok) return; 
     }
 
   try {
@@ -232,7 +231,6 @@ export async function criarSubmissaoDesafioUpload(
         .json({ message: "Dados obrigatórios ausentes (desafioId/atletaId)." });
     }
 
-    // 🔒 Gating: 2 submissões de desafio / mês no plano Free
     await enforceFeatureLimit({
       prisma,
       feature: "SUBMISSAO_DESAFIO",
@@ -246,7 +244,6 @@ export async function criarSubmissaoDesafioUpload(
     const atleta = await prisma.atleta.findUnique({ where: { id: atletaId } });
     if (!atleta) return res.status(400).json({ message: "Atleta inválido ou não encontrado." });
 
-    // Limite de 2 tentativas por desafio (independente do mês) – manteve sua regra antiga
     const tentativas = await prisma.submissaoDesafio.count({ where: { atletaId, desafioId } });
     if (tentativas >= 2) {
       return res.status(400).json({ message: "Limite de 2 tentativas atingido para este desafio." });
@@ -271,7 +268,7 @@ export async function criarSubmissaoDesafioUpload(
         ? Math.round(Number(tempoSeg) * 1000)
         : undefined;
 
-    const repeticoesNum = tentativaNumero; // (mantém sua regra)
+    const repeticoesNum = tentativaNumero;
 
     const created = await prisma.submissaoDesafio.create({
       data: {
@@ -324,7 +321,7 @@ export async function criarSubmissaoDesafioUpload(
       logCapabilityDenied({
         req,
         capability: fl.capability,
-        periodRef: fl.window,           // aqui é "30d" ou "TOTAL"
+        periodRef: fl.window,         
         remaining: fl.remaining,
         reason: "FEATURE_LIMIT",
       });

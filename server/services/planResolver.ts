@@ -1,4 +1,3 @@
-// server/services/planResolver.ts
 import { PrismaClient, TipoUsuario } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -9,7 +8,7 @@ export interface UserPayload {
   id: string;
   tipo: TipoUsuario;
   tipoUsuarioId?: string | null;
-  plano?: PlanoName | null;   // 👈 opcional/nulo
+  plano?: PlanoName | null;  
   isAdmin?: boolean;
 }
 
@@ -34,7 +33,6 @@ export async function getPlano(usuarioId: string): Promise<PlanoName> {
   });
   if (assinatura) return asPlano(assinatura.plano) === "FREE" ? "PRO" : asPlano(assinatura.plano);
 
-  // Fallback via Pagamento (janela por periodicidade)
   const pg = await prisma.pagamento.findFirst({
     where: { usuarioId, status: "APROVADO" },
     orderBy: { pagoEm: "desc" },
@@ -43,7 +41,7 @@ export async function getPlano(usuarioId: string): Promise<PlanoName> {
   if (pg?.pagoEm) {
     const pago = pg.pagoEm.getTime();
     const agora = Date.now();
-    const janela = pg.periodicidade === "Anual" ? 365 : 31; // dias
+    const janela = pg.periodicidade === "Anual" ? 365 : 31;
     if (agora - pago <= janela * 24 * 60 * 60 * 1000) return "PRO";
   }
 
@@ -71,7 +69,7 @@ export async function resolveUserContext(userId: string): Promise<UserPayload> {
   return {
     id: usuario.id,
     tipo: usuario.tipo,
-    tipoUsuarioId: null, // ou pegar professorId/atletaId se quiser
+    tipoUsuarioId: null,
     plano,
     isAdmin: !!usuario.administrador,
   };

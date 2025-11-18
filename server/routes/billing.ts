@@ -13,7 +13,6 @@ import {
 
 const router = Router();
 
-// Rotas protegidas por JWT (cliente)
 router.get("/plans", getPlans);
 router.get("/me", getMyBilling);
 router.post("/coupon", applyCoupon);
@@ -23,7 +22,6 @@ router.post("/subscription/cancel", cancelSubscription);
 router.post("/subscription/renew", renewSubscription);
 router.post("/subscription/switch", switchPlan);
 
-// Webhook do provedor (pode ser separado, se quiser sem JWT)
 router.post("/webhook/provider", providerWebhook);
 
 export default router;

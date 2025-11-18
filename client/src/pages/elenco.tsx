@@ -355,7 +355,6 @@ export default function PaginaElenco() {
     }
   }, []);
 
-  // carregar turmas do dono
   useEffect(() => {
     (async () => {
       try {
@@ -508,11 +507,9 @@ export default function PaginaElenco() {
 
       const atleta = atletas[source.index];
 
-      // coloca no slot (guardei o antigo sem depender da ordem de setState)
       const anterior = posicoes[posId];
       setPosicoes(prev => ({ ...prev, [posId]: atleta }));
 
-      // tira da lista e, se o slot tinha alguém, devolve-o pra lista
       setAtletas(prev => {
         const nova = prev.slice();
         nova.splice(source.index, 1);

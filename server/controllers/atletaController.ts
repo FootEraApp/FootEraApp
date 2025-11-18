@@ -111,7 +111,6 @@ export const uploadMidiaAtleta = async (req: Request, res: Response) => {
     descricao?: string;
   };
 
-  // normaliza string -> enum TipoMidia
   const tipoMidia: TipoMidia =
     tipo === "Video"
       ? TipoMidia.Video

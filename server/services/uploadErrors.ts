@@ -1,5 +1,3 @@
-// server/services/uploadErrors.ts
-
 export type UploadErrorCode =
   | "FILE_REQUIRED"
   | "FILE_TOO_LARGE"
@@ -12,9 +10,6 @@ interface UploadErrorPayload {
   details?: Record<string, any>;
 }
 
-/**
- * Helper pra padronizar erros de upload com mensagens amigáveis.
- */
 export function uploadError(
   code: UploadErrorCode,
   message: string,

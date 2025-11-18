@@ -1,12 +1,7 @@
-// server/utils/analyticsWindow.ts
 export type PlanoAtleta = "FREE" | "PRO" | string;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/**
- * Lê ?from=&to= da query. Se não vier nada:
- *  - usa últimos `defaultDays` dias.
- */
 export function getRangeFromQuery(
   query: any,
   defaultDays: number
@@ -19,10 +14,6 @@ export function getRangeFromQuery(
   return { from, to };
 }
 
-/**
- * Valida a janela permitida para atleta (Free x Pro).
- * Joga erro com code = "WINDOW_TOO_LARGE" se passar do limite.
- */
 export function validarJanelaAtleta(
   plano: PlanoAtleta,
   from: Date,
@@ -46,11 +37,6 @@ export function validarJanelaAtleta(
   }
 }
 
-/**
- * Para relatórios de escolinha/organização:
- * se o range passar de 12 meses, corta o FROM para 12 meses antes do TO.
- * Não dá erro, só ajusta.
- */
 export function aplicarCorteEscolinha(
   from: Date,
   to: Date

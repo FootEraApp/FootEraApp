@@ -1,4 +1,3 @@
-// client/src/pages/admin/metrics.tsx
 import React, { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { API } from "../../config.js";

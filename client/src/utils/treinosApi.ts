@@ -1,4 +1,3 @@
-// client/src/utils/treinosApi.ts
 import axios from "axios";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
@@ -8,14 +7,13 @@ const auth = () => ({ Authorization: `Bearer ${Storage.token}` });
 
 type AgendarRotinaMensalPayload = {
   treinoProgramadoId: string;
-  datas: string[];          // "2025-11-20" ou ISO completo
-  atletaIds?: string[];     // ids de atletas (id ou usuarioId, igual no backend)
-  elencosIds?: string[];    // ids de elencos
+  datas: string[];        
+  atletaIds?: string[];  
+  elencosIds?: string[];  
   incluirObservados?: boolean;
 };
 
 export const TreinosApi = {
-  // Criar treino programado (template / plano)
   criar(payload: TreinoCreatePayload) {
     return axios.post(
       `${API.BASE_URL}/api/treinos`,
@@ -24,7 +22,6 @@ export const TreinosApi = {
     );
   },
 
-  // Atualizar treino programado
   atualizar(id: string, payload: Partial<TreinoCreatePayload>) {
     return axios.put(
       `${API.BASE_URL}/api/treinos/${id}`,
@@ -33,7 +30,6 @@ export const TreinosApi = {
     );
   },
 
-  // Listar exercícios disponíveis
   listarExercicios() {
     return axios.get(
       `${API.BASE_URL}/api/treinos/exercicios`,
@@ -41,7 +37,6 @@ export const TreinosApi = {
     );
   },
 
-  // Buscar calendário de treinos agendados (usa getCalendarioTreinos no backend)
   async getCalendario(start: Date, end: Date) {
     const res = await axios.get(
       `${API.BASE_URL}/api/treinos/calendario`,
@@ -51,13 +46,12 @@ export const TreinosApi = {
           end: end.toISOString(),
         },
         headers: auth(),
-        withCredentials: true, // mantém como você tinha
+        withCredentials: true,
       }
     );
-    return res.data; // array de eventos
+    return res.data;
   },
 
-  // Agendar rotina mensal (usa agendarRotinaMensal do treinosController)
   agendarRotinaMensal(payload: AgendarRotinaMensalPayload) {
     return axios.post(
       `${API.BASE_URL}/api/treinos/agendar-rotina-mensal`,

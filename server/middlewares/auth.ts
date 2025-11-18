@@ -1,4 +1,3 @@
-// server/middlewares/auth.ts
 import { RequestHandler, Request } from "express";
 import jwt from "jsonwebtoken";
 import { TipoUsuario } from "@prisma/client";
@@ -7,13 +6,8 @@ import type { PlanoName, UserPayload } from "../services/planResolver.js";
 
 const SECRET = process.env.JWT_SECRET || "footera_secret";
 
-// Alias opcional
 export type AuthUser = UserPayload;
 
-/**
- * NÃO mexemos mais em Request["user"].
- * Guardamos tudo em `authUser` para evitar conflito com Express.User.
- */
 export type AuthenticatedRequest = Request & {
   userId?: string;
   authUser?: UserPayload;
@@ -51,7 +45,6 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
     const reqAuthed = req as AuthenticatedRequest;
     reqAuthed.userId = userId;
 
-    // contexto único (usuário + plano)
     const ctx = await resolveUserContext(userId);
 
     const user: UserPayload = {
@@ -62,7 +55,6 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
       isAdmin: !!ctx.isAdmin,
     };
 
-    // >>> NÃO usamos mais req.user, apenas req.authUser
     reqAuthed.authUser = user;
 
     return next();

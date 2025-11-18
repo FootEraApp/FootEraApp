@@ -90,7 +90,7 @@ import adsRoutes from "./routes/ads.js";
 import consentimentoRoutes from "./routes/consentimento.js";
 import metricsRoutes from "./routes/metrics.js";
 
-import { handlePaymentWebhook } from "./controllers/billingController.js"; // 👈 ADD ISTO
+import { handlePaymentWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 

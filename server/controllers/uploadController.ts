@@ -1,4 +1,3 @@
-// controllers/uploadController.ts
 import { Request, Response } from "express";
 import multer from "multer";
 import path from "path";
@@ -6,7 +5,7 @@ import fs from "fs";
 import { PrismaClient, TipoMidia, StorageClass } from "@prisma/client";
 import { probeImage, probeVideo } from "../services/mediaMetadata.js";
 import { audit } from "../services/audit.js";
-import { uploadError } from "../services/uploadErrors.js"; // <- corrige aqui
+import { uploadError } from "../services/uploadErrors.js";
 import { transcodeTo720p } from "../services/transcodeService.js";
 
 const prisma = new PrismaClient();
@@ -15,7 +14,6 @@ const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
 const queueTranscode = {
   add: async (_name: string, data: { midiaId: string; localPath: string }) => {
-    // Versão simples: roda em "background" no mesmo processo
     setImmediate(() => {
       transcodeTo720p(data.midiaId, data.localPath).catch((err) => {
         console.error("Erro na transcodificação 720p:", err);
@@ -66,7 +64,6 @@ export const uploadMidia = [
         );
       }
 
-      // Dados do corpo
       const {
         tipo,
         titulo = "",
@@ -87,7 +84,6 @@ export const uploadMidia = [
         submissaoTreinoId?: string;
       };
 
-      // Descobrir tipo da mídia
       let tipoMidia: TipoMidia;
       if (tipo === "Imagem" || tipo === "Video" || tipo === "Documento") {
         tipoMidia = tipo as TipoMidia;
@@ -99,7 +95,6 @@ export const uploadMidia = [
         tipoMidia = TipoMidia.Documento;
       }
 
-      // Metadata básica
       let meta: {
         durationSec: number | null;
         width: number | null;
@@ -149,7 +144,6 @@ export const uploadMidia = [
         console.warn("ffprobe/sharp error", e);
       }
 
-      // monta URL relativa e absoluta
       const filename = path.basename(localPath);
       const publicUrl = `/uploads/${filename}`;
 
@@ -160,10 +154,9 @@ export const uploadMidia = [
         `${req.protocol}://${req.get("host")}`;
       const urlAbs = `${String(base).replace(/\/+$/, "")}${publicUrl}`;
 
-      // grava no banco (modelo Midia do schema.prisma)
       const midia = await prisma.midia.create({
         data: {
-          url: urlAbs, // URL "original" pública
+          url: urlAbs,
           tipo: tipoMidia,
           dataEnvio: new Date(),
           descricao,
@@ -184,13 +177,11 @@ export const uploadMidia = [
         },
       });
 
-      // Enfileira para transcodificar em 720p/30 (se tiver fila)
       await queueTranscode.add("transcode", {
         midiaId: midia.id,
         localPath,
       });
 
-      // Auditar upload (seu service já existe)
       await audit(req, {
         acao: "UPLOAD_MIDIA",
         entidade: "Midia",

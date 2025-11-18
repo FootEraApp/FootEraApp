@@ -1,4 +1,3 @@
-// server/services/observability.ts
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 
 export type CapabilityName = string;
@@ -31,7 +30,6 @@ function ensureLatency(cap: CapabilityName): CanLatency {
   return canLatencies[cap];
 }
 
-// T13.1.1 – contadores por capability (permitidas/negadas)
 export function recordCapabilityDecision(opts: {
   capability: CapabilityName;
   allowed: boolean;
@@ -41,7 +39,6 @@ export function recordCapabilityDecision(opts: {
   else c.denied++;
 }
 
-// T13.1.1 – latência do can()
 export function recordCanLatency(opts: {
   capability: CapabilityName;
   latencyMs: number;
@@ -52,7 +49,6 @@ export function recordCanLatency(opts: {
   if (opts.latencyMs > l.maxMs) l.maxMs = opts.latencyMs;
 }
 
-// T13.1.2 – log estruturado de negação
 export function logCapabilityDenied(opts: {
   req: AuthenticatedRequest | null;
   capability: CapabilityName;
@@ -78,11 +74,9 @@ export function logCapabilityDenied(opts: {
     reason: opts.reason ?? null,
   };
 
-  // hoje: console, amanhã: enviar pra seu logger/Elastic/etc.
   console.warn(JSON.stringify(log));
 }
 
-// Para o dashboard
 export function getObservabilitySnapshot() {
   const canStats = Object.entries(canLatencies).map(([cap, l]) => ({
     capability: cap,

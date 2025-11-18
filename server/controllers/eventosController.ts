@@ -155,3 +155,60 @@ export async function obter(req: Request, res: Response) {
   if (!ev) return res.status(404).json({ error: "Evento não encontrado" });
   res.json(ev);
 }
+
+export async function minhaAgenda(req: any, res: Response) {
+  try {
+    const { alvoId, from, to } = req.query as {
+      alvoId?: string;
+      from?: string;
+      to?: string;
+    };
+
+    const agora = new Date();
+    const fromDate = parseDate(from) || agora;
+    const toDate = parseDate(to) || null;
+
+    const where: any = {
+      inicio: {
+        gte: fromDate,
+      },
+      status: "ABERTO", 
+    };
+
+    if (toDate) {
+      where.inicio.lte = toDate;
+    }
+
+    if (alvoId) {
+      const clube = await prisma.clube.findUnique({
+        where: { id: String(alvoId) },
+        select: { id: true },
+      });
+      if (clube) {
+        where.clubeId = clube.id;
+      }
+    } else if (req.user?.tipo === "clube" && req.user.tipoUsuarioId) {
+      where.clubeId = String(req.user.tipoUsuarioId);
+    }
+
+    const eventos = await prisma.evento.findMany({
+      where,
+      orderBy: { inicio: "asc" },
+      take: 100,
+    });
+
+    const items = eventos.map((ev) => ({
+      id: ev.id,
+      tipo: (ev.tipo as any) || "EVENTO",
+      titulo: ev.titulo,
+      inicio: ev.inicio,
+      fim: ev.fim,
+      origem: "EVENTO",
+    }));
+
+    return res.json(items);
+  } catch (e) {
+    console.error("Erro em eventos.minhaAgenda:", e);
+    return res.status(500).json({ error: "Erro ao carregar agenda de eventos" });
+  }
+}
