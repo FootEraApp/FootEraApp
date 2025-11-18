@@ -9,6 +9,7 @@ import qrcode from "qrcode-terminal";
 import * as fs from "fs";
 import helmet from "helmet";
 
+import { runColdStorageJob } from "./jobs/coldStorageJob.js";
 import { setupSocket } from "./socket.js";
 import { UPLOADS_ROOT, ensureUploadDirs } from "./utils/uploads.js";
 import { gerarSnapshotRanking } from "./jobs/rankingSnapshot.js";
@@ -86,6 +87,10 @@ import agendamentosRouter from './routes/agendamentos.js';
 import listasOlheiroRoutes from './routes/listaOlheiro.js';
 import auditoriaRouter from "./routes/auditoria.js";
 import adsRoutes from "./routes/ads.js";
+import consentimentoRoutes from "./routes/consentimento.js";
+import metricsRoutes from "./routes/metrics.js";
+
+import { handlePaymentWebhook } from "./controllers/billingController.js"; // 👈 ADD ISTO
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -193,7 +198,7 @@ app.use("/api/legal", legalRoutes);
 app.use("/api/catalogo", catalogoRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminAdminsRoutes);
-
+app.use("/api/admin", metricsRoutes);
 app.use("/api/analises", analisesRoutes);
 app.use("/api/admin/assinantes", adminAssinantesRoutes);
 app.use("/api/assinaturas", assinaturasRoutes);
@@ -249,6 +254,7 @@ app.use("/api/turmas", authenticateToken, turmasRoutes);
 app.use("/api/treinos-elencos", authenticateToken, treinosElencosRoutes);
 app.use("/api/treinosSalvos", treinosSalvosRoutes);
 app.use("/api/analytics", authenticateToken, analyticsRoutes);
+app.post("/api/billing/webhook", handlePaymentWebhook);
 app.use("/api/billing", authenticateToken, billingRoutes);
 app.use("/api/schedule", scheduleRoutes);
 app.use("/api/templates", templatesRoutes);
@@ -257,6 +263,7 @@ app.use('/api/agendamentos', agendamentosRouter);
 app.use("/api/olheiro/listas", listasOlheiroRoutes);
 app.use("/api/auditoria", auditoriaRouter);
 app.use("/api/ads", adsRoutes);
+app.use("/api/consentimento", authenticateToken, consentimentoRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
 
@@ -267,6 +274,10 @@ server.listen({ port: PORT, host: "0.0.0.0" }, () => {
     try { qrcode.generate(frontendURL, { small: true }); } catch {}
     console.log(`🔗 Front-end (dev): ${frontendURL}`);
   }
+});
+
+cron.schedule("0 3 * * *", () => {
+  runColdStorageJob().catch((e) => console.error("Cold storage job failed", e));
 });
 
 cron.schedule("0 2 * * *", async () => {

@@ -34,7 +34,8 @@ import {
   atualizarAgendamento,
   agendarTreinoLote,
   agendarTreinoPessoal,
-  salvarTreinoNaBiblioteca
+  salvarTreinoNaBiblioteca,
+  getCalendarioTreinos
 } from "server/controllers/treinosController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
 import { requireCapability, requireOrgSeat } from "server/middlewares/guards.js";
@@ -46,7 +47,6 @@ router.use(authenticateToken);
 router.get("/elencos/:id/escala", requireElencoOwner, getEscalaPorElencoId);
 router.get("/elencos/escala-por-dono", getEscalaPorDono);
 router.get("/elencos", listarElencos);
-
 router.post(
   "/elencos",
   requireCapability("agendamento:lote"),
@@ -54,7 +54,6 @@ router.post(
   requireOrgSeat(req => (req.body?.escolinhaId as string) || (req.body?.clubeId as string)),
   criarElenco
 );
-
 router.put("/elencos/:id", requireElencoOwner, atualizarElenco);
 
 /* ===== AGENDADOS (treinos do atleta) ===== */
@@ -86,6 +85,7 @@ router.post(
   requireCapability("agendamento:lote"),
   agendarTreinoLote
 );
+router.get("/calendario", getCalendarioTreinos);
 
 /* ===== SUBMISSÕES / STATUS ===== */
 router.get("/minhas-submissoes", listarMinhasSubmissoesTreino);

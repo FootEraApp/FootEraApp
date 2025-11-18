@@ -50,6 +50,7 @@ import PaginaTreinoLivreNovo from "./pages/treinoLivreNovo.js";
 import PaginaTreinoLivresHistorico from "./pages/treinoLivreHistorico.js"
 import PaginaCreateAdmin from "./pages/createAdmin.js";
 import PaginaPagamentos from "./pages/pagamentos/index.js";
+import PaginaAdminMetrics from "./pages/admin/metrics.js";
 
 export function AppRoutes() {
   return (
@@ -87,6 +88,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/admin/professores/create">
         <RequireAdmin><PaginaCreateProfessores /></RequireAdmin>
+      </Route>
+      <Route path="/admin/metrics">
+        <RequireAdmin><PaginaAdminMetrics /></RequireAdmin>
       </Route>
       <Route path="/admin/admins/create" component={PaginaCreateAdmin} />
       <Route path="/admin">

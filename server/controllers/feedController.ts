@@ -8,6 +8,27 @@ const prisma = new PrismaClient();
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
 
+export async function listarFeed(req: Request, res: Response) {
+  try {
+    const postagens = await prisma.postagem.findMany({
+      orderBy: { dataCriacao: "desc" },
+      include: {
+        usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
+        curtidas: { select: { usuarioId: true } },
+        comentarios: {
+          orderBy: { dataCriacao: "asc" },
+          include: { usuario: { select: { nome: true, foto: true } } },
+        },
+      },
+    });
+
+    res.json(postagens);
+  } catch (e) {
+    console.error("Erro em listarFeed:", e);
+    res.status(500).json({ message: "Erro ao listar feed." });
+  }
+}
+
 async function isProUser(userId: string) {
   const assinatura = await prisma.assinatura.findUnique({
     where: { usuarioId: userId },

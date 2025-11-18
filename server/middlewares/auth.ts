@@ -1,43 +1,38 @@
-import { RequestHandler } from "express";
+// server/middlewares/auth.ts
+import { RequestHandler, Request } from "express";
 import jwt from "jsonwebtoken";
-import { PrismaClient, TipoUsuario } from "@prisma/client";
+import { TipoUsuario } from "@prisma/client";
 import { resolveUserContext } from "../services/planResolver.js";
-import type { Request, Response, NextFunction } from "express";
-import type { ParamsDictionary } from "express-serve-static-core";
-import type { ParsedQs } from "qs";
+import type { PlanoName, UserPayload } from "../services/planResolver.js";
 
-const prisma = new PrismaClient();
 const SECRET = process.env.JWT_SECRET || "footera_secret";
 
-export type PlanoName = "FREE" | "PRO" | "ORG";
+// Alias opcional
+export type AuthUser = UserPayload;
 
-export interface AuthUser {
-  id: string;
-  // Prisma exporta como union de strings; comparar com "Professor" etc. funciona
-  tipo: TipoUsuario;
-  tipoUsuarioId?: string | null;
-  plano?: PlanoName | null;
-  isAdmin?: boolean;
-}
-
-export interface AuthenticatedRequest<
-  P = ParamsDictionary,
-  ResBody = any,
-  ReqBody = any,
-  ReqQuery = ParsedQs
-> extends Request<P, ResBody, ReqBody, ReqQuery> {
+/**
+ * NÃO mexemos mais em Request["user"].
+ * Guardamos tudo em `authUser` para evitar conflito com Express.User.
+ */
+export type AuthenticatedRequest = Request & {
   userId?: string;
-  user?: AuthUser; // mantém shape único aqui
-}
+  authUser?: UserPayload;
+};
 
 function toTipoUsuario(s: string): TipoUsuario {
   switch (s.toLowerCase()) {
-    case "admin": return TipoUsuario.Admin;
-    case "professor": return TipoUsuario.Professor;
-    case "clube": return TipoUsuario.Clube;
-    case "escolinha": return TipoUsuario.Escolinha;
-    case "olheiro": return TipoUsuario.Olheiro;
-    default: return TipoUsuario.Atleta;
+    case "admin":
+      return TipoUsuario.Admin;
+    case "professor":
+      return TipoUsuario.Professor;
+    case "clube":
+      return TipoUsuario.Clube;
+    case "escolinha":
+      return TipoUsuario.Escolinha;
+    case "olheiro":
+      return TipoUsuario.Olheiro;
+    default:
+      return TipoUsuario.Atleta;
   }
 }
 
@@ -49,22 +44,27 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
   try {
     const payload = jwt.verify(token, SECRET) as any;
     const userId = payload.id || payload.sub;
-    if (!userId) return res.status(401).json({ message: "Invalid token payload" });
+    if (!userId) {
+      return res.status(401).json({ message: "Invalid token payload" });
+    }
 
-    (req as AuthenticatedRequest).userId = userId;
+    const reqAuthed = req as AuthenticatedRequest;
+    reqAuthed.userId = userId;
 
-    // fonte única de verdade de usuário/plano
+    // contexto único (usuário + plano)
     const ctx = await resolveUserContext(userId);
 
-    const user: AuthUser = {
+    const user: UserPayload = {
       id: userId,
-      tipo: toTipoUsuario(ctx.tipo),
+      tipo: ctx.tipo,
       tipoUsuarioId: ctx.tipoUsuarioId ?? null,
-      plano: (ctx.plano as PlanoName) ?? null,
+      plano: (ctx.plano as PlanoName) ?? "FREE",
       isAdmin: !!ctx.isAdmin,
     };
 
-    (req as AuthenticatedRequest).user = user;
+    // >>> NÃO usamos mais req.user, apenas req.authUser
+    reqAuthed.authUser = user;
+
     return next();
   } catch (err: any) {
     console.error("JWT verify fail:", err.name, err.message);

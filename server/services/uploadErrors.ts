@@ -1,0 +1,24 @@
+// server/services/uploadErrors.ts
+
+export type UploadErrorCode =
+  | "FILE_REQUIRED"
+  | "FILE_TOO_LARGE"
+  | "VIDEO_TOO_LONG"
+  | "UNSUPPORTED_TYPE";
+
+interface UploadErrorPayload {
+  code: UploadErrorCode;
+  message: string;
+  details?: Record<string, any>;
+}
+
+/**
+ * Helper pra padronizar erros de upload com mensagens amigáveis.
+ */
+export function uploadError(
+  code: UploadErrorCode,
+  message: string,
+  details?: Record<string, any>
+): UploadErrorPayload {
+  return { code, message, details };
+}

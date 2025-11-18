@@ -8,7 +8,16 @@ type SvgProps = ComponentPropsWithoutRef<"svg">;
 
 function EyeIcon(props: SvgProps) {
   return (
-    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      className="w-5 h-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
@@ -16,7 +25,16 @@ function EyeIcon(props: SvgProps) {
 }
 function EyeOffIcon(props: SvgProps) {
   return (
-    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      className="w-5 h-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.8 21.8 0 0 1 5.06-5.94" />
       <path d="M9.9 4.24A10.94 10.94 0 0 1 12 5c7 0 11 7 11 7a21.7 21.7 0 0 1-3.2 4.49" />
       <line x1="1" y1="1" x2="23" y2="23" />
@@ -25,14 +43,32 @@ function EyeOffIcon(props: SvgProps) {
 }
 function ChevronDown(props: SvgProps) {
   return (
-    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      className="w-6 h-6"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <path d="m6 9 6 6 6-6" />
     </svg>
   );
 }
 function ChevronUp(props: SvgProps) {
   return (
-    <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      className="w-6 h-6"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <path d="m18 15-6-6-6 6" />
     </svg>
   );
@@ -51,16 +87,19 @@ export default function PaginaLogin() {
   const [infoAberto, setInfoAberto] = useState(false);
 
   async function handleResend() {
-  try {
-    setSendingResend(true);
-    await axios.post(`${API.BASE_URL}/api/auth/cadastro/resend-verification`, { nomeDeUsuario });
-    alert("Reenviamos o e-mail de verificação.");
-  } catch (e: any) {
-    alert(e?.response?.data?.message ?? "Não foi possível reenviar agora.");
-  } finally {
-    setSendingResend(false);
+    try {
+      setSendingResend(true);
+      await axios.post(
+        `${API.BASE_URL}/api/auth/cadastro/resend-verification`,
+        { nomeDeUsuario }
+      );
+      alert("Reenviamos o e-mail de verificação.");
+    } catch (e: any) {
+      alert(e?.response?.data?.message ?? "Não foi possível reenviar agora.");
+    } finally {
+      setSendingResend(false);
+    }
   }
-}
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,48 +112,102 @@ export default function PaginaLogin() {
       const url = `${API.BASE_URL}/api/auth/login`;
       const resp = await axios.post(url, { nomeDeUsuario, senha });
       const data = resp.data ?? {};
+
       if (data?.ok === false && data?.needVerification) {
         setNeedVerify(true);
         setEmailDestino(data.emailDestino ?? null);
-        setErro(data.message ?? "Verifique seu e-mail para concluir o cadastro.");
-        return; 
+        setErro(
+          data.message ??
+            "Verifique seu e-mail para concluir o cadastro."
+        );
+        return;
       }
 
       const usuario = data.usuario ?? {};
       const usuarioId = usuario.id ?? data.id ?? "";
       const usuarioNome = usuario.nomeDeUsuario ?? data.nomeDeUsuario ?? "";
       const rawTipo = String(usuario.tipo ?? data.tipo ?? "").toLowerCase();
-      const isAdmin = usuario.tipo === "Admin" || String(usuario.tipo).toLowerCase() === "admin";
+      const isAdmin =
+        usuario.tipo === "Admin" ||
+        String(usuario.tipo).toLowerCase() === "admin";
       const token = data.token;
-      if (!token || !usuarioId) throw new Error("Resposta inválida do servidor");
+
+      // 🔹 Plano vindo do backend – fonte de verdade da assinatura
+      const plano =
+        usuario.plano ??
+        data.plano ??
+        "FREE"; // se backend não mandar, cai em FREE
+
+      if (!token || !usuarioId)
+        throw new Error("Resposta inválida do servidor");
 
       const store = lembrarDeMim ? localStorage : sessionStorage;
-      ["token","usuarioId","nomeUsuario","tipoUsuario","usuarioTipoRaw","tipoUsuarioId"].forEach((k) => {
+
+      // limpa tudo antes
+      [
+        "token",
+        "usuarioId",
+        "nomeUsuario",
+        "tipoUsuario",
+        "usuarioTipoRaw",
+        "tipoUsuarioId",
+        "plano",
+      ].forEach((k) => {
         localStorage.removeItem(k);
         sessionStorage.removeItem(k);
       });
 
+      // sempre guardamos token/usuario em ambos para fallback
       sessionStorage.setItem("token", token);
       localStorage.setItem("token", token);
 
-      sessionStorage.setItem("usuarioId", usuario.id);
-      localStorage.setItem("usuarioId", usuario.id);
+      sessionStorage.setItem("usuarioId", usuarioId);
+      localStorage.setItem("usuarioId", usuarioId);
 
-      sessionStorage.setItem("tipoUsuario", (usuario.tipo || "").toLowerCase());
-      localStorage.setItem("tipoUsuario", (usuario.tipo || "").toLowerCase());
+      if (usuarioNome) {
+        sessionStorage.setItem("nomeUsuario", usuarioNome);
+        localStorage.setItem("nomeUsuario", usuarioNome);
+      }
 
-      const map: Record<string, string> = { admin:"admin", atleta:"atleta", professor:"professor", clube:"clube", escolinha:"escolinha", escola:"escola", olheiro:"olheiro" };
+      const tipoServer = (usuario.tipo || data.tipo || "").toLowerCase();
+      sessionStorage.setItem("tipoUsuario", tipoServer);
+      localStorage.setItem("tipoUsuario", tipoServer);
+
+      const map: Record<string, string> = {
+        admin: "admin",
+        atleta: "atleta",
+        professor: "professor",
+        clube: "clube",
+        escolinha: "escolinha",
+        escola: "escola",
+        olheiro: "olheiro",
+      };
       const tipoPadrao = isAdmin ? "admin" : map[rawTipo] ?? "atleta";
       store.setItem("tipoUsuario", tipoPadrao);
       store.setItem("usuarioTipoRaw", rawTipo);
 
       const tipoUsuarioId =
-        data.tipoUsuarioId || data?.olheiro?.id || data?.professor?.id || data?.clube?.id || data?.escolinha?.id || data?.atleta?.id || null;
+        data.tipoUsuarioId ||
+        data?.olheiro?.id ||
+        data?.professor?.id ||
+        data?.clube?.id ||
+        data?.escolinha?.id ||
+        data?.atleta?.id ||
+        null;
       if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
+
+      // 🔹 salva plano atual da assinatura – usado pelos guards de membership
+      store.setItem("plano", String(plano));
+      sessionStorage.setItem("plano", String(plano));
+      localStorage.setItem("plano", String(plano));
 
       navigate(isAdmin ? "/admin" : "/feed");
     } catch (err: any) {
-      console.error("Erro no login:", err.response?.status, err.response?.data || err.message);
+      console.error(
+        "Erro no login:",
+        err.response?.status,
+        err.response?.data || err.message
+      );
       const data = err.response?.data;
       setNeedVerify(!!data?.needVerification);
       setEmailDestino(data?.emailDestino ?? null);
@@ -122,10 +215,18 @@ export default function PaginaLogin() {
     }
   };
 
+  // Se já tem token, redireciona
   useEffect(() => {
-    const token = Storage.token || localStorage.getItem("token") || sessionStorage.getItem("token");
+    const token =
+      Storage.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token");
     if (!token) return;
-    const tipo = (localStorage.getItem("tipoUsuario") || sessionStorage.getItem("tipoUsuario") || "").toLowerCase();
+    const tipo = (
+      localStorage.getItem("tipoUsuario") ||
+      sessionStorage.getItem("tipoUsuario") ||
+      ""
+    ).toLowerCase();
     navigate(tipo === "admin" ? "/admin" : "/feed");
   }, []);
 
@@ -148,8 +249,6 @@ export default function PaginaLogin() {
               "
             />
 
-
-
             <h1 className="flex-1 md:flex-none text-center text-xl md:text-3xl font-bold">
               Bem-vindo à FootEra
             </h1>
@@ -169,21 +268,45 @@ export default function PaginaLogin() {
           <div
             id="info-footera"
             className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out
-              ${infoAberto ? "max-h-[720px] opacity-100" : "max-h-0 opacity-0 md:max-h-[720px] md:opacity-100"}`}
+              ${
+                infoAberto
+                  ? "max-h-[720px] opacity-100"
+                  : "max-h-0 opacity-0 md:max-h-[720px] md:opacity-100"
+              }`}
           >
             <p className="text-center text-base md:text-lg mt-4">
-              Treine, se desafie e ganhe visibilidade com a metodologia de profissionais.
-              Aqui você acompanha sua evolução e se conecta com quem vive futebol.
+              Treine, se desafie e ganhe visibilidade com a metodologia de
+              profissionais. Aqui você acompanha sua evolução e se conecta com
+              quem vive futebol.
             </p>
 
             <div className="mt-6 p-5 md:p-6 rounded-xl text-sm md:text-base text-left w-full bg-white/10">
-              <h2 className="font-semibold mb-2">O que você encontra na FootEra</h2>
+              <h2 className="font-semibold mb-2">
+                O que você encontra na FootEra
+              </h2>
               <ul className="list-disc list-inside space-y-1">
-                <li><span className="font-medium">Treinos Programados</span> com objetivos e instruções claras.</li>
-                <li><span className="font-medium">Desafios Oficiais</span> com validação por vídeo e rankings.</li>
-                <li><span className="font-medium">Pontuação FootEra & Badges</span> para acompanhar seu progresso.</li>
-                <li><span className="font-medium">Perfil com vídeos</span> — seu “cartão de visitas” esportivo.</li>
-                <li><span className="font-medium">Conexão</span> com Escolinhas, Clubes e Olheiros.</li>
+                <li>
+                  <span className="font-medium">Treinos Programados</span> com
+                  objetivos e instruções claras.
+                </li>
+                <li>
+                  <span className="font-medium">Desafios Oficiais</span> com
+                  validação por vídeo e rankings.
+                </li>
+                <li>
+                  <span className="font-medium">
+                    Pontuação FootEra &amp; Badges
+                  </span>{" "}
+                  para acompanhar seu progresso.
+                </li>
+                <li>
+                  <span className="font-medium">Perfil com vídeos</span> — seu
+                  “cartão de visitas” esportivo.
+                </li>
+                <li>
+                  <span className="font-medium">Conexão</span> com Escolinhas,
+                  Clubes e Olheiros.
+                </li>
               </ul>
             </div>
           </div>
@@ -213,7 +336,9 @@ export default function PaginaLogin() {
 
           <form onSubmit={handleLogin}>
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">Nome de usuário</label>
+              <label className="block text-sm font-medium mb-1">
+                Nome de usuário
+              </label>
               <input
                 className="w-full border border-gray-300 rounded px-3 py-2"
                 placeholder="Seu nome de usuário"
@@ -253,7 +378,9 @@ export default function PaginaLogin() {
                 onChange={(e) => setLembrarDeMim(e.target.checked)}
                 className="mr-2"
               />
-              <label htmlFor="lembrarDeMim" className="text-sm">Lembrar de mim</label>
+              <label htmlFor="lembrarDeMim" className="text-sm">
+                Lembrar de mim
+              </label>
             </div>
 
             {erro && <p className="text-sm text-red-500 mb-3">{erro}</p>}
@@ -268,7 +395,11 @@ export default function PaginaLogin() {
                   type="button"
                   onClick={handleResend}
                   disabled={sendingResend || !nomeDeUsuario}
-                  className={`px-3 py-1.5 rounded-md ${sendingResend ? "bg-amber-300" : "bg-amber-500 hover:bg-amber-600"} text-white`}
+                  className={`px-3 py-1.5 rounded-md ${
+                    sendingResend
+                      ? "bg-amber-300"
+                      : "bg-amber-500 hover:bg-amber-600"
+                  } text-white`}
                 >
                   {sendingResend ? "Reenviando..." : "Reenviar e-mail"}
                 </button>
@@ -282,14 +413,19 @@ export default function PaginaLogin() {
               Entrar
             </button>
 
-            <a href="/esqueci-senha" className="text-green-700 underline text-right text-sm mt-2 block">
+            <a
+              href="/esqueci-senha"
+              className="text-green-700 underline text-right text-sm mt-2 block"
+            >
               Esqueci minha senha
             </a>
           </form>
 
           <p className="text-center text-sm text-gray-600 mt-4">
             Não tem uma conta?{" "}
-            <a href="/cadastro" className="text-green-700 underline">Cadastre-se</a>
+            <a href="/cadastro" className="text-green-700 underline">
+              Cadastre-se
+            </a>
           </p>
         </div>
       </div>
