@@ -54,7 +54,7 @@ export async function login(req: Request, res: Response) {
   }
 
   try {
-    const userKey = String(nomeDeUsuario).trim().toLowerCase();
+    const userKey = String(nomeDeUsuario).trim();
 
     const usuario = await prisma.usuario.findUnique({
       where: { nomeDeUsuario: userKey },
@@ -70,6 +70,13 @@ export async function login(req: Request, res: Response) {
 
     if (!usuario) {
       return res.status(404).json({ message: "Usuário não encontrado" });
+    }
+
+    if (!usuario.senhaHash) {
+      console.error("Usuário sem senhaHash no banco:", usuario.id, usuario.nomeDeUsuario);
+      return res
+        .status(500)
+        .json({ message: "Usuário sem senha configurada. Contate o suporte ou recrie o usuário." });
     }
 
     const senhaCorreta = await bcrypt.compare(String(senha), usuario.senhaHash);
