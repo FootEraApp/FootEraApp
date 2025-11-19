@@ -391,6 +391,7 @@ const markReadFromUser = async (otherId: string) => {
                 selecionado ? "bg-green-50 border-green-300" : "hover:bg-gray-50 bg-white"
               }`}
               onClick={() => selecionarAlvo({ tipo: "usuario", usuario: u })}
+              data-testid="usuario-list-item" 
             >
               <Avatar src={u.foto} name={u.nome} className="w-12 h-12" />
               <div className="flex flex-col flex-1 min-w-0">
@@ -1251,6 +1252,7 @@ useEffect(() => {
                 value={novaMensagem}
                 onChange={(e) => setNovaMensagem(e.target.value)}
                 placeholder="Digite sua mensagem..."
+                data-testid="chat-input"
               />
               <button
                 onClick={enviarMensagem}

@@ -79,6 +79,10 @@ router.post(
   agendarTreinoLote
 );
 router.get("/calendario", getCalendarioTreinos);
+router.post(
+  "/expirar-vencidos",
+  expirarTreinosVencidos
+);
 
 router.get("/minhas-submissoes", listarMinhasSubmissoesTreino);
 router.post("/submissoes/:id/validar", validarSubmissaoTreino);
@@ -116,7 +120,6 @@ router.post(
 );
 router.post(
   "/biblioteca",
-  authenticateToken,
   salvarTreinoNaBiblioteca
 );
 

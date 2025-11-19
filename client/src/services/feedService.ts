@@ -25,7 +25,7 @@ export type PostagemComUsuario = {
   videoUrl?: string | null;
   tipoMidia?: "Imagem" | "Video" | "Documento" | null;
   curtidas: { usuarioId: string }[];
-  comentarios: Comentarios[],
+  comentarios: Comentarios[];
   compartilhamentos?: number | null;
   reposts?: number | null;
   repostOf?: PostagemComUsuario | null;
@@ -54,16 +54,47 @@ function pickToken(): string {
 
 const auth = () => ({ Authorization: pickToken() });
 
-export async function getFeedPosts(filtro: FiltroFeed = "todos") {
-  const qs = new URLSearchParams({ filtro });
-  const res = await fetch(`${API.BASE_URL}/api/feed?${qs}`, { headers: auth() });
+interface FeedMeta {
+  adsEnabled: boolean;
+  adEveryN: number | null;
+  adsRemainingToday: number;
+}
+
+interface FeedApiResponse {
+  items: PostagemComUsuario[];
+  meta?: FeedMeta;
+}
+
+export async function getFeedPosts(
+  filtro: FiltroFeed = "todos"
+): Promise<PostagemComUsuario[]> {
+  const params: Record<string, string> = {};
+  if (filtro && filtro !== "todos") {
+    params.filtro = filtro;
+  }
+
+  const qs = new URLSearchParams(params).toString();
+  const url = `${API.BASE_URL}/api/feed${qs ? `?${qs}` : ""}`;
+
+  const res = await fetch(url, { headers: auth() });
   if (res.status === 401) {
-    try { sessionStorage.clear(); localStorage.removeItem("token"); } catch {}
+    try {
+      sessionStorage.clear();
+      localStorage.removeItem("token");
+    } catch {}
     window.location.href = "/login";
-    return []; 
+    return [];
   }
   if (!res.ok) throw new Error(`Falha ao carregar feed (${res.status})`);
-  return (await res.json()) as PostagemComUsuario[];
+
+  const json = await res.json();
+
+  if (Array.isArray(json)) {
+    return json as PostagemComUsuario[];
+  }
+
+  const typed = json as FeedApiResponse;
+  return Array.isArray(typed.items) ? typed.items : [];
 }
 
 export async function likePost(postId: string) {
@@ -142,7 +173,7 @@ export async function criarPost({
   const POST_URL = `${API.BASE_URL}/api/post`;
   const hasDescricao = !!descricao && descricao.trim().length > 0;
   const hasImagem = !!imagemUrl && imagemUrl.trim().length > 0;
-  const hasVideo  = !!videoUrl && videoUrl.trim().length > 0;
+  const hasVideo = !!videoUrl && videoUrl.trim().length > 0;
 
   if (arquivo instanceof File) {
     const fd = new FormData();
@@ -164,7 +195,7 @@ export async function criarPost({
     const payload: any = {};
     if (hasDescricao) payload.descricao = descricao.trim();
     if (hasImagem) payload.imagemUrl = imagemUrl;
-    if (hasVideo)  payload.videoUrl = videoUrl;
+    if (hasVideo) payload.videoUrl = videoUrl;
 
     const res = await fetch(POST_URL, {
       method: "POST",
@@ -178,5 +209,7 @@ export async function criarPost({
     return res.json();
   }
 
-  throw new Error("Escreva algo, selecione uma conquista ou anexe uma mídia (URL/arquivo).");
+  throw new Error(
+    "Escreva algo, selecione uma conquista ou anexe uma mídia (URL/arquivo)."
+  );
 }
