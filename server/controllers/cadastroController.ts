@@ -1,3 +1,4 @@
+// server/controllers/cadastroController
 import { Request, Response } from "express";
 import { PrismaClient, TipoUsuario, Nivel, StatusCref } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -8,7 +9,12 @@ import { sendEmailVerification } from "../utils/mailer.js";
 const prisma = new PrismaClient();
 
 const FRONTEND_URL = (process.env.WEB_BASE_URL || "http://localhost:5173").replace(/\/+$/, "");
-const API_BASE_URL  = (process.env.APP_BASE_URL  || "http://localhost:3001").replace(/\/+$/, "");
+
+const API_BASE_URL = (
+  process.env.API_BASE_URL ||
+  process.env.APP_BASE_URL ||
+  "http://localhost:3001"
+).replace(/\/+$/, "");
 
 const JWT_SECRET: jwt.Secret = (process.env.JWT_SECRET || "defaultsecret");
 const JWT_VERIFY_TTL = process.env.JWT_VERIFY_TTL || "2d";

@@ -662,110 +662,183 @@ export default function PaginaElenco() {
     });
   };
 
-  const handleDragEnd = (result: DropResult) => {
-    if (!ativo) return;
-    const { source, destination } = result;
-    if (!destination) return;
+const LIST_IDS = ["atletasDesk", "atletasMob"] as const;
 
-    const isLista = (id: string) => id === "atletasDesk" || id === "atletasMob";
-    const isPosicao = (id: string) => id.startsWith("pos:");
+const isLista = (id: string) =>
+  LIST_IDS.includes(id as (typeof LIST_IDS)[number]);
+const isPosicao = (id: string) => id.startsWith("pos:");
 
-    // reordenar dentro da lista
-    if (isLista(source.droppableId) && isLista(destination.droppableId)) {
-      setElencos(prev => {
-        const arr = [...prev];
-        const e = { ...arr[activeIndex] };
-        const nova = Array.from(e.livres);
-        const [movido] = nova.splice(source.index, 1);
-        nova.splice(destination.index, 0, movido);
-        e.livres = nova;
-        arr[activeIndex] = e;
-        return arr;
-      });
-      return;
-    }
+const handleDragEnd = (result: DropResult) => {
+  // 🔎 Log sempre que o drag terminar
+  console.log("[Elenco] onDragEnd RAW:", result);
 
-    // lista -> posição
-    if (isLista(source.droppableId) && isPosicao(destination.droppableId)) {
-      const posId = destination.droppableId.replace("pos:", "") as PosicaoCampo;
-      const ocupados = elencoAtual.length;
+  const { source, destination, reason } = result;
 
-      setElencos(prev => {
-        const arr = [...prev];
-        const e = { ...arr[activeIndex] };
+  // Se não caiu em nenhum Droppable válido
+  if (!destination) {
+    console.log("[Elenco] drop sem destination (soltou fora da lista/campo)", {
+      source,
+      reason,
+    });
 
-        // não deixa passar do maxJogadores do elenco
-        if (ocupados >= e.maxJogadores && !e.posicoes[posId]) {
-          alert(`O elenco já tem ${e.maxJogadores} jogadores.`);
-          return prev;
-        }
-
-        const livres = Array.from(e.livres);
-        const [atleta] = livres.splice(source.index, 1);
-
-        const anterior = e.posicoes[posId];
-        e.posicoes = { ...e.posicoes, [posId]: atleta };
-        if (anterior) livres.unshift(anterior);
-
-        e.livres = livres;
-        arr[activeIndex] = e;
-
-        if (atleta && !pontos[atleta.atletaId]) fetchPontuacoes([atleta.atletaId]);
-
-        return arr;
-      });
-      return;
-    }
-
-    // posição -> lista
-    if (isPosicao(source.droppableId) && isLista(destination.droppableId)) {
+    // Se quiser: se veio de uma posição do campo, devolve pra lista
+    if (isPosicao(source.droppableId) && ativo) {
       const posId = source.droppableId.replace("pos:", "") as PosicaoCampo;
-      setElencos(prev => {
+
+      setElencos((prev) => {
         const arr = [...prev];
         const e = { ...arr[activeIndex] };
         const atleta = e.posicoes[posId];
         if (!atleta) return prev;
 
-        const livres = Array.from(e.livres);
-        livres.splice(Math.min(destination.index, livres.length), 0, atleta);
-
+        // devolve pro final da lista de livres
+        e.livres = [...e.livres, atleta];
         e.posicoes = { ...e.posicoes, [posId]: null };
-        e.livres = livres;
         arr[activeIndex] = e;
         return arr;
       });
-      return;
     }
 
-    // posição -> posição
-    if (isPosicao(source.droppableId) && isPosicao(destination.droppableId)) {
-      const from = source.droppableId.replace("pos:", "") as PosicaoCampo;
-      const to = destination.droppableId.replace("pos:", "") as PosicaoCampo;
-      if (from === to) return;
+    return;
+  }
 
-      setElencos(prev => {
-        const arr = [...prev];
-        const e = { ...arr[activeIndex] };
-        const a = e.posicoes[from];
-        const b = e.posicoes[to];
-        e.posicoes = { ...e.posicoes, [to]: a ?? null, [from]: b ?? null };
-        arr[activeIndex] = e;
-        return arr;
-      });
-      return;
-    }
-  };
+  if (!ativo) {
+    console.log("[Elenco] onDragEnd sem elenco ativo");
+    return;
+  }
+
+  const fromId = source.droppableId;
+  const toId = destination.droppableId;
+
+  const fromLista = isLista(fromId);
+  const toLista = isLista(toId);
+  const fromPos = isPosicao(fromId);
+  const toPos = isPosicao(toId);
+
+  console.log("[Elenco] drag result:", {
+    fromId,
+    toId,
+    fromLista,
+    toLista,
+    fromPos,
+    toPos,
+    sourceIndex: source.index,
+    destIndex: destination.index,
+  });
+
+  // === posição -> posição (trocar de lugar) ===
+  if (fromPos && toPos) {
+    const from = fromId.replace("pos:", "") as PosicaoCampo;
+    const to = toId.replace("pos:", "") as PosicaoCampo;
+    if (from === to) return;
+
+    setElencos((prev) => {
+      const arr = [...prev];
+      const e = { ...arr[activeIndex] };
+      const a = e.posicoes[from];
+      const b = e.posicoes[to];
+      e.posicoes = { ...e.posicoes, [to]: a ?? null, [from]: b ?? null };
+      arr[activeIndex] = e;
+      return arr;
+    });
+    return;
+  }
+
+  // === posição -> QUALQUER OUTRA COISA (lista de atletas livres) ===
+  if (fromPos && !toPos) {
+    const posId = fromId.replace("pos:", "") as PosicaoCampo;
+
+    setElencos((prev) => {
+      const arr = [...prev];
+      const e = { ...arr[activeIndex] };
+      const atleta = e.posicoes[posId];
+      if (!atleta) return prev;
+
+      const livres = Array.from(e.livres);
+      const insertIndex = Math.min(destination.index, livres.length);
+      livres.splice(insertIndex, 0, atleta);
+
+      e.posicoes = { ...e.posicoes, [posId]: null };
+      e.livres = livres;
+      arr[activeIndex] = e;
+      return arr;
+    });
+
+    return;
+  }
+
+  // === lista -> posição ===
+  if (fromLista && toPos) {
+    const posId = toId.replace("pos:", "") as PosicaoCampo;
+    const ocupados = elencoAtual.length;
+
+    setElencos((prev) => {
+      const arr = [...prev];
+      const e = { ...arr[activeIndex] };
+
+      if (ocupados >= e.maxJogadores && !e.posicoes[posId]) {
+        alert(`O elenco já tem ${e.maxJogadores} jogadores.`);
+        return prev;
+      }
+
+      const livres = Array.from(e.livres);
+      const [atleta] = livres.splice(source.index, 1);
+
+      const anterior = e.posicoes[posId];
+      e.posicoes = { ...e.posicoes, [posId]: atleta };
+      if (anterior) livres.unshift(anterior);
+
+      e.livres = livres;
+      arr[activeIndex] = e;
+
+      if (atleta && !pontos[atleta.atletaId]) {
+        fetchPontuacoes([atleta.atletaId]);
+      }
+
+      return arr;
+    });
+    return;
+  }
+
+  // === lista -> lista (reordenar) ===
+  if (fromLista && toLista) {
+    setElencos((prev) => {
+      const arr = [...prev];
+      const e = { ...arr[activeIndex] };
+      const nova = Array.from(e.livres);
+      const [movido] = nova.splice(source.index, 1);
+      nova.splice(destination.index, 0, movido);
+      e.livres = nova;
+      arr[activeIndex] = e;
+      return arr;
+    });
+  }
+};
 
 const salvarElencoAtivo = async () => {
   const token = Storage.token;
   const tipoUsuarioId = Storage.tipoUsuarioId;
-  const tipoUsuario = (Storage.tipoSalvo || "").toLowerCase() as "professor" | "escolinha" | "clube";
+  const tipoUsuarioRaw = Storage.tipoSalvo || "";
+  const tipoUsuario = tipoUsuarioRaw.toLowerCase() as
+    | "professor"
+    | "escolinha"
+    | "clube"
+    | "atleta"
+    | string;
+
   const e = ativo;
   if (!e) return;
 
-  if (!token) { alert("Você não está autenticado. Faça login novamente."); return; }
-  if (!tipoUsuarioId || !tipoUsuario) { alert("Não foi possível identificar seu tipo de usuário."); return; }
+  if (!token) {
+    alert("Você não está autenticado. Faça login novamente.");
+    return;
+  }
+  if (!tipoUsuarioId || !tipoUsuario) {
+    alert("Não foi possível identificar seu tipo de usuário.");
+    return;
+  }
 
+  // monta escala
   const escala: Record<PosicaoCampo, string | null> = POSICOES.reduce((acc, p) => {
     acc[p.id] = e.posicoes[p.id]?.atletaId ?? null;
     return acc;
@@ -773,28 +846,46 @@ const salvarElencoAtivo = async () => {
 
   const formacaoStr = `${formacao.defesa}-${formacao.meio}-${formacao.atacantes}`;
 
+  // Decide qual campo de dono usar a partir do tipoUsuario
+  const donoRef: {
+    professorId?: string;
+    clubeId?: string;
+    escolinhaId?: string;
+  } =
+    tipoUsuario === "professor"
+      ? { professorId: tipoUsuarioId }
+      : tipoUsuario === "clube"
+      ? { clubeId: tipoUsuarioId }
+      : tipoUsuario === "escolinha"
+      ? { escolinhaId: tipoUsuarioId }
+      : {};
+
   const payload = {
     nome: e.nome,
-    professorId: Storage.tipoSalvo === "Professor" ? tipoUsuarioId : undefined,
-    clubeId:     Storage.tipoSalvo === "Clube"     ? tipoUsuarioId : undefined,
-    escolinhaId: Storage.tipoSalvo === "Escolinha" ? tipoUsuarioId : undefined,
-    atletasIds: (POSICOES.map((p) => e.posicoes[p.id]).filter(Boolean) as Atleta[]).map(a => a.atletaId),
+    ...donoRef, // professorId / clubeId / escolinhaId
+    atletasIds: (POSICOES.map((p) => e.posicoes[p.id]).filter(Boolean) as Atleta[]).map(
+      (a) => a.atletaId
+    ),
     maxJogadores: e.maxJogadores,
     escala,
-    tipoUsuario,
-    tipoUsuarioId,
+    tipoUsuario,    // sempre em minúsculo
+    tipoUsuarioId,  // id do professor/clube/escolinha vindo do Storage
     turmaId: turmaId || undefined,
     formacao: formacaoStr,
   };
 
   try {
     if (e.id) {
-      await axios.put(`${ELENCOS_BASE}/${e.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.put(`${ELENCOS_BASE}/${e.id}`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       alert("Elenco atualizado com sucesso!");
     } else {
-      const res = await axios.post(ELENCOS_BASE, payload, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.post(ELENCOS_BASE, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const newId = res.data?.id ?? null;
-      setElencos(prev => {
+      setElencos((prev) => {
         const arr = [...prev];
         arr[activeIndex] = { ...arr[activeIndex], id: newId };
         return arr;
@@ -808,36 +899,54 @@ const salvarElencoAtivo = async () => {
 };
 
 
-  const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) => {
-    const a = posicoesAtivas[pos];
-    const pts = a ? pontos[a.atletaId] : undefined;
-    const ovr  = pts?.mediaGeral ?? 0;
-    const perf = pts?.performance ?? 0;
-    const disc = pts?.disciplina ?? 0;
-    const resp = pts?.responsabilidade ?? 0;
+const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) => {
+  const a = posicoesAtivas[pos];
+  const pts = a ? pontos[a.atletaId] : undefined;
+  const ovr  = pts?.mediaGeral ?? 0;
+  const perf = pts?.performance ?? 0;
+  const disc = pts?.disciplina ?? 0;
+  const resp = pts?.responsabilidade ?? 0;
 
-    return (
+  // wrapper maior (para label + respiro)
+  const WRAP_W = SHIELD_W + 12;
+  const WRAP_H = SHIELD_H + SLOT_EXTRA_H;
+
+  return (
+    <div
+      className="relative flex items-start justify-center"
+      style={{
+        width: WRAP_W,
+        height: WRAP_H,
+        flex: "0 0 auto",
+      }}
+    >
+      {/* Label fica FORA do droppable, não entra no hitbox */}
+      <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[10px] sm:text-xs font-semibold opacity-80 pointer-events-none">
+        {label}
+      </span>
+
       <Droppable droppableId={`pos:${pos}`} type="ATLETA">
         {(provided, snapshot) => (
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`rounded-xl border-2 border-dashed overflow-hidden flex flex-col items-center justify-between p-1
-              transition-all duration-200
-              ${snapshot.isDraggingOver ? "bg-green-300/70 scale-[1.02]" : "bg-green-100/70"}`}
-            style={{ width: SHIELD_W + 12, height: SHIELD_H + SLOT_EXTRA_H, flex: "0 0 auto" }}
+            className={`mt-5 rounded-xl border-2 border-dashed overflow-hidden flex items-center justify-center
+              transition-colors duration-200
+              ${snapshot.isDraggingOver ? "bg-green-300/70" : "bg-green-100/70"}`}
+            style={{
+              width: SHIELD_W,
+              height: SHIELD_H,
+            }}
           >
-            <span className="text-[10px] sm:text-xs font-semibold opacity-80">{label}</span>
-
             {a ? (
-              <Draggable draggableId={String(a.id)} index={0}>
+              <Draggable draggableId={String(a.atletaId)} index={0}>
                 {(provided2, snapshot2) => (
                   <div
                     ref={provided2.innerRef}
                     {...provided2.draggableProps}
                     {...provided2.dragHandleProps}
-                    className={`transition-transform duration-200 ${
-                      snapshot2.isDragging ? "shadow-2xl scale-105 z-50" : ""
+                    className={`transition-shadow duration-200 ${
+                      snapshot2.isDragging ? "shadow-2xl z-50" : ""
                     } will-change-transform`}
                   >
                     <CardAtletaShield
@@ -853,16 +962,19 @@ const salvarElencoAtivo = async () => {
                 )}
               </Draggable>
             ) : (
-              <div className="w-full flex-1 flex items-center justify-center text-[10px] sm:text-xs text-green-700/70">
+              <div className="w-full h-full flex items-center justify-center text-[10px] sm:text-xs text-green-700/70">
                 Solte aqui
               </div>
             )}
-            {/* sem placeholder nos slots para evitar “pulos” */}
+
+            {provided.placeholder}
           </div>
         )}
       </Droppable>
-    );
-  };
+    </div>
+  );
+};
+
 
   const ElencoPickerModal: React.FC<{
     open: boolean;
@@ -1237,112 +1349,123 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
             </div>
           </div>
 
-          {/* Lista (desktop) */}
-          <div className="hidden md:block w-full md:w-80 bg-white shadow-md p-4 border-l border-green-200">
-            <h2 className="text-lg font-bold mb-3">Atletas Vinculados</h2>
-            <label htmlFor="buscaDesk" className="sr-only">Buscar por nome/posição</label>
-            <input
-              id="buscaDesk"
-              name="buscaDesk"
-              value={filtro}
-              onChange={(e) => setFiltro(e.target.value)}
-              placeholder="Buscar por nome/posição"
-              className="w-full mb-3 border rounded px-3 py-2"
-            />
-            <Droppable droppableId="atletasDesk" type="ATLETA" direction="vertical">
-              {(provided) => (
+{/* Lista (desktop) – só renderiza no desktop */}
+{!isMobile && (
+  <div className="w-full md:w-80 bg-white shadow-md p-4 border-l border-green-200">
+    <h2 className="text-lg font-bold mb-3">Atletas Vinculados</h2>
+    <label htmlFor="buscaDesk" className="sr-only">Buscar por nome/posição</label>
+    <input
+      id="buscaDesk"
+      name="buscaDesk"
+      value={filtro}
+      onChange={(e) => setFiltro(e.target.value)}
+      placeholder="Buscar por nome/posição"
+      className="w-full mb-3 border rounded px-3 py-2"
+    />
+    <Droppable droppableId="atletasDesk" type="ATLETA" direction="vertical">
+      {(provided) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.droppableProps}
+          className="flex flex-col gap-3 overflow-y-auto max-h-[calc(100dvh-240px)] pr-1"
+        >
+          {atletasLivresAtivo.map((atleta, index) => (
+            <Draggable
+              key={String(atleta.atletaId)}
+              draggableId={String(atleta.atletaId)}
+              index={index}
+            >
+              {(provided2, snapshot) => (
                 <div
-                  ref={provided.innerRef}
-                  {...provided.droppableProps}
-                  className="flex flex-col gap-3 overflow-y-auto max-h-[calc(100dvh-240px)] pr-1"
+                  ref={provided2.innerRef}
+                  {...provided2.draggableProps}
+                  {...provided2.dragHandleProps}
+                  className={`cursor-grab ${
+                    snapshot.isDragging ? "shadow-2xl z-50" : ""
+                  } will-change-transform`}
                 >
-                  {atletasLivresAtivo.map((atleta, index) => (
-                    <Draggable
-                      key={String(atleta.id ?? atleta.atletaId)}
-                      draggableId={String(atleta.id ?? atleta.atletaId)}
-                      index={index}
-                    >
-                      {(provided2, snapshot) => (
-                        <div
-                          ref={provided2.innerRef}
-                          {...provided2.draggableProps}
-                          {...provided2.dragHandleProps}
-                          className={`cursor-grab ${snapshot.isDragging ? "shadow-2xl scale-105 z-50" : ""} will-change-transform`}
-                        >
-                          <CardAtleta atleta={atleta} />
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
+                  <CardAtleta atleta={atleta} />
                 </div>
               )}
-            </Droppable>
-          </div>
+            </Draggable>
+          ))}
+          {provided.placeholder}
+        </div>
+      )}
+    </Droppable>
+  </div>
+)}
 
-          {/* Gaveta (mobile) */}
+
+
+{/* Gaveta (mobile) – só renderiza no mobile */}
+{isMobile && (
+  <div
+    className={`fixed left-0 right-0 z-30 transition-transform duration-200
+      ${drawerOpen ? "translate-y-0" : "translate-y-[calc(100%_-_52px)]"}
+      bottom-0`}
+  >
+    <div className="mx-3 rounded-t-2xl border border-green-300 bg-white shadow-2xl overflow-hidden pb-[env(safe-area-inset-bottom)]">
+      <button
+        onClick={() => setDrawerOpen(v => !v)}
+        className="w-full py-2 active:opacity-80"
+        aria-label="Alternar lista de atletas"
+      >
+        <div className="mx-auto h-1.5 w-12 rounded-full bg-green-300" />
+      </button>
+
+      <div className="px-3 pb-2 flex items-center gap-2">
+        <h2 className="text-base font-bold">Atletas Vinculados</h2>
+        <span className="text-xs text-green-700/80">({atletasLivresAtivo.length})</span>
+      </div>
+
+      <div className="px-3 pb-2">
+        <label htmlFor="buscaMob" className="sr-only">Buscar por nome/posição</label>
+        <input
+          id="buscaMob"
+          name="buscaMob"
+          value={filtro}
+          onChange={(e) => setFiltro(e.target.value)}
+          placeholder="Buscar por nome/posição"
+          className="w-full border rounded px-3 py-2"
+        />
+      </div>
+
+      <Droppable droppableId="atletasMob" type="ATLETA" direction="horizontal">
+        {(provided) => (
           <div
-            className={`md:hidden fixed left-0 right-0 z-30 transition-transform duration-200
-              ${drawerOpen ? "translate-y-0" : "translate-y-[calc(100%_-_52px)]"}
-              bottom-0`}
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className="flex flex-row gap-3 overflow-x-auto px-3 py-2 snap-x snap-mandatory"
           >
-            <div className="mx-3 rounded-t-2xl border border-green-300 bg-white shadow-2xl overflow-hidden pb-[env(safe-area-inset-bottom)]">
-              <button
-                onClick={() => setDrawerOpen(v => !v)}
-                className="w-full py-2 active:opacity-80"
-                aria-label="Alternar lista de atletas"
+            {atletasLivresAtivo.map((atleta, index) => (
+              <Draggable
+                key={String(atleta.atletaId)}
+                draggableId={String(atleta.atletaId)}
+                index={index}
               >
-                <div className="mx-auto h-1.5 w-12 rounded-full bg-green-300" />
-              </button>
-
-              <div className="px-3 pb-2 flex items-center gap-2">
-                <h2 className="text-base font-bold">Atletas Vinculados</h2>
-                <span className="text-xs text-green-700/80">({atletasLivresAtivo.length})</span>
-              </div>
-
-              <div className="px-3 pb-2">
-                <label htmlFor="buscaMob" className="sr-only">Buscar por nome/posição</label>
-                <input
-                  id="buscaMob"
-                  name="buscaMob"
-                  value={filtro}
-                  onChange={(e) => setFiltro(e.target.value)}
-                  placeholder="Buscar por nome/posição"
-                  className="w-full border rounded px-3 py-2"
-                />
-              </div>
-
-              <Droppable droppableId="atletasMob" type="ATLETA" direction={direction}>
-                {(provided) => (
+                {(provided2, snapshot) => (
                   <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className="flex flex-row gap-3 overflow-x-auto px-3 py-2 snap-x snap-mandatory"
+                    ref={provided2.innerRef}
+                    {...provided2.draggableProps}
+                    {...provided2.dragHandleProps}
+                    className={`cursor-grab snap-start ${
+                      snapshot.isDragging ? "shadow-2xl z-50" : ""
+                    } will-change-transform`}
                   >
-                    {atletasLivresAtivo.map((atleta, index) => (
-                      <Draggable
-                        key={String(atleta.id ?? atleta.atletaId)}
-                        draggableId={String(atleta.id ?? atleta.atletaId)}
-                        index={index}
-                      >
-                        {(provided2, snapshot) => (
-                          <div
-                            ref={provided2.innerRef}
-                            {...provided2.draggableProps}
-                            {...provided2.dragHandleProps}
-                            className={`cursor-grab snap-start ${snapshot.isDragging ? "shadow-2xl scale-105 z-50" : ""} will-change-transform`}
-                          >
-                            <CardAtleta atleta={atleta} />
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
+                    <CardAtleta atleta={atleta} />
                   </div>
                 )}
-              </Droppable>
-            </div>
+              </Draggable>
+            ))}
+            {provided.placeholder}
           </div>
+        )}
+      </Droppable>
+    </div>
+  </div>
+)}
+
         </DragDropContext>
       </div>
 

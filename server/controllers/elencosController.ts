@@ -1,6 +1,7 @@
-// controllers/elencoController.ts
+// server/controllers/elencosController.ts
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 
 const prisma = new PrismaClient();
@@ -40,7 +41,7 @@ async function montarRespostaElencos(donoId: string, turmaId?: string) {
   }));
 }
 
-// GET /api/treinos/elencos?tipoUsuarioId=...&turmaId=...
+// GET /api/elencos/minha?turmaId=...
 export async function listarElencosMinha(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.userId;
@@ -77,7 +78,7 @@ export async function listarElencosMinha(req: AuthenticatedRequest, res: Respons
   }
 }
 
-// GET /api/treinos/elencos/escala-por-turma?turmaId=...
+// GET /api/elencos/escala-por-turma?turmaId=...
 export async function escalaPorTurma(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.userId;
@@ -153,9 +154,7 @@ export async function escalaPorTurma(req: AuthenticatedRequest, res: Response) {
 }
 
 /* ============================================================================
-   🔄 Funções abaixo copiadas / sincronizadas com treinosController
-   (getEscalaCore, getEscalaPorElencoId, getEscalaPorDono,
-    listarElencos, criarElenco, atualizarElenco)
+   🔄 Funções sincronizadas com o antigo treinosController (parte de Elencos)
 ============================================================================ */
 
 async function getEscalaCore(elencoId: string, res: Response) {
@@ -185,7 +184,7 @@ async function getEscalaCore(elencoId: string, res: Response) {
       id: elenco.id,
       nome: elenco.nome,
       maxJogadores: elenco.maxJogadores,
-      escala,   // ex: { GOL: "uuidAtleta", LD: "uuidAtleta", ... }
+      escala, // ex: { GOL: "uuidAtleta", LD: "uuidAtleta", ... }
       formacao, // ex: { defesa: 4, meio: 2, atacantes: 3 }
     });
   } catch (err) {
@@ -202,8 +201,14 @@ export async function getEscalaPorElencoId(req: Request, res: Response) {
 
 export async function getEscalaPorDono(req: Request, res: Response) {
   try {
-    const raw = (req.query.tipoUsuarioId ?? "") as string;
-    const tipoUsuarioId = String(raw).trim();
+    // suporta tanto query (?tipoUsuarioId=...) quanto params (/por-escolinha/:escolinhaId/escala)
+    const fromQuery = (req.query.tipoUsuarioId ?? "") as string;
+    const fromParams =
+      (req.params.escolinhaId as string | undefined) ||
+      (req.params.clubeId as string | undefined) ||
+      (req.params.professorId as string | undefined);
+
+    const tipoUsuarioId = String(fromQuery || fromParams || "").trim();
     if (!tipoUsuarioId) {
       return res.status(400).json({ error: "tipoUsuarioId é obrigatório" });
     }
@@ -280,27 +285,41 @@ export async function criarElenco(req: Request, res: Response) {
       escala,
       maxJogadores,
       turmaId,
-      formacao,          // vem do front (ex: "4-3-3" ou objeto)
-      // pode ler, mas NÃO vamos colocar no data:
+      formacao, // vem do front (ex: "4-3-3" ou objeto)
+      // usados só pra descobrir o dono:
       tipoUsuario,
       tipoUsuarioId,
     } = req.body;
 
-    // se quiser usar tipoUsuario/tipoUsuarioId pra validação, usa aqui
-    // e depois ignora no create
+    const tipo = (tipoUsuario ?? "").toString().toLowerCase();
+    const donoId =
+      typeof tipoUsuarioId === "string" && tipoUsuarioId.trim()
+        ? tipoUsuarioId.trim()
+        : null;
+
+    const owner: {
+      professorId?: string | null;
+      clubeId?: string | null;
+      escolinhaId?: string | null;
+    } = {};
+
+    if (donoId) {
+      if (tipo === "professor") owner.professorId = donoId;
+      else if (tipo === "clube") owner.clubeId = donoId;
+      else if (tipo === "escolinha") owner.escolinhaId = donoId;
+    }
 
     const elenco = await prisma.elenco.create({
       data: {
         nome,
-        professorId: professorId ?? null,
-        clubeId: clubeId ?? null,
-        escolinhaId: escolinhaId ?? null,
+        professorId: professorId ?? owner.professorId ?? null,
+        clubeId: clubeId ?? owner.clubeId ?? null,
+        escolinhaId: escolinhaId ?? owner.escolinhaId ?? null,
         atletasIds: Array.isArray(atletasIds) ? atletasIds : [],
         escala: escala ?? null,
-        formacao: formacao ?? null, // <- salva como JSON
+        formacao: formacao ?? null, // salva como JSON ou string
         maxJogadores: maxJogadores ?? 11,
         turmaId: turmaId ?? null,
-        // ativo, createdAt, updatedAt usam default
       },
     });
 
@@ -323,19 +342,36 @@ export async function atualizarElenco(req: Request, res: Response) {
       escala,
       maxJogadores,
       turmaId,
-      formacao,          // vem do front
-      // lidos mas não enviados pro Prisma:
+      formacao,
       tipoUsuario,
       tipoUsuarioId,
     } = req.body;
+
+    const tipo = (tipoUsuario ?? "").toString().toLowerCase();
+    const donoId =
+      typeof tipoUsuarioId === "string" && tipoUsuarioId.trim()
+        ? tipoUsuarioId.trim()
+        : null;
+
+    const owner: {
+      professorId?: string | null;
+      clubeId?: string | null;
+      escolinhaId?: string | null;
+    } = {};
+
+    if (donoId) {
+      if (tipo === "professor") owner.professorId = donoId;
+      else if (tipo === "clube") owner.clubeId = donoId;
+      else if (tipo === "escolinha") owner.escolinhaId = donoId;
+    }
 
     const elenco = await prisma.elenco.update({
       where: { id },
       data: {
         nome,
-        professorId: professorId ?? null,
-        clubeId: clubeId ?? null,
-        escolinhaId: escolinhaId ?? null,
+        professorId: professorId ?? owner.professorId ?? null,
+        clubeId: clubeId ?? owner.clubeId ?? null,
+        escolinhaId: escolinhaId ?? owner.escolinhaId ?? null,
         atletasIds: Array.isArray(atletasIds) ? atletasIds : [],
         escala: escala ?? null,
         formacao: formacao ?? null,
@@ -348,5 +384,124 @@ export async function atualizarElenco(req: Request, res: Response) {
   } catch (err) {
     console.error("Erro ao atualizar elenco:", err);
     return res.status(500).json({ error: "Erro ao atualizar elenco" });
+  }
+}
+
+/* ============================================================================
+   🆕 Funções trazidas do treinosController: atletas vinculados
+============================================================================ */
+
+// GET /api/elencos/atletas-vinculados?professorId=...&incluirPontuacao=1
+export const atletasVinculados = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    let professorId: string | undefined =
+      (typeof req.query.professorId === "string" && req.query.professorId.trim()) ||
+      (typeof req.query.tipoUsuarioId === "string" && req.query.tipoUsuarioId.trim()) ||
+      undefined;
+
+    const usuarioIdQ =
+      typeof req.query.usuarioId === "string" ? req.query.usuarioId.trim() : undefined;
+
+    if (!professorId && usuarioIdQ) {
+      const prof = await prisma.professor.findFirst({
+        where: { usuarioId: usuarioIdQ },
+        select: { id: true },
+      });
+      professorId = prof?.id;
+    }
+
+    if (!professorId) {
+      res.json([]);
+      return;
+    }
+    const pid: string = professorId;
+    const incluirPontuacao = String(req.query.incluirPontuacao ?? "") === "1";
+
+    const rows = await prisma.relacaoTreinamento.findMany({
+      where: { professorId: pid, atletaId: { not: null } },
+      select: {
+        atleta: {
+          select: {
+            id: true,
+            usuarioId: true,
+            posicao: true,
+            idade: true,
+            categoria: true,
+            usuario: { select: { nome: true, foto: true } },
+            ...(incluirPontuacao
+              ? { pontuacao: { select: { pontuacaoTotal: true } } }
+              : {}),
+          },
+        },
+      },
+    });
+
+    const lista = rows
+      .map((r: (typeof rows)[number]) => r.atleta)
+      .filter((a): a is NonNullable<(typeof rows)[number]["atleta"]> => Boolean(a))
+      .map((a) => ({
+        id: a.id,
+        usuarioId: a.usuarioId,
+        atletaId: a.id,
+        nome: a.usuario?.nome ?? "Atleta",
+        foto: a.usuario?.foto ?? null,
+        posicao: a.posicao ?? null,
+        idade: a.idade ?? null,
+        categoria: Array.isArray(a.categoria) && a.categoria.length ? a.categoria[0] : null,
+        pontuacao: (a as any).pontuacao?.pontuacaoTotal ?? null,
+      }));
+
+    res.json(lista);
+  } catch (e) {
+    console.error("GET /elencos/atletas-vinculados erro:", e);
+    res.status(500).json({ error: "Falha ao buscar atletas vinculados" });
+  }
+};
+
+// GET /api/elencos/atletas?tipoUsuarioId=...&turmaId=...
+export async function listarAtletasVinculados(req: Request, res: Response) {
+  try {
+    const tipoUsuarioId = String(req.query.tipoUsuarioId || "");
+    const turmaId = req.query.turmaId ? String(req.query.turmaId) : undefined;
+
+    if (!tipoUsuarioId) {
+      return res.status(400).json({ error: "tipoUsuarioId obrigatório" });
+    }
+
+    const whereBase: Prisma.AtletaWhereInput = {
+      OR: [
+        { relacoesTreinamento: { some: { professorId: tipoUsuarioId } } },
+        { clubeId: tipoUsuarioId },
+        { escolinhaId: tipoUsuarioId },
+      ],
+    };
+
+    if (turmaId) {
+      const membros = await prisma.turmaUsuario.findMany({
+        where: { turmaId },
+        select: { usuarioId: true },
+      });
+      const usuarioIds = membros.map((m) => m.usuarioId);
+
+      whereBase.usuarioId = { in: usuarioIds.length ? usuarioIds : ["__none__"] };
+    }
+
+    const atletas = await prisma.atleta.findMany({
+      where: whereBase,
+      select: {
+        id: true,
+        usuarioId: true,
+        nome: true,
+        foto: true,
+        idade: true,
+        posicao: true,
+      },
+      orderBy: { nome: "asc" },
+    });
+
+    return res.json(atletas);
+  } catch (e) {
+    console.error("[listarAtletasVinculados]", e);
+    return res.status(500).json({ error: "Erro ao listar atletas vinculados" });
   }
 }
