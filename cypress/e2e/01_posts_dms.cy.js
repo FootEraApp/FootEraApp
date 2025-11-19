@@ -1,27 +1,31 @@
 describe("Cenário 1 — Posts e DMs", () => {
-  it("cria um post e outro usuário visualiza no feed", () => {
-    cy.loginUi("atletaPro");
+  it("cria um post e visualiza no feed", () => {
+    cy.loginUi("atletaFree");
 
-    cy.visit("/feed");
+    const textoPost = `Post de teste automatizado (E2E) ${Date.now()}`;
 
-    cy.get('[data-testid="novo-post"], textarea, [name="conteudoPost"]').first().click();
-    cy.get('textarea, [data-testid="post-text"]').type("Post de teste automatizado (E2E).");
+    cy.visit("/post");
+
+    cy.get('textarea, [data-testid="post-text"]').first().click().type(textoPost);
     cy.contains("button", /publicar|postar|enviar/i).click();
 
-    cy.contains(/Post de teste automatizado \(E2E\)/i).should("be.visible");
+    cy.visit("/feed");
+    cy.contains(new RegExp(textoPost.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")).should(
+      "be.visible"
+    );
   });
 
   it("envia uma DM para outro usuário", () => {
-    cy.loginUi("atletaPro");
+    cy.loginUi("atletaFree");
 
     cy.visit("/mensagens");
 
-    cy.contains(/nova conversa|novo chat|nova mensagem/i).click();
-    cy.get('input[placeholder*="Buscar"], input[placeholder*="usuário"]').type("atleta.free");
-    cy.contains(/atleta\.free/i).click();
+    cy.get('[data-testid="usuario-list-item"]').first().click();
 
     const msg = `Mensagem E2E ${Date.now()}`;
-    cy.get('textarea, [data-testid="chat-input"]').type(msg);
+
+    cy.get('[data-testid="chat-input"]').type(msg);
+
     cy.contains("button", /enviar|mandar/i).click();
 
     cy.contains(msg).should("be.visible");

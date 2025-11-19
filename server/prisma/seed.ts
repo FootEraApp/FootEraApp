@@ -22,7 +22,6 @@ async function main() {
   'admin': 'admin123',
   'olheiro_joao': 'olheiro123',
 
-  // >>> ADICIONAR AQUI <<<
   'atleta_free': 'senha123',
   'atleta_pro': 'senha123',
   'prof_free': 'senha123',
@@ -811,9 +810,15 @@ const usuarioAaaaa = await prisma.usuario.upsert({
 // ====================== USUÁRIOS DE TESTE CYPRESS ======================
 
 // 1) Atleta Free
+// 1) Atleta Free
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'atleta_free' },
-  update: {},
+  update: {
+    // garante que, se já existir, a senha seja atualizada pro hash novo
+    senhaHash: H['atleta_free'],
+    tipo: TipoUsuario.Atleta,
+    verified: true,
+  },
   create: {
     nome: 'Atleta Free',
     nomeDeUsuario: 'atleta_free',
@@ -847,7 +852,12 @@ await prisma.usuario.upsert({
 // 2) Atleta Pro
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'atleta_pro' },
-  update: {},
+  update: {
+    // garante que, se já existir, a senha seja atualizada pro hash novo
+    senhaHash: H['atleta_pro'],
+    tipo: TipoUsuario.Atleta,
+    verified: true,
+  },
   create: {
     nome: 'Atleta Pro',
     nomeDeUsuario: 'atleta_pro',
@@ -881,7 +891,12 @@ await prisma.usuario.upsert({
 // 3) Professor Free
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'prof_free' },
-  update: {},
+  update: {
+    // garante que, se já existir, a senha seja atualizada pro hash novo
+    senhaHash: H['prof_free'],
+    tipo: TipoUsuario.Professor,
+    verified: true,
+  },
   create: {
     nome: 'Professor Free',
     nomeDeUsuario: 'prof_free',
@@ -910,7 +925,12 @@ await prisma.usuario.upsert({
 // 4) Professor Pro
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'prof_pro' },
-  update: {},
+  update: {
+    // garante que, se já existir, a senha seja atualizada pro hash novo
+    senhaHash: H['prof_pro'],
+    tipo: TipoUsuario.Professor,
+    verified: true,
+  },
   create: {
     nome: 'Professor Pro',
     nomeDeUsuario: 'prof_pro',
@@ -939,7 +959,12 @@ await prisma.usuario.upsert({
 // 5) Olheiro Free
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'scout_free' },
-  update: {},
+  update: {
+    // garante que, se já existir, a senha seja atualizada pro hash novo
+    senhaHash: H['scout_free'],
+    tipo: TipoUsuario.Olheiro,
+    verified: true,
+  },
   create: {
     nome: 'Olheiro Free',
     nomeDeUsuario: 'scout_free',
@@ -965,7 +990,12 @@ await prisma.usuario.upsert({
 // 6) Olheiro Pro
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'scout_pro' },
-  update: {},
+  update: {
+    // garante que, se já existir, a senha seja atualizada pro hash novo
+    senhaHash: H['scout_pro'],
+    tipo: TipoUsuario.Olheiro,
+    verified: true,
+  },
   create: {
     nome: 'Olheiro Pro',
     nomeDeUsuario: 'scout_pro',
@@ -991,7 +1021,12 @@ await prisma.usuario.upsert({
 // 7) Escolinha (escolinha_01)
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'escolinha_01' },
-  update: {},
+  update: {
+    // garante que, se já existir, a senha seja atualizada pro hash novo
+    senhaHash: H['escolinha_01'],
+    tipo: TipoUsuario.Escolinha,
+    verified: true,
+  },
   create: {
     nome: 'Escolinha 01',
     nomeDeUsuario: 'escolinha_01',

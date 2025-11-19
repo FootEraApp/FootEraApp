@@ -6,6 +6,7 @@ import {
   TreinoStatus,
   TipoMidia,
   TreinoAgendadoStatus,
+  Nivel,
 } from "@prisma/client";
 import { getIO } from "../socket.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
@@ -54,10 +55,14 @@ export async function agendarTreinoPessoal(req: AuthenticatedRequest, res: Respo
     });
   }
 
-  const atletaId = req.user?.atletaId;
-  if (!atletaId) {
-    return res.status(400).json({ message: "Usuário não é atleta." });
-  }
+  const atleta = await prisma.atleta.findUnique({
+    where: { usuarioId: req.userId! },
+    select: { id: true },
+  });
+
+  if (!atleta) return res.status(400).json({ message: "Usuário não é atleta." });
+
+  const atletaId = atleta.id;
 
   const { titulo, dataTreino, descricao } = req.body as {
     titulo: string;
@@ -179,7 +184,7 @@ function startOfToday() {
 
 export async function getCalendarioTreinos(req: Request, res: Response) {
   try {
-    const usuarioId = (req as any).usuarioId;
+    const usuarioId = (req as AuthenticatedRequest).userId;
     const { start, end } = req.query;
 
     if (!usuarioId) {
@@ -317,6 +322,8 @@ export async function salvarTreinoNaBiblioteca(req: AuthenticatedRequest, res: R
   try {
     const user = req.user as any;
     const usuarioId = req.userId!;
+    const atletaId = user?.tipo === "Atleta" ? user.tipoUsuarioId : undefined;
+
     const { treinoProgramadoId } = req.body as { treinoProgramadoId?: string };
 
     if (!usuarioId) {
@@ -327,7 +334,6 @@ export async function salvarTreinoNaBiblioteca(req: AuthenticatedRequest, res: R
       return res.status(400).json({ message: "treinoProgramadoId é obrigatório." });
     }
 
-    const atletaId = user?.tipoUsuarioId as string | undefined;
     const plano = user?.plano ?? "FREE";
 
     if (!atletaId) {
@@ -1383,39 +1389,46 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
     const pid: string = professorId;
     const incluirPontuacao = String(req.query.incluirPontuacao ?? "") === "1";
 
+    const selectBase: any = {
+      id: true,
+      usuarioId: true,
+      posicao: true,
+      idade: true,
+      categoria: true,
+      usuario: { select: { nome: true, foto: true } },
+    };
+
+    if (incluirPontuacao) {
+      selectBase.pontuacao = { select: { pontuacaoTotal: true } };
+    }
+
     const rows = await prisma.relacaoTreinamento.findMany({
       where: { professorId: pid, atletaId: { not: null } },
-      select: {
-        atleta: {
-          select: {
-            id: true,
-            usuarioId: true,
-            posicao: true,
-            idade: true,
-            categoria: true,
-            usuario: { select: { nome: true, foto: true } },
-            ...(incluirPontuacao ? { pontuacao: { select: { pontuacaoTotal: true } } } : {}),
-          },
-        },
-      },
+      select: { atleta: { select: selectBase } },
     });
 
     const lista = rows
       .map((r: typeof rows[number]) => r.atleta)
       .filter((a): a is NonNullable<typeof a> => Boolean(a))
-      .map((a) => ({
-        id: a.id,
-        usuarioId: a.usuarioId,
-        atletaId: a.id,
-        nome: a.usuario?.nome ?? "Atleta",
-        foto: a.usuario?.foto ?? null,
-        posicao: a.posicao ?? null,
-        idade: a.idade ?? null,
-        categoria: Array.isArray(a.categoria) && a.categoria.length ? a.categoria[0] : null,
-        pontuacao: (a as any).pontuacao?.pontuacaoTotal ?? null,
-      }));
+      .map((a) => {
+        const usuario = (a as any).usuario as { nome?: string | null; foto?: string | null } | null;
+
+        return {
+          id: a.id,
+          usuarioId: a.usuarioId,
+          atletaId: a.id,
+          nome: usuario?.nome ?? "Atleta",
+          foto: usuario?.foto ?? null,
+          posicao: a.posicao ?? null,
+          idade: a.idade ?? null,
+          categoria:
+            Array.isArray(a.categoria) && a.categoria.length ? a.categoria[0] : null,
+          pontuacao: (a as any).pontuacao?.pontuacaoTotal ?? null,
+        };
+      });
 
     res.json(lista);
+
   } catch (e) {
     console.error("GET /treinos/atletas-vinculados erro:", e);
     res.status(500).json({ error: "Falha ao buscar atletas vinculados" });
@@ -1434,8 +1447,8 @@ export async function restaurarTreinos(req: Request, res: Response) {
       create: {
         nome,
         codigo: `${nome}-${Date.now()}`,
-        nivel: "Base",
-        tipoTreino: "Fisico",
+        nivel: Nivel.Base,
+        tipoTreino: TipoTreino.Fisico,
         categoria: [],
         duracao: 60,
         pontuacao: 15,
@@ -2115,7 +2128,7 @@ export async function listarAtletasVinculados(req: Request, res: Response) {
         where: { turmaId },
         select: { usuarioId: true },
       });
-      const usuarioIds = membros.map(m => m.usuarioId);
+      const usuarioIds = membros.map((m) => m.usuarioId);
 
       whereBase.usuarioId = { in: usuarioIds.length ? usuarioIds : ["__none__"] };
     }
@@ -2123,12 +2136,30 @@ export async function listarAtletasVinculados(req: Request, res: Response) {
     const atletas = await prisma.atleta.findMany({
       where: whereBase,
       select: {
-        id: true, usuarioId: true, nome: true, foto: true, idade: true, posicao: true,
+        id: true,
+        usuarioId: true,
+        idade: true,
+        posicao: true,
+        usuario: {
+          select: {
+            nome: true,
+            foto: true,
+          },
+        },
       },
-      orderBy: { nome: "asc" },
+      orderBy: { usuario: { nome: "asc" } },
     });
 
-    return res.json(atletas);
+    const payload = atletas.map((a) => ({
+      id: a.id,
+      usuarioId: a.usuarioId,
+      nome: a.usuario?.nome ?? "",
+      foto: a.usuario?.foto ?? null,
+      idade: a.idade,
+      posicao: a.posicao,
+    }));
+
+    return res.json(payload);
   } catch (e) {
     console.error("[listarAtletasVinculados]", e);
     return res.status(500).json({ error: "Erro ao listar atletas vinculados" });
