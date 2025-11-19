@@ -369,36 +369,39 @@ function PaginaFeed(): JSX.Element {
   }, []);
 
   useEffect(() => {
-    async function carregar() {
-      try {
-        const dados: PostagemComUsuario[] = await getFeedPosts(filtro);
+  async function carregar() {
+    try {
+      const dados: PostagemComUsuario[] = await getFeedPosts(filtro);
 
-        const uid = Storage.usuarioId ?? null;
+      const uid = Storage.usuarioId ?? null;
 
-        let filtrado: PostagemComUsuario[] = dados;
-        if (uid && filtro === "todos") {
-          filtrado = dados.filter(
-            (p) => p.usuario?.id !== uid && (p as any).usuarioId !== uid
-          );
-        } else if (uid && filtro === "meus") {
-          filtrado = dados.filter(
-            (p) => p.usuario?.id === uid || (p as any).usuarioId === uid
-          );
-        }
+      let filtrado: PostagemComUsuario[] = dados;
 
-        const unicos: PostagemComUsuario[] = Array.from(
-          new Map<string, PostagemComUsuario>(
-            filtrado.map((p) => [p.id, p] as const)
-          ).values()
+      if (uid && filtro === "todos") {
+        filtrado = dados.filter(
+          (p) => p.usuario?.id !== uid && (p as any).usuarioId !== uid
         );
-
-        setPosts(unicos);
-      } catch (e) {
-        console.error("Falha ao carregar feed:", e);
       }
+
+      if (uid && filtro === "meus") {
+        filtrado = dados.filter(
+          (p) => p.usuario?.id === uid || (p as any).usuarioId === uid
+        );
+      }
+
+      const unicos: PostagemComUsuario[] = Array.from(
+        new Map<string, PostagemComUsuario>(
+          filtrado.map((p) => [p.id, p] as const)
+        ).values()
+      );
+
+      setPosts(unicos);
+    } catch (e) {
+      console.error("Falha ao carregar feed:", e);
     }
-    carregar();
-  }, [filtro]);
+  }
+  carregar();
+}, [filtro]);
 
   useEffect(() => {
     const onNovoPost = (novo: PostagemComUsuario) => {
@@ -562,71 +565,6 @@ function PaginaFeed(): JSX.Element {
           </button>
         ))}
       </div>
-
-      <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mb-4">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <CalendarClock className="w-5 h-5 text-green-800" />
-          <h3 className="text-sm font-semibold text-green-900">
-            Minha agenda (próximos 7 dias)
-          </h3>
-        </div>
-        {carregandoAgenda && (
-          <span className="text-[11px] text-gray-500">Carregando...</span>
-        )}
-      </div>
-
-      {agendaFeed.length === 0 && !carregandoAgenda && (
-        <p className="text-xs text-gray-500">
-          Nenhuma atividade agendada para os próximos dias.
-        </p>
-      )}
-
-      {agendaFeed.length > 0 && (
-        <ul className="space-y-2 text-xs">
-          {agendaFeed.slice(0, 5).map((item) => (
-            <li
-              key={`${item.origem}-${item.id}`}
-              className="flex items-start gap-2 rounded-lg border bg-white px-3 py-2"
-            >
-              <span
-                className={`
-                  px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0
-                  ${
-                    item.tipo === "TREINO"
-                      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                      : item.tipo === "DESAFIO"
-                      ? "bg-amber-100 text-amber-800 border border-amber-200"
-                      : item.tipo === "EVENTO" || item.tipo === "PENEIRA"
-                      ? "bg-blue-100 text-blue-800 border-blue-200"
-                      : "bg-gray-100 text-gray-700 border-gray-200"
-                  }
-                `}
-              >
-                {item.tipo}
-              </span>
-
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-green-900 truncate">
-                  {item.titulo}
-                </div>
-                <div className="text-[11px] text-gray-600">
-                  {new Date(item.inicio).toLocaleDateString("pt-BR", {
-                    day: "2-digit",
-                    month: "2-digit",
-                  })}{" "}
-                  às{" "}
-                  {new Date(item.inicio).toLocaleTimeString("pt-BR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
 
       {posts.length === 0 && (
         <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">

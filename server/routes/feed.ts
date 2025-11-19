@@ -11,18 +11,21 @@ import {
   deletarPostagem,
   getPerfil,
   deletarUsuario,
-  repostPost
+  repostPost,
+  curtirPostagem,
 } from "../controllers/feedController.js";
 
 const storage = multer.diskStorage({
   async destination(req, file, cb) {
     try {
       const texto =
-        (req.body?.descricao && req.body.descricao.length ? req.body.descricao : req.body?.conteudo) || "";
+        (req.body?.descricao && req.body.descricao.length
+          ? req.body.descricao
+          : req.body?.conteudo) || "";
       const isCard = /Meu Card FOOTERA/i.test(texto);
       const isVideo = file.mimetype?.startsWith("video");
 
-      const sub = isVideo ? "videos" : (isCard ? "cards" : "posts");
+      const sub = isVideo ? "videos" : isCard ? "cards" : "posts";
       const dest = path.join(process.cwd(), "uploads", sub);
       await fs.ensureDir(dest);
       cb(null, dest);
@@ -32,10 +35,14 @@ const storage = multer.diskStorage({
   },
   filename(req, file, cb) {
     const texto =
-      (req.body?.descricao && req.body.descricao.length ? req.body.descricao : req.body?.conteudo) || "";
+      (req.body?.descricao && req.body.descricao.length
+        ? req.body.descricao
+        : req.body?.conteudo) || "";
     const isCard = /Meu Card FOOTERA/i.test(texto);
     const isVideo = file.mimetype?.startsWith("video");
-    const ext = path.extname(file.originalname || (isVideo ? ".mp4" : ".png")) || (isVideo ? ".mp4" : ".png");
+    const ext =
+      path.extname(file.originalname || (isVideo ? ".mp4" : ".png")) ||
+      (isVideo ? ".mp4" : ".png");
     const name = `${Date.now()}${!isVideo && isCard ? "-card" : ""}${ext}`;
     cb(null, name);
   },
@@ -47,6 +54,7 @@ const router = Router();
 router.use(authenticateToken);
 
 router.post("/:id/repost", authenticateToken, repostPost);
+router.post("/:postId/like", authenticateToken, curtirPostagem);
 router.get("/perfil/:id", authenticateToken, getPerfil);
 router.delete("/usuario/:id", adminAuth, deletarUsuario);
 router.post("/seguir", seguirUsuario);

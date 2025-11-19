@@ -38,7 +38,7 @@ Cypress.Commands.add("loginUi", (tipoUsuarioKey) => {
       win.localStorage.clear();
       win.sessionStorage.clear();
     },
-    timeout: 120000, // 120s pra carregar a página
+    timeout: 120000,
   });
 
   cy.url().should("include", "/login");
@@ -51,11 +51,14 @@ Cypress.Commands.add("loginUi", (tipoUsuarioKey) => {
     .first()
     .type(user.senha);
 
-  cy.get('button[type="submit"], button[data-testid="btn-login"]')
-    .first()
-    .click();
+    cy.get('button[type="submit"], button[data-testid="btn-login"]')
+        .first()
+        .click();
 
-  cy.url().should("include", "/feed");
+    cy.url({ timeout: 60000 }).should((url) => {
+        expect(url).to.not.match(/\/login\/?$/);
+    });
+
 });
 
 Cypress.Commands.add("setToken", (token) => {

@@ -81,7 +81,10 @@ export default function PagamentosPage() {
   const [pendingPaymentId, setPendingPaymentId] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
 
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" }), [token]);
+  const headers = useMemo(
+    () => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" }),
+    [token]
+  );
 
   type RoleKey = keyof typeof roleToDefaultPlan;
 
@@ -117,11 +120,16 @@ export default function PagamentosPage() {
   }, [headers, tipo]);
 
   const currentPlanPrice = useMemo(() => {
-    const p = plans.find(p => p.id === selectedPlan);
+    const p = plans.find((p) => p.id === selectedPlan);
     if (!p) return 0;
     if (selectedPlan === "ESCOLINHA_PRO") return p.monthly;
-    return period === "Mensal" ? p.monthly : (p.annual ?? p.monthly);
+    return period === "Mensal" ? p.monthly : p.annual ?? p.monthly;
   }, [plans, selectedPlan, period]);
+
+  const selectedObj = useMemo(
+    () => plans.find((p) => p.id === selectedPlan),
+    [plans, selectedPlan]
+  );
 
   async function previewCoupon() {
     if (!cupomInput) return;
@@ -337,14 +345,12 @@ export default function PagamentosPage() {
     return <div className="p-6">Carregando pagamentos...</div>;
   }
 
-  const p = plans.find(x => x.id === selectedPlan);
+  const p = selectedObj;
   const total = totalComCupom();
-  const selectedObj = useMemo(
-    () => plans.find(p => p.id === selectedPlan),
-    [plans, selectedPlan]
-  );
   const anualDisponivel =
-    selectedPlan !== "ESCOLINHA_PRO" && !!selectedObj?.annual && (selectedObj.annual as number) > 0;
+    selectedPlan !== "ESCOLINHA_PRO" &&
+    !!selectedObj?.annual &&
+    (selectedObj.annual as number) > 0;
 
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-8">
