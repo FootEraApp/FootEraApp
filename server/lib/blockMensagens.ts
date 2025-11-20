@@ -1,10 +1,11 @@
+// server/lib/blockMensagens.ts
 import type { UsageKey } from "./usage.js";
 
 export type BlockReason =
-  | UsageKey              
+  | UsageKey
   | "TREINO_SALVO_FREE"
   | "DM_MENOR_SEM_CONSENTIMENTO"
-  | "OUTRO";              
+  | "OUTRO";
 
 export const BLOCK_MESSAGES: Record<BlockReason, string> = {
   treinos_semana:
@@ -29,6 +30,10 @@ export const BLOCK_MESSAGES: Record<BlockReason, string> = {
     "Fair-use: muitas turmas criadas. Revise sua organização.",
   agendamentos_mes:
     "Fair-use: alto volume de agendamentos este mês.",
+
+  // NOVO: mensagem para o limite de treinos programados criados por mês (FREE)
+  treinos_programados_mes:
+    "Você atingiu o limite mensal de treinos programados no plano Free. Remova alguns treinos ou faça upgrade para continuar criando.",
 
   TREINO_SALVO_FREE:
     "Você atingiu o limite de treinos salvos no plano Free. Exclua um ou faça upgrade.",

@@ -486,3 +486,25 @@ export async function repostPost(req: Request, res: Response) {
     return res.status(500).json({ message: "Erro ao repostar" });
   }
 }
+
+export const compartilharPost: RequestHandler = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const post = await prisma.postagem.update({
+      where: { id },
+      data: {
+        compartilhamentos: {
+          increment: 1,
+        },
+      },
+    });
+
+    return res.json(post);
+  } catch (error) {
+    console.error("Erro ao compartilhar post:", error);
+    return res
+      .status(500)
+      .json({ message: "Erro interno ao registrar compartilhamento." });
+  }
+};

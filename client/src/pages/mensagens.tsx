@@ -598,8 +598,25 @@ const markReadFromUser = async (otherId: string) => {
         const mutuos: Usuario[] = await mutuosRes.json();
 
         const recentes = loadRecentUsers();
-        const fromConversas: Usuario[] = conv.conversas.map(c => ({ id: c.id, nome: c.nome, foto: c.foto }));
-        setUsuariosMutuos(mergeUnique(mergeUnique(recentes, fromConversas), mutuos));
+        const fromConversas: Usuario[] = conv.conversas.map(c => ({
+          id: c.id,
+          nome: c.nome,
+          foto: c.foto,
+        }));
+
+        let base = mergeUnique(mergeUnique(recentes, fromConversas), mutuos);
+
+        if (base.length === 0 && usuarioId) {
+          base = [
+            {
+              id: usuarioId,
+              nome: "Minhas notas (teste)",
+              foto: null,
+            },
+          ];
+        }
+
+        setUsuariosMutuos(base);
         setGrupos(meusGrupos);
 
         setUnreadByUser(prev => ({
@@ -908,12 +925,20 @@ useEffect(() => {
           reconcilePrivadaByClientId(saved);
         } else {
           console.error("POST /api/mensagem falhou:", resp.status, await resp.text());
-          setMensagensPrivadas(prev => prev.filter(m => m.clientMsgId !== clientMsgId));
+          setMensagensPrivadas(prev =>
+            prev.map(m =>
+              m.clientMsgId === clientMsgId ? { ...m, pending: false } : m
+            )
+          );
           alert("Não foi possível enviar a mensagem agora.");
         }
       } catch (e) {
         console.error("POST /api/mensagem erro:", e);
-        setMensagensPrivadas(prev => prev.filter(m => m.clientMsgId !== clientMsgId));
+        setMensagensPrivadas(prev =>
+          prev.map(m =>
+            m.clientMsgId === clientMsgId ? { ...m, pending: false } : m
+          )
+        );
         alert("Não foi possível enviar a mensagem agora.");
       }
       setNovaMensagem("");
