@@ -265,30 +265,34 @@ function AchievementShareCard({ parsed }: { parsed: ParsedAchievement }) {
   );
 }
 
-function BottomSheet({
-  open,
-  onClose,
-  heightPct = 40,
-  children,
-  ariaLabel = "Painel",
-}: {
-  open: boolean;
-  onClose: () => void;
-  heightPct?: number;
-  children: React.ReactNode;
-  ariaLabel?: string;
-}) {
+  function BottomSheet({
+    open,
+    onClose,
+    heightPct = 40,
+    children,
+    ariaLabel = "Painel",
+  }: {
+    open: boolean;
+    onClose: () => void;
+    heightPct?: number;
+    children: React.ReactNode;
+    ariaLabel?: string;
+  }) {
   useEffect(() => {
     if (!open) return;
+
     const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onEsc);
+
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
       document.removeEventListener("keydown", onEsc);
       document.body.style.overflow = prev;
     };
   }, [open, onClose]);
+
 
   if (!open) return null;
 
@@ -320,7 +324,6 @@ function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
   const [comentarioTextoPorPost, setComentarioTextoPorPost] = useState<Record<string, string>>({});
-  const userId = Storage.usuarioId as string | null;
 
   const [modalAberto, setModalAberto] = useState(false);
   const [linkCompartilhado, setLinkCompartilhado] = useState("");
@@ -337,67 +340,83 @@ function PaginaFeed(): JSX.Element {
   const [agendaFeed, setAgendaFeed] = useState<AgendaItem[]>([]);
   const [carregandoAgenda, setCarregandoAgenda] = useState(false);
 
+  const userId = Storage.usuarioId as string | null;
+  const tipoUsuario =
+    (Storage as any).tipoUsuario ??
+    localStorage.getItem("tipoUsuario") ??
+    sessionStorage.getItem("tipoUsuario") ??
+    "";
+
+   React.useEffect(() => {
+    setModalAberto(false);
+    setComentariosModalAberto(false);
+    setPostSelecionado(null);
+
+    // mata overlays “fantasmas” de outros componentes/modais
+    document
+      .querySelectorAll(
+        ".backdrop, .overlay, .modal, [data-state='open'], [data-radix-dialog-overlay]"
+      )
+      .forEach((el) => {
+        (el as HTMLElement).remove();
+      });
+  }, []);
+  
   useEffect(() => {
-    (async () => {
-      try {
-        setCarregandoAgenda(true);
+  // se não for atleta, nem tenta carregar calendário
+  if (tipoUsuario !== "ATLETA") {
+    setAgendaFeed([]);
+    setCarregandoAgenda(false);
+    return;
+  }
 
-        const hoje = new Date();
-        const daqui7 = new Date();
-        daqui7.setDate(hoje.getDate() + 7);
+  (async () => {
+    try {
+      setCarregandoAgenda(true);
 
-        const rows = await TreinosApi.getCalendario(hoje, daqui7);
+      const hoje = new Date();
+      const daqui7 = new Date();
+      daqui7.setDate(hoje.getDate() + 7);
 
-        const normalizados: AgendaItem[] = (Array.isArray(rows) ? rows : []).map((item: any) => ({
+      const rows = await TreinosApi.getCalendario(hoje, daqui7);
+
+      const normalizados: AgendaItem[] = (Array.isArray(rows) ? rows : []).map(
+        (item: any) => ({
           id: item.id,
           tipo: (item.tipo as AgendaTipo) ?? "OUTRO",
           titulo: item.titulo ?? "Atividade",
           inicio: item.inicio ?? item.start ?? item.data ?? new Date().toISOString(),
           fim: item.fim ?? item.end ?? item.dataFim ?? null,
           origem: item.origem ?? "API",
-        }));
+        })
+      );
 
-        normalizados.sort((a, b) => a.inicio.localeCompare(b.inicio));
-        setAgendaFeed(normalizados);
-      } catch (e) {
-        console.error("Erro ao carregar agenda do feed:", e);
-        setAgendaFeed([]);
-      } finally {
-        setCarregandoAgenda(false);
-      }
-    })();
-  }, []);
+      normalizados.sort((a, b) => a.inicio.localeCompare(b.inicio));
+      setAgendaFeed(normalizados);
+    } catch (e) {
+      console.error("Erro ao carregar agenda do feed:", e);
+      setAgendaFeed([]);
+    } finally {
+      setCarregandoAgenda(false);
+    }
+  })();
+}, [tipoUsuario]);
 
   useEffect(() => {
   async function carregar() {
     try {
       const dados: PostagemComUsuario[] = await getFeedPosts(filtro);
 
-      const uid = Storage.usuarioId ?? null;
-
-      let filtrado: PostagemComUsuario[] = dados;
-
-      if (uid && filtro === "todos") {
-        filtrado = dados.filter(
-          (p) => p.usuario?.id !== uid && (p as any).usuarioId !== uid
-        );
-      }
-
-      if (uid && filtro === "meus") {
-        filtrado = dados.filter(
-          (p) => p.usuario?.id === uid || (p as any).usuarioId === uid
-        );
-      }
-
       const unicos: PostagemComUsuario[] = Array.from(
         new Map<string, PostagemComUsuario>(
-          filtrado.map((p) => [p.id, p] as const)
+          dados.map((p) => [p.id, p] as const)
         ).values()
       );
 
       setPosts(unicos);
     } catch (e) {
       console.error("Falha ao carregar feed:", e);
+      setPosts([]);
     }
   }
   carregar();

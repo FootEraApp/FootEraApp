@@ -82,7 +82,9 @@ export async function getFeedPosts(
       sessionStorage.clear();
       localStorage.removeItem("token");
     } catch {}
-    window.location.href = "/login";
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
     return [];
   }
   if (!res.ok) throw new Error(`Falha ao carregar feed (${res.status})`);
@@ -138,7 +140,7 @@ export async function compartilharPost(postId: string) {
   const link = `${window.location.origin}/post/${postId}`;
   try {
     await navigator.clipboard.writeText(link);
-    await fetch(`${API.BASE_URL}/api/post/${postId}/compartilhar`, {
+    await fetch(`${API.BASE_URL}/api/feed/post/${postId}/compartilhar`, {
       method: "POST",
       headers: auth(),
     });
@@ -150,9 +152,12 @@ export async function compartilharPost(postId: string) {
 }
 
 export async function getPostById(id: string): Promise<PostagemComUsuario> {
-  const response = await fetch(`${API.BASE_URL}/api/post/visualizar/${id}`, {
-    headers: auth(),
-  });
+  const response = await fetch(
+    `${API.BASE_URL}/api/feed/post/visualizar/${id}`,
+    {
+      headers: auth(),
+    }
+  );
   if (!response.ok) throw new Error("Erro ao buscar post");
 
   const raw = await response.json();
@@ -170,7 +175,7 @@ export async function criarPost({
   videoUrl,
   arquivo,
 }: CriarPostInput) {
-  const POST_URL = `${API.BASE_URL}/api/post`;
+  const POST_URL = `${API.BASE_URL}/api/feed/post`;
   const hasDescricao = !!descricao && descricao.trim().length > 0;
   const hasImagem = !!imagemUrl && imagemUrl.trim().length > 0;
   const hasVideo = !!videoUrl && videoUrl.trim().length > 0;

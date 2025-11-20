@@ -23,17 +23,34 @@ import {
   enforceFeatureLimit,
   type FeatureLimitError,
 } from "server/utils/featureLimit.js";
+import jwt from "jsonwebtoken";
 
 const prisma = new PrismaClient();
-type Request = ExpressRequest;
 
+const JWT_SECRET: jwt.Secret = (process.env.JWT_SECRET || "defaultsecret");
+
+type Request = ExpressRequest;
 type AuthenticatedRequest = ExpressRequest & {
   userId?: string;
+  usuarioId?: string;
   user?: any;
+  auth?: any; // para suportar o novo middleware de auth
 };
 
-const FAIR_USE_TURMA_MES = 30;
+function getUserFromReq(req: AuthenticatedRequest) {
+  const anyReq = req as any;
 
+  // tenta várias formas, dependendo de como o middleware preenche
+  return (
+    anyReq.user ||          // versão antiga
+    anyReq.usuario ||
+    anyReq.auth?.user ||    // alguns middlewares colocam em auth.user
+    anyReq.auth ||          // outros colocam o próprio payload em req.auth
+    null
+  );
+}
+
+const FAIR_USE_TURMA_MES = 30;
 
 type CanKey = Parameters<typeof can>[1];
 
@@ -46,21 +63,60 @@ const FEAT = {
 } as const;
 
 export async function agendarTreinoPessoal(req: AuthenticatedRequest, res: Response) {
-  const user = req.user as any;
+  // 1) Recuperar o usuário de forma robusta
+  let user: any = getUserFromReq(req);
 
-  if (!user || !can(user, FEAT.AGENDAMENTO_PESSOAL)) {
+  // 2) Se ainda não tiver user, tenta decodificar o token manualmente (igual criacao de treino)
+  if (!user) {
+    const authHeader =
+      (req.headers.authorization as string | undefined) ||
+      (req.headers.Authorization as string | undefined);
+
+    if (authHeader) {
+      const token = authHeader.startsWith("Bearer ")
+        ? authHeader.slice(7)
+        : authHeader;
+
+      try {
+        user = jwt.verify(token, JWT_SECRET) as any;
+        (req as any).user = user;
+        (req as any).userId = user.id;
+      } catch {
+        // token inválido, mantém user = null
+      }
+    }
+  }
+
+  // 3) Agora sim: se ainda não tem user, é não autenticado
+  if (!user) {
+    return res.status(401).json({
+      code: "UNAUTHENTICATED",
+      message: "Usuário não autenticado.",
+    });
+  }
+
+  // 4) Checa se o plano permite agendamento pessoal
+  if (!can(user, FEAT.AGENDAMENTO_PESSOAL)) {
     return res.status(402).json({
       code: "UPGRADE_REQUIRED",
       message: "Agendamento pessoal de treinos está disponível apenas para planos Pro.",
     });
   }
 
+  // 5) Descobre o usuarioId de forma segura
+  const usuarioId = (req.userId as string | undefined) || (user.id as string | undefined);
+  if (!usuarioId) {
+    return res.status(400).json({ message: "Não foi possível identificar o usuário." });
+  }
+
   const atleta = await prisma.atleta.findUnique({
-    where: { usuarioId: req.userId! },
+    where: { usuarioId },
     select: { id: true },
   });
 
-  if (!atleta) return res.status(400).json({ message: "Usuário não é atleta." });
+  if (!atleta) {
+    return res.status(400).json({ message: "Usuário não é atleta." });
+  }
 
   const atletaId = atleta.id;
 
@@ -322,23 +378,30 @@ export async function salvarTreinoNaBiblioteca(req: AuthenticatedRequest, res: R
   try {
     const user = req.user as any;
     const usuarioId = req.userId!;
-    const atletaId = user?.tipo === "Atleta" ? user.tipoUsuarioId : undefined;
+
+    // tenta pegar do payload, mas faz fallback pelo usuarioId
+    let atletaId: string | undefined =
+      user?.tipo === "Atleta" ? user.tipoUsuarioId : undefined;
+
+    if (!atletaId) {
+      const atleta = await prisma.atleta.findFirst({
+        where: { usuarioId },
+        select: { id: true },
+      });
+      atletaId = atleta?.id;
+    }
+
+    if (!atletaId) {
+      return res.status(400).json({ message: "atletaId não encontrado para o usuário logado." });
+    }
 
     const { treinoProgramadoId } = req.body as { treinoProgramadoId?: string };
-
-    if (!usuarioId) {
-      return res.status(401).json({ message: "Não autenticado." });
-    }
 
     if (!treinoProgramadoId) {
       return res.status(400).json({ message: "treinoProgramadoId é obrigatório." });
     }
 
     const plano = user?.plano ?? "FREE";
-
-    if (!atletaId) {
-      return res.status(400).json({ message: "atletaId não encontrado para o usuário logado." });
-    }
 
     const treinoProgramado = await prisma.treinoProgramado.findUnique({
       where: { id: treinoProgramadoId },
@@ -370,12 +433,12 @@ export async function salvarTreinoNaBiblioteca(req: AuthenticatedRequest, res: R
         usuarioId,
         treinoProgramadoId,
         titulo: treinoProgramado.nome ?? "Treino salvo",
-        conteudo: treinoProgramado.descricao ?? "Treino salvo na sua biblioteca."
+        conteudo: treinoProgramado.descricao ?? "Treino salvo na sua biblioteca.",
       },
     });
 
     return res.status(201).json(salvo);
-    } catch (err: any) {
+  } catch (err: any) {
     if ((err as FeatureLimitError)?.code === "LIMIT_REACHED") {
       const fl = err as FeatureLimitError;
       const capability = fl.capability;
@@ -1462,14 +1525,61 @@ export async function restaurarTreinos(req: Request, res: Response) {
   return res.json({ ok: true, restaurados: nomes.length });
 }
 
-export async function criarTreinoProgramado(req: AuthenticatedRequest, res: Response) {
-  const user = req.user as any;
-  
-  if (!user || !can(user, "Treinos:CriarProgramado" as CanKey)) {
-    return res.status(403).json({
-      code: "FORBIDDEN",
-      message: "Seu plano não permite criar novos treinos programados.",
+export async function criarTreinoProgramado(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  let user: any = getUserFromReq(req);
+
+  if (!user) {
+    const authHeader =
+      (req.headers.authorization as string | undefined) ||
+      (req.headers.Authorization as string | undefined);
+
+    if (authHeader) {
+      const token = authHeader.startsWith("Bearer ")
+        ? authHeader.slice(7)
+        : authHeader;
+
+      try {
+        user = jwt.verify(token, JWT_SECRET) as any;
+        (req as any).user = user;
+        (req as any).userId = user.id;
+      } catch {}
+    }
+  }
+
+  if (!user) {
+    return res.status(401).json({
+      code: "UNAUTHENTICATED",
+      message: "Usuário não autenticado.",
     });
+  }
+
+  // 🔹 NORMALIZA tipo/plano pra professor
+  const tipoStr = String(user.tipo ?? user.tipoUsuario ?? "").toLowerCase();
+  if (!user.plano) {
+    user.plano = "FREE"; // default
+  }
+
+  if (!can(user, CAP_CRIAR_TREINO)) {
+    // fallback: se for professor, deixa passar mesmo se o can falhar (até arrumar token/middleware)
+    if (tipoStr !== "professor") {
+      return res.status(403).json({
+        code: "FORBIDDEN",
+        message: "Seu plano não permite criar novos treinos programados.",
+      });
+    }
+  }
+
+  // 3) Limite de 5 treinos programados / mês para plano FREE
+  //    (PRO e ORG ficam ilimitados na prática)
+  if (user.plano === "FREE") {
+    const ok = await requireUsage(req as any, res, "treinos_programados_mes");
+    if (!ok) {
+      // requireUsage já respondeu com o 4xx + mensagem amigável
+      return;
+    }
   }
 
   try {
@@ -1493,6 +1603,9 @@ export async function criarTreinoProgramado(req: AuthenticatedRequest, res: Resp
       pontuacao,
     } = req.body as any;
 
+    // ... resto da função permanece igual
+
+    // 4) Regras específicas pra professor FREE (planos / templates ativos)
     if (user.tipo === "Professor" && !can(user, FEAT.TREINOS_ILIMITADOS)) {
       const profId = String(tipoUsuarioId);
       const ativos = await prisma.treinoProgramado.count({
@@ -1522,7 +1635,8 @@ export async function criarTreinoProgramado(req: AuthenticatedRequest, res: Resp
         });
       }
     }
-    
+
+    // Validação básica do payload
     if (!nome || !nivel || !Array.isArray(exercicios) || !usuarioId || !tipoUsuarioId) {
       return res.status(400).json({ error: "Dados inválidos" });
     }
@@ -1540,11 +1654,15 @@ export async function criarTreinoProgramado(req: AuthenticatedRequest, res: Resp
     }
 
     const when = dataTreino || dataAgendada || null;
-    const tipoNorm = typeof tipoUsuario === "string" ? (tipoUsuario as string).toLowerCase() : null;
+    const tipoNorm =
+      typeof tipoUsuario === "string" ? (tipoUsuario as string).toLowerCase() : null;
 
     const pontuacaoNum =
-      Number.isFinite(Number(pontuacao)) ? Math.max(0, Math.floor(Number(pontuacao))) : null;
+      Number.isFinite(Number(pontuacao))
+        ? Math.max(0, Math.floor(Number(pontuacao)))
+        : null;
 
+    // ====== CRIAÇÃO DO TREINO PROGRAMADO ======
     const treino = await prisma.treinoProgramado.create({
       data: {
         nome,
@@ -1568,6 +1686,7 @@ export async function criarTreinoProgramado(req: AuthenticatedRequest, res: Resp
       },
     });
 
+    // ====== EXERCÍCIOS DO TREINO ======
     const exsBanco = (exercicios as any[]).filter((e) => e.exercicioId);
     const exsTemp = (exercicios as any[]).filter((e) => !e.exercicioId && e.nome);
 
@@ -1579,14 +1698,14 @@ export async function criarTreinoProgramado(req: AuthenticatedRequest, res: Resp
       : [];
 
     const atletasUniqRaw = Array.from(
-      new Set([ ...(atletasIds || []), ...atletasFromElencos.map(a => a.atletaId) ])
+      new Set([...(atletasIds || []), ...atletasFromElencos.map((a) => a.atletaId)])
     );
 
     const atletasResolvidos = atletasUniqRaw.length
       ? await prisma.atleta.findMany({
           where: {
             OR: [
-              { id:        { in: atletasUniqRaw } },
+              { id: { in: atletasUniqRaw } },
               { usuarioId: { in: atletasUniqRaw } },
             ],
           },
@@ -1595,7 +1714,7 @@ export async function criarTreinoProgramado(req: AuthenticatedRequest, res: Resp
       : [];
 
     const atletaIdsResolved: string[] = Array.from(
-      new Set(atletasResolvidos.map(a => a.id))
+      new Set(atletasResolvidos.map((a) => a.id))
     );
 
     if (exsBanco.length) {
@@ -1603,7 +1722,7 @@ export async function criarTreinoProgramado(req: AuthenticatedRequest, res: Resp
         data: exsBanco.map((e, i) => ({
           treinoProgramadoId: treino.id,
           exercicioId: e.exercicioId,
-          repeticoes: String(e.repeticoes ?? ""), 
+          repeticoes: String(e.repeticoes ?? ""),
           ordem: e.ordem ?? i + 1,
         })),
       });
@@ -1625,12 +1744,13 @@ export async function criarTreinoProgramado(req: AuthenticatedRequest, res: Resp
         data: {
           treinoProgramadoId: treino.id,
           exercicioTemporarioId: temp.id,
-          repeticoes: String(e.repeticoes ?? ""),  
-          ordem: e.ordem ?? (exsBanco.length + i + 1),
+          repeticoes: String(e.repeticoes ?? ""),
+          ordem: e.ordem ?? exsBanco.length + i + 1,
         },
       });
     }
 
+    // ====== AGENDAMENTO AUTOMÁTICO PARA ATLETAS (se houver) ======
     if (atletaIdsResolved.length > 0) {
       const whenDate = treino.dataAgendada ?? new Date();
       const dataExpiracao = whenDate

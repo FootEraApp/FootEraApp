@@ -2316,7 +2316,7 @@ async function main() {
       descricao: 'Estabiliza no pouso e executa passe de chapa ao alvo. Foco em equilíbrio, controle de joelho e precisão do gesto.',
       nivel: Nivel.Avancado,
       categorias: TODAS_CATEGORIAS_SEED,
-      videoDemonstrativoUrl: '/assets/videos/exercicios/salto_unipodal_passe_de_chapa.mp4',
+      videoDemonstrativoUrl: '/assets/videos/exercicios/salto_unipodal_chapa.mp4',
     },
     {
       codigo: 'EX289',
@@ -2324,7 +2324,7 @@ async function main() {
       descricao: 'Desloca lateralmente e realiza pegadas rasteira e à meia altura com proteção. Leitura de trajetória, base baixa e queda controlada.',
       nivel: Nivel.Avancado,
       categorias: TODAS_CATEGORIAS_SEED,
-      videoDemonstrativoUrl: '/assets/videos/exercicios/goleiro_salto_lateral_pegada_rasteira_meia_altura.mp4',
+      videoDemonstrativoUrl: '/assets/videos/exercicios/goleiro_salto_lateral_pegada_rasteira_bola_meia_altura.mp4',
     },
     {
       codigo: 'EX290',
@@ -2332,7 +2332,7 @@ async function main() {
       descricao: 'Salto reativo seguido de arranque curto e finalização de primeira. Impulsão, aceleração e precisão na batida rápida.',
       nivel: Nivel.Performance,
       categorias: TODAS_CATEGORIAS_SEED,
-      videoDemonstrativoUrl: '/assets/videos/exercicios/salto_sprint_curto_bate_pronto.mp4',
+      videoDemonstrativoUrl: '/assets/videos/exercicios/salto_com_sprint_curto_bate_pronto.mp4',
     },
     {
       codigo: 'EX291',
@@ -2340,7 +2340,7 @@ async function main() {
       descricao: 'Salto explosivo, aceleração curta e cabeceio ao alvo. Tempo de impulsão, direção da testada e aterrissagem estável.',
       nivel: Nivel.Performance,
       categorias: TODAS_CATEGORIAS_SEED,
-      videoDemonstrativoUrl: '/assets/videos/exercicios/salto_sprint_curto_cabeceio.mp4',
+      videoDemonstrativoUrl: '/assets/videos/exercicios/salto_com_sprint_curto_cabeceio.mp4',
     },
     {
       codigo: 'EX292',
@@ -2348,7 +2348,7 @@ async function main() {
       descricao: 'Salto reativo, arranque e finalização com o peito do pé. Integra impulsão, aceleração e gesto técnico de finalização.',
       nivel: Nivel.Performance,
       categorias: TODAS_CATEGORIAS_SEED,
-      videoDemonstrativoUrl: '/assets/videos/exercicios/salto_sprint_curto_peito_de_pe.mp4',
+      videoDemonstrativoUrl: '/assets/videos/exercicios/salto_com_sprint_curto_peito_de_pe.mp4',
     },
     {
       codigo: 'EX293',
@@ -2356,7 +2356,7 @@ async function main() {
       descricao: 'Salto em um apoio para atacar a bola alta com soco seguro. Equilíbrio unilateral, alcance e reposicionamento.',
       nivel: Nivel.Avancado,
       categorias: TODAS_CATEGORIAS_SEED,
-      videoDemonstrativoUrl: '/assets/videos/exercicios/goleiro_salto_unipodal_punho_soco.mp4',
+      videoDemonstrativoUrl: '/assets/videos/exercicios/goleiro_salto_unipodal_pegada_de_punho.mp4',
     },
     {
       codigo: 'EX294',
