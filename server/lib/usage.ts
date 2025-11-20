@@ -11,17 +11,19 @@ import {
 const prisma = new PrismaClient();
 
 export type UsageKey =
-  | "treinos_semana"          
-  | "desafios_mes"            
-  | "treinos_salvos_total"    
-  | "planos_ativos_total"    
-  | "templates_total"    
-  | "perfis_vistos_dia"    
-  | "listas_salvas_total"    
+  | "treinos_semana"
+  | "desafios_mes"
+  | "treinos_salvos_total"
+  | "planos_ativos_total"
+  | "templates_total"
+  | "perfis_vistos_dia"
+  | "listas_salvas_total"
   | "atletas_vinculados_total"
   | "assentos_coach_total"
   | "turmas_total"
-  | "agendamentos_mes";
+  | "agendamentos_mes"
+  // NOVO: limite de treinos programados criados por mês (plano FREE)
+  | "treinos_programados_mes";
 
 type Window = "day" | "week" | "month" | "total";
 
@@ -37,6 +39,7 @@ const WINDOW_BY_KEY: Record<UsageKey, Window> = {
   assentos_coach_total: "total",
   turmas_total: "total",
   agendamentos_mes: "month",
+  treinos_programados_mes: "month",
 };
 
 const LIMITS = {
@@ -52,8 +55,10 @@ const LIMITS = {
     assentos_coach_total: 30,
     turmas_total: 30,
     agendamentos_mes: 20000,
+    // NOVO: até 5 treinos programados criados por mês
+    treinos_programados_mes: 5,
   },
-  PRO:  {
+  PRO: {
     treinos_semana: Infinity,
     desafios_mes: Infinity,
     treinos_salvos_total: Infinity,
@@ -65,8 +70,9 @@ const LIMITS = {
     assentos_coach_total: 30,
     turmas_total: 30,
     agendamentos_mes: 20000,
+    treinos_programados_mes: Infinity,
   },
-  ORG:  {
+  ORG: {
     treinos_semana: Infinity,
     desafios_mes: Infinity,
     treinos_salvos_total: Infinity,
@@ -78,6 +84,7 @@ const LIMITS = {
     assentos_coach_total: 30,
     turmas_total: 30,
     agendamentos_mes: 20000,
+    treinos_programados_mes: Infinity,
   },
 } as const;
 
@@ -93,6 +100,8 @@ const CAPABILITY_BY_KEY: Record<UsageKey, string> = {
   assentos_coach_total: "ASSENTOS_COACH",
   turmas_total: "TURMAS",
   agendamentos_mes: "AGENDAMENTOS",
+  // Nome interno pra upgradeHint / logs
+  treinos_programados_mes: "TREINOS_PROGRAMADOS_MES",
 };
 
 const WINDOW_LABEL: Record<Window, string> = {
