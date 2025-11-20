@@ -13,6 +13,8 @@ import {
   deletarUsuario,
   repostPost,
   curtirPostagem,
+  getPostById,
+  compartilharPost,
 } from "../controllers/feedController.js";
 
 const storage = multer.diskStorage({
@@ -53,14 +55,16 @@ const router = Router();
 
 router.use(authenticateToken);
 
-router.post("/:id/repost", authenticateToken, repostPost);
-router.post("/:postId/like", authenticateToken, curtirPostagem);
-router.get("/perfil/:id", authenticateToken, getPerfil);
+router.post("/:id/repost", repostPost);
+router.post("/:postId/like", curtirPostagem);
+router.get("/perfil/:id", getPerfil);
 router.delete("/usuario/:id", adminAuth, deletarUsuario);
 router.post("/seguir", seguirUsuario);
 router.post("/postar", upload.single("arquivo"), postar);
 router.post("/post", upload.single("arquivo"), postar);
-router.delete("/posts/:id", authenticateToken, deletarPostagem);
-router.get("/", authenticateToken, getFeedPosts);
+router.get("/post/visualizar/:id", getPostById);
+router.post("/post/:id/compartilhar", compartilharPost);
+router.delete("/posts/:id", deletarPostagem);
+router.get("/", getFeedPosts);
 
 export default router;

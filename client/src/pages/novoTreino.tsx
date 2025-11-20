@@ -70,6 +70,7 @@ interface Exercicio {
   videoDemonstrativoUrl?: string;
   descricao?: string;
   nivel?: string;
+  categoria?: string | null;
 }
 
 interface AtletaVinculado {
@@ -130,7 +131,7 @@ function authHeaders() {
 
 async function apiListarTreinosSalvos(ownerTipo: "professor" | "clube" | "escolinha", ownerId: string) {
   const headers = authHeaders();
-  const url = `${API.BASE_URL}/api/treinos-salvos?tipoUsuario=${encodeURIComponent(ownerTipo)}&tipoUsuarioId=${encodeURIComponent(ownerId)}&includePublic=0`;
+  const url = `${API.BASE_URL}/api/treinosSalvos?tipoUsuario=${encodeURIComponent(ownerTipo)}&tipoUsuarioId=${encodeURIComponent(ownerId)}&includePublic=0`;
   const r = await fetch(url, { headers });
   if (!r.ok) throw new Error("Falha ao listar treinos salvos");
   const j = await r.json();
@@ -140,14 +141,14 @@ async function apiListarTreinosSalvos(ownerTipo: "professor" | "clube" | "escoli
 
 async function apiDeletarTreinoSalvo(id: string) {
   const headers = authHeaders();
-  const r = await fetch(`${API.BASE_URL}/api/treinos-salvos/${encodeURIComponent(id)}`, { method: "DELETE", headers });
+  const r = await fetch(`${API.BASE_URL}/api/treinosSalvos/${encodeURIComponent(id)}`, { method: "DELETE", headers });
   if (!r.ok) throw new Error("Falha ao apagar treino salvo");
   return true;
 }
 
 async function apiCriarTreinoSalvo(body: any) {
   const headers = authHeaders();
-  const r = await fetch(`${API.BASE_URL}/api/treinos-salvos`, {
+  const r = await fetch(`${API.BASE_URL}/api/treinosSalvos`, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
@@ -331,6 +332,9 @@ export default function NovoTreino() {
   const [dicas, setDicas] = useState<string[]>([]);
   const [dicaAtual, setDicaAtual] = useState<string>("");
   const [filtroEx, setFiltroEx] = useState("");
+  const [filtroNivelEx, setFiltroNivelEx] = useState<string>("");
+  const [filtroCategoriaEx, setFiltroCategoriaEx] = useState<string>("");
+
   const restoredRef = useRef(false);
   const [idsProgramadosBloqueados, setIdsProgramadosBloqueados] = useState<Set<string>>(new Set());
   const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
@@ -519,6 +523,7 @@ export default function NovoTreino() {
               e.videoDemonstrativoUrl ?? e.videoUrl ?? e.video ?? e.demonstracaoUrl ?? "",
             descricao: e.descricao ?? e.resumo ?? "",
             nivel: e.nivel ?? e.dificuldade ?? "",
+            categoria: e.categoria ?? (Array.isArray(e.categorias) ? e.categorias[0] : null) ?? null,
           }));
           setExerciciosDisponiveis(itens);
           return;
@@ -820,14 +825,29 @@ export default function NovoTreino() {
 
   const exerciciosFiltrados = useMemo(() => {
     const q = filtroEx.trim().toLowerCase();
-    if (!q) return exerciciosDisponiveis;
+
     return exerciciosDisponiveis.filter((e) => {
+      // filtro por nível
+      const nivelOk =
+        !filtroNivelEx ||
+        (e.nivel && e.nivel.toLowerCase() === filtroNivelEx.toLowerCase());
+
+      // filtro por categoria (normalizando p/ Sub9, Sub11, etc.)
+      const catEnum = toCategoriaEnum(e.categoria || undefined);
+      const catOk =
+        !filtroCategoriaEx || (catEnum && catEnum === filtroCategoriaEx);
+
+      if (!nivelOk || !catOk) return false;
+
+      if (!q) return true;
+
       const nome = (e.nome || "").toLowerCase();
       const desc = (e.descricao || "").toLowerCase();
       const nivel = (e.nivel || "").toLowerCase();
+
       return nome.includes(q) || desc.includes(q) || nivel.includes(q);
     });
-  }, [filtroEx, exerciciosDisponiveis]);
+  }, [filtroEx, filtroNivelEx, filtroCategoriaEx, exerciciosDisponiveis]);
 
   const adicionarExercicio = () => {
     setExerciciosSelecionados((prev) => [
@@ -911,130 +931,160 @@ export default function NovoTreino() {
   }
 
   const criarTreino = async () => {
-    try {
-      const { tipoUsuario, tipoUsuarioId } = getDono();
-      const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
+  try {
+    const { tipoUsuario, tipoUsuarioId } = getDono();
+    const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
 
-      if (!tipoUsuario || !tipoUsuarioId) {
-        alert("Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).");
-        return;
-      }
-
-      if (!isDono(tipoUsuarioNormRaw)) {
-        alert("Erro: tipo de usuário inválido.");
-        return;
-      }
-      const tipoUsuarioNorm: DonoLiteral = tipoUsuarioNormRaw;
-
-      if (!usuarioId) {
-        alert("Erro: usuário não autenticado.");
-        return;
-      }
-
-      const exercicios = montarExerciciosParaPayload(exerciciosSelecionados);
-
-      const mapNivel = (s: string) => ({ Base: "Base", Avancado: "Avancado", Performance: "Performance" } as const)[s] ?? "Base";
-      const mapTipoTreino = (s: string) => ({ Tecnico: "Tecnico", Fisico: "Fisico", Tatico: "Tatico" } as const)[s] ?? null;
-      const mapCategoria = (s: string) => {
-        const m = String(s || "").match(/sub[\s\-]?(\d{1,2})/i);
-        if (m) return `Sub${m[1]}`;
-        if (/^livre$/i.test(String(s))) return "Livre";
-        return s;
-      };
-
-      const codigo =
-        `${nome}`.trim()
-          ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) + "-" + Date.now().toString(36)
-          : "TP-" + Date.now().toString(36);
-
-      const payload: TreinoCreatePayload = {
-        codigo,
-        nome,
-        descricao: descricao || null,
-        nivel: mapNivel(nivel),
-        usuarioId,
-        tipoUsuario: tipoUsuarioNorm,
-        tipoUsuarioId,
-        categoria: categoria ? [mapCategoria(categoria)!] : [],
-        tipoTreino: mapTipoTreino(tipoTreino),
-        objetivo: objetivo || null,
-        duracao: duracao ? Number(duracao) : null,
-        dataTreino: dataTreino || null,
-        dataAgendada: dataTreino || null,
-        dicas,
-        atletasIds: atletasSelecionados,
-        elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
-        exercicios,
-        pontuacao: Math.max(0, Math.floor(score.total)),
-      };
-
-      const vistosId = new Set<string>();
-      const vistosNome = new Set<string>();
-      const duplicados: string[] = [];
-
-      for (const ex of exerciciosSelecionados) {
-        const idK = ex.idCatalogo ? String(ex.idCatalogo) : null;
-        const nomeK = normalizaNome(ex.nome);
-
-        if (idK) {
-          if (vistosId.has(idK)) duplicados.push(`ID ${idK}`);
-          vistosId.add(idK);
-        }
-        if (nomeK) {
-          if (vistosNome.has(nomeK)) duplicados.push(ex.nome || nomeK);
-          vistosNome.add(nomeK);
-        }
-      }
-
-      if (duplicados.length) {
-        alert(`Remova os exercícios repetidos antes de salvar: ${duplicados.join(", ")}`);
-        return;
-      }
-
-      const exValidos = exerciciosSelecionados.filter(x => x.idCatalogo || (x.nome && x.nome.trim()));
-      if (exValidos.length === 0) {
-        alert("Adicione pelo menos 1 exercício válido antes de salvar.");
-        return;
-      }
-
-      await TreinosApi.criar(payload);
-
-      const resultadoSalvar = await tentarSalvarComoTreinoSalvo(payload, score.total);
-
-      if (resultadoSalvar.saved) {
-        alert("Treino criado e salvo na sua Gaveta (treinos salvos).");
-      } else {
-        if (resultadoSalvar.reason === "usuario-pulou") {
-          alert("Treino criado. Você optou por NÃO salvar na Gaveta (limite de 5).");
-        } else if (resultadoSalvar.reason === "falha-apagar") {
-          alert("Treino criado, mas não foi possível liberar espaço na Gaveta. Novo treino NÃO salvo na Gaveta.");
-        } else if (resultadoSalvar.reason === "sem-dono") {
-          console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
-        } else {
-          console.warn("Treino Salvo: erro ao salvar, seguindo sem gaveta.");
-        }
-      }
-
-      sessionStorage.removeItem(SAVE_KEY);
-      setEtapa(1);
-      setCompletedUntil(1);
-      setNome("");
-      setDescricao("");
-      setNivel("Base");
-      setDuracao(60);
-      setDataTreino("");
-      setCategoria("Sub13");
-      setTipoTreino("Tecnico");
-      setObjetivo("");
-      setExerciciosSelecionados([]);
-      setDicas([]);
-      setDicaAtual("");
-      setAtletasSelecionados([]);
-    } catch (e: any) {
-      console.error("Falha inesperada ao criar treino:", e?.response?.data || e);
-      alert(e?.response?.data?.error || e?.response?.data?.message || "Erro inesperado ao criar treino.");
+    if (!tipoUsuario || !tipoUsuarioId) {
+      alert("Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).");
+      return;
     }
-  };
+
+    if (!isDono(tipoUsuarioNormRaw)) {
+      alert("Erro: tipo de usuário inválido.");
+      return;
+    }
+    const tipoUsuarioNorm: DonoLiteral = tipoUsuarioNormRaw as DonoLiteral;
+
+    if (!usuarioId) {
+      alert("Erro: usuário não autenticado.");
+      return;
+    }
+
+    const token =
+      (Storage as any).token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") || "";
+
+    if (!token) {
+      alert("Sessão expirada. Faça login novamente.");
+      return;
+    }
+
+    const exercicios = montarExerciciosParaPayload(exerciciosSelecionados);
+
+    const mapNivel = (s: string) =>
+      ({ Base: "Base", Avancado: "Avancado", Performance: "Performance" } as const)[s] ?? "Base";
+    const mapTipoTreino = (s: string) =>
+      ({ Tecnico: "Tecnico", Fisico: "Fisico", Tatico: "Tatico" } as const)[s] ?? null;
+    const mapCategoria = (s: string) => {
+      const m = String(s || "").match(/sub[\s\-]?(\d{1,2})/i);
+      if (m) return `Sub${m[1]}`;
+      if (/^livre$/i.test(String(s))) return "Livre";
+      return s;
+    };
+
+    const codigo =
+      `${nome}`.trim()
+        ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) + "-" + Date.now().toString(36)
+        : "TP-" + Date.now().toString(36);
+
+    const payload: TreinoCreatePayload = {
+      codigo,
+      nome,
+      descricao: descricao || null,
+      nivel: mapNivel(nivel),
+      usuarioId,
+      tipoUsuario: tipoUsuarioNorm,
+      tipoUsuarioId,
+      categoria: categoria ? [mapCategoria(categoria)!] : [],
+      tipoTreino: mapTipoTreino(tipoTreino),
+      objetivo: objetivo || null,
+      duracao: duracao ? Number(duracao) : null,
+      dataTreino: dataTreino || null,
+      dataAgendada: dataTreino || null,
+      dicas,
+      atletasIds: atletasSelecionados,
+      elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
+      exercicios,
+      pontuacao: Math.max(0, Math.floor(score.total)),
+    };
+
+    // valida duplicados
+    const vistosId = new Set<string>();
+    const vistosNome = new Set<string>();
+    const duplicados: string[] = [];
+
+    for (const ex of exerciciosSelecionados) {
+      const idK = ex.idCatalogo ? String(ex.idCatalogo) : null;
+      const nomeK = normalizaNome(ex.nome);
+
+      if (idK) {
+        if (vistosId.has(idK)) duplicados.push(`ID ${idK}`);
+        vistosId.add(idK);
+      }
+      if (nomeK) {
+        if (vistosNome.has(nomeK)) duplicados.push(ex.nome || nomeK);
+        vistosNome.add(nomeK);
+      }
+    }
+
+    if (duplicados.length) {
+      alert(`Remova os exercícios repetidos antes de salvar: ${duplicados.join(", ")}`);
+      return;
+    }
+
+    const exValidos = exerciciosSelecionados.filter(x => x.idCatalogo || (x.nome && x.nome.trim()));
+    if (exValidos.length === 0) {
+      alert("Adicione pelo menos 1 exercício válido antes de salvar.");
+      return;
+    }
+
+    // cria treino
+    const res = await TreinosApi.criar(payload);
+    const created = res.data;
+    console.log("Treino criado:", created);
+
+    // tenta salvar na gaveta
+    const resultadoSalvar = await tentarSalvarComoTreinoSalvo(payload, score.total);
+
+    let msgBase = "Treino criado com sucesso!";
+    if (resultadoSalvar.saved) {
+      msgBase += " Ele também foi salvo na sua Gaveta (treinos salvos).";
+    } else if (resultadoSalvar.reason === "usuario-pulou") {
+      msgBase += " Você optou por NÃO salvar na Gaveta (limite de 5).";
+    } else if (resultadoSalvar.reason === "falha-apagar") {
+      msgBase += " Porém não foi possível liberar espaço na Gaveta; o novo treino não foi salvo lá.";
+    } else if (resultadoSalvar.reason === "sem-dono") {
+      console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
+    } else {
+      console.warn("Treino Salvo: erro ao salvar, seguindo sem gaveta.");
+    }
+
+    alert(msgBase + "\n\nVocê será redirecionado para a tela de treinos para visualizá-lo.");
+
+    // limpar estado local / rascunho
+    sessionStorage.removeItem(SAVE_KEY);
+    setEtapa(1);
+    setCompletedUntil(1);
+    setNome("");
+    setDescricao("");
+    setNivel("Base");
+    setDuracao(60);
+    setDataTreino("");
+    setCategoria("Sub13");
+    setTipoTreino("Tecnico");
+    setObjetivo("");
+    setExerciciosSelecionados([]);
+    setDicas([]);
+    setDicaAtual("");
+    setAtletasSelecionados([]);
+
+    // 🔹 REDIRECIONAR PARA /treinos 🔹
+    navigate("/treinos");
+  } catch (e: any) {
+    console.error("Falha inesperada ao criar treino:", e?.response?.data || e);
+    const status = e?.response?.status;
+    const msg = e?.response?.data?.error || e?.response?.data?.message || e?.message || "Erro inesperado ao criar treino.";
+
+    if (status === 401) {
+      alert("Sessão expirada ou não autenticado. Faça login novamente.");
+      return;
+    }
+
+    alert(msg);
+  }
+};
 
   const agendarTreino = async (t: TreinoProgramado) => {
     try {
@@ -1316,14 +1366,6 @@ export default function NovoTreino() {
               </div>
             </div>
 
-            <label className="block text-sm text-gray-700 mb-1">Data Agendada (prazo para envio)</label>
-            <input
-              className="border w-full mb-4 p-2 rounded text-sm sm:text-base"
-              type="datetime-local"
-              value={dataTreino}
-              onChange={(e) => setDataTreino(e.target.value)}
-            />
-
             <div className="flex justify-end">
               <button onClick={() => goTo(2)} className="bg-green-800 text-white px-4 py-2 rounded">
                 Próximo
@@ -1342,7 +1384,8 @@ export default function NovoTreino() {
               <div className="space-y-3">
                 {exerciciosSelecionados.map((ex, i) => {
                   const base = ex.idCatalogo ? exerciciosDisponiveis.find((e) => e.id === ex.idCatalogo) : undefined;
-                  const videoSrc = resolveVideoUrl(base?.videoDemonstrativoUrl);
+                  const midiaSrc = resolveVideoUrl(base?.videoDemonstrativoUrl);
+                  const ehFoto = midiaSrc && /\.(jpe?g|png|webp|gif)$/i.test(midiaSrc);
 
                   const nomeFinal = base?.nome ?? ex.nome ?? "";
                   const nivelFinal = base?.nivel ?? undefined;
@@ -1361,16 +1404,24 @@ export default function NovoTreino() {
                       </button>
 
                       <div className="flex flex-col sm:flex-row gap-3 items-start">
-                        {videoSrc ? (
-                          <video
-                            className="w-full h-44 sm:w-44 sm:h-28 rounded bg-black object-cover shrink-0"
-                            src={videoSrc}
-                            controls
-                            preload="metadata"
-                          />
+                        {midiaSrc ? (
+                          ehFoto ? (
+                            <img
+                              className="w-full h-44 sm:w-44 sm:h-28 rounded bg-black object-cover shrink-0"
+                              src={midiaSrc}
+                              alt={nomeFinal || "Exercício"}
+                            />
+                          ) : (
+                            <video
+                              className="w-full h-44 sm:w-44 sm:h-28 rounded bg-black object-cover shrink-0"
+                              src={midiaSrc}
+                              controls
+                              preload="metadata"
+                            />
+                          )
                         ) : (
                           <div className="w-full h-44 sm:w-44 sm:h-28 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600 shrink-0">
-                            sem vídeo
+                            sem mídia
                           </div>
                         )}
 
@@ -1440,7 +1491,7 @@ export default function NovoTreino() {
             <div className="h-4" />
 
             <StepCard title="Exercícios Disponíveis">
-              <div className="mb-3 flex items-center gap-2">
+              <div className="mb-2 flex flex-col sm:flex-row gap-2 sm:items-center">
                 <div className="relative flex-1">
                   <input
                     className="border w-full p-2 pl-9 rounded text-sm"
@@ -1450,29 +1501,67 @@ export default function NovoTreino() {
                   />
                   <SearchIcon className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 </div>
-                <span className="text-xs text-gray-600 whitespace-nowrap">
-                  {exerciciosFiltrados.length} resultado(s)
-                </span>
+
+                <div className="flex gap-2">
+                  <select
+                    className="border p-2 rounded text-sm"
+                    value={filtroNivelEx}
+                    onChange={(e) => setFiltroNivelEx(e.target.value)}
+                  >
+                    <option value="">Todos níveis</option>
+                    <option value="Base">Base</option>
+                    <option value="Avancado">Avançado</option>
+                    <option value="Performance">Performance</option>
+                  </select>
+
+                  <select
+                    className="border p-2 rounded text-sm"
+                    value={filtroCategoriaEx}
+                    onChange={(e) => setFiltroCategoriaEx(e.target.value)}
+                  >
+                    <option value="">Todas categorias</option>
+                    <option value="Sub9">Sub-9</option>
+                    <option value="Sub11">Sub-11</option>
+                    <option value="Sub13">Sub-13</option>
+                    <option value="Sub15">Sub-15</option>
+                    <option value="Sub17">Sub-17</option>
+                    <option value="Sub20">Sub-20</option>
+                    <option value="Livre">Livre</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mb-3 text-xs text-gray-600">
+                {exerciciosFiltrados.length} resultado(s)
               </div>
 
               <ul className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1">
                 {exerciciosFiltrados.map((exercicio) => {
-                  const videoSrc = resolveVideoUrl(exercicio.videoDemonstrativoUrl);
+                  const midiaSrc = resolveVideoUrl(exercicio.videoDemonstrativoUrl);
+                  const ehFoto = midiaSrc && /\.(jpe?g|png|webp|gif)$/i.test(midiaSrc);
                   const jaAdicionado = jaEstaNoTreinoPorIdOuNome(exerciciosSelecionados, exercicio.id, exercicio.nome);
 
                   return (
                     <li key={exercicio.id} className="py-3">
                       <div className="flex flex-col sm:flex-row gap-3 items-start">
-                        {videoSrc ? (
-                          <video
-                            className="w-full h-40 sm:w-40 sm:h-24 rounded bg-black object-cover shrink-0"
-                            src={videoSrc}
-                            controls
-                            preload="metadata"
-                          />
+                        {midiaSrc ? (
+                          ehFoto ? (
+                            <img
+                              className="w-full h-40 sm:w-40 sm:h-24 rounded bg-black object-cover shrink-0"
+                              src={midiaSrc}
+                              alt={exercicio.nome}
+                            />
+                          ) : (
+                            <video
+                              className="w-full h-40 sm:w-40 sm:h-24 rounded bg-black object-cover shrink-0"
+                              src={midiaSrc}
+                              controls
+                              preload="metadata"
+                            />
+                          )
                         ) : (
                           <div className="w-full h-40 sm:w-40 sm:h-24 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600 shrink-0">
-                            sem vídeo
+                            sem mídia
                           </div>
                         )}
 
