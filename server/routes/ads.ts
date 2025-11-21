@@ -1,4 +1,3 @@
-// server/routes/adsRoute.ts
 import { Router } from "express";
 import { authenticateToken } from "../middlewares/auth.js";
 import { registrarImpressaoAd } from "server/controllers/adsController.js";

@@ -1,12 +1,14 @@
+// client/src/config.ts
+
 const viteEnv =
   typeof import.meta !== "undefined" && (import.meta as any).env
     ? ((import.meta as any).env as Record<string, string | undefined>)
     : undefined;
 
 const isDev =
-  typeof import.meta !== "undefined"
+  typeof import.meta !== "undefined" && (import.meta as any).env
     ? !!(import.meta as any).env.DEV
-    : process.env.NODE_ENV !== "production";
+    : typeof process !== "undefined" && process.env?.NODE_ENV !== "production";
 
 const strip = (s?: string) => (s ?? "").replace(/\/+$/, "");
 
@@ -25,7 +27,11 @@ function inferApiFromHost(): string {
 
 let API_BASE = strip(viteEnv?.VITE_API_URL || inferApiFromHost());
 
-if (typeof window !== "undefined" && window.location.protocol === "https:" && /^http:\/\//i.test(API_BASE)) {
+if (
+  typeof window !== "undefined" &&
+  window.location.protocol === "https:" &&
+  /^http:\/\//i.test(API_BASE)
+) {
   API_BASE = API_BASE.replace(/^http:\/\//i, "https://");
 }
 

@@ -12,18 +12,14 @@ export async function relatorioRetencaoEscolinha(req: Request, res: Response) {
       return res.status(400).json({ message: "escolinhaId é obrigatório." });
     }
 
-    // lê from/to (se não vier, últimos 12 meses)
     let { from, to } = getRangeFromQuery(req.query, 365);
 
-    // aqui NÃO dá erro, só corta pra no máximo 12 meses
     ({ from, to } = aplicarCorteEscolinha(from, to));
 
     const alunosAtivos = await prisma.relacaoTreinamento.count({
       where: {
         escolinhaId,
         criadoEm: { gte: from, lte: to },
-        // se você depois tornar encerradoEm opcional, pode filtrar só os ativos:
-        // encerradoEm: null,
       },
     });
 
@@ -49,7 +45,6 @@ export async function relatorioRetencaoEscolinha(req: Request, res: Response) {
   }
 }
 
-// Helper para setar os headers de fair-use quando precisar
 async function setFairUseHeadersIfNeeded(res: Response, escolinhaId?: string) {
   if (!escolinhaId) return;
   try {
@@ -87,7 +82,6 @@ export const getEscolinhaById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Escolinha não encontrada." });
     }
 
-    // avisa sobre fair-use para esse id
     await setFairUseHeadersIfNeeded(res, id);
 
     res.json(escolinha);

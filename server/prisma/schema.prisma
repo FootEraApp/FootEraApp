@@ -94,6 +94,7 @@ model Assinatura {
   canceledAt DateTime?
   ativo      Boolean   @default(true)
   usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  providerSubscriptionId String?  @unique 
 
   @@index([startsAt])
   @@index([canceledAt])
@@ -246,6 +247,10 @@ model Atleta {
   DocumentoFormador            DocumentoFormador[]
   TreinoRotinaAtribuicao       TreinoRotinaAtribuicao[]
   ListaOlheiroItem             ListaOlheiroItem[]
+  dataNascimento                 DateTime?
+  contatoOlheiroPermitido        Boolean  @default(false)
+  contatoOlheiroConsentidoEm     DateTime?
+  contatoOlheiroConsentidoPorId  String?
 
   @@index([perfilTipoTreino])
 }
@@ -436,11 +441,16 @@ model Midia {
   submissaoDesafioId String?
   submissaoTreinoId  String?
   criadoEm           DateTime  @default(now())
-
-  durationSec Int?
-  width       Int?
-  height      Int?
-  sizeBytes   Int?
+  durationSec        Int?
+  width              Int?
+  height             Int?
+  sizeBytes          Int?
+  processedUrl       String? 
+  thumbUrl           String?
+  fps                Int?
+  lastAccessAt       DateTime?
+  storageClass       StorageClass 
+  atualizadoEm       DateTime @updatedAt
 
   atleta           Atleta?           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   clube            Clube?            @relation(fields: [clubeId], references: [id], onDelete: SetNull)
@@ -1545,6 +1555,31 @@ model UsageCounter {
 
   @@unique([userId, key, windowKind, windowStart])
   @@index([key, windowKind, windowStart])
+}
+
+model EventoPagamento {
+  id              String   @id @default(cuid())
+  providerEventId String   @unique
+  tipo            String
+  recebidoEm      DateTime @default(now())
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  usuarioId    String?
+  ip           String?
+  userAgent    String?
+  acao         String
+  entidade     String?
+  entidadeId   String?
+  descricao    String?
+  meta         Json?
+  criadoEm     DateTime @default(now())
+}
+
+enum StorageClass {
+  HOT
+  COLD
 }
 
 enum Periodicidade {

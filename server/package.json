@@ -62,6 +62,7 @@
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/fs-extra": "^11.0.4",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/lru-cache": "^7.10.10",
     "@types/multer": "^2.0.0",
     "@types/node": "^24.6.2",
     "@types/node-cron": "^3.0.11",

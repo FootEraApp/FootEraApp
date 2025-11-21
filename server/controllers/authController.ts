@@ -1,11 +1,50 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
+import { AuthenticatedRequest } from "../middlewares/auth.js";
+import { getUserFlags } from "../services/flags.js";
+
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 
 dotenv.config();
 const prisma = new PrismaClient();
+
+export async function me(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ error: "Não autenticado." });
+    }
+
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: req.userId },
+      select: {
+        id: true,
+        nome: true,
+        nomeDeUsuario: true,
+        email: true,
+        tipo: true,
+        foto: true,
+      },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ error: "Usuário não encontrado." });
+    }
+
+    const flags = await getUserFlags(req.userId);
+
+    return res.json({
+      ...usuario,
+      plano: flags.plano,
+      adsEnabled: flags.adsEnabled,
+      capabilities: flags.capabilities,
+    });
+  } catch (err) {
+    console.error("me error:", err);
+    return res.status(500).json({ error: "Erro ao carregar dados do usuário." });
+  }
+}
 
 export async function login(req: Request, res: Response) {
   const { nomeDeUsuario, senha } = req.body as { nomeDeUsuario: string; senha: string };
@@ -15,7 +54,7 @@ export async function login(req: Request, res: Response) {
   }
 
   try {
-    const userKey = String(nomeDeUsuario).trim().toLowerCase();
+    const userKey = String(nomeDeUsuario).trim();
 
     const usuario = await prisma.usuario.findUnique({
       where: { nomeDeUsuario: userKey },
@@ -31,6 +70,13 @@ export async function login(req: Request, res: Response) {
 
     if (!usuario) {
       return res.status(404).json({ message: "Usuário não encontrado" });
+    }
+
+    if (!usuario.senhaHash) {
+      console.error("Usuário sem senhaHash no banco:", usuario.id, usuario.nomeDeUsuario);
+      return res
+        .status(500)
+        .json({ message: "Usuário sem senha configurada. Contate o suporte ou recrie o usuário." });
     }
 
     const senhaCorreta = await bcrypt.compare(String(senha), usuario.senhaHash);

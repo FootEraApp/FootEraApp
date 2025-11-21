@@ -515,7 +515,6 @@ export default function PaginaElenco() {
     }
   }, []);
 
-  // carregar turmas do dono
   useEffect(() => {
     (async () => {
       try {

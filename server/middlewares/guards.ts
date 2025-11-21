@@ -1,4 +1,3 @@
-// server/middlewares/guards.ts
 import type { Response, NextFunction } from "express";
 import type { AuthenticatedRequest } from "./auth.js";
 import { canDetailed } from "../services/entitlements.js";
@@ -15,7 +14,6 @@ export function requireCapability(
     | "treinos:por_semana"
     | "perfil:olheiro:consultas_dia"
 ) {
-  // mapeia nomes "humanos" -> keys da tabela
   const map: Record<string, any> = {
     "agendamento:pessoal": "agendamento.pessoal",
     "agendamento:lote":    "agendamento.lote",
@@ -35,7 +33,6 @@ export function requireCapability(
   };
 }
 
-// igual ao teu, mantido
 export function requireOrgSeat(getOrgId: (req: AuthenticatedRequest) => string | null | undefined) {
   return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const orgId = getOrgId(req);

@@ -1,9 +1,26 @@
 import { PrismaClient } from '@prisma/client';
 import { getUserPlan, planLimitFor } from './plan.js';
 import { USAGE_MESSAGES, WINDOW_BY_KEY, type WindowKind } from './usage.messages.js';
+import { sendLimitInfo } from "../lib/limitInfo.js";
 
 const prisma = new PrismaClient();
 const TZ = 'America/Sao_Paulo';
+
+const LIMITS: Record<
+  string,
+  { capability: string; window: string; allowed: number }
+> = {
+  treinos_semana: {
+    capability: "SUBMISSAO_TREINO",
+    window: "7d",
+    allowed: 7,
+  },
+  ads_impressions_day: {
+    capability: "ADS",
+    window: "1d",
+    allowed: 5,
+  },
+};
 
 function zonedNow(): Date {
   const s = new Date().toLocaleString('en-US', { timeZone: TZ });
@@ -22,7 +39,7 @@ function startOfMonth(d: Date) {
 }
 function startOfIsoWeek(d: Date) {
   const x = startOfDay(d);
-  const day = x.getDay() || 7; // 1..7 (segunda = 1)
+  const day = x.getDay() || 7;
   if (day !== 1) x.setDate(x.getDate() - (day - 1));
   return x;
 }
@@ -42,7 +59,6 @@ export function windowBounds(kind: WindowKind, now: Date) {
     const ws = startOfIsoWeek(now);
     const we = new Date(ws);
     we.setDate(ws.getDate() + 7);
-    // ISO week label
     const y = ws.getUTCFullYear();
     const firstThursday = new Date(Date.UTC(y, 0, 4));
     const week =
@@ -72,38 +88,44 @@ export function windowBounds(kind: WindowKind, now: Date) {
     const m = String(ws.getMonth() + 1).padStart(2, "0");
     return { windowStart: ws, windowEnd: we, periodRef: `${y}-${m}` };
   }
-  // TOTAL
   const ws = new Date(0);
   const we = new Date(8640000000000000);
   return { windowStart: ws, windowEnd: we, periodRef: "TOTAL" };
 }
 
-function writeUsageHeaders(res: any, key: string, limit: number, remaining: number, windowKind: WindowKind) {
+function writeUsageHeaders(
+  res: any,
+  key: string,
+  limit: number,
+  remaining: number,
+  windowKind: WindowKind
+) {
   res.setHeader('X-Usage-Key', key);
   res.setHeader('X-Usage-Limit', String(Number.isFinite(limit) ? limit : -1));
   res.setHeader('X-Usage-Remaining', String(remaining));
   res.setHeader('X-Usage-Window', windowKind);
 }
 
-/**
- * Incrementa contador da janela (DAY/WEEK/MONTH) e bloqueia se exceder limite.
- * Usa o índice @@unique([userId, key, windowKind, windowStart]) do schema atual.
- */
-export async function requireUsage(req: any, res: any, key: string) {
+export async function requireUsage(
+  req: any,
+  res: any,
+  key: string
+): Promise<boolean> {
   const windowKind = WINDOW_BY_KEY[key];
-  if (!windowKind) return; // chave desconhecida → ignora
+  if (!windowKind) return true;
 
   const userId: string = req.user?.id || req.userId;
-  if (!userId) return res.status(401).json({ code: 'UNAUTHENTICATED' });
+  if (!userId) {
+    res.status(401).json({ code: 'UNAUTHENTICATED' });
+    return false;
+  }
 
-  // resolve plano
   const plan = (req.user?.plan as string | undefined) || (await getUserPlan(userId));
   const limit = planLimitFor(plan, key);
 
   if (windowKind === 'TOTAL') {
-    // TOTAL não é contável aqui — usar enforceTotalLimit()
     writeUsageHeaders(res, key, limit, Infinity, 'TOTAL');
-    return;
+    return true;
   }
 
   const now = zonedNow();
@@ -116,44 +138,74 @@ export async function requireUsage(req: any, res: any, key: string) {
   });
 
   const used = counter.count;
-  const remaining = Number.isFinite(limit) ? Math.max(0, limit - used) : Number.POSITIVE_INFINITY;
+  const remaining = Number.isFinite(limit)
+    ? Math.max(0, limit - used)
+    : Number.POSITIVE_INFINITY;
 
   writeUsageHeaders(res, key, limit, remaining, windowKind);
 
+  const meta =
+    LIMITS[key] || {
+      capability: key,
+      window: String(windowKind).toLowerCase(),
+      allowed: Number.isFinite(limit) ? limit : Infinity,
+    };
+
   if (Number.isFinite(limit) && used > limit) {
-    const message = USAGE_MESSAGES[key] || 'Limite de uso atingido.';
-    return res.status(429).json({ code: 'USAGE_LIMIT', message, key, limit, window: windowKind });
+    sendLimitInfo(res, {
+      capability: meta.capability,
+      window: meta.window,
+      allowed: limit,
+      remaining: 0,
+    });
+    return false;
   }
+
+  return true;
 }
 
-/**
- * Para cotas TOTAL (sem janela). Você passa uma função que retorna o COUNT atual do recurso.
- */
 export async function enforceTotalLimit(
   req: any,
   res: any,
   key: string,
   currentCountFn: () => Promise<number>
-) {
+): Promise<boolean> {
   const userId: string = req.user?.id || req.userId;
-  if (!userId) return res.status(401).json({ code: 'UNAUTHENTICATED' });
+  if (!userId) {
+    res.status(401).json({ code: 'UNAUTHENTICATED' });
+    return false;
+  }
 
   const plan = (req.user?.plan as string | undefined) || (await getUserPlan(userId));
   const limit = planLimitFor(plan, key);
 
   if (!Number.isFinite(limit)) {
     writeUsageHeaders(res, key, limit, Infinity, 'TOTAL');
-    return;
+    return true;
   }
 
   const count = await currentCountFn();
   const remaining = Math.max(0, limit - count);
   writeUsageHeaders(res, key, limit, remaining, 'TOTAL');
 
+  const meta =
+    LIMITS[key] || {
+      capability: key,
+      window: "TOTAL",
+      allowed: limit,
+    };
+
   if (count >= limit) {
-    const message = USAGE_MESSAGES[key] || 'Limite atingido.';
-    return res.status(429).json({ code: 'USAGE_LIMIT', message, key, limit, window: 'TOTAL' });
+    sendLimitInfo(res, {
+      capability: meta.capability,
+      window: meta.window,
+      allowed: limit,
+      remaining: 0,
+    });
+    return false;
   }
+
+  return true;
 }
 
 export async function getDailyUsage(userId: string, key: string) {
@@ -173,10 +225,6 @@ export async function getDailyUsage(userId: string, key: string) {
   return row?.count ?? 0;
 }
 
-/**
- * Incrementa uso diário e retorna { allowed, countToday }.
- * Usado para ads_impressions_day (cap 5/dia).
- */
 export async function incrementDailyUsage(
   userId: string,
   key: string,
