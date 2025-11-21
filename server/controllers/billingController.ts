@@ -1,15 +1,32 @@
+// server/controllers/billingController.ts
 import { Request, Response } from "express";
 import {
   PrismaClient,
   Prisma,
   MetodoPagamento,
   Periodicidade,
-  PagamentoStatus
+  PagamentoStatus,
 } from "@prisma/client";
 import QRCode from "qrcode";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 
+// mercadopago does not have type declarations in this project; import via require with an any type
+const mercadopago: any = require("mercadopago");
 const prisma = new PrismaClient();
+
+const API_BASE_URL = (process.env.APP_BASE_URL || "http://localhost:3001").replace(
+  /\/+$/,
+  ""
+);
+const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN || "";
+
+if (MP_ACCESS_TOKEN) {
+  mercadopago.configure({ access_token: MP_ACCESS_TOKEN });
+} else {
+  console.warn(
+    "[billing] Atenção: MP_ACCESS_TOKEN não definido. Integração real com Mercado Pago ficará desativada e o fluxo cairá no modo fake."
+  );
+}
 
 type Pagador = {
   nome: string;
@@ -139,6 +156,9 @@ async function approvePaymentAndProvisionSubscription(pagamentoId: string) {
       },
     });
 
+    const months = pg.periodicidade === "Mensal" ? 1 : 12;
+    const renovaEm = addMonths(now, months);
+
     await tx.assinatura.upsert({
       where: { usuarioId: pg.usuarioId },
       update: {
@@ -146,12 +166,16 @@ async function approvePaymentAndProvisionSubscription(pagamentoId: string) {
         ativo: true,
         startsAt: now,
         canceledAt: null,
+        periodicidade: pg.periodicidade,
+        renovaEm,
       },
       create: {
         usuarioId: pg.usuarioId,
         plano: pg.plano,
         ativo: true,
         startsAt: now,
+        periodicidade: pg.periodicidade,
+        renovaEm,
       },
     });
 
@@ -296,8 +320,7 @@ export async function applyCoupon(req: Request, res: Response) {
     const c = check.cupom;
     let desconto = 0;
     if (c.tipo === "PERCENTUAL" && typeof c.descontoPerc === "number") {
-      desconto =
-        (Math.max(0, Math.min(100, c.descontoPerc)) * base) / 100;
+      desconto = (Math.max(0, Math.min(100, c.descontoPerc)) * base) / 100;
     } else if (c.tipo === "VALOR" && c.descontoFixo != null) {
       desconto = Number(c.descontoFixo);
     } else if (c.tipo === "PRESENTE") {
@@ -317,6 +340,22 @@ export async function applyCoupon(req: Request, res: Response) {
   } catch (err) {
     return res.status(500).json({ message: "Erro ao validar cupom", err });
   }
+}
+
+async function resgatarCupom(
+  cupomId: string,
+  usuarioId: string,
+  pagamentoId?: string
+) {
+  await prisma.$transaction([
+    prisma.cupomResgate.create({
+      data: { cupomId, usuarioId, pagamentoId: pagamentoId || null },
+    }),
+    prisma.cupom.update({
+      where: { id: cupomId },
+      data: { usosAtuais: { increment: 1 } },
+    }),
+  ]);
 }
 
 export async function startCheckout(req: Request, res: Response) {
@@ -401,7 +440,10 @@ export async function startCheckout(req: Request, res: Response) {
           .status(400)
           .json({ message: check.reason || "Cupom inválido" });
       cupomRow = check.cupom;
-      if (cupomRow.tipo === "PERCENTUAL" && typeof cupomRow.descontoPerc === "number") {
+      if (
+        cupomRow.tipo === "PERCENTUAL" &&
+        typeof cupomRow.descontoPerc === "number"
+      ) {
         desconto =
           (Math.max(0, Math.min(100, cupomRow.descontoPerc)) * base) / 100;
       } else if (cupomRow.tipo === "VALOR" && cupomRow.descontoFixo != null) {
@@ -413,37 +455,30 @@ export async function startCheckout(req: Request, res: Response) {
 
     const total = Math.max(0, base - desconto);
 
-    const provider = "INTERNAL_FAKE";
-    const providerRef = `FAKE-${Date.now()}`;
     const totalDecimal = new Prisma.Decimal(total.toFixed(2));
+    const provider = MP_ACCESS_TOKEN ? "MERCADOPAGO" : "INTERNAL_FAKE";
 
-    const data: Prisma.PagamentoUncheckedCreateInput = {
-      usuarioId,
-      plano: planoId,
-      periodicidade,
-      metodo,
-      status: total === 0 ? "APROVADO" : "PENDENTE",
-      valor: totalDecimal,
-      moeda: "BRL",
-      provider,
-      providerRef,
-      cupomId: cupomRow?.id ?? null,
-      pagoEm: total === 0 ? new Date() : null,
-    };
-
-    const pagamento = await prisma.pagamento.upsert({
-      where: { provider_providerRef: { provider, providerRef } },
-      update: {
+    // cria registro do pagamento antes de chamar o provedor
+    let pagamento = await prisma.pagamento.create({
+      data: {
+        usuarioId,
+        plano: planoId,
+        periodicidade,
+        metodo,
+        status:
+          total === 0 ? PagamentoStatus.APROVADO : PagamentoStatus.PENDENTE,
         valor: totalDecimal,
-        status: total === 0 ? "APROVADO" : "PENDENTE",
-        pagoEm: total === 0 ? new Date() : null,
+        moeda: "BRL",
+        provider,
+        providerRef: `TEMP-${Date.now()}`,
         cupomId: cupomRow?.id ?? null,
-      } as Prisma.PagamentoUncheckedUpdateInput,
-      create: data,
+        pagoEm: total === 0 ? new Date() : null,
+      },
     });
 
+    // Se total 0 (presente/cupom total), não precisa chamar Mercado Pago
     if (total === 0) {
-      await upsertSubscription(usuarioId, planoId);
+      await upsertSubscription(usuarioId, planoId, periodicidade);
       if (cupomRow) await resgatarCupom(cupomRow.id, usuarioId, pagamento.id);
       return res.json({
         status: "APROVADO",
@@ -452,39 +487,49 @@ export async function startCheckout(req: Request, res: Response) {
       });
     }
 
-    if (metodo === "PIX") {
-      const payload = `pix:plano=${planoId};user=${usuarioId};pg=${pagamento.id};valor=${total.toFixed(
-        2
-      )}`;
-      await prisma.pagamento.update({
+    // Se não tiver MP_ACCESS_TOKEN, fallback pro modo fake antigo
+    if (!MP_ACCESS_TOKEN) {
+      const providerRef = `FAKE-${Date.now()}`;
+      pagamento = await prisma.pagamento.update({
         where: { id: pagamento.id },
-        data: { pixCopiaECola: payload },
-      });
-      const qrCodeUrl = await QRCode.toDataURL(payload, {
-        width: 320,
-        margin: 1,
-      });
-      return res.json({
-        status: "PENDENTE",
-        pagamento,
-        pix: {
-          copiaECola: payload,
-          qrCodeUrl,
+        data: {
+          provider: "INTERNAL_FAKE",
+          providerRef,
         },
       });
-    }
 
-    if (metodo === "BOLETO") {
-      const linhaDigitavel =
-        "23790.00000 00000.000000 00000.000000 0 00000000000000";
-      return res.json({
-        status: "PENDENTE",
-        pagamento,
-        boleto: { linhaDigitavel, pdfUrl: null },
-      });
-    }
+      if (metodo === "PIX") {
+        const payload = `pix:plano=${planoId};user=${usuarioId};pg=${pagamento.id};valor=${total.toFixed(
+          2
+        )}`;
+        await prisma.pagamento.update({
+          where: { id: pagamento.id },
+          data: { pixCopiaECola: payload },
+        });
+        const qrCodeUrl = await QRCode.toDataURL(payload, {
+          width: 320,
+          margin: 1,
+        });
+        return res.json({
+          status: "PENDENTE",
+          pagamento,
+          pix: {
+            copiaECola: payload,
+            qrCodeUrl,
+          },
+        });
+      }
 
-    if (metodo === "CREDITO" || metodo === "DEBITO") {
+      if (metodo === "BOLETO") {
+        const linhaDigitavel =
+          "23790.00000 00000.000000 00000.000000 0 00000000000000";
+        return res.json({
+          status: "PENDENTE",
+          pagamento,
+          boleto: { linhaDigitavel, pdfUrl: null },
+        });
+      }
+
       const checkoutUrl = `https://pagador.fake/checkout/${pagamento.id}`;
       return res.json({
         status: "PENDENTE",
@@ -494,31 +539,113 @@ export async function startCheckout(req: Request, res: Response) {
       });
     }
 
+    // ==========================
+    // INTEGRAÇÃO REAL MERCADO PAGO
+    // ==========================
+    if (metodo === "PIX") {
+      const mpResp: any = await (mercadopago as any).payment.create({
+        body: {
+          transaction_amount: Number(total.toFixed(2)),
+          description: `Assinatura ${plan.title} (${periodicidade})`,
+          payment_method_id: "pix",
+          payer: {
+            email: pagador!.email,
+            first_name: pagador!.nome,
+            identification: pagador!.cpf
+              ? { type: "CPF", number: onlyDigits(pagador!.cpf) }
+              : undefined,
+          },
+          notification_url: `${API_BASE_URL}/api/billing/mercadopago/webhook`,
+          metadata: {
+            pagamentoId: pagamento.id,
+            usuarioId,
+            planoId,
+          },
+          external_reference: pagamento.id,
+        },
+      });
+
+      const mpBody = mpResp.body || mpResp;
+
+      const qr_code =
+        mpBody.point_of_interaction?.transaction_data?.qr_code || null;
+      const qr_code_base64 =
+        mpBody.point_of_interaction?.transaction_data?.qr_code_base64 || null;
+
+      pagamento = await prisma.pagamento.update({
+        where: { id: pagamento.id },
+        data: {
+          provider: "MERCADOPAGO",
+          providerRef: String(mpBody.id),
+          pixCopiaECola: qr_code,
+        },
+      });
+
+      return res.json({
+        status: "PENDENTE",
+        pagamento,
+        pix: {
+          copiaECola: qr_code,
+          qrCodeUrl: qr_code_base64,
+        },
+      });
+    }
+
+    // Para CREDITO / DEBITO / BOLETO vamos usar Checkout Pro (Preference)
+    const mpPrefResp: any = await (mercadopago as any).preferences.create({
+      body: {
+        items: [
+          {
+            title: plan.title,
+            quantity: 1,
+            currency_id: "BRL",
+            unit_price: Number(total.toFixed(2)),
+          },
+        ],
+        payer: {
+          name: pagador?.nome,
+          email: pagador?.email,
+        },
+        metadata: {
+          pagamentoId: pagamento.id,
+          usuarioId,
+          planoId,
+        },
+        external_reference: pagamento.id,
+        notification_url: `${API_BASE_URL}/api/billing/mercadopago/webhook`,
+      },
+    });
+
+    const prefBody = mpPrefResp.body || mpPrefResp;
+
+    pagamento = await prisma.pagamento.update({
+      where: { id: pagamento.id },
+      data: {
+        provider: "MERCADOPAGO",
+        providerRef: String(prefBody.id),
+      },
+    });
+
     return res.json({
       status: "PENDENTE",
       pagamento,
-      message: "Pagamento iniciado (simulado)",
+      checkoutUrl: prefBody.init_point,
+      sandboxCheckoutUrl: prefBody.sandbox_init_point,
+      message: "Redirecione o usuário para o checkout do Mercado Pago.",
     });
   } catch (err) {
+    console.error("Erro em startCheckout:", err);
     res.status(500).json({ message: "Erro ao iniciar checkout", err });
   }
 }
 
-async function resgatarCupom(
-  cupomId: string,
-  usuarioId: string,
-  pagamentoId?: string
-) {
-  await prisma.$transaction([
-    prisma.cupomResgate.create({
-      data: { cupomId, usuarioId, pagamentoId: pagamentoId || null },
-    }),
-    prisma.cupom.update({
-      where: { id: cupomId },
-      data: { usosAtuais: { increment: 1 } },
-    }),
-  ]);
-}
+// Webhook genérico usado para outros providers (mantido se você quiser usar outro)
+// ----------------------------------------------------------------
+type PaymentWebhookBody = {
+  event: "payment.paid" | "payment.canceled" | "payment.refunded";
+  provider: string;
+  providerRef: string;
+};
 
 export async function providerWebhook(req: Request, res: Response) {
   try {
@@ -575,7 +702,11 @@ export async function providerWebhook(req: Request, res: Response) {
         },
       });
 
-      await upsertSubscription(pagamento.usuarioId, pagamento.plano);
+      await upsertSubscription(
+        pagamento.usuarioId,
+        pagamento.plano,
+        pagamento.periodicidade
+      );
     } else if (tipo === "payment_canceled") {
       pagamento = await prisma.pagamento.update({
         where: { id: pagamento.id },
@@ -625,20 +756,35 @@ export async function providerWebhook(req: Request, res: Response) {
   }
 }
 
-async function upsertSubscription(usuarioId: string, plano: string) {
+async function upsertSubscription(
+  usuarioId: string,
+  plano: string,
+  periodicidade: Periodicidade
+) {
   const now = new Date();
+  const months = periodicidade === "Mensal" ? 1 : 12;
+  const renovaEm = addMonths(now, months);
+
   await prisma.assinatura.upsert({
     where: { usuarioId },
-    update: { plano, startsAt: now, canceledAt: null, ativo: true },
-    create: { usuarioId, plano, startsAt: now, ativo: true },
+    update: {
+      plano,
+      startsAt: now,
+      canceledAt: null,
+      ativo: true,
+      periodicidade,
+      renovaEm,
+    },
+    create: {
+      usuarioId,
+      plano,
+      startsAt: now,
+      ativo: true,
+      periodicidade,
+      renovaEm,
+    },
   });
 }
-
-type PaymentWebhookBody = {
-  event: "payment.paid" | "payment.canceled" | "payment.refunded";
-  provider: string;
-  providerRef: string;
-};
 
 export async function handlePaymentWebhook(req: Request, res: Response) {
   try {
@@ -688,6 +834,127 @@ export async function handlePaymentWebhook(req: Request, res: Response) {
   }
 }
 
+// Webhook específico do Mercado Pago
+// ----------------------------------
+export async function mercadoPagoWebhook(req: Request, res: Response) {
+  try {
+    if (!MP_ACCESS_TOKEN) {
+      console.warn(
+        "[billing] Webhook Mercado Pago recebido, mas MP_ACCESS_TOKEN não está configurado."
+      );
+    }
+
+    const paymentIdRaw =
+      (req.query["data.id"] as string) ||
+      (req.query.id as string) ||
+      req.body?.data?.id ||
+      (req.body?.resource
+        ? String(req.body.resource).split("/").pop()
+        : null);
+
+    if (!paymentIdRaw) {
+      return res.status(200).json({ ok: true, ignored: true });
+    }
+
+    const mpResp: any = await (mercadopago as any).payment.findById(
+      paymentIdRaw
+    );
+    const p = mpResp.body || mpResp;
+
+    const status: string = p.status;
+    const mpId = String(p.id);
+    const externalRef = p.external_reference as string | null;
+    const meta = p.metadata || {};
+
+    const pagamento = await prisma.pagamento.findFirst({
+      where: {
+        OR: [
+          meta.pagamentoId ? { id: String(meta.pagamentoId) } : undefined,
+          externalRef ? { id: String(externalRef) } : undefined,
+          { provider: "MERCADOPAGO", providerRef: mpId },
+        ].filter(Boolean) as any,
+      },
+    });
+
+    if (!pagamento) {
+      console.warn(
+        "[billing] Pagamento não encontrado para webhook Mercado Pago",
+        paymentIdRaw
+      );
+      return res.status(200).json({ ok: true, ignored: true });
+    }
+
+    // sempre atualiza providerRef pra id real do pagamento MP
+    await prisma.pagamento.update({
+      where: { id: pagamento.id },
+      data: {
+        provider: "MERCADOPAGO",
+        providerRef: mpId,
+      },
+    });
+
+    const now = new Date();
+
+    if (status === "approved") {
+      await approvePaymentAndProvisionSubscription(pagamento.id);
+    } else if (status === "cancelled" || status === "rejected") {
+      await prisma.$transaction([
+        prisma.pagamento.update({
+          where: { id: pagamento.id },
+          data: {
+            status: PagamentoStatus.CANCELADO,
+            canceladoEm: now,
+          },
+        }),
+        prisma.assinatura.updateMany({
+          where: {
+            usuarioId: pagamento.usuarioId,
+            plano: pagamento.plano,
+            ativo: true,
+          },
+          data: {
+            ativo: false,
+            canceledAt: now,
+          },
+        }),
+      ]);
+    } else if (status === "refunded" || status === "charged_back") {
+      await prisma.$transaction([
+        prisma.pagamento.update({
+          where: { id: pagamento.id },
+          data: {
+            status: PagamentoStatus.REEMBOLSADO,
+            reembolsadoEm: now,
+          },
+        }),
+        prisma.assinatura.updateMany({
+          where: {
+            usuarioId: pagamento.usuarioId,
+            plano: pagamento.plano,
+            ativo: true,
+          },
+          data: {
+            ativo: false,
+            canceledAt: now,
+          },
+        }),
+      ]);
+    } else {
+      // pending/in_process etc
+      return res.status(200).json({ ok: true, ignored: true });
+    }
+
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error("Erro webhook Mercado Pago:", err);
+    return res
+      .status(500)
+      .json({ message: "Erro ao processar webhook Mercado Pago" });
+  }
+}
+
+// Redeem / cancel / renew / switch (mantidos)
+// ------------------------------------------
 export async function redeemGift(req: Request, res: Response) {
   try {
     const usuarioId = getUserId(req);
@@ -745,7 +1012,7 @@ export async function redeemGift(req: Request, res: Response) {
       },
     });
 
-    await upsertSubscription(usuarioId, planoId);
+    await upsertSubscription(usuarioId, planoId, periodicidade);
     await resgatarCupom(cupom.id, usuarioId, pagamento.id);
 
     res.json({
@@ -786,7 +1053,8 @@ export async function renewSubscription(req: Request, res: Response) {
     const now = new Date();
 
     const a = await prisma.assinatura.findUnique({ where: { usuarioId } });
-    if (!a) return res.status(400).json({ message: "Sem assinatura para renovar" });
+    if (!a)
+      return res.status(400).json({ message: "Sem assinatura para renovar" });
 
     await prisma.assinatura.update({
       where: { usuarioId },
@@ -807,9 +1075,112 @@ export async function switchPlan(req: Request, res: Response) {
     const plan = findPlan(novoPlano);
     if (!plan) return res.status(400).json({ message: "Plano inválido" });
 
-    await upsertSubscription(usuarioId, novoPlano);
+    // pega a periodicidade atual da assinatura; se não tiver, assume Mensal
+        const atual = await prisma.assinatura.findUnique({
+      where: { usuarioId },
+    });
+
+    // garante que o valor é tratado como Periodicidade ou null
+    const periodicidade =
+      (atual?.periodicidade as Periodicidade | null) ?? Periodicidade.Mensal;
+
+    await upsertSubscription(usuarioId, novoPlano, periodicidade);
+
     res.json({ ok: true, message: "Plano alterado", plano: novoPlano });
   } catch (err) {
     res.status(500).json({ message: "Erro ao alterar plano", err });
+  }
+}
+
+// ==============================
+// Checagem diária de vencimento
+// ==============================
+function addMonths(d: Date, months: number) {
+  const dt = new Date(d.getTime());
+  dt.setMonth(dt.getMonth() + months);
+  return dt;
+}
+
+function addDays(d: Date, days: number) {
+  return new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+export async function checkExpiringSubscriptions(req: Request, res: Response) {
+  try {
+    const daysBefore =
+      Number(process.env.BILLING_DAYS_BEFORE_REMINDER || "5") || 5;
+    const graceDays =
+      Number(process.env.BILLING_GRACE_DAYS || "7") || 7;
+
+    const now = new Date();
+    const limitReminder = new Date(
+      now.getTime() + daysBefore * 24 * 60 * 60 * 1000
+    );
+
+    const assinaturas = await prisma.assinatura.findMany({
+      where: { ativo: true },
+      include: {
+        usuario: {
+          select: { id: true, email: true, nome: true, nomeDeUsuario: true },
+        },
+      },
+    });
+
+    const expiring: Array<{
+      usuarioId: string;
+      email: string | null;
+      nome: string | null;
+      plano: string;
+      venceEm: Date;
+    }> = [];
+
+    for (const a of assinaturas as any[]) {
+      const last = await prisma.pagamento.findFirst({
+        where: {
+          usuarioId: a.usuarioId,
+          plano: a.plano,
+          status: PagamentoStatus.APROVADO,
+        },
+        orderBy: { pagoEm: "desc" },
+      });
+      if (!last || !last.pagoEm) continue;
+
+      const meses = last.periodicidade === "Mensal" ? 1 : 12;
+      const due = addMonths(last.pagoEm, meses);
+
+      // 1) Se já passou do vencimento + período de carência => desativar
+      const limiteGrace = addDays(due, graceDays);
+      if (now > limiteGrace) {
+        await prisma.assinatura.updateMany({
+          where: { usuarioId: a.usuarioId, plano: a.plano, ativo: true },
+          data: { ativo: false, canceledAt: now },
+        });
+        continue;
+      }
+
+      // 2) Se ainda está ativa e perto de vencer => adicionar na lista expiring (pra avisos)
+      if (due >= now && due <= limitReminder) {
+        expiring.push({
+          usuarioId: a.usuarioId,
+          email: a.usuario?.email ?? null,
+          nome: a.usuario?.nome ?? a.usuario?.nomeDeUsuario ?? null,
+          plano: a.plano,
+          venceEm: due,
+        });
+
+        // aqui você pode mandar email/notificação se quiser
+      }
+    }
+
+    return res.json({
+      ok: true,
+      daysBefore,
+      graceDays,
+      expiringCount: expiring.length,
+      expiring,
+    });
+  } catch (err) {
+    console.error("Erro ao checar assinaturas próximas do vencimento:", err);
+    return res.status(500).json({ message: "Erro ao checar assinaturas" });
   }
 }

@@ -39,9 +39,41 @@ type Pagamento = {
 type Pagador = { nome: string; email: string; cpf?: string; telefone?: string };
 type Cartao = { numero: string; nomeImpresso: string; validade: string; cvv: string };
 
+function diasRestantes(renovaEm?: string | null) {
+  if (!renovaEm) return null;
+  const d = new Date(renovaEm).getTime();
+  const hoje = Date.now();
+  const diff = d - hoje;
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
 function brl(n: number | string) {
   const v = typeof n === "string" ? Number(n) : n;
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function computeRenovaEm(
+  assinatura: Assinatura | null,
+  pagamentos: Pagamento[]
+): string | null {
+  if (!assinatura) return null;
+
+  const aprovadosMesmoPlano = pagamentos
+    .filter((p) => p.status === "APROVADO" && p.plano === assinatura.plano);
+
+  if (aprovadosMesmoPlano.length === 0) return null;
+
+  const last = aprovadosMesmoPlano.sort(
+    (a, b) =>
+      new Date(b.pagoEm || b.criadoEm).getTime() -
+      new Date(a.pagoEm || a.criadoEm).getTime()
+  )[0];
+
+  const baseDate = new Date(last.pagoEm || last.criadoEm);
+  const meses = last.periodicidade === "Mensal" ? 1 : 12;
+  const d = new Date(baseDate);
+  d.setMonth(d.getMonth() + meses);
+  return d.toISOString();
 }
 
 const roleToDefaultPlan: Record<string, string> = {
@@ -341,9 +373,18 @@ export default function PagamentosPage() {
     }
   }
 
-  if (loading) {
+    if (loading) {
     return <div className="p-6">Carregando pagamentos...</div>;
   }
+
+  const renovaEm = computeRenovaEm(assinatura, pagamentos);
+  const dias = diasRestantes(renovaEm);
+  const aviso =
+    dias !== null && dias >= 0 && dias <= 7
+      ? `Sua assinatura vence em ${dias} dia${dias === 1 ? "" : "s"}.`
+      : dias !== null && dias < 0
+      ? "Sua assinatura está vencida. Renove para continuar com os benefícios."
+      : null;
 
   const p = selectedObj;
   const total = totalComCupom();
@@ -358,6 +399,16 @@ export default function PagamentosPage() {
       <p className="text-sm text-gray-600 mb-6">
         Bem-vindo(a)! Aqui você escolhe seu plano, aplica cupons e acompanha o histórico.
       </p>
+
+      {aviso && (
+        <div
+          className={`mb-4 text-sm font-medium rounded-md px-3 py-2 ${
+            dias! < 0 ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-800"
+          }`}
+        >
+          {aviso}
+        </div>
+      )}
       <div className="mb-6 rounded-lg border bg-emerald-50 text-emerald-900 p-3 text-sm">
         <ul className="list-disc pl-4 space-y-1">
           <li>Rede social aberta: posts/DMs ilimitados para todos. Vídeos ≤ 60s.</li>
