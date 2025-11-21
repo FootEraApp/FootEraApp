@@ -50,6 +50,7 @@ interface UsuarioAdmin {
   destaque?: boolean;
   ultimaAtividade?: string | null;
   ultimaAtividadeNome?: string | null;
+  assinatura?: AssinaturaDTO | null; // <-- ADICIONE ESTA LINHA
 }
 
 type PlanoAssinatura = "FREE" | "PRO" | "ELITE" | string;
@@ -60,6 +61,7 @@ interface AssinaturaDTO {
   startsAt: string;
   canceledAt?: string | null;
   ativo: boolean;
+  renovaEm?: string | null; // <-- ADICIONE ESTA LINHA
 }
 
 interface UsuarioDetalhe extends UsuarioAdmin {
@@ -240,6 +242,7 @@ type AssinanteListItem = {
   startsAt: string;
   canceledAt?: string | null;
   ativo: boolean;
+  renovaEm?: string | null;
   usuario: {
     id: string;
     nome: string | null;
@@ -890,6 +893,7 @@ function fmtDate(d?: string | null) {
                     <th className="px-3 py-2 text-left">Tipo</th>
                     <th className="px-3 py-2 text-left">Criado em</th>
                     <th className="px-3 py-2 text-left">Última atv.</th>
+                    <th className="px-3 py-2 text-left">Renova em</th>
                     <th className="px-3 py-2"></th>
                   </tr>
                 </thead>
@@ -930,20 +934,25 @@ function fmtDate(d?: string | null) {
                         </td>
                         <td className="px-3 py-2">{u.email ?? "-"}</td>
                         <td className="px-3 py-2 capitalize">{u.tipo ?? "-"}</td>
-                        <td className="px-3 py-2">{formatDate(u.criadoEm)}</td>
-                        <td className="px-3 py-2">
-                          {u.ultimaAtividade ? (
-                            <>
-                              <span className="block truncate max-w-[220px]" title={u.ultimaAtividadeNome ?? ""}>
-                                {u.ultimaAtividadeNome ?? "—"}
-                              </span>
-                              <span className="text-xs text-gray-500">{formatDate(u.ultimaAtividade)}</span>
-                            </>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right">
+                       <td className="px-3 py-2">{formatDate(u.criadoEm)}</td>
+                          <td className="px-3 py-2">
+                            {u.ultimaAtividade ? (
+                              <>
+                                <span className="block truncate max-w-[220px]" title={u.ultimaAtividadeNome ?? ""}>
+                                  {u.ultimaAtividadeNome ?? "—"}
+                                </span>
+                                <span className="text-xs text-gray-500">{formatDate(u.ultimaAtividade)}</span>
+                              </>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {fmtDate(u.assinatura?.renovaEm ?? null)}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+
+
                           <div className="flex items-center gap-3 justify-end">
                             <button onClick={() => abrirDetalhes(u.id)} className="text-green-700 hover:underline">
                               Detalhes
