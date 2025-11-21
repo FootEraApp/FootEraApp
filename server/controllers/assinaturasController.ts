@@ -41,10 +41,22 @@ export async function updatePlano(req: Request, res: Response) {
     const { plano } = req.body || {};
     if (!plano) return res.status(400).send("Informe o plano (FREE | PRO | ORG).");
 
+    const startsAt = new Date();
+    const renovaEm = new Date(startsAt);
+    renovaEm.setMonth(renovaEm.getMonth() + 1); // padrão: 1 mês
+
     const updated = await prisma.assinatura.upsert({
       where: { usuarioId },
       update: { plano: String(plano).toUpperCase() },
-      create: { usuarioId, plano: String(plano).toUpperCase(), ativo: true, startsAt: new Date(), canceledAt: null },
+      create: {
+        usuarioId,
+        plano: String(plano).toUpperCase(),
+        ativo: true,
+        startsAt,
+        canceledAt: null,
+        periodicidade: "Mensal",
+        renovaEm,
+      },
     });
 
     res.json(toDTO(updated));
@@ -52,6 +64,7 @@ export async function updatePlano(req: Request, res: Response) {
     res.status(e.status || 500).send(e.message || "Erro ao atualizar plano");
   }
 }
+
 
 export async function cancelar(req: Request, res: Response) {
   try {
@@ -82,11 +95,23 @@ export async function reativar(req: Request, res: Response) {
         where: { usuarioId },
         data: { ativo: true, canceledAt: null },
       });
-    } else {
-      out = await prisma.assinatura.create({
-        data: { usuarioId, plano: "FREE", startsAt: new Date(), ativo: true, canceledAt: null },
-      });
-    }
+      } else {
+    const startsAt = new Date();
+    const renovaEm = new Date(startsAt);
+    renovaEm.setMonth(renovaEm.getMonth() + 1);
+
+    out = await prisma.assinatura.create({
+      data: {
+        usuarioId,
+        plano: "FREE",
+        startsAt,
+        renovaEm,
+        periodicidade: "Mensal",
+        ativo: true,
+        canceledAt: null,
+      },
+    });
+  }
     res.json(toDTO(out));
   } catch (e: any) {
     res.status(e.status || 500).send(e.message || "Erro ao reativar assinatura");
