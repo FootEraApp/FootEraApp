@@ -1,4 +1,3 @@
-// server/utils/featureLimit.ts
 import { PrismaClient } from "@prisma/client";
 
 export type FeatureKey = "SUBMISSAO_DESAFIO" | "TREINO_SALVO";
@@ -6,17 +5,31 @@ export type FeatureKey = "SUBMISSAO_DESAFIO" | "TREINO_SALVO";
 type EnforceFeatureLimitParams = {
   prisma: PrismaClient;
   feature: FeatureKey;
-  plano: string; // "FREE", "PRO", etc.
-  atletaId?: string;   // usado em SUBMISSAO_DESAFIO
-  usuarioId?: string;  // usado em TREINO_SALVO (TreinoSalvo.usuarioId)
+  plano: string;
+  atletaId?: string;
+  usuarioId?: string;
 };
 
-function makeLimitError(feature: FeatureKey, limit: number, message: string) {
-  const err: any = new Error(message);
-  err.status = 403;
+export interface FeatureLimitError extends Error {
+  code: "LIMIT_REACHED";
+  capability: FeatureKey;
+  window: string;
+  allowed: number;
+  remaining: number;
+}
+
+function makeLimitError(
+  feature: FeatureKey,
+  allowed: number,
+  window: string,
+  message: string
+): FeatureLimitError {
+  const err = new Error(message) as FeatureLimitError;
   err.code = "LIMIT_REACHED";
-  err.feature = feature;
-  err.limit = limit;
+  err.capability = feature;
+  err.window = window;
+  err.allowed = allowed;
+  err.remaining = 0;
   return err;
 }
 
@@ -26,17 +39,15 @@ export async function enforceFeatureLimit({
   atletaId,
   usuarioId,
   plano,
-}: EnforceFeatureLimitParams) {
-  // Se não for plano Free, não aplica limite
+}: EnforceFeatureLimitParams): Promise<void> {
   if (String(plano).toUpperCase() !== "FREE") return;
 
   if (feature === "SUBMISSAO_DESAFIO") {
-    // aqui o campo é atletaId + createdAt
-    if (!atletaId) return; // sem atleta, não aplica nada
+    if (!atletaId) return;
 
     const now = new Date();
     const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const fimMes = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0); // primeiro dia do próximo mês
+    const fimMes = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0);
 
     const count = await prisma.submissaoDesafio.count({
       where: {
@@ -49,17 +60,18 @@ export async function enforceFeatureLimit({
     });
 
     const LIMIT = 2;
+    const WINDOW = "30d";
     if (count >= LIMIT) {
       throw makeLimitError(
         "SUBMISSAO_DESAFIO",
         LIMIT,
+        WINDOW,
         "Você atingiu o limite de 2 submissões de desafio no plano Free este mês."
       );
     }
   }
 
   if (feature === "TREINO_SALVO") {
-    // TreinoSalvo usa usuarioId no schema
     const key = usuarioId ?? atletaId;
     if (!key) return;
 
@@ -68,10 +80,12 @@ export async function enforceFeatureLimit({
     });
 
     const LIMIT = 5;
+    const WINDOW = "TOTAL";
     if (count >= LIMIT) {
       throw makeLimitError(
         "TREINO_SALVO",
         LIMIT,
+        WINDOW,
         "Você atingiu o limite de 5 treinos salvos na sua biblioteca no plano Free."
       );
     }

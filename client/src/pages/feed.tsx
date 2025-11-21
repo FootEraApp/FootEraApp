@@ -39,6 +39,8 @@ import {
 } from "../lib/achievementsCatalog.js";
 import { FaRetweet } from "react-icons/fa";
 import { http } from "../services/http.js";
+import { TreinosApi } from "../utils/treinosApi.js";
+import { CalendarClock } from "lucide-react";
 
 interface Usuario {
   id: string;
@@ -108,7 +110,6 @@ function HeaderSliderLite({
 
   return (
     <div ref={wrapRef} className="relative h-16 sm:h-20 -mx-4 px-4 sm:mx-0 mb-2">
-      {/* botão de mensagens no topo direito */}
       <div className="absolute right-2 top-1/2 -translate-y-1/2 z-20">
         <Link
           href="/mensagens"
@@ -174,6 +175,17 @@ function HeaderSliderLite({
     </div>
   );
 }
+
+type AgendaTipo = "TREINO" | "DESAFIO" | "EVENTO" | "JOGO" | "PENEIRA" | "OUTRO";
+
+type AgendaItem = {
+  id: string;
+  tipo: AgendaTipo;
+  titulo: string;
+  inicio: string;
+  fim?: string | null;
+  origem: string;
+};
 
 type ParsedAchievement = {
   ach?: AchievementLite;
@@ -253,30 +265,34 @@ function AchievementShareCard({ parsed }: { parsed: ParsedAchievement }) {
   );
 }
 
-function BottomSheet({
-  open,
-  onClose,
-  heightPct = 40,
-  children,
-  ariaLabel = "Painel",
-}: {
-  open: boolean;
-  onClose: () => void;
-  heightPct?: number;
-  children: React.ReactNode;
-  ariaLabel?: string;
-}) {
+  function BottomSheet({
+    open,
+    onClose,
+    heightPct = 40,
+    children,
+    ariaLabel = "Painel",
+  }: {
+    open: boolean;
+    onClose: () => void;
+    heightPct?: number;
+    children: React.ReactNode;
+    ariaLabel?: string;
+  }) {
   useEffect(() => {
     if (!open) return;
+
     const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onEsc);
+
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
       document.removeEventListener("keydown", onEsc);
       document.body.style.overflow = prev;
     };
   }, [open, onClose]);
+
 
   if (!open) return null;
 
@@ -308,7 +324,6 @@ function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
   const [comentarioTextoPorPost, setComentarioTextoPorPost] = useState<Record<string, string>>({});
-  const userId = Storage.usuarioId as string | null;
 
   const [modalAberto, setModalAberto] = useState(false);
   const [linkCompartilhado, setLinkCompartilhado] = useState("");
@@ -322,38 +337,90 @@ function PaginaFeed(): JSX.Element {
 
   const [idCompartilhado, setIdCompartilhado] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<"todos" | "seguindo" | "favoritos" | "meus">("todos");
+  const [agendaFeed, setAgendaFeed] = useState<AgendaItem[]>([]);
+  const [carregandoAgenda, setCarregandoAgenda] = useState(false);
+
+  const userId = Storage.usuarioId as string | null;
+  const tipoUsuario =
+    (Storage as any).tipoUsuario ??
+    localStorage.getItem("tipoUsuario") ??
+    sessionStorage.getItem("tipoUsuario") ??
+    "";
+
+   React.useEffect(() => {
+    setModalAberto(false);
+    setComentariosModalAberto(false);
+    setPostSelecionado(null);
+
+    // mata overlays “fantasmas” de outros componentes/modais
+    document
+      .querySelectorAll(
+        ".backdrop, .overlay, .modal, [data-state='open'], [data-radix-dialog-overlay]"
+      )
+      .forEach((el) => {
+        (el as HTMLElement).remove();
+      });
+  }, []);
+  
+  useEffect(() => {
+  // se não for atleta, nem tenta carregar calendário
+  if (tipoUsuario !== "ATLETA") {
+    setAgendaFeed([]);
+    setCarregandoAgenda(false);
+    return;
+  }
+
+  (async () => {
+    try {
+      setCarregandoAgenda(true);
+
+      const hoje = new Date();
+      const daqui7 = new Date();
+      daqui7.setDate(hoje.getDate() + 7);
+
+      const rows = await TreinosApi.getCalendario(hoje, daqui7);
+
+      const normalizados: AgendaItem[] = (Array.isArray(rows) ? rows : []).map(
+        (item: any) => ({
+          id: item.id,
+          tipo: (item.tipo as AgendaTipo) ?? "OUTRO",
+          titulo: item.titulo ?? "Atividade",
+          inicio: item.inicio ?? item.start ?? item.data ?? new Date().toISOString(),
+          fim: item.fim ?? item.end ?? item.dataFim ?? null,
+          origem: item.origem ?? "API",
+        })
+      );
+
+      normalizados.sort((a, b) => a.inicio.localeCompare(b.inicio));
+      setAgendaFeed(normalizados);
+    } catch (e) {
+      console.error("Erro ao carregar agenda do feed:", e);
+      setAgendaFeed([]);
+    } finally {
+      setCarregandoAgenda(false);
+    }
+  })();
+}, [tipoUsuario]);
 
   useEffect(() => {
-    async function carregar() {
-      try {
-        const dados: PostagemComUsuario[] = await getFeedPosts(filtro);
+  async function carregar() {
+    try {
+      const dados: PostagemComUsuario[] = await getFeedPosts(filtro);
 
-        const uid = Storage.usuarioId ?? null;
+      const unicos: PostagemComUsuario[] = Array.from(
+        new Map<string, PostagemComUsuario>(
+          dados.map((p) => [p.id, p] as const)
+        ).values()
+      );
 
-        let filtrado: PostagemComUsuario[] = dados;
-        if (uid && filtro === "todos") {
-          filtrado = dados.filter(
-            (p) => p.usuario?.id !== uid && (p as any).usuarioId !== uid
-          );
-        } else if (uid && filtro === "meus") {
-          filtrado = dados.filter(
-            (p) => p.usuario?.id === uid || (p as any).usuarioId === uid
-          );
-        }
-
-        const unicos: PostagemComUsuario[] = Array.from(
-          new Map<string, PostagemComUsuario>(
-            filtrado.map((p) => [p.id, p] as const)
-          ).values()
-        );
-
-        setPosts(unicos);
-      } catch (e) {
-        console.error("Falha ao carregar feed:", e);
-      }
+      setPosts(unicos);
+    } catch (e) {
+      console.error("Falha ao carregar feed:", e);
+      setPosts([]);
     }
-    carregar();
-  }, [filtro]);
+  }
+  carregar();
+}, [filtro]);
 
   useEffect(() => {
     const onNovoPost = (novo: PostagemComUsuario) => {

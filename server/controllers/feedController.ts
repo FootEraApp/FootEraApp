@@ -8,6 +8,27 @@ const prisma = new PrismaClient();
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
 
+export async function listarFeed(req: Request, res: Response) {
+  try {
+    const postagens = await prisma.postagem.findMany({
+      orderBy: { dataCriacao: "desc" },
+      include: {
+        usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
+        curtidas: { select: { usuarioId: true } },
+        comentarios: {
+          orderBy: { dataCriacao: "asc" },
+          include: { usuario: { select: { nome: true, foto: true } } },
+        },
+      },
+    });
+
+    res.json(postagens);
+  } catch (e) {
+    console.error("Erro em listarFeed:", e);
+    res.status(500).json({ message: "Erro ao listar feed." });
+  }
+}
+
 async function isProUser(userId: string) {
   const assinatura = await prisma.assinatura.findUnique({
     where: { usuarioId: userId },
@@ -25,7 +46,8 @@ async function getAdsConfigForUser(userId?: string) {
       adsRemainingToday: 0,
     };
   }
-    const pro = await isProUser(userId);
+
+  const pro = await isProUser(userId);
   if (pro) {
     return {
       adsEnabled: false,
@@ -55,7 +77,6 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
 
     if (filtro === "meus") {
       if (!userId) {
-        // usuário não autenticado → nenhum post e sem ads
         const ads = await getAdsConfigForUser(undefined);
         return res.json({ items: [], meta: ads });
       }
@@ -75,7 +96,7 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
         where: { seguidorUsuarioId: userId },
         select: { seguidoUsuarioId: true },
       });
-      const ids = seguindo.map(s => s.seguidoUsuarioId);
+      const ids = seguindo.map((s) => s.seguidoUsuarioId);
       if (ids.length === 0) {
         const ads = await getAdsConfigForUser(userId);
         return res.json({ items: [], meta: ads });
@@ -92,7 +113,7 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
         where: { usuarioId: userId },
         select: { favoritoUsuarioId: true },
       });
-      const ids = favs.map(f => f.favoritoUsuarioId);
+      const ids = favs.map((f) => f.favoritoUsuarioId);
       if (ids.length === 0) {
         const ads = await getAdsConfigForUser(userId);
         return res.json({ items: [], meta: ads });
@@ -113,7 +134,9 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
           include: {
             usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
             curtidas: true,
-            comentarios: { include: { usuario: { select: { nome: true, foto: true } } } },
+            comentarios: {
+              include: { usuario: { select: { nome: true, foto: true } } },
+            },
           },
         },
       },
@@ -122,7 +145,6 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
 
     const ads = await getAdsConfigForUser(userId);
 
-    // >>> AQUI entra o formato com meta de ads <<<
     return res.json({
       items: postagens,
       meta: {
@@ -146,7 +168,7 @@ export async function getPostById(req: Request, res: Response) {
         usuario: true,
         comentarios: { include: { usuario: true } },
         curtidas: true,
-        repostOf: { 
+        repostOf: {
           include: {
             usuario: true,
             comentarios: { include: { usuario: true } },
@@ -246,14 +268,18 @@ export const postar: RequestHandler = async (req, res) => {
     }
 
     if (!file) {
-      const FRONT = (process.env.FRONTEND_BASE_URL || "http://localhost:5173").replace(/\/+$/, "");
+      const FRONT = (process.env.FRONTEND_BASE_URL || "http://localhost:5173").replace(
+        /\/+$/,
+        ""
+      );
 
       const norm = (u?: string): string | undefined => {
         if (!u) return undefined;
         let s = String(u).trim();
         if (!s) return undefined;
 
-        if (/^(https?:)?\/\//i.test(s) || s.startsWith("data:") || s.startsWith("blob:")) return s;
+        if (/^(https?:)?\/\//i.test(s) || s.startsWith("data:") || s.startsWith("blob:"))
+          return s;
 
         if (s.startsWith("uploads/")) s = "/" + s;
         if (s.startsWith("/uploads/")) return s;
@@ -297,7 +323,9 @@ export const postar: RequestHandler = async (req, res) => {
       include: {
         usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
         curtidas: true,
-        comentarios: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
+        comentarios: {
+          include: { usuario: { select: { id: true, nome: true, foto: true } } },
+        },
       },
     });
 
@@ -306,7 +334,7 @@ export const postar: RequestHandler = async (req, res) => {
       select: { seguidorUsuarioId: true },
     });
     getIO()
-      ?.to([`u:${usuarioId}`, ...segs.map(s => `u:${s.seguidorUsuarioId}`)])
+      ?.to([`u:${usuarioId}`, ...segs.map((s) => `u:${s.seguidorUsuarioId}`)])
       .emit("feed:novoPost", postForEmit);
 
     return res.status(201).json(postagem);
@@ -392,10 +420,7 @@ export const deletarUsuario: RequestHandler = async (req, res) => {
 
     await prisma.seguidor.deleteMany({
       where: {
-        OR: [
-          { seguidorUsuarioId: id },
-          { seguidoUsuarioId: id },
-        ],
+        OR: [{ seguidorUsuarioId: id }, { seguidoUsuarioId: id }],
       },
     });
 
@@ -432,7 +457,7 @@ export async function repostPost(req: Request, res: Response) {
     const novo = await prisma.postagem.create({
       data: {
         usuarioId: userId,
-        conteudo: comentario || "" || hidden, 
+        conteudo: comentario || "" || hidden,
         repostOfId: original.id,
       },
       include: {
@@ -461,3 +486,25 @@ export async function repostPost(req: Request, res: Response) {
     return res.status(500).json({ message: "Erro ao repostar" });
   }
 }
+
+export const compartilharPost: RequestHandler = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const post = await prisma.postagem.update({
+      where: { id },
+      data: {
+        compartilhamentos: {
+          increment: 1,
+        },
+      },
+    });
+
+    return res.json(post);
+  } catch (error) {
+    console.error("Erro ao compartilhar post:", error);
+    return res
+      .status(500)
+      .json({ message: "Erro interno ao registrar compartilhamento." });
+  }
+};

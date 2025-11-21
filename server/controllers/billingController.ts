@@ -1,6 +1,13 @@
 import { Request, Response } from "express";
-import { PrismaClient, Prisma, MetodoPagamento, Periodicidade } from "@prisma/client";
+import {
+  PrismaClient,
+  Prisma,
+  MetodoPagamento,
+  Periodicidade,
+  PagamentoStatus
+} from "@prisma/client";
 import QRCode from "qrcode";
+import type { AuthenticatedRequest } from "../middlewares/auth.js";
 
 const prisma = new PrismaClient();
 
@@ -12,10 +19,10 @@ type Pagador = {
 };
 
 type Cartao = {
-  numero: string;         
+  numero: string;
   nomeImpresso: string;
-  validade: string;       
-  cvv: string;            
+  validade: string;
+  cvv: string;
 };
 
 type StartCheckoutBody = {
@@ -23,17 +30,24 @@ type StartCheckoutBody = {
   periodicidade: Periodicidade;
   metodo: MetodoPagamento;
   cupom?: string | null;
-  pagador?: Pagador;     
-  cartao?: Cartao;        
+  pagador?: Pagador;
+  cartao?: Cartao;
 };
 
-function onlyDigits(s: string) { return (s || "").replace(/\D+/g, ""); }
+function onlyDigits(s: string) {
+  return (s || "").replace(/\D+/g, "");
+}
 function luhnOk(num: string) {
-  let sum = 0, alt = false;
+  let sum = 0,
+    alt = false;
   for (let i = num.length - 1; i >= 0; i--) {
     let n = parseInt(num.charAt(i), 10);
-    if (alt) { n *= 2; if (n > 9) n -= 9; }
-    sum += n; alt = !alt;
+    if (alt) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    alt = !alt;
   }
   return sum % 10 === 0;
 }
@@ -42,8 +56,8 @@ const PLANS = [
   {
     id: "ATLETA_PRO",
     title: "Atleta Pro",
-    monthly: 19.90,
-    annual: 199.00, // conforme seção 6 do texto
+    monthly: 19.9,
+    annual: 199.0,
     benefits: [
       "Sem anúncios no app",
       "Registros de treino ilimitados (fair-use)",
@@ -51,39 +65,39 @@ const PLANS = [
       "Biblioteca de treinos pessoal ilimitada (fair-use)",
       "Agendamento pessoal de treinos",
       "Analytics pessoal com retenção de 12 meses",
-      "Social aberto: posts/DMs ilimitados • vídeos ≤ 60s"
+      "Social aberto: posts/DMs ilimitados • vídeos ≤ 60s",
     ],
   },
   {
     id: "OLHEIRO_PRO",
     title: "Olheiro Pro",
-    monthly: 39.90,
-    annual: 399.00, // ajustado para 399/ano
+    monthly: 39.9,
+    annual: 399.0,
     benefits: [
       "Sem anúncios",
       "Filtros avançados e ver até 200 perfis/dia",
       "Listas ilimitadas e notas privadas",
-      "Contato mediado com prioridade"
+      "Contato mediado com prioridade",
     ],
   },
   {
     id: "PROFESSOR_PRO",
     title: "Professor Pro",
-    monthly: 39.90,
-    annual: 399.00,
+    monthly: 39.9,
+    annual: 399.0,
     benefits: [
       "Sem anúncios",
       "Workspace pessoal (fora da organização)",
       "Planos/rotinas ativas até 1.000",
       "Templates salvos até 500",
-      "Agendamentos em lote (séries/semestres)"
+      "Agendamentos em lote (séries/semestres)",
     ],
   },
   {
     id: "ESCOLINHA_PRO",
     title: "Escolinha (organização)",
-    monthly: 199.00,     // PREÇO ÚNICO MENSAL
-    annual: 0,           // não oferecemos anual; ver regra no priceFor()
+    monthly: 199.0,
+    annual: 0,
     benefits: [
       "Sem anúncios no contexto da organização",
       "Painel por times/turmas; importação de atletas",
@@ -92,20 +106,84 @@ const PLANS = [
       "Agendamento por turma/time e por atleta",
       "Relatórios/analytics com retenção de 12 meses",
       "Capacidades de referência: 600 atletas, 30 coaches, 30 turmas",
-      "Página pública e vitrine da escolinha"
+      "Página pública e vitrine da escolinha",
     ],
   },
 ] as const;
 
 function getUserId(req: Request) {
-  return (req as any).userId ?? (req as any).user?.id;
+  const r = req as AuthenticatedRequest as any;
+  return r.userId ?? r.authUser?.id ?? r.user?.id;
+}
+
+async function approvePaymentAndProvisionSubscription(pagamentoId: string) {
+  const pagamento = await prisma.pagamento.findUnique({
+    where: { id: pagamentoId },
+  });
+  if (!pagamento) {
+    throw new Error("Pagamento não encontrado");
+  }
+
+  if (pagamento.status === "APROVADO") {
+    return pagamento;
+  }
+
+  const now = new Date();
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const pg = await tx.pagamento.update({
+      where: { id: pagamentoId },
+      data: {
+        status: "APROVADO",
+        pagoEm: now,
+      },
+    });
+
+    await tx.assinatura.upsert({
+      where: { usuarioId: pg.usuarioId },
+      update: {
+        plano: pg.plano,
+        ativo: true,
+        startsAt: now,
+        canceledAt: null,
+      },
+      create: {
+        usuarioId: pg.usuarioId,
+        plano: pg.plano,
+        ativo: true,
+        startsAt: now,
+      },
+    });
+
+    return pg;
+  });
+
+  return updated;
+}
+
+async function deactivateSubscriptionForPayment(pagamentoId: string) {
+  const pagamento = await prisma.pagamento.findUnique({
+    where: { id: pagamentoId },
+  });
+  if (!pagamento) {
+    return null;
+  }
+
+  const now = new Date();
+
+  await prisma.assinatura.updateMany({
+    where: { usuarioId: pagamento.usuarioId, ativo: true },
+    data: { ativo: false, canceledAt: now },
+  });
+
+  return pagamento;
 }
 
 export async function getPlans(req: Request, res: Response) {
   res.json({ plans: PLANS });
 }
 
-export async function getMyBilling(req: Request, res: Response) {
+export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
   try {
     const usuarioId = getUserId(req);
 
@@ -131,14 +209,13 @@ export async function getMyBilling(req: Request, res: Response) {
 }
 
 function findPlan(planoId: string) {
-  return PLANS.find(p => p.id === planoId);
+  return PLANS.find((p) => p.id === planoId);
 }
 
 function priceFor(planoId: string, period: Periodicidade): number {
   const p = findPlan(planoId);
   if (!p) throw new Error("Plano inválido");
 
-  // Escolinha não tem anual
   if (planoId === "ESCOLINHA_PRO" && period === "Anual") {
     throw new Error("ESCOLINHA_PRO é apenas mensal");
   }
@@ -146,7 +223,12 @@ function priceFor(planoId: string, period: Periodicidade): number {
   return period === "Mensal" ? p.monthly : p.annual!;
 }
 
-async function computeCouponDiscount(codigo: string, usuarioId: string, planoId: string, periodicidade: Periodicidade) {
+async function computeCouponDiscount(
+  codigo: string,
+  usuarioId: string,
+  planoId: string,
+  periodicidade: Periodicidade
+) {
   const cupom = await prisma.cupom.findUnique({ where: { codigo } });
   if (!cupom || !cupom.ativo) return { ok: false, reason: "Cupom inválido" };
 
@@ -164,7 +246,11 @@ async function computeCouponDiscount(codigo: string, usuarioId: string, planoId:
     return { ok: false, reason: "Cupom não válido para esta periodicidade" };
   }
 
-  if (cupom.tipo === "PRESENTE" && cupom.concedidoParaUsuarioId && cupom.concedidoParaUsuarioId !== usuarioId) {
+  if (
+    cupom.tipo === "PRESENTE" &&
+    cupom.concedidoParaUsuarioId &&
+    cupom.concedidoParaUsuarioId !== usuarioId
+  ) {
     return { ok: false, reason: "Este presente não é para este usuário" };
   }
 
@@ -175,33 +261,43 @@ export async function applyCoupon(req: Request, res: Response) {
   try {
     const usuarioId = getUserId(req);
     const { codigo, planoId, periodicidade } = req.body as {
-      codigo: string; planoId: string; periodicidade: Periodicidade
+      codigo: string;
+      planoId: string;
+      periodicidade: Periodicidade;
     };
 
     const pl = findPlan(planoId);
     if (!pl) return res.status(400).json({ message: "Plano inválido" });
 
-    // 1) valide periodicidade primeiro
     if (!["Mensal", "Anual"].includes(periodicidade as any)) {
       return res.status(400).json({ message: "Periodicidade inválida" });
     }
 
-    // 2) bloqueie anual da escolinha antes de chamar priceFor
     if (planoId === "ESCOLINHA_PRO" && periodicidade === "Anual") {
-      return res.status(400).json({ message: "ESCOLINHA_PRO é apenas mensal" });
+      return res
+        .status(400)
+        .json({ message: "ESCOLINHA_PRO é apenas mensal" });
     }
 
     const base = priceFor(planoId, periodicidade);
 
-    const check = await computeCouponDiscount(codigo, usuarioId, planoId, periodicidade);
+    const check = await computeCouponDiscount(
+      codigo,
+      usuarioId,
+      planoId,
+      periodicidade
+    );
     if (!check.ok || !check.cupom) {
-      return res.status(400).json({ message: check.reason || "Cupom inválido" });
+      return res
+        .status(400)
+        .json({ message: check.reason || "Cupom inválido" });
     }
 
     const c = check.cupom;
     let desconto = 0;
     if (c.tipo === "PERCENTUAL" && typeof c.descontoPerc === "number") {
-      desconto = Math.max(0, Math.min(100, c.descontoPerc)) * base / 100;
+      desconto =
+        (Math.max(0, Math.min(100, c.descontoPerc)) * base) / 100;
     } else if (c.tipo === "VALOR" && c.descontoFixo != null) {
       desconto = Number(c.descontoFixo);
     } else if (c.tipo === "PRESENTE") {
@@ -211,10 +307,12 @@ export async function applyCoupon(req: Request, res: Response) {
     const total = Math.max(0, base - desconto);
 
     return res.json({
-      planoId, periodicidade, base,
+      planoId,
+      periodicidade,
+      base,
       desconto: Number(desconto.toFixed(2)),
       total: Number(total.toFixed(2)),
-      cupom: { codigo: c.codigo, tipo: c.tipo }
+      cupom: { codigo: c.codigo, tipo: c.tipo },
     });
   } catch (err) {
     return res.status(500).json({ message: "Erro ao validar cupom", err });
@@ -224,14 +322,22 @@ export async function applyCoupon(req: Request, res: Response) {
 export async function startCheckout(req: Request, res: Response) {
   try {
     const usuarioId = getUserId(req);
-    const { planoId, periodicidade, metodo, cupom, pagador, cartao } = req.body as StartCheckoutBody;
+    const { planoId, periodicidade, metodo, cupom, pagador, cartao } =
+      req.body as StartCheckoutBody;
 
-    const METODOS_VALIDOS: MetodoPagamento[] = ["PIX", "CREDITO", "DEBITO", "BOLETO"];
+    const METODOS_VALIDOS: MetodoPagamento[] = [
+      "PIX",
+      "CREDITO",
+      "DEBITO",
+      "BOLETO",
+    ];
     if (!METODOS_VALIDOS.includes(metodo)) {
       return res.status(400).json({ message: "Método de pagamento inválido" });
     }
     if (planoId === "ESCOLINHA_PRO" && periodicidade === "Anual") {
-      return res.status(400).json({ message: "ESCOLINHA_PRO é apenas mensal" });
+      return res
+        .status(400)
+        .json({ message: "ESCOLINHA_PRO é apenas mensal" });
     }
 
     if (!["Mensal", "Anual"].includes(periodicidade)) {
@@ -243,23 +349,39 @@ export async function startCheckout(req: Request, res: Response) {
 
     if (metodo === "PIX") {
       if (!pagador?.nome || !pagador?.email) {
-        return res.status(400).json({ message: "Informe nome e e-mail para PIX" });
+        return res
+          .status(400)
+          .json({ message: "Informe nome e e-mail para PIX" });
       }
     }
     if (metodo === "BOLETO") {
       if (!pagador?.nome || !pagador?.email || !pagador?.cpf) {
-        return res.status(400).json({ message: "Informe nome, e-mail e CPF para boleto" });
+        return res.status(400).json({
+          message: "Informe nome, e-mail e CPF para boleto",
+        });
       }
     }
     if (metodo === "CREDITO" || metodo === "DEBITO") {
       const num = onlyDigits(cartao?.numero || "");
       const cvv = onlyDigits(cartao?.cvv || "");
-      const validadeOk = /^(0[1-9]|1[0-2])\/\d{2}$/.test(cartao?.validade || "");
-      if (!cartao?.nomeImpresso || num.length < 13 || !luhnOk(num) || !validadeOk || !(cvv.length === 3 || cvv.length === 4)) {
-        return res.status(400).json({ message: "Dados de cartão inválidos" });
+      const validadeOk = /^(0[1-9]|1[0-2])\/\d{2}$/.test(
+        cartao?.validade || ""
+      );
+      if (
+        !cartao?.nomeImpresso ||
+        num.length < 13 ||
+        !luhnOk(num) ||
+        !validadeOk ||
+        !(cvv.length === 3 || cvv.length === 4)
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Dados de cartão inválidos" });
       }
       if (!pagador?.nome || !pagador?.email) {
-        return res.status(400).json({ message: "Informe nome e e-mail do titular" });
+        return res.status(400).json({
+          message: "Informe nome e e-mail do titular",
+        });
       }
     }
 
@@ -268,11 +390,20 @@ export async function startCheckout(req: Request, res: Response) {
     let cupomRow: any = null;
 
     if (cupom) {
-      const check = await computeCouponDiscount(cupom, usuarioId, planoId, periodicidade);
-      if (!check.ok || !check.cupom) return res.status(400).json({ message: check.reason || "Cupom inválido" });
+      const check = await computeCouponDiscount(
+        cupom,
+        usuarioId,
+        planoId,
+        periodicidade
+      );
+      if (!check.ok || !check.cupom)
+        return res
+          .status(400)
+          .json({ message: check.reason || "Cupom inválido" });
       cupomRow = check.cupom;
       if (cupomRow.tipo === "PERCENTUAL" && typeof cupomRow.descontoPerc === "number") {
-        desconto = Math.max(0, Math.min(100, cupomRow.descontoPerc)) * base / 100;
+        desconto =
+          (Math.max(0, Math.min(100, cupomRow.descontoPerc)) * base) / 100;
       } else if (cupomRow.tipo === "VALOR" && cupomRow.descontoFixo != null) {
         desconto = Number(cupomRow.descontoFixo);
       } else if (cupomRow.tipo === "PRESENTE") {
@@ -282,17 +413,17 @@ export async function startCheckout(req: Request, res: Response) {
 
     const total = Math.max(0, base - desconto);
 
-    const provider = 'INTERNAL_FAKE';
+    const provider = "INTERNAL_FAKE";
     const providerRef = `FAKE-${Date.now()}`;
     const totalDecimal = new Prisma.Decimal(total.toFixed(2));
 
-   const data: Prisma.PagamentoUncheckedCreateInput = {
+    const data: Prisma.PagamentoUncheckedCreateInput = {
       usuarioId,
       plano: planoId,
       periodicidade,
       metodo,
       status: total === 0 ? "APROVADO" : "PENDENTE",
-      valor: totalDecimal,      
+      valor: totalDecimal,
       moeda: "BRL",
       provider,
       providerRef,
@@ -314,16 +445,25 @@ export async function startCheckout(req: Request, res: Response) {
     if (total === 0) {
       await upsertSubscription(usuarioId, planoId);
       if (cupomRow) await resgatarCupom(cupomRow.id, usuarioId, pagamento.id);
-      return res.json({ status: "APROVADO", pagamento, message: "Assinatura ativada pelo cupom" });
+      return res.json({
+        status: "APROVADO",
+        pagamento,
+        message: "Assinatura ativada pelo cupom",
+      });
     }
 
     if (metodo === "PIX") {
-      const payload = `pix:plano=${planoId};user=${usuarioId};pg=${pagamento.id};valor=${total.toFixed(2)}`;
+      const payload = `pix:plano=${planoId};user=${usuarioId};pg=${pagamento.id};valor=${total.toFixed(
+        2
+      )}`;
       await prisma.pagamento.update({
         where: { id: pagamento.id },
         data: { pixCopiaECola: payload },
       });
-      const qrCodeUrl = await QRCode.toDataURL(payload, { width: 320, margin: 1 });
+      const qrCodeUrl = await QRCode.toDataURL(payload, {
+        width: 320,
+        margin: 1,
+      });
       return res.json({
         status: "PENDENTE",
         pagamento,
@@ -335,7 +475,8 @@ export async function startCheckout(req: Request, res: Response) {
     }
 
     if (metodo === "BOLETO") {
-      const linhaDigitavel = "23790.00000 00000.000000 00000.000000 0 00000000000000";
+      const linhaDigitavel =
+        "23790.00000 00000.000000 00000.000000 0 00000000000000";
       return res.json({
         status: "PENDENTE",
         pagamento,
@@ -353,13 +494,21 @@ export async function startCheckout(req: Request, res: Response) {
       });
     }
 
-    return res.json({ status: "PENDENTE", pagamento, message: "Pagamento iniciado (simulado)" });
+    return res.json({
+      status: "PENDENTE",
+      pagamento,
+      message: "Pagamento iniciado (simulado)",
+    });
   } catch (err) {
     res.status(500).json({ message: "Erro ao iniciar checkout", err });
   }
 }
 
-async function resgatarCupom(cupomId: string, usuarioId: string, pagamentoId?: string) {
+async function resgatarCupom(
+  cupomId: string,
+  usuarioId: string,
+  pagamentoId?: string
+) {
   await prisma.$transaction([
     prisma.cupomResgate.create({
       data: { cupomId, usuarioId, pagamentoId: pagamentoId || null },
@@ -367,8 +516,113 @@ async function resgatarCupom(cupomId: string, usuarioId: string, pagamentoId?: s
     prisma.cupom.update({
       where: { id: cupomId },
       data: { usosAtuais: { increment: 1 } },
-    })
+    }),
   ]);
+}
+
+export async function providerWebhook(req: Request, res: Response) {
+  try {
+    const { provider, providerEventId, tipo, data } = req.body as {
+      provider: string;
+      providerEventId: string;
+      tipo: "payment_approved" | "payment_canceled" | "payment_refunded";
+      data: {
+        pagamentoId?: string;
+        providerRef?: string;
+      };
+    };
+
+    const already = await prisma.eventoPagamento.findUnique({
+      where: { providerEventId },
+    });
+    if (already) {
+      return res.status(200).json({ ok: true, idempotent: true });
+    }
+
+    await prisma.eventoPagamento.create({
+      data: { providerEventId, tipo },
+    });
+
+    let pagamento = null as any;
+
+    if (data?.pagamentoId) {
+      pagamento = await prisma.pagamento.findUnique({
+        where: { id: data.pagamentoId },
+      });
+    } else if (data?.providerRef) {
+      pagamento = await prisma.pagamento.findUnique({
+        where: {
+          provider_providerRef: {
+            provider,
+            providerRef: data.providerRef,
+          },
+        },
+      });
+    }
+
+    if (!pagamento) {
+      return res.status(404).json({ message: "Pagamento não encontrado" });
+    }
+
+    const now = new Date();
+
+    if (tipo === "payment_approved") {
+      pagamento = await prisma.pagamento.update({
+        where: { id: pagamento.id },
+        data: {
+          status: PagamentoStatus.APROVADO,
+          pagoEm: pagamento.pagoEm ?? now,
+        },
+      });
+
+      await upsertSubscription(pagamento.usuarioId, pagamento.plano);
+    } else if (tipo === "payment_canceled") {
+      pagamento = await prisma.pagamento.update({
+        where: { id: pagamento.id },
+        data: {
+          status: PagamentoStatus.CANCELADO,
+          canceladoEm: now,
+        },
+      });
+
+      await prisma.assinatura.updateMany({
+        where: {
+          usuarioId: pagamento.usuarioId,
+          plano: pagamento.plano,
+          ativo: true,
+        },
+        data: {
+          ativo: false,
+          canceledAt: now,
+        },
+      });
+    } else if (tipo === "payment_refunded") {
+      pagamento = await prisma.pagamento.update({
+        where: { id: pagamento.id },
+        data: {
+          status: PagamentoStatus.REEMBOLSADO,
+          reembolsadoEm: now,
+        },
+      });
+
+      await prisma.assinatura.updateMany({
+        where: {
+          usuarioId: pagamento.usuarioId,
+          plano: pagamento.plano,
+          ativo: true,
+        },
+        data: {
+          ativo: false,
+          canceledAt: now,
+        },
+      });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Webhook billing error:", err);
+    return res.status(500).json({ message: "Erro no webhook" });
+  }
 }
 
 async function upsertSubscription(usuarioId: string, plano: string) {
@@ -380,25 +634,99 @@ async function upsertSubscription(usuarioId: string, plano: string) {
   });
 }
 
+type PaymentWebhookBody = {
+  event: "payment.paid" | "payment.canceled" | "payment.refunded";
+  provider: string;
+  providerRef: string;
+};
+
+export async function handlePaymentWebhook(req: Request, res: Response) {
+  try {
+    const { event, provider, providerRef } = req.body as PaymentWebhookBody;
+
+    if (!event || !provider || !providerRef) {
+      return res.status(400).json({ message: "Payload de webhook inválido" });
+    }
+
+    const pagamento = await prisma.pagamento.findUnique({
+      where: {
+        provider_providerRef: {
+          provider,
+          providerRef,
+        },
+      },
+    });
+
+    if (!pagamento) {
+      return res.status(200).json({ ok: true, ignored: true });
+    }
+
+    switch (event) {
+      case "payment.paid": {
+        const pg = await approvePaymentAndProvisionSubscription(pagamento.id);
+        return res
+          .status(200)
+          .json({ ok: true, status: "APROVADO", pagamento: pg });
+      }
+      case "payment.canceled":
+      case "payment.refunded": {
+        const pg = await deactivateSubscriptionForPayment(pagamento.id);
+        return res.status(200).json({
+          ok: true,
+          status: "SUBSCRIPTION_INACTIVE",
+          pagamento: pg,
+        });
+      }
+      default:
+        return res.status(200).json({ ok: true, ignored: true });
+    }
+  } catch (err) {
+    console.error("Erro no webhook de pagamento:", err);
+    return res
+      .status(500)
+      .json({ message: "Erro ao processar webhook de pagamento" });
+  }
+}
+
 export async function redeemGift(req: Request, res: Response) {
   try {
     const usuarioId = getUserId(req);
-    const { codigo, planoId, periodicidade } = req.body as { codigo: string, planoId: string, periodicidade: Periodicidade };
+    const { codigo, planoId, periodicidade } = req.body as {
+      codigo: string;
+      planoId: string;
+      periodicidade: Periodicidade;
+    };
 
     const cupom = await prisma.cupom.findUnique({ where: { codigo } });
     if (!cupom || !cupom.ativo || cupom.tipo !== "PRESENTE") {
       return res.status(400).json({ message: "Presente inválido" });
     }
-    if (cupom.expiraEm && cupom.expiraEm < new Date()) return res.status(400).json({ message: "Presente expirado" });
-    if (cupom.usosMax != null && cupom.usosAtuais >= cupom.usosMax) return res.status(400).json({ message: "Presente esgotado" });
-    if (cupom.plano && cupom.plano !== planoId) return res.status(400).json({ message: "Presente não válido para este plano" });
-    if (cupom.periodicidade && cupom.periodicidade !== periodicidade) return res.status(400).json({ message: "Presente não válido para esta periodicidade" });
-    if (cupom.concedidoParaUsuarioId && cupom.concedidoParaUsuarioId !== usuarioId && !cupom.transferivel) {
-      return res.status(400).json({ message: "Este presente não é para este usuário" });
+    if (cupom.expiraEm && cupom.expiraEm < new Date())
+      return res.status(400).json({ message: "Presente expirado" });
+    if (cupom.usosMax != null && cupom.usosAtuais >= cupom.usosMax)
+      return res.status(400).json({ message: "Presente esgotado" });
+    if (cupom.plano && cupom.plano !== planoId)
+      return res
+        .status(400)
+        .json({ message: "Presente não válido para este plano" });
+    if (cupom.periodicidade && cupom.periodicidade !== periodicidade)
+      return res.status(400).json({
+        message: "Presente não válido para esta periodicidade",
+      });
+    if (
+      cupom.concedidoParaUsuarioId &&
+      cupom.concedidoParaUsuarioId !== usuarioId &&
+      !cupom.transferivel
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Este presente não é para este usuário" });
     }
 
     if (planoId === "ESCOLINHA_PRO" && periodicidade === "Anual") {
-      return res.status(400).json({ message: "ESCOLINHA_PRO é apenas mensal" });
+      return res
+        .status(400)
+        .json({ message: "ESCOLINHA_PRO é apenas mensal" });
     }
 
     const pagamento = await prisma.pagamento.create({
@@ -420,7 +748,11 @@ export async function redeemGift(req: Request, res: Response) {
     await upsertSubscription(usuarioId, planoId);
     await resgatarCupom(cupom.id, usuarioId, pagamento.id);
 
-    res.json({ status: "APROVADO", pagamento, message: "Presente resgatado e assinatura ativada." });
+    res.json({
+      status: "APROVADO",
+      pagamento,
+      message: "Presente resgatado e assinatura ativada.",
+    });
   } catch (err) {
     res.status(500).json({ message: "Erro ao resgatar presente", err });
   }
@@ -432,7 +764,10 @@ export async function cancelSubscription(req: Request, res: Response) {
     const now = new Date();
 
     const a = await prisma.assinatura.findUnique({ where: { usuarioId } });
-    if (!a || !a.ativo) return res.status(400).json({ message: "Você não possui assinatura ativa" });
+    if (!a || !a.ativo)
+      return res
+        .status(400)
+        .json({ message: "Você não possui assinatura ativa" });
 
     await prisma.assinatura.update({
       where: { usuarioId },
