@@ -1,4 +1,3 @@
-// server/types/express.d.ts
 import "express";
 import type { TipoUsuario } from "@prisma/client";
 
@@ -14,7 +13,6 @@ declare global {
       isAdmin?: boolean;
     }
 
-    // isto MERGEIA com o Request do express-serve-static-core
     interface Request {
       userId?: string;
       user?: UserPayload;

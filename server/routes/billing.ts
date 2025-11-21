@@ -1,27 +1,27 @@
-import express from "express";
+import { Router } from "express";
 import {
-  getMyBilling,
   getPlans,
-  startCheckout,
+  getMyBilling,
   applyCoupon,
+  startCheckout,
   redeemGift,
   cancelSubscription,
   renewSubscription,
-  switchPlan
+  switchPlan,
+  providerWebhook,
 } from "../controllers/billingController.js";
-import { authenticateToken } from "server/middlewares/auth.js";
 
-const router = express.Router();
+const router = Router();
 
-router.use(authenticateToken);
-
-router.get("/me", getMyBilling);
 router.get("/plans", getPlans);
+router.get("/me", getMyBilling);
+router.post("/coupon", applyCoupon);
 router.post("/checkout", startCheckout);
-router.post("/coupon/apply", applyCoupon);
 router.post("/gift/redeem", redeemGift);
-router.post("/cancel", cancelSubscription);
-router.post("/renew", renewSubscription);
-router.post("/switch-plan", switchPlan);
+router.post("/subscription/cancel", cancelSubscription);
+router.post("/subscription/renew", renewSubscription);
+router.post("/subscription/switch", switchPlan);
+
+router.post("/webhook/provider", providerWebhook);
 
 export default router;

@@ -20,7 +20,9 @@
     "prisma:seed": "prisma db seed --schema server/prisma/schema.prisma",
     "seed:ex": "tsx server/prisma/seed_exercicios.ts",
     "seed:base": "tsx server/prisma/seed.ts",
-    "seed:all": "npm run seed:ex && npm run seed:base"
+    "seed:all": "npm run seed:ex && npm run seed:base",
+    "cy:open": "cypress open",
+    "cy:run": "cypress run"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.4",
@@ -129,6 +131,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/jwt-decode": "^3.1.0",
     "@types/leo-profanity": "^1.5.4",
+    "@types/lru-cache": "^7.10.10",
     "@types/multer": "^2.0.0",
     "@types/node": "^20.19.25",
     "@types/node-cron": "^3.0.11",
@@ -146,6 +149,7 @@
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.2.0",
     "cross-env": "^7.0.3",
+    "cypress": "^15.6.0",
     "drizzle-kit": "^0.30.4",
     "esbuild": "^0.25.0",
     "postcss": "^8.5.6",

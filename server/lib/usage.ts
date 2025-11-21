@@ -1,23 +1,29 @@
-// server/lib/usage.ts
 import { PrismaClient } from "@prisma/client";
 import type { Response } from "express";
-import type { AuthenticatedRequest } from "../middlewares/auth.js"; // <- caminho relativo
+import type { AuthenticatedRequest } from "../middlewares/auth.js";
+import { sendLimitInfo } from "./limitInfo.js";
+import { UPGRADE_HINT_BY_CAP } from "./upgradeHints.js";
+import {
+  recordCapabilityDecision,
+  logCapabilityDenied,
+} from "../services/observability.js";
 
 const prisma = new PrismaClient();
 
 export type UsageKey =
-  | "treinos_semana"          // Atleta
-  | "desafios_mes"            // Atleta
-  | "treinos_salvos_total"    // Atleta
-  | "planos_ativos_total"     // Professor
-  | "templates_total"         // Professor
-  | "perfis_vistos_dia"       // Olheiro
-  | "listas_salvas_total"     // Olheiro
-  // fair-use (só aviso)
+  | "treinos_semana"
+  | "desafios_mes"
+  | "treinos_salvos_total"
+  | "planos_ativos_total"
+  | "templates_total"
+  | "perfis_vistos_dia"
+  | "listas_salvas_total"
   | "atletas_vinculados_total"
   | "assentos_coach_total"
   | "turmas_total"
-  | "agendamentos_mes";
+  | "agendamentos_mes"
+  // NOVO: limite de treinos programados criados por mês (plano FREE)
+  | "treinos_programados_mes";
 
 type Window = "day" | "week" | "month" | "total";
 
@@ -33,6 +39,7 @@ const WINDOW_BY_KEY: Record<UsageKey, Window> = {
   assentos_coach_total: "total",
   turmas_total: "total",
   agendamentos_mes: "month",
+  treinos_programados_mes: "month",
 };
 
 const LIMITS = {
@@ -48,8 +55,10 @@ const LIMITS = {
     assentos_coach_total: 30,
     turmas_total: 30,
     agendamentos_mes: 20000,
+    // NOVO: até 5 treinos programados criados por mês
+    treinos_programados_mes: 5,
   },
-  PRO:  {
+  PRO: {
     treinos_semana: Infinity,
     desafios_mes: Infinity,
     treinos_salvos_total: Infinity,
@@ -61,8 +70,9 @@ const LIMITS = {
     assentos_coach_total: 30,
     turmas_total: 30,
     agendamentos_mes: 20000,
+    treinos_programados_mes: Infinity,
   },
-  ORG:  {
+  ORG: {
     treinos_semana: Infinity,
     desafios_mes: Infinity,
     treinos_salvos_total: Infinity,
@@ -74,32 +84,31 @@ const LIMITS = {
     assentos_coach_total: 30,
     turmas_total: 30,
     agendamentos_mes: 20000,
+    treinos_programados_mes: Infinity,
   },
 } as const;
 
-const MSG: Record<UsageKey, string> = {
-  treinos_semana:
-    "Limite semanal de treinos atingido no plano Free (3 por semana). Faça upgrade para o Pro para liberar ilimitado.",
-  desafios_mes:
-    "Limite mensal de desafios atingido no plano Free (2 por mês). Faça upgrade para o Pro para liberar ilimitado.",
-  treinos_salvos_total:
-    "Você atingiu o limite de treinos salvos no plano Free (máx. 5). Exclua um salvo ou faça upgrade.",
-  planos_ativos_total:
-    "Você atingiu o limite de planos/rotinas ativos no plano Free (máx. 5). Desative um plano ou faça upgrade.",
-  templates_total:
-    "Você atingiu o limite de templates salvos no plano Free (máx. 10). Remova um template ou faça upgrade.",
-  perfis_vistos_dia:
-    "Limite diário de perfis visualizados para Olheiro (Free: 20/dia). Faça upgrade para ampliar.",
-  listas_salvas_total:
-    "Limite de listas salvas atingido no plano Free (máx. 2). Exclua uma lista ou faça upgrade.",
-  atletas_vinculados_total:
-    "Fair-use: muitos atletas vinculados à organização. Revise seus vínculos.",
-  assentos_coach_total:
-    "Fair-use: muitos assentos de coach. Revise sua alocação.",
-  turmas_total:
-    "Fair-use: muitas turmas criadas. Revise sua organização.",
-  agendamentos_mes:
-    "Fair-use: alto volume de agendamentos este mês.",
+const CAPABILITY_BY_KEY: Record<UsageKey, string> = {
+  treinos_semana: "SUBMISSAO_TREINO",
+  desafios_mes: "SUBMISSAO_DESAFIO",
+  treinos_salvos_total: "TREINO_SALVO",
+  planos_ativos_total: "PLANO_ATIVO",
+  templates_total: "TEMPLATE_TREINO",
+  perfis_vistos_dia: "PERFIL_VIEW",
+  listas_salvas_total: "LISTA_OLHEIRO",
+  atletas_vinculados_total: "ATLETAS_VINCULADOS",
+  assentos_coach_total: "ASSENTOS_COACH",
+  turmas_total: "TURMAS",
+  agendamentos_mes: "AGENDAMENTOS",
+  // Nome interno pra upgradeHint / logs
+  treinos_programados_mes: "TREINOS_PROGRAMADOS_MES",
+};
+
+const WINDOW_LABEL: Record<Window, string> = {
+  day: "1d",
+  week: "7d",
+  month: "30d",
+  total: "TOTAL",
 };
 
 export function planLimitFor(
@@ -111,37 +120,6 @@ export function planLimitFor(
   return v === Infinity ? Infinity : Number(v ?? Infinity);
 }
 
-export function denyUsage(
-  res: Response,
-  key: UsageKey,
-  ctx: { limit: number; used: number; remaining: number; window: Window }
-) {
-  // caso especial para desafios do mês -> força 402 + UPGRADE_REQUIRED
-  if (key === "desafios_mes") {
-    return res.status(402).json({
-      code: "UPGRADE_REQUIRED",
-      key,
-      message: MSG[key], // "Limite mensal de desafios atingido no plano Free (2 por mês)..."
-      limit: ctx.limit,
-      used: ctx.used,
-      remaining: ctx.remaining,
-      window: ctx.window,
-    });
-  }
-
-  // padrão para os outros limites
-  return res.status(429).json({
-    code: "USAGE_LIMIT",
-    key,
-    message: MSG[key],
-    limit: ctx.limit,
-    used: ctx.used,
-    remaining: ctx.remaining,
-    window: ctx.window,
-  });
-}
-
-// ---- janela/periodRef compatível com o schema (windowKind + windowStart) ----
 const WIN_KIND_MAP: Record<Window, "DAY" | "WEEK" | "MONTH" | "TOTAL"> = {
   day: "DAY",
   week: "WEEK",
@@ -175,26 +153,50 @@ function boundsFor(win: Window, ref = new Date()) {
   return { windowStart, windowEnd, periodRef, windowKind: WIN_KIND_MAP[win] };
 }
 
-// ----------------- API principal -----------------
-
 export async function requireUsage(
   req: AuthenticatedRequest,
   res: Response,
   key: UsageKey
-) {
-  const limit = planLimitFor((req.user as any)?.plano as any, key);
+): Promise<boolean> {
+  const plan = (req.user as any)?.plano as "FREE" | "PRO" | "ORG" | undefined;
+  const limit = planLimitFor(plan, key);
   const win = WINDOW_BY_KEY[key];
 
   if (!Number.isFinite(limit)) {
-    return { allowed: true, used: 0, remaining: Infinity, limit: Infinity, window: win };
+    return true;
   }
 
-  const chk = await incAndCheck((req as any).userId!, key, limit, win);
-  if (!chk.allowed) {
-    denyUsage(res, key, { limit: chk.limit, used: chk.used, remaining: chk.remaining, window: win });
-    return null;
+  const userId = (req as any).userId as string | undefined;
+  if (!userId) {
+    res.status(401).json({ code: "UNAUTHENTICATED" });
+    return false;
   }
-  return chk;
+
+    const chk = await incAndCheck(userId, key, limit, win);
+  const capability = CAPABILITY_BY_KEY[key] ?? key;
+
+  if (!chk.allowed) {
+    recordCapabilityDecision({ capability, allowed: false });
+    logCapabilityDenied({
+      req,
+      capability,
+      periodRef: chk.periodRef,
+      remaining: chk.remaining,
+      reason: "USAGE_LIMIT",
+    });
+
+    denyUsage(res, key, {
+      limit: chk.limit,
+      used: chk.used,
+      remaining: chk.remaining,
+      window: win,
+      periodRef: chk.periodRef,
+    });
+    return false;
+  }
+
+  recordCapabilityDecision({ capability, allowed: true });
+  return true;
 }
 
 export async function incAndCheck(
@@ -205,7 +207,6 @@ export async function incAndCheck(
 ) {
   const { windowStart, windowEnd, periodRef, windowKind } = boundsFor(win, new Date());
 
-  // incrementa se existir; senão cria
   const updated = await prisma.usageCounter.updateMany({
     where: { userId, key, windowKind, windowStart },
     data: { count: { increment: 1 }, windowEnd, periodRef, updatedAt: new Date() },
@@ -229,7 +230,27 @@ export async function incAndCheck(
   return { allowed, used, remaining, limit, window: win, periodRef };
 }
 
-// alerta “fair-use” (sem bloquear)
+export function denyUsage(
+  res: Response,
+  key: UsageKey,
+  ctx: { limit: number; used: number; remaining: number; window: Window; periodRef?: string }
+) {
+  const capability = CAPABILITY_BY_KEY[key] ?? key;
+  const windowStr = WINDOW_LABEL[ctx.window];
+  const allowed = ctx.limit;
+  const remaining = Math.max(0, ctx.remaining);
+
+  const upgradeHint = UPGRADE_HINT_BY_CAP[capability];
+
+  return sendLimitInfo(res, {
+    capability,
+    window: windowStr,
+    allowed,
+    remaining,
+    ...(upgradeHint ? { upgradeHint } : {}),
+  });
+}
+
 export async function touchFairUse(orgId: string, key: UsageKey) {
   const limit = (LIMITS.ORG as any)[key] ?? (LIMITS.PRO as any)[key] ?? Infinity;
   const win = WINDOW_BY_KEY[key];

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, TipoMidia, StorageClass } from "@prisma/client";
 import { uploadFile } from "server/utils/s3.js";
 
 const prisma = new PrismaClient();
@@ -21,8 +21,8 @@ export const getMidias = async (req: Request, res: Response) => {
 
 export const uploadMidia = async (req: Request, res: Response) => {
   const { atletaId } = req.params;
-  const { titulo, tipo } = req.body;
-  const file = (req as any).file;
+  const { titulo, tipo } = req.body as { titulo?: string; tipo?: string };
+  const file = (req as any).file as Express.Multer.File | undefined;
 
   if (!file) return res.status(400).json({ message: "Arquivo não enviado." });
 
@@ -30,20 +30,30 @@ export const uploadMidia = async (req: Request, res: Response) => {
   const tamanhoMax = tipo === "Imagem" ? 1 : 10;
 
   if (tamanhoMB > tamanhoMax) {
-    return res.status(400).json({ message: `Arquivo excede o limite de ${tamanhoMax}MB.` });
+    return res
+      .status(400)
+      .json({ message: `Arquivo excede o limite de ${tamanhoMax}MB.` });
   }
 
   try {
-    const url = await uploadFile(file, "midias"); 
+    const url = await uploadFile(file, "midias");
+
+    const tipoMidia: TipoMidia =
+      tipo === "Video"
+        ? TipoMidia.Video
+        : tipo === "Documento"
+        ? TipoMidia.Documento
+        : TipoMidia.Imagem;
 
     const midia = await prisma.midia.create({
       data: {
         atletaId,
-        titulo,
-        tipo,
+        titulo: titulo ?? "",
+        tipo: tipoMidia,
         url,
         dataEnvio: new Date(),
-        descricao: req.body.descricao || "",
+        descricao: (req.body as any).descricao || "",
+        storageClass: StorageClass.HOT,
       },
     });
 
@@ -59,7 +69,8 @@ export const deleteMidia = async (req: Request, res: Response) => {
 
   try {
     const midia = await prisma.midia.findUnique({ where: { id } });
-    if (!midia) return res.status(404).json({ message: "Mídia não encontrada." });
+    if (!midia)
+      return res.status(404).json({ message: "Mídia não encontrada." });
 
     await prisma.midia.delete({ where: { id } });
     res.status(204).end();

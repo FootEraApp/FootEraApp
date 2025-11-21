@@ -3,6 +3,7 @@ import { API } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import ValidacaoVideo from "./validacaovideo.js";
 import { FLAGS } from "../config.js";
+import { Link } from "wouter";
 
 type Tab =
   | "dashboard"
@@ -766,6 +767,20 @@ function fmtDate(d?: string | null) {
               <Card title="Treinos Cadastrados" icon="🏋️" value={dados?.totalTreinos ?? 0} />
               <Card title="Desafios Ativos" icon="🏆" value={dados?.totalDesafios ?? 0} />
               <Card title="Posts Criados" icon="✍️" value={dados?.totalPostsCriados ?? 0} />
+            </div>
+
+            <div className="mb-6">
+              <h4 className="font-semibold mb-2">Ferramentas de administração</h4>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <Link href="/admin/metrics">
+                  <a className="block rounded-xl border border-slate-800 bg-slate-900/70 p-4 hover:border-sky-500 hover:bg-slate-900 transition">
+                    <h3 className="text-sm font-semibold mb-1">Observabilidade</h3>
+                    <p className="text-xs text-slate-300">
+                      Ver métricas de capabilities (permitidas/negadas) e latência do can().
+                    </p>
+                  </a>
+                </Link>
+              </div>
             </div>
 
             <div className="grid lg:grid-cols-2 gap-6 mb-6">

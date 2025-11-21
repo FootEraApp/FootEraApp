@@ -1,4 +1,3 @@
-// server/controllers/mensagensController.ts
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
@@ -6,6 +5,7 @@ import { getIO } from "../socket.js";
 import fs from "fs/promises";
 import path from "path";
 import { getDailyUsage } from "../services/usage.js";
+import { audit } from "../services/audit.js"; 
 
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
@@ -57,6 +57,17 @@ async function salvarDataUrlComoPng(dataUrl: string, sub = "cards") {
   return `/uploads/${sub}/${filename}`;
 }
 
+function isMinor(birth: Date | string | null | undefined): boolean {
+  if (!birth) return false;
+  const d = new Date(birth);
+  if (Number.isNaN(d.getTime())) return false;
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+  return age < 18;
+}
+
 export async function getUnreadByUser(req: any, res: Response) {
   try {
     const userId = req.userId as string;
@@ -100,6 +111,44 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
       clientMsgId?: string;
     };
 
+    const deId = req.userId!;
+    const remetente = await prisma.usuario.findUnique({
+      where: { id: deId },
+      select: { id: true, tipo: true },
+    });
+
+    const destinatario = await prisma.usuario.findUnique({
+      where: { id: paraId },
+      select: { id: true, tipo: true },
+    });
+
+    if (remetente?.tipo === "Olheiro" && destinatario?.tipo === "Atleta") {
+      const atleta: any = await prisma.atleta.findFirst({
+        where: { usuarioId: destinatario.id },
+      });
+
+      const nascimento: Date | string | null =
+        atleta?.dataNascimento ?? atleta?.nascimento ?? null;
+      const consentido: boolean = !!atleta?.contatoOlheiroPermitido;
+      const ehMenor = isMinor(nascimento);
+
+      if (ehMenor && !consentido) {
+        const atletaId = atleta?.id ?? null;
+
+        await audit(req as any, {
+          acao: "DM_OLHEIRO_BLOQUEADA",
+          entidade: "Atleta",
+          entidadeId: atletaId ?? destinatario.id,
+          descricao: "Tentativa de contato de olheiro com atleta menor sem consentimento",
+          meta: { deId, paraId, tipoMensagem: tipo },
+        });
+
+        return res.status(403).json({
+          error: "Contato indisponível. É necessário consentimento do responsável.",
+        });
+      }
+    }
+
     let conteudoFinal = conteudo;
     if (tipo === "CARD" && typeof conteudo === "string" && conteudo.startsWith("data:image/")) {
       conteudoFinal = await salvarDataUrlComoPng(conteudo, "cards");
@@ -110,7 +159,7 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
         tipo,
         conteudo: conteudoFinal,
         paraId,
-        deId: req.userId!,
+        deId: deId,
       },
     });
 
@@ -119,7 +168,7 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
     const io = getIO();
     if (io) {
       io.to(`u:${paraId}`).emit("novaMensagem", payload);
-      io.to(`u:${req.userId!}`).emit("novaMensagem", payload);
+      io.to(`u:${deId}`).emit("novaMensagem", payload);
     }
 
     return res.json(payload);

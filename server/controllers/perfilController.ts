@@ -82,12 +82,10 @@ function mapGrupoToAtividade(p: any) {
   };
 }
 
-// GET /api/perfil/:id/pontuacao-historico?from=2024-01-01&to=2024-03-01
 export async function historicoPontuacaoAtleta(req: AuthenticatedRequest, res: Response) {
   try {
     const atletaParam = req.params.id;
 
-    // aceitar tanto id de atleta quanto usuarioId
     const atleta = await prisma.atleta.findFirst({
       where: {
         OR: [{ id: atletaParam }, { usuarioId: atletaParam }],
@@ -101,11 +99,9 @@ export async function historicoPontuacaoAtleta(req: AuthenticatedRequest, res: R
 
     const plano = (req.user?.plano ?? "FREE") as PlanoAtleta;
 
-    // Free -> 30 dias, Pro -> 365
     const defaultDias = plano === "FREE" ? 30 : 365;
     let { from, to } = getRangeFromQuery(req.query, defaultDias);
 
-    // aqui é onde a regra de janela entra (lança erro se passar do limite)
     validarJanelaAtleta(plano, from, to);
 
     const [subsTreino, subsDesafio] = await Promise.all([
@@ -1555,7 +1551,7 @@ export async function getPerfilEscola(req: Request, res: Response) {
 
 export async function getPerfilOlheiro(req: Request, res: Response) {
   if (req.user?.tipo === 'Olheiro') {
-    await requireUsage(req, res, 'perfis_vistos_dia'); // 20/dia no Free
+    await requireUsage(req, res, 'perfis_vistos_dia');
   }
   try {
     const { id } = req.params;

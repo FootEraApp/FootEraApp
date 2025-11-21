@@ -1,8 +1,7 @@
 // client/src/pages/treinos.tsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import TreinosAtletas from "./treino/treinos-atletas.js";
 import TreinosInstrutores from "./treino/treinos-instrutores.js";
-import Storage from "../../../server/utils/storage.js";
 
 type Tipo =
   | "admin"
@@ -11,38 +10,46 @@ type Tipo =
   | "escolinha"
   | "clube"
   | "professor"
-  | "olheiro"
-  | "";
+  | "olheiro";
 
-function detectarTipo(): Tipo {
-  const raw =
-    (Storage as any).tipoSalvo ??
-    (Storage as any).tipoUsuario ??
-    (Storage as any).tipo ??
-    localStorage.getItem("tipoUsuario") ??
-    sessionStorage.getItem("tipoUsuario") ??
-    "";
-  return String(raw || "").toLowerCase() as Tipo;
+interface UsuarioLogado {
+  tipo: Tipo;
+  usuarioId: string;
+  tipoUsuarioId: string;
 }
 
-export default function PaginaTreinos() {
-  const [tipo, setTipo] = useState<Tipo>("");
+function detectarTipo(): Tipo | null {
+  try {
+    const raw = localStorage.getItem("usuarioLogado");
+    if (!raw) return null;
+    const usuario = JSON.parse(raw) as UsuarioLogado | null;
+    return usuario?.tipo ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export default function Treinos() {
+  const [tipo, setTipo] = useState<Tipo | null>(null);
 
   useEffect(() => {
-    setTipo(detectarTipo());
+    const t = detectarTipo();
+    setTipo(t);
   }, []);
 
-  if (!tipo) return <p className="text-center p-4">Carregando...</p>;
+  if (!tipo) {
+    // Se quiser pode trocar por um skeleton bonitinho depois
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 text-gray-700">
+        Carregando treinos...
+      </div>
+    );
+  }
 
   if (tipo === "atleta") {
     return <TreinosAtletas />;
   }
 
-  // olheiro tem tela própria
-  if (tipo === "olheiro") {
-    if (typeof window !== "undefined") window.location.replace("/olheiros");
-    return null;
-  }
-
+  // professor / escolinha / escola / clube / admin / olheiro
   return <TreinosInstrutores tipo={tipo} />;
 }
