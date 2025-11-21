@@ -57,7 +57,6 @@ export async function listarElencosMinha(req: AuthenticatedRequest, res: Respons
     const donoId = clube?.id || escolinha?.id || professor?.id;
     if (!donoId) return res.json([]);
 
-    // se veio turmaId, valide que essa turma pertence ao dono
     if (turmaId) {
       const turma = await prisma.turma.findUnique({
         where: { id: turmaId },
@@ -86,7 +85,6 @@ export async function escalaPorTurma(req: AuthenticatedRequest, res: Response) {
     if (!userId) return res.status(401).json({ error: "Não autenticado" });
     if (!turmaId) return res.status(400).json({ error: "turmaId obrigatório" });
 
-    // autoriza somente professor/clube/escolinha donos da turma
     const [clube, escolinha, professor] = await Promise.all([
       prisma.clube.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
       prisma.escolinha.findFirst({ where: { usuarioId: userId }, select: { id: true } }),

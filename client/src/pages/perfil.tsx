@@ -1,3 +1,4 @@
+// client/src/pages/perfil.tsx
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";
@@ -80,8 +81,8 @@ export default function ProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [idDaUrl, token]); 
-  
+  }, [idDaUrl, token]);
+
   useEffect(() => {
     if (!token || !isOwnProfile) return;
 
@@ -89,7 +90,9 @@ export default function ProfilePage() {
     (async () => {
       try {
         setLoadingBilling(true);
-        const { data } = await http.get<{ assinatura: AssinaturaLite | null }>(`/api/billing/me`);
+        const { data } = await http.get<{ assinatura: AssinaturaLite | null }>(
+          `/api/billing/me`
+        );
         if (cancelled) return;
         setAssinatura(data?.assinatura ?? null);
       } catch (err) {
@@ -100,7 +103,9 @@ export default function ProfilePage() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [token, isOwnProfile]);
 
   if (loading) {
@@ -114,13 +119,14 @@ export default function ProfilePage() {
   const assinaturaAtiva = Boolean(assinatura?.ativo);
 
   return (
-    <div className="min-h-screen bg-transparent pb-20 mt-5">
-      <div className="max-w-3xl px-4 pt-3">
+    <div className="min-h-screen bg-transparent pb-20">
+      {/* WRAPPER CENTRALIZADO E MESMA LARGURA DO CONTEÚDO DO PERFIL */}
+      <div className="max-w-3xl mx-auto px-4 pt-3">
         <HealthBanner />
 
         {isOwnProfile && (
           <div className="mb-3">
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl border mt-5 bg-transparent shadow-sm">
+            <div className="flex items-center justify-between gap-3 p-3 rounded-xl border mt-4 bg-transparent shadow-sm">
               <div className="flex items-center gap-3 ">
                 {assinaturaAtiva ? (
                   <BadgeCheck className="w-5 h-5 text-green-600" />
@@ -137,7 +143,9 @@ export default function ProfilePage() {
                   </div>
                   <div className="text-xs text-gray-600">
                     {assinaturaAtiva
-                      ? `Plano: ${assinatura?.plano} — desde ${new Date(assinatura!.startsAt).toLocaleDateString()}`
+                      ? `Plano: ${assinatura?.plano} — desde ${new Date(
+                          assinatura!.startsAt
+                        ).toLocaleDateString()}`
                       : "Sem anúncios, sem limites e recursos Pro."}
                   </div>
                 </div>
@@ -160,6 +168,7 @@ export default function ProfilePage() {
         )}
       </div>
 
+      {/* CONTEÚDO ESPECÍFICO DO TIPO DE PERFIL */}
       {tipo === "Atleta" && <PerfilAtleta idDaUrl={idDaUrl} />}
       {tipo === "Professor" && <PerfilProfessor idDaUrl={idDaUrl} />}
       {tipo === "Clube" && <PerfilClube idDaUrl={idDaUrl} />}
@@ -167,15 +176,27 @@ export default function ProfilePage() {
       {tipo === "Olheiro" && <PerfilOlheiro idDaUrl={idDaUrl} />}
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed"><House /></Link>
-        <Link href="/explorar"><Search /></Link>
-        <Link href="/post"><CirclePlus /></Link>
+        <Link href="/feed">
+          <House />
+        </Link>
+        <Link href="/explorar">
+          <Search />
+        </Link>
+        <Link href="/post">
+          <CirclePlus />
+        </Link>
         {tipo === "Olheiro" ? (
-          <Link href="/olheiros"><Eye /></Link>
+          <Link href="/olheiros">
+            <Eye />
+          </Link>
         ) : (
-          <Link href="/treinos"><Volleyball /></Link>
+          <Link href="/treinos">
+            <Volleyball />
+          </Link>
         )}
-        <Link href="/perfil"><User /></Link>
+        <Link href="/perfil">
+          <User />
+        </Link>
       </nav>
     </div>
   );

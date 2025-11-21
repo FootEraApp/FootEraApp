@@ -1,4 +1,3 @@
-// server/controllers/templatesController.ts
 import { PrismaClient, TipoUsuario, Nivel, TipoTreino, Categoria } from "@prisma/client";
 import type { Request, Response } from "express";
 
@@ -18,7 +17,6 @@ export async function criarTemplate(req: Request, res: Response) {
     };
     if (!user?.id) return res.status(401).json({ error: "Não autenticado" });
 
-    // descobrir owner
     let owner: { professorId?: string; escolinhaId?: string; clubeId?: string } = {};
 
     if (isTipo(user, "Professor")) {
@@ -49,7 +47,6 @@ export async function criarTemplate(req: Request, res: Response) {
         owner.clubeId = clu?.id ?? undefined;
       }
     } else if (!user.isAdmin) {
-      // atleta/olheiro não criam templates de treino
       return res.status(403).json({ error: "Somente professor/organização podem criar templates." });
     }
 
@@ -74,7 +71,7 @@ export async function criarTemplate(req: Request, res: Response) {
       categoria?: Categoria[] | null;
       duracao?: number | null;
       dicas?: string[] | null;
-      conteudo: any; // JSON do template (exercícios, ordens etc.)
+      conteudo: any;
       publico?: boolean;
       parceiro?: boolean;
       expiraEm?: string | null;
@@ -85,15 +82,12 @@ export async function criarTemplate(req: Request, res: Response) {
       return res.status(400).json({ error: "Campos obrigatórios: titulo, conteudo." });
     }
 
-    // ID sintético só para satisfazer o campo obrigatório e o unique (usuarioId, treinoProgramadoId)
     const fakeTreinoProgramadoId = `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const created = await prisma.treinoSalvo.create({
       data: {
-        // obrigatórios em TreinoSalvo
         usuarioId: user.id,
         treinoProgramadoId: fakeTreinoProgramadoId,
-
         titulo,
         descricao: descricao ?? null,
         nivel: nivel ?? null,
@@ -127,7 +121,6 @@ export async function listarTemplates(req: Request, res: Response) {
     if (scope === "public") where.publico = true;
     else if (scope === "me") where.criadoPorUsuarioId = user.id;
     else if (scope === "org") {
-      // lista da org do usuário (se professor vinculado, traz da org)
       if (user.tipo === "Professor") {
         const prof = await prisma.professor.findUnique({
           where: { id: user.tipoUsuarioId ?? "" },
