@@ -10,8 +10,9 @@ import {
 import QRCode from "qrcode";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 
-// mercadopago does not have type declarations in this project; import via require with an any type
-const mercadopago: any = require("mercadopago");
+// IMPORTAÇÃO DO MERCADO PAGO COMO DEFAULT (any)
+import mercadopago from "mercadopago";
+
 const prisma = new PrismaClient();
 
 const API_BASE_URL = (process.env.APP_BASE_URL || "http://localhost:3001").replace(
@@ -20,8 +21,16 @@ const API_BASE_URL = (process.env.APP_BASE_URL || "http://localhost:3001").repla
 );
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN || "";
 
+// Clientes do Mercado Pago (SDK nova) – tipados como any por causa do .d.ts
+let mpClient: any = null;
+let mpPayment: any = null;
+let mpPreference: any = null;
+
 if (MP_ACCESS_TOKEN) {
-  mercadopago.configure({ access_token: MP_ACCESS_TOKEN });
+  const MP: any = mercadopago;
+  mpClient = new MP.MercadoPagoConfig({ accessToken: MP_ACCESS_TOKEN });
+  mpPayment = new MP.Payment(mpClient);
+  mpPreference = new MP.Preference(mpClient);
 } else {
   console.warn(
     "[billing] Atenção: MP_ACCESS_TOKEN não definido. Integração real com Mercado Pago ficará desativada e o fluxo cairá no modo fake."
@@ -364,48 +373,42 @@ export async function startCheckout(req: Request, res: Response) {
     const { planoId, periodicidade, metodo, cupom, pagador, cartao } =
       req.body as StartCheckoutBody;
 
-    const METODOS_VALIDOS: MetodoPagamento[] = [
-      "PIX",
-      "CREDITO",
-      "DEBITO",
-      "BOLETO",
-    ];
+    const METODOS_VALIDOS: MetodoPagamento[] = ["PIX", "CREDITO", "DEBITO", "BOLETO"];
     if (!METODOS_VALIDOS.includes(metodo)) {
       return res.status(400).json({ message: "Método de pagamento inválido" });
     }
-    if (planoId === "ESCOLINHA_PRO" && periodicidade === "Anual") {
-      return res
-        .status(400)
-        .json({ message: "ESCOLINHA_PRO é apenas mensal" });
+
+    if (!["Mensal", "Anual"].includes(periodicidade as any)) {
+      return res.status(400).json({ message: "Periodicidade inválida" });
     }
 
-    if (!["Mensal", "Anual"].includes(periodicidade)) {
-      return res.status(400).json({ message: "Periodicidade inválida" });
+    if (planoId === "ESCOLINHA_PRO" && periodicidade === "Anual") {
+      return res.status(400).json({ message: "ESCOLINHA_PRO é apenas mensal" });
     }
 
     const plan = findPlan(planoId);
     if (!plan) return res.status(400).json({ message: "Plano inválido" });
 
+    // validações por método
     if (metodo === "PIX") {
       if (!pagador?.nome || !pagador?.email) {
-        return res
-          .status(400)
-          .json({ message: "Informe nome e e-mail para PIX" });
+        return res.status(400).json({ message: "Informe nome e e-mail para PIX" });
       }
     }
+
     if (metodo === "BOLETO") {
       if (!pagador?.nome || !pagador?.email || !pagador?.cpf) {
-        return res.status(400).json({
-          message: "Informe nome, e-mail e CPF para boleto",
-        });
+        return res
+          .status(400)
+          .json({ message: "Informe nome, e-mail e CPF para boleto" });
       }
     }
+
     if (metodo === "CREDITO" || metodo === "DEBITO") {
       const num = onlyDigits(cartao?.numero || "");
       const cvv = onlyDigits(cartao?.cvv || "");
-      const validadeOk = /^(0[1-9]|1[0-2])\/\d{2}$/.test(
-        cartao?.validade || ""
-      );
+      const validadeOk = /^(0[1-9]|1[0-2])\/\d{2}$/.test(cartao?.validade || "");
+
       if (
         !cartao?.nomeImpresso ||
         num.length < 13 ||
@@ -413,17 +416,16 @@ export async function startCheckout(req: Request, res: Response) {
         !validadeOk ||
         !(cvv.length === 3 || cvv.length === 4)
       ) {
-        return res
-          .status(400)
-          .json({ message: "Dados de cartão inválidos" });
+        return res.status(400).json({ message: "Dados de cartão inválidos" });
       }
       if (!pagador?.nome || !pagador?.email) {
-        return res.status(400).json({
-          message: "Informe nome e e-mail do titular",
-        });
+        return res
+          .status(400)
+          .json({ message: "Informe nome e e-mail do titular" });
       }
     }
 
+    // preço + cupom
     let base = priceFor(planoId, periodicidade);
     let desconto = 0;
     let cupomRow: any = null;
@@ -435,15 +437,14 @@ export async function startCheckout(req: Request, res: Response) {
         planoId,
         periodicidade
       );
-      if (!check.ok || !check.cupom)
+      if (!check.ok || !check.cupom) {
         return res
           .status(400)
           .json({ message: check.reason || "Cupom inválido" });
+      }
       cupomRow = check.cupom;
-      if (
-        cupomRow.tipo === "PERCENTUAL" &&
-        typeof cupomRow.descontoPerc === "number"
-      ) {
+
+      if (cupomRow.tipo === "PERCENTUAL" && typeof cupomRow.descontoPerc === "number") {
         desconto =
           (Math.max(0, Math.min(100, cupomRow.descontoPerc)) * base) / 100;
       } else if (cupomRow.tipo === "VALOR" && cupomRow.descontoFixo != null) {
@@ -454,11 +455,10 @@ export async function startCheckout(req: Request, res: Response) {
     }
 
     const total = Math.max(0, base - desconto);
-
     const totalDecimal = new Prisma.Decimal(total.toFixed(2));
     const provider = MP_ACCESS_TOKEN ? "MERCADOPAGO" : "INTERNAL_FAKE";
 
-    // cria registro do pagamento antes de chamar o provedor
+    // cria o registro de pagamento
     let pagamento = await prisma.pagamento.create({
       data: {
         usuarioId,
@@ -476,7 +476,7 @@ export async function startCheckout(req: Request, res: Response) {
       },
     });
 
-    // Se total 0 (presente/cupom total), não precisa chamar Mercado Pago
+    // caso total = 0 (presente)
     if (total === 0) {
       await upsertSubscription(usuarioId, planoId, periodicidade);
       if (cupomRow) await resgatarCupom(cupomRow.id, usuarioId, pagamento.id);
@@ -487,7 +487,7 @@ export async function startCheckout(req: Request, res: Response) {
       });
     }
 
-    // Se não tiver MP_ACCESS_TOKEN, fallback pro modo fake antigo
+    // se NÃO tiver MP_ACCESS_TOKEN => modo fake
     if (!MP_ACCESS_TOKEN) {
       const providerRef = `FAKE-${Date.now()}`;
       pagamento = await prisma.pagamento.update({
@@ -542,8 +542,14 @@ export async function startCheckout(req: Request, res: Response) {
     // ==========================
     // INTEGRAÇÃO REAL MERCADO PAGO
     // ==========================
+
+    // PIX REAL
     if (metodo === "PIX") {
-      const mpResp: any = await (mercadopago as any).payment.create({
+      if (!mpPayment) {
+        throw new Error("SDK do Mercado Pago não inicializada");
+      }
+
+      const mpResp: any = await mpPayment.create({
         body: {
           transaction_amount: Number(total.toFixed(2)),
           description: `Assinatura ${plan.title} (${periodicidade})`,
@@ -565,12 +571,18 @@ export async function startCheckout(req: Request, res: Response) {
         },
       });
 
-      const mpBody = mpResp.body || mpResp;
+      const mpBody: any = mpResp?.body ?? mpResp;
+      console.log("MP PIX response:", JSON.stringify(mpBody, null, 2));
 
       const qr_code =
-        mpBody.point_of_interaction?.transaction_data?.qr_code || null;
+        mpBody.point_of_interaction?.transaction_data?.qr_code ?? null;
       const qr_code_base64 =
-        mpBody.point_of_interaction?.transaction_data?.qr_code_base64 || null;
+        mpBody.point_of_interaction?.transaction_data?.qr_code_base64 ?? null;
+
+      const qrCodeDataUrl =
+        typeof qr_code_base64 === "string"
+          ? `data:image/png;base64,${qr_code_base64}`
+          : null;
 
       pagamento = await prisma.pagamento.update({
         where: { id: pagamento.id },
@@ -586,13 +598,17 @@ export async function startCheckout(req: Request, res: Response) {
         pagamento,
         pix: {
           copiaECola: qr_code,
-          qrCodeUrl: qr_code_base64,
+          qrCodeUrl: qrCodeDataUrl,
         },
       });
     }
 
-    // Para CREDITO / DEBITO / BOLETO vamos usar Checkout Pro (Preference)
-    const mpPrefResp: any = await (mercadopago as any).preferences.create({
+    // CARTÃO / BOLETO – Checkout Pro (Preference)
+    if (!mpPreference) {
+      throw new Error("SDK do Mercado Pago não inicializada");
+    }
+
+    const mpPrefResp: any = await mpPreference.create({
       body: {
         items: [
           {
@@ -616,7 +632,7 @@ export async function startCheckout(req: Request, res: Response) {
       },
     });
 
-    const prefBody = mpPrefResp.body || mpPrefResp;
+    const prefBody = (mpPrefResp && (mpPrefResp.body || mpPrefResp)) as any;
 
     pagamento = await prisma.pagamento.update({
       where: { id: pagamento.id },
@@ -633,13 +649,16 @@ export async function startCheckout(req: Request, res: Response) {
       sandboxCheckoutUrl: prefBody.sandbox_init_point,
       message: "Redirecione o usuário para o checkout do Mercado Pago.",
     });
-  } catch (err) {
-    console.error("Erro em startCheckout:", err);
-    res.status(500).json({ message: "Erro ao iniciar checkout", err });
+  } catch (err: any) {
+    console.error("Erro em startCheckout:", err?.response?.data || err);
+    return res.status(500).json({
+      message: "Erro ao iniciar checkout",
+      detalhe: err?.response?.data || String(err),
+    });
   }
 }
 
-// Webhook genérico usado para outros providers (mantido se você quiser usar outro)
+// Webhook genérico usado para outros providers
 // ----------------------------------------------------------------
 type PaymentWebhookBody = {
   event: "payment.paid" | "payment.canceled" | "payment.refunded";
@@ -856,10 +875,15 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
       return res.status(200).json({ ok: true, ignored: true });
     }
 
-    const mpResp: any = await (mercadopago as any).payment.findById(
-      paymentIdRaw
-    );
-    const p = mpResp.body || mpResp;
+    if (!mpPayment) {
+      console.warn(
+        "[billing] Webhook Mercado Pago recebido, mas SDK não está inicializada."
+      );
+      return res.status(200).json({ ok: true, ignored: true });
+    }
+
+    const mpResp: any = await mpPayment.get({ id: paymentIdRaw as string });
+    const p: any = mpResp;
 
     const status: string = p.status;
     const mpId = String(p.id);
@@ -1076,11 +1100,10 @@ export async function switchPlan(req: Request, res: Response) {
     if (!plan) return res.status(400).json({ message: "Plano inválido" });
 
     // pega a periodicidade atual da assinatura; se não tiver, assume Mensal
-        const atual = await prisma.assinatura.findUnique({
+    const atual = await prisma.assinatura.findUnique({
       where: { usuarioId },
     });
 
-    // garante que o valor é tratado como Periodicidade ou null
     const periodicidade =
       (atual?.periodicidade as Periodicidade | null) ?? Periodicidade.Mensal;
 
