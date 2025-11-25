@@ -1,8 +1,12 @@
+// server/middlewares/auth.ts
 import { RequestHandler, Request } from "express";
 import jwt from "jsonwebtoken";
 import { TipoUsuario } from "@prisma/client";
 import { resolveUserContext } from "../services/planResolver.js";
 import type { PlanoName, UserPayload } from "../services/planResolver.js";
+import dotenv from "dotenv";
+
+dotenv.config(); // ✅ garante que JWT_SECRET do .env exista antes de ler
 
 const SECRET = process.env.JWT_SECRET || "footera_secret";
 
@@ -32,19 +36,42 @@ function toTipoUsuario(s: string): TipoUsuario {
 
 export const authenticateToken: RequestHandler = async (req, res, next) => {
   const auth = req.headers.authorization || "";
+
+  console.log("[AUTH] header em", req.method, req.originalUrl, "=", auth || "<vazio>");
+
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : auth;
-  if (!token) return res.status(401).json({ message: "Missing token" });
 
+  if (!token) {
+    console.warn("[AUTH] sem token em", req.originalUrl);
+    return res.status(401).json({ message: "Missing token" });
+  }
+
+  let payload: any;
   try {
-    const payload = jwt.verify(token, SECRET) as any;
-    const userId = payload.id || payload.sub;
-    if (!userId) {
-      return res.status(401).json({ message: "Invalid token payload" });
-    }
+    // ✅ aqui só validamos o JWT
+    payload = jwt.verify(token, SECRET);
+  } catch (err: any) {
+    console.error(
+      "[AUTH] JWT verify fail em",
+      req.originalUrl,
+      "->",
+      err.name,
+      err.message
+    );
+    return res.status(401).json({ message: "Invalid/expired token" });
+  }
 
-    const reqAuthed = req as AuthenticatedRequest;
-    reqAuthed.userId = userId;
+  const userId = payload.id || payload.sub;
+  if (!userId) {
+    console.error("[AUTH] payload sem id/sub em", req.originalUrl, "payload =", payload);
+    return res.status(401).json({ message: "Invalid token payload" });
+  }
 
+  const reqAuthed = req as AuthenticatedRequest;
+  reqAuthed.userId = userId;
+
+  // tenta resolver contexto; se der erro, não derruba o auth
+  try {
     const ctx = await resolveUserContext(userId);
 
     const user: UserPayload = {
@@ -56,10 +83,32 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
     };
 
     reqAuthed.authUser = user;
+  } catch (e: any) {
+    console.error("[AUTH] resolveUserContext failed em", req.originalUrl, "->", e);
 
-    return next();
-  } catch (err: any) {
-    console.error("JWT verify fail:", err.name, err.message);
-    return res.status(401).json({ message: "Invalid/expired token" });
+    const tipoRaw = String(payload.tipo || "").toLowerCase();
+    const tipo =
+      tipoRaw === "admin" ||
+      tipoRaw === "professor" ||
+      tipoRaw === "clube" ||
+      tipoRaw === "escolinha" ||
+      tipoRaw === "olheiro"
+        ? (toTipoUsuario(tipoRaw) as any)
+        : ("Atleta" as any);
+
+    reqAuthed.authUser = {
+      id: userId,
+      tipo,
+      tipoUsuarioId: null,
+      plano: "FREE",
+      isAdmin: tipoRaw === "admin",
+    };
   }
+
+  return next();
 };
+
+// exports de compatibilidade
+export const auth = authenticateToken;
+export const requireAuth = authenticateToken;
+export const authMiddleware = authenticateToken;

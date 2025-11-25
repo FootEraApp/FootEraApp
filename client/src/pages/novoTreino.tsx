@@ -117,7 +117,17 @@ interface TreinoProgramado {
   pontuacao?: number | null;
   treinoProgramadoId?: string | null;
   origemId?: string | null;
+
+  criador?: {
+    tipo: "Professor" | "Clube" | "Escolinha";
+    id: string;
+    nome: string;
+  } | null;
+
+  criadorNome?: string | null;
+  criadorTipo?: string | null;
 }
+
 
 interface Elenco {
   id: string;
@@ -402,32 +412,93 @@ export default function NovoTreino() {
     [nivel, tipoTreino, duracao, exerciciosSelecionados, dicas]
   );
 
-  function normalizaTreinos(raw: any[]): TreinoProgramado[] {
-    return raw.map((t: any) => {
-      const programadoId =
-        t.treinoProgramadoId ??
-        t.programadoId ??
-        t.programado?.id ??
-        t.id;
+function normalizaTreinos(raw: any[]): TreinoProgramado[] {
+  return raw.map((t: any) => {
+    const programadoId =
+      t.treinoProgramadoId ??
+      t.programadoId ??
+      t.programado?.id ??
+      t.id;
 
-      return {
-        id: String(programadoId),
-        nome: t.nome ?? t.titulo ?? "(sem nome)",
-        descricao: t.descricao ?? t.resumo ?? "",
-        nivel: t.nivel ?? t.dificuldade ?? "-",
-        pontuacao: t.pontuacao ?? null,
-        exercicios: (t.exercicios ?? t.exs ?? []).map((ex: any, i: number) => ({
-          id: ex.id ?? ex.exercicioId ?? String(i),
-          nome: ex.nome ?? ex.titulo ?? ex?.exercicio?.nome ?? ex?.exercicioTemporario?.nome ?? "",
-          repeticoes: ex.repeticoes ?? ex.reps ?? ex.qtde ?? "",
-        })),
-        // @ts-ignore
-        treinoProgramadoId: t.treinoProgramadoId ?? t.programadoId ?? t.programado?.id ?? null,
-        // @ts-ignore
-        origemId: t.id ?? null,
-      };
-    });
-  }
+    // NOVO: se backend já mandou "criador", usa direto
+    let criador: TreinoProgramado["criador"] = t.criador ?? null;
+
+    // fallback pra versões antigas ou outros formatos
+    if (!criador) {
+      if (t.professor) {
+        criador = {
+          tipo: "Professor",
+          id: t.professor.id,
+          nome: t.professor.nome ?? "Professor",
+        };
+      } else if (t.clube) {
+        criador = {
+          tipo: "Clube",
+          id: t.clube.id,
+          nome: t.clube.nome ?? "Clube",
+        };
+      } else if (t.escolinha) {
+        criador = {
+          tipo: "Escolinha",
+          id: t.escolinha.id,
+          nome: t.escolinha.nome ?? "Escolinha",
+        };
+      }
+    }
+
+    const criadorNome =
+      criador?.nome ??
+      t.criadorNome ??
+      t.criadoPorNome ??
+      t.ownerNome ??
+      t.donoNome ??
+      t.professor?.usuario?.nome ??
+      t.professor?.nome ??
+      t.clube?.nome ??
+      t.escolinha?.nome ??
+      null;
+
+    const criadorTipo =
+      criador?.tipo ??
+      t.criadorTipo ??
+      t.tipoUsuario ??
+      t.ownerTipo ??
+      t.donoTipo ??
+      (t.professorId
+        ? "Professor"
+        : t.clubeId
+        ? "Clube"
+        : t.escolinhaId
+        ? "Escolinha"
+        : null);
+
+    return {
+      id: String(programadoId),
+      nome: t.nome ?? t.titulo ?? "(sem nome)",
+      descricao: t.descricao ?? t.resumo ?? "",
+      nivel: t.nivel ?? t.dificuldade ?? "-",
+      pontuacao: t.pontuacao ?? null,
+      exercicios: (t.exercicios ?? t.exs ?? []).map((ex: any, i: number) => ({
+        id: ex.id ?? ex.exercicioId ?? String(i),
+        nome:
+          ex.nome ??
+          ex.titulo ??
+          ex?.exercicio?.nome ??
+          ex?.exercicioTemporario?.nome ??
+          "",
+        repeticoes: ex.repeticoes ?? ex.reps ?? ex.qtde ?? "",
+      })),
+      // @ts-ignore
+      treinoProgramadoId: t.treinoProgramadoId ?? t.programadoId ?? t.programado?.id ?? null,
+      // @ts-ignore
+      origemId: t.id ?? null,
+
+      criador,
+      criadorNome,
+      criadorTipo,
+    };
+  });
+}
 
   function mapAtletas(items: any[]): AtletaVinculado[] {
     return (items || []).map((a: any) => ({
@@ -1300,6 +1371,15 @@ export default function NovoTreino() {
               <p className="text-sm">
                 <strong>Nível:</strong> {t.nivel}
               </p>
+
+              {t.criador && (
+                <p className="text-sm mt-1">
+                  <strong>Criado por:</strong>{" "}
+                  {t.criador.tipo === "Professor"
+                    ? `Prof. ${t.criador.nome}`
+                    : `${t.criador.nome} (${t.criador.tipo})`}
+                </p>
+              )}
 
               <p className="text-sm">
                 <strong>Exercícios:</strong>

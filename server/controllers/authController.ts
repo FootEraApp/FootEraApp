@@ -1,3 +1,4 @@
+// server/controllers/authController.ts
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
@@ -9,6 +10,9 @@ import dotenv from "dotenv";
 
 dotenv.config();
 const prisma = new PrismaClient();
+
+// ⬇️ usa o MESMO default do middleware
+const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
 
 export async function me(req: AuthenticatedRequest, res: Response) {
   try {
@@ -59,12 +63,12 @@ export async function login(req: Request, res: Response) {
     const usuario = await prisma.usuario.findUnique({
       where: { nomeDeUsuario: userKey },
       include: {
-        atleta: true,
-        professor: true,
-        clube: true,
-        escolinha: true,
-        olheiro: true,
-        administrador: true,
+        atleta: { select: { id: true } },
+        professor: { select: { id: true } },
+        clube: { select: { id: true } },
+        escolinha: { select: { id: true } },
+        olheiro: { select: { id: true } },
+        administrador: { select: { id: true } },
       },
     });
 
@@ -104,9 +108,10 @@ export async function login(req: Request, res: Response) {
 
     const token = jwt.sign(
       { id: usuario.id, tipo: usuario.tipo },
-      process.env.JWT_SECRET || "defaultsecret",
+      JWT_SECRET,
       { expiresIn: "7d" }
     );
+
 
     return res.json({
       ok: true,
@@ -139,7 +144,7 @@ export const validateToken = async (req: Request, res: Response) => {
   if (!token) return res.status(401).json({ message: "Token ausente" });
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "defaultsecret");
+    const decoded = jwt.verify(token, JWT_SECRET);
     res.json({ valid: true, decoded });
   } catch {
     res.status(401).json({ message: "Token inválido ou expirado" });
