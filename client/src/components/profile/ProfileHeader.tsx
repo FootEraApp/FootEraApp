@@ -1,3 +1,4 @@
+// client/src/components/profile/ProfileHeader
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send, Eye, UserPlus, Share2 } from "lucide-react";
@@ -246,27 +247,44 @@ export default function ProfileHeader({
     })();
   }, [perfilId, isOwnProfile]);
 
-  useEffect(() => {
-    if (!podeObservar || isOwnProfile || !alvoAtletaId) return;
-    if (obsKey) setObservando(localStorage.getItem(obsKey) === "1");
+useEffect(() => {
+  if (!podeObservar || isOwnProfile || !alvoAtletaId) return;
+  if (obsKey) setObservando(localStorage.getItem(obsKey) === "1");
 
-    const token = Storage.token; if (!token) return;
-    setCarregandoObs(true);
-    fetch(`${API.BASE_URL}/api/observados/status/${encodeURIComponent(alvoAtletaId)}`, {
-      headers: { Authorization: `Bearer ${token}` },
+  const token = Storage.token;
+  const ownerId = Storage.tipoUsuarioId;
+  const tipo =
+    (Storage as any).tipoSalvo ??
+    localStorage.getItem("tipoUsuario") ??
+    sessionStorage.getItem("tipoUsuario") ??
+    "";
+
+  if (!token || !ownerId) return;
+
+  setCarregandoObs(true);
+
+  const url = `${API.BASE_URL}/api/observados/status/${encodeURIComponent(
+    alvoAtletaId
+  )}?ownerId=${encodeURIComponent(ownerId)}&tipo=${encodeURIComponent(
+    tipo || ""
+  )}`;
+
+  fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => {
+      const val = !!j?.observando;
+      setObservando(val);
+      if (obsKey) {
+        if (val) localStorage.setItem(obsKey, "1");
+        else localStorage.removeItem(obsKey);
+      }
     })
-      .then(r => (r.ok ? r.json() : null))
-      .then(j => {
-        const val = !!j?.observando;
-        setObservando(val);
-        if (obsKey) {
-          if (val) localStorage.setItem(obsKey, "1");
-          else localStorage.removeItem(obsKey);
-        }
-      })
-      .catch(() => setObservando(false))
-      .finally(() => setCarregandoObs(false));
-  }, [podeObservar, isOwnProfile, alvoAtletaId]);
+    .catch(() => setObservando(false))
+    .finally(() => setCarregandoObs(false));
+}, [podeObservar, isOwnProfile, alvoAtletaId]);
+
 
   const iniciarChat = () => {
     const me = Storage.usuarioId;
@@ -545,14 +563,27 @@ const toggleTreino = async () => {
   }
 };
 
-  const observarAtleta = async (id: string): Promise<"ok"|"dup"|"auth"|"err"> => {
-    try {
-      const token = Storage.token;
-      if (!token || !id) return "auth";
-      const resp = await fetch(`${API.BASE_URL}/api/observados`,{
+const observarAtleta = async (
+  id: string
+): Promise<"ok" | "dup" | "auth" | "err"> => {
+  try {
+    const token = Storage.token;
+    const ownerId = Storage.tipoUsuarioId;
+    const tipo =
+      (Storage as any).tipoSalvo ??
+      localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario") ??
+      "";
+
+    if (!token || !id || !ownerId) return "auth";
+
+    const resp = await fetch(`${API.BASE_URL}/api/observados`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ atletaId: id }),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ atletaId: id, ownerId, tipo }),
     });
 
     if (resp.ok) return "ok";
@@ -562,7 +593,8 @@ const toggleTreino = async () => {
   } catch {
     return "err";
   }
-  };
+};
+
 
   const toggleObservar = async () => {
     setCarregandoObs(true);
@@ -573,10 +605,25 @@ const toggleTreino = async () => {
       if (observando) {
         const prev = observando;
         setObservando(false);
-        const del = await fetch(`${API.BASE_URL}/api/observados/${encodeURIComponent(id)}`, {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${Storage.token || ""}` },
-        });
+        const ownerId = Storage.tipoUsuarioId;
+        const tipo =
+          (Storage as any).tipoSalvo ??
+          localStorage.getItem("tipoUsuario") ??
+          sessionStorage.getItem("tipoUsuario") ??
+          "";
+
+        const del = await fetch(
+          `${API.BASE_URL}/api/observados/${encodeURIComponent(id)}`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Storage.token || ""}`,
+            },
+            body: JSON.stringify({ ownerId, tipo }),
+          }
+        );
+
 
         if (del.ok || del.status === 204 || del.status === 404) {
           if (obsKey) localStorage.removeItem(obsKey);      
