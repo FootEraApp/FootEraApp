@@ -1,3 +1,4 @@
+// client/src/pages/submissao
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
@@ -19,6 +20,7 @@ export default function PaginaSubmissao() {
 
   const [observacao, setObservacao] = useState("");
   const [tempoTexto, setTempoTexto] = useState("");
+  const [tempoSegFixado, setTempoSegFixado] = useState<number | null>(null); // 👈 tempo vindo do timer (travado)
   const [reps, setReps] = useState<string>("");
 
   const [arquivo, setArquivo] = useState<File | null>(null);
@@ -84,7 +86,10 @@ export default function PaginaSubmissao() {
   };
 
   const saveAttempts = (dId: string, aId: string, n: number) =>
-    dualStorage.setItem(attemptKey(dId, aId), String(Math.min(ATTEMPT_LIMIT, Math.max(0, n))));
+    dualStorage.setItem(
+      attemptKey(dId, aId),
+      String(Math.min(ATTEMPT_LIMIT, Math.max(0, n)))
+    );
 
   function parseTempoToSeconds(v: string): number | undefined {
     const s = v.trim();
@@ -164,7 +169,11 @@ export default function PaginaSubmissao() {
 
   async function saveRecordedVideo(dId: string, aId: string, blob: Blob) {
     try {
-      await idbPut(videoKey(dId, aId), { blob, type: blob.type || "video/webm", createdAt: Date.now() });
+      await idbPut(videoKey(dId, aId), {
+        blob,
+        type: blob.type || "video/webm",
+        createdAt: Date.now(),
+      });
     } catch (e) {
       console.warn("Falha ao salvar vídeo no IDB", e);
     }
@@ -181,7 +190,9 @@ export default function PaginaSubmissao() {
   }
 
   async function clearRecordedVideo(dId: string, aId: string) {
-    try { await idbDel(videoKey(dId, aId)); } catch {}
+    try {
+      await idbDel(videoKey(dId, aId));
+    } catch {}
   }
 
   function pickBestMimeType(): string | undefined {
@@ -225,7 +236,10 @@ export default function PaginaSubmissao() {
     }
 
     const tries: MediaStreamConstraints[] = [
-      { video: { facingMode: preferBack ? { ideal: "environment" } : { ideal: "user" } }, audio: true },
+      {
+        video: { facingMode: preferBack ? { ideal: "environment" } : { ideal: "user" } },
+        audio: true,
+      },
       { video: { facingMode: { ideal: "user" } }, audio: true },
       { video: true, audio: true },
       { video: true, audio: false },
@@ -278,11 +292,14 @@ export default function PaginaSubmissao() {
     setDesafioId(dId);
     setModeParam(mode);
 
+    // 👇 se veio tempo do timer, fixa e já formata
     if (Number.isFinite(tempoSegParam) && tempoSegParam > 0) {
+      setTempoSegFixado(tempoSegParam);
       setTempoTexto(secondsToMMSS(tempoSegParam));
     }
 
-    const tipoId = (Storage as any)?.tipoUsuarioId ?? (Storage as any)?.tipoUserId ?? null;
+    const tipoId =
+      (Storage as any)?.tipoUsuarioId ?? (Storage as any)?.tipoUserId ?? null;
     if (tipoId) setAtletaId(String(tipoId));
 
     if (mode === "camera") {
@@ -329,14 +346,18 @@ export default function PaginaSubmissao() {
         }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [desafioId, atletaId]);
 
   async function startRecording() {
     setRecError(null);
     try {
       if (!("MediaRecorder" in window)) {
-        setRecError("Seu navegador não suporta gravação direta. Tente atualizar o navegador.");
+        setRecError(
+          "Seu navegador não suporta gravação direta. Tente atualizar o navegador."
+        );
         return;
       }
       if (attemptsUsed >= ATTEMPT_LIMIT) {
@@ -360,7 +381,9 @@ export default function PaginaSubmissao() {
       }
 
       const best = pickBestMimeType();
-      const recorder = best ? new MediaRecorder(stream, { mimeType: best }) : new MediaRecorder(stream);
+      const recorder = best
+        ? new MediaRecorder(stream, { mimeType: best })
+        : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (ev: BlobEvent) => {
@@ -454,7 +477,9 @@ export default function PaginaSubmissao() {
     setTreinoRecError(null);
     try {
       if (!("MediaRecorder" in window)) {
-        setTreinoRecError("Seu navegador não suporta gravação direta. Tente atualizar o navegador.");
+        setTreinoRecError(
+          "Seu navegador não suporta gravação direta. Tente atualizar o navegador."
+        );
         return;
       }
 
@@ -474,7 +499,9 @@ export default function PaginaSubmissao() {
       }
 
       const best = pickBestMimeType();
-      const recorder = best ? new MediaRecorder(stream, { mimeType: best }) : new MediaRecorder(stream);
+      const recorder = best
+        ? new MediaRecorder(stream, { mimeType: best })
+        : new MediaRecorder(stream);
       treinoMediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (ev: BlobEvent) => {
@@ -483,7 +510,9 @@ export default function PaginaSubmissao() {
 
       recorder.onstop = async () => {
         try {
-          const blob = new Blob(treinoChunksRef.current, { type: best || undefined });
+          const blob = new Blob(treinoChunksRef.current, {
+            type: best || undefined,
+          });
           setTreinoRecordedBlob(blob);
           const url = URL.createObjectURL(blob);
           setTreinoRecordedUrl(url);
@@ -550,7 +579,11 @@ export default function PaginaSubmissao() {
           alert("Grave um vídeo do treino antes de enviar.");
           return;
         }
-        formData.append("arquivo", treinoRecordedBlob, `treino-${treinoAgendadoId ?? "livre"}-${Date.now()}.webm`);
+        formData.append(
+          "arquivo",
+          treinoRecordedBlob,
+          `treino-${treinoAgendadoId ?? "livre"}-${Date.now()}.webm`
+        );
       } else {
         if (!arquivo) {
           alert("Selecione uma imagem ou vídeo do treino.");
@@ -561,7 +594,10 @@ export default function PaginaSubmissao() {
 
       formData.append("treinoAgendadoId", treinoAgendadoId!);
 
-      const seg = parseTempoToSeconds(tempoTexto);
+      // 👇 se veio tempo fixado do timer, usa ele; senão parseia o campo
+      const seg =
+        tempoSegFixado != null ? tempoSegFixado : parseTempoToSeconds(tempoTexto);
+
       if (seg != null) formData.append("tempoSeg", String(seg));
       if (reps) formData.append("repeticoes", String(Number(reps)));
 
@@ -571,10 +607,16 @@ export default function PaginaSubmissao() {
         alert("Grave sua execução do desafio antes de enviar.");
         return;
       }
-      const filename = `desafio-${desafioId}-tentativa${Math.max(1, attemptsUsed)}.webm`;
+      const filename = `desafio-${desafioId}-tentativa${Math.max(
+        1,
+        attemptsUsed
+      )}.webm`;
       formData.append("arquivo", recordedBlob, filename);
       formData.append("desafioId", desafioId!);
-      formData.append("repeticoes", String(Math.max(1, Math.min(ATTEMPT_LIMIT, attemptsUsed))));
+      formData.append(
+        "repeticoes",
+        String(Math.max(1, Math.min(ATTEMPT_LIMIT, attemptsUsed)))
+      );
       url = `${API.BASE_URL}/api/submissoes/desafio`;
     } else {
       alert("Defina se é treino ou desafio.");
@@ -593,18 +635,23 @@ export default function PaginaSubmissao() {
       if (res.ok) {
         const msg = (js as any)?.autoAprovado
           ? "Submissão enviada e aprovada automaticamente (sem pontuação por ausência de vínculo)."
-          : (js as any)?.mensagem || "Submissão enviada com sucesso! Aguarde validação.";
+          : (js as any)?.mensagem ||
+            "Submissão enviada com sucesso! Aguarde validação.";
         alert(msg);
 
         if (isTreino) {
           setArquivo(null);
-          if (preview) { URL.revokeObjectURL(preview); setPreview(null); }
+          if (preview) {
+            URL.revokeObjectURL(preview);
+            setPreview(null);
+          }
           if (treinoRecordedUrl) URL.revokeObjectURL(treinoRecordedUrl);
           setTreinoRecordedUrl(null);
           setTreinoRecordedBlob(null);
           setTreinoIsRecording(false);
           stopTreinoStream();
           setTempoTexto("");
+          setTempoSegFixado(null);
           setReps("");
         }
         if (isDesafio) {
@@ -613,19 +660,27 @@ export default function PaginaSubmissao() {
           setRecordedBlob(null);
           setIsRecording(false);
           stopStream();
-          if (desafioId && atletaId) { await clearRecordedVideo(desafioId, atletaId); }
+          if (desafioId && atletaId) {
+            await clearRecordedVideo(desafioId, atletaId);
+          }
         }
 
         setObservacao("");
       } else {
         console.error("Erro:", js);
-        alert((js as any)?.erro || (js as any)?.message || "Erro ao enviar submissão.");
+        alert(
+          (js as any)?.erro ||
+            (js as any)?.message ||
+            "Erro ao enviar submissão."
+        );
       }
     } catch (err) {
       console.error("Erro no envio:", err);
       alert("Erro de conexão ao enviar submissão.");
     }
   };
+
+  const tempoBloqueado = isTreino && tempoSegFixado != null;
 
   return (
     <div className="min-h-screen bg-transparent pb-24 px-4 pt-6">
@@ -636,35 +691,57 @@ export default function PaginaSubmissao() {
 
         {!isSecureContext && (
           <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 p-3 rounded">
-            Para acessar a câmera, abra esta página via <strong>HTTPS</strong> (ou em <code>localhost</code> durante o desenvolvimento).
+            Para acessar a câmera, abra esta página via <strong>HTTPS</strong>{" "}
+            (ou em <code>localhost</code> durante o desenvolvimento).
           </div>
         )}
 
-        <label className="block text-sm font-medium mb-1 text-gray-700">Comentário</label>
+        <label className="block text-sm font-medium mb-1 text-gray-700">
+          Comentário
+        </label>
         <textarea
           value={observacao}
           onChange={(e) => setObservacao(e.target.value)}
           className="w-full border p-3 mb-4 rounded-md shadow-sm"
           rows={4}
-          placeholder={isDesafio ? "Comente sua execução do desafio..." : "Comente seu treino..."}
+          placeholder={
+            isDesafio
+              ? "Comente sua execução do desafio..."
+              : "Comente seu treino..."
+          }
         />
 
         {isTreino && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700">Tempo (mm:ss ou segundos)</label>
+                <label className="block text-sm font-medium mb-1 text-gray-700">
+                  Tempo (mm:ss ou segundos)
+                </label>
                 <input
                   type="text"
                   value={tempoTexto}
-                  onChange={(e) => setTempoTexto(e.target.value)}
-                  className="w-full border p-2 rounded"
+                  onChange={(e) =>
+                    tempoBloqueado ? undefined : setTempoTexto(e.target.value)
+                  }
+                  className={`w-full border p-2 rounded ${
+                    tempoBloqueado ? "bg-gray-100 cursor-not-allowed" : ""
+                  }`}
                   placeholder="ex: 01:30 ou 90"
+                  disabled={tempoBloqueado}
+                  readOnly={tempoBloqueado}
                 />
+                {tempoBloqueado && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Tempo preenchido automaticamente pelo cronômetro do treino.
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700">Repetições</label>
+                <label className="block text-sm font-medium mb-1 text-gray-700">
+                  Repetições
+                </label>
                 <input
                   type="number"
                   min={0}
@@ -680,13 +757,21 @@ export default function PaginaSubmissao() {
               <div className="flex gap-2 mb-3">
                 <button
                   onClick={() => setTreinoMode("upload")}
-                  className={`px-3 py-2 rounded border ${treinoMode === "upload" ? "bg-green-100 border-green-600 text-green-800" : "bg-white border-gray-300"}`}
+                  className={`px-3 py-2 rounded border ${
+                    treinoMode === "upload"
+                      ? "bg-green-100 border-green-600 text-green-800"
+                      : "bg-white border-gray-300"
+                  }`}
                 >
                   Upload
                 </button>
                 <button
                   onClick={() => setTreinoMode("live")}
-                  className={`px-3 py-2 rounded border ${treinoMode === "live" ? "bg-green-100 border-green-600 text-green-800" : "bg-white border-gray-300"}`}
+                  className={`px-3 py-2 rounded border ${
+                    treinoMode === "live"
+                      ? "bg-green-100 border-green-600 text-green-800"
+                      : "bg-white border-gray-300"
+                  }`}
                 >
                   Gravar ao vivo (sem limite)
                 </button>
@@ -694,7 +779,10 @@ export default function PaginaSubmissao() {
 
               {treinoMode === "upload" ? (
                 <>
-                  <label className="block text-sm font-medium mb-1"> Enviar Vídeo</label>
+                  <label className="block text-sm font-medium mb-1">
+                    {" "}
+                    Enviar Vídeo
+                  </label>
                   <input
                     type="file"
                     accept="video/*;capture=camcorder"
@@ -706,7 +794,11 @@ export default function PaginaSubmissao() {
                   {preview && (
                     <div className="mt-4">
                       {arquivo?.type?.startsWith("image") ? (
-                        <img src={preview} alt="Preview" className="w-full h-auto rounded border object-contain" />
+                        <img
+                          src={preview}
+                          alt="Preview"
+                          className="w-full h-auto rounded border object-contain"
+                        />
                       ) : (
                         <video controls className="w-full rounded border">
                           <source src={preview} type={arquivo?.type} />
@@ -719,15 +811,30 @@ export default function PaginaSubmissao() {
               ) : (
                 <>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-700">Gravação ao vivo de treino (tentativas ilimitadas)</span>
-                    {treinoRecError && <span className="text-xs text-red-600">{treinoRecError}</span>}
+                    <span className="text-sm text-gray-700">
+                      Gravação ao vivo de treino (tentativas ilimitadas)
+                    </span>
+                    {treinoRecError && (
+                      <span className="text-xs text-red-600">
+                        {treinoRecError}
+                      </span>
+                    )}
                   </div>
 
                   <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border mb-3">
                     {!treinoRecordedUrl ? (
-                      <video ref={treinoLiveVideoRef} className="w-full h-full object-contain" muted playsInline />
+                      <video
+                        ref={treinoLiveVideoRef}
+                        className="w-full h-full object-contain"
+                        muted
+                        playsInline
+                      />
                     ) : (
-                      <video className="w-full h-full object-contain" controls src={treinoRecordedUrl} />
+                      <video
+                        className="w-full h-full object-contain"
+                        controls
+                        src={treinoRecordedUrl}
+                      />
                     )}
                   </div>
 
@@ -769,7 +876,8 @@ export default function PaginaSubmissao() {
                   </div>
 
                   <p className="text-xs text-gray-500 mt-2">
-                    • Você pode refazer quantas vezes quiser antes de enviar. <br />
+                    • Você pode refazer quantas vezes quiser antes de enviar.{" "}
+                    <br />
                     • O vídeo será enviado como parte da submissão do treino.
                   </p>
                 </>
@@ -782,9 +890,14 @@ export default function PaginaSubmissao() {
           <div className="mt-6">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-700">
-                Tentativas usadas: <strong>{attemptsUsed}/{ATTEMPT_LIMIT}</strong>
+                Tentativas usadas:{" "}
+                <strong>
+                  {attemptsUsed}/{ATTEMPT_LIMIT}
+                </strong>
               </span>
-              {recError && <span className="text-xs text-red-600">{recError}</span>}
+              {recError && (
+                <span className="text-xs text-red-600">{recError}</span>
+              )}
             </div>
 
             <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border mb-3">
@@ -795,9 +908,18 @@ export default function PaginaSubmissao() {
               )}
 
               {!recordedUrl ? (
-                <video ref={liveVideoRef} className="w-full h-full object-contain" muted playsInline />
+                <video
+                  ref={liveVideoRef}
+                  className="w-full h-full object-contain"
+                  muted
+                  playsInline
+                />
               ) : (
-                <video className="w-full h-full object-contain" controls src={recordedUrl} />
+                <video
+                  className="w-full h-full object-contain"
+                  controls
+                  src={recordedUrl}
+                />
               )}
             </div>
 
@@ -814,7 +936,9 @@ export default function PaginaSubmissao() {
                     onClick={startRecording}
                     disabled={attemptsUsed >= ATTEMPT_LIMIT}
                     className={`px-4 py-2 rounded font-semibold text-white ${
-                      attemptsUsed >= ATTEMPT_LIMIT ? "bg-gray-400" : "bg-green-700 hover:bg-green-600"
+                      attemptsUsed >= ATTEMPT_LIMIT
+                        ? "bg-gray-400"
+                        : "bg-green-700 hover:bg-green-600"
                     }`}
                   >
                     Começar a gravar
@@ -842,8 +966,10 @@ export default function PaginaSubmissao() {
             </div>
 
             <p className="text-xs text-gray-500 mt-2">
-              • O desafio é gravado ao vivo pelo app. Sem upload de arquivos. <br />
-              • Máximo de <strong>{ATTEMPT_LIMIT} tentativas</strong>. Enviaremos em <em>repetições</em> o número de tentativas usadas.
+              • O desafio é gravado ao vivo pelo app. Sem upload de arquivos.{" "}
+              <br />
+              • Máximo de <strong>{ATTEMPT_LIMIT} tentativas</strong>.
+              Enviaremos em <em>repetições</em> o número de tentativas usadas.
             </p>
           </div>
         )}
