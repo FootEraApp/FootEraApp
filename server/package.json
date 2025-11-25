@@ -40,7 +40,7 @@
     "jsonwebtoken": "^9.0.2",
     "leo-profanity": "^1.8.0",
     "memorystore": "^1.6.7",
-    "mercadopago": "^2.10.1",
+    "mercadopago": "^1.5.17",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.6",
