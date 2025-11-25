@@ -74,15 +74,29 @@ interface TreinoAgendado {
     dataAgendada?: string | null;
     pontuacao?: number | null;
     exercicios: {
-      exercicio: { 
-        id: string; 
+      exercicio: {
+        id: string;
         nome: string;
         videoDemonstrativoUrl?: string | null;
       };
       repeticoes: string;
     }[];
+
+    criador?: {
+      id: string;
+      nome: string;
+      tipo: "Professor" | "Clube" | "Escolinha";
+    } | null;
+
+    criadorNome?: string | null;
+    criadorTipo?: string | null;
+
+    professorId?: string | null;
+    clubeId?: string | null;
+    escolinhaId?: string | null;
   } | null;
 }
+
 
 interface Desafio {
   id: string;
@@ -192,6 +206,9 @@ const sameDay = (a?: Date | null, b?: Date | null) =>
 function WeeklyChecker({ weeks }: { weeks: any[] }) {
   if (!weeks || weeks.length === 0) return null;
 
+
+
+
   return (
     <div className="mb-3">
       <div className="text-sm font-semibold text-green-900 mb-1">
@@ -218,6 +235,47 @@ function WeeklyChecker({ weeks }: { weeks: any[] }) {
       </div>
     </div>
   );
+}
+
+function getCriadorLabel(t: TreinoAgendado): string | null {
+  // pode estar dentro do treinoProgramado ou no próprio treino agendado
+  const tp: any = t.treinoProgramado ?? {};
+  const root: any = t as any;
+
+  const criadorFromTp = tp.criador as
+    | { id?: string; nome?: string; tipo?: string }
+    | undefined;
+  const criadorFromRoot = root.criador as
+    | { id?: string; nome?: string; tipo?: string }
+    | undefined;
+
+  const c = criadorFromTp ?? criadorFromRoot;
+
+  const nome: string | null =
+    c?.nome ??
+    tp.criadorNome ??
+    root.criadorNome ??
+    tp.criadoPorNome ??
+    root.criadoPorNome ??
+    null;
+
+  const tipo: string | null =
+    (c?.tipo as string | undefined) ??
+    (tp.criadorTipo as string | undefined) ??
+    (root.criadorTipo as string | undefined) ??
+    ((tp.professorId || root.professorId)
+      ? "Professor"
+      : (tp.clubeId || root.clubeId)
+      ? "Clube"
+      : (tp.escolinhaId || root.escolinhaId)
+      ? "Escolinha"
+      : null);
+
+  if (!nome) return null;
+
+  if (tipo === "Professor") return `Prof. ${nome}`;
+  if (tipo) return `${nome} (${tipo})`;
+  return nome;
 }
 
 
@@ -327,6 +385,103 @@ async function enviarDesafioDM() {
     }
   }
 
+async function carregarTreinosAgendados() {
+  try {
+    const token = getToken();
+    if (!token) {
+      console.warn("[TREINOS] sem token, não dá pra buscar treinos agendados");
+      return;
+    }
+
+    const r = await fetch(`${API.BASE_URL}/api/treinos/agendados`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (r.status === 401) {
+      console.warn(
+        "[TREINOS] 401 ao buscar treinos agendados – provavelmente token inválido/expirado"
+      );
+      return;
+    }
+
+    if (!r.ok) throw new Error("Falha ao buscar treinos agendados");
+
+    const js = await r.json();
+    const listaRaw: any[] = Array.isArray(js) ? js : js.items ?? [];
+
+    // 🧠 Normaliza para o formato TreinoAgendado que o front usa
+    const listaAdaptada: TreinoAgendado[] = listaRaw.map((item) => {
+      const tp = item.treinoProgramado ?? null;
+
+      return {
+        id: item.id,
+        titulo: item.titulo ?? tp?.nome ?? "Treino",
+        dataTreino: item.dataTreino ?? tp?.dataAgendada ?? null,
+        dataExpiracao: item.dataExpiracao ?? null,
+        nivel: tp?.nivel ?? null,
+        prazoEnvio: item.prazoEnvio ?? null,
+        duracaoMinutos:
+          item.duracaoMinutos ??
+          (item.duracaoSegundos
+            ? Math.round(item.duracaoSegundos / 60)
+            : tp?.duracao ?? null),
+        meuStatus: item.meuStatus ?? item.execucaoStatus ?? item.status ?? "PENDING",
+        startedAt: item.startedAt ?? null,
+        completedAt: item.completedAt ?? item.finishedAt ?? null,
+        submissao: item.submissao ?? { enviados: 0, aprovados: 0, feito: false },
+
+        treinoProgramado: tp
+          ? {
+              id: tp.id,
+              descricao: tp.descricao ?? null,
+              nivel: tp.nivel ?? "Base",
+              dicas: tp.dicas ?? [],
+              objetivo: tp.objetivo ?? null,
+              duracao: tp.duracao ?? null,
+              dataAgendada: tp.dataAgendada ?? null,
+              pontuacao: tp.pontuacao ?? null,
+              exercicios:
+                (tp.exercicios ?? []).map((ex: any) => ({
+                  exercicio: {
+                    id: ex.exercicio?.id ?? "",
+                    nome: ex.exercicio?.nome ?? "",
+                    videoDemonstrativoUrl:
+                      ex.exercicio?.videoDemonstrativoUrl ?? null,
+                  },
+                  repeticoes: ex.repeticoes ?? "",
+                })) ?? [],
+
+              // esses campos podem vir ou não da API
+              criador: tp.criador ?? null,
+              criadorNome:
+                tp.criadorNome ??
+                tp.criadoPorNome ??
+                null,
+              criadorTipo:
+                tp.criadorTipo ??
+                (tp.professorId
+                  ? "Professor"
+                  : tp.clubeId
+                  ? "Clube"
+                  : tp.escolinhaId
+                  ? "Escolinha"
+                  : null),
+              professorId: tp.professorId ?? null,
+              clubeId: tp.clubeId ?? null,
+              escolinhaId: tp.escolinhaId ?? null,
+            }
+          : null,
+      };
+    });
+
+    console.log("[TREINOS] agendados normalizados:", listaAdaptada);
+    setTreinosAgendados(listaAdaptada);
+  } catch (e) {
+    console.error("Erro ao carregar treinos agendados:", e);
+    setTreinosAgendados([]);
+  }
+}
+
   const agendaItems: AgendaItem[] = React.useMemo(() => {
     const arr: AgendaItem[] = [];
 
@@ -369,6 +524,12 @@ async function enviarDesafioDM() {
 
     return arr.sort((a, b) => a.inicio.localeCompare(b.inicio));
   }, [treinosAgendados, desafios, eventosAtleta]);
+
+  // 🔹 Carregar treinos agendados + eventos do atleta ao abrir a página
+  useEffect(() => {
+    carregarTreinosAgendados();
+    carregarEventosAtleta();
+  }, []);
 
   useEffect(() => {
     function onAgendado() {
@@ -688,103 +849,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
           <HealthBanner />
         </div>
 
-        {/* ======= NOVO COMPONENTE: MINHA AGENDA ======= */}
-        <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mt-4 mb-6">
-          <button
-            onClick={() => setAgendaAberta((v) => !v)}
-            className="w-full flex items-center justify-between px-2 py-2 text-left"
-          >
-            <div className="flex items-center gap-2">
-              <CalendarClock className="w-5 h-5 text-green-800" />
-              <h3 className="text-lg font-semibold text-green-900">
-                Minha Agenda
-              </h3>
-            </div>
-
-            {agendaAberta ? (
-              <ChevronUp className="w-5 h-5 text-gray-600" />
-            ) : (
-              <ChevronDown className="w-5 h-5 text-gray-600" />
-            )}
-          </button>
-
-          {agendaAberta && (
-            <div className="mt-3 border-t pt-3 max-h-[260px] overflow-y-auto">
-              {agendaItems.length === 0 ? (
-                <p className="text-gray-500 text-sm">Nenhum item na agenda.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {agendaItems.map((item) => {
-                    const dateStr = item.inicio
-                      ? new Date(item.inicio).toLocaleString("pt-BR", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })
-                      : "Sem data";
-
-                    const icon =
-                      item.tipo === "TREINO"
-                        ? <Volleyball className="w-4 h-4 text-green-700" />
-                        : item.tipo === "DESAFIO"
-                        ? <StarIcon className="w-4 h-4 text-amber-600" />
-                        : <CalendarClock className="w-4 h-4 text-blue-700" />;
-
-                    return (
-                      <li
-                        key={item.id}
-                        className="flex items-center justify-between bg-neutral-50 border rounded-lg px-3 py-2 hover:bg-neutral-100"
-                      >
-                        <div className="flex items-center gap-2">
-                          {icon}
-                          <div>
-                            <div className="text-sm font-medium">
-                              {item.titulo}
-                            </div>
-                            <div className="text-xs text-gray-600">
-                              {item.tipo} • {dateStr}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Navegação */}
-                        {item.origem === "treino" && (
-                          <button
-                            className="text-green-700 text-sm"
-                            onClick={() => {
-                              setFullscreenId(item.id);
-                              setAgendaAberta(false);
-                            }}
-                          >
-                            Abrir
-                          </button>
-                        )}
-
-                        {item.origem === "desafio" && (
-                          <Link
-                            href={`/desafios/${item.id}`}
-                            className="text-green-700 text-sm"
-                          >
-                            Ver
-                          </Link>
-                        )}
-
-                        {item.origem === "evento" && (
-                          <Link
-                            href={`/eventos/${item.id}`}
-                            className="text-green-700 text-sm"
-                          >
-                            Ver evento
-                          </Link>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          )}
-        </div>
-
         {/* ======= AÇÕES RÁPIDAS / MEUS TREINOS ======= */}
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
           <div className="flex items-center justify-between gap-2">
@@ -907,118 +971,195 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
           </div>
         </div>
 
-        {/* ======= TREINOS AGENDADOS ======= */}
-        <div
-          ref={agendadosCardRef}
-          className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4"
-        >
-          <h3 className="text-lg font-semibold mb-3">Treinos agendados</h3>
+        {/* ======= MINHA AGENDA (UNIFICADA) ======= */}
+        <div className="mt-4 mb-2 flex justify-center">
+          <div className="w-full max-w-4xl bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
+            <button
+              onClick={() => setAgendaAberta((v) => !v)}
+              className="w-full flex items-center justify-between px-2 py-2 text-left"
+            >
+              <div className="flex items-center gap-2">
+                <CalendarClock className="w-5 h-5 text-green-800" />
+                <h3 className="text-lg font-semibold text-green-900">
+                  Minha Agenda
+                </h3>
+              </div>
 
-          <div
-            className="overflow-y-auto overscroll-contain -mr-2 pr-2"
-            style={{
-              maxHeight: agendadosMaxH ? `${agendadosMaxH}px` : undefined,
-            }}
-          >
-            {ordenados.length === 0 ? (
-              <p className="text-gray-500">Nenhum treino disponível ainda.</p>
-            ) : (
-              <ul className="divide-y">
-              {ordenados.map((t) => {
-                const d = t.dataTreino ? new Date(t.dataTreino) : null;
-                const isHoje = d ? sameDay(d, hoje) : false;
-                const diaStr = d
-                  ? String(d.getDate()).padStart(2, "0")
-                  : "—";
-                const subtitulo = d
-                  ? d.toLocaleDateString("pt-BR", {
-                      weekday: "short",
-                      month: "short",
-                    })
-                  : "Sem data";
+              {agendaAberta ? (
+                <ChevronUp className="w-5 h-5 text-gray-600" />
+              ) : (
+                <ChevronDown className="w-5 h-5 text-gray-600" />
+              )}
+            </button>
 
-                // ===== lógica do computeTile =====
-                const st = statusPorTreino[t.id]?.status as
-                  | TreinoStatus
-                  | undefined;
+            {agendaAberta && (
+              <div className="mt-3 border-t pt-3 max-h-[260px] overflow-y-auto">
+                {agendaItems.length === 0 ? (
+                  <p className="text-gray-500 text-sm">
+                    Nenhum item na agenda.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {agendaItems.map((item) => {
+                      // 👉 Se for TREINO, usamos o mesmo visual de "Treinos agendados"
+                      if (item.origem === "treino") {
+                        const treino = treinosAgendados.find(
+                          (t) => t.id === item.id
+                        );
+                        if (!treino) return null;
 
-                const submitted =
-                  (t.submissao?.aprovados ?? 0) > 0 ||
-                  idsAgendadosSubmetidos.has(t.id) ||
-                  t.submissao?.feito === true;
+                        const d = treino.dataTreino
+                          ? new Date(treino.dataTreino)
+                          : null;
+                        const isHoje = d ? sameDay(d, hoje) : false;
+                        const diaStr = d
+                          ? String(d.getDate()).padStart(2, "0")
+                          : "—";
+                        const subtitulo = d
+                          ? d.toLocaleDateString("pt-BR", {
+                              weekday: "short",
+                              month: "short",
+                            })
+                          : "Sem data";
 
-                const diaPassou = d ? endOfDay(d) < now : false;
-                const expiradoBackend =
-                  (st as string) === "EXPIRED" ||
-                  (t as any).execucaoStatus === "EXPIRED";
+                          const criadorLabel = getCriadorLabel(treino);
 
-                const isMissedTreino =
-                  !submitted &&
-                  (diaPassou || expiradoBackend) &&
-                  st !== "COMPLETED";
+                        const st = statusPorTreino[treino.id]?.status as
+                          | TreinoStatus
+                          | undefined;
 
-                // classe do círculo
-                let circleClass =
-                  "flex items-center justify-center rounded-full border h-12 w-12 text-base font-bold shrink-0 bg-gray-50 border-gray-300 text-gray-800";
+                        const submitted =
+                          (treino.submissao?.aprovados ?? 0) > 0 ||
+                          idsAgendadosSubmetidos.has(treino.id) ||
+                          treino.submissao?.feito === true;
 
-                let titleClass =
-                  "font-medium truncate text-gray-900";
+                        const diaPassou = d ? endOfDay(d) < now : false;
+                        const expiradoBackend =
+                          (st as string) === "EXPIRED" ||
+                          (treino as any).execucaoStatus === "EXPIRED";
 
-                if (submitted || st === "COMPLETED") {
-                  // VERDE
-                  circleClass =
-                    "flex items-center justify-center rounded-full border h-12 w-12 text-base font-bold shrink-0 bg-emerald-50 border-emerald-300 text-emerald-800";
-                  titleClass =
-                    "font-medium truncate text-emerald-800";
-                } else if (isMissedTreino) {
-                  // VERMELHO
-                  circleClass =
-                    "flex items-center justify-center rounded-full border h-12 w-12 text-base font-bold shrink-0 bg-red-50 border-red-300 text-red-700";
-                  titleClass =
-                    "font-medium truncate text-red-700";
-                } else if (isHoje) {
-                  // hoje → realce com anel
-                  circleClass += " ring-2 ring-emerald-300";
-                }
+                        const isMissedTreino =
+                          !submitted &&
+                          (diaPassou || expiradoBackend) &&
+                          st !== "COMPLETED";
 
-                return (
-                  <li key={t.id} className="py-2">
-                    <button
-                      onClick={() => {
-                        if (isMissedTreino) return;
-                        setFullscreenId(t.id);
-                        setMenuOpen(false);
-                      }}
-                      aria-label="Expandir treino"
-                      aria-disabled={isMissedTreino}
-                      className={`w-full flex items-center justify-between gap-3 text-left ${
-                        isMissedTreino
-                          ? "opacity-60 cursor-not-allowed"
-                          : ""
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        {/* Círculo com dia */}
-                        <div className={circleClass}>{diaStr}</div>
+                        let circleClass =
+                          "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-gray-50 border-gray-300 text-gray-800";
+                        let titleClass =
+                          "font-medium truncate text-gray-900";
 
-                        {/* Título + subtítulo */}
-                        <div className="min-w-0">
-                          <div className={titleClass}>{t.titulo}</div>
-                          <div className="text-xs text-gray-500">
-                            {subtitulo}
+                        if (submitted || st === "COMPLETED") {
+                          circleClass =
+                            "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-emerald-50 border-emerald-300 text-emerald-800";
+                          titleClass =
+                            "font-medium truncate text-emerald-800";
+                        } else if (isMissedTreino) {
+                          circleClass =
+                            "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-red-50 border-red-300 text-red-700";
+                          titleClass =
+                            "font-medium truncate text-red-700";
+                        } else if (isHoje) {
+                          circleClass += " ring-2 ring-emerald-300";
+                        }
+
+                        return (
+                          <li key={`treino-${treino.id}`} className="py-1.5">
+                            <button
+                              onClick={() => {
+                                if (isMissedTreino) return;
+                                setFullscreenId(treino.id);
+                                setMenuOpen(false);
+                              }}
+                              aria-label="Abrir treino"
+                              aria-disabled={isMissedTreino}
+                              className={`w-full flex items-center justify-between gap-3 text-left ${
+                                isMissedTreino
+                                  ? "opacity-60 cursor-not-allowed"
+                                  : ""
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className={circleClass}>{diaStr}</div>
+
+                                <div className="min-w-0">
+                                  <div className={titleClass}>
+                                    {treino.titulo}
+                                  </div>
+                                  <div className="text-[11px] text-gray-500">
+                                    TREINO • {subtitulo}
+                                    {criadorLabel ? ` • ${criadorLabel}` : ""}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+                            </button>
+                          </li>
+                        );
+                      }
+
+                      // 👉 DESAFIOS / EVENTOS / OUTROS
+                      const dateStr = item.inicio
+                        ? new Date(item.inicio).toLocaleString("pt-BR", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })
+                        : "Sem data";
+
+                      const icon =
+                        item.tipo === "TREINO" ? (
+                          <Volleyball className="w-4 h-4 text-green-700" />
+                        ) : item.tipo === "DESAFIO" ? (
+                          <StarIcon className="w-4 h-4 text-amber-600" />
+                        ) : (
+                          <CalendarClock className="w-4 h-4 text-blue-700" />
+                        );
+
+                      return (
+                        <li
+                          key={`${item.origem}-${item.id}`}
+                          className="flex items-center justify-between bg-neutral-50 border rounded-lg px-3 py-2 hover:bg-neutral-100"
+                        >
+                          <div className="flex items-center gap-2">
+                            {icon}
+                            <div>
+                              <div className="text-sm font-medium">
+                                {item.titulo}
+                              </div>
+                              <div className="text-xs text-gray-600">
+                                {item.tipo} • {dateStr}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
 
-                      <ChevronDown className="w-5 h-5 text-gray-500 shrink-0" />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                          {item.origem === "desafio" && (
+                            <Link
+                              href={`/desafios/${item.id}`}
+                              className="text-green-700 text-xs sm:text-sm"
+                            >
+                              Ver
+                            </Link>
+                          )}
+
+                          {item.origem === "evento" && (
+                            <Link
+                              href={`/eventos/${item.id}`}
+                              className="text-green-700 text-xs sm:text-sm"
+                            >
+                              Ver evento
+                            </Link>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+
+
       {/* ======= DESAFIOS ======= */}
       {FLAGS.DESAFIOS_ENABLED && (
         <div
@@ -1229,16 +1370,27 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
           <div className="flex-1 overflow-y-auto px-4 py-4 pb-28">
             {ordenados
               .filter((t) => t.id === fullscreenId)
-              .map((treino) => (
-                <div key={treino.id} className="max-w-3xl mx-auto">
-                  <h2 className="font-bold text-lg text-green-900 mb-2">
-                    {treino.titulo}
-                  </h2>
+              .map((treino) => {
+                const criadorLabel = getCriadorLabel(treino);
 
-                  {/* REUSANDO FUNÇÃO COMPLETA DO DETALHE */}
-                  {renderTreinoDetalhesConteudo(treino)}
-                </div>
-              ))}
+                return (
+                  <div key={treino.id} className="max-w-3xl mx-auto">
+                    <h2 className="font-bold text-lg text-green-900 mb-1">
+                      {treino.titulo}
+                    </h2>
+
+                    {criadorLabel && (
+                      <p className="text-sm text-gray-600 mb-3">
+                        <span className="font-medium">Criado por:</span>{" "}
+                        {criadorLabel}
+                      </p>
+                    )}
+
+                    {/* REUSANDO FUNÇÃO COMPLETA DO DETALHE */}
+                    {renderTreinoDetalhesConteudo(treino)}
+                  </div>
+                );
+              })}
           </div>
 
           {/* ===== BARRA INFERIOR ===== */}
@@ -1452,42 +1604,24 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
       )}
 
       {/* ======= BOTTOM NAV ======= */}
-      <nav
-        ref={bottomNavRef}
-        className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t flex items-center justify-around z-30"
-      >
-        <Link
-          href="/feed"
-          className="flex flex-col items-center text-gray-600 hover:text-green-700"
-        >
-          <House className="w-6 h-6" />
-          <span className="text-[10px]">Início</span>
+      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
+        <Link href="/feed" className="hover:underline">
+          <House />
         </Link>
-
-        <Link
-          href="/explorar"
-          className="flex flex-col items-center text-gray-600 hover:text-green-700"
-        >
-          <Search className="w-6 h-6" />
-          <span className="text-[10px]">Explorar</span>
+        <Link href="/explorar" className="hover:underline">
+          <Search />
         </Link>
-
-        <Link
-          href="/treinos"
-          className="flex flex-col items-center text-green-700"
-        >
-          <Volleyball className="w-6 h-6" />
-          <span className="text-[10px]">Treinos</span>
+        <Link href="/post" className="hover:underline">
+          <CirclePlus />
         </Link>
-
-        <Link
-          href="/perfil"
-          className="flex flex-col items-center text-gray-600 hover:text-green-700"
-        >
-          <User className="w-6 h-6" />
-          <span className="text-[10px]">Perfil</span>
+        <Link href="/treinos" className="hover:underline">
+          <Volleyball />
+        </Link>
+        <Link href="/perfil" className="hover:underline">
+          <User />
         </Link>
       </nav>
+
     </div>
   );
 }

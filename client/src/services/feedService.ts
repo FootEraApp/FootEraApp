@@ -1,5 +1,6 @@
-import Storage from "../../../server/utils/storage.js";
+// client/src/services/feedService.ts
 import { API } from "../config.js";
+import { readToken } from "../utils/auth.js";
 
 export interface Usuario {
   id: string;
@@ -43,13 +44,12 @@ export interface CriarPostInput {
 export type FiltroFeed = "todos" | "seguindo" | "favoritos" | "meus";
 
 function pickToken(): string {
-  const t =
-    Storage?.token ||
-    (typeof window !== "undefined" &&
-      (sessionStorage.getItem("token") || localStorage.getItem("token"))) ||
-    "";
-  if (!t) throw new Error("Sem token. Faça login novamente.");
-  return t.startsWith("Bearer ") ? t : `Bearer ${t}`;
+  const raw = readToken();
+  if (!raw) {
+    throw new Error("Sem token. Faça login novamente.");
+  }
+  // garante que só tenha um "Bearer "
+  return raw.startsWith("Bearer ") ? raw : `Bearer ${raw}`;
 }
 
 const auth = () => ({ Authorization: pickToken() });
@@ -76,17 +76,20 @@ export async function getFeedPosts(
   const qs = new URLSearchParams(params).toString();
   const url = `${API.BASE_URL}/api/feed${qs ? `?${qs}` : ""}`;
 
-  const res = await fetch(url, { headers: auth() });
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: auth() });
+  } catch (e) {
+    console.error("Erro de rede ao carregar feed:", e);
+    throw e;
+  }
+
   if (res.status === 401) {
-    try {
-      sessionStorage.clear();
-      localStorage.removeItem("token");
-    } catch {}
-    if (typeof window !== "undefined") {
-      window.location.href = "/login";
-    }
+    console.warn("[FEED] 401 em", url, "– provavelmente token inválido/expirado");
+    // NÃO redireciona automaticamente; só devolve lista vazia
     return [];
   }
+
   if (!res.ok) throw new Error(`Falha ao carregar feed (${res.status})`);
 
   const json = await res.json();

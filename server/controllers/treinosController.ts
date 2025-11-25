@@ -370,24 +370,64 @@ async function resolveEntidade(
 export async function treinosDisponiveis(_req: AuthenticatedRequest, res: Response) {
   try {
     const treinos = await prisma.treinoProgramado.findMany({
-      include: { exercicios: { include: { exercicio: true, exercicioTemporario: true } } },
+      include: {
+        exercicios: {
+          include: {
+            exercicio: true,
+            exercicioTemporario: true,
+          },
+        },
+        professor: { select: { id: true, nome: true } },
+        clube: { select: { id: true, nome: true } },
+        escolinha: { select: { id: true, nome: true } },
+      },
     });
 
-    const resposta = treinos.map((t) => ({
-      id: t.id,
-      nome: t.nome,
-      descricao: t.descricao,
-      nivel: t.nivel,
-      duracao: t.duracao,
-      objetivo: t.objetivo,
-      dicas: t.dicas,
-      pontuacao: t.pontuacao ?? null,
-      exercicios: t.exercicios.map((e) => ({
-        id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
-        nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
-        repeticoes: e.repeticoes,
-      })),
-    }));
+    const resposta = treinos.map((t) => {
+      // Descobre quem é o criador (professor / clube / escolinha)
+      let criador: null | {
+        tipo: "Professor" | "Clube" | "Escolinha";
+        id: string;
+        nome: string;
+      } = null;
+
+      if (t.professor) {
+        criador = {
+          tipo: "Professor",
+          id: t.professor.id,
+          nome: t.professor.nome ?? "Professor",
+        };
+      } else if (t.clube) {
+        criador = {
+          tipo: "Clube",
+          id: t.clube.id,
+          nome: t.clube.nome ?? "Clube",
+        };
+      } else if (t.escolinha) {
+        criador = {
+          tipo: "Escolinha",
+          id: t.escolinha.id,
+          nome: t.escolinha.nome ?? "Escolinha",
+        };
+      }
+
+      return {
+        id: t.id,
+        nome: t.nome,
+        descricao: t.descricao,
+        nivel: t.nivel,
+        duracao: t.duracao,
+        objetivo: t.objetivo,
+        dicas: t.dicas,
+        pontuacao: t.pontuacao ?? null,
+        criador, // <-- aqui vem { tipo, id, nome } ou null
+        exercicios: t.exercicios.map((e) => ({
+          id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
+          nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
+          repeticoes: e.repeticoes,
+        })),
+      };
+    });
 
     res.json(resposta);
   } catch (error) {

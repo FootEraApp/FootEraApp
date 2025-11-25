@@ -152,6 +152,28 @@ export async function escalaPorTurma(req: AuthenticatedRequest, res: Response) {
 }
 
 /* ============================================================================
+   Helpers novos: validação de escala e contagem de jogadores
+============================================================================ */
+
+// Extrai ids únicos de atletas a partir da escala enviada
+function extrairAtletasDaEscala(escala: any): string[] {
+  if (!escala || typeof escala !== "object") return [];
+  const set = new Set<string>();
+
+  for (const val of Object.values(escala)) {
+    if (!val) continue;
+    if (typeof val === "string") {
+      set.add(val);
+    } else if (typeof val === "object" && val !== null) {
+      const id = (val as any).atletaId ?? (val as any).id ?? null;
+      if (id) set.add(String(id));
+    }
+  }
+
+  return Array.from(set);
+}
+
+/* ============================================================================
    🔄 Funções sincronizadas com o antigo treinosController (parte de Elencos)
 ============================================================================ */
 
@@ -279,7 +301,7 @@ export async function criarElenco(req: Request, res: Response) {
       professorId,
       clubeId,
       escolinhaId,
-      atletasIds,
+      atletasIds, // será ignorado e recalculado a partir da escala
       escala,
       maxJogadores,
       turmaId,
@@ -307,16 +329,27 @@ export async function criarElenco(req: Request, res: Response) {
       else if (tipo === "escolinha") owner.escolinhaId = donoId;
     }
 
+    const escalaUsada = escala && typeof escala === "object" ? escala : null;
+    const atletasFromEscala = extrairAtletasDaEscala(escalaUsada);
+
+    // 🔒 trava para exatamente 11
+    if (atletasFromEscala.length !== 11) {
+      return res.status(400).json({
+        error: "Elenco precisa ter exatamente 11 jogadores escalados.",
+        detalhe: { recebidos: atletasFromEscala.length },
+      });
+    }
+
     const elenco = await prisma.elenco.create({
       data: {
         nome,
         professorId: professorId ?? owner.professorId ?? null,
         clubeId: clubeId ?? owner.clubeId ?? null,
         escolinhaId: escolinhaId ?? owner.escolinhaId ?? null,
-        atletasIds: Array.isArray(atletasIds) ? atletasIds : [],
-        escala: escala ?? null,
-        formacao: formacao ?? null, // salva como JSON ou string
-        maxJogadores: maxJogadores ?? 11,
+        atletasIds: atletasFromEscala,
+        escala: escalaUsada ?? null,
+        formacao: formacao ?? null, // salva como JSON ou string conforme schema
+        maxJogadores: 11, // força 11
         turmaId: turmaId ?? null,
       },
     });
@@ -336,7 +369,7 @@ export async function atualizarElenco(req: Request, res: Response) {
       professorId,
       clubeId,
       escolinhaId,
-      atletasIds,
+      atletasIds, // ignorado, vamos montar a partir da escala
       escala,
       maxJogadores,
       turmaId,
@@ -363,6 +396,17 @@ export async function atualizarElenco(req: Request, res: Response) {
       else if (tipo === "escolinha") owner.escolinhaId = donoId;
     }
 
+    const escalaUsada = escala && typeof escala === "object" ? escala : null;
+    const atletasFromEscala = extrairAtletasDaEscala(escalaUsada);
+
+    // 🔒 trava para exatamente 11
+    if (atletasFromEscala.length !== 11) {
+      return res.status(400).json({
+        error: "Elenco precisa ter exatamente 11 jogadores escalados.",
+        detalhe: { recebidos: atletasFromEscala.length },
+      });
+    }
+
     const elenco = await prisma.elenco.update({
       where: { id },
       data: {
@@ -370,10 +414,10 @@ export async function atualizarElenco(req: Request, res: Response) {
         professorId: professorId ?? owner.professorId ?? null,
         clubeId: clubeId ?? owner.clubeId ?? null,
         escolinhaId: escolinhaId ?? owner.escolinhaId ?? null,
-        atletasIds: Array.isArray(atletasIds) ? atletasIds : [],
-        escala: escala ?? null,
+        atletasIds: atletasFromEscala,
+        escala: escalaUsada ?? null,
         formacao: formacao ?? null,
-        maxJogadores: maxJogadores ?? 11,
+        maxJogadores: 11, // força 11 mesmo se vier outro número
         turmaId: turmaId ?? null,
       },
     });
