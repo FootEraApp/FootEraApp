@@ -1,4 +1,14 @@
-import { PrismaClient, TipoUsuario, TipoTreino, Nivel, Categoria, OrigemFormador } from '@prisma/client';
+import {
+  PrismaClient,
+  TipoUsuario,
+  TipoTreino,
+  Nivel,
+  Categoria,
+  OrigemFormador,
+  MetodoPagamento,
+  Periodicidade,
+  PagamentoStatus,
+} from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -1057,6 +1067,114 @@ await prisma.usuario.upsert({
   },
 });
 
+// ====================== ASSINATURAS FIXAS PARA USUÁRIOS DE TESTE ======================
+
+const agora = new Date();
+// deixa a renovação bem no futuro pra nunca cair no corte automático
+const renovaFutura = new Date(2099, 0, 1);
+
+// Busca os usuários especiais
+const usuarioAtletaPro = await prisma.usuario.findUnique({
+  where: { nomeDeUsuario: 'atleta_pro' },
+});
+const usuarioProfPro = await prisma.usuario.findUnique({
+  where: { nomeDeUsuario: 'prof_pro' },
+});
+const usuarioScoutPro = await prisma.usuario.findUnique({
+  where: { nomeDeUsuario: 'scout_pro' },
+});
+const usuarioEscolinha01Db = await prisma.usuario.findUnique({
+  where: { nomeDeUsuario: 'escolinha_01' },
+});
+
+// Helper pra criar/atualizar assinatura fixa e um pagamento fake aprovado (se ainda não existir)
+async function garantirAssinaturaFixa(
+  usuarioId: string,
+  plano: string,
+  periodicidade: Periodicidade
+) {
+  await prisma.assinatura.upsert({
+    where: { usuarioId },
+    update: {
+      plano,
+      startsAt: agora,
+      renovaEm: renovaFutura,
+      ativo: true,
+      periodicidade,
+      canceledAt: null,
+    },
+    create: {
+      usuarioId,
+      plano,
+      startsAt: agora,
+      renovaEm: renovaFutura,
+      ativo: true,
+      periodicidade,
+    },
+  });
+
+  const jaTemPagamento = await prisma.pagamento.findFirst({
+    where: {
+      usuarioId,
+      plano,
+      status: PagamentoStatus.APROVADO,
+    },
+  });
+
+  if (!jaTemPagamento) {
+    await prisma.pagamento.create({
+      data: {
+        usuarioId,
+        plano,
+        periodicidade,
+        metodo: MetodoPagamento.PIX, // qualquer método, é só pra constar
+        status: PagamentoStatus.APROVADO,
+        // valor 0 => é um "pagamento" fake só pra manter histórico e renovaEm coerente
+        valor: 0,
+        moeda: 'BRL',
+        criadoEm: agora,
+        pagoEm: agora,
+      },
+    });
+  }
+}
+
+// Atleta PRO de teste -> plano ATLETA_PRO
+if (usuarioAtletaPro) {
+  await garantirAssinaturaFixa(
+    usuarioAtletaPro.id,
+    'ATLETA_PRO',
+    Periodicidade.Mensal
+  );
+}
+
+// Professor PRO de teste -> plano PROFESSOR_PRO
+if (usuarioProfPro) {
+  await garantirAssinaturaFixa(
+    usuarioProfPro.id,
+    'PROFESSOR_PRO',
+    Periodicidade.Mensal
+  );
+}
+
+// Olheiro PRO de teste -> plano OLHEIRO_PRO
+if (usuarioScoutPro) {
+  await garantirAssinaturaFixa(
+    usuarioScoutPro.id,
+    'OLHEIRO_PRO',
+    Periodicidade.Mensal
+  );
+}
+
+// Escolinha 01 de teste -> plano ESCOLINHA_PRO
+if (usuarioEscolinha01Db) {
+  await garantirAssinaturaFixa(
+    usuarioEscolinha01Db.id,
+    'ESCOLINHA_PRO',
+    Periodicidade.Mensal
+  );
+}
+
 const atletaAaaaa = await prisma.atleta.findUnique({
   where: { usuarioId: usuarioAaaaa.id }
 });
@@ -1119,7 +1237,7 @@ if (atletaAaaaa && professorArthur) {
       atletaId_treinoProgramadoId_dataTreino: {
         atletaId: atletaAaaaa.id,
         treinoProgramadoId: treino.id,
-        dataTreino, // mesma data usada no create
+        dataTreino,
       },
     },
     update: {},
@@ -1184,7 +1302,6 @@ if (atletaAaaaa && professorArthur) {
     skipDuplicates: true,
   });
 }
-  // garanta que TODOS os usuários fiquem verificados
   await prisma.usuario.updateMany({
     data: { verified: true },
   });
