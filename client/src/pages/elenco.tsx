@@ -401,6 +401,8 @@ export default function PaginaElenco() {
     [posicoesAtivas]
   );
 
+    const totalEscalados = elencoAtual.length;
+
   // Formação dinâmica: defesa-meio-ataque
   const [formacao, setFormacao] = useState<{ atacantes: number; meio: number; defesa: number }>({
     atacantes: 3,
@@ -828,6 +830,20 @@ const salvarElencoAtivo = async () => {
   const e = ativo;
   if (!e) return;
 
+  const totalEscaladosSalvar = POSICOES.reduce(
+    (acc, p) => (e.posicoes[p.id] ? acc + 1 : acc),
+    0
+  );
+
+  if (totalEscaladosSalvar !== 11) {
+    alert(
+      `Seu elenco precisa ter exatamente 11 jogadores escalados para salvar.\n` +
+      `Atualmente: ${totalEscaladosSalvar}/11.`
+    );
+    return;
+  }
+
+
   if (!token) {
     alert("Você não está autenticado. Faça login novamente.");
     return;
@@ -1028,7 +1044,7 @@ const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) =>
                     {e.nome || `Elenco ${idx + 1}`}
                   </div>
                   <div className="text-xs text-gray-500">
-                    Máximo {e.maxJogadores} • {Object.values(e.posicoes).filter(Boolean).length}/11
+                    {Object.values(e.posicoes).filter(Boolean).length}/11 jogadores escalados
                   </div>
                 </button>
 
@@ -1207,29 +1223,10 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
               className="border rounded px-3 py-2 text-base md:text-lg font-bold bg-white"
               placeholder="Nome do elenco"
             />
-            <div className="flex items-center gap-2">
-              <label htmlFor="maxJog" className="text-sm">Máximo:</label>
-              <input
-                id="maxJog"
-                name="maxJog"
-                type="number"
-                value={ativo.maxJogadores}
-                min={5}
-                max={30}
-                onChange={(e) =>
-                  setElencos(prev => {
-                    const arr = [...prev];
-                    arr[activeIndex] = { ...arr[activeIndex], maxJogadores: Number(e.target.value) };
-                    return arr;
-                  })
-                }
-                className="w-20 border rounded px-2 py-2 bg-white"
-              />
-            </div>
-
-            {/* Texto da formação atual */}
+            {/* Info de escalação + formação */}
             <span className="text-sm font-semibold text-green-900">
-              Formação: {formacao.defesa}-{formacao.meio}-{formacao.atacantes}
+              {totalEscalados}/11 jogadores escalados • Formação:{" "}
+              {formacao.defesa}-{formacao.meio}-{formacao.atacantes}
             </span>
 
             <button
