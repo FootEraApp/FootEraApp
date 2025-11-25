@@ -9,6 +9,7 @@ import qrcode from "qrcode-terminal";
 import * as fs from "fs";
 import helmet from "helmet";
 
+import { processarRenovacoesDiarias } from "./services/billingscheduler.js";
 import { runColdStorageJob } from "./jobs/coldStorageJob.js";
 import { setupSocket } from "./socket.js";
 import { UPLOADS_ROOT, ensureUploadDirs } from "./utils/uploads.js";
@@ -278,7 +279,9 @@ server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   }
 });
 
-cron.schedule("0 3 * * *", () => {
+cron.schedule("0 3 * * *", async () => {
+  console.log("[CRON] Rodando verificação diária de assinaturas...");
+  await processarRenovacoesDiarias();
   runColdStorageJob().catch((e) => console.error("Cold storage job failed", e));
 });
 
