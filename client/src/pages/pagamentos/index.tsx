@@ -39,9 +39,41 @@ type Pagamento = {
 type Pagador = { nome: string; email: string; cpf?: string; telefone?: string };
 type Cartao = { numero: string; nomeImpresso: string; validade: string; cvv: string };
 
+function diasRestantes(renovaEm?: string | null) {
+  if (!renovaEm) return null;
+  const d = new Date(renovaEm).getTime();
+  const hoje = Date.now();
+  const diff = d - hoje;
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
 function brl(n: number | string) {
   const v = typeof n === "string" ? Number(n) : n;
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function computeRenovaEm(
+  assinatura: Assinatura | null,
+  pagamentos: Pagamento[]
+): string | null {
+  if (!assinatura) return null;
+
+  const aprovadosMesmoPlano = pagamentos
+    .filter((p) => p.status === "APROVADO" && p.plano === assinatura.plano);
+
+  if (aprovadosMesmoPlano.length === 0) return null;
+
+  const last = aprovadosMesmoPlano.sort(
+    (a, b) =>
+      new Date(b.pagoEm || b.criadoEm).getTime() -
+      new Date(a.pagoEm || a.criadoEm).getTime()
+  )[0];
+
+  const baseDate = new Date(last.pagoEm || last.criadoEm);
+  const meses = last.periodicidade === "Mensal" ? 1 : 12;
+  const d = new Date(baseDate);
+  d.setMonth(d.getMonth() + meses);
+  return d.toISOString();
 }
 
 const roleToDefaultPlan: Record<string, string> = {
@@ -227,7 +259,11 @@ export default function PagamentosPage() {
       }
 
       if (data.status === "APROVADO") {
-        alert("Assinatura ativada com sucesso!");
+        alert(
+          data.freeTrial
+            ? "Assinatura ativada com sucesso! Seu primeiro mês é gratuito. 🎉"
+            : "Assinatura ativada com sucesso!"
+        );
         reloadMe();
         return;
       }
@@ -345,6 +381,15 @@ export default function PagamentosPage() {
     return <div className="p-6">Carregando pagamentos...</div>;
   }
 
+  const renovaEm = computeRenovaEm(assinatura, pagamentos);
+  const dias = diasRestantes(renovaEm);
+  const aviso =
+    dias !== null && dias >= 0 && dias <= 7
+      ? `Sua assinatura vence em ${dias} dia${dias === 1 ? "" : "s"}.`
+      : dias !== null && dias < 0
+      ? "Sua assinatura está vencida. Renove para continuar com os benefícios."
+      : null;
+
   const p = selectedObj;
   const total = totalComCupom();
   const anualDisponivel =
@@ -358,6 +403,16 @@ export default function PagamentosPage() {
       <p className="text-sm text-gray-600 mb-6">
         Bem-vindo(a)! Aqui você escolhe seu plano, aplica cupons e acompanha o histórico.
       </p>
+
+      {aviso && (
+        <div
+          className={`mb-4 text-sm font-medium rounded-md px-3 py-2 ${
+            dias! < 0 ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-800"
+          }`}
+        >
+          {aviso}
+        </div>
+      )}
       <div className="mb-6 rounded-lg border bg-emerald-50 text-emerald-900 p-3 text-sm">
         <ul className="list-disc pl-4 space-y-1">
           <li>Rede social aberta: posts/DMs ilimitados para todos. Vídeos ≤ 60s.</li>
@@ -488,6 +543,10 @@ export default function PagamentosPage() {
           {method === "PIX" && (
             <div>
               <div className="font-semibold mb-2">Pagar com PIX</div>
+              <p className="text-xs text-emerald-700 mt-1">
+                Seu primeiro mês em qualquer plano é gratuito. A cobrança começa só no próximo ciclo.
+              </p>
+
               <p className="text-sm text-gray-700 mb-3">
                 Valor: <b>{brl(total)}</b>. Clique em <b>Assinar agora</b> para gerar o QR Code e o código “copia e cola”.
               </p>
@@ -537,8 +596,17 @@ export default function PagamentosPage() {
 
           {(method === "CREDITO" || method === "DEBITO") && (
             <div>
-              <div className="font-semibold mb-2">Pagar com {method === "CREDITO" ? "Cartão de Crédito" : "Cartão de Débito"}</div>
-              <p className="text-sm text-gray-700 mb-3">Valor: <b>{brl(total)}</b></p>
+              <div className="font-semibold mb-2">
+                Pagar com {method === "CREDITO" ? "Cartão de Crédito" : "Cartão de Débito"}
+              </div>
+
+              <p className="text-xs text-emerald-700 mt-1">
+                Seu primeiro mês em qualquer plano é gratuito. A cobrança começa só no próximo ciclo.
+              </p>
+
+              <p className="text-sm text-gray-700 mb-3">
+                Valor: <b>{brl(total)}</b>
+              </p>
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <input
@@ -605,7 +673,14 @@ export default function PagamentosPage() {
           {method === "BOLETO" && (
             <div>
               <div className="font-semibold mb-2">Pagar com Boleto</div>
-              <p className="text-sm text-gray-700 mb-3">Valor: <b>{brl(total)}</b></p>
+
+              <p className="text-xs text-emerald-700 mt-1">
+                Seu primeiro mês em qualquer plano é gratuito. A cobrança começa só no próximo ciclo.
+              </p>
+
+              <p className="text-sm text-gray-700 mb-3">
+                Valor: <b>{brl(total)}</b>
+              </p>
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <input
@@ -663,6 +738,9 @@ export default function PagamentosPage() {
         <div className="flex items-center justify-between border-t pt-3 mt-4">
           <div className="text-sm text-gray-600">
             Total a pagar: <b className="text-gray-900">{brl(total)}</b>
+            <span className="block text-xs text-emerald-700">
+              Seu primeiro mês em qualquer plano é gratuito. Se esta for sua primeira assinatura, você não será cobrado agora.
+            </span>
           </div>
           <button
             onClick={startCheckout}
