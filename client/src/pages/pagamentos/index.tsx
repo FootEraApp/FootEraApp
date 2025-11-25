@@ -259,7 +259,11 @@ export default function PagamentosPage() {
       }
 
       if (data.status === "APROVADO") {
-        alert("Assinatura ativada com sucesso!");
+        alert(
+          data.freeTrial
+            ? "Assinatura ativada com sucesso! Seu primeiro mês é gratuito. 🎉"
+            : "Assinatura ativada com sucesso!"
+        );
         reloadMe();
         return;
       }
@@ -373,7 +377,7 @@ export default function PagamentosPage() {
     }
   }
 
-    if (loading) {
+  if (loading) {
     return <div className="p-6">Carregando pagamentos...</div>;
   }
 
@@ -539,6 +543,10 @@ export default function PagamentosPage() {
           {method === "PIX" && (
             <div>
               <div className="font-semibold mb-2">Pagar com PIX</div>
+              <p className="text-xs text-emerald-700 mt-1">
+                Seu primeiro mês em qualquer plano é gratuito. A cobrança começa só no próximo ciclo.
+              </p>
+
               <p className="text-sm text-gray-700 mb-3">
                 Valor: <b>{brl(total)}</b>. Clique em <b>Assinar agora</b> para gerar o QR Code e o código “copia e cola”.
               </p>
@@ -588,8 +596,17 @@ export default function PagamentosPage() {
 
           {(method === "CREDITO" || method === "DEBITO") && (
             <div>
-              <div className="font-semibold mb-2">Pagar com {method === "CREDITO" ? "Cartão de Crédito" : "Cartão de Débito"}</div>
-              <p className="text-sm text-gray-700 mb-3">Valor: <b>{brl(total)}</b></p>
+              <div className="font-semibold mb-2">
+                Pagar com {method === "CREDITO" ? "Cartão de Crédito" : "Cartão de Débito"}
+              </div>
+
+              <p className="text-xs text-emerald-700 mt-1">
+                Seu primeiro mês em qualquer plano é gratuito. A cobrança começa só no próximo ciclo.
+              </p>
+
+              <p className="text-sm text-gray-700 mb-3">
+                Valor: <b>{brl(total)}</b>
+              </p>
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <input
@@ -656,7 +673,14 @@ export default function PagamentosPage() {
           {method === "BOLETO" && (
             <div>
               <div className="font-semibold mb-2">Pagar com Boleto</div>
-              <p className="text-sm text-gray-700 mb-3">Valor: <b>{brl(total)}</b></p>
+
+              <p className="text-xs text-emerald-700 mt-1">
+                Seu primeiro mês em qualquer plano é gratuito. A cobrança começa só no próximo ciclo.
+              </p>
+
+              <p className="text-sm text-gray-700 mb-3">
+                Valor: <b>{brl(total)}</b>
+              </p>
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <input
@@ -714,6 +738,9 @@ export default function PagamentosPage() {
         <div className="flex items-center justify-between border-t pt-3 mt-4">
           <div className="text-sm text-gray-600">
             Total a pagar: <b className="text-gray-900">{brl(total)}</b>
+            <span className="block text-xs text-emerald-700">
+              Seu primeiro mês em qualquer plano é gratuito. Se esta for sua primeira assinatura, você não será cobrado agora.
+            </span>
           </div>
           <button
             onClick={startCheckout}
