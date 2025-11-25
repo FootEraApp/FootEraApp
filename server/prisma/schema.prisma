@@ -90,9 +90,12 @@ model Assinatura {
   id         String    @id @default(uuid())
   usuarioId  String    @unique
   plano      String
-  startsAt   DateTime  @default(now())
+  periodicidade   String   // "MENSAL" | "ANUAL"
+  startsAt        DateTime
+  renovaEm        DateTime
   canceledAt DateTime?
   ativo      Boolean   @default(true)
+  lembreteEnviado Boolean  @default(false)
   usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   providerSubscriptionId String?  @unique 
 
