@@ -950,13 +950,20 @@ const enviados = sub.enviados ?? 0;
 const aprovados = sub.aprovados ?? 0;
 
 let meu: TreinoStatus = "PENDING";
+
+// 1. Submissão DO AGENDADO -> sempre COMPLETED
 if (aprovados > 0) {
   meu = TreinoStatus.COMPLETED;
-} else if (tu?.status) {
+
+// 2. Depois sim usamos o treinoUsuario, SE NÃO houver submissão
+} else if (tu?.status && tu.status !== TreinoStatus.COMPLETED) {
   meu = tu.status as TreinoStatus;
+
+// 3. Expirou sem submissão ou completed
 } else if (r.dataExpiracao && r.dataExpiracao < now) {
   meu = TreinoStatus.EXPIRED;
 }
+
 
 
       return {
@@ -1637,7 +1644,6 @@ export async function atualizarElenco(req: AuthenticatedRequest, res: Response) 
     return res.status(500).json({ error: "Erro ao atualizar elenco" });
   }
 }
-
 
 export const atletasVinculados = async (req: AuthenticatedRequest, res: Response) => {
   try {

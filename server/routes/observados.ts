@@ -1,3 +1,4 @@
+// server/routes/observados
 import { Router } from "express";
 import { authenticateToken } from "../middlewares/auth.js";
 import {
