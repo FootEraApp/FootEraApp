@@ -379,6 +379,7 @@ function Explorar() {
             <input
               type="text"
               value={busca}
+              data-testid="explorar-search"
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Buscar por nome, posição, cidade..."
               className="w-full pl-9 pr-4 py-2 rounded-xl border outline-none focus:ring-2 ring-emerald-100 bg-white text-sm sm:text-base"
@@ -631,7 +632,7 @@ function Explorar() {
                             alt={`${nome} profile`}
                             className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
                             onError={(e) =>
-                              ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`)
+                              ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/usuarios/default-user.png`)
                             }
                           />
                           <p className="mt-2 font-medium text-center line-clamp-2 text-sm sm:text-base">{nome}</p>
@@ -695,7 +696,7 @@ function Explorar() {
                             <img
                               src={foto}
                               onError={(e) =>
-                                ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`)
+                                ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/usuarios/default-user.png`)
                               }
                               className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border"
                               alt={r.usuario.nome}
@@ -723,7 +724,7 @@ function Explorar() {
                           <img
                             src={foto}
                             onError={(e) =>
-                              ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`)
+                              ((e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/usuarios/default-user.png`)
                             }
                             className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border"
                             alt={top.usuario.nome}
@@ -862,7 +863,7 @@ function Explorar() {
                           alt="Foto do usuário"
                           className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
                           onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`;
+                            (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/usuarios/default-user.png`;
                           }}
                         />
                         <p className="mt-2 font-medium text-center line-clamp-2 text-sm sm:text-base">{p.usuario.nome}</p>

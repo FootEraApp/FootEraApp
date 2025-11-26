@@ -125,7 +125,7 @@ type MinhasSubTreino = {
 const now = new Date();
 const hoje = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-const PLACEHOLDER_USER = "/assets/default-user.png";
+const PLACEHOLDER_USER = "/assets/usuarios/default-user.png";
 const TIMER_KEY = (id: string) => `footera:treinoTimerStart:${id}`;
 const CHECKLIST_KEY = (id: string) => `footera:treinoChecklist:${id}`;
 
