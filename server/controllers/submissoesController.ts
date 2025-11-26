@@ -1,4 +1,3 @@
-// server/controllers/submissoesController
 import { Request, Response } from "express";
 import {
   PrismaClient,

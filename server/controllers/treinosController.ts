@@ -1,4 +1,3 @@
-// server/controllers/treinosController.ts
 import {
   PrismaClient,
   PosicaoCampo,
@@ -39,18 +38,17 @@ type AuthenticatedRequest = ExpressRequest & {
   userId?: string;
   usuarioId?: string;
   user?: any;
-  auth?: any; // para suportar o novo middleware de auth
+  auth?: any;
 };
 
 function getUserFromReq(req: AuthenticatedRequest) {
   const anyReq = req as any;
 
-  // tenta várias formas, dependendo de como o middleware preenche
   return (
-    anyReq.user ||          // versão antiga
+    anyReq.user ||         
     anyReq.usuario ||
-    anyReq.auth?.user ||    // alguns middlewares colocam em auth.user
-    anyReq.auth ||          // outros colocam o próprio payload em req.auth
+    anyReq.auth?.user ||    
+    anyReq.auth ||         
     null
   );
 }
@@ -68,10 +66,8 @@ const FEAT = {
 } as const;
 
 export async function agendarTreinoPessoal(req: AuthenticatedRequest, res: Response) {
-  // 1) Recuperar o usuário de forma robusta
   let user: any = getUserFromReq(req);
 
-  // 2) Se ainda não tiver user, tenta decodificar o token manualmente (igual criacao de treino)
   if (!user) {
     const authHeader =
       (req.headers.authorization as string | undefined) ||
@@ -87,12 +83,10 @@ export async function agendarTreinoPessoal(req: AuthenticatedRequest, res: Respo
         (req as any).user = user;
         (req as any).userId = user.id;
       } catch {
-        // token inválido, mantém user = null
       }
     }
   }
 
-  // 3) Agora sim: se ainda não tem user, é não autenticado
   if (!user) {
     return res.status(401).json({
       code: "UNAUTHENTICATED",
@@ -100,7 +94,6 @@ export async function agendarTreinoPessoal(req: AuthenticatedRequest, res: Respo
     });
   }
 
-  // 4) Checa se o plano permite agendamento pessoal
   if (!can(user, FEAT.AGENDAMENTO_PESSOAL)) {
     return res.status(402).json({
       code: "UPGRADE_REQUIRED",
@@ -108,7 +101,6 @@ export async function agendarTreinoPessoal(req: AuthenticatedRequest, res: Respo
     });
   }
 
-  // 5) Descobre o usuarioId de forma segura
   const usuarioId = (req.userId as string | undefined) || (user.id as string | undefined);
   if (!usuarioId) {
     return res.status(400).json({ message: "Não foi possível identificar o usuário." });
@@ -198,7 +190,6 @@ export async function agendarTreinoLote(req: AuthenticatedRequest, res: Response
   return res.status(201).json({ ok: true });
 }
 
-/* ===================== Helpers ===================== */
 async function atletaTemVinculo(atletaId: string) {
   const a = await prisma.atleta.findUnique({
     where: { id: atletaId },
@@ -366,7 +357,6 @@ async function resolveEntidade(
   return null;
 }
 
-/* ===================== Endpoints ===================== */
 export async function treinosDisponiveis(_req: AuthenticatedRequest, res: Response) {
   try {
     const treinos = await prisma.treinoProgramado.findMany({
@@ -384,7 +374,6 @@ export async function treinosDisponiveis(_req: AuthenticatedRequest, res: Respon
     });
 
     const resposta = treinos.map((t) => {
-      // Descobre quem é o criador (professor / clube / escolinha)
       let criador: null | {
         tipo: "Professor" | "Clube" | "Escolinha";
         id: string;
@@ -420,7 +409,7 @@ export async function treinosDisponiveis(_req: AuthenticatedRequest, res: Respon
         objetivo: t.objetivo,
         dicas: t.dicas,
         pontuacao: t.pontuacao ?? null,
-        criador, // <-- aqui vem { tipo, id, nome } ou null
+        criador, 
         exercicios: t.exercicios.map((e) => ({
           id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
           nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
@@ -441,7 +430,6 @@ export async function salvarTreinoNaBiblioteca(req: AuthenticatedRequest, res: R
     const user = req.user as any;
     const usuarioId = req.userId!;
 
-    // tenta pegar do payload, mas faz fallback pelo usuarioId
     let atletaId: string | undefined =
       user?.tipo === "Atleta" ? user.tipoUsuarioId : undefined;
 
@@ -917,7 +905,6 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
       orderBy: { dataTreino: "asc" },
     });
 
-    // ids dos agendados e status do usuário logado
     const agIds = rows.map((r) => r.id);
     const tuRows = await prisma.treinoUsuario.findMany({
       where: { treinoId: { in: agIds }, usuarioId: req.userId! },
@@ -925,7 +912,6 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
     });
     const tuMap = new Map(tuRows.map((r) => [r.treinoId, r]));
 
-    // submissões por agendado (filtradas pelo atleta)
     const subRows = await prisma.submissaoTreino.findMany({
       where: { treinoAgendadoId: { in: agIds }, atletaId },
       select: { treinoAgendadoId: true, aprovado: true },
@@ -945,26 +931,20 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
       const tu = tuMap.get(r.id);
       const sub = subMap.get(r.id) ?? { enviados: 0, aprovados: 0 };
 
-// ✅ "COMPLETED" somente quando existir submissão APROVADA daquele treino *agendado*
 const enviados = sub.enviados ?? 0;
 const aprovados = sub.aprovados ?? 0;
 
 let meu: TreinoStatus = "PENDING";
 
-// 1. Submissão DO AGENDADO -> sempre COMPLETED
 if (aprovados > 0) {
   meu = TreinoStatus.COMPLETED;
 
-// 2. Depois sim usamos o treinoUsuario, SE NÃO houver submissão
 } else if (tu?.status && tu.status !== TreinoStatus.COMPLETED) {
   meu = tu.status as TreinoStatus;
 
-// 3. Expirou sem submissão ou completed
 } else if (r.dataExpiracao && r.dataExpiracao < now) {
   meu = TreinoStatus.EXPIRED;
 }
-
-
 
       return {
         ...r,
@@ -980,7 +960,6 @@ if (aprovados > 0) {
               })),
             }
           : null,
-        // ✅ campos padronizados para o front:
         meuStatus: meu,
         startedAt: tu?.startedAt ?? null,
         completedAt: tu?.completedAt ?? null,
@@ -1229,11 +1208,9 @@ async function getEscalaCore(elencoId: string, res: Response) {
       return res.json(null);
     }
 
-    // escala vem como Json, convertemos para um map simples posicao -> atletaId
     const escala =
       (elenco.escala as Record<string, string | null> | null) ?? null;
 
-    // formação também Json, { defesa, meio, atacantes }
     const formacao =
       (elenco.formacao as
         | { defesa: number; meio: number; atacantes: number }
@@ -1243,8 +1220,8 @@ async function getEscalaCore(elencoId: string, res: Response) {
       id: elenco.id,
       nome: elenco.nome,
       maxJogadores: elenco.maxJogadores,
-      escala,   // ex: { GOL: "uuidAtleta", LD: "uuidAtleta", ... }
-      formacao, // ex: { defesa: 4, meio: 2, atacantes: 3 }
+      escala,   
+      formacao, 
     });
   } catch (err) {
     console.error("Erro ao buscar escala do elenco:", err);
@@ -1284,7 +1261,6 @@ export async function getEscalaPorDono(req: Request, res: Response) {
 
     if (!elenco) return res.json(null);
 
-    // usa o mesmo core para montar resposta (inclui escala + formacao)
     return getEscalaCore(elenco.id, res);
   } catch (err) {
     console.error("Erro ao buscar escala por dono:", err);
@@ -1480,7 +1456,6 @@ export async function criarElenco(req: AuthenticatedRequest, res: Response) {
       return res.status(400).json({ error: "tipoUsuario inválido" });
     }
 
-    // turmaId AGORA É OPCIONAL
     const turmaIdFinal =
       typeof turmaId === "string" && turmaId.trim().length > 0
         ? turmaId.trim()
@@ -1490,7 +1465,7 @@ export async function criarElenco(req: AuthenticatedRequest, res: Response) {
       nome,
       maxJogadores,
       ativo,
-      turmaId: turmaIdFinal, // pode ser null sem problema
+      turmaId: turmaIdFinal,
     };
 
     if (tipoUsuario === "professor") dataCreate.professorId = tipoUsuarioId;
@@ -1499,7 +1474,6 @@ export async function criarElenco(req: AuthenticatedRequest, res: Response) {
 
     const elenco = await prisma.elenco.create({ data: dataCreate });
 
-    // Monta vínculos a partir de atletas[] ou escala
     let vinculos: { atletaId: string; posicao: PosicaoCampo }[] = [];
 
     if (Array.isArray(atletas) && atletas.length) {
@@ -1581,8 +1555,6 @@ export async function atualizarElenco(req: AuthenticatedRequest, res: Response) 
     if (typeof nome === "string") dataUpdate.nome = nome;
     if (typeof maxJogadores === "number") dataUpdate.maxJogadores = maxJogadores;
     if (typeof ativo === "boolean") dataUpdate.ativo = ativo;
-
-    // turmaId OPCIONAL no update também
     if (typeof turmaId === "string") {
       dataUpdate.turmaId = turmaId.trim().length ? turmaId.trim() : null;
     }
@@ -1601,7 +1573,6 @@ export async function atualizarElenco(req: AuthenticatedRequest, res: Response) 
         }));
     }
 
-    // zera vínculos antigos e recria
     await prisma.atletaElenco.deleteMany({ where: { elencoId: id } });
 
     if (vinculos.length) {
@@ -1788,14 +1759,12 @@ export async function criarTreinoProgramado(
     });
   }
 
-  // 🔹 NORMALIZA tipo/plano pra professor
   const tipoStr = String(user.tipo ?? user.tipoUsuario ?? "").toLowerCase();
   if (!user.plano) {
-    user.plano = "FREE"; // default
+    user.plano = "FREE"; 
   }
 
   if (!can(user, CAP_CRIAR_TREINO)) {
-    // fallback: se for professor, deixa passar mesmo se o can falhar (até arrumar token/middleware)
     if (tipoStr !== "professor") {
       return res.status(403).json({
         code: "FORBIDDEN",
@@ -1804,12 +1773,9 @@ export async function criarTreinoProgramado(
     }
   }
 
-  // 3) Limite de 5 treinos programados / mês para plano FREE
-  //    (PRO e ORG ficam ilimitados na prática)
   if (user.plano === "FREE") {
     const ok = await requireUsage(req as any, res, "treinos_programados_mes");
     if (!ok) {
-      // requireUsage já respondeu com o 4xx + mensagem amigável
       return;
     }
   }
@@ -1835,9 +1801,6 @@ export async function criarTreinoProgramado(
       pontuacao,
     } = req.body as any;
 
-    // ... resto da função permanece igual
-
-    // 4) Regras específicas pra professor FREE (planos / templates ativos)
     if (user.tipo === "Professor" && !can(user, FEAT.TREINOS_ILIMITADOS)) {
       const profId = String(tipoUsuarioId);
       const ativos = await prisma.treinoProgramado.count({
@@ -1868,7 +1831,6 @@ export async function criarTreinoProgramado(
       }
     }
 
-    // Validação básica do payload
     if (!nome || !nivel || !Array.isArray(exercicios) || !usuarioId || !tipoUsuarioId) {
       return res.status(400).json({ error: "Dados inválidos" });
     }
@@ -1894,7 +1856,6 @@ export async function criarTreinoProgramado(
         ? Math.max(0, Math.floor(Number(pontuacao)))
         : null;
 
-    // ====== CRIAÇÃO DO TREINO PROGRAMADO ======
     const treino = await prisma.treinoProgramado.create({
       data: {
         nome,
@@ -1918,7 +1879,6 @@ export async function criarTreinoProgramado(
       },
     });
 
-    // ====== EXERCÍCIOS DO TREINO ======
     const exsBanco = (exercicios as any[]).filter((e) => e.exercicioId);
     const exsTemp = (exercicios as any[]).filter((e) => !e.exercicioId && e.nome);
 
@@ -1983,7 +1943,6 @@ export async function criarTreinoProgramado(
       });
     }
 
-    // ====== AGENDAMENTO AUTOMÁTICO PARA ATLETAS (se houver) ======
     if (atletaIdsResolved.length > 0) {
       const whenDate = treino.dataAgendada ?? new Date();
       const dataExpiracao = whenDate
@@ -2409,13 +2368,11 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
 
 export async function listarMinhasSubmissoesTreino(req: AuthenticatedRequest, res: Response) {
   try {
-    // o front chama com atletaId, tipoUsuarioId e às vezes usuarioId
     const qAtletaId = String((req.query.atletaId ?? req.query.tipoUsuarioId ?? "") as string).trim();
     const qUsuarioId = String((req.query.usuarioId ?? "") as string).trim();
 
     let atletaId = qAtletaId;
 
-    // 1) se não veio atletaId, tenta descobrir pelo usuarioId passado na query
     if (!atletaId && qUsuarioId) {
       const atleta = await prisma.atleta.findFirst({
         where: { usuarioId: qUsuarioId },
@@ -2424,7 +2381,6 @@ export async function listarMinhasSubmissoesTreino(req: AuthenticatedRequest, re
       atletaId = atleta?.id ?? "";
     }
 
-    // 2) se ainda não tiver, tenta pelo usuário logado (token)
     if (!atletaId && req.userId) {
       const u = await prisma.usuario.findUnique({
         where: { id: req.userId },
@@ -2434,14 +2390,12 @@ export async function listarMinhasSubmissoesTreino(req: AuthenticatedRequest, re
     }
 
     if (!atletaId) {
-      // sem atleta => sem submissões
       return res.json([]);
     }
 
     const subs = await prisma.submissaoTreino.findMany({
       where: {
         atletaId,
-        // não precisa do "not: null" porque treinoAgendadoId é String obrigatória
       },
       include: {
         treinoAgendado: {
@@ -2457,9 +2411,7 @@ export async function listarMinhasSubmissoesTreino(req: AuthenticatedRequest, re
     const payload = subs.map((s) => ({
       id: s.id,
       aprovado: s.aprovado,
-      // aqui é o ID específico do treino AGENDADO (é o que o front usa pra marcar como feito)
       treinoAgendadoId: s.treinoAgendadoId,
-      // e aqui só para referência (se você quiser usar em outra tela)
       treinoProgramadoId: s.treinoAgendado?.treinoProgramadoId ?? null,
     }));
 
@@ -2845,9 +2797,9 @@ export async function expirarTreinosVencidos(req: AuthenticatedRequest, res: Res
 
 export async function iniciarTreinoAgendado(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params;                // id do TreinoAgendado
-    const usuarioId = req.userId!;            // usuário logado (atleta)
-    const atletaId = req.user?.tipoUsuarioId; // id do Atleta
+    const { id } = req.params;               
+    const usuarioId = req.userId!;           
+    const atletaId = req.user?.tipoUsuarioId; 
 
     if (!atletaId || req.user?.tipo !== "Atleta") {
       return res.status(403).json({ message: "Apenas atleta pode iniciar o treino." });
@@ -2864,7 +2816,6 @@ export async function iniciarTreinoAgendado(req: AuthenticatedRequest, res: Resp
       return res.status(403).json({ message: "Não autorizado para iniciar este treino." });
     }
 
-    // Se já foi iniciado antes, só devolve o estado atual
     if (ag.startedAt) {
       const tuExistente = await prisma.treinoUsuario.findUnique({
         where: { treinoId_usuarioId: { treinoId: id, usuarioId } },
@@ -2922,7 +2873,7 @@ export async function iniciarTreinoAgendado(req: AuthenticatedRequest, res: Resp
 
 export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Response) {
   try {
-    const { id } = req.params; // id do TreinoAgendado
+    const { id } = req.params; 
     const usuarioId = req.userId!;
     const atletaId = req.user?.tipoUsuarioId;
 
@@ -2957,7 +2908,6 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
       Math.floor((finishedAt.getTime() - new Date(ag.startedAt).getTime()) / 1000)
     );
 
-    // Normalizar midiaTipo vindo como string
     let midiaEnum: TipoMidia | null = null;
     if (typeof midiaTipo === "string") {
       const s = midiaTipo.toLowerCase();
@@ -2968,7 +2918,6 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
     } else if (midiaTipo) {
       midiaEnum = midiaTipo;
     } else if (midiaUrl) {
-      // default: se tem mídia mas não mandou tipo, considera vídeo
       midiaEnum = TipoMidia.Video;
     }
 

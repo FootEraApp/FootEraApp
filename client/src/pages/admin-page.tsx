@@ -50,7 +50,7 @@ interface UsuarioAdmin {
   destaque?: boolean;
   ultimaAtividade?: string | null;
   ultimaAtividadeNome?: string | null;
-  assinatura?: AssinaturaDTO | null; // <-- ADICIONE ESTA LINHA
+  assinatura?: AssinaturaDTO | null; 
 }
 
 type PlanoAssinatura = "FREE" | "PRO" | "ELITE" | string;
@@ -61,7 +61,7 @@ interface AssinaturaDTO {
   startsAt: string;
   canceledAt?: string | null;
   ativo: boolean;
-  renovaEm?: string | null; // <-- ADICIONE ESTA LINHA
+  renovaEm?: string | null; 
 }
 
 interface UsuarioDetalhe extends UsuarioAdmin {

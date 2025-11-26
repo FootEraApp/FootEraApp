@@ -43,7 +43,7 @@ export async function updatePlano(req: Request, res: Response) {
 
     const startsAt = new Date();
     const renovaEm = new Date(startsAt);
-    renovaEm.setMonth(renovaEm.getMonth() + 1); // padrão: 1 mês
+    renovaEm.setMonth(renovaEm.getMonth() + 1); 
 
     const updated = await prisma.assinatura.upsert({
       where: { usuarioId },

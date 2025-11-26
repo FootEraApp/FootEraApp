@@ -1,4 +1,3 @@
-// client/src/pages/explorar
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";
