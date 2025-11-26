@@ -1,4 +1,3 @@
-// client/src/pages/jogos-elenco.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import axios from "axios";
@@ -13,8 +12,8 @@ type ElencoMin = { id: string; nome: string; maxJogadores?: number };
 type Partida = {
   id: string;
   eventoId: string;
-  fase: number;        // 1 = oitavas, 2 = quartas, 3 = semi, 4 = final... (ou simplesmente "round index")
-  ordem: number;       // ordem dentro da fase
+  fase: number;      
+  ordem: number;      
   elencoAId?: string | null;
   elencoBId?: string | null;
   elencoA?: ElencoMin | null;
@@ -36,8 +35,8 @@ type EventoElenco = {
   titulo: string;
   tipo: "MATA_MATA";
   status: "ABERTO" | "EM_ANDAMENTO" | "ENCERRADO";
-  participantes: string[]; // elencoIds
-  rounds: Partida[][];     // agrupadas por fase
+  participantes: string[]; 
+  rounds: Partida[][];    
 };
 
 const BASE = `${API.BASE_URL}/api/jogos-elenco`;
@@ -61,13 +60,10 @@ export default function JogosElencoPage() {
   const [seed, setSeed] = useState<ElencoMin[]>([]);
   const [evento, setEvento] = useState<EventoElenco | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
-
-  // controle de placar (modal)
   const [partidaSel, setPartidaSel] = useState<Partida | null>(null);
   const [timerSec, setTimerSec] = useState<number>(0);
   const timerRef = useRef<number | null>(null);
 
-  // ====== Carregar elencos do dono/associação ======
   useEffect(() => {
     const tipoUsuarioId = Storage.tipoUsuarioId;
     const token = safeGetToken();
@@ -85,7 +81,6 @@ export default function JogosElencoPage() {
     })();
   }, []);
 
-  // ====== DnD seeds ======
   const onDragEnd = (r: DropResult) => {
     const { source, destination } = r;
     if (!destination) return;
@@ -95,7 +90,6 @@ export default function JogosElencoPage() {
 
     const copy = <T,>(arr: T[]) => arr.map((x) => x);
 
-    // mover de elencos -> seed
     if (fromList === "elencos" && toList === "seed") {
       const src = copy(elencos);
       const [item] = src.splice(source.index, 1);
@@ -106,7 +100,6 @@ export default function JogosElencoPage() {
       return;
     }
 
-    // remover de seed -> elencos
     if (fromList === "seed" && toList === "elencos") {
       const s = copy(seed);
       const [item] = s.splice(source.index, 1);
@@ -117,7 +110,6 @@ export default function JogosElencoPage() {
       return;
     }
 
-    // reordenar dentro da própria seed
     if (fromList === "seed" && toList === "seed") {
       const s = copy(seed);
       const [item] = s.splice(source.index, 1);
@@ -126,7 +118,6 @@ export default function JogosElencoPage() {
       return;
     }
 
-    // reordenar dentro da lista de elencos
     if (fromList === "elencos" && toList === "elencos") {
       const e = copy(elencos);
       const [item] = e.splice(source.index, 1);
@@ -136,7 +127,6 @@ export default function JogosElencoPage() {
     }
   };
 
-  // ====== Criar evento/chaveamento ======
   const criarChaveamento = async () => {
     if (seed.length < 2) {
       alert("Selecione pelo menos 2 elencos para criar o chaveamento.");
@@ -155,7 +145,6 @@ export default function JogosElencoPage() {
       const hydrated: EventoElenco = { id: ev.evento.id, titulo: ev.evento.titulo, tipo: "MATA_MATA", status: ev.evento.status, participantes: ev.evento.participantes, rounds };
       setEvento(hydrated);
 
-      // socket room
       const s = io(API.BASE_URL, { auth: { token: safeGetToken() }, transports: ["websocket"] });
       s.emit("jogos-elenco:join", { eventoId: ev.evento.id });
       s.on("jogos-elenco:update", (payload: any) => {
@@ -183,10 +172,8 @@ export default function JogosElencoPage() {
     }
   };
 
-  // ====== abrir modal de controle ======
   const abrirPartida = (p: Partida) => {
     setPartidaSel(p);
-    // timer local a partir de iniciadoEm
     if (p.status === "EM_ANDAMENTO" && p.iniciadoEm) {
       const base = Date.now() - new Date(p.iniciadoEm).getTime();
       setTimerSec(Math.max(0, Math.floor(base / 1000)));
@@ -201,7 +188,6 @@ export default function JogosElencoPage() {
     pararLoopTimer();
   };
 
-  // ====== loop timer ======
   const tick = () => setTimerSec((s) => s + 1);
   const iniciarLoopTimer = () => {
     if (timerRef.current) return;
@@ -214,7 +200,6 @@ export default function JogosElencoPage() {
     }
   };
 
-  // ====== ações de partida ======
   async function acao(partidaId: string, op: string, extra?: any) {
     try {
       const res = await axios.patch(`${BASE}/partidas/${partidaId}`, { op, ...extra }, { headers: auth() });
@@ -226,7 +211,6 @@ export default function JogosElencoPage() {
       });
       setPartidaSel(upd.partida);
 
-      // timer feedback local
       if (op === "start") iniciarLoopTimer();
       if (op === "finish") pararLoopTimer();
     } catch (e) {
@@ -240,8 +224,6 @@ export default function JogosElencoPage() {
     const f = [...elencos, ...seed].find((x) => x.id === id);
     return f?.nome || `Elenco ${id.slice(0, 4)}…`;
   };
-
-  // ====== UI ======
 
   const Coluna = ({ children, title }: { title: string; children: React.ReactNode }) => (
     <div className="flex-1 min-w-[260px]">
@@ -380,7 +362,6 @@ export default function JogosElencoPage() {
         </DragDropContext>
       </div>
 
-      {/* ===== Modal de Partida ===== */}
       {partidaSel && (
         <div className="fixed inset-0 bg-black/50 z-50 grid place-items-center p-3">
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl p-4">
@@ -395,7 +376,6 @@ export default function JogosElencoPage() {
             <div className="mt-2 text-center text-3xl font-mono">{String(Math.floor(timerSec / 60)).padStart(2, "0")}:{String(timerSec % 60).padStart(2, "0")}</div>
 
             <div className="grid grid-cols-2 gap-3 mt-4">
-              {/* Time A */}
               <div className="border rounded-xl p-3">
                 <div className="font-bold">{nomeElenco(partidaSel.elencoAId)}</div>
                 <div className="flex items-center gap-2 mt-2">
@@ -418,7 +398,6 @@ export default function JogosElencoPage() {
                 </div>
               </div>
 
-              {/* Time B */}
               <div className="border rounded-xl p-3">
                 <div className="font-bold">{nomeElenco(partidaSel.elencoBId)}</div>
                 <div className="flex items-center gap-2 mt-2">

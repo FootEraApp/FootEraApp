@@ -1,4 +1,3 @@
-// client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, Volleyball, User, CirclePlus, Search as SearchIcon, House, Check, ChevronLeft, ChevronRight, Calendar as CalendarIcon, } from "lucide-react";
@@ -46,7 +45,6 @@ const NOMES_MESES_PT = [
 
 const DIAS_SEMANA_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
-// Formata yyyy-MM-dd
 function formatYMD(ano: number, mesZeroBased: number, dia: number): string {
   const m = String(mesZeroBased + 1).padStart(2, "0");
   const d = String(dia).padStart(2, "0");
@@ -420,10 +418,8 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
       t.programado?.id ??
       t.id;
 
-    // NOVO: se backend já mandou "criador", usa direto
     let criador: TreinoProgramado["criador"] = t.criador ?? null;
 
-    // fallback pra versões antigas ou outros formatos
     if (!criador) {
       if (t.professor) {
         criador = {
@@ -1060,16 +1056,13 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
 
   async function agendarTreinoEmLote(treinoProgramadoId: string) {
     try {
-      // Datas escolhidas no passo 4
       const datasValidas = datasAgendamento.filter(d => d && d.trim());
 
-      // Se não tiver datas em lote, tenta usar a data da etapa 1 (dataTreino)
       const datasBase = datasValidas.length
         ? datasValidas
         : (dataTreino ? [dataTreino] : []);
 
       if (!datasBase.length || !atletasSelecionados.length) {
-        // Nada para agendar
         return 0;
       }
 
@@ -1081,10 +1074,9 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
       const headers: any = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
 
-      // Pega a hora da dataTreino, se tiver, senão assume 18:00
       const baseTime =
         dataTreino && dataTreino.includes("T")
-          ? dataTreino.split("T")[1].slice(0, 5) // "HH:MM"
+          ? dataTreino.split("T")[1].slice(0, 5)
           : "18:00";
 
       const datasISO = datasBase.map(d => {
@@ -1113,7 +1105,6 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
       }
 
       const json = await res.json().catch(() => null);
-      // backend pode retornar { count: X }
       return typeof json?.count === "number"
         ? json.count
         : datasISO.length * atletasSelecionados.length;
@@ -1211,7 +1202,6 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
         return;
       }
 
-      // IMPORTANTE: garantir que TreinosApi.criar retorne o treino criado com "id"
       const criado: any = await TreinosApi.criar(payload);
 
       let qtdAgendados = 0;
@@ -1894,7 +1884,6 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                 </div>
               </div>
 
-              {/* Header do calendário: mês/ano + navegação */}
               <div className="flex items-center justify-between mb-2">
                 <button
                   type="button"
@@ -1935,7 +1924,6 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                 </button>
               </div>
 
-              {/* Cabeçalho dos dias da semana */}
               <div className="grid grid-cols-7 gap-1 text-center text-[11px] sm:text-xs text-gray-500 mb-1">
                 {DIAS_SEMANA_PT.map((d) => (
                   <div key={d} className="uppercase tracking-tight">
@@ -1944,13 +1932,11 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                 ))}
               </div>
 
-              {/* Grade de dias */}
               {(() => {
                 const { ano, mes } = mesCalendario;
                 const primeiroDia = new Date(ano, mes, 1);
-                // Começando em segunda-feira (0 = segunda)
-                const weekdaySundayBased = primeiroDia.getDay(); // 0 = domingo
-                const firstWeekday = (weekdaySundayBased + 6) % 7; // 0 = segunda
+                const weekdaySundayBased = primeiroDia.getDay();
+                const firstWeekday = (weekdaySundayBased + 6) % 7;
                 const diasNoMes = new Date(ano, mes + 1, 0).getDate();
 
                 const dias: Array<number | null> = [];
@@ -1969,7 +1955,6 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                       return prev.filter((d) => d !== dateStr);
                     }
                     const next = [...prev, dateStr];
-                    // ordena por data só pra ficar organizado
                     return next.sort();
                   });
                 };
@@ -2007,7 +1992,6 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                 );
               })()}
 
-              {/* Resumo de dias selecionados */}
               {datasAgendamento.length > 0 && (
                 <div className="mt-2 text-xs text-gray-700">
                   <span className="font-semibold">Dias selecionados:</span>{" "}

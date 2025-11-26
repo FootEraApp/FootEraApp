@@ -1,4 +1,3 @@
-// server/routes/submissoes
 import { Router } from "express";
 import multer from "multer";
 import { authenticateToken, AuthenticatedRequest } from "../middlewares/auth.js";
