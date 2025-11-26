@@ -23,7 +23,6 @@ const queueTranscode = {
 };
 
 const uploadsDir = path.join(process.cwd(), "public", "uploads");
-
 fs.mkdirSync(uploadsDir, { recursive: true });
 
 const storage = multer.diskStorage({
@@ -33,10 +32,11 @@ const storage = multer.diskStorage({
     cb(null, `${Date.now()}-${safeName}`);
   },
 });
+
 export const upload = multer({ storage });
 
 export const uploadMidia = [
-  upload.single("arquivo"),
+  upload.single("foto"),
   async (req: Request, res: Response) => {
     try {
       const file = req.file;
@@ -195,7 +195,12 @@ export const uploadMidia = [
         },
       });
 
-      return res.status(201).json({ ok: true, midia });
+      return res.status(201).json({
+        ok: true,
+        midia,
+        url: midia.url,         
+        relativeUrl: publicUrl,  
+      });
     } catch (err: any) {
       console.error("uploadMidia error", err);
       return res

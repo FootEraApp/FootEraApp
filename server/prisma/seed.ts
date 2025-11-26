@@ -7,6 +7,7 @@ import {
   OrigemFormador,
   MetodoPagamento,
   Periodicidade,
+  TipoMensagem,
   PagamentoStatus,
 } from '@prisma/client';
 import bcrypt from 'bcryptjs';
@@ -816,15 +817,9 @@ const usuarioAaaaa = await prisma.usuario.upsert({
     }
   }
 });
-
-// ====================== USUÁRIOS DE TESTE CYPRESS ======================
-
-// 1) Atleta Free
-// 1) Atleta Free
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'atleta_free' },
   update: {
-    // garante que, se já existir, a senha seja atualizada pro hash novo
     senhaHash: H['atleta_free'],
     tipo: TipoUsuario.Atleta,
     verified: true,
@@ -859,11 +854,9 @@ await prisma.usuario.upsert({
   },
 });
 
-// 2) Atleta Pro
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'atleta_pro' },
   update: {
-    // garante que, se já existir, a senha seja atualizada pro hash novo
     senhaHash: H['atleta_pro'],
     tipo: TipoUsuario.Atleta,
     verified: true,
@@ -898,11 +891,9 @@ await prisma.usuario.upsert({
   },
 });
 
-// 3) Professor Free
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'prof_free' },
   update: {
-    // garante que, se já existir, a senha seja atualizada pro hash novo
     senhaHash: H['prof_free'],
     tipo: TipoUsuario.Professor,
     verified: true,
@@ -932,11 +923,9 @@ await prisma.usuario.upsert({
   },
 });
 
-// 4) Professor Pro
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'prof_pro' },
   update: {
-    // garante que, se já existir, a senha seja atualizada pro hash novo
     senhaHash: H['prof_pro'],
     tipo: TipoUsuario.Professor,
     verified: true,
@@ -966,11 +955,9 @@ await prisma.usuario.upsert({
   },
 });
 
-// 5) Olheiro Free
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'scout_free' },
   update: {
-    // garante que, se já existir, a senha seja atualizada pro hash novo
     senhaHash: H['scout_free'],
     tipo: TipoUsuario.Olheiro,
     verified: true,
@@ -997,11 +984,9 @@ await prisma.usuario.upsert({
   },
 });
 
-// 6) Olheiro Pro
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'scout_pro' },
   update: {
-    // garante que, se já existir, a senha seja atualizada pro hash novo
     senhaHash: H['scout_pro'],
     tipo: TipoUsuario.Olheiro,
     verified: true,
@@ -1028,11 +1013,9 @@ await prisma.usuario.upsert({
   },
 });
 
-// 7) Escolinha (escolinha_01)
 await prisma.usuario.upsert({
   where: { nomeDeUsuario: 'escolinha_01' },
   update: {
-    // garante que, se já existir, a senha seja atualizada pro hash novo
     senhaHash: H['escolinha_01'],
     tipo: TipoUsuario.Escolinha,
     verified: true,
@@ -1067,13 +1050,70 @@ await prisma.usuario.upsert({
   },
 });
 
-// ====================== ASSINATURAS FIXAS PARA USUÁRIOS DE TESTE ======================
+const atletaFree = await prisma.usuario.findUnique({
+  where: { nomeDeUsuario: 'atleta_free' },
+});
+
+const atletaPro = await prisma.usuario.findUnique({
+  where: { nomeDeUsuario: 'atleta_pro' },
+});
+
+if (atletaFree && atletaPro) {
+  const follow1 = await prisma.seguidor.findFirst({
+    where: {
+      seguidorUsuarioId: atletaFree.id,
+      seguidoUsuarioId: atletaPro.id,
+    },
+  });
+
+  if (!follow1) {
+    await prisma.seguidor.create({
+      data: {
+        seguidorUsuarioId: atletaFree.id,
+        seguidoUsuarioId: atletaPro.id,
+      },
+    });
+  }
+
+  const follow2 = await prisma.seguidor.findFirst({
+    where: {
+      seguidorUsuarioId: atletaPro.id,
+      seguidoUsuarioId: atletaFree.id,
+    },
+  });
+
+  if (!follow2) {
+    await prisma.seguidor.create({
+      data: {
+        seguidorUsuarioId: atletaPro.id,
+        seguidoUsuarioId: atletaFree.id,
+      },
+    });
+  }
+
+  const msgInicial = await prisma.mensagem.findFirst({
+    where: {
+      deId: atletaFree.id,
+      paraId: atletaPro.id,
+      conteudo: 'Mensagem inicial seed E2E',
+    },
+  });
+
+  if (!msgInicial) {
+    await prisma.mensagem.create({
+      data: {
+        deId: atletaFree.id,
+        paraId: atletaPro.id,
+        conteudo: 'Mensagem inicial seed E2E',
+        tipo: TipoMensagem.NORMAL,
+      },
+    });
+  }
+}
 
 const agora = new Date();
-// deixa a renovação bem no futuro pra nunca cair no corte automático
 const renovaFutura = new Date(2099, 0, 1);
 
-// Busca os usuários especiais
 const usuarioAtletaPro = await prisma.usuario.findUnique({
   where: { nomeDeUsuario: 'atleta_pro' },
 });
@@ -1087,7 +1127,6 @@ const usuarioEscolinha01Db = await prisma.usuario.findUnique({
   where: { nomeDeUsuario: 'escolinha_01' },
 });
 
-// Helper pra criar/atualizar assinatura fixa e um pagamento fake aprovado (se ainda não existir)
 async function garantirAssinaturaFixa(
   usuarioId: string,
   plano: string,
@@ -1127,9 +1166,8 @@ async function garantirAssinaturaFixa(
         usuarioId,
         plano,
         periodicidade,
-        metodo: MetodoPagamento.PIX, // qualquer método, é só pra constar
+        metodo: MetodoPagamento.PIX,
         status: PagamentoStatus.APROVADO,
-        // valor 0 => é um "pagamento" fake só pra manter histórico e renovaEm coerente
         valor: 0,
         moeda: 'BRL',
         criadoEm: agora,
@@ -1139,7 +1177,6 @@ async function garantirAssinaturaFixa(
   }
 }
 
-// Atleta PRO de teste -> plano ATLETA_PRO
 if (usuarioAtletaPro) {
   await garantirAssinaturaFixa(
     usuarioAtletaPro.id,
@@ -1148,7 +1185,6 @@ if (usuarioAtletaPro) {
   );
 }
 
-// Professor PRO de teste -> plano PROFESSOR_PRO
 if (usuarioProfPro) {
   await garantirAssinaturaFixa(
     usuarioProfPro.id,
@@ -1157,7 +1193,6 @@ if (usuarioProfPro) {
   );
 }
 
-// Olheiro PRO de teste -> plano OLHEIRO_PRO
 if (usuarioScoutPro) {
   await garantirAssinaturaFixa(
     usuarioScoutPro.id,
@@ -1166,7 +1201,6 @@ if (usuarioScoutPro) {
   );
 }
 
-// Escolinha 01 de teste -> plano ESCOLINHA_PRO
 if (usuarioEscolinha01Db) {
   await garantirAssinaturaFixa(
     usuarioEscolinha01Db.id,

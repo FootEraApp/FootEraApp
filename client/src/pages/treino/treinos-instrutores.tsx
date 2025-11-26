@@ -60,7 +60,7 @@ function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
-const PLACEHOLDER_USER = "/assets/default-user.png";
+const PLACEHOLDER_USER = "/assets/usuarios/default-user.png";
 function resolveUploadUrl(raw?: string | null) {
   if (!raw) return "";
   if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;

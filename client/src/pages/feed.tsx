@@ -640,7 +640,7 @@ function PaginaFeed(): JSX.Element {
                   <img
                     src={
                       publicImgUrl(post.usuario.foto) ||
-                      `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
+                      `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
                     }
                     alt={post.usuario.nome}
                     className="w-10 h-10 rounded-full object-cover cursor-pointer"
@@ -694,7 +694,7 @@ function PaginaFeed(): JSX.Element {
                         <img
                           src={
                             publicImgUrl(post.repostOf.usuario?.foto) ||
-                            `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
+                            `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
                           }
                           alt={post.repostOf.usuario?.nome || "avatar original"}
                           className="w-7 h-7 rounded-full object-cover cursor-pointer"
@@ -842,7 +842,7 @@ function PaginaFeed(): JSX.Element {
                           <img
                             src={
                               publicImgUrl(comentario.usuario?.foto) ||
-                              `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
+                              `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
                             }
                             alt={comentario.usuario?.nome || "avatar"}
                             className="w-8 h-8 rounded-full object-cover cursor-pointer"
