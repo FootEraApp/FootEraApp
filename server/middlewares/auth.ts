@@ -1,4 +1,3 @@
-// server/middlewares/auth.ts
 import { RequestHandler, Request } from "express";
 import jwt from "jsonwebtoken";
 import { TipoUsuario } from "@prisma/client";
@@ -6,7 +5,7 @@ import { resolveUserContext } from "../services/planResolver.js";
 import type { PlanoName, UserPayload } from "../services/planResolver.js";
 import dotenv from "dotenv";
 
-dotenv.config(); // ✅ garante que JWT_SECRET do .env exista antes de ler
+dotenv.config();
 
 const SECRET = process.env.JWT_SECRET || "footera_secret";
 
@@ -48,7 +47,6 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
 
   let payload: any;
   try {
-    // ✅ aqui só validamos o JWT
     payload = jwt.verify(token, SECRET);
   } catch (err: any) {
     console.error(
@@ -70,7 +68,6 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
   const reqAuthed = req as AuthenticatedRequest;
   reqAuthed.userId = userId;
 
-  // tenta resolver contexto; se der erro, não derruba o auth
   try {
     const ctx = await resolveUserContext(userId);
 
@@ -108,7 +105,6 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
   return next();
 };
 
-// exports de compatibilidade
 export const auth = authenticateToken;
 export const requireAuth = authenticateToken;
 export const authMiddleware = authenticateToken;

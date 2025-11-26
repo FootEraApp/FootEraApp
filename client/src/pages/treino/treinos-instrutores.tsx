@@ -1,4 +1,3 @@
-// client/src/pages/treinos/treinos-instrutores.tsx
 import React, { useEffect, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -14,7 +13,6 @@ import Storage from "../../../../server/utils/storage.js";
 import { API, FLAGS } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
 
-/* ===================== Tipos ===================== */
 interface Exercicio {
   id: string;
   nome: string;
@@ -51,7 +49,6 @@ interface SubmissaoParaValidacao {
   observacao?: string | null;
 }
 
-/* ===================== Helpers ===================== */
 function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -81,7 +78,6 @@ function isVideoUrl(url: string) {
 const getToken = () =>
   (Storage as any).token ?? localStorage.getItem("token") ?? sessionStorage.getItem("token") ?? "";
 
-/* ===================== Props ===================== */
 export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo"] | "" }) {
   const [, navigate] = useLocation();
 
@@ -114,14 +110,12 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
     }
   }, []);
 
-  // carregar dados principais
   useEffect(() => {
     const token = getToken();
     if (!token) return;
     const t = (usuario?.tipo ?? tipo ?? "").toLowerCase();
 
     (async () => {
-      // treinos programados
       try {
         const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/programados`, { headers: { Authorization: `Bearer ${token}` } });
         if (!resTreinos.ok) throw new Error(`/treinos/programados: ${resTreinos.status}`);
@@ -151,7 +145,6 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
         setTreinos([]);
       }
 
-      // submissões pendentes (para quem é gestor)
       if (["professor", "admin", "escola", "escolinha", "clube"].includes(t)) {
         carregarSubmissoes();
       }
@@ -219,7 +212,6 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
   const aprovar = (id: string, pontos?: number) => validarSubmissao(id, true, pontos);
   const reprovar = (id: string) => validarSubmissao(id, false, 0);
 
-  // ---- Agendar treino programado (mantido, só aparece se existir atletaId no storage) ----
   async function agendarTreinoProgramado(treino: TreinoProgramado, dataSelecionadaISO: string, observacao?: string) {
     const token = getToken();
     const atletaId = (Storage as any).tipoUsuarioId || (Storage as any).atletaId;
@@ -263,7 +255,6 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
   const formatarDataHora = (iso?: string | null) =>
     iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
 
-  // ---- UI helpers ----
   const renderTreinoCard = (treino: TreinoProgramado) => {
     const temAtletaNoStorage = Boolean((Storage as any).tipoUsuarioId || (Storage as any).atletaId);
     return (
@@ -280,7 +271,6 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
         {treino.descricao && <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>}
 
         <div className="mt-3 flex flex-col gap-2">
-          {/* Só mostra UI de agendar se houver atletaId disponível */}
           {temAtletaNoStorage && (
             <div className="flex flex-col sm:flex-row gap-2">
               <input
@@ -529,7 +519,6 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
         </div>
       </div>
 
-      {/* bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-[0_-4px_12px_-6px_rgba(0,0,0,0.3)]">
         <Link href="/feed" className="hover:opacity-90" aria-label="Feed">
           <House />

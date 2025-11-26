@@ -22,7 +22,6 @@ export type UsageKey =
   | "assentos_coach_total"
   | "turmas_total"
   | "agendamentos_mes"
-  // NOVO: limite de treinos programados criados por mês (plano FREE)
   | "treinos_programados_mes";
 
 type Window = "day" | "week" | "month" | "total";
@@ -55,7 +54,6 @@ const LIMITS = {
     assentos_coach_total: 30,
     turmas_total: 30,
     agendamentos_mes: 20000,
-    // NOVO: até 5 treinos programados criados por mês
     treinos_programados_mes: 5,
   },
   PRO: {
@@ -100,7 +98,6 @@ const CAPABILITY_BY_KEY: Record<UsageKey, string> = {
   assentos_coach_total: "ASSENTOS_COACH",
   turmas_total: "TURMAS",
   agendamentos_mes: "AGENDAMENTOS",
-  // Nome interno pra upgradeHint / logs
   treinos_programados_mes: "TREINOS_PROGRAMADOS_MES",
 };
 

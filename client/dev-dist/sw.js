@@ -11,12 +11,9 @@
  * limitations under the License.
  */
 
-// If the loader is already loaded, just stop.
 if (!self.define) {
   let registry = {};
 
-  // Used for `eval` and `importScripts` where we can't get script URL by other means.
-  // In both cases, it's safe to use a global var because those functions are synchronous.
   let nextDefineUri;
 
   const singleRequire = (uri, parentUri) => {
@@ -49,7 +46,6 @@ if (!self.define) {
   self.define = (depsNames, factory) => {
     const uri = nextDefineUri || ("document" in self ? document.currentScript.src : "") || location.href;
     if (registry[uri]) {
-      // Module is already loading or loaded.
       return;
     }
     let exports = {};
@@ -75,11 +71,6 @@ define(['./workbox-487f81db'], (function (workbox) { 'use strict';
     }
   });
 
-  /**
-   * The precacheAndRoute() method efficiently caches and responds to
-   * requests for URLs in the manifest.
-   * See https://goo.gl/S9QRab
-   */
   workbox.precacheAndRoute([{
     "url": "registerSW.js",
     "revision": "3ca0b8505b4bec776b69afdba2768812"

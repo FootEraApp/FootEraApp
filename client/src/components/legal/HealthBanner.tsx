@@ -2,19 +2,12 @@ import React from "react";
 import { X } from "lucide-react";
 
 type Props = {
-  /** Mostra o botão X e permite fechar o aviso */
   dismissible?: boolean;
-  /** Chave usada para lembrar que o usuário fechou */
   storageKey?: string;
-  /** Estado inicial caso não haja registro salvo */
   defaultOpen?: boolean;
-  /** Classes extras */
   className?: string;
-  /** Tipografia/espacamento mais compacto */
   compact?: boolean;
-  /** Usa sessionStorage em vez de localStorage */
   useSession?: boolean;
-  /** Conteúdo customizado (opcional) */
   children?: React.ReactNode;
 };
 
@@ -28,7 +21,7 @@ function getStore(useSession?: boolean) {
 }
 
 export default function HealthBanner({
-  dismissible = true,                // padrão: já vem com X
+  dismissible = true,             
   storageKey = "healthbanner:v1",
   defaultOpen = true,
   className = "",
@@ -39,7 +32,6 @@ export default function HealthBanner({
   const store = getStore(useSession);
   const [open, setOpen] = React.useState<boolean>(defaultOpen);
 
-  // Lê do storage se já foi fechado antes
   React.useEffect(() => {
     if (!dismissible || !store) return;
     const v = store.getItem(storageKey);

@@ -1,12 +1,8 @@
-// server/controllers/atletaObservadoController.ts
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-/**
- * Para filtros (where): usa os campos ID (professorId, clubeId, ...)
- */
 function buildOwnerWhere(tipoRaw: string | undefined, ownerId: string) {
   const tipo = String(tipoRaw || "").toLowerCase();
 
@@ -15,13 +11,9 @@ function buildOwnerWhere(tipoRaw: string | undefined, ownerId: string) {
   if (tipo === "escola" || tipo === "escolinha") return { escolinhaId: ownerId };
   if (tipo === "olheiro") return { olheiroId: ownerId };
 
-  // padrão: professorId
   return { professorId: ownerId };
 }
 
-/**
- * Para CREATE: usa nested connect (professor: { connect: { id } })
- */
 function buildOwnerCreate(tipoRaw: string | undefined, ownerId: string) {
   const tipo = String(tipoRaw || "").toLowerCase();
 
@@ -31,13 +23,9 @@ function buildOwnerCreate(tipoRaw: string | undefined, ownerId: string) {
     return { escolinha: { connect: { id: ownerId } } };
   if (tipo === "olheiro") return { olheiro: { connect: { id: ownerId } } };
 
-  // padrão: professor
   return { professor: { connect: { id: ownerId } } };
 }
 
-/**
- * GET /api/observados/status/:atletaId?ownerId=...&tipo=...
- */
 export async function statusObservacao(req: Request, res: Response) {
   const { atletaId } = req.params;
   const { ownerId, tipo } = req.query as { ownerId?: string; tipo?: string };
@@ -46,7 +34,6 @@ export async function statusObservacao(req: Request, res: Response) {
     return res.status(400).json({ message: "atletaId é obrigatório" });
   }
   if (!ownerId) {
-    // sem travar: só responde false
     return res.json({ observando: false });
   }
 
@@ -59,9 +46,6 @@ export async function statusObservacao(req: Request, res: Response) {
   return res.json({ observando: !!existe });
 }
 
-/**
- * GET /api/observados?ownerId=...&tipo=...
- */
 export async function listarObservados(req: Request, res: Response) {
   const { ownerId, tipo } = req.query as { ownerId?: string; tipo?: string };
 
@@ -97,10 +81,6 @@ export async function listarObservados(req: Request, res: Response) {
   return res.json(lista);
 }
 
-/**
- * POST /api/observados
- * body: { atletaId, ownerId, tipo }
- */
 export async function observarAtleta(req: Request, res: Response) {
   const { atletaId, ownerId, tipo } = req.body as {
     atletaId?: string;
@@ -127,7 +107,6 @@ export async function observarAtleta(req: Request, res: Response) {
 
     return res.status(201).json({ ok: true, observando: true, id: row.id });
   } catch (e: any) {
-    // unique constraint (já existe relação)
     if (e?.code === "P2002") {
       const ja = await prisma.atletaObservado.findFirst({
         where: { atletaId, ...ownerWhere },
@@ -143,10 +122,6 @@ export async function observarAtleta(req: Request, res: Response) {
   }
 }
 
-/**
- * DELETE /api/observados/:atletaId
- * body: { ownerId, tipo }
- */
 export async function pararDeObservar(req: Request, res: Response) {
   const { atletaId } = req.params;
   const { ownerId, tipo } = req.body as { ownerId?: string; tipo?: string };
@@ -166,9 +141,6 @@ export async function pararDeObservar(req: Request, res: Response) {
   return res.sendStatus(204);
 }
 
-/**
- * GET /api/observados/olheiro/:olheiroId
- */
 export async function listarObservadosPorOlheiro(req: Request, res: Response) {
   try {
     let { olheiroId } = req.params as { olheiroId?: string };
