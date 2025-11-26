@@ -1,4 +1,3 @@
-// client/src/pages/perfil.tsx
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";
@@ -120,7 +119,6 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-transparent pb-20">
-      {/* WRAPPER CENTRALIZADO E MESMA LARGURA DO CONTEÚDO DO PERFIL */}
       <div className="max-w-3xl mx-auto px-4 pt-3">
         <HealthBanner />
 
@@ -168,7 +166,6 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* CONTEÚDO ESPECÍFICO DO TIPO DE PERFIL */}
       {tipo === "Atleta" && <PerfilAtleta idDaUrl={idDaUrl} />}
       {tipo === "Professor" && <PerfilProfessor idDaUrl={idDaUrl} />}
       {tipo === "Clube" && <PerfilClube idDaUrl={idDaUrl} />}

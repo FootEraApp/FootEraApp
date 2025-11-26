@@ -1,4 +1,3 @@
-// client/src/pages/feed
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FaHeart,
@@ -353,7 +352,6 @@ function PaginaFeed(): JSX.Element {
     setComentariosModalAberto(false);
     setPostSelecionado(null);
 
-    // mata overlays “fantasmas” de outros componentes/modais
     document
       .querySelectorAll(
         ".backdrop, .overlay, .modal, [data-state='open'], [data-radix-dialog-overlay]"
@@ -364,7 +362,6 @@ function PaginaFeed(): JSX.Element {
   }, []);
   
   useEffect(() => {
-  // se não for atleta, nem tenta carregar calendário
   if (tipoUsuario !== "ATLETA") {
     setAgendaFeed([]);
     setCarregandoAgenda(false);

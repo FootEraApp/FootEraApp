@@ -1521,7 +1521,7 @@ model PartidaElenco {
   finalizadoEm       DateTime?
   vencedorElencoId   String?
   proximaPartidaId   String?
-  proximaPartidaSlot String? // "A" ou "B"
+  proximaPartidaSlot String?
 
   evento EventoElenco @relation(fields: [eventoId], references: [id], onDelete: Cascade)
 
@@ -1605,56 +1605,26 @@ enum IndicacaoStatus {
 }
 
 enum PosicaoCampo {
-  // Goleiro
   GOL
-
-  // Linha de defesa
-  // Lateral Direito
   LD
-  // Lateral Esquerdo
   LE
-  // Zagueiro Direito
   ZD
-  // Zagueiro Central
   ZC
-  // Zagueiro Esquerdo
   ZE
-
-  // Ala Direito (RWB)
   ALA_D
-  // Ala Esquerdo (LWB)
   ALA_E
-
-  // Meio-campo defensivo / central
-  // Volante 1 (CDM)
   VOL1
-  // Volante 2 (CDM)
   VOL2
-  // Meia Central 1 (CM)
   MC1
-  // Meia Central 2 (CM)
   MC2
-
-  // Meio-campo ofensivo / meias abertos
-  // Meia Ofensivo Central (CAM)
   MEI
-  // Meia Ofensivo Direita (AMR)
   MEI_D
-  // Meia Ofensivo Esquerda (AML)
   MEI_E
-  // Meia Direita (RM)
   MD
-  // Meia Esquerda (LM)
   ME
-
-  // Ataque
-  // Ponta Direita (RW)
   PD
-  // Ponta Esquerda (LW)
   PE
-  // Segundo Atacante / Centroavante recuado (CF/SS)
   SA
-  // Centroavante (ST)
   CA
 }
 

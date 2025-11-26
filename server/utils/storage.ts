@@ -1,4 +1,3 @@
-// server/utils/storage
 const getFromStorage = (key: string): string | null => {
   return localStorage.getItem(key) || sessionStorage.getItem(key);
 };
@@ -19,7 +18,6 @@ const Storage = {
   get token() {
     return getFromStorage("token");
   },
-  
 };
 
 export default Storage;

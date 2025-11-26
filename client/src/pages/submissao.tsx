@@ -1,4 +1,3 @@
-// client/src/pages/submissao
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
@@ -20,7 +19,7 @@ export default function PaginaSubmissao() {
 
   const [observacao, setObservacao] = useState("");
   const [tempoTexto, setTempoTexto] = useState("");
-  const [tempoSegFixado, setTempoSegFixado] = useState<number | null>(null); // 👈 tempo vindo do timer (travado)
+  const [tempoSegFixado, setTempoSegFixado] = useState<number | null>(null);
   const [reps, setReps] = useState<string>("");
 
   const [arquivo, setArquivo] = useState<File | null>(null);
@@ -292,7 +291,6 @@ export default function PaginaSubmissao() {
     setDesafioId(dId);
     setModeParam(mode);
 
-    // 👇 se veio tempo do timer, fixa e já formata
     if (Number.isFinite(tempoSegParam) && tempoSegParam > 0) {
       setTempoSegFixado(tempoSegParam);
       setTempoTexto(secondsToMMSS(tempoSegParam));
@@ -594,7 +592,6 @@ export default function PaginaSubmissao() {
 
       formData.append("treinoAgendadoId", treinoAgendadoId!);
 
-      // 👇 se veio tempo fixado do timer, usa ele; senão parseia o campo
       const seg =
         tempoSegFixado != null ? tempoSegFixado : parseTempoToSeconds(tempoTexto);
 

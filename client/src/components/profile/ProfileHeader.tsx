@@ -1,4 +1,3 @@
-// client/src/components/profile/ProfileHeader
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send, Eye, UserPlus, Share2 } from "lucide-react";

@@ -1,4 +1,3 @@
-// server/utils/featureLimit.ts
 import { PrismaClient } from "@prisma/client";
 
 export type FeatureKey = "SUBMISSAO_DESAFIO" | "TREINO_SALVO";
@@ -6,9 +5,9 @@ export type FeatureKey = "SUBMISSAO_DESAFIO" | "TREINO_SALVO";
 type EnforceFeatureLimitParams = {
   prisma: PrismaClient;
   feature: FeatureKey;
-  plano: string; // "FREE", "PRO", etc.
-  atletaId?: string;   // usado em SUBMISSAO_DESAFIO
-  usuarioId?: string;  // usado em TREINO_SALVO (TreinoSalvo.usuarioId)
+  plano: string;
+  atletaId?: string;  
+  usuarioId?: string; 
 };
 
 function makeLimitError(feature: FeatureKey, limit: number, message: string) {
@@ -27,16 +26,14 @@ export async function enforceFeatureLimit({
   usuarioId,
   plano,
 }: EnforceFeatureLimitParams) {
-  // Se não for plano Free, não aplica limite
   if (String(plano).toUpperCase() !== "FREE") return;
 
   if (feature === "SUBMISSAO_DESAFIO") {
-    // aqui o campo é atletaId + createdAt
-    if (!atletaId) return; // sem atleta, não aplica nada
+    if (!atletaId) return; 
 
     const now = new Date();
     const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const fimMes = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0); // primeiro dia do próximo mês
+    const fimMes = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0);
 
     const count = await prisma.submissaoDesafio.count({
       where: {
@@ -59,7 +56,6 @@ export async function enforceFeatureLimit({
   }
 
   if (feature === "TREINO_SALVO") {
-    // TreinoSalvo usa usuarioId no schema
     const key = usuarioId ?? atletaId;
     if (!key) return;
 
