@@ -38,9 +38,35 @@ export const buscarProfessorPorId = async (req: Request, res: Response) => {
   }
 };
 
-export const listarProfessores = async (_req: Request, res: Response) => {
+export const listarProfessores = async (req: Request, res: Response) => {
   try {
-    const professores = await prisma.professor.findMany({ include: { usuario: true } });
+    const { organizacaoId } = req.query;
+
+    let where: any = {};
+
+    if (typeof organizacaoId === "string" && organizacaoId.trim() !== "") {
+      // usa o helper que você já criou pra validar se é clube ou escolinha
+      const { id } = await resolveOrganizacao(organizacaoId.trim());
+
+      if (!id) {
+        // organizacaoId não bate com nenhum clube/escolinha → lista vazia
+        return res.json([]);
+      }
+
+      where = {
+        OR: [
+          { clubeId: id },
+          { escolinhaId: id },
+          { organizacaoId: id }, // se você estiver usando esse campo também
+        ],
+      };
+    }
+
+    const professores = await prisma.professor.findMany({
+      where,
+      include: { usuario: true },
+    });
+
     res.json(professores);
   } catch (error) {
     console.error("Erro ao listar professores:", error);
