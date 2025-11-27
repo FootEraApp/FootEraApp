@@ -1,4 +1,3 @@
-// client/src/services/feedService.ts
 import { API } from "../config.js";
 import { readToken } from "../utils/auth.js";
 
@@ -48,7 +47,6 @@ function pickToken(): string {
   if (!raw) {
     throw new Error("Sem token. Faça login novamente.");
   }
-  // garante que só tenha um "Bearer "
   return raw.startsWith("Bearer ") ? raw : `Bearer ${raw}`;
 }
 
@@ -86,7 +84,6 @@ export async function getFeedPosts(
 
   if (res.status === 401) {
     console.warn("[FEED] 401 em", url, "– provavelmente token inválido/expirado");
-    // NÃO redireciona automaticamente; só devolve lista vazia
     return [];
   }
 

@@ -431,7 +431,7 @@ useEffect(() => {
           <img
             src={formatarUrlFoto(dadosUsuario.foto, "usuarios")}
             onError={(e) => {
-              (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/default-user.png`;
+              (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/usuarios/default-user.png`;
             }}
             className="w-24 h-24 rounded-full object-cover mt-2"
             alt="Foto atual"
@@ -514,15 +514,19 @@ useEffect(() => {
                 let fotoUrl = dadosUsuario.foto;
                 if (dadosUsuario.foto instanceof File) {
                   const formData = new FormData();
-                  formData.append("foto", dadosUsuario.foto);
+                  formData.append("foto", dadosUsuario.foto);          // bate com upload.single("foto")
                   formData.append("usuarioId", usuarioId!);
                   formData.append("tipo", tipoUsuarioOriginal!);
-                  const uploadRes = await axios.post(`${API.BASE_URL}/api/upload/perfil`, formData, {
-                    headers: { Authorization: `Bearer ${token}` },
-                  });
-                  fotoUrl = uploadRes.data.url;
-                }
 
+                  const uploadRes = await axios.post(
+                    `${API.BASE_URL}/api/upload/perfil`,
+                    formData,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                  );
+
+                  // backend agora devolve { ok, midia, url, relativeUrl }
+                  fotoUrl = uploadRes.data?.url || uploadRes.data?.midia?.url;
+                }
                 const tipo: any = { ...dadosTipo };
 
                 if (tipo.siteOficial && !tipo.site) tipo.site = tipo.siteOficial;

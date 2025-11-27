@@ -32,7 +32,6 @@ type Capability =
   | "org.turmas"
   | "org.templates"
   | "org.agendamentosMes"
-  // NOVOS:
   | "Treinos:CriarProgramado"
   | "treinos.ilimitados"
   | "rotinas.ilimitadas";
@@ -67,7 +66,6 @@ const ENTITLEMENTS: EntTable = {
       "templates:criar": false,
       "agendamento.pessoal": false,
       "agendamento.lote": true,
-      // pode criar treinos programados, mas com limite de uso (usage.ts)
       "Treinos:CriarProgramado": true,
       "treinos.ilimitados": false,
       "rotinas.ilimitadas": false,
@@ -78,7 +76,6 @@ const ENTITLEMENTS: EntTable = {
       "templates:criar": true,
       "agendamento.pessoal": true,
       "agendamento.lote": true,
-      // PRO pode criar treinos sem limitação por capability (limite prático é enorme)
       "Treinos:CriarProgramado": true,
       "treinos.ilimitados": true,
       "rotinas.ilimitadas": true,
@@ -98,7 +95,6 @@ const ENTITLEMENTS: EntTable = {
       "analytics.meses": 12,
       "agendamento.lote": true,
       "templates:criar": true,
-      // Escolinha/Clube em plano ORG pode criar e ter treinos/rotinas ilimitados
       "Treinos:CriarProgramado": true,
       "treinos.ilimitados": true,
       "rotinas.ilimitadas": true,
