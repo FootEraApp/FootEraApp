@@ -1,14 +1,9 @@
-// server/controllers/elencosController.ts
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 
 const prisma = new PrismaClient();
-
-/* ============================================================================
-   Helpers antigos mantidos (usados em listarElencosMinha / escalaPorTurma)
-============================================================================ */
 
 async function montarRespostaElencos(donoId: string, turmaId?: string) {
   const whereBase: any = {
@@ -41,7 +36,6 @@ async function montarRespostaElencos(donoId: string, turmaId?: string) {
   }));
 }
 
-// GET /api/elencos/minha?turmaId=...
 export async function listarElencosMinha(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.userId;
@@ -77,7 +71,6 @@ export async function listarElencosMinha(req: AuthenticatedRequest, res: Respons
   }
 }
 
-// GET /api/elencos/escala-por-turma?turmaId=...
 export async function escalaPorTurma(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.userId;
@@ -151,11 +144,6 @@ export async function escalaPorTurma(req: AuthenticatedRequest, res: Response) {
   }
 }
 
-/* ============================================================================
-   Helpers novos: validação de escala e contagem de jogadores
-============================================================================ */
-
-// Extrai ids únicos de atletas a partir da escala enviada
 function extrairAtletasDaEscala(escala: any): string[] {
   if (!escala || typeof escala !== "object") return [];
   const set = new Set<string>();
@@ -173,10 +161,6 @@ function extrairAtletasDaEscala(escala: any): string[] {
   return Array.from(set);
 }
 
-/* ============================================================================
-   🔄 Funções sincronizadas com o antigo treinosController (parte de Elencos)
-============================================================================ */
-
 async function getEscalaCore(elencoId: string, res: Response) {
   try {
     const elenco = await prisma.elenco.findUnique({
@@ -186,7 +170,7 @@ async function getEscalaCore(elencoId: string, res: Response) {
         nome: true,
         maxJogadores: true,
         escala: true,
-        formacao: true, // se não existir no schema, remova esta linha
+        formacao: true,
       },
     });
 
@@ -204,8 +188,8 @@ async function getEscalaCore(elencoId: string, res: Response) {
       id: elenco.id,
       nome: elenco.nome,
       maxJogadores: elenco.maxJogadores,
-      escala, // ex: { GOL: "uuidAtleta", LD: "uuidAtleta", ... }
-      formacao, // ex: { defesa: 4, meio: 2, atacantes: 3 }
+      escala,
+      formacao,
     });
   } catch (err) {
     console.error("Erro ao buscar escala do elenco:", err);
@@ -221,7 +205,6 @@ export async function getEscalaPorElencoId(req: Request, res: Response) {
 
 export async function getEscalaPorDono(req: Request, res: Response) {
   try {
-    // suporta tanto query (?tipoUsuarioId=...) quanto params (/por-escolinha/:escolinhaId/escala)
     const fromQuery = (req.query.tipoUsuarioId ?? "") as string;
     const fromParams =
       (req.params.escolinhaId as string | undefined) ||
@@ -301,12 +284,9 @@ export async function criarElenco(req: Request, res: Response) {
       professorId,
       clubeId,
       escolinhaId,
-      atletasIds, // será ignorado e recalculado a partir da escala
       escala,
-      maxJogadores,
       turmaId,
-      formacao, // vem do front (ex: "4-3-3" ou objeto)
-      // usados só pra descobrir o dono:
+      formacao, 
       tipoUsuario,
       tipoUsuarioId,
     } = req.body;
@@ -332,7 +312,6 @@ export async function criarElenco(req: Request, res: Response) {
     const escalaUsada = escala && typeof escala === "object" ? escala : null;
     const atletasFromEscala = extrairAtletasDaEscala(escalaUsada);
 
-    // 🔒 trava para exatamente 11
     if (atletasFromEscala.length !== 11) {
       return res.status(400).json({
         error: "Elenco precisa ter exatamente 11 jogadores escalados.",
@@ -348,8 +327,8 @@ export async function criarElenco(req: Request, res: Response) {
         escolinhaId: escolinhaId ?? owner.escolinhaId ?? null,
         atletasIds: atletasFromEscala,
         escala: escalaUsada ?? null,
-        formacao: formacao ?? null, // salva como JSON ou string conforme schema
-        maxJogadores: 11, // força 11
+        formacao: formacao ?? null,
+        maxJogadores: 11, 
         turmaId: turmaId ?? null,
       },
     });
@@ -369,7 +348,6 @@ export async function atualizarElenco(req: Request, res: Response) {
       professorId,
       clubeId,
       escolinhaId,
-      atletasIds, // ignorado, vamos montar a partir da escala
       escala,
       maxJogadores,
       turmaId,
@@ -399,7 +377,6 @@ export async function atualizarElenco(req: Request, res: Response) {
     const escalaUsada = escala && typeof escala === "object" ? escala : null;
     const atletasFromEscala = extrairAtletasDaEscala(escalaUsada);
 
-    // 🔒 trava para exatamente 11
     if (atletasFromEscala.length !== 11) {
       return res.status(400).json({
         error: "Elenco precisa ter exatamente 11 jogadores escalados.",
@@ -417,7 +394,7 @@ export async function atualizarElenco(req: Request, res: Response) {
         atletasIds: atletasFromEscala,
         escala: escalaUsada ?? null,
         formacao: formacao ?? null,
-        maxJogadores: 11, // força 11 mesmo se vier outro número
+        maxJogadores: 11, 
         turmaId: turmaId ?? null,
       },
     });
@@ -429,11 +406,6 @@ export async function atualizarElenco(req: Request, res: Response) {
   }
 }
 
-/* ============================================================================
-   🆕 Funções trazidas do treinosController: atletas vinculados
-============================================================================ */
-
-// GET /api/elencos/atletas-vinculados?professorId=...&incluirPontuacao=1
 export const atletasVinculados = async (req: AuthenticatedRequest, res: Response) => {
   try {
     let professorId: string | undefined =
@@ -500,7 +472,6 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
   }
 };
 
-// GET /api/elencos/atletas?tipoUsuarioId=...&turmaId=...
 export async function listarAtletasVinculados(req: Request, res: Response) {
   try {
     const tipoUsuarioId = String(req.query.tipoUsuarioId || "");

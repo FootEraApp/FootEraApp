@@ -1,4 +1,3 @@
-// server/controllers/authController.ts
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
@@ -11,7 +10,6 @@ import dotenv from "dotenv";
 dotenv.config();
 const prisma = new PrismaClient();
 
-// ⬇️ usa o MESMO default do middleware
 const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
 
 export async function me(req: AuthenticatedRequest, res: Response) {

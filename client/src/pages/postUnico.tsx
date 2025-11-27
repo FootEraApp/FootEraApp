@@ -130,7 +130,7 @@ function PostUnico(): JSX.Element {
         <div className="border rounded-xl p-3 bg-gray-50">
           <div className="flex items-center gap-2 mb-1">
             <img
-              src={publicImgUrl(post.repostOf.usuario?.foto) || `${APP.FRONTEND_BASE_URL}/assets/default-user.png`}
+              src={publicImgUrl(post.repostOf.usuario?.foto) || `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`}
               alt="avatar original"
               className="w-7 h-7 rounded-full object-cover"
             />

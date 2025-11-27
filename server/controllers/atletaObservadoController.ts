@@ -1,4 +1,3 @@
-// server/controllers/atletaObservadoController.ts
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
@@ -25,13 +24,9 @@ function buildOwnerWhere(tipoRaw: string | undefined, ownerId: string): OwnerWhe
   if (tipo === "escola" || tipo === "escolinha") return { escolinhaId: ownerId };
   if (tipo === "olheiro") return { olheiroId: ownerId };
 
-  // padrão: professorId
   return { professorId: ownerId };
 }
 
-/**
- * Para CREATE: usa nested connect (professor: { connect: { id } })
- */
 function buildOwnerCreate(tipoRaw: string | undefined, ownerId: string) {
   const tipo = String(tipoRaw || "").toLowerCase();
 
@@ -182,10 +177,6 @@ export async function listarObservados(req: Request, res: Response) {
   return res.json(lista);
 }
 
-/**
- * POST /api/observados
- * body: { atletaId, ownerId, tipo }
- */
 export async function observarAtleta(req: Request, res: Response) {
   const { atletaId, ownerId, tipo } = req.body as {
     atletaId?: string;
@@ -212,7 +203,6 @@ export async function observarAtleta(req: Request, res: Response) {
 
     return res.status(201).json({ ok: true, observando: true, id: row.id });
   } catch (e: any) {
-    // unique constraint (já existe relação)
     if (e?.code === "P2002") {
       const ja = await prisma.atletaObservado.findFirst({
         where: { atletaId, ...ownerWhere },
@@ -271,9 +261,6 @@ export async function pararDeObservar(req: Request, res: Response) {
   return res.sendStatus(204);
 }
 
-/**
- * GET /api/observados/olheiro/:olheiroId
- */
 export async function listarObservadosPorOlheiro(req: Request, res: Response) {
   try {
     let { olheiroId } = req.params as { olheiroId?: string };

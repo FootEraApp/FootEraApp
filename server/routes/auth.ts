@@ -1,4 +1,3 @@
-// server/routes/auth.ts
 import { Router } from "express";
 import { login, me } from "../controllers/authController.js";
 import { forgotPassword, resetPassword } from "../controllers/senhaController.js";

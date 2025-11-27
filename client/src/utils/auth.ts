@@ -1,4 +1,3 @@
-// client/src/utils/auth.ts
 import Storage from "../../../server/utils/storage.js";
 
 export function readToken(): string | null {
