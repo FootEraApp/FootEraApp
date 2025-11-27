@@ -1,4 +1,3 @@
-// client/src/pages/feed
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FaHeart,
@@ -353,7 +352,6 @@ function PaginaFeed(): JSX.Element {
     setComentariosModalAberto(false);
     setPostSelecionado(null);
 
-    // mata overlays “fantasmas” de outros componentes/modais
     document
       .querySelectorAll(
         ".backdrop, .overlay, .modal, [data-state='open'], [data-radix-dialog-overlay]"
@@ -364,7 +362,6 @@ function PaginaFeed(): JSX.Element {
   }, []);
   
   useEffect(() => {
-  // se não for atleta, nem tenta carregar calendário
   if (tipoUsuario !== "ATLETA") {
     setAgendaFeed([]);
     setCarregandoAgenda(false);
@@ -643,7 +640,7 @@ function PaginaFeed(): JSX.Element {
                   <img
                     src={
                       publicImgUrl(post.usuario.foto) ||
-                      `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
+                      `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
                     }
                     alt={post.usuario.nome}
                     className="w-10 h-10 rounded-full object-cover cursor-pointer"
@@ -697,7 +694,7 @@ function PaginaFeed(): JSX.Element {
                         <img
                           src={
                             publicImgUrl(post.repostOf.usuario?.foto) ||
-                            `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
+                            `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
                           }
                           alt={post.repostOf.usuario?.nome || "avatar original"}
                           className="w-7 h-7 rounded-full object-cover cursor-pointer"
@@ -845,7 +842,7 @@ function PaginaFeed(): JSX.Element {
                           <img
                             src={
                               publicImgUrl(comentario.usuario?.foto) ||
-                              `${APP.FRONTEND_BASE_URL}/assets/default-user.png`
+                              `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
                             }
                             alt={comentario.usuario?.nome || "avatar"}
                             className="w-8 h-8 rounded-full object-cover cursor-pointer"
