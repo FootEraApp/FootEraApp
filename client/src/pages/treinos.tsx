@@ -1,4 +1,3 @@
-// client/src/pages/treinos.tsx
 import { useEffect, useState } from "react";
 import TreinosAtletas from "./treino/treinos-atletas.js";
 import TreinosInstrutores from "./treino/treinos-instrutores.js";
@@ -20,7 +19,6 @@ interface UsuarioLogadoLegacy {
 
 function detectarTipo(): Tipo | null {
   try {
-    // 🔹 NOVO FORMATO — o login salva "tipoUsuario" em localStorage/sessionStorage
     const fromStore =
       localStorage.getItem("tipoUsuario") ||
       sessionStorage.getItem("tipoUsuario");
@@ -39,7 +37,6 @@ function detectarTipo(): Tipo | null {
       if (map[raw]) return map[raw];
     }
 
-    // 🔹 FORMATO ANTIGO — ainda tenta ler "usuarioLogado" se existir
     const rawLegacy = localStorage.getItem("usuarioLogado");
     if (!rawLegacy) return null;
 
@@ -60,8 +57,6 @@ export default function Treinos() {
   }, []);
 
   if (!tipo) {
-    // Se não detectou tipo, pode ser usuário não logado
-    // Aqui por enquanto só mostra o loading simples
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 text-gray-700">
         Carregando treinos...
@@ -73,6 +68,5 @@ export default function Treinos() {
     return <TreinosAtletas />;
   }
 
-  // professor / escolinha / escola / clube / admin / olheiro
   return <TreinosInstrutores tipo={tipo} />;
 }

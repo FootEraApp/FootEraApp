@@ -1,4 +1,3 @@
-// client/src/pages/treinos/treinos-atletas.tsx
 import React, { useEffect, useRef, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -126,7 +125,7 @@ type MinhasSubTreino = {
 const now = new Date();
 const hoje = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-const PLACEHOLDER_USER = "/assets/default-user.png";
+const PLACEHOLDER_USER = "/assets/usuarios/default-user.png";
 const TIMER_KEY = (id: string) => `footera:treinoTimerStart:${id}`;
 const CHECKLIST_KEY = (id: string) => `footera:treinoChecklist:${id}`;
 
@@ -250,7 +249,6 @@ function WeeklyChecker({ weeks }: { weeks: any[] }) {
 }
 
 function getCriadorLabel(t: TreinoAgendado): string | null {
-  // pode estar dentro do treinoProgramado ou no próprio treino agendado
   const tp: any = t.treinoProgramado ?? {};
   const root: any = t as any;
 
@@ -336,28 +334,25 @@ export default function TreinosAtletas() {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [enviandoDM, setEnviandoDM] = useState(false);
   const [carregandoMutuos, setCarregandoMutuos] = useState(false);
-  const [desafioParaCompartilhar, setDesafioParaCompartilhar] =
-    useState<string | null>(null);
+  const [desafioParaCompartilhar, setDesafioParaCompartilhar] = useState<string | null>(null);
 
   const [eventosAtleta, setEventosAtleta] = useState<EventoAtleta[]>([]);
   const [agendaAberta, setAgendaAberta] = useState(false);
 
   const stripRef = useRef<HTMLDivElement | null>(null);
 
-  // contador de cliques nos treinos perdidos (easter egg)
   const [missedClickCounts, setMissedClickCounts] = useState<
     Record<string, number>
   >({});
 
   const [easterEggMsg, setEasterEggMsg] = useState<string | null>(null);
 
-  // faz o easter egg sumir sozinho depois de alguns segundos
   useEffect(() => {
     if (!easterEggMsg) return;
 
     const id = window.setTimeout(() => {
       setEasterEggMsg(null);
-    }, 3500); // 3.5 segundos visível
+    }, 3500); 
 
     return () => window.clearTimeout(id);
   }, [easterEggMsg]);
@@ -478,8 +473,6 @@ export default function TreinosAtletas() {
 
       const js = await r.json();
       const listaRaw: any[] = Array.isArray(js) ? js : js.items ?? [];
-
-      // 🧠 Normaliza para o formato TreinoAgendado que o front usa
       const listaAdaptada: TreinoAgendado[] = listaRaw.map((item) => {
         const tp = item.treinoProgramado ?? null;
 
@@ -526,7 +519,6 @@ export default function TreinosAtletas() {
                     repeticoes: ex.repeticoes ?? "",
                   })) ?? [],
 
-                // esses campos podem vir ou não da API
                 criador: tp.criador ?? null,
                 criadorNome: tp.criadorNome ?? tp.criadoPorNome ?? null,
                 criadorTipo:
@@ -557,7 +549,6 @@ export default function TreinosAtletas() {
   const agendaItems: AgendaItem[] = React.useMemo(() => {
     const arr: AgendaItem[] = [];
 
-    // treinos
     treinosAgendados.forEach((t) => {
       if (!t.dataTreino) return;
       arr.push({
@@ -570,7 +561,6 @@ export default function TreinosAtletas() {
       });
     });
 
-    // desafios
     desafios.forEach((d) => {
       arr.push({
         id: d.id,
@@ -582,7 +572,6 @@ export default function TreinosAtletas() {
       });
     });
 
-    // eventos externos
     eventosAtleta.forEach((e) => {
       arr.push({
         id: e.id,
@@ -597,7 +586,6 @@ export default function TreinosAtletas() {
     return arr.sort((a, b) => a.inicio.localeCompare(b.inicio));
   }, [treinosAgendados, desafios, eventosAtleta]);
 
-  // 🔹 Carregar treinos agendados + eventos do atleta ao abrir a página
   useEffect(() => {
     carregarTreinosAgendados();
     carregarEventosAtleta();
@@ -624,12 +612,10 @@ export default function TreinosAtletas() {
   const canVerElenco = ["professor", "clube", "escolinha"].includes(tipo);
   const isOlheiro = tipo === "olheiro";
 
-  // refs para cálculos visuais
   const bottomNavRef = useRef<HTMLElement | null>(null);
   const agendadosCardRef = useRef<HTMLDivElement | null>(null);
   const [agendadosMaxH, setAgendadosMaxH] = useState<number>(0);
 
-  // 🚨 Ajuste de altura da lista de treinos agendados
   useEffect(() => {
     if (typeof window === "undefined") return;
     const calc = () => {
@@ -660,9 +646,6 @@ export default function TreinosAtletas() {
     };
   }, [treinosAgendados.length, desafios.length]);
 
-  // =========================
-  // ORDENADOS (treinos ordenados por data)
-  // =========================
   const ordenados = [...treinosAgendados].sort((a, b) => {
     const ad = a.dataTreino ? +new Date(a.dataTreino) : 0;
     const bd = b.dataTreino ? +new Date(b.dataTreino) : 0;
@@ -737,14 +720,8 @@ export default function TreinosAtletas() {
     };
   }
 
-  // =========================
-  // TILES (faixa mensal)
-  // =========================
   const tiles: TileInfo[] = ordenados.map((t) => computeTile(t));
 
-  // =============================
-  // 🔹 CARREGAR USUÁRIOS MUTUOS
-  // =============================
   async function carregarUsuariosMutuos() {
     try {
       setCarregandoMutuos(true);
@@ -768,15 +745,11 @@ export default function TreinosAtletas() {
     }
   }
 
-  // =============================
-  // 🔹 HIDRATAR CHECKLIST & TIMER
-  // =============================
   useEffect(() => {
     const initialChecklist: Record<string, Checklist> = {};
     const initialElapsed: Record<string, number> = {};
 
     treinosAgendados.forEach((t) => {
-      // checklist
       const rawCk = localStorage.getItem(CHECKLIST_KEY(t.id));
       if (rawCk) {
         try {
@@ -785,7 +758,6 @@ export default function TreinosAtletas() {
         } catch {}
       }
 
-      // timer
       const rawStart = localStorage.getItem(TIMER_KEY(t.id));
       if (rawStart) {
         const startMs = Number(rawStart);
@@ -806,9 +778,6 @@ export default function TreinosAtletas() {
     }
   }, [treinosAgendados]);
 
-  // =============================
-  // 🔹 EFEITO DO TIMER EM FULLSCREEN
-  // =============================
   useEffect(() => {
     if (!fullscreenId) {
       if (tickRef.current != null) {
@@ -830,7 +799,6 @@ export default function TreinosAtletas() {
       return;
     }
 
-    // garante que temos um start salvo
     const key = TIMER_KEY(fullscreenId);
     let startMs = Number(localStorage.getItem(key) || "");
     if (!startMs || Number.isNaN(startMs)) {
@@ -856,9 +824,6 @@ export default function TreinosAtletas() {
     };
   }, [fullscreenId, statusPorTreino]);
 
-  // =============================
-  // 🔹 INICIAR TREINO
-  // =============================
   async function iniciar(id: string) {
     try {
       const nowMs = Date.now();
@@ -878,9 +843,6 @@ export default function TreinosAtletas() {
     }
   }
 
-  // =============================
-  // 🔹 FINALIZAR E ENVIAR
-  // =============================
   async function finalizarEEnviar(treino: TreinoAgendado) {
     try {
       const token = getToken();
@@ -904,7 +866,6 @@ export default function TreinosAtletas() {
         },
       }));
 
-      // limpa timer
       localStorage.removeItem(TIMER_KEY(treino.id));
       setElapsedByTreino((prev) => {
         const { [treino.id]: _, ...rest } = prev;
@@ -922,9 +883,6 @@ export default function TreinosAtletas() {
     }
   }
 
-  // =============================
-  // 🔹 REMARCAR TREINO
-  // =============================
   async function remarcarTreino(t: TreinoAgendado) {
     const nova = prompt("Escolha a nova data (AAAA-MM-DD):");
     if (!nova) return;
@@ -954,9 +912,6 @@ export default function TreinosAtletas() {
     }
   }
 
-  // =============================
-  // 🔹 REMOVER TREINO AGENDADO
-  // =============================
   async function removerTreinoAgendado(id: string) {
     if (!confirm("Deseja excluir este treino?")) return;
 
@@ -972,7 +927,6 @@ export default function TreinosAtletas() {
       setTreinosAgendados((arr) => arr.filter((t) => t.id !== id));
       setFullscreenId(null);
 
-      // limpa timer e checklist
       localStorage.removeItem(TIMER_KEY(id));
       localStorage.removeItem(CHECKLIST_KEY(id));
       setElapsedByTreino((prev) => {
@@ -989,9 +943,6 @@ export default function TreinosAtletas() {
     }
   }
 
-// =============================
-// 🔹 DETALHES DO TREINO + CHECKBOXES
-// =============================
 function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
   const exs = t.treinoProgramado?.exercicios ?? [];
   if (exs.length === 0)
@@ -999,12 +950,10 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
 
   const ck = checklistByTreino[t.id] ?? {};
 
-  // Descobre se esse treino está marcado como "perdido" nos tiles
   const tileInfo = tiles.find((tl) => tl.id === t.id);
   const isMissedTreino = tileInfo?.isMissed ?? false;
 
   const toggleExercicio = (exId: string) => {
-    // se treino foi perdido, não deixa marcar nada
     if (isMissedTreino) return;
 
     setChecklistByTreino((prev) => {
@@ -1013,7 +962,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
       atualTreino[exId] = novoValor;
 
       const next = { ...prev, [t.id]: atualTreino };
-      // persiste no storage
       try {
         localStorage.setItem(CHECKLIST_KEY(t.id), JSON.stringify(atualTreino));
       } catch {}
@@ -1032,7 +980,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
             className="p-3 border rounded-lg bg-neutral-50 flex justify-between items-center gap-3"
           >
             <div className="flex items-start gap-3">
-              {/* Checkbox */}
               <button
                 type="button"
                 onClick={() => toggleExercicio(ex.exercicio.id)}
@@ -1105,12 +1052,10 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
   return (
     <div className="min-h-screen bg-neutral-50 pb-24 overflow-hidden">
       <div className="mx-auto w-full max-w-3xl lg:max-w-4xl px-3 sm:px-4 overflow-hidden">
-        {/* ======= HEALTHBANNER ======= */}
         <div className="max-w-3xl mx-auto px-4 pt-3">
           <HealthBanner />
         </div>
 
-        {/* ======= AÇÕES RÁPIDAS / MEUS TREINOS ======= */}
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
           <div className="flex items-center justify-between gap-2">
             <div className="text-lg font-semibold text-green-900">Treinos</div>
@@ -1127,7 +1072,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
           </div>
         </div>
 
-        {/* BOTÕES DE AÇÃO */}
         <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
             <h3 className="text-lg font-semibold">Meus Treinos</h3>
@@ -1156,7 +1100,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
             </div>
           </div>
 
-          {/* ======= FAIXA MENSAL (TILES) ======= */}
           {tiles.length > 0 && (
             <div
               ref={stripRef}
@@ -1170,7 +1113,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                     id={`tile-${tl.id}`}
                     key={tl.id}
                     onClick={() => {
-                      // agora SEM bloqueio pros perdidos
                       setExpandedId((prev) => (prev === tl.id ? null : tl.id));
                       setFullscreenId(tl.id);
                       setMenuOpen(false);
@@ -1180,7 +1122,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                     } ${tl.borderClass} ${
                       isMissed ? "opacity-80" : "hover:opacity-95"
                     }`}
-                    // não marcamos mais como aria-disabled
                     title={tl.titulo}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -1224,7 +1165,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
           )}
         </div>
 
-        {/* ======= MINHA AGENDA (UNIFICADA) ======= */}
         <div className="mt-4 mb-2 flex justify-center">
           <div className="w-full max-w-4xl bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
             <button
@@ -1254,7 +1194,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                 ) : (
                   <ul className="space-y-2">
                     {agendaItems.map((item) => {
-                      // 👉 Se for TREINO, usamos o mesmo visual de "Treinos agendados"
                       if (item.origem === "treino") {
                         const treino = treinosAgendados.find(
                           (t) => t.id === item.id
@@ -1355,7 +1294,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                         );
                       }
 
-                      // 👉 DESAFIOS / EVENTOS / OUTROS
                       const dateStr = item.inicio
                         ? new Date(item.inicio).toLocaleString("pt-BR", {
                             dateStyle: "short",
@@ -1416,7 +1354,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
           </div>
         </div>
 
-        {/* ======= DESAFIOS ======= */}
         {FLAGS.DESAFIOS_ENABLED && (
           <div
             className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mt-6"
@@ -1461,7 +1398,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                     </div>
 
                     <div className="mt-3 grid grid-cols-3 gap-2">
-                      {/* Submeter */}
                       <button
                         onClick={() =>
                           navigate(`/submissao?desafioId=${desafio.id}`)
@@ -1475,7 +1411,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                         </span>
                       </button>
 
-                      {/* Ver */}
                       <button
                         onClick={() =>
                           navigate(`/desafios/${desafio.id}`)
@@ -1486,7 +1421,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                         Ver desafio
                       </button>
 
-                      {/* Compartilhar */}
                       <button
                         onClick={() => abrirModalCompartilhar(desafio.id)}
                         className="w-full inline-flex items-center justify-center gap-1 text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white"
@@ -1508,14 +1442,11 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
         )}
       </div>
 
-      {/* ======= FULLSCREEN DO TREINO ======= */}
       {fullscreenId && (
         <div className="fixed inset-0 z-40 bg-white flex flex-col">
-          {/* ===== HEADER ===== */}
           <div className="sticky top-0 z-10 px-4 py-3 border-b bg-white/95 backdrop-blur">
             {(() => {
               const atual = ordenados.find((t) => t.id === fullscreenId);
-              // ⬇⬇⬇ AJUSTE DO rawStatus PARA NÃO TER STRING VAZIA NO TIPO
               const rawStatus =
                 fullscreenId
                   ? (statusPorTreino[fullscreenId]?.status as
@@ -1532,7 +1463,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                 atual?.submissao?.feito === true ||
                 (atual ? idsAgendadosSubmetidos.has(atual.id) : false);
 
-              // status efetivo combinando backend + local
               let st: TreinoStatus | "READY_TO_SUBMIT" | undefined = rawStatus;
               if (!st || st === "PENDING") {
                 if (backendStatus === "COMPLETED" || submittedAgendado) {
@@ -1571,7 +1501,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
 
               return (
                 <div className="relative flex items-center gap-3">
-                  {/* TIMER NO CENTRO */}
                   {st === "IN_PROGRESS" && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <div
@@ -1583,7 +1512,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                     </div>
                   )}
 
-                  {/* BOTÃO FECHAR */}
                   <button
                     onClick={() => {
                       setMenuOpen(false);
@@ -1595,7 +1523,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                     <X className="w-5 h-5" />
                   </button>
 
-                  {/* TÍTULO */}
                   <div className="flex-1 min-w-0 text-center relative z-0">
                     {st !== "IN_PROGRESS" && (
                       <div className="text-base sm:text-lg font-semibold text-green-900 truncate max-w-[70vw] mx-auto">
@@ -1604,7 +1531,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                     )}
                   </div>
 
-                  {/* MENU (3 pontinhos) */}
                   <div className="relative z-10">
                     <button
                       onClick={() => setMenuOpen((v) => !v)}
@@ -1616,7 +1542,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
 
                     {menuOpen && (
                       <div className="absolute right-0 mt-2 w-56 bg-white border rounded-lg shadow-lg z-10 overflow-hidden">
-                        {/* FINALIZAR */}
                         {st === "IN_PROGRESS" && (
                           <button
                             onClick={() => {
@@ -1634,7 +1559,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                           </button>
                         )}
 
-                        {/* REMARCAR (bloqueado se concluído ou perdido) */}
                         <button
                           onClick={() => {
                             if (!atual) return;
@@ -1652,7 +1576,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                           Remarcar (≤ 7 dias)
                         </button>
 
-                        {/* EXCLUIR (mantido mesmo concluído/perdido) */}
                         <button
                           onClick={() => {
                             setMenuOpen(false);
@@ -1670,7 +1593,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
             })()}
           </div>
 
-          {/* ===== CONTEÚDO DO FULLSCREEN ===== */}
           <div className="flex-1 overflow-y-auto px-4 py-4 pb-28">
             {ordenados
               .filter((t) => t.id === fullscreenId)
@@ -1690,14 +1612,12 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                       </p>
                     )}
 
-                    {/* REUSANDO FUNÇÃO COMPLETA DO DETALHE */}
                     {renderTreinoDetalhesConteudo(treino)}
                   </div>
                 );
               })}
           </div>
 
-          {/* ===== BARRA INFERIOR ===== */}
           {(() => {
             const t = ordenados.find((x) => x.id === fullscreenId);
             if (!t || !fullscreenId) return null;
@@ -1766,7 +1686,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
             const visuallyDisabled = disabledCentral || isMissedTreino;
 
             const handleCentralClick = () => {
-              // COMPLETO → não deixa reiniciar, só avisa
               if (isCompletedTreino) {
                 alert(
                   "Este treino já foi concluído e aprovado. Você ainda pode revisar os exercícios quando quiser. 😉"
@@ -1774,35 +1693,29 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                 return;
               }
 
-              // PERDIDO → easter egg de motivação
               if (isMissedTreino) {
                 handleMissedClick(t.id);
                 return;
               }
 
-              // 1) Se ainda não começou → INICIAR
               if (!st || st === "PENDING") {
                 iniciar(t.id);
                 return;
               }
 
-              // 2) Se está em progresso → FINALIZAR (para timer) e virar "Fazer submissão"
               if (st === "IN_PROGRESS") {
-                // para o timer e limpa o start salvo
                 if (tickRef.current != null) {
                   window.clearInterval(tickRef.current);
                   tickRef.current = null;
                 }
                 localStorage.removeItem(TIMER_KEY(fullscreenId));
 
-                // congela o tempo atual (já está em elapsedByTreino)
                 const currentElapsed = elapsedByTreino[fullscreenId] ?? 0;
                 setElapsedByTreino((prev) => ({
                   ...prev,
                   [fullscreenId]: currentElapsed,
                 }));
 
-                // muda o status para "READY_TO_SUBMIT"
                 setStatusPorTreino((prev) => ({
                   ...prev,
                   [fullscreenId]: {
@@ -1814,7 +1727,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                 return;
               }
 
-              // 3) Se já está pronto para submissão → ir para página de submissão
               if (st === "READY_TO_SUBMIT") {
                 const elapsed = elapsedByTreino[fullscreenId] ?? 0;
                 const params = new URLSearchParams();
@@ -1830,7 +1742,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
             return (
               <div className="fixed bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur border-t px-4 py-3">
                 <div className="max-w-3xl mx-auto flex items-center gap-2">
-                  {/* REMARCAR (desativado se concluído ou perdido) */}
                   <button
                     onClick={() => {
                       if (isCompletedTreino || isMissedTreino) return;
@@ -1846,7 +1757,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                     Remarcar
                   </button>
 
-                  {/* INICIAR / FINALIZAR / FAZER SUBMISSÃO / CONCLUÍDO */}
                   <button
                     onClick={handleCentralClick}
                     disabled={disabledCentral}
@@ -1869,7 +1779,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                     {labelCentral}
                   </button>
 
-                  {/* EXCLUIR */}
                   <button
                     onClick={() => removerTreinoAgendado(t.id)}
                     className="h-11 px-3 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 flex-1"
@@ -1883,11 +1792,9 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
         </div>
       )}
 
-      {/* ======= MODAL DE VÍDEO DO EXERCÍCIO ======= */}
       {videoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="relative w-full max-w-2xl bg-white rounded-xl shadow-lg p-4">
-            {/* BOTÃO FECHAR */}
             <button
               onClick={() => setVideoModal(null)}
               className="absolute top-3 right-3 text-gray-600 hover:text-gray-800"
@@ -1899,21 +1806,18 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
               {videoModal.nome}
             </h2>
 
-            {/* CARREGANDO */}
             {videoCarregando && (
               <div className="text-center py-10 text-gray-600">
                 Carregando vídeo...
               </div>
             )}
 
-            {/* ERRO */}
             {videoErro && (
               <div className="text-center py-6 text-red-600">
                 {videoErro}
               </div>
             )}
 
-            {/* YOUTUBE EMBED */}
             {!videoErro && isYouTubeUrl(videoModal.url) && (
               <div className="aspect-w-16 aspect-h-9">
                 <iframe
@@ -1924,7 +1828,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
               </div>
             )}
 
-            {/* VÍDEO MP4 */}
             {!videoErro &&
               !isYouTubeUrl(videoModal.url) &&
               isVideoUrl(videoModal.url) && (
@@ -1940,7 +1843,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                 />
               )}
 
-            {/* IMAGEM */}
             {!videoErro &&
               !isVideoUrl(videoModal.url) &&
               !isYouTubeUrl(videoModal.url) && (
@@ -1954,7 +1856,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
         </div>
       )}
 
-      {/* ======= MODAL COMPARTILHAR DESAFIO (DM) ======= */}
       {modalAberto && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl p-4 sm:p-6">
@@ -1970,7 +1871,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
               </button>
             </div>
 
-            {/* LISTA DE USUÁRIOS */}
             {carregandoMutuos ? (
               <p className="text-gray-600">Carregando usuários...</p>
             ) : usuariosMutuos.length === 0 ? (
@@ -2012,7 +1912,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
               </div>
             )}
 
-            {/* BOTÃO ENVIAR */}
             <button
               disabled={selecionados.size === 0 || enviandoDM}
               onClick={() => enviarDesafioDM()}
@@ -2029,7 +1928,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
         </div>
       )}
 
-      {/* ======= EASTER EGG MOTIVACIONAL (TOAST) ======= */}
       {easterEggMsg && (
         <div className="fixed bottom-24 inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
           <div className="max-w-xs bg-black/80 text-white text-sm px-4 py-2.5 rounded-full shadow-lg text-center">
@@ -2038,7 +1936,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
         </div>
       )}
 
-      {/* ======= BOTTOM NAV ======= */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
           <House />

@@ -1,4 +1,3 @@
-// client/src/pages/explorar
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";
@@ -396,6 +395,7 @@ function Explorar() {
             <input
               type="text"
               value={busca}
+              data-testid="explorar-search"
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Buscar por nome, posição, cidade..."
               className="w-full pl-9 pr-4 py-2 rounded-xl border outline-none focus:ring-2 ring-emerald-100 bg-white text-sm sm:text-base"
