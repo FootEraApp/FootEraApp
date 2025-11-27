@@ -247,9 +247,9 @@ export default function ProfileHeader({
     })();
   }, [perfilId, isOwnProfile]);
 
+
 useEffect(() => {
-  if (!podeObservar || isOwnProfile || !alvoAtletaId) return;
-  if (obsKey) setObservando(localStorage.getItem(obsKey) === "1");
+  if (isOwnProfile) return;
 
   const token = Storage.token;
   const ownerId = Storage.tipoUsuarioId;
@@ -261,10 +261,25 @@ useEffect(() => {
 
   if (!token || !ownerId) return;
 
+  // Se não pode observar (perfil não é atleta), nem tenta
+  if (!podeObservar) return;
+
+  // Podemos usar o atletaId já resolvido OU o próprio perfilId
+  const alvo = alvoAtletaId || perfilId;
+  if (!alvo) return;
+
+  if (obsKey) {
+    const cache = localStorage.getItem(obsKey);
+    if (cache === "1") {
+      setObservando(true);
+      // mesmo com cache, vamos consultar o backend pra garantir
+    }
+  }
+
   setCarregandoObs(true);
 
   const url = `${API.BASE_URL}/api/observados/status/${encodeURIComponent(
-    alvoAtletaId
+    alvo
   )}?ownerId=${encodeURIComponent(ownerId)}&tipo=${encodeURIComponent(
     tipo || ""
   )}`;
@@ -283,7 +298,7 @@ useEffect(() => {
     })
     .catch(() => setObservando(false))
     .finally(() => setCarregandoObs(false));
-}, [podeObservar, isOwnProfile, alvoAtletaId]);
+}, [podeObservar, isOwnProfile, alvoAtletaId, perfilId]);
 
 
   const iniciarChat = () => {
