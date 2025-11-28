@@ -156,6 +156,21 @@ export async function obter(req: Request, res: Response) {
   res.json(ev);
 }
 
+// -------- helpers compartilhados --------
+
+function mapEventoToAgendaItem(ev: any) {
+  return {
+    id: ev.id,
+    tipo: (ev.tipo as any) || "EVENTO",
+    titulo: ev.titulo,
+    inicio: ev.inicio,
+    fim: ev.fim,
+    origem: "EVENTO" as const,
+  };
+}
+
+// -------- agendas --------
+
 export async function minhaAgenda(req: any, res: Response) {
   try {
     const { alvoId, from, to } = req.query as {
@@ -172,7 +187,7 @@ export async function minhaAgenda(req: any, res: Response) {
       inicio: {
         gte: fromDate,
       },
-      status: "ABERTO", 
+      status: "ABERTO",
     };
 
     if (toDate) {
@@ -197,18 +212,36 @@ export async function minhaAgenda(req: any, res: Response) {
       take: 100,
     });
 
-    const items = eventos.map((ev) => ({
-      id: ev.id,
-      tipo: (ev.tipo as any) || "EVENTO",
-      titulo: ev.titulo,
-      inicio: ev.inicio,
-      fim: ev.fim,
-      origem: "EVENTO",
-    }));
-
+    const items = eventos.map(mapEventoToAgendaItem);
     return res.json(items);
   } catch (e) {
     console.error("Erro em eventos.minhaAgenda:", e);
     return res.status(500).json({ error: "Erro ao carregar agenda de eventos" });
+  }
+}
+
+// ✅ NOVO: eventos visíveis para um atleta específico
+export async function eventosDoAtleta(req: any, res: Response) {
+  try {
+    const { usuarioId } = req.params;
+
+    // Aqui dá pra sofisticar depois (buscar vínculos do atleta, etc).
+    // Por enquanto: todos eventos ABERTOS a partir de hoje.
+    const agora = new Date();
+
+    const eventos = await prisma.evento.findMany({
+      where: {
+        inicio: { gte: agora },
+        status: "ABERTO",
+      },
+      orderBy: { inicio: "asc" },
+      take: 100,
+    });
+
+    const items = eventos.map(mapEventoToAgendaItem);
+    return res.json(items);
+  } catch (e) {
+    console.error("Erro em eventos.eventosDoAtleta:", e);
+    return res.status(500).json({ error: "Erro ao carregar eventos do atleta" });
   }
 }
