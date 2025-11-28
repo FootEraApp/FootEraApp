@@ -1,3 +1,4 @@
+// client/src/pages/perfil
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";
@@ -18,6 +19,7 @@ import PerfilClube from "../components/perfil/PerfilClube.js";
 import PerfilEscola from "../components/perfil/PerfilEscola.js";
 import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
 import HealthBanner from "../components/legal/HealthBanner.js";
+import SubscriptionBanner from "../components/billing/SubscriptionBanner.js";
 import { http } from "../services/http.js";
 
 type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha" | "Admin" | "Olheiro";
@@ -122,49 +124,9 @@ export default function ProfilePage() {
       <div className="max-w-3xl mx-auto px-4 pt-3">
         <HealthBanner />
 
-        {isOwnProfile && (
-          <div className="mb-3">
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl border mt-4 bg-transparent shadow-sm">
-              <div className="flex items-center gap-3 ">
-                {assinaturaAtiva ? (
-                  <BadgeCheck className="w-5 h-5 text-green-600" />
-                ) : (
-                  <Crown className="w-5 h-5 text-yellow-500" />
-                )}
-                <div className="leading-tight">
-                  <div className="font-semibold ">
-                    {loadingBilling
-                      ? "Carregando assinatura..."
-                      : assinaturaAtiva
-                      ? "Assinatura ativa"
-                      : "Assinatura gratuita"}
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {assinaturaAtiva
-                      ? `Plano: ${assinatura?.plano} — desde ${new Date(
-                          assinatura!.startsAt
-                        ).toLocaleDateString()}`
-                      : "Sem anúncios, sem limites e recursos Pro."}
-                  </div>
-                </div>
-              </div>
-
-              <Link href="/pagamentos">
-                <div
-                  className={`px-3 py-2 rounded-lg border cursor-pointer ${
-                    assinaturaAtiva
-                      ? "bg-green-600 text-white border-green-600"
-                      : "bg-blue-600 text-white border-blue-600"
-                  }`}
-                  title={assinaturaAtiva ? "Gerenciar assinatura" : "Assinar FootEra Pro"}
-                >
-                  {assinaturaAtiva ? "Gerenciar" : "Seja Pro"}
-                </div>
-              </Link>
-            </div>
-          </div>
-        )}
+        {isOwnProfile && <SubscriptionBanner />}
       </div>
+
 
       {tipo === "Atleta" && <PerfilAtleta idDaUrl={idDaUrl} />}
       {tipo === "Professor" && <PerfilProfessor idDaUrl={idDaUrl} />}
