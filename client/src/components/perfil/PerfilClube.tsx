@@ -983,15 +983,6 @@ export default function PerfilClube({ idDaUrl }: Props) {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setProfessorSelecionado(String(p.id));
-                          setTurmasOpen(true);
-                        }}
-                        className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
-                      >
-                        Administrar turmas
-                      </button>
                       <Link
                         href={`/perfil/${p.usuarioId ?? p.id}`}
                         className="text-sm text-green-800 inline-flex items-center gap-1"

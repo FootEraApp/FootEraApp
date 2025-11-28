@@ -52,7 +52,7 @@ import PaginaCreateAdmin from "./pages/createAdmin.js";
 import PaginaPagamentos from "./pages/pagamentos/index.js";
 import PaginaJogosElenco from "./pages/jogos-elenco.js"
 import PaginaAdminMetrics from "./pages/admin/metrics.js";
-
+import PaginaGerenciarProfessores from "./pages/GerenciarProfessores.js"
 export function AppRoutes() {
   return (
     <Switch>
@@ -110,6 +110,7 @@ export function AppRoutes() {
 
       <Route path="/perfil/conquistas"><PaginaConquistas /></Route>
       <Route path="/perfil/GerenciarAtletas"><PaginaGerenciarAtleta /></Route>
+      <Route path="/perfil/GerenciarProfessores"><PaginaGerenciarProfessores /></Route>
       <Route path="/formadores" component={PaginaFormadores} />
 
       <Route path="/eventos/clubes/:id/novo">
