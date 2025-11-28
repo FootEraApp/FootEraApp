@@ -1,3 +1,4 @@
+// client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, Volleyball, User, CirclePlus, Search as SearchIcon, House, Check, ChevronLeft, ChevronRight, Calendar as CalendarIcon, } from "lucide-react";
@@ -780,9 +781,13 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
         const token =
           (Storage as any).token ||
           localStorage.getItem("token") ||
-          sessionStorage.getItem("token") || "";
+          sessionStorage.getItem("token") ||
+          "";
         const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
+        console.log("[NovoTreino] orgSelecionada =", orgSelecionada);
+
+        // Caso especial: mostrar todos os atletas
         if (orgSelecionada === MOSTRAR_TODOS) {
           const urlsTodos = [
             `${API.BASE_URL}/api/atletas`,
@@ -790,10 +795,13 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
             `${API.BASE_URL}/api/relacoes/atletas?todos=1`,
           ];
           for (const url of urlsTodos) {
+            console.log("[NovoTreino] tentando carregar TODOS atletas em", url);
             const r = await fetch(url, { headers });
             if (!r.ok) continue;
             const j = await r.json();
-            const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
+            const arr = Array.isArray(j)
+              ? j
+              : j.items ?? j.data ?? j.rows ?? j.result ?? [];
             if (!cancel) setAtletasVinculados(mapAtletas(arr));
             return;
           }
@@ -801,26 +809,79 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
           return;
         }
 
+        // Dono padrão (professor / escola / clube)
         const tipoUsuarioId =
           orgSelecionada ||
           (Storage as any).tipoUsuarioId ||
           localStorage.getItem("tipoUsuarioId") ||
-          sessionStorage.getItem("tipoUsuarioId") || "";
+          sessionStorage.getItem("tipoUsuarioId") ||
+          // fallback extra: alguns lugares usam "perfilId"
+          localStorage.getItem("perfilId") ||
+          sessionStorage.getItem("perfilId") ||
+          "";
 
-        if (!tipoUsuarioId) { if (!cancel) setAtletasVinculados([]); return; }
+        console.log(
+          "[NovoTreino] tipoUsuarioId usado em atletas-vinculados =",
+          tipoUsuarioId
+        );
 
-        const url = `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}&incluirPontuacao=1`;
+        if (!tipoUsuarioId) {
+          console.warn(
+            "[NovoTreino] nenhum tipoUsuarioId/perfilId encontrado; não dá para chamar /api/treinos/atletas-vinculados"
+          );
+          if (!cancel) setAtletasVinculados([]);
+          return;
+        }
+
+        const url = `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(
+          tipoUsuarioId
+        )}&incluirPontuacao=1`;
+
+        console.log("[NovoTreino] GET", url);
+
         const r = await fetch(url, { headers });
-        if (!r.ok) { if (!cancel) setAtletasVinculados([]); return; }
-        const data = await r.json();
-        const items = Array.isArray(data) ? data : (data.items ?? []);
-        if (!cancel) setAtletasVinculados(mapAtletas(items));
-      } catch {
+        const txt = await r.text();
+
+        if (!r.ok) {
+          console.error(
+            "[NovoTreino] erro ao buscar atletas-vinculados:",
+            r.status,
+            txt
+          );
+          if (!cancel) setAtletasVinculados([]);
+          return;
+        }
+
+        let data: any;
+        try {
+          data = txt ? JSON.parse(txt) : [];
+        } catch {
+          data = [];
+        }
+
+        const items = Array.isArray(data)
+          ? data
+          : data.items ?? data.data ?? data.rows ?? data.result ?? [];
+
+        if (!cancel) {
+          setAtletasVinculados(mapAtletas(items));
+          console.log(
+            "[NovoTreino] atletas-vinculados carregados:",
+            mapAtletas(items)
+          );
+        }
+      } catch (e) {
+        console.error(
+          "[NovoTreino] exceção ao carregar atletas-vinculados:",
+          e
+        );
         if (!cancel) setAtletasVinculados([]);
       }
     })();
 
-    return () => { cancel = true; };
+    return () => {
+      cancel = true;
+    };
   }, [orgSelecionada]);
 
   useEffect(() => {
@@ -1549,14 +1610,6 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
               </div>
             </div>
 
-            <label className="block text-sm text-gray-700 mb-1">Data Agendada (prazo para envio)</label>
-            <input
-              className="border w-full mb-4 p-2 rounded text-sm sm:text-base"
-              type="datetime-local"
-              value={dataTreino}
-              onChange={(e) => setDataTreino(e.target.value)}
-            />
-
             <div className="flex justify-end">
               <button onClick={() => goTo(2)} className="bg-green-800 text-white px-4 py-2 rounded">
                 Próximo
@@ -1878,8 +1931,8 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                   </label>
                   <p className="text-xs text-gray-600">
                     Toque nos dias do calendário FootEra para marcar ou desmarcar.
-                    Se você não escolher datas aqui, o treino será criado sem agendamento automático
-                    (ou usará apenas a data agendada da etapa 1, se preenchida).
+                    Se você não escolher datas aqui, o treino será criado sem agendamento automático.
+                    Depois você poderá agendar manualmente para os atletas na tela de treinos.
                   </p>
                 </div>
               </div>
