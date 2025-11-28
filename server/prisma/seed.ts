@@ -40,6 +40,7 @@ async function main() {
   'scout_free': 'senha123',
   'scout_pro': 'senha123',
   'escolinha_01': 'senha123',
+  'prof_clube_footera': 'senha123',
 } as const;
   const H = Object.fromEntries(
     await Promise.all(
@@ -194,35 +195,6 @@ async function main() {
   });
 
   await prisma.usuario.upsert({
-    where: { nomeDeUsuario: 'arthur.persio' },
-    update: {},
-    create: {
-      nome: 'Arthur Persio de Azevedo',
-      nomeDeUsuario: 'arthur.persio',
-      email: 'arthur.persio@example.com',
-      senhaHash: H['arthur.persio'],
-      tipo: TipoUsuario.Professor,
-      cidade: 'Vitória',
-      estado: 'ES',
-      pais: 'Brasil',
-      bairro: 'Centro',
-      foto: '/assets/usuarios/arthur.jpg',
-      professor: {
-        create: {
-          codigo: 'PROF002',
-          cref: 'ES123456',
-          areaFormacao: 'Educação Física - UFES',
-          escola: 'Escola Estrelas',
-          qualificacoes: ['Treinamento físico, técnico'],
-          certificacoes: ['Licença CBF A'],
-          fotoUrl: '/assets/usuarios/arthur.jpg',
-          nome: 'Arthur Persio de Azevedo'
-        }
-      }
-    }
-  });
-
-  await prisma.usuario.upsert({
     where: { nomeDeUsuario: 'admin' },
     create: {
       nome: 'Administrador do Sistema',
@@ -263,47 +235,6 @@ async function main() {
     },
   });
 
-  await prisma.usuario.upsert({
-    where: { nomeDeUsuario: 'admin' },
-    create: {
-      nome: 'Administrador do Sistema',
-      nomeDeUsuario: 'admin',
-      email: 'admin@footera.example.com',
-      senhaHash: H['admin'],
-      tipo: TipoUsuario.Admin,
-      verified: true,
-      cidade: 'São Paulo',
-      estado: 'SP',
-      pais: 'Brasil',
-      foto: '/assets/usuarios/profa-teste.png',
-      administrador: {
-        create: {
-          cargo: 'superadmin',             
-          nivel: Nivel.Performance,
-          fotoUrl: '/assets/usuarios/profa-teste.png',
-        }
-      }
-    },
-    update: {
-      tipo: TipoUsuario.Admin,             
-      verified: true,
-      administrador: {
-        upsert: {                           
-          create: {
-            cargo: 'superadmin',
-            nivel: Nivel.Performance,
-            fotoUrl: '/assets/usuarios/profa-teste.png',
-          },
-          update: {
-            cargo: 'superadmin',
-            nivel: Nivel.Performance,
-            fotoUrl: '/assets/usuarios/profa-teste.png',
-          }
-        }
-      }
-    }
-  });
-
   const clube1Db = await prisma.clube.findFirst({
     where: { usuario: { nomeDeUsuario: "clube_footera" } }
   });
@@ -314,6 +245,107 @@ async function main() {
 
   const escolinhaEstrelasDb = await prisma.escolinha.findFirst({
     where: { usuario: { nomeDeUsuario: "escola_estrelas" } },
+  });
+
+    // Professor de teste vinculado ao Clube FootEra
+  await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'prof_clube_footera' },
+    update: {
+      tipo: TipoUsuario.Professor,
+      senhaHash: H['prof_clube_footera'],
+    },
+    create: {
+      nome: 'Professor Clube FootEra',
+      nomeDeUsuario: 'prof_clube_footera',
+      email: 'prof.clube_footera@example.com',
+      senhaHash: H['prof_clube_footera'],
+      tipo: TipoUsuario.Professor,
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/prof-clube-footera.png',
+      professor: {
+        create: {
+          codigo: 'PROF_FOOTERA',
+          cref: 'SP000001',
+          areaFormacao: 'Educação Física',
+          escola: 'Clube FootEra FC',
+          qualificacoes: ['Professor vinculado ao Clube FootEra para testes'],
+          certificacoes: ['Licença C'],
+          fotoUrl: '/assets/usuarios/prof-clube-footera.png',
+          nome: 'Professor Clube FootEra',
+          // 👇 vínculo real com o clube_footera
+          clubeId: clube1Db ? clube1Db.id : null,
+        },
+      },
+    },
+  });
+
+    await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'arthur.persio' },
+    update: {
+      tipo: TipoUsuario.Professor,
+    },
+    create: {
+      nome: 'Arthur Persio de Azevedo',
+      nomeDeUsuario: 'arthur.persio',
+      email: 'arthur.persio@example.com',
+      senhaHash: H['arthur.persio'],
+      tipo: TipoUsuario.Professor,
+      cidade: 'Vitória',
+      estado: 'ES',
+      pais: 'Brasil',
+      bairro: 'Centro',
+      foto: '/assets/usuarios/arthur.jpg',
+      professor: {
+        create: {
+          codigo: 'PROF002',
+          cref: 'ES123456',
+          areaFormacao: 'Educação Física - UFES',
+          escola: 'Escola Estrelas',
+          qualificacoes: ['Treinamento físico, técnico'],
+          certificacoes: ['Licença CBF A'],
+          fotoUrl: '/assets/usuarios/arthur.jpg',
+          nome: 'Arthur Persio de Azevedo',
+          // 👇 vínculo com a escolinha "escola_estrelas"
+          escolinhaId: escolinhaEstrelasDb ? escolinhaEstrelasDb.id : null,
+        },
+      },
+    },
+  });
+
+  await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'prof_free' },
+    update: {
+      senhaHash: H['prof_free'],
+      tipo: TipoUsuario.Professor,
+      verified: true,
+    },
+    create: {
+      nome: 'Professor Free',
+      nomeDeUsuario: 'prof_free',
+      email: 'prof_free@example.com',
+      senhaHash: H['prof_free'],
+      tipo: TipoUsuario.Professor,
+      cidade: 'Vitória',
+      estado: 'ES',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/teste-prof-free.png',
+      professor: {
+        create: {
+          codigo: 'PROF_FREE',
+          cref: 'ES000001',
+          areaFormacao: 'Educação Física',
+          escola: 'Escola Estrelas',
+          qualificacoes: ['Professor de teste (FREE)'],
+          certificacoes: ['Licença C'],
+          fotoUrl: '/assets/usuarios/teste-prof-free.png',
+          nome: 'Professor Free',
+          // 👇 vínculo com a mesma escolinha
+          escolinhaId: escolinhaEstrelasDb ? escolinhaEstrelasDb.id : null,
+        },
+      },
+    },
   });
 
   const olheiroJoao = await prisma.usuario.upsert({
@@ -336,7 +368,7 @@ async function main() {
           telefonePublico: '11999997777',
           emailPublico: 'olheiro.joao@example.com',
           fotoUrl: '/assets/usuarios/olheiro-joao.png', 
-          colaboracaoClubeId: clube1Db?.id
+          colaboracaoClubeId: clube1Db ? clube1Db.id : null,
         }
       }
     }
@@ -543,7 +575,7 @@ const usuarioFormado = await prisma.usuario.upsert({
         seloQualidade: 'Prata',
         categoria: [Categoria.Sub17],
         foto: '/assets/usuarios/atleta-formadores.png',
-        clubeId: clube1Db?.id || null,
+        clubeId: clube1Db ? clube1Db.id : null,
       },
     },
   },
