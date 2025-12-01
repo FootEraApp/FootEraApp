@@ -1,3 +1,4 @@
+// client/src/pages/mensagens
 import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { Send, Share2, Volleyball, User, UserPlus, CirclePlus, Search, House, Users, Trash, ArrowLeft } from "lucide-react";
@@ -90,6 +91,8 @@ export default function PaginaMensagens() {
   const [isAtleta, setIsAtleta] = useState(
     String(Storage?.tipoSalvo ?? "").toLowerCase() === "atleta"
   );
+
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [unreadByUser, setUnreadByUser] = useState<Record<string, number>>({});
   const totalUnread = Object.values(unreadByUser).reduce((a, b) => a + b, 0);
@@ -342,74 +345,142 @@ const markReadFromUser = async (otherId: string) => {
   });
 }
 
-  const SidebarContent = () => (
-    <div className="p-4 overflow-y-auto h-full">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-lg font-semibold">Conversas</h2>
-        <button onClick={abrirModal} title="Criar/gerenciar grupos" className="p-1 rounded hover:bg-gray-100">
-          <UserPlus size={20} />
-        </button>
-      </div>
+  const SidebarContent = () => {
+    const term = searchTerm.trim().toLowerCase();
 
-      <div className="mb-4">
-        <div className="flex items-center gap-2 text-gray-700 mb-2">
-          <Users size={16} /> <span className="text-sm font-semibold">Grupos</span>
+    const gruposFiltrados = term
+      ? grupos.filter((g) => g.nome.toLowerCase().includes(term))
+      : grupos;
+
+    const usuariosFiltrados = term
+      ? usuariosMutuos.filter((u) => u.nome.toLowerCase().includes(term))
+      : usuariosMutuos;
+
+    return (
+      <div className="p-4 overflow-y-auto h-full">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-semibold">Conversas</h2>
+          <button
+            onClick={abrirModal}
+            title="Criar/gerenciar grupos"
+            className="p-1 rounded hover:bg-gray-100"
+          >
+            <UserPlus size={20} />
+          </button>
         </div>
-        {grupos.length === 0 && <p className="text-xs text-gray-500">Você ainda não participa de grupos.</p>}
-        {grupos.map((g) => {
-          const selecionado = alvo?.tipo === "grupo" && alvo.grupo.id === g.id;
-          return (
-            <div
-              key={g.id}
-              className={`p-3 mb-2 rounded-lg cursor-pointer border shadow-sm transition ${selecionado ? "bg-green-50 border-green-300" : "hover:bg-gray-50 bg-white"}`}
-              onClick={() => selecionarAlvo({ tipo: "grupo", grupo: g })}
-            >
-              <div className="font-medium text-sm">{g.nome}</div>
-              {g.descricao && <div className="text-xs text-gray-500 line-clamp-1">{g.descricao}</div>}
-            </div>
-          );
-        })}
-      </div>
 
-      <div>
-        <div className="flex items-center gap-2 text-gray-700 mb-2">
-          <User size={16} /> <span className="text-sm font-semibold">Usuários</span>
-          {totalUnread > 0 && (
-            <span className="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-green-800 text-white">
-              {totalUnread}
-            </span>
+        {/* Barra de busca */}
+        <div className="mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar usuários ou grupos..."
+              className="w-full pl-9 pr-3 py-2 text-sm border rounded-full focus:outline-none focus:ring-2 focus:ring-green-700 focus:border-green-700"
+            />
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+            />
+          </div>
+        </div>
+
+        {/* Grupos */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 text-gray-700 mb-2">
+            <Users size={16} />{" "}
+            <span className="text-sm font-semibold">Grupos</span>
+          </div>
+          {gruposFiltrados.length === 0 && (
+            <p className="text-xs text-gray-500">
+              {term
+                ? "Nenhum grupo encontrado."
+                : "Você ainda não participa de grupos."}
+            </p>
           )}
-        </div>
-        {usuariosMutuos.map((u) => {
-          const selecionado = alvo?.tipo === "usuario" && alvo.usuario.id === u.id;
-          const unread = unreadByUser[u.id] || 0;
-
-          return (
-            <div
-              key={u.id}
-              className={`flex items-center gap-3 p-3 mb-3 rounded-lg cursor-pointer border shadow-sm transition ${
-                selecionado ? "bg-green-50 border-green-300" : "hover:bg-gray-50 bg-white"
-              }`}
-              onClick={() => selecionarAlvo({ tipo: "usuario", usuario: u })}
-              data-testid="usuario-list-item" 
-            >
-              <Avatar src={u.foto} name={u.nome} className="w-12 h-12" />
-              <div className="flex flex-col flex-1 min-w-0">
-                <span className="font-medium text-sm truncate">{u.nome}</span>
-                <span className="text-xs text-gray-500">Clique para conversar</span>
+          {gruposFiltrados.map((g) => {
+            const selecionado =
+              alvo?.tipo === "grupo" && alvo.grupo.id === g.id;
+            return (
+              <div
+                key={g.id}
+                className={`p-3 mb-2 rounded-lg cursor-pointer border shadow-sm transition ${
+                  selecionado
+                    ? "bg-green-50 border-green-300"
+                    : "hover:bg-gray-50 bg-white"
+                }`}
+                onClick={() => selecionarAlvo({ tipo: "grupo", grupo: g })}
+              >
+                <div className="font-medium text-sm">{g.nome}</div>
+                {g.descricao && (
+                  <div className="text-xs text-gray-500 line-clamp-1">
+                    {g.descricao}
+                  </div>
+                )}
               </div>
+            );
+          })}
+        </div>
 
-              {unread > 0 && (
-                <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-green-700 text-white shrink-0">
-                  {unread}
-                </span>
-              )}
-            </div>
-          );
-        })}
+        {/* Usuários */}
+        <div>
+          <div className="flex items-center gap-2 text-gray-700 mb-2">
+            <User size={16} />{" "}
+            <span className="text-sm font-semibold">Usuários</span>
+            {totalUnread > 0 && (
+              <span className="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-green-800 text-white">
+                {totalUnread}
+              </span>
+            )}
+          </div>
+
+          {usuariosFiltrados.length === 0 && (
+            <p className="text-xs text-gray-500">
+              {term
+                ? "Nenhum usuário encontrado."
+                : "Nenhum contato disponível ainda."}
+            </p>
+          )}
+
+          {usuariosFiltrados.map((u) => {
+            const selecionado =
+              alvo?.tipo === "usuario" && alvo.usuario.id === u.id;
+            const unread = unreadByUser[u.id] || 0;
+
+            return (
+              <div
+                key={u.id}
+                className={`flex items-center gap-3 p-3 mb-3 rounded-lg cursor-pointer border shadow-sm transition ${
+                  selecionado
+                    ? "bg-green-50 border-green-300"
+                    : "hover:bg-gray-50 bg-white"
+                }`}
+                onClick={() => selecionarAlvo({ tipo: "usuario", usuario: u })}
+                data-testid="usuario-list-item"
+              >
+                <Avatar src={u.foto} name={u.nome} className="w-12 h-12" />
+                <div className="flex flex-col flex-1 min-w-0">
+                  <span className="font-medium text-sm truncate">
+                    {u.nome}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    Clique para conversar
+                  </span>
+                </div>
+
+                {unread > 0 && (
+                  <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-green-700 text-white shrink-0">
+                    {unread}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const compartilharPerfilNoChat = async () => {
     if (!isAtleta) return;
@@ -578,33 +649,48 @@ const markReadFromUser = async (otherId: string) => {
   }, [usuarioId]);
 
   useEffect(() => {
+    if (!token) return;
+
     (async () => {
       try {
         const headers = { Authorization: `Bearer ${token}` };
 
-        const [gruposRes, convRes, mutuosRes] = await Promise.all([
+        const [gruposRes, convRes, contatosRes] = await Promise.all([
           fetch(`${API.BASE_URL}/api/grupos/me`, { headers }),
           fetch(`${API.BASE_URL}/api/mensagem/conversas`, { headers }),
-          fetch(`${API.BASE_URL}/api/seguidores/mutuos`, { headers }),
+          fetch(`${API.BASE_URL}/api/mensagem/contatos-relacionados`, { headers }),
         ]);
 
         if (!gruposRes.ok) throw new Error(await gruposRes.text());
         const meusGrupos: Grupo[] = await gruposRes.json();
 
-        let conv = { totalNaoLidas: 0, conversas: [] as Array<{id:string; nome:string; foto?:string|null; naoLidas:number}> };
+        let conv = {
+          totalNaoLidas: 0,
+          conversas: [] as Array<{
+            id: string;
+            nome: string;
+            foto?: string | null;
+            naoLidas: number;
+          }>,
+        };
         if (convRes.ok) conv = await convRes.json();
 
-        if (!mutuosRes.ok) throw new Error(await mutuosRes.text());
-        const mutuos: Usuario[] = await mutuosRes.json();
+        const contatosRelacionados: Usuario[] = contatosRes.ok
+          ? await contatosRes.json()
+          : [];
 
         const recentes = loadRecentUsers();
-        const fromConversas: Usuario[] = conv.conversas.map(c => ({
+
+        const fromConversas: Usuario[] = conv.conversas.map((c) => ({
           id: c.id,
           nome: c.nome,
           foto: c.foto,
         }));
 
-        let base = mergeUnique(mergeUnique(recentes, fromConversas), mutuos);
+        let base = mergeUnique(
+          mergeUnique(recentes, fromConversas),
+          contatosRelacionados
+        );
 
         if (base.length === 0 && usuarioId) {
           base = [
@@ -619,9 +705,9 @@ const markReadFromUser = async (otherId: string) => {
         setUsuariosMutuos(base);
         setGrupos(meusGrupos);
 
-        setUnreadByUser(prev => ({
+        setUnreadByUser((prev) => ({
           ...prev,
-          ...Object.fromEntries(conv.conversas.map(c => [c.id, c.naoLidas])),
+          ...Object.fromEntries(conv.conversas.map((c) => [c.id, c.naoLidas])),
         }));
       } catch (e) {
         console.error("Erro ao carregar sidebar:", e);
