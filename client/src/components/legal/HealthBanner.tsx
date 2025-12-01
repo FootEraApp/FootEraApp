@@ -1,4 +1,3 @@
-// client/src/components/legal/HealthBanner
 import React from "react";
 import { X } from "lucide-react";
 

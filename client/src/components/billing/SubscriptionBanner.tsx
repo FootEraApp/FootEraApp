@@ -44,14 +44,12 @@ export default function SubscriptionBanner({
     null
   );
 
-  // controla “fechei e não quero ver de novo”
   React.useEffect(() => {
     if (!dismissible || !store) return;
     const v = store.getItem(storageKey);
     if (v === "dismissed") setOpen(false);
   }, [dismissible, storageKey, store]);
 
-  // carrega /api/billing/me
   React.useEffect(() => {
     let cancelled = false;
 
@@ -90,7 +88,6 @@ export default function SubscriptionBanner({
   return (
     <div className={`mb-3 ${className}`}>
       <div className="flex items-center gap-3 p-3 rounded-xl border mt-4 bg-transparent shadow-sm">
-        {/* Lado esquerdo: ícone + textos */}
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {assinaturaAtiva ? (
             <BadgeCheck className="w-5 h-5 text-green-600" />
@@ -117,7 +114,6 @@ export default function SubscriptionBanner({
           </div>
         </div>
 
-        {/* Lado direito: botão + X alinhados */}
         <div className="flex items-center gap-2">
           <Link href="/pagamentos">
             <div

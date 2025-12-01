@@ -132,7 +132,7 @@ export function can(user: UserContext, cap: Capability, want = 1): boolean {
     allowed = true;
   } else {
     const papel = normPapel(user?.tipo || "atleta");
-    const plano = normPlano(user?.plano); // ✅ normaliza FREE/PRO/ORG
+    const plano = normPlano(user?.plano);
     const caps = ENTITLEMENTS[papel]?.[plano];
 
     if (!caps) {
@@ -165,7 +165,6 @@ export function canDetailed(user: UserContext, cap: Capability, want = 1) {
   const planoEfetivo = normPlano(user?.plano);
   const papelEfetivo = normPapel(user?.tipo || "atleta");
 
-  // 🔍 LOG de debug – aparece no console do servidor
   console.log("[entitlements.canDetailed]", {
     cap,
     rawTipo: user?.tipo,
@@ -174,7 +173,6 @@ export function canDetailed(user: UserContext, cap: Capability, want = 1) {
     planoEfetivo,
   });
 
-  // ✅ Regra especial: agendamento em lote liberado para professor/escolinha/admin
   if (
     cap === "agendamento.lote" &&
     (papelEfetivo === "professor" ||
@@ -185,7 +183,6 @@ export function canDetailed(user: UserContext, cap: Capability, want = 1) {
     return { ok: true, http: 200 as const, reason: "ok" };
   }
 
-  // Usa o plano normalizado para a checagem padrão
   const ok = can({ ...user, plano: planoEfetivo }, cap, want);
   if (ok) return { ok: true, http: 200 as const, reason: "ok" };
 
