@@ -2623,6 +2623,52 @@ export async function getTreinoStatus(req: AuthenticatedRequest, res: Response) 
 
 export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Response) {
   try {
+    // 1) Garante que temos um "user" real (igual em criarTreinoProgramado)
+    let user: any = getUserFromReq(req);
+
+    if (!user) {
+      const authHeader =
+        (req.headers.authorization as string | undefined) ||
+        (req.headers.Authorization as string | undefined);
+
+      if (authHeader) {
+        const token = authHeader.startsWith("Bearer ")
+          ? authHeader.slice(7)
+          : authHeader;
+
+        try {
+          user = jwt.verify(token, JWT_SECRET) as any;
+          (req as any).user = user;
+          (req as any).userId = user.id;
+        } catch {
+          // ignora, vai cair no 401 abaixo
+        }
+      }
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        code: "UNAUTHENTICATED",
+        message: "Usuário não autenticado.",
+      });
+    }
+
+    // 2) Normaliza tipo/plano
+    const tipoStr = String(user.tipo ?? user.tipoUsuario ?? "").toLowerCase();
+    if (!user.plano) {
+      user.plano = "FREE";
+    }
+
+    // 3) Em vez de can(...), checa na mão quem pode usar este recurso
+    if (!["professor", "clube", "escolinha"].includes(tipoStr)) {
+      return res.status(403).json({
+        code: "FORBIDDEN",
+        message: "Apenas professor, clube ou escolinha podem agendar rotina mensal.",
+      });
+    }
+
+    // 🔻 Daqui pra baixo mantém exatamente o que você já tem hoje 🔻
+
     const {
       treinoProgramadoId,
       datas = [],
@@ -2637,21 +2683,20 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
       incluirObservados?: boolean;
     };
 
-    if (!can(req.user as any, FEAT.AGENDAMENTO_LOTE)) {
-      return res.status(402).json({
-        code: "UPGRADE_REQUIRED",
-        message: "Recurso disponível apenas em planos superiores (agendamento em lote).",
-      });
-    }
-
     if (!treinoProgramadoId || !Array.isArray(datas) || datas.length === 0) {
-      return res.status(400).json({ message: "Informe treinoProgramadoId e ao menos uma data." });
+      return res
+        .status(400)
+        .json({ message: "Informe treinoProgramadoId e ao menos uma data." });
     }
 
     const tp = await prisma.treinoProgramado.findUnique({
       where: { id: String(treinoProgramadoId) },
     });
-    if (!tp) return res.status(404).json({ message: "Treino programado não encontrado." });
+    if (!tp) {
+      return res
+        .status(404)
+        .json({ message: "Treino programado não encontrado." });
+    }
 
     const resolved = await resolveEntidade(req.userId!);
 
@@ -2693,7 +2738,9 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
     );
 
     if (atletaIdsFinal.length === 0) {
-      return res.status(400).json({ message: "Nenhum atleta resolvido para receber a rotina." });
+      return res
+        .status(400)
+        .json({ message: "Nenhum atleta resolvido para receber a rotina." });
     }
 
     let fairUseInfo: {
@@ -2706,7 +2753,7 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
     if (resolved?.tipo === "escolinha" && elencosIds.length) {
       const agora = new Date();
       const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
-      const fimMes    = new Date(agora.getFullYear(), agora.getMonth() + 1, 1);
+      const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 1);
 
       const agMes = await prisma.treinoAgendado.count({
         where: {
@@ -2740,8 +2787,12 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
       const diaISO = String(d).trim();
       if (!diaISO) continue;
 
-      const dataTreino = /T/.test(diaISO) ? new Date(diaISO) : new Date(`${diaISO}T23:59:59.000Z`);
-      const dataExpiracao = new Date(dataTreino.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const dataTreino = /T/.test(diaISO)
+        ? new Date(diaISO)
+        : new Date(`${diaISO}T23:59:59.000Z`);
+      const dataExpiracao = new Date(
+        dataTreino.getTime() + 7 * 24 * 60 * 60 * 1000
+      );
 
       for (const atletaId of atletaIdsFinal) {
         payload.push({
@@ -2753,13 +2804,17 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
           dataOriginal: dataTreino,
           status: TreinoAgendadoStatus.AGENDADO,
           execucaoStatus: TreinoStatus.PENDING,
-          criadoPorProfessorId: req.user?.tipo === "Professor" ? req.user.tipoUsuarioId : null,
+          criadoPorProfessorId:
+            req.user?.tipo === "Professor" ? req.user.tipoUsuarioId : null,
         });
       }
     }
 
-    if (!payload.length)
-      return res.status(400).json({ message: "Nenhuma combinação válida de atleta/data." });
+    if (!payload.length) {
+      return res
+        .status(400)
+        .json({ message: "Nenhuma combinação válida de atleta/data." });
+    }
 
     let criados = 0;
     const chunkSize = 500;

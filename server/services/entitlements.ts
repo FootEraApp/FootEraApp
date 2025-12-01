@@ -117,6 +117,13 @@ function normPapel(t: TipoUsuario | string): Papel {
   return "atleta";
 }
 
+function normPlano(raw: Plano | string | null | undefined): Plano {
+  const s = String(raw || "FREE").toUpperCase();
+  if (s === "PRO") return "PRO";
+  if (s === "ORG") return "ORG";
+  return "FREE";
+}
+
 export function can(user: UserContext, cap: Capability, want = 1): boolean {
   const start = process.hrtime.bigint();
   let allowed = false;
@@ -125,7 +132,8 @@ export function can(user: UserContext, cap: Capability, want = 1): boolean {
     allowed = true;
   } else {
     const papel = normPapel(user?.tipo || "atleta");
-    const caps = ENTITLEMENTS[papel]?.[user?.plano || "FREE"];
+    const plano = normPlano(user?.plano); // ✅ normaliza FREE/PRO/ORG
+    const caps = ENTITLEMENTS[papel]?.[plano];
 
     if (!caps) {
       allowed = false;
@@ -154,14 +162,39 @@ export function can(user: UserContext, cap: Capability, want = 1): boolean {
 }
 
 export function canDetailed(user: UserContext, cap: Capability, want = 1) {
-  const ok = can(user, cap, want);
+  const planoEfetivo = normPlano(user?.plano);
+  const papelEfetivo = normPapel(user?.tipo || "atleta");
+
+  // 🔍 LOG de debug – aparece no console do servidor
+  console.log("[entitlements.canDetailed]", {
+    cap,
+    rawTipo: user?.tipo,
+    papelEfetivo,
+    rawPlano: user?.plano,
+    planoEfetivo,
+  });
+
+  // ✅ Regra especial: agendamento em lote liberado para professor/escolinha/admin
+  if (
+    cap === "agendamento.lote" &&
+    (papelEfetivo === "professor" ||
+      papelEfetivo === "escolinha" ||
+      papelEfetivo === "admin" ||
+      user?.isAdmin)
+  ) {
+    return { ok: true, http: 200 as const, reason: "ok" };
+  }
+
+  // Usa o plano normalizado para a checagem padrão
+  const ok = can({ ...user, plano: planoEfetivo }, cap, want);
   if (ok) return { ok: true, http: 200 as const, reason: "ok" };
 
   const needPlan =
-    user.plano === "FREE" &&
+    planoEfetivo === "FREE" &&
     ["agendamento.pessoal", "agendamento.lote", "templates:criar", "templates"].includes(
       cap
     );
+
   return {
     ok: false,
     http: (needPlan ? 402 : 403) as 402 | 403,
