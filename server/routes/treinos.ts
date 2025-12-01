@@ -1,3 +1,4 @@
+// server/routes/treinos
 import { Router } from "express";
 import { authenticateToken } from "server/middlewares/auth.js";
 import {
@@ -78,11 +79,9 @@ router.post(
   requireCapability("agendamento:lote"),
   agendarTreinoLote
 );
+
 router.get("/calendario", getCalendarioTreinos);
-router.post(
-  "/expirar-vencidos",
-  expirarTreinosVencidos
-);
+router.post("/expirar-vencidos", expirarTreinosVencidos);
 
 router.get("/minhas-submissoes", listarMinhasSubmissoesTreino);
 router.post("/submissoes/:id/validar", validarSubmissaoTreino);
@@ -102,7 +101,6 @@ router.get("/desafios-semanais", statusDesafiosSemanais);
 
 router.post(
   "/rotina/agendar",
-  requireCapability("agendamento:lote"),
   agendarRotinaMensal
 );
 
@@ -118,6 +116,7 @@ router.post(
   requireCapability("agendamento:pessoal"),
   agendarTreinoPessoal
 );
+
 router.post(
   "/biblioteca",
   salvarTreinoNaBiblioteca
