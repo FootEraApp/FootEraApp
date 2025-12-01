@@ -1,4 +1,3 @@
-//server/controllers/treinosController
 import {
   PrismaClient,
   PosicaoCampo,
@@ -1619,7 +1618,6 @@ export async function atualizarElenco(req: AuthenticatedRequest, res: Response) 
 
 export const atletasVinculados = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    // pode vir como professorId (versão antiga) ou tipoUsuarioId (versão nova)
     let tipoUsuarioId =
       (typeof req.query.tipoUsuarioId === "string" && req.query.tipoUsuarioId.trim()) ||
       (typeof req.query.professorId === "string" && req.query.professorId.trim()) ||
@@ -1633,16 +1631,9 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
     const incluirPontuacao = String(req.query.incluirPontuacao ?? "") === "1";
 
     if (!tipoUsuarioId) {
-      // se ainda assim não veio nada, devolve vazio (ou 400 dependendo do que você preferir)
       return res.json([]);
-      // ou:
-      // return res.status(400).json({ error: "tipoUsuarioId obrigatório" });
     }
 
-    // Base: qualquer atleta que esteja
-    // - vinculado ao professor (relacaoTreinamento)
-    // - OU com clubeId = tipoUsuarioId
-    // - OU com escolinhaId = tipoUsuarioId
     const whereBase: Prisma.AtletaWhereInput = {
       OR: [
         { relacoesTreinamento: { some: { professorId: tipoUsuarioId } } },
@@ -1651,7 +1642,6 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
       ],
     };
 
-    // se veio turmaId, filtramos também pelos usuários daquela turma
     if (turmaId) {
       const membros = await prisma.turmaUsuario.findMany({
         where: { turmaId },
@@ -1692,7 +1682,6 @@ const atletasRaw = await prisma.atleta.findMany({
   orderBy: { usuario: { nome: "asc" } },
 });
 
-// Força um tipo explícito para o TS parar de misturar com outros selects do Prisma
 type AtletaComUsuarioEPontuacao = {
   id: string;
   usuarioId: string | null;
@@ -2623,7 +2612,6 @@ export async function getTreinoStatus(req: AuthenticatedRequest, res: Response) 
 
 export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Response) {
   try {
-    // 1) Garante que temos um "user" real (igual em criarTreinoProgramado)
     let user: any = getUserFromReq(req);
 
     if (!user) {
@@ -2641,7 +2629,6 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
           (req as any).user = user;
           (req as any).userId = user.id;
         } catch {
-          // ignora, vai cair no 401 abaixo
         }
       }
     }
@@ -2653,21 +2640,17 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
       });
     }
 
-    // 2) Normaliza tipo/plano
     const tipoStr = String(user.tipo ?? user.tipoUsuario ?? "").toLowerCase();
     if (!user.plano) {
       user.plano = "FREE";
     }
 
-    // 3) Em vez de can(...), checa na mão quem pode usar este recurso
     if (!["professor", "clube", "escolinha"].includes(tipoStr)) {
       return res.status(403).json({
         code: "FORBIDDEN",
         message: "Apenas professor, clube ou escolinha podem agendar rotina mensal.",
       });
     }
-
-    // 🔻 Daqui pra baixo mantém exatamente o que você já tem hoje 🔻
 
     const {
       treinoProgramadoId,

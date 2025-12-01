@@ -3,9 +3,6 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-/**
- * Tipo auxiliar para filtros do dono
- */
 type OwnerWhere = {
   professorId?: string;
   clubeId?: string;
@@ -13,9 +10,6 @@ type OwnerWhere = {
   olheiroId?: string;
 };
 
-/**
- * Para filtros (where): usa os campos ID (professorId, clubeId, ...)
- */
 function buildOwnerWhere(tipoRaw: string | undefined, ownerId: string): OwnerWhere {
   const tipo = String(tipoRaw || "").toLowerCase();
 
@@ -46,16 +40,11 @@ function buildOwnerCreate(tipoRaw: string | undefined, ownerId: string) {
     return { olheiro: { connect: { id: ownerId } } };
   }
 
-  // se cair aqui é bug de integração → estoura pra aparecer no log
   throw new Error(
     `buildOwnerCreate: tipo de owner inválido ou ausente (tipoRaw="${tipoRaw}", ownerId="${ownerId}")`
   );
 }
 
-/**
- * GET /api/observados/status/:atletaId?ownerId=...&tipo=...
- * :atletaId pode ser atletaId OU usuarioId (do atleta)
- */
 export async function statusObservacao(req: Request, res: Response) {
   const { atletaId: rawId } = req.params as { atletaId?: string };
 
@@ -63,7 +52,6 @@ export async function statusObservacao(req: Request, res: Response) {
     return res.status(400).json({ message: "id é obrigatório" });
   }
 
-  // 1) Resolver o ID real do atleta (pode vir Atleta.id ou Usuario.id)
   const atleta = await prisma.atleta.findFirst({
     where: {
       OR: [{ id: rawId }, { usuarioId: rawId }],
@@ -72,7 +60,6 @@ export async function statusObservacao(req: Request, res: Response) {
   });
 
   if (!atleta) {
-    // Se não achar atleta correspondente, considera não observado
     return res.json({ observando: false });
   }
 
@@ -81,7 +68,6 @@ export async function statusObservacao(req: Request, res: Response) {
   const q: any = req.query || {};
   const user: any = (req as any).user || {};
 
-  // 2) Descobrir o dono (professor/clube/escolinha/olheiro)
   const ownerId: string =
     (q.ownerId as string) ||
     (q.tipoUsuarioId as string) ||
@@ -96,7 +82,6 @@ export async function statusObservacao(req: Request, res: Response) {
     "";
 
   if (!ownerId) {
-    // sem dono => não tem como estar observando
     return res.json({ observando: false });
   }
 
@@ -109,42 +94,34 @@ export async function statusObservacao(req: Request, res: Response) {
   return res.json({ observando: !!existe });
 }
 
-/**
- * GET /api/observados?ownerId=...&tipo=...
- * Também aceita: ?tipoUsuarioId=...&usuarioId=...
- */
 export async function listarObservados(req: Request, res: Response) {
   const q: any = req.query || {};
   const user: any = (req as any).user || {};
 
-  // 1) Descobrir o ID do dono (professor/escolinha/clube/olheiro)
   const ownerId: string =
     (q.ownerId as string) ||
-    (q.tipoUsuarioId as string) || // o que o front está mandando
+    (q.tipoUsuarioId as string) || 
     (q.professorId as string) ||
     (q.clubeId as string) ||
     (q.escolinhaId as string) ||
     (q.olheiroId as string) ||
-    (user.tipoUsuarioId as string) || // cai pro token, se existir
+    (user.tipoUsuarioId as string) || 
     "";
 
-  // Se mesmo assim não tiver um dono, devolve lista vazia (não quebra a tela)
   if (!ownerId) {
     return res.json([]);
   }
 
-  // 2) Descobrir o tipo do dono
   const tipoRaw: string =
     (q.tipo as string) ||
     (q.tipoUsuario as string) ||
     (q.tipoSalvo as string) ||
     (user.tipo as string) ||
     (user.tipoUsuario as string) ||
-    ""; // pode ficar vazio, o buildOwnerWhere trata
+    ""; 
 
   const ownerWhere = buildOwnerWhere(tipoRaw, ownerId);
 
-  // 3) Buscar os atletas observados por esse dono
   const rows = await prisma.atletaObservado.findMany({
     where: ownerWhere,
     include: { atleta: { include: { usuario: true } } },
@@ -155,7 +132,7 @@ export async function listarObservados(req: Request, res: Response) {
   const incluirNotas = String(q.incluirNotas ?? "").trim() !== "";
 
   const lista = rows.map((r) => {
-    const rr: any = r; // para acessar campos adicionais (notaInterna, alertarMudancas)
+    const rr: any = r;
     return {
       id: r.atleta?.usuario?.id ?? r.atleta?.usuarioId ?? r.atletaId,
       usuarioId: r.atleta?.usuario?.id ?? r.atleta?.usuarioId ?? "",
@@ -218,10 +195,6 @@ export async function observarAtleta(req: Request, res: Response) {
   }
 }
 
-/**
- * DELETE /api/observados/:atletaId
- * body/query podem conter { ownerId, tipo }
- */
 export async function pararDeObservar(req: Request, res: Response) {
   const { atletaId } = req.params;
   if (!atletaId) {
@@ -247,7 +220,6 @@ export async function pararDeObservar(req: Request, res: Response) {
     user.tipoUsuario ||
     "";
 
-  // se não tiver ownerId, não faz nada (no-op)
   if (!ownerId) {
     return res.sendStatus(204);
   }

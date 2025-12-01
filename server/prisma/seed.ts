@@ -9,10 +9,23 @@ import {
   Periodicidade,
   TipoMensagem,
   PagamentoStatus,
+  PosicaoCampo,
 } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+
+function daysAgo(n: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d;
+}
+
+function monthsAgo(n: number) {
+  const d = new Date();
+  d.setMonth(d.getMonth() - n);
+  return d;
+}
 
 async function hash(p: string) {
   return bcrypt.hash(p, 10);
@@ -194,7 +207,7 @@ async function main() {
     }
   });
 
-  await prisma.usuario.upsert({
+    await prisma.usuario.upsert({
     where: { nomeDeUsuario: 'admin' },
     create: {
       nome: 'Administrador do Sistema',
@@ -209,14 +222,14 @@ async function main() {
       foto: '/assets/usuarios/profa-teste.png',
       administrador: {
         create: {
-          cargo: 'Super Admin',          
+          cargo: 'Super Admin',
           nivel: Nivel.Performance,
           fotoUrl: '/assets/usuarios/profa-teste.png',
         },
       },
     },
     update: {
-      tipo: TipoUsuario.Admin,              
+      tipo: TipoUsuario.Admin,
       verified: true,
       administrador: {
         upsert: {
@@ -247,7 +260,6 @@ async function main() {
     where: { usuario: { nomeDeUsuario: "escola_estrelas" } },
   });
 
-    // Professor de teste vinculado ao Clube FootEra
   await prisma.usuario.upsert({
     where: { nomeDeUsuario: 'prof_clube_footera' },
     update: {
@@ -274,14 +286,13 @@ async function main() {
           certificacoes: ['Licença C'],
           fotoUrl: '/assets/usuarios/prof-clube-footera.png',
           nome: 'Professor Clube FootEra',
-          // 👇 vínculo real com o clube_footera
           clubeId: clube1Db ? clube1Db.id : null,
         },
       },
     },
   });
 
-    await prisma.usuario.upsert({
+  await prisma.usuario.upsert({
     where: { nomeDeUsuario: 'arthur.persio' },
     update: {
       tipo: TipoUsuario.Professor,
@@ -307,7 +318,6 @@ async function main() {
           certificacoes: ['Licença CBF A'],
           fotoUrl: '/assets/usuarios/arthur.jpg',
           nome: 'Arthur Persio de Azevedo',
-          // 👇 vínculo com a escolinha "escola_estrelas"
           escolinhaId: escolinhaEstrelasDb ? escolinhaEstrelasDb.id : null,
         },
       },
@@ -341,7 +351,6 @@ async function main() {
           certificacoes: ['Licença C'],
           fotoUrl: '/assets/usuarios/teste-prof-free.png',
           nome: 'Professor Free',
-          // 👇 vínculo com a mesma escolinha
           escolinhaId: escolinhaEstrelasDb ? escolinhaEstrelasDb.id : null,
         },
       },
@@ -356,18 +365,18 @@ async function main() {
       nomeDeUsuario: 'olheiro_joao',
       email: 'olheiro.joao@example.com',
       senhaHash: H['olheiro_joao'],
-      tipo: TipoUsuario.Olheiro, 
+      tipo: TipoUsuario.Olheiro,
       cidade: 'São Paulo',
       estado: 'SP',
       pais: 'Brasil',
       foto: '/assets/usuarios/olheiro-joao.png',
-      olheiro: {               
+      olheiro: {
         create: {
           descricao: 'Olheiro independente em SP; 10 anos de experiência. Foco Sub15–Sub20.',
           areaAtuacao: 'Sudeste (SP, RJ, MG, ES)',
           telefonePublico: '11999997777',
           emailPublico: 'olheiro.joao@example.com',
-          fotoUrl: '/assets/usuarios/olheiro-joao.png', 
+          fotoUrl: '/assets/usuarios/olheiro-joao.png',
           colaboracaoClubeId: clube1Db ? clube1Db.id : null,
         }
       }
@@ -398,7 +407,7 @@ async function main() {
           telefone1: "27999990000",
           nacionalidade: "Brasileiro",
           naturalidade: "Vitória - ES",
-          posicao: "MEI",
+          posicao: PosicaoCampo.MEI,
           altura: 1.75,
           peso: 65.0,
           seloQualidade: "Prata",
@@ -433,7 +442,7 @@ async function main() {
           telefone1: "27988880000",
           nacionalidade: "Brasileira",
           naturalidade: "Vila Velha - ES",
-          posicao: "CA",
+          posicao: PosicaoCampo.CA,
           altura: 1.65,
           peso: 58.0,
           seloQualidade: "Ouro",
@@ -443,194 +452,169 @@ async function main() {
       }
     }
   });
-  
-const professorMateus = await prisma.professor.findFirst({
-  where: { usuario: { nomeDeUsuario: 'mateus.furieri' } }
-});
 
-const prazo25Out = new Date(new Date().getFullYear(), 9, 25, 23, 59, 0);
-
-const ex1 = await prisma.exercicio.findUnique({ where: { codigo: 'EX005' } });
-const ex2 = await prisma.exercicio.findUnique({ where: { codigo: 'EX009' } }); 
-const ex3 = await prisma.exercicio.findUnique({ where: { codigo: 'EX010' } }); 
-const ex4 = await prisma.exercicio.findUnique({ where: { codigo: 'EX020' } });
-const ex5 = await prisma.exercicio.findUnique({ where: { codigo: 'EX001' } });
-
-if (professorMateus && ex1 && ex2 && ex3 && ex4 && ex5) {
-  await prisma.treinoProgramado.upsert({
-    where: { codigo: 'TR002' },
-    update: {},
-    create: {
-      codigo: 'TR002',
-      nome: 'Treino Técnico Agilidade',
-      descricao: 'Sequência integrada de fundamentos: drible, passes no chão e no alto, e cabeceio.',
-      nivel: Nivel.Base,
-      categoria: [Categoria.Livre],
-      duracao: 60,
-      tipoTreino: TipoTreino.Tecnico,
-      professorId: professorMateus.id,
-      dataAgendada: prazo25Out,
-      imagemUrl: '/assets/treinos/agilidade.jpg',
-      pontuacao: 12,
-      exercicios: {
-        create: [
-          { exercicioId: ex1.id, ordem: 1, repeticoes: '3x 40s + 20s descanso' },
-          { exercicioId: ex2.id, ordem: 2, repeticoes: '4x 12 passes cada' },
-          { exercicioId: ex3.id, ordem: 3, repeticoes: '3x 10 lançamentos' },
-          { exercicioId: ex4.id, ordem: 4, repeticoes: '3x 12 cabeceios' },
-          { exercicioId: ex5.id, ordem: 5, repeticoes: '5 voltas' },
-        ]
-      }
-    }
+  const professorMateus = await prisma.professor.findFirst({
+    where: { usuario: { nomeDeUsuario: 'mateus.furieri' } }
   });
-}
 
-const ex031 = await prisma.exercicio.findUnique({ where: { codigo: 'EX031' } }); 
-const ex032 = await prisma.exercicio.findUnique({ where: { codigo: 'EX032' } }); 
-const ex035 = await prisma.exercicio.findUnique({ where: { codigo: 'EX035' } }); 
-const ex041 = await prisma.exercicio.findUnique({ where: { codigo: 'EX041' } }); 
-const ex042 = await prisma.exercicio.findUnique({ where: { codigo: 'EX042' } });
-const ex057 = await prisma.exercicio.findUnique({ where: { codigo: 'EX057' } });
-const ex061 = await prisma.exercicio.findUnique({ where: { codigo: 'EX061' } });
-const ex068 = await prisma.exercicio.findUnique({ where: { codigo: 'EX068' } }); 
+  const prazo25Out = new Date(new Date().getFullYear(), 9, 25, 23, 59, 0);
 
-if (
-  professorMateus &&
-  ex031 && ex032 && ex035 && ex041 && ex042 && ex057 && ex061 && ex068
-) {
-  await prisma.treinoProgramado.upsert({
-    where: { codigo: 'TR003' },
-    update: {
-      tipoTreino: TipoTreino.Fisico,
-      dataAgendada: prazo25Out,
-      exercicios: {
-        deleteMany: {},
-        create: [
-          { exercicioId: ex031.id, ordem: 1, repeticoes: '3x 20s + 20s descanso' },
-          { exercicioId: ex032.id, ordem: 2, repeticoes: '3x 20s + 20s descanso' },
-          { exercicioId: ex041.id, ordem: 3, repeticoes: '3x 20s + 20s descanso' },
-          { exercicioId: ex042.id, ordem: 4, repeticoes: '4x 15m (zig-zag)' },
-          { exercicioId: ex057.id, ordem: 5, repeticoes: '4x 6 saltos' },
-          { exercicioId: ex061.id, ordem: 6, repeticoes: '3x 20s (shuffle)' },
-          { exercicioId: ex035.id, ordem: 7, repeticoes: '3x 20s + 20s descanso' },
-          { exercicioId: ex068.id, ordem: 8, repeticoes: '3x 40s (isometria)' },
-        ],
-      },
-    },
-    create: {
-      codigo: 'TR003',
-      nome: 'Agilidade & Core (Escada + Pliometria)',
-      descricao: 'Circuito integrado de escada, mudanças de direção, pliometria e core.',
-      nivel: Nivel.Avancado,
-      categoria: [Categoria.Livre],
-      duracao: 50,
-      tipoTreino: TipoTreino.Fisico,
-      professorId: professorMateus.id,
-      dataAgendada: prazo25Out,
-      imagemUrl: '/assets/treinos/agilidade.jpg',
-      pontuacao: 14,
-      exercicios: {
-        create: [
-          { exercicioId: ex031.id, ordem: 1, repeticoes: '3x 20s + 20s descanso' },
-          { exercicioId: ex032.id, ordem: 2, repeticoes: '3x 20s + 20s descanso' },
-          { exercicioId: ex041.id, ordem: 3, repeticoes: '3x 20s + 20s descanso' },
-          { exercicioId: ex042.id, ordem: 4, repeticoes: '4x 15m (zig-zag)' },
-          { exercicioId: ex057.id, ordem: 5, repeticoes: '4x 6 saltos' },
-          { exercicioId: ex061.id, ordem: 6, repeticoes: '3x 20s (shuffle)' },
-          { exercicioId: ex035.id, ordem: 7, repeticoes: '3x 20s + 20s descanso' },
-          { exercicioId: ex068.id, ordem: 8, repeticoes: '3x 40s (isometria)' },
-        ],
-      },
-    },
-  });
-}
+  const ex1 = await prisma.exercicio.findUnique({ where: { codigo: 'EX005' } });
+  const ex2 = await prisma.exercicio.findUnique({ where: { codigo: 'EX009' } });
+  const ex3 = await prisma.exercicio.findUnique({ where: { codigo: 'EX010' } });
+  const ex4 = await prisma.exercicio.findUnique({ where: { codigo: 'EX020' } });
+  const ex5 = await prisma.exercicio.findUnique({ where: { codigo: 'EX001' } });
 
-const senhaFormado = await hash('atleta123');
-
-const usuarioFormado = await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'atleta.formadores' },
-  update: {},
-  create: {
-    nomeDeUsuario: 'atleta.formadores',
-    nome: 'Mauro Formado',
-    email: 'atleta.formadores@example.com',
-    senhaHash: senhaFormado,
-    tipo: TipoUsuario.Atleta,
-    cidade: 'São Paulo',
-    estado: 'SP',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/atleta-formadores.png',
-    atleta: {
+  if (professorMateus && ex1 && ex2 && ex3 && ex4 && ex5) {
+    await prisma.treinoProgramado.upsert({
+      where: { codigo: 'TR002' },
+      update: {},
       create: {
-        nome: 'Mauro',
-        sobrenome: 'Formado',
-        email: 'atleta.formadores@example.com',
-        idade: 17,
-        posicao: 'MEI',
-        altura: 1.77,
-        peso: 66,
-        nacionalidade: 'Brasileira',
-        naturalidade: 'São Paulo - SP',
-        telefone1: '11999990022',
-        seloQualidade: 'Prata',
-        categoria: [Categoria.Sub17],
-        foto: '/assets/usuarios/atleta-formadores.png',
-        clubeId: clube1Db ? clube1Db.id : null,
+        codigo: 'TR002',
+        nome: 'Treino Técnico Agilidade',
+        descricao: 'Sequência integrada de fundamentos: drible, passes no chão e no alto, e cabeceio.',
+        nivel: Nivel.Base,
+        categoria: [Categoria.Livre],
+        duracao: 60,
+        tipoTreino: TipoTreino.Tecnico,
+        professorId: professorMateus.id,
+        dataAgendada: prazo25Out,
+        imagemUrl: '/assets/treinos/agilidade.jpg',
+        pontuacao: 12,
+        exercicios: {
+          create: [
+            { exercicioId: ex1.id, ordem: 1, repeticoes: '3x 40s + 20s descanso' },
+            { exercicioId: ex2.id, ordem: 2, repeticoes: '4x 12 passes cada' },
+            { exercicioId: ex3.id, ordem: 3, repeticoes: '3x 10 lançamentos' },
+            { exercicioId: ex4.id, ordem: 4, repeticoes: '3x 12 cabeceios' },
+            { exercicioId: ex5.id, ordem: 5, repeticoes: '5 voltas' },
+          ]
+        }
+      }
+    });
+  }
+
+  const ex031 = await prisma.exercicio.findUnique({ where: { codigo: 'EX031' } });
+  const ex032 = await prisma.exercicio.findUnique({ where: { codigo: 'EX032' } });
+  const ex035 = await prisma.exercicio.findUnique({ where: { codigo: 'EX035' } });
+  const ex041 = await prisma.exercicio.findUnique({ where: { codigo: 'EX041' } });
+  const ex042 = await prisma.exercicio.findUnique({ where: { codigo: 'EX042' } });
+  const ex057 = await prisma.exercicio.findUnique({ where: { codigo: 'EX057' } });
+  const ex061 = await prisma.exercicio.findUnique({ where: { codigo: 'EX061' } });
+  const ex068 = await prisma.exercicio.findUnique({ where: { codigo: 'EX068' } });
+
+  if (
+    professorMateus &&
+    ex031 && ex032 && ex035 && ex041 && ex042 && ex057 && ex061 && ex068
+  ) {
+    await prisma.treinoProgramado.upsert({
+      where: { codigo: 'TR003' },
+      update: {
+        tipoTreino: TipoTreino.Fisico,
+        dataAgendada: prazo25Out,
+        exercicios: {
+          deleteMany: {},
+          create: [
+            { exercicioId: ex031.id, ordem: 1, repeticoes: '3x 20s + 20s descanso' },
+            { exercicioId: ex032.id, ordem: 2, repeticoes: '3x 20s + 20s descanso' },
+            { exercicioId: ex041.id, ordem: 3, repeticoes: '3x 20s + 20s descanso' },
+            { exercicioId: ex042.id, ordem: 4, repeticoes: '4x 15m (zig-zag)' },
+            { exercicioId: ex057.id, ordem: 5, repeticoes: '4x 6 saltos' },
+            { exercicioId: ex061.id, ordem: 6, repeticoes: '3x 20s (shuffle)' },
+            { exercicioId: ex035.id, ordem: 7, repeticoes: '3x 20s + 20s descanso' },
+            { exercicioId: ex068.id, ordem: 8, repeticoes: '3x 40s (isometria)' },
+          ],
+        },
       },
-    },
-  },
-});
-
-const atletaFormado = await prisma.atleta.findUnique({
-  where: { usuarioId: usuarioFormado.id },
-});
-
-if (atletaFormado && escolinhaEstrelasDb) {
-  const jaTem = await prisma.vinculoFormacao.findFirst({
-    where: {
-      atletaId: atletaFormado.id,
-      origem: OrigemFormador.Escolinha,
-      origemId: escolinhaEstrelasDb.id,
-    },
-  });
-
-  if (!jaTem) {
-    await prisma.vinculoFormacao.create({
-      data: {
-        atletaId: atletaFormado.id,
-        origem: OrigemFormador.Escolinha,
-        origemId: escolinhaEstrelasDb.id,
-        inicio: new Date(new Date().getFullYear() - 2, 0, 15),
-        observacoes: 'Vínculo criado no seed para demo do módulo Formadores.',
+      create: {
+        codigo: 'TR003',
+        nome: 'Agilidade & Core (Escada + Pliometria)',
+        descricao: 'Circuito integrado de escada, mudanças de direção, pliometria e core.',
+        nivel: Nivel.Avancado,
+        categoria: [Categoria.Livre],
+        duracao: 50,
+        tipoTreino: TipoTreino.Fisico,
+        professorId: professorMateus.id,
+        dataAgendada: prazo25Out,
+        imagemUrl: '/assets/treinos/agilidade.jpg',
+        pontuacao: 14,
+        exercicios: {
+          create: [
+            { exercicioId: ex031.id, ordem: 1, repeticoes: '3x 20s + 20s descanso' },
+            { exercicioId: ex032.id, ordem: 2, repeticoes: '3x 20s + 20s descanso' },
+            { exercicioId: ex041.id, ordem: 3, repeticoes: '3x 20s + 20s descanso' },
+            { exercicioId: ex042.id, ordem: 4, repeticoes: '4x 15m (zig-zag)' },
+            { exercicioId: ex057.id, ordem: 5, repeticoes: '4x 6 saltos' },
+            { exercicioId: ex061.id, ordem: 6, repeticoes: '3x 20s (shuffle)' },
+            { exercicioId: ex035.id, ordem: 7, repeticoes: '3x 20s + 20s descanso' },
+            { exercicioId: ex068.id, ordem: 8, repeticoes: '3x 40s (isometria)' },
+          ],
+        },
       },
     });
   }
-}
 
-  // const desafios = [
-  //   {
-  //     titulo: 'Desafio Controle Aéreo',
-  //     descricao: 'Mantenha a bola no ar pelo maior tempo possível usando diferentes partes do corpo.',
-  //     imagemUrl: '/assets/controle-aereo.jpg',
-  //     nivel: Nivel.Avancado,
-  //     pontuacao: 10,
-  //     categoria: [Categoria.Sub15]
-  //   },
-  //   {
-  //     titulo: 'Desafio Equilíbrio e Agilidade',
-  //     descricao: 'Supere um percurso de obstáculos mantendo o controle da bola.',
-  //     imagemUrl: '/assets/treino-agilidade.webp',
-  //     nivel: Nivel.Avancado,
-  //     pontuacao: 8,
-  //     categoria: [Categoria.Sub13]
-  //   }
-  // ];
-  // for (const desafio of desafios) {
-  //   const exists = await prisma.desafioOficial.findFirst({ where: { titulo: desafio.titulo } });
-  //   if (!exists) {
-  //     await prisma.desafioOficial.create({ data: desafio });
-  //   }
-  // }
+  const senhaFormado = await hash('atleta123');
+
+  const usuarioFormado = await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'atleta.formadores' },
+    update: {},
+    create: {
+      nomeDeUsuario: 'atleta.formadores',
+      nome: 'Mauro Formado',
+      email: 'atleta.formadores@example.com',
+      senhaHash: senhaFormado,
+      tipo: TipoUsuario.Atleta,
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/atleta-formadores.png',
+      atleta: {
+        create: {
+          nome: 'Mauro',
+          sobrenome: 'Formado',
+          email: 'atleta.formadores@example.com',
+          idade: 17,
+          posicao: PosicaoCampo.MEI,
+          altura: 1.77,
+          peso: 66,
+          nacionalidade: 'Brasileira',
+          naturalidade: 'São Paulo - SP',
+          telefone1: '11999990022',
+          seloQualidade: 'Prata',
+          categoria: [Categoria.Sub17],
+          foto: '/assets/usuarios/atleta-formadores.png',
+          clubeId: clube1Db ? clube1Db.id : null,
+        },
+      },
+    },
+  });
+
+  const atletaFormado = await prisma.atleta.findUnique({
+    where: { usuarioId: usuarioFormado.id },
+  });
+
+  if (atletaFormado && escolinhaEstrelasDb) {
+    const jaTem = await prisma.vinculoFormacao.findFirst({
+      where: {
+        atletaId: atletaFormado.id,
+        origem: OrigemFormador.Escolinha,
+        origemId: escolinhaEstrelasDb.id,
+      },
+    });
+
+    if (!jaTem) {
+      await prisma.vinculoFormacao.create({
+        data: {
+          atletaId: atletaFormado.id,
+          origem: OrigemFormador.Escolinha,
+          origemId: escolinhaEstrelasDb.id,
+          inicio: new Date(new Date().getFullYear() - 2, 0, 15),
+          observacoes: 'Vínculo criado no seed para demo do módulo Formadores.',
+        },
+      });
+    }
+  }
 
   const professorArthur = await prisma.professor.findFirst({
     where: { usuario: { nomeDeUsuario: 'arthur.persio' } }
@@ -699,7 +683,7 @@ if (atletaFormado && escolinhaEstrelasDb) {
           nome: "teste",
           sobrenome: "",
           idade: 16,
-          posicao: "ZD",
+          posicao: PosicaoCampo.ZD,
           altura: 1.8,
           peso: 72,
           nacionalidade: "Brasileira",
@@ -721,7 +705,7 @@ if (atletaFormado && escolinhaEstrelasDb) {
       nome: "teste",
       sobrenome: "",
       idade: 16,
-      posicao: "ZD",
+      posicao: PosicaoCampo.ZD,
       altura: 1.8,
       peso: 72,
       nacionalidade: "Brasileira",
@@ -735,11 +719,6 @@ if (atletaFormado && escolinhaEstrelasDb) {
 
   await prisma.atividadeRecente.createMany({
     data: [
-      // {
-      //   usuarioId: usuarioTeste.id,
-      //   tipo: "Desafio",
-      //   imagemUrl: "/assets/desafios/velocidade.jpg",
-      // },
       {
         usuarioId: usuarioTeste.id,
         tipo: "Treino",
@@ -754,626 +733,716 @@ if (atletaFormado && escolinhaEstrelasDb) {
     skipDuplicates: true,
   });
 
-  // const desafioExtra = await prisma.desafioOficial.upsert({
-  //   where: { titulo: "Desafio de Velocidade" },
-  //   update: {},
-  //   create: {
-  //     titulo: "Desafio de Velocidade",
-  //     descricao: "Complete um circuito em tempo recorde.",
-  //     nivel: Nivel.Performance,
-  //     pontuacao: 15,
-  //     categoria: [Categoria.Sub17],
-  //     imagemUrl: "/assets/desafios/velocidade.jpg"
-  //   }
-  // });
+  await prisma.atividadeRecente.createMany({
+    data: [
+      {
+        usuarioId: atletaTeste.usuarioId,
+        tipo: "Treino",
+        imagemUrl: "/assets/treinos/controle.jpg",
+      },
+    ],
+    skipDuplicates: true,
+  });
 
-  // await prisma.submissaoDesafio.upsert({
-  //   where: { videoUrl: "https://www.google.com/imgres?q=desafio%20velocidade%20futebol&imgurl=https%3A%2F%2Fwww.tiktok.com%2Fapi%2Fimg%2F%3FitemId%3D7358856354527857926%26location%3D0%26aid%3D1988&imgrefurl=https%3A%2F%2Fwww.tiktok.com%2F%40adonias%2Fvideo%2F7358856354527857926&docid=Q3i_9CrrR3OQFM&tbnid=3SL_XXb6IEl1zM&vet=12ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA..i&w=1080&h=1920&hcb=2&ved=2ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA" },
-  //   update: {},
-  //   create: {
-  //     atletaId: atletaTeste.id,
-  //     desafioId: desafioExtra.id,
-  //     videoUrl: "https://www.google.com/imgres?q=desafio%20velocidade%20futebol&imgurl=https%3A%2F%2Fwww.tiktok.com%2Fapi%2Fimg%2F%3FitemId%3D7358856354527857926%26location%3D0%26aid%3D1988&imgrefurl=https%3A%2F%2Fwww.tiktok.com%2F%40adonias%2Fvideo%2F7358856354527857926&docid=Q3i_9CrrR3OQFM&tbnid=3SL_XXb6IEl1zM&vet=12ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA..i&w=1080&h=1920&hcb=2&ved=2ahUKEwjx6-2iseWOAxWYiJUCHYlxORkQM3oECBkQAA",
-  //     aprovado: true,
-  //   },
-  // });
-
-// const desafioTeste2 = await prisma.desafioOficial.upsert({
-//   where: { titulo: "Desafio de Controle Avançado" },
-//   update: {},
-//   create: {
-//     titulo: "Desafio de Controle Avançado",
-//     descricao: "Mantenha a posse da bola com domínio total durante 60 segundos.",
-//     nivel: Nivel.Performance,
-//     pontuacao: 20,
-//     categoria: [Categoria.Sub15],
-//     imagemUrl: "/assets/desafios/controle-avancado.jpg",
-//   },
-// });
-
-// await prisma.submissaoDesafio.upsert({
-//   where: { videoUrl: "https://www.youtube.com/watch?v=controle_avancado" },
-//   update: {},
-//   create: {
-//     atletaId: atletaTeste!.id,
-//     desafioId: desafioTeste2.id,
-//     videoUrl: "https://www.youtube.com/watch?v=controle_avancado",
-//     aprovado: true,
-//   },
-// });
-
-await prisma.atividadeRecente.createMany({
-  data: [
-    {
-      usuarioId: atletaTeste!.usuarioId,
-      tipo: "Treino",
-      imagemUrl: "/assets/treinos/controle.jpg",
-    },
-    // {
-    //   usuarioId: atletaTeste!.usuarioId,
-    //   tipo: "Desafio",
-    //   imagemUrl: "/assets/desafios/controle-avancado.jpg",
-    // },
-  ],
-  skipDuplicates: true,
-});
-
-const usuarioAaaaa = await prisma.usuario.upsert({
-  where: { nomeDeUsuario: "aaaaa" },
-  update: {},
-  create: {
-    nome: "aaaaa",
-    nomeDeUsuario: "aaaaa",
-    email: "aaaaa@example.com",
-    senhaHash: H['aaaaa'],
-    tipo: TipoUsuario.Atleta,
-    cidade: "Vitória",
-    estado: "ES",
-    foto: "/assets/usuarios/isadora.jpg",
-    pais: "Brasil",
-    atleta: {
-      create: {
-        nome: "aaaaa",
-        sobrenome: "",
-        idade: 16,
-        posicao: "ZE",
-        altura: 1.8,
-        peso: 72,
-        nacionalidade: "Brasileira",
-        naturalidade: "Vitória - ES",
-        telefone1: "11999999999",
-        seloQualidade: "Bronze",
-        categoria: [Categoria.Sub17],
-        foto: "/assets/usuarios/isadora.jpg"
+  const usuarioAaaaa = await prisma.usuario.upsert({
+    where: { nomeDeUsuario: "aaaaa" },
+    update: {},
+    create: {
+      nome: "aaaaa",
+      nomeDeUsuario: "aaaaa",
+      email: "aaaaa@example.com",
+      senhaHash: H['aaaaa'],
+      tipo: TipoUsuario.Atleta,
+      cidade: "Vitória",
+      estado: "ES",
+      foto: "/assets/usuarios/isadora.jpg",
+      pais: "Brasil",
+      atleta: {
+        create: {
+          nome: "aaaaa",
+          sobrenome: "",
+          idade: 16,
+          posicao: PosicaoCampo.ZE,
+          altura: 1.8,
+          peso: 72,
+          nacionalidade: "Brasileira",
+          naturalidade: "Vitória - ES",
+          telefone1: "11999999999",
+          seloQualidade: "Bronze",
+          categoria: [Categoria.Sub17],
+          foto: "/assets/usuarios/isadora.jpg"
+        }
       }
     }
-  }
-});
-await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'atleta_free' },
-  update: {
-    senhaHash: H['atleta_free'],
-    tipo: TipoUsuario.Atleta,
-    verified: true,
-  },
-  create: {
-    nome: 'Atleta Free',
-    nomeDeUsuario: 'atleta_free',
-    email: 'atleta_free@example.com',
-    senhaHash: H['atleta_free'],
-    tipo: TipoUsuario.Atleta,
-    cidade: 'São Paulo',
-    estado: 'SP',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/teste-atleta-free.png',
-    atleta: {
-      create: {
-        nome: 'Atleta',
-        sobrenome: 'Free',
-        email: 'atleta_free@example.com',
-        idade: 15,
-        posicao: 'MEI',
-        altura: 1.70,
-        peso: 60,
-        nacionalidade: 'Brasileira',
-        naturalidade: 'São Paulo - SP',
-        telefone1: '11999990001',
-        seloQualidade: 'Bronze',
-        categoria: [Categoria.Sub15],
-        foto: '/assets/usuarios/teste-atleta-free.png',
-      },
+  });
+
+  await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'atleta_free' },
+    update: {
+      senhaHash: H['atleta_free'],
+      tipo: TipoUsuario.Atleta,
+      verified: true,
     },
-  },
-});
-
-await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'atleta_pro' },
-  update: {
-    senhaHash: H['atleta_pro'],
-    tipo: TipoUsuario.Atleta,
-    verified: true,
-  },
-  create: {
-    nome: 'Atleta Pro',
-    nomeDeUsuario: 'atleta_pro',
-    email: 'atleta_pro@example.com',
-    senhaHash: H['atleta_pro'],
-    tipo: TipoUsuario.Atleta,
-    cidade: 'São Paulo',
-    estado: 'SP',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/teste-atleta-pro.png',
-    atleta: {
-      create: {
-        nome: 'Atleta',
-        sobrenome: 'Pro',
-        email: 'atleta_pro@example.com',
-        idade: 16,
-        posicao: 'CA',
-        altura: 1.75,
-        peso: 65,
-        nacionalidade: 'Brasileira',
-        naturalidade: 'São Paulo - SP',
-        telefone1: '11999990002',
-        seloQualidade: 'Prata',
-        categoria: [Categoria.Sub17],
-        foto: '/assets/usuarios/teste-atleta-pro.png',
+    create: {
+      nome: 'Atleta Free',
+      nomeDeUsuario: 'atleta_free',
+      email: 'atleta_free@example.com',
+      senhaHash: H['atleta_free'],
+      tipo: TipoUsuario.Atleta,
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/teste-atleta-free.png',
+      atleta: {
+        create: {
+          nome: 'Atleta',
+          sobrenome: 'Free',
+          email: 'atleta_free@example.com',
+          idade: 15,
+          posicao: PosicaoCampo.MEI,
+          altura: 1.70,
+          peso: 60,
+          nacionalidade: 'Brasileira',
+          naturalidade: 'São Paulo - SP',
+          telefone1: '11999990001',
+          seloQualidade: 'Bronze',
+          categoria: [Categoria.Sub15],
+          foto: '/assets/usuarios/teste-atleta-free.png',
+        },
       },
-    },
-  },
-});
-
-await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'prof_free' },
-  update: {
-    senhaHash: H['prof_free'],
-    tipo: TipoUsuario.Professor,
-    verified: true,
-  },
-  create: {
-    nome: 'Professor Free',
-    nomeDeUsuario: 'prof_free',
-    email: 'prof_free@example.com',
-    senhaHash: H['prof_free'],
-    tipo: TipoUsuario.Professor,
-    cidade: 'Vitória',
-    estado: 'ES',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/teste-prof-free.png',
-    professor: {
-      create: {
-        codigo: 'PROF_FREE',
-        cref: 'ES000001',
-        areaFormacao: 'Educação Física',
-        escola: 'Escola Estrelas',
-        qualificacoes: ['Professor de teste (FREE)'],
-        certificacoes: ['Licença C'],
-        fotoUrl: '/assets/usuarios/teste-prof-free.png',
-        nome: 'Professor Free',
-      },
-    },
-  },
-});
-
-await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'prof_pro' },
-  update: {
-    senhaHash: H['prof_pro'],
-    tipo: TipoUsuario.Professor,
-    verified: true,
-  },
-  create: {
-    nome: 'Professor Pro',
-    nomeDeUsuario: 'prof_pro',
-    email: 'prof_pro@example.com',
-    senhaHash: H['prof_pro'],
-    tipo: TipoUsuario.Professor,
-    cidade: 'Vitória',
-    estado: 'ES',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/teste-prof-pro.png',
-    professor: {
-      create: {
-        codigo: 'PROF_PRO',
-        cref: 'ES000002',
-        areaFormacao: 'Educação Física',
-        escola: 'Academia FC',
-        qualificacoes: ['Professor de teste (PRO)'],
-        certificacoes: ['Licença B'],
-        fotoUrl: '/assets/usuarios/teste-prof-pro.png',
-        nome: 'Professor Pro',
-      },
-    },
-  },
-});
-
-await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'scout_free' },
-  update: {
-    senhaHash: H['scout_free'],
-    tipo: TipoUsuario.Olheiro,
-    verified: true,
-  },
-  create: {
-    nome: 'Olheiro Free',
-    nomeDeUsuario: 'scout_free',
-    email: 'scout_free@example.com',
-    senhaHash: H['scout_free'],
-    tipo: TipoUsuario.Olheiro,
-    cidade: 'São Paulo',
-    estado: 'SP',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/teste-scout-free.png',
-    olheiro: {
-      create: {
-        descricao: 'Olheiro de teste (FREE)',
-        areaAtuacao: 'Sudeste',
-        telefonePublico: '11999990003',
-        emailPublico: 'scout_free@example.com',
-        fotoUrl: '/assets/usuarios/teste-scout-free.png',
-      },
-    },
-  },
-});
-
-await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'scout_pro' },
-  update: {
-    senhaHash: H['scout_pro'],
-    tipo: TipoUsuario.Olheiro,
-    verified: true,
-  },
-  create: {
-    nome: 'Olheiro Pro',
-    nomeDeUsuario: 'scout_pro',
-    email: 'scout_pro@example.com',
-    senhaHash: H['scout_pro'],
-    tipo: TipoUsuario.Olheiro,
-    cidade: 'São Paulo',
-    estado: 'SP',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/teste-scout-pro.png',
-    olheiro: {
-      create: {
-        descricao: 'Olheiro de teste (PRO)',
-        areaAtuacao: 'Sudeste',
-        telefonePublico: '11999990004',
-        emailPublico: 'scout_pro@example.com',
-        fotoUrl: '/assets/usuarios/teste-scout-pro.png',
-      },
-    },
-  },
-});
-
-await prisma.usuario.upsert({
-  where: { nomeDeUsuario: 'escolinha_01' },
-  update: {
-    senhaHash: H['escolinha_01'],
-    tipo: TipoUsuario.Escolinha,
-    verified: true,
-  },
-  create: {
-    nome: 'Escolinha 01',
-    nomeDeUsuario: 'escolinha_01',
-    email: 'escolinha_01@example.com',
-    senhaHash: H['escolinha_01'],
-    tipo: TipoUsuario.Escolinha,
-    cidade: 'São Paulo',
-    estado: 'SP',
-    pais: 'Brasil',
-    foto: '/assets/usuarios/teste-escolinha-01.png',
-    escolinha: {
-      create: {
-        nome: 'Escolinha 01',
-        cidade: 'São Paulo',
-        estado: 'SP',
-        pais: 'Brasil',
-        email: 'escolinha_01@example.com',
-        cnpj: '11.111.111/0001-11',
-        telefone1: '11999990005',
-        logradouro: 'Rua Teste',
-        numero: '123',
-        bairro: 'Centro',
-        cep: '01000-000',
-        sede: 'São Paulo',
-        logo: '/assets/usuarios/teste-escolinha-01.png',
-      },
-    },
-  },
-});
-
-const atletaFree = await prisma.usuario.findUnique({
-  where: { nomeDeUsuario: 'atleta_free' },
-});
-
-const atletaPro = await prisma.usuario.findUnique({
-  where: { nomeDeUsuario: 'atleta_pro' },
-});
-
-if (atletaFree && atletaPro) {
-  const follow1 = await prisma.seguidor.findFirst({
-    where: {
-      seguidorUsuarioId: atletaFree.id,
-      seguidoUsuarioId: atletaPro.id,
     },
   });
 
-  if (!follow1) {
-    await prisma.seguidor.create({
-      data: {
+  await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'atleta_pro' },
+    update: {
+      senhaHash: H['atleta_pro'],
+      tipo: TipoUsuario.Atleta,
+      verified: true,
+    },
+    create: {
+      nome: 'Atleta Pro',
+      nomeDeUsuario: 'atleta_pro',
+      email: 'atleta_pro@example.com',
+      senhaHash: H['atleta_pro'],
+      tipo: TipoUsuario.Atleta,
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/teste-atleta-pro.png',
+      atleta: {
+        create: {
+          nome: 'Atleta',
+          sobrenome: 'Pro',
+          email: 'atleta_pro@example.com',
+          idade: 16,
+          posicao: PosicaoCampo.CA,
+          altura: 1.75,
+          peso: 65,
+          nacionalidade: 'Brasileira',
+          naturalidade: 'São Paulo - SP',
+          telefone1: '11999990002',
+          seloQualidade: 'Prata',
+          categoria: [Categoria.Sub17],
+          foto: '/assets/usuarios/teste-atleta-pro.png',
+        },
+      },
+    },
+  });
+
+  await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'prof_free' },
+    update: {
+      senhaHash: H['prof_free'],
+      tipo: TipoUsuario.Professor,
+      verified: true,
+    },
+    create: {
+      nome: 'Professor Free',
+      nomeDeUsuario: 'prof_free',
+      email: 'prof_free@example.com',
+      senhaHash: H['prof_free'],
+      tipo: TipoUsuario.Professor,
+      cidade: 'Vitória',
+      estado: 'ES',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/teste-prof-free.png',
+      professor: {
+        create: {
+          codigo: 'PROF_FREE',
+          cref: 'ES000001',
+          areaFormacao: 'Educação Física',
+          escola: 'Escola Estrelas',
+          qualificacoes: ['Professor de teste (FREE)'],
+          certificacoes: ['Licença C'],
+          fotoUrl: '/assets/usuarios/teste-prof-free.png',
+          nome: 'Professor Free',
+        },
+      },
+    },
+  });
+
+  await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'prof_pro' },
+    update: {
+      senhaHash: H['prof_pro'],
+      tipo: TipoUsuario.Professor,
+      verified: true,
+    },
+    create: {
+      nome: 'Professor Pro',
+      nomeDeUsuario: 'prof_pro',
+      email: 'prof_pro@example.com',
+      senhaHash: H['prof_pro'],
+      tipo: TipoUsuario.Professor,
+      cidade: 'Vitória',
+      estado: 'ES',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/teste-prof-pro.png',
+      professor: {
+        create: {
+          codigo: 'PROF_PRO',
+          cref: 'ES000002',
+          areaFormacao: 'Educação Física',
+          escola: 'Academia FC',
+          qualificacoes: ['Professor de teste (PRO)'],
+          certificacoes: ['Licença B'],
+          fotoUrl: '/assets/usuarios/teste-prof-pro.png',
+          nome: 'Professor Pro',
+        },
+      },
+    },
+  });
+
+  await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'scout_free' },
+    update: {
+      senhaHash: H['scout_free'],
+      tipo: TipoUsuario.Olheiro,
+      verified: true,
+    },
+    create: {
+      nome: 'Olheiro Free',
+      nomeDeUsuario: 'scout_free',
+      email: 'scout_free@example.com',
+      senhaHash: H['scout_free'],
+      tipo: TipoUsuario.Olheiro,
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/teste-scout-free.png',
+      olheiro: {
+        create: {
+          descricao: 'Olheiro de teste (FREE)',
+          areaAtuacao: 'Sudeste',
+          telefonePublico: '11999990003',
+          emailPublico: 'scout_free@example.com',
+          fotoUrl: '/assets/usuarios/teste-scout-free.png',
+        },
+      },
+    },
+  });
+
+  await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'scout_pro' },
+    update: {
+      senhaHash: H['scout_pro'],
+      tipo: TipoUsuario.Olheiro,
+      verified: true,
+    },
+    create: {
+      nome: 'Olheiro Pro',
+      nomeDeUsuario: 'scout_pro',
+      email: 'scout_pro@example.com',
+      senhaHash: H['scout_pro'],
+      tipo: TipoUsuario.Olheiro,
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/teste-scout-pro.png',
+      olheiro: {
+        create: {
+          descricao: 'Olheiro de teste (PRO)',
+          areaAtuacao: 'Sudeste',
+          telefonePublico: '11999990004',
+          emailPublico: 'scout_pro@example.com',
+          fotoUrl: '/assets/usuarios/teste-scout-pro.png',
+        },
+      },
+    },
+  });
+
+  await prisma.usuario.upsert({
+    where: { nomeDeUsuario: 'escolinha_01' },
+    update: {
+      senhaHash: H['escolinha_01'],
+      tipo: TipoUsuario.Escolinha,
+      verified: true,
+    },
+    create: {
+      nome: 'Escolinha 01',
+      nomeDeUsuario: 'escolinha_01',
+      email: 'escolinha_01@example.com',
+      senhaHash: H['escolinha_01'],
+      tipo: TipoUsuario.Escolinha,
+      cidade: 'São Paulo',
+      estado: 'SP',
+      pais: 'Brasil',
+      foto: '/assets/usuarios/teste-escolinha-01.png',
+      escolinha: {
+        create: {
+          nome: 'Escolinha 01',
+          cidade: 'São Paulo',
+          estado: 'SP',
+          pais: 'Brasil',
+          email: 'escolinha_01@example.com',
+          cnpj: '11.111.111/0001-11',
+          telefone1: '11999990005',
+          logradouro: 'Rua Teste',
+          numero: '123',
+          bairro: 'Centro',
+          cep: '01000-000',
+          sede: 'São Paulo',
+          logo: '/assets/usuarios/teste-escolinha-01.png',
+        },
+      },
+    },
+  });
+
+  const atletaFree = await prisma.usuario.findUnique({
+    where: { nomeDeUsuario: 'atleta_free' },
+  });
+
+  const atletaPro = await prisma.usuario.findUnique({
+    where: { nomeDeUsuario: 'atleta_pro' },
+  });
+
+  if (atletaFree) {
+    await prisma.assinatura.upsert({
+      where: { usuarioId: atletaFree.id },
+      update: {},
+      create: {
+        usuarioId: atletaFree.id,
+        plano: "FREE",
+        periodicidade: "Mensal",
+        startsAt: monthsAgo(3),
+        canceledAt: null,
+        ativo: true,
+        renovaEm: monthsAgo(-1),
+      },
+    });
+  }
+
+  if (atletaPro) {
+    await prisma.assinatura.upsert({
+      where: { usuarioId: atletaPro.id },
+      update: {},
+      create: {
+        usuarioId: atletaPro.id,
+        plano: "PRO",
+        periodicidade: "Mensal",
+        startsAt: monthsAgo(2),
+        canceledAt: null,
+        ativo: true,
+        renovaEm: monthsAgo(-1),
+      },
+    });
+  }
+
+  if (atletaTeste) {
+    await prisma.assinatura.upsert({
+      where: { usuarioId: atletaTeste.usuarioId },
+      update: {},
+      create: {
+        usuarioId: atletaTeste.usuarioId,
+        plano: "PRO",
+        periodicidade: "Mensal",
+        startsAt: monthsAgo(2),
+        canceledAt: daysAgo(10),
+        ativo: false,
+        renovaEm: monthsAgo(-1),
+      },
+    });
+  }
+
+  if (atletaFree) {
+    await prisma.atividadeRecente.createMany({
+      data: [
+        {
+          usuarioId: atletaFree.id,
+          tipo: "TREINO",
+          createdAt: daysAgo(1),
+        },
+        {
+          usuarioId: atletaFree.id,
+          tipo: "DESAFIO",
+          createdAt: daysAgo(3),
+        },
+        {
+          usuarioId: atletaFree.id,
+          tipo: "POST",
+          createdAt: daysAgo(10),
+        },
+      ],
+    });
+  }
+
+  if (atletaPro) {
+    await prisma.atividadeRecente.createMany({
+      data: [
+        {
+          usuarioId: atletaPro.id,
+          tipo: "TREINO",
+          createdAt: daysAgo(2),
+        },
+        {
+          usuarioId: atletaPro.id,
+          tipo: "TREINO",
+          createdAt: daysAgo(8),
+        },
+        {
+          usuarioId: atletaPro.id,
+          tipo: "DESAFIO",
+          createdAt: daysAgo(15),
+        },
+      ],
+    });
+  }
+
+  if (atletaTeste) {
+    await prisma.atividadeRecente.createMany({
+      data: [
+        {
+          usuarioId: atletaTeste.usuarioId,
+          tipo: "TREINO",
+          createdAt: daysAgo(1),
+        },
+        {
+          usuarioId: atletaTeste.usuarioId,
+          tipo: "TREINO",
+          createdAt: daysAgo(20),
+        },
+      ],
+    });
+  }
+
+  const agora = new Date();
+  const renovaFutura = new Date(2099, 0, 1);
+
+  const usuarioAtletaPro = await prisma.usuario.findUnique({
+    where: { nomeDeUsuario: 'atleta_pro' },
+  });
+  const usuarioProfPro = await prisma.usuario.findUnique({
+    where: { nomeDeUsuario: 'prof_pro' },
+  });
+  const usuarioScoutPro = await prisma.usuario.findUnique({
+    where: { nomeDeUsuario: 'scout_pro' },
+  });
+  const usuarioEscolinha01Db = await prisma.usuario.findUnique({
+    where: { nomeDeUsuario: 'escolinha_01' },
+  });
+
+  async function garantirAssinaturaFixa(
+    usuarioId: string,
+    plano: string,
+    periodicidade: Periodicidade
+  ) {
+    await prisma.assinatura.upsert({
+      where: { usuarioId },
+      update: {
+        plano,
+        periodicidade,
+        startsAt: agora,
+        renovaEm: renovaFutura,
+        ativo: true,
+        canceledAt: null,
+      },
+      create: {
+        usuarioId,
+        plano,
+        periodicidade,
+        startsAt: agora,
+        renovaEm: renovaFutura,
+        ativo: true,
+      },
+    });
+
+    const jaTemPagamento = await prisma.pagamento.findFirst({
+      where: {
+        usuarioId,
+        plano,
+        status: PagamentoStatus.APROVADO,
+      },
+    });
+
+    if (!jaTemPagamento) {
+      await prisma.pagamento.create({
+        data: {
+          usuarioId,
+          plano,
+          periodicidade,
+          metodo: MetodoPagamento.PIX,
+          status: PagamentoStatus.APROVADO,
+          valor: 0,
+          moeda: 'BRL',
+          criadoEm: agora,
+          pagoEm: agora,
+        },
+      });
+    }
+  }
+
+  if (usuarioAtletaPro) {
+    await garantirAssinaturaFixa(
+      usuarioAtletaPro.id,
+      'ATLETA_PRO',
+      Periodicidade.Mensal
+    );
+  }
+
+  if (usuarioProfPro) {
+    await garantirAssinaturaFixa(
+      usuarioProfPro.id,
+      'PROFESSOR_PRO',
+      Periodicidade.Mensal
+    );
+  }
+
+  if (usuarioScoutPro) {
+    await garantirAssinaturaFixa(
+      usuarioScoutPro.id,
+      'OLHEIRO_PRO',
+      Periodicidade.Mensal
+    );
+  }
+
+  if (usuarioEscolinha01Db) {
+    await garantirAssinaturaFixa(
+      usuarioEscolinha01Db.id,
+      'ESCOLINHA_PRO',
+      Periodicidade.Mensal
+    );
+  }
+
+  const atletaAaaaa = await prisma.atleta.findUnique({
+    where: { usuarioId: usuarioAaaaa.id }
+  });
+
+  const exA = await prisma.exercicio.findUnique({ where: { codigo: 'EX006' } });
+  const exB = await prisma.exercicio.findUnique({ where: { codigo: 'EX011' } });
+  const exC = await prisma.exercicio.findUnique({ where: { codigo: 'EX012' } });
+  const exD = await prisma.exercicio.findUnique({ where: { codigo: 'EX021' } });
+  const exE = await prisma.exercicio.findUnique({ where: { codigo: 'EX024' } });
+
+  if (atletaAaaaa && professorArthur) {
+    if (!(exA && exB && exC && exD && exE)) {
+      throw new Error('Exercícios do TR001 não encontrados no seed');
+    }
+
+    const treino = await prisma.treinoProgramado.upsert({
+      where: { codigo: "TR001" },
+      update: {
+        tipoTreino: TipoTreino.Fisico,
+        dataAgendada: prazo25Out,
+        exercicios: {
+          deleteMany: {},
+          create: [
+            { exercicioId: exA.id, ordem: 1, repeticoes: '4x 45s + 15s descanso' },
+            { exercicioId: exB.id, ordem: 2, repeticoes: '3x 12 reps' },
+            { exercicioId: exC.id, ordem: 3, repeticoes: '3x 10 lançamentos' },
+            { exercicioId: exD.id, ordem: 4, repeticoes: '4x 8 cabeceios' },
+            { exercicioId: exE.id, ordem: 5, repeticoes: '4x 60s' },
+          ],
+        },
+      },
+      create: {
+        nome: "Treino Resistencia Física",
+        codigo: "TR001",
+        descricao: "Treino voltado para resistência",
+        nivel: Nivel.Avancado,
+        pontuacao: 10,
+        duracao: 45,
+        categoria: [Categoria.Livre],
+        imagemUrl: "/assets/treinos/resistencia.jpg",
+        professor: { connect: { id: professorArthur.id } },
+        tipoTreino: TipoTreino.Fisico,
+        dataAgendada: prazo25Out,
+        exercicios: {
+          create: [
+            { exercicioId: exA.id, ordem: 1, repeticoes: '4x 45s + 15s descanso' },
+            { exercicioId: exB.id, ordem: 2, repeticoes: '3x 12 reps' },
+            { exercicioId: exC.id, ordem: 3, repeticoes: '3x 10 lançamentos' },
+            { exercicioId: exD.id, ordem: 4, repeticoes: '4x 8 cabeceios' },
+            { exercicioId: exE.id, ordem: 5, repeticoes: '4x 60s' },
+          ],
+        },
+      },
+    });
+
+    const dataTreino = new Date();
+
+    const treinoAgendado = await prisma.treinoAgendado.upsert({
+      where: {
+        atletaId_treinoProgramadoId_dataTreino: {
+          atletaId: atletaAaaaa.id,
+          treinoProgramadoId: treino.id,
+          dataTreino,
+        },
+      },
+      update: {},
+      create: {
+        titulo: treino.nome,
+        dataExpiracao: dataTreino,
+        dataTreino,
+        local: "Quadra A",
+        atleta: { connect: { id: atletaAaaaa.id } },
+        treinoProgramado: { connect: { id: treino.id } },
+      },
+    });
+
+    await prisma.submissaoTreino.upsert({
+      where: { observacao: "Concluído com sucesso" },
+      update: {},
+      create: {
+        atleta: { connect: { id: atletaAaaaa.id } },
+        treinoAgendado: { connect: { id: treinoAgendado.id } },
+        observacao: "Concluído com sucesso",
+        aprovado: true,
+      },
+    });
+
+    await prisma.atividadeRecente.createMany({
+      data: [
+        {
+          usuarioId: atletaAaaaa.usuarioId,
+          tipo: "Treino",
+        },
+      ],
+      skipDuplicates: true,
+    });
+  }
+
+  if (atletaFree && atletaPro) {
+    const follow1 = await prisma.seguidor.findFirst({
+      where: {
         seguidorUsuarioId: atletaFree.id,
         seguidoUsuarioId: atletaPro.id,
       },
     });
-  }
 
-  const follow2 = await prisma.seguidor.findFirst({
-    where: {
-      seguidorUsuarioId: atletaPro.id,
-      seguidoUsuarioId: atletaFree.id,
-    },
-  });
-
-  if (!follow2) {
-    await prisma.seguidor.create({
+    const post1 = await prisma.postagem.create({
       data: {
+        conteudo: "Primeiro treino do dia!",
+        usuarioId: atletaFree.id,
+        dataCriacao: daysAgo(1),
+      },
+    });
+
+    const post2 = await prisma.postagem.create({
+      data: {
+        conteudo: "Treino intenso hoje 💪",
+        usuarioId: atletaPro.id,
+        dataCriacao: daysAgo(2),
+      },
+    });
+
+    const post3 = await prisma.postagem.create({
+      data: {
+        conteudo: "Alongamento pós-treino",
+        usuarioId: atletaFree.id,
+        dataCriacao: daysAgo(5),
+      },
+    });
+
+    await prisma.comentario.createMany({
+      data: [
+        {
+          postagemId: post1.id,
+          usuarioId: atletaPro.id,
+          conteudo: "Bora pra cima!",
+          dataCriacao: daysAgo(1),
+        },
+        {
+          postagemId: post2.id,
+          usuarioId: atletaFree.id,
+          conteudo: "Boa!",
+          dataCriacao: daysAgo(2),
+        },
+      ],
+    });
+
+    await prisma.curtida.createMany({
+      data: [
+        {
+          postagemId: post1.id,
+          usuarioId: atletaPro.id,
+          createdAt: daysAgo(1),
+        },
+        {
+          postagemId: post2.id,
+          usuarioId: atletaFree.id,
+          createdAt: daysAgo(2),
+        },
+        {
+          postagemId: post2.id,
+          usuarioId: atletaTeste?.usuarioId ?? atletaFree.id,
+          createdAt: daysAgo(3),
+        },
+      ],
+    });
+
+    if (!follow1) {
+      await prisma.seguidor.create({
+        data: {
+          seguidorUsuarioId: atletaFree.id,
+          seguidoUsuarioId: atletaPro.id,
+        },
+      });
+    }
+
+    const follow2 = await prisma.seguidor.findFirst({
+      where: {
         seguidorUsuarioId: atletaPro.id,
         seguidoUsuarioId: atletaFree.id,
       },
     });
-  }
 
-  const msgInicial = await prisma.mensagem.findFirst({
-    where: {
-      deId: atletaFree.id,
-      paraId: atletaPro.id,
-      conteudo: 'Mensagem inicial seed E2E',
-    },
-  });
+    if (!follow2) {
+      await prisma.seguidor.create({
+        data: {
+          seguidorUsuarioId: atletaPro.id,
+          seguidoUsuarioId: atletaFree.id,
+        },
+      });
+    }
 
-  if (!msgInicial) {
-    await prisma.mensagem.create({
-      data: {
+    const msgInicial = await prisma.mensagem.findFirst({
+      where: {
         deId: atletaFree.id,
         paraId: atletaPro.id,
         conteudo: 'Mensagem inicial seed E2E',
-        tipo: TipoMensagem.NORMAL,
       },
     });
-  }
-}
 
-const agora = new Date();
-const renovaFutura = new Date(2099, 0, 1);
-
-const usuarioAtletaPro = await prisma.usuario.findUnique({
-  where: { nomeDeUsuario: 'atleta_pro' },
-});
-const usuarioProfPro = await prisma.usuario.findUnique({
-  where: { nomeDeUsuario: 'prof_pro' },
-});
-const usuarioScoutPro = await prisma.usuario.findUnique({
-  where: { nomeDeUsuario: 'scout_pro' },
-});
-const usuarioEscolinha01Db = await prisma.usuario.findUnique({
-  where: { nomeDeUsuario: 'escolinha_01' },
-});
-
-async function garantirAssinaturaFixa(
-  usuarioId: string,
-  plano: string,
-  periodicidade: Periodicidade
-) {
-  await prisma.assinatura.upsert({
-    where: { usuarioId },
-    update: {
-      plano,
-      startsAt: agora,
-      renovaEm: renovaFutura,
-      ativo: true,
-      periodicidade,
-      canceledAt: null,
-    },
-    create: {
-      usuarioId,
-      plano,
-      startsAt: agora,
-      renovaEm: renovaFutura,
-      ativo: true,
-      periodicidade,
-    },
-  });
-
-  const jaTemPagamento = await prisma.pagamento.findFirst({
-    where: {
-      usuarioId,
-      plano,
-      status: PagamentoStatus.APROVADO,
-    },
-  });
-
-  if (!jaTemPagamento) {
-    await prisma.pagamento.create({
-      data: {
-        usuarioId,
-        plano,
-        periodicidade,
-        metodo: MetodoPagamento.PIX,
-        status: PagamentoStatus.APROVADO,
-        valor: 0,
-        moeda: 'BRL',
-        criadoEm: agora,
-        pagoEm: agora,
-      },
-    });
-  }
-}
-
-if (usuarioAtletaPro) {
-  await garantirAssinaturaFixa(
-    usuarioAtletaPro.id,
-    'ATLETA_PRO',
-    Periodicidade.Mensal
-  );
-}
-
-if (usuarioProfPro) {
-  await garantirAssinaturaFixa(
-    usuarioProfPro.id,
-    'PROFESSOR_PRO',
-    Periodicidade.Mensal
-  );
-}
-
-if (usuarioScoutPro) {
-  await garantirAssinaturaFixa(
-    usuarioScoutPro.id,
-    'OLHEIRO_PRO',
-    Periodicidade.Mensal
-  );
-}
-
-if (usuarioEscolinha01Db) {
-  await garantirAssinaturaFixa(
-    usuarioEscolinha01Db.id,
-    'ESCOLINHA_PRO',
-    Periodicidade.Mensal
-  );
-}
-
-const atletaAaaaa = await prisma.atleta.findUnique({
-  where: { usuarioId: usuarioAaaaa.id }
-});
-
-const exA = await prisma.exercicio.findUnique({ where: { codigo: 'EX006' } });
-const exB = await prisma.exercicio.findUnique({ where: { codigo: 'EX011' } });
-const exC = await prisma.exercicio.findUnique({ where: { codigo: 'EX012' } });
-const exD = await prisma.exercicio.findUnique({ where: { codigo: 'EX021' } });
-const exE = await prisma.exercicio.findUnique({ where: { codigo: 'EX024' } });
-
-if (atletaAaaaa && professorArthur) {
-  if (!(exA && exB && exC && exD && exE)) {
-    throw new Error('Exercícios do TR001 não encontrados no seed');
+    if (!msgInicial) {
+      await prisma.mensagem.create({
+        data: {
+          deId: atletaFree.id,
+          paraId: atletaPro.id,
+          conteudo: 'Mensagem inicial seed E2E',
+          tipo: TipoMensagem.NORMAL,
+        },
+      });
+    }
   }
 
-  const treino = await prisma.treinoProgramado.upsert({
-    where: { codigo: "TR001" },
-    update: {
-      tipoTreino: TipoTreino.Fisico,
-      dataAgendada: prazo25Out,
-      exercicios: {
-        deleteMany: {},
-        create: [
-          { exercicioId: exA.id, ordem: 1, repeticoes: '4x 45s + 15s descanso' },
-          { exercicioId: exB.id, ordem: 2, repeticoes: '3x 12 reps' },
-          { exercicioId: exC.id, ordem: 3, repeticoes: '3x 10 lançamentos' },
-          { exercicioId: exD.id, ordem: 4, repeticoes: '4x 8 cabeceios' },
-          { exercicioId: exE.id, ordem: 5, repeticoes: '4x 60s' },
-        ],
-      },
-    },
-    create: {
-      nome: "Treino Resistencia Física",
-      codigo: "TR001",
-      descricao: "Treino voltado para resistência",
-      nivel: Nivel.Avancado,
-      pontuacao: 10,
-      duracao: 45,
-      categoria: [Categoria.Livre],
-      imagemUrl: "/assets/treinos/resistencia.jpg",
-      professor: { connect: { id: professorArthur.id } },
-      tipoTreino: TipoTreino.Fisico,
-      dataAgendada: prazo25Out,
-      exercicios: {
-        create: [
-          { exercicioId: exA.id, ordem: 1, repeticoes: '4x 45s + 15s descanso' },
-          { exercicioId: exB.id, ordem: 2, repeticoes: '3x 12 reps' },
-          { exercicioId: exC.id, ordem: 3, repeticoes: '3x 10 lançamentos' },
-          { exercicioId: exD.id, ordem: 4, repeticoes: '4x 8 cabeceios' },
-          { exercicioId: exE.id, ordem: 5, repeticoes: '4x 60s' },
-        ],
-      },
-    },
-  });
-
-  const dataTreino = new Date();
-
-  const treinoAgendado = await prisma.treinoAgendado.upsert({
-    where: {
-      atletaId_treinoProgramadoId_dataTreino: {
-        atletaId: atletaAaaaa.id,
-        treinoProgramadoId: treino.id,
-        dataTreino,
-      },
-    },
-    update: {},
-    create: {
-      titulo: treino.nome,
-      dataExpiracao: dataTreino,
-      dataTreino,
-      local: "Quadra A",
-      atleta: { connect: { id: atletaAaaaa.id } },
-      treinoProgramado: { connect: { id: treino.id } },
-    },
-  });
-
-  await prisma.submissaoTreino.upsert({
-    where: { observacao: "Concluído com sucesso" },
-    update: {},
-    create: {
-      atleta: { connect: { id: atletaAaaaa.id } },
-      treinoAgendado: { connect: { id: treinoAgendado.id } },
-      observacao: "Concluído com sucesso",
-      aprovado: true,
-    },
-  });
-
-  // const desafio = await prisma.desafioOficial.upsert({
-  //   where: { titulo: "Desafio Técnica com Bola" },
-  //   update: {},
-  //   create: {
-  //     titulo: "Desafio Técnica com Bola",
-  //     descricao: "Controle e passes curtos",
-  //     nivel: Nivel.Base,
-  //     categoria: [Categoria.Sub9],
-  //     pontuacao: 15,
-  //     imagemUrl: "/assets/desafios/tecnico-bola.jpg"
-  //   },
-  // });
-
-  // await prisma.submissaoDesafio.upsert({
-  //   where: { videoUrl: "https://video.url/desafio.mp4" },
-  //   update: {},
-  //   create: {
-  //     atleta: { connect: { id: atletaAaaaa.id } },
-  //     desafio: { connect: { id: desafio.id } },
-  //     videoUrl: "https://video.url/desafio.mp4",
-  //     aprovado: true,
-  //   },
-  // });
-
-  await prisma.atividadeRecente.createMany({
-    data: [
-      {
-        usuarioId: atletaAaaaa.usuarioId,
-        tipo: "Treino",
-        imagemUrl: "/assets/treinos/resistencia.jpg",
-      },
-      // {
-      //   usuarioId: atletaAaaaa.usuarioId,
-      //   tipo: "Desafio",
-      //   imagemUrl: "/assets/desafios/tecnico-bola.jpg",
-      // },
-    ],
-    skipDuplicates: true,
-  });
-}
   await prisma.usuario.updateMany({
     data: { verified: true },
   });
 
   console.log("✅ Seed completo executado com sucesso!");
 }
+
 main()
   .then(() => prisma.$disconnect())
   .catch(async (e) => {

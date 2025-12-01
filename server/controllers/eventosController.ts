@@ -156,8 +156,6 @@ export async function obter(req: Request, res: Response) {
   res.json(ev);
 }
 
-// -------- helpers compartilhados --------
-
 function mapEventoToAgendaItem(ev: any) {
   return {
     id: ev.id,
@@ -168,8 +166,6 @@ function mapEventoToAgendaItem(ev: any) {
     origem: "EVENTO" as const,
   };
 }
-
-// -------- agendas --------
 
 export async function minhaAgenda(req: any, res: Response) {
   try {
@@ -220,13 +216,10 @@ export async function minhaAgenda(req: any, res: Response) {
   }
 }
 
-// ✅ NOVO: eventos visíveis para um atleta específico
 export async function eventosDoAtleta(req: any, res: Response) {
   try {
     const { usuarioId } = req.params;
 
-    // Aqui dá pra sofisticar depois (buscar vínculos do atleta, etc).
-    // Por enquanto: todos eventos ABERTOS a partir de hoje.
     const agora = new Date();
 
     const eventos = await prisma.evento.findMany({
