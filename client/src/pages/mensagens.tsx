@@ -1,4 +1,3 @@
-// client/src/pages/mensagens
 import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { Send, Share2, Volleyball, User, UserPlus, CirclePlus, Search, House, Users, Trash, ArrowLeft } from "lucide-react";
@@ -369,7 +368,6 @@ const markReadFromUser = async (otherId: string) => {
           </button>
         </div>
 
-        {/* Barra de busca */}
         <div className="mb-4">
           <div className="relative">
             <input
@@ -386,7 +384,6 @@ const markReadFromUser = async (otherId: string) => {
           </div>
         </div>
 
-        {/* Grupos */}
         <div className="mb-4">
           <div className="flex items-center gap-2 text-gray-700 mb-2">
             <Users size={16} />{" "}
@@ -423,7 +420,6 @@ const markReadFromUser = async (otherId: string) => {
           })}
         </div>
 
-        {/* Usuários */}
         <div>
           <div className="flex items-center gap-2 text-gray-700 mb-2">
             <User size={16} />{" "}

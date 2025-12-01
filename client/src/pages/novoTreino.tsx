@@ -1,4 +1,3 @@
-// client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -462,7 +461,7 @@ export default function NovoTreino() {
 
   useEffect(() => {
     if (!toast) return;
-    const id = setTimeout(() => setToast(null), 4000); // some em 4s
+    const id = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(id);
   }, [toast]);
 
@@ -953,7 +952,6 @@ export default function NovoTreino() {
 
         console.log("[NovoTreino] orgSelecionada =", orgSelecionada);
 
-        // Caso especial: mostrar todos os atletas
         if (orgSelecionada === MOSTRAR_TODOS) {
           const urlsTodos = [
             `${API.BASE_URL}/api/atletas`,
@@ -978,13 +976,11 @@ export default function NovoTreino() {
           return;
         }
 
-        // Dono padrão (professor / escola / clube)
         const tipoUsuarioId =
           orgSelecionada ||
           (Storage as any).tipoUsuarioId ||
           localStorage.getItem("tipoUsuarioId") ||
           sessionStorage.getItem("tipoUsuarioId") ||
-          // fallback extra: alguns lugares usam "perfilId"
           localStorage.getItem("perfilId") ||
           sessionStorage.getItem("perfilId") ||
           "";
@@ -1332,7 +1328,6 @@ export default function NovoTreino() {
     return v === "professor" || v === "clube" || v === "escolinha";
   }
 
-  // 🔧 AQUI está a função ajustada para usar /api/treinos/rotina/agendar
   async function agendarTreinoEmLote(treinoProgramadoId: string) {
     try {
       const datasValidas = datasAgendamento.filter((d) => d && d.trim());
@@ -1372,9 +1367,7 @@ export default function NovoTreino() {
       const body = {
         treinoProgramadoId,
         datas: datasISO,
-        // nome esperado pelo backend: atletaIds
         atletaIds: atletasSelecionados,
-        // aproveita elencoSelecionado se tiver
         elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
         incluirObservados: false,
         tituloPadrao: nome || "Treino",
