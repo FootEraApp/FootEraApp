@@ -1,15 +1,20 @@
-import type { Request, Response } from "express";
+import type { Response } from "express";
 import { PrismaClient } from "@prisma/client";
+import type { AuthenticatedRequest } from "../middlewares/auth.js"; 
+
 const prisma = new PrismaClient();
 
-function assertAdmin(req: Request) {
-  const u: any = (req as any).user || {};
-  if (!u?.id || String(u?.tipo) !== "Admin") {
+function assertAdmin(req: AuthenticatedRequest) {
+  const u = req.user;
+  console.log("assertAdmin /admin/assinantes user =", u);
+
+  if (!u?.id || String(u.tipo) !== "Admin") {
     const err: any = new Error("Acesso restrito ao administrador.");
     err.status = 403;
     throw err;
   }
 }
+
 function parseBool(v?: string) {
   if (v === undefined || v === null || v === "") return undefined;
   if (v === "true") return true;
@@ -17,7 +22,7 @@ function parseBool(v?: string) {
   return undefined;
 }
 
-export async function listar(req: Request, res: Response) {
+export async function listar(req: AuthenticatedRequest, res: Response) {
   try {
     assertAdmin(req);
     const { q = "", plano = "", ativo = "", page = "1", pageSize = "20" } = req.query as Record<string, string>;
@@ -73,7 +78,7 @@ export async function listar(req: Request, res: Response) {
   }
 }
 
-export async function overview(req: Request, res: Response) {
+export async function overview(req: AuthenticatedRequest, res: Response) {
   try {
     assertAdmin(req);
     const all = await prisma.assinatura.findMany({ select: { plano: true, ativo: true, canceledAt: true } });

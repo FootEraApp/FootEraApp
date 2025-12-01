@@ -1,4 +1,3 @@
-// server/controllers/mensagensController
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
@@ -317,7 +316,6 @@ export async function listarContatosRelacionados(req: AuthenticatedRequest, res:
       });
     };
 
-    // 1) Se for ATLETA -> traz professor, clube, escolinha
     if (usuario.atleta) {
       const rels = await prisma.relacaoTreinamento.findMany({
         where: { atletaId: usuario.atleta.id },
@@ -335,7 +333,6 @@ export async function listarContatosRelacionados(req: AuthenticatedRequest, res:
       }
     }
 
-    // 2) Se for PROFESSOR -> traz atletas, clubes, escolinhas
     if (usuario.professor) {
       const rels = await prisma.relacaoTreinamento.findMany({
         where: { professorId: usuario.professor.id },
@@ -353,7 +350,6 @@ export async function listarContatosRelacionados(req: AuthenticatedRequest, res:
       }
     }
 
-    // 3) Se for CLUBE -> traz atletas e professores
     if (usuario.clube) {
       const rels = await prisma.relacaoTreinamento.findMany({
         where: { clubeId: usuario.clube.id },
@@ -369,7 +365,6 @@ export async function listarContatosRelacionados(req: AuthenticatedRequest, res:
       }
     }
 
-    // 4) Se for ESCOLINHA -> traz atletas e professores
     if (usuario.escolinha) {
       const rels = await prisma.relacaoTreinamento.findMany({
         where: { escolinhaId: usuario.escolinha.id },
