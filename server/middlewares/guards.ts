@@ -1,3 +1,4 @@
+// server/middlewares/guards
 import type { Response, NextFunction } from "express";
 import type { AuthenticatedRequest } from "./auth.js";
 import { canDetailed } from "../services/entitlements.js";

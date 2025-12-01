@@ -1,3 +1,4 @@
+// server/routes/mensagens
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateToken } from "../middlewares/auth.js";
@@ -12,7 +13,9 @@ import {
   markReadFromUser,
   getUnreadByUser,
   listarConversas,
+  listarContatosRelacionados,
 } from "../controllers/mensagensController.js";
+
 import { softRateLimit } from "../lib/rateLimit.js";
 
 const prisma = new PrismaClient();
@@ -21,6 +24,7 @@ const router = Router();
 router.use(authenticateToken);
 
 router.get("/conversas", listarConversas);
+router.get("/contatos-relacionados", listarContatosRelacionados);
 router.get("/grupos/:grupoId", listarMensagensGrupo);
 router.post("/grupo/:grupoId", softRateLimit("msg-grupo"), enviarMensagemGrupo);
 router.delete("/:id", deletarMensagem);

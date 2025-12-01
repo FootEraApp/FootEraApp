@@ -1,7 +1,18 @@
 // client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Volleyball, User, CirclePlus, Search as SearchIcon, House, Check, ChevronLeft, ChevronRight, Calendar as CalendarIcon, } from "lucide-react";
+import {
+  ArrowLeft,
+  Volleyball,
+  User,
+  CirclePlus,
+  Search as SearchIcon,
+  House,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Calendar as CalendarIcon,
+} from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { TreinosApi } from "../utils/treinosApi.js";
@@ -67,7 +78,7 @@ function calcularPontuacaoTreino(
   exercicios: ExItemUI[],
   dicas: string[],
 ): PontuacaoDetalhe {
-  const exCount = exercicios.filter(e => e.idCatalogo || (e.nome && e.nome.trim())).length;
+  const exCount = exercicios.filter((e) => e.idCatalogo || (e.nome && e.nome.trim())).length;
   const ptsEx = exCount * PONTOS.POR_EXERCICIO;
 
   const ptsNivel = PONTOS.NIVEL[nivel as keyof typeof PONTOS.NIVEL] ?? 0;
@@ -76,7 +87,7 @@ function calcularPontuacaoTreino(
   const dur = Number.isFinite(Number(duracaoMin)) ? Number(duracaoMin) : 0;
   const ptsDur = Math.max(0, Math.floor(dur / 15) * PONTOS.POR_15_MIN);
 
-  const dicasValidas = Math.min(PONTOS.DICAS_MAX, Math.max(0, (dicas?.length ?? 0)));
+  const dicasValidas = Math.min(PONTOS.DICAS_MAX, Math.max(0, dicas?.length ?? 0));
   const ptsDicas = dicasValidas * PONTOS.POR_DICA;
 
   const total = ptsEx + ptsNivel + ptsTipo + ptsDur + ptsDicas;
@@ -127,7 +138,6 @@ interface TreinoProgramado {
   criadorTipo?: string | null;
 }
 
-
 interface Elenco {
   id: string;
   nome: string;
@@ -156,25 +166,39 @@ function authHeaders() {
   const token =
     (Storage as any).token ||
     localStorage.getItem("token") ||
-    sessionStorage.getItem("token") || "";
+    sessionStorage.getItem("token") ||
+    "";
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
 }
 
-async function apiListarTreinosSalvos(ownerTipo: "professor" | "clube" | "escolinha", ownerId: string) {
+async function apiListarTreinosSalvos(
+  ownerTipo: "professor" | "clube" | "escolinha",
+  ownerId: string,
+) {
   const headers = authHeaders();
-  const url = `${API.BASE_URL}/api/treinos-salvos?tipoUsuario=${encodeURIComponent(ownerTipo)}&tipoUsuarioId=${encodeURIComponent(ownerId)}&includePublic=0`;
+  const url = `${API.BASE_URL}/api/treinos-salvos?tipoUsuario=${encodeURIComponent(
+    ownerTipo,
+  )}&tipoUsuarioId=${encodeURIComponent(ownerId)}&includePublic=0`;
   const r = await fetch(url, { headers });
   if (!r.ok) throw new Error("Falha ao listar treinos salvos");
   const j = await r.json();
   const meus = Array.isArray(j?.meus) ? j.meus : [];
-  return meus as Array<{ id: string; titulo: string; atualizadoEm?: string; expiraEm?: string | null }>;
+  return meus as Array<{
+    id: string;
+    titulo: string;
+    atualizadoEm?: string;
+    expiraEm?: string | null;
+  }>;
 }
 
 async function apiDeletarTreinoSalvo(id: string) {
   const headers = authHeaders();
-  const r = await fetch(`${API.BASE_URL}/api/treinos-salvos/${encodeURIComponent(id)}`, { method: "DELETE", headers });
+  const r = await fetch(
+    `${API.BASE_URL}/api/treinos-salvos/${encodeURIComponent(id)}`,
+    { method: "DELETE", headers },
+  );
   if (!r.ok) throw new Error("Falha ao apagar treino salvo");
   return true;
 }
@@ -193,12 +217,16 @@ async function apiCriarTreinoSalvo(body: any) {
   return r.json();
 }
 
-async function tentarSalvarComoTreinoSalvo(payload: TreinoCreatePayload, scoreTotal: number) {
+async function tentarSalvarComoTreinoSalvo(
+  payload: TreinoCreatePayload,
+  scoreTotal: number,
+) {
   try {
     const ownerTipo = payload.tipoUsuario;
     const ownerId = payload.tipoUsuarioId;
 
-    if (!ownerTipo || !ownerId) return { saved: false, reason: "sem-dono" as const };
+    if (!ownerTipo || !ownerId)
+      return { saved: false, reason: "sem-dono" as const };
 
     const meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
 
@@ -212,11 +240,16 @@ async function tentarSalvarComoTreinoSalvo(payload: TreinoCreatePayload, scoreTo
 
       const escolha = window.prompt(
         `Você já possui ${MAX_SLOTS_TREINOS_SALVOS} treinos salvos.\n` +
-          `Escolha um número para apagar e liberar espaço OU deixe vazio para não salvar este novo treino.\n\n${lista}\n\nDigite 1-${meus.length}, ou deixe em branco para pular:`
+          `Escolha um número para apagar e liberar espaço OU deixe vazio para não salvar este novo treino.\n\n${lista}\n\nDigite 1-${meus.length}, ou deixe em branco para pular:`,
       );
 
       const idx = Number(escolha);
-      if (!escolha || !Number.isFinite(idx) || idx < 1 || idx > meus.length) {
+      if (
+        !escolha ||
+        !Number.isFinite(idx) ||
+        idx < 1 ||
+        idx > meus.length
+      ) {
         return { saved: false, reason: "usuario-pulou" as const };
       }
 
@@ -224,12 +257,16 @@ async function tentarSalvarComoTreinoSalvo(payload: TreinoCreatePayload, scoreTo
       try {
         await apiDeletarTreinoSalvo(apagar.id);
       } catch {
-        alert("Não foi possível apagar o treino selecionado. O novo não será salvo na Gaveta.");
+        alert(
+          "Não foi possível apagar o treino selecionado. O novo não será salvo na Gaveta.",
+        );
         return { saved: false, reason: "falha-apagar" as const };
       }
     }
 
-    const categorias = Array.isArray(payload.categoria) ? payload.categoria.map(toCategoriaEnum).filter(Boolean) : [];
+    const categorias = Array.isArray(payload.categoria)
+      ? payload.categoria.map(toCategoriaEnum).filter(Boolean)
+      : [];
     const body = {
       titulo: payload.nome,
       descricao: payload.descricao ?? null,
@@ -316,11 +353,19 @@ function Stepper({
                   title={`Ir para ${s.label}`}
                 >
                   <span className="inline-flex items-center justify-center w-6 h-6 rounded-full border text-xs">
-                    {isCompleted ? <Check className="w-3.5 h-3.5" /> : s.id}
+                    {isCompleted ? (
+                      <Check className="w-3.5 h-3.5" />
+                    ) : (
+                      s.id
+                    )}
                   </span>
-                  <span className="font-semibold text-xs sm:text-sm">{s.label}</span>
+                  <span className="font-semibold text-xs sm:text-sm">
+                    {s.label}
+                  </span>
                 </button>
-                {idx < steps.length - 1 && <div className="hidden sm:block w-8 h-px bg-gray-300" />}
+                {idx < steps.length - 1 && (
+                  <div className="hidden sm:block w-8 h-px bg-gray-300" />
+                )}
               </li>
             );
           })}
@@ -330,7 +375,13 @@ function Stepper({
   );
 }
 
-function StepCard({ title, children }: { title: string; children: ReactNode }) {
+function StepCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
   return (
     <div className="bg-white rounded-2xl shadow-md border border-gray-200 p-4 sm:p-6">
       <h3 className="font-bold text-lg sm:text-xl mb-4">{title}</h3>
@@ -345,9 +396,15 @@ export default function NovoTreino() {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [prazos, setPrazos] = useState<Record<string, string>>({});
-  const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<Exercicio[]>([]);
-  const [treinosDisponiveis, setTreinosDisponiveis] = useState<TreinoProgramado[]>([]);
-  const [atletasVinculados, setAtletasVinculados] = useState<AtletaVinculado[]>([]);
+  const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<
+    Exercicio[]
+  >([]);
+  const [treinosDisponiveis, setTreinosDisponiveis] = useState<
+    TreinoProgramado[]
+  >([]);
+  const [atletasVinculados, setAtletasVinculados] = useState<
+    AtletaVinculado[]
+  >([]);
   const [atletasSelecionados, setAtletasSelecionados] = useState<string[]>([]);
   const [elencos, setElencos] = useState<Elenco[]>([]);
   const [elencoSelecionado, setElencoSelecionado] = useState<string>("");
@@ -361,20 +418,32 @@ export default function NovoTreino() {
   const [tipoTreino, setTipoTreino] = useState<string>("Tecnico");
   const [objetivo, setObjetivo] = useState<string>("");
   const [iniciado, setIniciado] = useState<boolean>(false);
-  const [exerciciosSelecionados, setExerciciosSelecionados] = useState<ExItemUI[]>([]);
+  const [exerciciosSelecionados, setExerciciosSelecionados] = useState<
+    ExItemUI[]
+  >([]);
   const [dicas, setDicas] = useState<string[]>([]);
   const [dicaAtual, setDicaAtual] = useState<string>("");
   const [filtroEx, setFiltroEx] = useState("");
   const restoredRef = useRef(false);
-  const [idsProgramadosBloqueados, setIdsProgramadosBloqueados] = useState<Set<string>>(new Set());
+  const [idsProgramadosBloqueados, setIdsProgramadosBloqueados] = useState<
+    Set<string>
+  >(new Set());
   const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
   const [orgSelecionada, setOrgSelecionada] = useState<string>("");
   const [novaTurmaNome, setNovaTurmaNome] = useState<string>("");
   const [datasAgendamento, setDatasAgendamento] = useState<string[]>([]);
 
+  const [toast, setToast] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
+
   const jaSincronizouCalendarioComDatas = useRef(false);
 
-  const [mesCalendario, setMesCalendario] = useState<{ ano: number; mes: number }>(() => {
+  const [mesCalendario, setMesCalendario] = useState<{
+    ano: number;
+    mes: number;
+  }>(() => {
     const base =
       (typeof window !== "undefined" &&
         (sessionStorage.getItem("novoTreino-dataTreinoBase") || "")) ||
@@ -384,15 +453,33 @@ export default function NovoTreino() {
     return { ano: d.getFullYear(), mes: d.getMonth() };
   });
 
+  function showToast(
+    message: string,
+    type: "success" | "error" | "info" = "success",
+  ) {
+    setToast({ message, type });
+  }
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 4000); // some em 4s
+    return () => clearTimeout(id);
+  }, [toast]);
+
   useEffect(() => {
     if (dataTreino) {
-      const soData = dataTreino.includes("T") ? dataTreino.split("T")[0] : dataTreino;
+      const soData = dataTreino.includes("T")
+        ? dataTreino.split("T")[0]
+        : dataTreino;
       sessionStorage.setItem("novoTreino-dataTreinoBase", soData);
     }
   }, [dataTreino]);
 
   useEffect(() => {
-    if (!jaSincronizouCalendarioComDatas.current && datasAgendamento.length > 0) {
+    if (
+      !jaSincronizouCalendarioComDatas.current &&
+      datasAgendamento.length > 0
+    ) {
       const primeira = datasAgendamento[0];
       const d = new Date(primeira);
       if (!isNaN(d.getTime())) {
@@ -402,134 +489,147 @@ export default function NovoTreino() {
     }
   }, [datasAgendamento]);
 
-
-
   const MOSTRAR_TODOS = "__todos__";
 
   const score = useMemo(
-    () => calcularPontuacaoTreino(nivel, tipoTreino, duracao, exerciciosSelecionados, dicas),
-    [nivel, tipoTreino, duracao, exerciciosSelecionados, dicas]
+    () =>
+      calcularPontuacaoTreino(
+        nivel,
+        tipoTreino,
+        duracao,
+        exerciciosSelecionados,
+        dicas,
+      ),
+    [nivel, tipoTreino, duracao, exerciciosSelecionados, dicas],
   );
 
-function normalizaTreinos(raw: any[]): TreinoProgramado[] {
-  return raw.map((t: any) => {
-    const programadoId =
-      t.treinoProgramadoId ??
-      t.programadoId ??
-      t.programado?.id ??
-      t.id;
+  function normalizaTreinos(raw: any[]): TreinoProgramado[] {
+    return raw.map((t: any) => {
+      const programadoId =
+        t.treinoProgramadoId ?? t.programadoId ?? t.programado?.id ?? t.id;
 
-    let criador: TreinoProgramado["criador"] = t.criador ?? null;
+      let criador: TreinoProgramado["criador"] = t.criador ?? null;
 
-    if (!criador) {
-      if (t.professor) {
-        criador = {
-          tipo: "Professor",
-          id: t.professor.id,
-          nome: t.professor.nome ?? "Professor",
-        };
-      } else if (t.clube) {
-        criador = {
-          tipo: "Clube",
-          id: t.clube.id,
-          nome: t.clube.nome ?? "Clube",
-        };
-      } else if (t.escolinha) {
-        criador = {
-          tipo: "Escolinha",
-          id: t.escolinha.id,
-          nome: t.escolinha.nome ?? "Escolinha",
-        };
+      if (!criador) {
+        if (t.professor) {
+          criador = {
+            tipo: "Professor",
+            id: t.professor.id,
+            nome: t.professor.nome ?? "Professor",
+          };
+        } else if (t.clube) {
+          criador = {
+            tipo: "Clube",
+            id: t.clube.id,
+            nome: t.clube.nome ?? "Clube",
+          };
+        } else if (t.escolinha) {
+          criador = {
+            tipo: "Escolinha",
+            id: t.escolinha.id,
+            nome: t.escolinha.nome ?? "Escolinha",
+          };
+        }
       }
-    }
 
-    const criadorNome =
-      criador?.nome ??
-      t.criadorNome ??
-      t.criadoPorNome ??
-      t.ownerNome ??
-      t.donoNome ??
-      t.professor?.usuario?.nome ??
-      t.professor?.nome ??
-      t.clube?.nome ??
-      t.escolinha?.nome ??
-      null;
+      const criadorNome =
+        criador?.nome ??
+        t.criadorNome ??
+        t.criadoPorNome ??
+        t.ownerNome ??
+        t.donoNome ??
+        t.professor?.usuario?.nome ??
+        t.professor?.nome ??
+        t.clube?.nome ??
+        t.escolinha?.nome ??
+        null;
 
-    const criadorTipo =
-      criador?.tipo ??
-      t.criadorTipo ??
-      t.tipoUsuario ??
-      t.ownerTipo ??
-      t.donoTipo ??
-      (t.professorId
-        ? "Professor"
-        : t.clubeId
-        ? "Clube"
-        : t.escolinhaId
-        ? "Escolinha"
-        : null);
+      const criadorTipo =
+        criador?.tipo ??
+        t.criadorTipo ??
+        t.tipoUsuario ??
+        t.ownerTipo ??
+        t.donoTipo ??
+        (t.professorId
+          ? "Professor"
+          : t.clubeId
+          ? "Clube"
+          : t.escolinhaId
+          ? "Escolinha"
+          : null);
 
-    return {
-      id: String(programadoId),
-      nome: t.nome ?? t.titulo ?? "(sem nome)",
-      descricao: t.descricao ?? t.resumo ?? "",
-      nivel: t.nivel ?? t.dificuldade ?? "-",
-      pontuacao: t.pontuacao ?? null,
-      exercicios: (t.exercicios ?? t.exs ?? []).map((ex: any, i: number) => ({
-        id: ex.id ?? ex.exercicioId ?? String(i),
-        nome:
-          ex.nome ??
-          ex.titulo ??
-          ex?.exercicio?.nome ??
-          ex?.exercicioTemporario?.nome ??
-          "",
-        repeticoes: ex.repeticoes ?? ex.reps ?? ex.qtde ?? "",
-      })),
-      // @ts-ignore
-      treinoProgramadoId: t.treinoProgramadoId ?? t.programadoId ?? t.programado?.id ?? null,
-      // @ts-ignore
-      origemId: t.id ?? null,
+      return {
+        id: String(programadoId),
+        nome: t.nome ?? t.titulo ?? "(sem nome)",
+        descricao: t.descricao ?? t.resumo ?? "",
+        nivel: t.nivel ?? t.dificuldade ?? "-",
+        pontuacao: t.pontuacao ?? null,
+        exercicios: (t.exercicios ?? t.exs ?? []).map(
+          (ex: any, i: number) => ({
+            id: ex.id ?? ex.exercicioId ?? String(i),
+            nome:
+              ex.nome ??
+              ex.titulo ??
+              ex?.exercicio?.nome ??
+              ex?.exercicioTemporario?.nome ??
+              "",
+            repeticoes: ex.repeticoes ?? ex.reps ?? ex.qtde ?? "",
+          }),
+        ),
+        // @ts-ignore
+        treinoProgramadoId:
+          t.treinoProgramadoId ?? t.programadoId ?? t.programado?.id ?? null,
+        // @ts-ignore
+        origemId: t.id ?? null,
 
-      criador,
-      criadorNome,
-      criadorTipo,
-    };
-  });
-}
+        criador,
+        criadorNome,
+        criadorTipo,
+      };
+    });
+  }
 
   function mapAtletas(items: any[]): AtletaVinculado[] {
-    return (items || []).map((a: any) => ({
-      id: a.atletaId || a.id || a.usuarioId || "",
-      nome: a.nome ?? a?.usuario?.nome ?? a?.atleta?.nome ?? "Atleta",
-      foto: a.foto ?? a?.usuario?.foto ?? a?.atleta?.usuario?.foto ?? undefined,
-    })).filter(x => x.id);
+    return (items || [])
+      .map((a: any) => ({
+        id: a.atletaId || a.id || a.usuarioId || "",
+        nome: a.nome ?? a?.usuario?.nome ?? a?.atleta?.nome ?? "Atleta",
+        foto:
+          a.foto ?? a?.usuario?.foto ?? a?.atleta?.usuario?.foto ?? undefined,
+      }))
+      .filter((x) => x.id);
   }
 
   useEffect(() => {
     const tipo =
       (Storage as any).tipoSalvo ??
       localStorage.getItem("tipoUsuario") ??
-      sessionStorage.getItem("tipoUsuario") ?? "";
+      sessionStorage.getItem("tipoUsuario") ??
+      "";
     if (String(tipo).toLowerCase() !== "atleta") return;
 
     let cancel = false;
 
-    (async () => {
+     (async () => {
       try {
         const token =
           (Storage as any).token ||
           localStorage.getItem("token") ||
-          sessionStorage.getItem("token") || "";
+          sessionStorage.getItem("token") ||
+          "";
         if (!token) return;
 
         const headers = { Authorization: `Bearer ${token}` };
         const atletaId =
           (Storage as any).tipoUsuarioId ||
           localStorage.getItem("tipoUsuarioId") ||
-          sessionStorage.getItem("tipoUsuarioId") || "";
+          sessionStorage.getItem("tipoUsuarioId") ||
+          "";
 
         const tries = [
-          `${API.BASE_URL}/api/treinos/disponiveis${atletaId ? `?atletaId=${encodeURIComponent(atletaId)}` : ""}`,
+          `${API.BASE_URL}/api/treinos/disponiveis${
+            atletaId ? `?atletaId=${encodeURIComponent(atletaId)}` : ""
+          }`,
           `${API.BASE_URL}/api/treinos/programados`,
         ];
 
@@ -538,8 +638,13 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
           const r = await fetch(url, { headers });
           if (!r.ok) continue;
           const j = await r.json();
-          const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
-          if (Array.isArray(arr)) { lista = arr; break; }
+          const arr = Array.isArray(j)
+            ? j
+            : j.items ?? j.data ?? j.rows ?? j.result ?? [];
+          if (Array.isArray(arr)) {
+            lista = arr;
+            break;
+          }
         }
 
         if (!cancel) setTreinosDisponiveis(normalizaTreinos(lista || []));
@@ -549,17 +654,22 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
       }
     })();
 
-    return () => { cancel = true; };
+    return () => {
+      cancel = true;
+    };
   }, []);
 
   useEffect(() => {
     (async () => {
       try {
-        const token = (Storage as any).token ||
+        const token =
+          (Storage as any).token ||
           localStorage.getItem("token") ||
-          sessionStorage.getItem("token") || "";
-
-        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+          sessionStorage.getItem("token") ||
+          "";
+        const headers = token
+          ? { Authorization: `Bearer ${token}` }
+          : undefined;
 
         if (!orgSelecionada) {
           setElencos([]);
@@ -569,39 +679,57 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
 
         try {
           const r = await fetch(
-            `${API.BASE_URL}/api/treinos/elencos?tipoUsuarioId=${encodeURIComponent(orgSelecionada)}`,
-            { headers }
+            `${API.BASE_URL}/api/treinos/elencos?tipoUsuarioId=${encodeURIComponent(
+              orgSelecionada,
+            )}`,
+            { headers },
           );
           if (r.ok) {
             const j = await r.json();
-            const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
-            setElencos((arr || []).map((e: any) => ({
-              id: String(e.id),
-              nome: e.nome ?? e.titulo ?? "Turma",
-              atletasIds: e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
-            })));
+            const arr = Array.isArray(j)
+              ? j
+              : j.items ?? j.data ?? j.rows ?? j.result ?? [];
+            setElencos(
+              (arr || []).map((e: any) => ({
+                id: String(e.id),
+                nome: e.nome ?? e.titulo ?? "Turma",
+                atletasIds:
+                  e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
+              })),
+            );
             return;
           }
         } catch {}
 
         const ownerId = orgSelecionada;
         const urls = [
-          `${API.BASE_URL}/api/elencos?organizacaoId=${encodeURIComponent(ownerId)}`,
-          `${API.BASE_URL}/api/turmas?organizacaoId=${encodeURIComponent(ownerId)}`,
-          `${API.BASE_URL}/api/turmas?escolinhaId=${encodeURIComponent(ownerId)}`,
+          `${API.BASE_URL}/api/elencos?organizacaoId=${encodeURIComponent(
+            ownerId,
+          )}`,
+          `${API.BASE_URL}/api/turmas?organizacaoId=${encodeURIComponent(
+            ownerId,
+          )}`,
+          `${API.BASE_URL}/api/turmas?escolinhaId=${encodeURIComponent(
+            ownerId,
+          )}`,
         ];
 
         for (const url of urls) {
           const r = await fetch(url, { headers });
           if (!r.ok) continue;
           const j = await r.json();
-          const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
+          const arr = Array.isArray(j)
+            ? j
+            : j.items ?? j.data ?? j.rows ?? j.result ?? [];
           if (Array.isArray(arr)) {
-            setElencos(arr.map((e: any) => ({
-              id: e.id,
-              nome: e.nome ?? e.titulo ?? "Turma",
-              atletasIds: e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
-            })));
+            setElencos(
+              arr.map((e: any) => ({
+                id: e.id,
+                nome: e.nome ?? e.titulo ?? "Turma",
+                atletasIds:
+                  e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
+              })),
+            );
             return;
           }
         }
@@ -618,18 +746,26 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
         const token =
           (Storage as any).token ||
           localStorage.getItem("token") ||
-          sessionStorage.getItem("token") || "";
-        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+          sessionStorage.getItem("token") ||
+          "";
+        const headers = token
+          ? { Authorization: `Bearer ${token}` }
+          : undefined;
 
         const ownerId =
           orgSelecionada ||
           (Storage as any).tipoUsuarioId ||
           localStorage.getItem("tipoUsuarioId") ||
-          sessionStorage.getItem("tipoUsuarioId") || "";
+          sessionStorage.getItem("tipoUsuarioId") ||
+          "";
 
         const tries = [
-          `${API.BASE_URL}/api/treinos/exercicios?tipoUsuarioId=${encodeURIComponent(ownerId)}`,
-          `${API.BASE_URL}/api/exercicios?ownerId=${encodeURIComponent(ownerId)}`,
+          `${API.BASE_URL}/api/treinos/exercicios?tipoUsuarioId=${encodeURIComponent(
+            ownerId,
+          )}`,
+          `${API.BASE_URL}/api/exercicios?ownerId=${encodeURIComponent(
+            ownerId,
+          )}`,
           `${API.BASE_URL}/api/exercicios`,
         ];
 
@@ -637,12 +773,18 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
           const r = await fetch(url, { headers });
           if (!r.ok) continue;
           const j = await r.json();
-          const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
+          const arr = Array.isArray(j)
+            ? j
+            : j.items ?? j.data ?? j.rows ?? j.result ?? [];
           const itens: Exercicio[] = (arr || []).map((e: any) => ({
             id: String(e.id),
             nome: e.nome ?? e.titulo ?? "Sem nome",
             videoDemonstrativoUrl:
-              e.videoDemonstrativoUrl ?? e.videoUrl ?? e.video ?? e.demonstracaoUrl ?? "",
+              e.videoDemonstrativoUrl ??
+              e.videoUrl ??
+              e.video ??
+              e.demonstracaoUrl ??
+              "",
             descricao: e.descricao ?? e.resumo ?? "",
             nivel: e.nivel ?? e.dificuldade ?? "",
           }));
@@ -670,13 +812,17 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
         .trim()
         .toLowerCase();
 
-    const tipoNormalizado = tipoPersistido === "escolinha" ? "escola" : tipoPersistido;
+    const tipoNormalizado =
+      tipoPersistido === "escolinha" ? "escola" : tipoPersistido;
     const permitidos = ["escola", "clube", "professor", "atleta"] as const;
 
     if (permitidos.includes(tipoNormalizado as any)) {
       setUsuario({ tipo: tipoNormalizado as (typeof permitidos)[number] });
     } else {
-      console.warn("tipoUsuario inválido/inesperado:", { tipoPersistido, tipoNormalizado });
+      console.warn("tipoUsuario inválido/inesperado:", {
+        tipoPersistido,
+        tipoNormalizado,
+      });
       setUsuario(null);
     }
 
@@ -699,7 +845,9 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
         setCategoria(saved.categoria ?? "Sub13");
         setTipoTreino(saved.tipoTreino ?? "Tecnico");
         setObjetivo(saved.objetivo ?? "");
-        const exOld = Array.isArray(saved.exerciciosSelecionados) ? saved.exerciciosSelecionados : [];
+        const exOld = Array.isArray(saved.exerciciosSelecionados)
+          ? saved.exerciciosSelecionados
+          : [];
         const exUi: ExItemUI[] = exOld.map((x: any, idx: number) => ({
           idCatalogo: x.exercicioId ?? null,
           nome: x.nome ?? "",
@@ -725,15 +873,22 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
         const token =
           (Storage as any).token ||
           localStorage.getItem("token") ||
-          sessionStorage.getItem("token") || "";
-        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+          sessionStorage.getItem("token") ||
+          "";
+        const headers = token
+          ? { Authorization: `Bearer ${token}` }
+          : undefined;
 
         const professorTipoId =
           (Storage as any).tipoUsuarioId ||
           localStorage.getItem("tipoUsuarioId") ||
-          sessionStorage.getItem("tipoUsuarioId") || "";
+          sessionStorage.getItem("tipoUsuarioId") ||
+          "";
 
-        if (!professorTipoId) { setOrgsVinculadas([]); return; }
+        if (!professorTipoId) {
+          setOrgsVinculadas([]);
+          return;
+        }
 
         const tentativas = [
           `${API.BASE_URL}/api/professores/${professorTipoId}/vinculos`,
@@ -746,27 +901,36 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
           const r = await fetch(url, { headers });
           if (!r.ok) continue;
           const j = await r.json();
-          const list = Array.isArray(j) ? j : (j.items ?? j.data ?? j.rows ?? j.result ?? []);
-          if (Array.isArray(list) && list.length) { arr = list; break; }
+          const list = Array.isArray(j)
+            ? j
+            : j.items ?? j.data ?? j.rows ?? j.result ?? [];
+          if (Array.isArray(list) && list.length) {
+            arr = list;
+            break;
+          }
         }
 
-        const normalizada: Organizacao[] = (arr || []).map((o: any) => {
-          const tipo: Organizacao["tipo"] =
-            String(o.tipo ?? o.kind ?? o.categoria ?? "")
+        const normalizada: Organizacao[] = (arr || [])
+          .map((o: any) => {
+            const tipo: Organizacao["tipo"] = String(
+              o.tipo ?? o.kind ?? o.categoria ?? "",
+            )
               .toLowerCase()
               .includes("clube")
               ? "Clube"
               : "Escolinha";
 
-          return {
-            id: String(o.escolinhaId ?? o.clubeId ?? o.id ?? o.organizacaoId),
-            nome: String(o.nome ?? o.titulo ?? "Organização"),
-            tipo,
-          };
-        }).filter((x) => x.id);
+            return {
+              id: String(o.escolinhaId ?? o.clubeId ?? o.id ?? o.organizacaoId),
+              nome: String(o.nome ?? o.titulo ?? "Organização"),
+              tipo,
+            };
+          })
+          .filter((x) => x.id);
 
         setOrgsVinculadas(normalizada);
-        if (!orgSelecionada && normalizada.length === 1) setOrgSelecionada(normalizada[0].id);
+        if (!orgSelecionada && normalizada.length === 1)
+          setOrgSelecionada(normalizada[0].id);
       } catch {
         setOrgsVinculadas([]);
       }
@@ -783,7 +947,9 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
           localStorage.getItem("token") ||
           sessionStorage.getItem("token") ||
           "";
-        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+        const headers = token
+          ? { Authorization: `Bearer ${token}` }
+          : undefined;
 
         console.log("[NovoTreino] orgSelecionada =", orgSelecionada);
 
@@ -795,7 +961,10 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
             `${API.BASE_URL}/api/relacoes/atletas?todos=1`,
           ];
           for (const url of urlsTodos) {
-            console.log("[NovoTreino] tentando carregar TODOS atletas em", url);
+            console.log(
+              "[NovoTreino] tentando carregar TODOS atletas em",
+              url,
+            );
             const r = await fetch(url, { headers });
             if (!r.ok) continue;
             const j = await r.json();
@@ -822,19 +991,19 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
 
         console.log(
           "[NovoTreino] tipoUsuarioId usado em atletas-vinculados =",
-          tipoUsuarioId
+          tipoUsuarioId,
         );
 
         if (!tipoUsuarioId) {
           console.warn(
-            "[NovoTreino] nenhum tipoUsuarioId/perfilId encontrado; não dá para chamar /api/treinos/atletas-vinculados"
+            "[NovoTreino] nenhum tipoUsuarioId/perfilId encontrado; não dá para chamar /api/treinos/atletas-vinculados",
           );
           if (!cancel) setAtletasVinculados([]);
           return;
         }
 
         const url = `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(
-          tipoUsuarioId
+          tipoUsuarioId,
         )}&incluirPontuacao=1`;
 
         console.log("[NovoTreino] GET", url);
@@ -846,7 +1015,7 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
           console.error(
             "[NovoTreino] erro ao buscar atletas-vinculados:",
             r.status,
-            txt
+            txt,
           );
           if (!cancel) setAtletasVinculados([]);
           return;
@@ -867,13 +1036,13 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
           setAtletasVinculados(mapAtletas(items));
           console.log(
             "[NovoTreino] atletas-vinculados carregados:",
-            mapAtletas(items)
+            mapAtletas(items),
           );
         }
       } catch (e) {
         console.error(
           "[NovoTreino] exceção ao carregar atletas-vinculados:",
-          e
+          e,
         );
         if (!cancel) setAtletasVinculados([]);
       }
@@ -917,22 +1086,40 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
   ]);
 
   const criarTurmaComSelecionados = async () => {
-    if (!orgSelecionada) { alert("Selecione uma organização primeiro."); return; }
-    if (!novaTurmaNome.trim()) { alert("Informe o nome da turma."); return; }
-    if (atletasSelecionados.length === 0) { alert("Selecione ao menos 1 atleta."); return; }
+    if (!orgSelecionada) {
+      alert("Selecione uma organização primeiro.");
+      return;
+    }
+    if (!novaTurmaNome.trim()) {
+      alert("Informe o nome da turma.");
+      return;
+    }
+    if (atletasSelecionados.length === 0) {
+      alert("Selecione ao menos 1 atleta.");
+      return;
+    }
 
     try {
-      const token = (Storage as any).token ||
+      const token =
+        (Storage as any).token ||
         localStorage.getItem("token") ||
-        sessionStorage.getItem("token") || "";
+        sessionStorage.getItem("token") ||
+        "";
       const headers: any = token
-        ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
+        ? {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          }
         : { "Content-Type": "application/json" };
 
-      let ok = false, created: any = null;
+      let ok = false,
+        created: any = null;
 
-      const ownerTipoRaw = orgsVinculadas.find(o => o.id === orgSelecionada)?.tipo;
-      const tipoUsuario = (ownerTipoRaw || "").toLowerCase() === "clube" ? "clube" : "escolinha";
+      const ownerTipoRaw = orgsVinculadas.find(
+        (o) => o.id === orgSelecionada,
+      )?.tipo;
+      const tipoUsuario =
+        (ownerTipoRaw || "").toLowerCase() === "clube" ? "clube" : "escolinha";
 
       const tentativas = [
         { url: `${API.BASE_URL}/api/treinos/elencos`, method: "POST" },
@@ -941,14 +1128,20 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
       ];
 
       for (const t of tentativas) {
-        const base = { nome: novaTurmaNome.trim(), atletasIds: atletasSelecionados };
-        const body =
-          t.url.includes("/api/treinos/elencos")
-            ? { ...base, tipoUsuario, tipoUsuarioId: orgSelecionada } 
-            : { ...base, organizacaoId: orgSelecionada };
+        const base = {
+          nome: novaTurmaNome.trim(),
+          atletasIds: atletasSelecionados,
+        };
+        const body = t.url.includes("/api/treinos/elencos")
+          ? { ...base, tipoUsuario, tipoUsuarioId: orgSelecionada }
+          : { ...base, organizacaoId: orgSelecionada };
 
-        const r = await fetch(t.url, { method: t.method, headers, body: JSON.stringify(body) });
-        
+        const r = await fetch(t.url, {
+          method: t.method,
+          headers,
+          body: JSON.stringify(body),
+        });
+
         const txt = await r.text();
 
         if (!r.ok) continue;
@@ -960,13 +1153,18 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
       if (ok) {
         alert("Turma criada!");
         setNovaTurmaNome("");
-        setElencos(prev => [...prev, {
-          id: String(created?.id ?? Date.now()),
-          nome: created?.nome ?? novaTurmaNome.trim(),
-          atletasIds: created?.atletasIds ?? atletasSelecionados,
-        }]);
+        setElencos((prev) => [
+          ...prev,
+          {
+            id: String(created?.id ?? Date.now()),
+            nome: created?.nome ?? novaTurmaNome.trim(),
+            atletasIds: created?.atletasIds ?? atletasSelecionados,
+          },
+        ]);
       } else {
-        alert("Falha ao criar turma (verifique os logs no console para o motivo do 400).");
+        alert(
+          "Falha ao criar turma (verifique os logs no console para o motivo do 400).",
+        );
       }
     } catch (e) {
       console.error(e);
@@ -976,22 +1174,22 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
 
   const incluirElencoNoTreino = () => {
     if (!elencoSelecionado) return;
-    const el = elencos.find(e => e.id === elencoSelecionado);
+    const el = elencos.find((e) => e.id === elencoSelecionado);
     if (!el || !el.atletasIds?.length) return;
 
-    setAtletasSelecionados(prev => {
+    setAtletasSelecionados((prev) => {
       const set = new Set(prev);
-      el.atletasIds!.forEach(id => set.add(id));
+      el.atletasIds!.forEach((id) => set.add(id));
       return Array.from(set);
     });
   };
 
   const adicionarDataAgendamento = () => {
-    setDatasAgendamento(prev => [...prev, ""]);
+    setDatasAgendamento((prev) => [...prev, ""]);
   };
 
   const atualizarDataAgendamento = (index: number, valor: string) => {
-    setDatasAgendamento(prev => {
+    setDatasAgendamento((prev) => {
       const copia = [...prev];
       copia[index] = valor;
       return copia;
@@ -999,7 +1197,7 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
   };
 
   const removerDataAgendamento = (index: number) => {
-    setDatasAgendamento(prev => prev.filter((_, i) => i !== index));
+    setDatasAgendamento((prev) => prev.filter((_, i) => i !== index));
   };
 
   const [completedUntil, setCompletedUntil] = useState<number>(1);
@@ -1012,7 +1210,11 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
     return (n || "").trim().toLowerCase();
   }
 
-  function jaEstaNoTreinoPorIdOuNome(lista: ExItemUI[], id?: string, nome?: string) {
+  function jaEstaNoTreinoPorIdOuNome(
+    lista: ExItemUI[],
+    id?: string,
+    nome?: string,
+  ) {
     const nomeK = normalizaNome(nome);
     const idK = id ? String(id) : null;
 
@@ -1037,11 +1239,22 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
   const adicionarExercicio = () => {
     setExerciciosSelecionados((prev) => [
       ...prev,
-      { idCatalogo: null, nome: "", descricao: "", repeticoes: "", ordem: prev.length + 1, series: "" },
+      {
+        idCatalogo: null,
+        nome: "",
+        descricao: "",
+        repeticoes: "",
+        ordem: prev.length + 1,
+        series: "",
+      },
     ]);
   };
 
-  const atualizarExercicio = (index: number, campo: keyof ExItemUI | "series", valor: string) => {
+  const atualizarExercicio = (
+    index: number,
+    campo: keyof ExItemUI | "series",
+    valor: string,
+  ) => {
     const copia = [...exerciciosSelecionados];
     (copia[index][campo] as string | undefined) = valor;
     if (campo === "ordem") {
@@ -1093,7 +1306,8 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
       "";
 
     const normalized =
-      String(tipoRaw).trim().toLowerCase() === "escola" || String(tipoRaw).trim().toLowerCase() === "escolinha"
+      String(tipoRaw).trim().toLowerCase() === "escola" ||
+      String(tipoRaw).trim().toLowerCase() === "escolinha"
         ? "Escolinha"
         : String(tipoRaw).trim().toLowerCase() === "professor"
         ? "Professor"
@@ -1107,7 +1321,10 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
       sessionStorage.getItem("tipoUsuarioId") ||
       null;
 
-    return { tipoUsuario: normalized as "Professor" | "Clube" | "Escolinha" | null, tipoUsuarioId };
+    return {
+      tipoUsuario: normalized as "Professor" | "Clube" | "Escolinha" | null,
+      tipoUsuarioId,
+    };
   }
 
   type DonoLiteral = "professor" | "clube" | "escolinha";
@@ -1115,13 +1332,16 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
     return v === "professor" || v === "clube" || v === "escolinha";
   }
 
+  // 🔧 AQUI está a função ajustada para usar /api/treinos/rotina/agendar
   async function agendarTreinoEmLote(treinoProgramadoId: string) {
     try {
-      const datasValidas = datasAgendamento.filter(d => d && d.trim());
+      const datasValidas = datasAgendamento.filter((d) => d && d.trim());
 
       const datasBase = datasValidas.length
         ? datasValidas
-        : (dataTreino ? [dataTreino] : []);
+        : dataTreino
+        ? [dataTreino]
+        : [];
 
       if (!datasBase.length || !atletasSelecionados.length) {
         return 0;
@@ -1130,7 +1350,8 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
       const token =
         (Storage as any).token ||
         localStorage.getItem("token") ||
-        sessionStorage.getItem("token") || "";
+        sessionStorage.getItem("token") ||
+        "";
 
       const headers: any = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -1140,7 +1361,7 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
           ? dataTreino.split("T")[1].slice(0, 5)
           : "18:00";
 
-      const datasISO = datasBase.map(d => {
+      const datasISO = datasBase.map((d) => {
         if (d.includes("T")) {
           return new Date(d).toISOString();
         }
@@ -1148,16 +1369,25 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
         return dt.toISOString();
       });
 
-      const res = await fetch(`${API.BASE_URL}/api/treinos/agendados/lote`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          treinoProgramadoId,
-          atletasIds: atletasSelecionados,
-          datas: datasISO,
-          tituloPadrao: nome || "Treino",
-        }),
-      });
+      const body = {
+        treinoProgramadoId,
+        datas: datasISO,
+        // nome esperado pelo backend: atletaIds
+        atletaIds: atletasSelecionados,
+        // aproveita elencoSelecionado se tiver
+        elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
+        incluirObservados: false,
+        tituloPadrao: nome || "Treino",
+      };
+
+      const res = await fetch(
+        `${API.BASE_URL}/api/treinos/rotina/agendar`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+        },
+      );
 
       if (!res.ok) {
         const txt = await res.text();
@@ -1175,14 +1405,15 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
     }
   }
 
-
   const criarTreino = async () => {
     try {
       const { tipoUsuario, tipoUsuarioId } = getDono();
       const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
 
       if (!tipoUsuario || !tipoUsuarioId) {
-        alert("Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).");
+        alert(
+          "Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).",
+        );
         return;
       }
 
@@ -1199,8 +1430,18 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
 
       const exercicios = montarExerciciosParaPayload(exerciciosSelecionados);
 
-      const mapNivel = (s: string) => ({ Base: "Base", Avancado: "Avancado", Performance: "Performance" } as const)[s] ?? "Base";
-      const mapTipoTreino = (s: string) => ({ Tecnico: "Tecnico", Fisico: "Fisico", Tatico: "Tatico" } as const)[s] ?? null;
+      const mapNivel = (s: string) =>
+        ({
+          Base: "Base",
+          Avancado: "Avancado",
+          Performance: "Performance",
+        } as const)[s] ?? "Base";
+      const mapTipoTreino = (s: string) =>
+        ({
+          Tecnico: "Tecnico",
+          Fisico: "Fisico",
+          Tatico: "Tatico",
+        } as const)[s] ?? null;
       const mapCategoria = (s: string) => {
         const m = String(s || "").match(/sub[\s\-]?(\d{1,2})/i);
         if (m) return `Sub${m[1]}`;
@@ -1210,7 +1451,9 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
 
       const codigo =
         `${nome}`.trim()
-          ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) + "-" + Date.now().toString(36)
+          ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) +
+            "-" +
+            Date.now().toString(36)
           : "TP-" + Date.now().toString(36);
 
       const payload: TreinoCreatePayload = {
@@ -1253,11 +1496,17 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
       }
 
       if (duplicados.length) {
-        alert(`Remova os exercícios repetidos antes de salvar: ${duplicados.join(", ")}`);
+        alert(
+          `Remova os exercícios repetidos antes de salvar: ${duplicados.join(
+            ", ",
+          )}`,
+        );
         return;
       }
 
-      const exValidos = exerciciosSelecionados.filter(x => x.idCatalogo || (x.nome && x.nome.trim()));
+      const exValidos = exerciciosSelecionados.filter(
+        (x) => x.idCatalogo || (x.nome && x.nome.trim()),
+      );
       if (exValidos.length === 0) {
         alert("Adicione pelo menos 1 exercício válido antes de salvar.");
         return;
@@ -1266,37 +1515,87 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
       const criado: any = await TreinosApi.criar(payload);
 
       let qtdAgendados = 0;
-      const treinoProgramadoId = criado?.id ?? criado?.treinoProgramadoId ?? criado?.data?.id ?? null;
+      const treinoProgramadoId =
+        criado?.id ?? criado?.treinoProgramadoId ?? criado?.data?.id ?? null;
 
       if (treinoProgramadoId) {
-        qtdAgendados = await agendarTreinoEmLote(String(treinoProgramadoId));
+        qtdAgendados = await agendarTreinoEmLote(
+          String(treinoProgramadoId),
+        );
       } else {
-        console.warn("TreinosApi.criar não retornou id do treino programado. Agendamento em lote foi pulado.");
+        console.warn(
+          "TreinosApi.criar não retornou id do treino programado. Agendamento em lote foi pulado.",
+        );
       }
 
-      const resultadoSalvar = await tentarSalvarComoTreinoSalvo(payload, score.total);
+      const resultadoSalvar = await tentarSalvarComoTreinoSalvo(
+        payload,
+        score.total,
+      );
+
+      const atletasDoTreino = atletasVinculados.filter((a) =>
+        atletasSelecionados.includes(a.id),
+      );
+      const nomesAtletas = atletasDoTreino.map((a) => a.nome);
+
+      const datasBase =
+        datasAgendamento.length > 0
+          ? datasAgendamento
+          : dataTreino
+          ? [dataTreino]
+          : [];
+
+      const datasLabel = datasBase.length
+        ? datasBase
+            .slice()
+            .sort()
+            .map((str) => {
+              const d = new Date(str);
+              if (isNaN(d.getTime())) return str;
+              return d.toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+              });
+            })
+            .join(", ")
+        : null;
+
+      let msgPrincipal = `Treino "${nome || codigo}" criado com sucesso.`;
+
+      if (qtdAgendados > 0 && nomesAtletas.length && datasLabel) {
+        const nomesPreview =
+          nomesAtletas.length <= 3
+            ? nomesAtletas.join(", ")
+            : `${nomesAtletas.slice(0, 3).join(", ")} + ${
+                nomesAtletas.length - 3
+              } atleta(s)`;
+
+        msgPrincipal += ` Foi agendado automaticamente para ${nomesAtletas.length} atleta(s) (${nomesPreview}) nos dias ${datasLabel}.`;
+      } else if (qtdAgendados > 0) {
+        msgPrincipal += ` Foram gerados ${qtdAgendados} agendamentos para seus atletas.`;
+      } else {
+        msgPrincipal +=
+          " Nenhum agendamento automático foi criado (você pode agendar depois na tela de treinos).";
+      }
+
+      let extra = "";
 
       if (resultadoSalvar.saved) {
-        if (qtdAgendados > 0) {
-          alert(`Treino criado, salvo na Gaveta e ${qtdAgendados} agendamentos gerados para seus atletas.`);
-        } else {
-          alert("Treino criado e salvo na sua Gaveta (treinos salvos).");
-        }
-      } else {
-        if (qtdAgendados > 0) {
-          alert(`Treino criado e ${qtdAgendados} agendamentos gerados para seus atletas.`);
-        } else if (resultadoSalvar.reason === "usuario-pulou") {
-          alert("Treino criado. Você optou por NÃO salvar na Gaveta (limite de 5).");
-        } else if (resultadoSalvar.reason === "falha-apagar") {
-          alert("Treino criado, mas não foi possível liberar espaço na Gaveta. Novo treino NÃO salvo na Gaveta.");
-        } else if (resultadoSalvar.reason === "sem-dono") {
-          console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
-          alert("Treino criado (sem Gaveta configurada).");
-        } else {
-          console.warn("Treino Salvo: erro ao salvar, seguindo sem gaveta.");
-          alert("Treino criado (não foi possível salvar na Gaveta).");
-        }
+        extra = " O treino também foi salvo na sua Gaveta.";
+      } else if (resultadoSalvar.reason === "usuario-pulou") {
+        extra =
+          " Você optou por não salvar este treino na Gaveta (limite de 5).";
+      } else if (resultadoSalvar.reason === "falha-apagar") {
+        extra =
+          " Não foi possível liberar espaço na Gaveta, então o treino não foi salvo lá.";
+      } else if (resultadoSalvar.reason === "erro") {
+        extra =
+          " O treino foi criado, mas houve um erro ao salvar na Gaveta.";
+      } else if (resultadoSalvar.reason === "sem-dono") {
+        console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
       }
+
+      showToast(msgPrincipal + extra, "success");
 
       sessionStorage.removeItem(SAVE_KEY);
       setEtapa(1);
@@ -1314,10 +1613,18 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
       setDicaAtual("");
       setAtletasSelecionados([]);
       setDatasAgendamento([]);
-
     } catch (e: any) {
-      console.error("Falha inesperada ao criar treino:", e?.response?.data || e);
-      alert(e?.response?.data?.error || e?.response?.data?.message || "Erro inesperado ao criar treino.");
+      console.error(
+        "Falha inesperada ao criar treino:",
+        e?.response?.data || e,
+      );
+
+      const msgErro =
+        e?.response?.data?.error ||
+        e?.response?.data?.message ||
+        "Erro inesperado ao criar treino.";
+
+      showToast(msgErro, "error");
     }
   };
 
@@ -1325,20 +1632,31 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
     try {
       const atletaId = (Storage as any).tipoUsuarioId;
       const token = (Storage as any).token;
-      if (!atletaId || !token) { alert("Sessão expirada. Faça login novamente."); return; }
+      if (!atletaId || !token) {
+        alert("Sessão expirada. Faça login novamente.");
+        return;
+      }
 
       const prazoSelecionado = prazos[t.id];
-      const quando = prazoSelecionado ? new Date(prazoSelecionado) : new Date(Date.now() + 24*60*60*1000);
-      const expira = new Date(quando.getTime() + 7*24*60*60*1000);
+      const quando = prazoSelecionado
+        ? new Date(prazoSelecionado)
+        : new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const expira = new Date(
+        quando.getTime() + 7 * 24 * 60 * 60 * 1000,
+      );
 
       const res = await fetch(`${API.BASE_URL}/api/treinos/agendados`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           titulo: t.nome,
           dataTreino: quando.toISOString(),
           dataExpiracao: expira.toISOString(),
-          atletaId,                         treinoProgramadoId: t.id,
+          atletaId,
+          treinoProgramadoId: t.id,
         }),
       });
 
@@ -1351,15 +1669,25 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
 
       const novo: TreinoAgendadoResp = await res.json();
       sessionStorage.setItem("lastAgendamento", JSON.stringify(novo));
-      setIdsProgramadosBloqueados(prev => new Set(prev).add(novo.treinoProgramadoId));
+      setIdsProgramadosBloqueados(
+        (prev) => new Set(prev).add(novo.treinoProgramadoId),
+      );
       navigate("/treinos");
       const once = () => {
         window.removeEventListener("treinos:ready", once as any);
-        window.dispatchEvent(new CustomEvent("treino:agendado", { detail: novo }));
+        window.dispatchEvent(
+          new CustomEvent("treino:agendado", { detail: novo }),
+        );
       };
       window.addEventListener("treinos:ready", once as any);
 
-      setTimeout(() => window.dispatchEvent(new CustomEvent("treino:agendado", { detail: novo })), 50);
+      setTimeout(
+        () =>
+          window.dispatchEvent(
+            new CustomEvent("treino:agendado", { detail: novo }),
+          ),
+        50,
+      );
       setPrazos(({ [t.id]: _, ...rest }) => rest);
       alert("Treino agendado com sucesso!");
     } catch (e) {
@@ -1372,12 +1700,15 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
   if (!usuario)
     return (
       <div className="p-4 text-center">
-        Você precisa estar logado como <b>Escola</b>, <b>Clube</b> ou <b>Professor</b> para criar treinos.
+        Você precisa estar logado como <b>Escola</b>, <b>Clube</b> ou{" "}
+        <b>Professor</b> para criar treinos.
       </div>
     );
 
   if (usuario.tipo === "atleta") {
-    const treinosParaAgendar = treinosDisponiveis.filter(t => !idsProgramadosBloqueados.has(t.id));
+    const treinosParaAgendar = treinosDisponiveis.filter(
+      (t) => !idsProgramadosBloqueados.has(t.id),
+    );
 
     return (
       <div className="p-4 max-w-xl mx-auto mb-5">
@@ -1389,20 +1720,27 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
             rounded-full border border-green-800 bg-white text-green-900
             shadow-sm hover:bg-green-50 focus:outline-none
             focus:ring-2 focus:ring-green-700/30 mt-2 ml-2"
-          >
+        >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <h2 className="text-lg font-bold mb-4">Treinos Disponíveis</h2>
 
         {treinosParaAgendar.length === 0 ? (
-          <p className="text-gray-600">Nenhum treino disponível para agendar no momento.</p>
+          <p className="text-gray-600">
+            Nenhum treino disponível para agendar no momento.
+          </p>
         ) : (
           treinosParaAgendar.map((t) => (
-            <div key={t.id} className="bg-white border p-4 rounded shadow mb-4">
+            <div
+              key={t.id}
+              className="bg-white border p-4 rounded shadow mb-4"
+            >
               <div className="flex items-start justify-between gap-2">
                 <h3
                   className="text-green-800 text-lg font-semibold cursor-pointer hover:underline"
-                  onClick={() => navigate(`/treinos/unico?programadoId=${t.id}`)}
+                  onClick={() =>
+                    navigate(`/treinos/unico?programadoId=${t.id}`)
+                  }
                   title="Ver detalhes do treino"
                 >
                   {t.nome}
@@ -1450,7 +1788,12 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                 type="datetime-local"
                 className="border p-2 rounded"
                 value={prazos[t.id] || ""}
-                onChange={(e) => setPrazos((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                onChange={(e) =>
+                  setPrazos((prev) => ({
+                    ...prev,
+                    [t.id]: e.target.value,
+                  }))
+                }
               />
               <button
                 className="mt-3 bg-green-800 text-white px-5 py-2 rounded ml-3"
@@ -1487,7 +1830,9 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
     <div className="min-h-screen bg-gray-50 pb-24">
       <div className="p-4 sm:p-6 max-w-3xl mx-auto">
         <div className="grid grid-cols-3 items-center mb-3 sm:mb-4">
-          <h2 className="text-lg sm:text-xl font-bold col-start-1">Criar Novo Treino</h2>
+          <h2 className="text-lg sm:text-xl font-bold col-start-1">
+            Criar Novo Treino
+          </h2>
 
           <div
             className="justify-self-center col-start-2"
@@ -1497,10 +1842,12 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
               `Duração: +${score.duracao} • Dicas: +${score.dicas}`
             }
           >
-            <span className="
+            <span
+              className="
               inline-flex items-center gap-1 rounded-full px-3 py-1
               text-sm font-semibold bg-amber-100 text-amber-900 border border-amber-300
-            ">
+            "
+            >
               {score.total} pts
             </span>
           </div>
@@ -1535,7 +1882,9 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
 
         {etapa === 1 && (
           <StepCard title="Informações Básicas">
-            <label className="block text-sm text-gray-700 mb-1">Título do Treino</label>
+            <label className="block text-sm text-gray-700 mb-1">
+              Título do Treino
+            </label>
             <input
               className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
               placeholder="Título do Treino"
@@ -1543,7 +1892,9 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
               onChange={(e) => setNome(e.target.value)}
             />
 
-            <label className="block text-sm text-gray-700 mb-1">Descrição</label>
+            <label className="block text-sm text-gray-700 mb-1">
+              Descrição
+            </label>
             <textarea
               className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
               placeholder="Descrição do Treino"
@@ -1553,7 +1904,9 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm text-gray-700 mb-1">Nível do Treino</label>
+                <label className="block text-sm text-gray-700 mb-1">
+                  Nível do Treino
+                </label>
                 <select
                   className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
                   value={nivel}
@@ -1567,7 +1920,9 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
               </div>
 
               <div>
-                <label className="block text-sm text-gray-700 mb-1">Categoria (Faixa Etária)</label>
+                <label className="block text-sm text-gray-700 mb-1">
+                  Categoria (Faixa Etária)
+                </label>
                 <select
                   className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
                   value={categoria}
@@ -1585,7 +1940,9 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
               </div>
 
               <div>
-                <label className="block text-sm text-gray-700 mb-1">Tipo do Treino</label>
+                <label className="block text-sm text-gray-700 mb-1">
+                  Tipo do Treino
+                </label>
                 <select
                   className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
                   value={tipoTreino}
@@ -1599,19 +1956,26 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
               </div>
 
               <div>
-                <label className="block text-sm text-gray-700 mb-1">Duração do Treino (minutos)</label>
+                <label className="block text-sm text-gray-700 mb-1">
+                  Duração do Treino (minutos)
+                </label>
                 <input
                   className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
                   type="number"
                   min={1}
                   value={duracao}
-                  onChange={(e) => setDuracao(parseInt(e.target.value || "0") || 0)}
+                  onChange={(e) =>
+                    setDuracao(parseInt(e.target.value || "0") || 0)
+                  }
                 />
               </div>
             </div>
 
             <div className="flex justify-end">
-              <button onClick={() => goTo(2)} className="bg-green-800 text-white px-4 py-2 rounded">
+              <button
+                onClick={() => goTo(2)}
+                className="bg-green-800 text-white px-4 py-2 rounded"
+              >
                 Próximo
               </button>
             </div>
@@ -1622,13 +1986,21 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
           <>
             <StepCard title="Exercícios Selecionados">
               {exerciciosSelecionados.length === 0 && (
-                <div className="text-sm text-gray-600 mb-3">Nenhum exercício adicionado ainda.</div>
+                <div className="text-sm text-gray-600 mb-3">
+                  Nenhum exercício adicionado ainda.
+                </div>
               )}
 
               <div className="space-y-3">
                 {exerciciosSelecionados.map((ex, i) => {
-                  const base = ex.idCatalogo ? exerciciosDisponiveis.find((e) => e.id === ex.idCatalogo) : undefined;
-                  const videoSrc = resolveVideoUrl(base?.videoDemonstrativoUrl);
+                  const base = ex.idCatalogo
+                    ? exerciciosDisponiveis.find(
+                        (e) => e.id === ex.idCatalogo,
+                      )
+                    : undefined;
+                  const videoSrc = resolveVideoUrl(
+                    base?.videoDemonstrativoUrl,
+                  );
 
                   const nomeFinal = base?.nome ?? ex.nome ?? "";
                   const nivelFinal = base?.nivel ?? undefined;
@@ -1637,7 +2009,10 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                   const ehDoBanco = Boolean(ex.idCatalogo);
 
                   return (
-                    <div key={i} className="border rounded-lg p-3 relative bg-white shadow-sm">
+                    <div
+                      key={i}
+                      className="border rounded-lg p-3 relative bg-white shadow-sm"
+                    >
                       <button
                         onClick={() => removerExercicio(i)}
                         className="text-red-600 text-sm self-end sm:absolute sm:top-2 sm:right-2"
@@ -1663,13 +2038,21 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             {ehDoBanco ? (
-                              <div className="font-semibold">{nomeFinal}</div>
+                              <div className="font-semibold">
+                                {nomeFinal}
+                              </div>
                             ) : (
                               <input
                                 className="border p-1 rounded w-full"
                                 placeholder="Nome do exercício"
                                 value={ex.nome || ""}
-                                onChange={(e) => atualizarExercicio(i, "nome", e.target.value)}
+                                onChange={(e) =>
+                                  atualizarExercicio(
+                                    i,
+                                    "nome",
+                                    e.target.value,
+                                  )
+                                }
                               />
                             )}
 
@@ -1681,33 +2064,57 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                           </div>
 
                           {ehDoBanco ? (
-                            <p className="text-sm text-gray-700 mb-2 whitespace-pre-line">{descFinal || "Sem descrição."}</p>
+                            <p className="text-sm text-gray-700 mb-2 whitespace-pre-line">
+                              {descFinal || "Sem descrição."}
+                            </p>
                           ) : (
                             <textarea
                               className="border w-full mb-2 p-1 rounded"
                               placeholder="Descrição"
                               value={ex.descricao || ""}
-                              onChange={(e) => atualizarExercicio(i, "descricao", e.target.value)}
+                              onChange={(e) =>
+                                atualizarExercicio(
+                                  i,
+                                  "descricao",
+                                  e.target.value,
+                                )
+                              }
                             />
                           )}
 
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <label className="block text-xs text-gray-600 mb-1">Séries</label>
+                              <label className="block text-xs text-gray-600 mb-1">
+                                Séries
+                              </label>
                               <input
                                 className="border w-full p-1 rounded"
                                 placeholder="ex.: 3"
                                 value={ex.series || ""}
-                                onChange={(e) => atualizarExercicio(i, "series", e.target.value)}
+                                onChange={(e) =>
+                                  atualizarExercicio(
+                                    i,
+                                    "series",
+                                    e.target.value,
+                                  )
+                                }
                               />
                             </div>
                             <div>
-                              <label className="block text-xs text-gray-600 mb-1">Repetições</label>
+                              <label className="block text-xs text-gray-600 mb-1">
+                                Repetições
+                              </label>
                               <input
                                 className="border w-full p-1 rounded"
                                 placeholder="ex.: 12"
                                 value={ex.repeticoes || ""}
-                                onChange={(e) => atualizarExercicio(i, "repeticoes", e.target.value)}
+                                onChange={(e) =>
+                                  atualizarExercicio(
+                                    i,
+                                    "repeticoes",
+                                    e.target.value,
+                                  )
+                                }
                               />
                             </div>
                           </div>
@@ -1718,7 +2125,10 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                 })}
               </div>
 
-              <button onClick={adicionarExercicio} className="bg-gray-200 px-3 py-1 rounded mb-2 mt-3">
+              <button
+                onClick={adicionarExercicio}
+                className="bg-gray-200 px-3 py-1 rounded mb-2 mt-3"
+              >
                 + Adicionar linha (personalizado)
               </button>
             </StepCard>
@@ -1743,8 +2153,14 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
 
               <ul className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1">
                 {exerciciosFiltrados.map((exercicio) => {
-                  const videoSrc = resolveVideoUrl(exercicio.videoDemonstrativoUrl);
-                  const jaAdicionado = jaEstaNoTreinoPorIdOuNome(exerciciosSelecionados, exercicio.id, exercicio.nome);
+                  const videoSrc = resolveVideoUrl(
+                    exercicio.videoDemonstrativoUrl,
+                  );
+                  const jaAdicionado = jaEstaNoTreinoPorIdOuNome(
+                    exerciciosSelecionados,
+                    exercicio.id,
+                    exercicio.nome,
+                  );
 
                   return (
                     <li key={exercicio.id} className="py-3">
@@ -1764,7 +2180,9 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <div className="font-semibold truncate">{exercicio.nome}</div>
+                            <div className="font-semibold truncate">
+                              {exercicio.nome}
+                            </div>
                             {exercicio.nivel ? (
                               <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300">
                                 {exercicio.nivel}
@@ -1772,17 +2190,28 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                             ) : null}
                           </div>
                           {exercicio.descricao ? (
-                            <p className="text-sm text-gray-700 mt-1 line-clamp-2">{exercicio.descricao}</p>
+                            <p className="text-sm text-gray-700 mt-1 line-clamp-2">
+                              {exercicio.descricao}
+                            </p>
                           ) : null}
                         </div>
 
                         <button
-                          onClick={() => !jaAdicionado && adicionarExercicioExistente(exercicio)}
+                          onClick={() =>
+                            !jaAdicionado &&
+                            adicionarExercicioExistente(exercicio)
+                          }
                           disabled={jaAdicionado}
                           className={`bg-blue-600 text-white text-sm px-3 py-1.5 rounded w-full sm:w-auto ${
-                            jaAdicionado ? "opacity-50 cursor-not-allowed" : ""
+                            jaAdicionado
+                              ? "opacity-50 cursor-not-allowed"
+                              : ""
                           }`}
-                          title={jaAdicionado ? "Já adicionado ao treino" : "Adicionar ao treino"}
+                          title={
+                            jaAdicionado
+                              ? "Já adicionado ao treino"
+                              : "Adicionar ao treino"
+                          }
                         >
                           {jaAdicionado ? "Adicionado" : "Adicionar"}
                         </button>
@@ -1793,10 +2222,16 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
               </ul>
 
               <div className="flex flex-col sm:flex-row justify-between gap-2 mt-6">
-                <button onClick={() => goTo(1)} className="bg-gray-200 px-4 py-2 rounded w-full sm:w-auto">
+                <button
+                  onClick={() => goTo(1)}
+                  className="bg-gray-200 px-4 py-2 rounded w-full sm:w-auto"
+                >
                   Voltar
                 </button>
-                <button onClick={() => goTo(3)} className="bg-green-800 text-white px-4 py-2 rounded w-full sm:w-auto">
+                <button
+                  onClick={() => goTo(3)}
+                  className="bg-green-800 text-white px-4 py-2 rounded w-full sm:w-auto"
+                >
                   Próximo
                 </button>
               </div>
@@ -1813,7 +2248,10 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                 value={dicaAtual}
                 onChange={(e) => setDicaAtual(e.target.value)}
               />
-              <button onClick={adicionarDica} className="bg-gray-300 px-3 py-2 rounded">
+              <button
+                onClick={adicionarDica}
+                className="bg-gray-300 px-3 py-2 rounded"
+              >
                 + Adicionar
               </button>
             </div>
@@ -1825,10 +2263,16 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
             </ul>
 
             <div className="flex flex-col sm:flex-row justify-between gap-2 mt-6">
-              <button onClick={() => goTo(2)} className="bg-gray-200 px-4 py-2 rounded w-full sm:w-auto">
+              <button
+                onClick={() => goTo(2)}
+                className="bg-gray-200 px-4 py-2 rounded w-full sm:w-auto"
+              >
                 Voltar
               </button>
-              <button onClick={() => goTo(4)} className="bg-green-800 text-white px-4 py-2 rounded w-full sm:w-auto">
+              <button
+                onClick={() => goTo(4)}
+                className="bg-green-800 text-white px-4 py-2 rounded w-full sm:w-auto"
+              >
                 Próximo
               </button>
             </div>
@@ -1838,20 +2282,31 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
         {etapa === 4 && (
           <StepCard title="Selecionar Atletas Vinculados">
             <div className="mb-4 grid gap-2">
-              <label className="block text-sm text-gray-700">Organização (para montar turmas e listar alunos)</label>
+              <label className="block text-sm text-gray-700">
+                Organização (para montar turmas e listar alunos)
+              </label>
               <select
                 className="border w-full p-2 rounded"
                 value={orgSelecionada}
-                onChange={(e) => { setOrgSelecionada(e.target.value); setAtletasSelecionados([]); setElencoSelecionado(""); }}
+                onChange={(e) => {
+                  setOrgSelecionada(e.target.value);
+                  setAtletasSelecionados([]);
+                  setElencoSelecionado("");
+                }}
               >
-                <option value="">— Meus vinculados (professor/escola/clube) —</option>
+                <option value="">
+                  — Meus vinculados (professor/escola/clube) —
+                </option>
                 <option value={MOSTRAR_TODOS}>— Todos os atletas —</option>
                 {orgsVinculadas.map((o) => (
-                  <option key={o.id} value={o.id}>{o.nome} ({o.tipo})</option>
+                  <option key={o.id} value={o.id}>
+                    {o.nome} ({o.tipo})
+                  </option>
                 ))}
               </select>
               <p className="text-xs text-gray-600">
-                Se escolher uma organização, os alunos e as turmas listados abaixo virão dela.
+                Se escolher uma organização, os alunos e as turmas listados
+                abaixo virão dela.
               </p>
             </div>
 
@@ -1868,19 +2323,29 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                       key={atleta.id}
                       onClick={() =>
                         setAtletasSelecionados((prev) =>
-                          selecionado ? prev.filter((id) => id !== atleta.id) : [...prev, atleta.id]
+                          selecionado
+                            ? prev.filter((id) => id !== atleta.id)
+                            : [...prev, atleta.id],
                         )
                       }
                       className={`cursor-pointer p-4 rounded-xl shadow-md text-center border-2 transition-all duration-200 ${
-                        selecionado ? "border-green-500 bg-green-50" : "border-gray-200"
+                        selecionado
+                          ? "border-green-500 bg-green-50"
+                          : "border-gray-200"
                       }`}
                     >
                       <img
-                        src={atleta.foto ? `${atleta.foto}` : "https://via.placeholder.com/80"}
+                        src={
+                          atleta.foto
+                            ? `${atleta.foto}`
+                            : "https://via.placeholder.com/80"
+                        }
                         alt={atleta.nome}
                         className="w-20 h-20 mx-auto rounded-full object-cover mb-2"
                       />
-                      <p className="font-semibold text-sm sm:text-base">{atleta.nome}</p>
+                      <p className="font-semibold text-sm sm:text-base">
+                        {atleta.nome}
+                      </p>
                     </div>
                   );
                 })}
@@ -1890,19 +2355,26 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
             <div className="my-4 p-3 border rounded-md">
               <div className="mb-3 flex items-end gap-2">
                 <div className="flex-1">
-                  <label className="block text-sm text-gray-700 mb-1">Turmas da organização</label>
+                  <label className="block text-sm text-gray-700 mb-1">
+                    Turmas da organização
+                  </label>
                   <select
                     className="border w-full p-2 rounded"
                     value={elencoSelecionado}
-                    onChange={e => setElencoSelecionado(e.target.value)}
+                    onChange={(e) => setElencoSelecionado(e.target.value)}
                   >
                     <option value="">— Selecionar turma —</option>
-                    {elencos.map(el => (
-                      <option key={el.id} value={el.id}>{el.nome}</option>
+                    {elencos.map((el) => (
+                      <option key={el.id} value={el.id}>
+                        {el.nome}
+                      </option>
                     ))}
                   </select>
                 </div>
-                <button onClick={incluirElencoNoTreino} className="bg-green-700 text-white px-3 py-2 rounded">
+                <button
+                  onClick={incluirElencoNoTreino}
+                  className="bg-green-700 text-white px-3 py-2 rounded"
+                >
                   Usar turma no treino
                 </button>
               </div>
@@ -1914,7 +2386,10 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                   value={novaTurmaNome}
                   onChange={(e) => setNovaTurmaNome(e.target.value)}
                 />
-                <button onClick={criarTurmaComSelecionados} className="bg-emerald-600 text-white px-3 py-2 rounded">
+                <button
+                  onClick={criarTurmaComSelecionados}
+                  className="bg-emerald-600 text-white px-3 py-2 rounded"
+                >
                   + Criar turma com selecionados
                 </button>
               </div>
@@ -1930,9 +2405,10 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                     Dias para agendar este treino automaticamente
                   </label>
                   <p className="text-xs text-gray-600">
-                    Toque nos dias do calendário FootEra para marcar ou desmarcar.
-                    Se você não escolher datas aqui, o treino será criado sem agendamento automático.
-                    Depois você poderá agendar manualmente para os atletas na tela de treinos.
+                    Toque nos dias do calendário FootEra para marcar ou
+                    desmarcar. Se você não escolher datas aqui, o treino será
+                    criado sem agendamento automático. Depois você poderá
+                    agendar manualmente para os atletas na tela de treinos.
                   </p>
                 </div>
               </div>
@@ -2015,13 +2491,19 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                 return (
                   <div className="grid grid-rows-6 gap-1 mb-2">
                     {semanas.map((semana, idxSemana) => (
-                      <div key={idxSemana} className="grid grid-cols-7 gap-1">
+                      <div
+                        key={idxSemana}
+                        className="grid grid-cols-7 gap-1"
+                      >
                         {semana.map((dia, idxDia) => {
                           if (!dia) {
-                            return <div key={idxDia} className="h-8 sm:h-9" />;
+                            return (
+                              <div key={idxDia} className="h-8 sm:h-9" />
+                            );
                           }
                           const dateStr = formatYMD(ano, mes, dia);
-                          const selecionado = datasAgendamento.includes(dateStr);
+                          const selecionado =
+                            datasAgendamento.includes(dateStr);
 
                           return (
                             <button
@@ -2054,27 +2536,36 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
                     .map((str) => {
                       const d = new Date(str);
                       if (isNaN(d.getTime())) return str;
-                      return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+                      return d.toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                      });
                     })
                     .join(", ")}
                 </div>
               )}
 
-              {datasAgendamento.length > 0 && atletasSelecionados.length === 0 && (
-                <p className="mt-2 text-xs text-amber-700">
-                  Você já escolheu datas, mas ainda não selecionou atletas.
-                  O treino só será agendado para quem estiver selecionado acima.
-                </p>
-              )}
+              {datasAgendamento.length > 0 &&
+                atletasSelecionados.length === 0 && (
+                  <p className="mt-2 text-xs text-amber-700">
+                    Você já escolheu datas, mas ainda não selecionou atletas. O
+                    treino só será agendado para quem estiver selecionado
+                    acima.
+                  </p>
+                )}
             </div>
 
-
-
             <div className="flex flex-col sm:flex-row justify-between gap-2 mt-6">
-              <button onClick={() => goTo(3)} className="bg-gray-200 px-4 py-2 rounded w-full sm:w-auto">
+              <button
+                onClick={() => goTo(3)}
+                className="bg-gray-200 px-4 py-2 rounded w-full sm:w-auto"
+              >
                 Voltar
               </button>
-              <button onClick={criarTreino} className="bg-green-800 text-white px-4 py-2 rounded w-full sm:w-auto">
+              <button
+                onClick={criarTreino}
+                className="bg-green-800 text-white px-4 py-2 rounded w-full sm:w-auto"
+              >
                 Salvar Treino
               </button>
             </div>
@@ -2082,14 +2573,40 @@ function normalizaTreinos(raw: any[]): TreinoProgramado[] {
         )}
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed" className="hover:underline"><House /></Link>
-        <Link href="/explorar" className="hover:underline"><SearchIcon /></Link>
-        <Link href="/post" className="hover:underline"><CirclePlus /></Link>
-        <Link href="/treinos" className="hover:underline"><Volleyball /></Link>
-        <Link href="/perfil" className="hover:underline"><User /></Link>
-      </nav>
+      {toast && (
+        <div className="fixed bottom-20 inset-x-0 flex justify-center z-40 px-4">
+          <div
+            className={[
+              "max-w-md w-full px-4 py-3 rounded-full shadow-lg border text-sm sm:text-base bg-white",
+              toast.type === "success"
+                ? "border-green-500 text-green-900"
+                : toast.type === "error"
+                ? "border-red-500 text-red-900"
+                : "border-gray-400 text-gray-900",
+            ].join(" ")}
+          >
+            {toast.message}
+          </div>
+        </div>
+      )}
 
+      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
+        <Link href="/feed" className="hover:underline">
+          <House />
+        </Link>
+        <Link href="/explorar" className="hover:underline">
+          <SearchIcon />
+        </Link>
+        <Link href="/post" className="hover:underline">
+          <CirclePlus />
+        </Link>
+        <Link href="/treinos" className="hover:underline">
+          <Volleyball />
+        </Link>
+        <Link href="/perfil" className="hover:underline">
+          <User />
+        </Link>
+      </nav>
     </div>
   );
 }

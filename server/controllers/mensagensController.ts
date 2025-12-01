@@ -1,3 +1,4 @@
+// server/controllers/mensagensController
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
@@ -284,6 +285,111 @@ export async function listarConversas(req: any, res: Response) {
       adsRemainingToday: ads.adsRemainingToday,
     },
   });
+}
+
+export async function listarContatosRelacionados(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = req.userId!;
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: userId },
+      include: {
+        atleta: true,
+        professor: true,
+        clube: true,
+        escolinha: true,
+      },
+    });
+
+    if (!usuario) {
+      return res.json([]);
+    }
+
+    type ContatoLite = { id: string; nome: string; foto: string | null };
+    const contatos = new Map<string, ContatoLite>();
+
+    const pushUsuario = (u?: { id: string; nome: string | null; foto: string | null }) => {
+      if (!u) return;
+      if (contatos.has(u.id)) return;
+      contatos.set(u.id, {
+        id: u.id,
+        nome: u.nome ?? "Usuário FootEra",
+        foto: u.foto ?? null,
+      });
+    };
+
+    // 1) Se for ATLETA -> traz professor, clube, escolinha
+    if (usuario.atleta) {
+      const rels = await prisma.relacaoTreinamento.findMany({
+        where: { atletaId: usuario.atleta.id },
+        include: {
+          professor: { include: { usuario: true } },
+          clube: { include: { usuario: true } },
+          escolinha: { include: { usuario: true } },
+        },
+      });
+
+      for (const r of rels) {
+        if (r.professor?.usuario) pushUsuario(r.professor.usuario as any);
+        if (r.clube?.usuario) pushUsuario(r.clube.usuario as any);
+        if (r.escolinha?.usuario) pushUsuario(r.escolinha.usuario as any);
+      }
+    }
+
+    // 2) Se for PROFESSOR -> traz atletas, clubes, escolinhas
+    if (usuario.professor) {
+      const rels = await prisma.relacaoTreinamento.findMany({
+        where: { professorId: usuario.professor.id },
+        include: {
+          atleta: { include: { usuario: true } },
+          clube: { include: { usuario: true } },
+          escolinha: { include: { usuario: true } },
+        },
+      });
+
+      for (const r of rels) {
+        if (r.atleta?.usuario) pushUsuario(r.atleta.usuario as any);
+        if (r.clube?.usuario) pushUsuario(r.clube.usuario as any);
+        if (r.escolinha?.usuario) pushUsuario(r.escolinha.usuario as any);
+      }
+    }
+
+    // 3) Se for CLUBE -> traz atletas e professores
+    if (usuario.clube) {
+      const rels = await prisma.relacaoTreinamento.findMany({
+        where: { clubeId: usuario.clube.id },
+        include: {
+          atleta: { include: { usuario: true } },
+          professor: { include: { usuario: true } },
+        },
+      });
+
+      for (const r of rels) {
+        if (r.atleta?.usuario) pushUsuario(r.atleta.usuario as any);
+        if (r.professor?.usuario) pushUsuario(r.professor.usuario as any);
+      }
+    }
+
+    // 4) Se for ESCOLINHA -> traz atletas e professores
+    if (usuario.escolinha) {
+      const rels = await prisma.relacaoTreinamento.findMany({
+        where: { escolinhaId: usuario.escolinha.id },
+        include: {
+          atleta: { include: { usuario: true } },
+          professor: { include: { usuario: true } },
+        },
+      });
+
+      for (const r of rels) {
+        if (r.atleta?.usuario) pushUsuario(r.atleta.usuario as any);
+        if (r.professor?.usuario) pushUsuario(r.professor.usuario as any);
+      }
+    }
+
+    return res.json(Array.from(contatos.values()));
+  } catch (err) {
+    console.error("listarContatosRelacionados error:", err);
+    return res.status(500).json({ error: "Erro ao carregar contatos relacionados." });
+  }
 }
 
 export const listarMensagensGrupo = async (req: AuthenticatedRequest, res: Response) => {
