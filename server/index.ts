@@ -18,6 +18,7 @@ import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 import { authenticateToken } from "./middlewares/auth.js";
 import { limparTreinosSalvosExpirados } from "./controllers/treinosSalvosController.js";
 
+import adminUsuariosRoutes from "./routes/adminUsuarios.js";
 import adminRoutes from "./routes/admin.js";
 import adminModeracaoRoutes from "./routes/adminModeracao.js";
 import atletaRoutes from "./routes/atleta.js";
@@ -76,7 +77,7 @@ import turmasRoutes from "./routes/turmas.js";
 import treinosElencosRoutes from "./routes/treinosElencos.js";
 import adminAdminsRoutes from "./routes/adminAdmins.js";
 import analisesRoutes from "./routes/analises.js";
-import adminAssinantesRoutes from "./routes/admin.assinantes.js";
+import adminAssinantesRoutes from "./routes/adminAssinantes.js";
 import assinaturasRoutes from "./routes/assinaturas.js";
 import treinosSalvosRoutes from "./routes/treinosSalvos.js";
 import analyticsRoutes from "./routes/analytics.js"
@@ -202,6 +203,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminAdminsRoutes);
 app.use("/api/admin", metricsRoutes);
 app.use("/api/analises", analisesRoutes);
+app.use("/api/admin/usuarios", adminUsuariosRoutes);
 app.use("/api/admin/assinantes", adminAssinantesRoutes);
 app.use("/api/assinaturas", assinaturasRoutes);
 

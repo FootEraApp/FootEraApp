@@ -30,51 +30,72 @@ function resolveFoto(u: any): string | null {
 }
 
 export async function listAdminUsers(req: Request, res: Response) {
-  const page = Number(req.query.page || 1);
-  const pageSize = Number(req.query.pageSize || 20);
-  const q = String(req.query.q || "").trim();
-  const tipo = normalizaTipo(String(req.query.tipo || ""));
+  try {
+    const page = Math.max(1, Number(req.query.page || 1) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize || 20) || 20));
+    const q = String(req.query.q || "").trim();
+    const tipo = normalizaTipo(String(req.query.tipo || ""));
 
-  const where: any = {};
-  if (q) {
-    where.OR = [
-      { nome: { contains: q, mode: "insensitive" } },
-      { nomeDeUsuario: { contains: q, mode: "insensitive" } },
-      { email: { contains: q, mode: "insensitive" } },
-    ];
+    const where: any = {};
+    if (q) {
+      where.OR = [
+        { nome: { contains: q, mode: "insensitive" } },
+        { nomeDeUsuario: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+      ];
+    }
+    if (tipo) where.tipo = tipo;
+
+    const [rows, total] = await prisma.$transaction([
+      prisma.usuario.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { dataCriacao: "desc" },
+        include: {
+          atleta: { select: { foto: true } },
+          professor: { select: { fotoUrl: true } },
+          clube: { select: { logo: true } },
+          escolinha: { select: { logo: true } },
+          olheiro: { select: { fotoUrl: true } },
+        },
+      }),
+      prisma.usuario.count({ where }),
+    ]);
+
+    const items = rows.map((u) => {
+      const rawCriado =
+        (u as any).criadoEm ??
+        (u as any).dataCriacao ??
+        (u as any).createdAt ??
+        null;
+
+      const criadoEm =
+        rawCriado && typeof (rawCriado as any).toISOString === "function"
+          ? (rawCriado as any).toISOString()
+          : rawCriado;
+
+      return {
+        id: u.id,
+        nome: u.nome,
+        nomeDeUsuario: u.nomeDeUsuario,
+        email: u.email ?? null,
+        tipo: u.tipo,
+        foto: resolveFoto(u),
+        criadoEm,
+        verificado: (u as any).verified ?? false,
+        ultimaAtividade: null as string | null,
+        ultimaAtividadeNome: null as string | null,
+      };
+    });
+
+    res.json({ items, total, page, pageSize });
+  } catch (e: any) {
+    console.error("Erro em listAdminUsers:", e);
+    res
+      .status(e.status || 500)
+      .json({ message: e.message || "Erro ao listar usuários (admin)." });
   }
-  if (tipo) where.tipo = tipo;
-
-  const [rows, total] = await prisma.$transaction([
-    prisma.usuario.findMany({
-      where,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: {
-        atleta:     { select: { foto: true } },
-        professor:  { select: { fotoUrl: true } },
-        clube:      { select: { logo: true } },
-        escolinha:  { select: { logo: true } },
-        olheiro:    { select: { fotoUrl: true } },
-      },
-    }),
-    prisma.usuario.count({ where }),
-  ]);
-
-  const items = rows.map((u) => ({
-    id: u.id,
-    nome: u.nome,
-    nomeDeUsuario: u.nomeDeUsuario,
-    email: u.email ?? null,
-    tipo: u.tipo,
-    foto: resolveFoto(u),
-    criadoEm: (u as any).criadoEm ?? (u as any).dataCriacao ?? null,
-    verificado: (u as any).verified ?? false,
-    ultimaAtividade: null as string | null,
-    ultimaAtividadeNome: null as string | null,
-  }));
-
-  res.json({ items, total });
 }
 
 export async function getAdminUserDetail(req: Request, res: Response) {
@@ -98,7 +119,9 @@ export async function getAdminUserDetail(req: Request, res: Response) {
 
   const [ultima, posicaoCampo, totalVinculados] = await Promise.all([
     u.tipo === "Atleta" ? ultimaAtividadeDeAtleta(u.id) : Promise.resolve(null),
-    u.tipo === "Atleta" ? posicaoDoAtletaPorUsuarioId(u.id) : Promise.resolve(null),
+    u.tipo === "Atleta"
+      ? posicaoDoAtletaPorUsuarioId(u.id)
+      : Promise.resolve(null),
     totalVinculadosDoUsuario(u as any),
   ]);
 
@@ -109,7 +132,11 @@ export async function getAdminUserDetail(req: Request, res: Response) {
     email: u.email ?? null,
     tipo: u.tipo,
     foto: resolveFoto(u),
-    criadoEm: (u as any).criadoEm ?? (u as any).dataCriacao ?? null,
+    criadoEm:
+      (u as any).criadoEm ??
+      (u as any).dataCriacao ??
+      (u as any).createdAt ??
+      null,
     verificado: (u as any).verified ?? false,
     contagens: {
       posts: u._count.postagens,
@@ -239,7 +266,9 @@ export async function patchAdminUser(req: Request, res: Response) {
   const data: any = {};
   if (typeof verificado === "boolean") data.verified = verificado;
   if (!Object.keys(data).length) {
-    return res.status(400).json({ message: "Nenhum campo válido para atualizar." });
+    return res
+      .status(400)
+      .json({ message: "Nenhum campo válido para atualizar." });
   }
   const u = await prisma.usuario.update({ where: { id }, data });
   res.json(u);
@@ -253,8 +282,12 @@ export async function unbanUser(_req: Request, res: Response) {
 }
 export async function removeUserContent(req: Request, res: Response) {
   const { id } = req.params;
-  const { escopo } = req.body as { escopo: "posts" | "comentarios" | "todos" };
-  if (escopo === "posts" || escopo === "todos") await prisma.postagem.deleteMany({ where: { usuarioId: id } });
-  if (escopo === "comentarios" || escopo === "todos") await prisma.comentario.deleteMany({ where: { usuarioId: id } });
+  const { escopo } = req.body as {
+    escopo: "posts" | "comentarios" | "todos";
+  };
+  if (escopo === "posts" || escopo === "todos")
+    await prisma.postagem.deleteMany({ where: { usuarioId: id } });
+  if (escopo === "comentarios" || escopo === "todos")
+    await prisma.comentario.deleteMany({ where: { usuarioId: id } });
   res.json({ ok: true });
 }
