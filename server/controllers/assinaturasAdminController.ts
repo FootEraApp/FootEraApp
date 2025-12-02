@@ -1,14 +1,27 @@
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import type { AuthenticatedRequest } from "../middlewares/auth.js"; 
 
 const prisma = new PrismaClient();
 
-function assertAdmin(req: AuthenticatedRequest) {
-  const u = req.user;
+type AdminReq = Request & { user?: any };
+
+function assertAdmin(req: AdminReq) {
+  const u: any = req.user || {};
   console.log("assertAdmin /admin/assinantes user =", u);
 
-  if (!u?.id || String(u.tipo) !== "Admin") {
+  if (!u || !u.id) {
+    const err: any = new Error("Acesso restrito ao administrador.");
+    err.status = 403;
+    throw err;
+  }
+
+  const tipo = String(u.tipo || u.tipoUsuario || "").toLowerCase();
+  const isAdmin =
+    (!!u.id && (tipo === "admin" || tipo === "administrador")) ||
+    u.isAdmin === true ||
+    String(u.role || "").toLowerCase() === "admin";
+
+  if (!isAdmin) {
     const err: any = new Error("Acesso restrito ao administrador.");
     err.status = 403;
     throw err;
@@ -22,10 +35,17 @@ function parseBool(v?: string) {
   return undefined;
 }
 
-export async function listar(req: AuthenticatedRequest, res: Response) {
+export async function listar(req: AdminReq, res: Response) {
   try {
     assertAdmin(req);
-    const { q = "", plano = "", ativo = "", page = "1", pageSize = "20" } = req.query as Record<string, string>;
+
+    const {
+      q = "",
+      plano = "",
+      ativo = "",
+      page = "1",
+      pageSize = "20",
+    } = req.query as Record<string, string>;
 
     const p = Math.max(1, Number(page) || 1);
     const ps = Math.min(100, Math.max(1, Number(pageSize) || 20));
@@ -42,7 +62,12 @@ export async function listar(req: AuthenticatedRequest, res: Response) {
             usuario: {
               OR: [
                 { nome: { contains: q as string, mode: "insensitive" } },
-                { nomeDeUsuario: { contains: q as string, mode: "insensitive" } },
+                {
+                  nomeDeUsuario: {
+                    contains: q as string,
+                    mode: "insensitive",
+                  },
+                },
                 { email: { contains: q as string, mode: "insensitive" } },
               ],
             },
@@ -74,18 +99,26 @@ export async function listar(req: AuthenticatedRequest, res: Response) {
 
     res.json({ total, items, page: p, pageSize: ps });
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro ao listar assinantes");
+    console.error("erro listar assinantes:", e);
+    res
+      .status(e.status || 500)
+      .send(e.message || "Erro ao listar assinantes");
   }
 }
 
-export async function overview(req: AuthenticatedRequest, res: Response) {
+export async function overview(req: AdminReq, res: Response) {
   try {
     assertAdmin(req);
-    const all = await prisma.assinatura.findMany({ select: { plano: true, ativo: true, canceledAt: true } });
+
+    const all = await prisma.assinatura.findMany({
+      select: { plano: true, ativo: true, canceledAt: true },
+    });
 
     const total = all.length;
-    const ativos = all.filter(a => a.ativo).length;
-    const cancelados = all.filter(a => !a.ativo || a.canceledAt != null).length;
+    const ativos = all.filter((a) => a.ativo).length;
+    const cancelados = all.filter(
+      (a) => !a.ativo || a.canceledAt != null
+    ).length;
 
     const porPlano: Record<string, { total: number; ativos: number }> = {};
     for (const a of all) {
@@ -97,6 +130,9 @@ export async function overview(req: AuthenticatedRequest, res: Response) {
 
     res.json({ total, ativos, cancelados, porPlano });
   } catch (e: any) {
-    res.status(e.status || 500).send(e.message || "Erro ao calcular overview de assinaturas");
+    console.error("erro overview assinaturas:", e);
+    res
+      .status(e.status || 500)
+      .send(e.message || "Erro ao calcular overview de assinaturas");
   }
 }

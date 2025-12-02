@@ -1,9 +1,11 @@
-import { Response, NextFunction } from "express";
-import { AuthenticatedRequest } from "./auth.js";
+import type { Response, NextFunction } from "express";
+import type { AuthenticatedRequest } from "./auth.js";
+import { requireAdmin as guardRequireAdmin } from "./adminGuard.js";
 
-export function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  const tipo = String(req.user?.tipo ?? res.locals?.user?.tipo ?? "").toLowerCase();
-  const isAdmin = (req.user?.isAdmin === true) || (res.locals?.user?.isAdmin === true);
-
-  next();
+export function requireAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  return guardRequireAdmin(req as any, res, next);
 }
