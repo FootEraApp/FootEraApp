@@ -44,14 +44,14 @@ export default function SubscriptionBanner({
     null
   );
 
-  // controla “fechei e não quero ver de novo”
+
   React.useEffect(() => {
     if (!dismissible || !store) return;
     const v = store.getItem(storageKey);
     if (v === "dismissed") setOpen(false);
   }, [dismissible, storageKey, store]);
 
-  // carrega /api/billing/me
+
   React.useEffect(() => {
     let cancelled = false;
 

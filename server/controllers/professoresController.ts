@@ -45,11 +45,11 @@ export const listarProfessores = async (req: Request, res: Response) => {
     let where: any = {};
 
     if (typeof organizacaoId === "string" && organizacaoId.trim() !== "") {
-      // usa o helper que você já criou pra validar se é clube ou escolinha
+
       const { id } = await resolveOrganizacao(organizacaoId.trim());
 
       if (!id) {
-        // organizacaoId não bate com nenhum clube/escolinha → lista vazia
+
         return res.json([]);
       }
 
@@ -57,7 +57,7 @@ export const listarProfessores = async (req: Request, res: Response) => {
         OR: [
           { clubeId: id },
           { escolinhaId: id },
-          { organizacaoId: id }, // se você estiver usando esse campo também
+          { organizacaoId: id },
         ],
       };
     }
