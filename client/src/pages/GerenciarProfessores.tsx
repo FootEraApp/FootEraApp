@@ -81,7 +81,6 @@ const GerenciarProfessores: React.FC = () => {
       const resp = await axios.get(`${API.BASE_URL}/api/perfil/me`, { headers });
       data = resp.data;
     } catch {
-      // se der erro na rota, vamos tentar só pelo Storage
       data = null;
     }
 
@@ -124,7 +123,6 @@ const GerenciarProfessores: React.FC = () => {
         Storage.tipoUsuarioId ||
         null;
     } else {
-      // só por segurança, cai pro valor salvo
       tipoId = Storage.tipoUsuarioId ?? null;
     }
 
@@ -181,7 +179,6 @@ const GerenciarProfessores: React.FC = () => {
     }
   };
 
-  // 3) Carrega turmas do clube/escolinha
   const carregarTurmas = async () => {
     if (!tipoUsuarioIdEntidade || !tipo) return;
     try {

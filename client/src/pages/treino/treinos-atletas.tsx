@@ -1020,27 +1020,43 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
               </div>
             </div>
 
-            <button
-              disabled={isMissedTreino}
-              className={`text-green-700 underline text-sm shrink-0 ${
-                isMissedTreino
-                  ? "text-gray-400 no-underline cursor-not-allowed"
-                  : ""
-              }`}
-              onClick={() => {
-                if (isMissedTreino) return;
-                setVideoModal({
-                  exercicioId: ex.exercicio.id,
-                  nome: ex.exercicio.nome,
-                  url:
-                    t.treinoProgramado?.exercicios.find(
-                      (e) => e.exercicio.id === ex.exercicio.id
-                    )?.exercicio?.videoDemonstrativoUrl || "",
-                });
-              }}
-            >
-              Ver vídeo
-            </button>
+<button
+  disabled={isMissedTreino}
+  className={`text-green-700 underline text-sm shrink-0 ${
+    isMissedTreino
+      ? "text-gray-400 no-underline cursor-not-allowed"
+      : ""
+  }`}
+  onClick={() => {
+    if (isMissedTreino) return;
+
+    const rawUrl = ex.exercicio.videoDemonstrativoUrl || "";
+
+    if (!rawUrl) {
+      setVideoErro("Este exercício ainda não tem vídeo/imagem cadastrados.");
+      setVideoModal({
+        exercicioId: ex.exercicio.id,
+        nome: ex.exercicio.nome,
+        url: "",
+      });
+      return;
+    }
+
+    const finalUrl = resolveUploadUrl(rawUrl);
+
+    setVideoErro(null);
+    setVideoCarregando(true);
+
+    setVideoModal({
+      exercicioId: ex.exercicio.id,
+      nome: ex.exercicio.nome,
+      url: finalUrl,
+    });
+  }}
+>
+  Ver vídeo
+</button>
+
           </div>
         );
       })}
@@ -1792,69 +1808,80 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
         </div>
       )}
 
-      {videoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="relative w-full max-w-2xl bg-white rounded-xl shadow-lg p-4">
-            <button
-              onClick={() => setVideoModal(null)}
-              className="absolute top-3 right-3 text-gray-600 hover:text-gray-800"
-            >
-              <X className="w-6 h-6" />
-            </button>
+{videoModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className="relative w-full max-w-2xl bg-white rounded-xl shadow-lg p-4">
+      <button
+        onClick={() => setVideoModal(null)}
+        className="absolute top-3 right-3 text-gray-600 hover:text-gray-800"
+      >
+        <X className="w-6 h-6" />
+      </button>
 
-            <h2 className="text-lg font-semibold mb-3">
-              {videoModal.nome}
-            </h2>
+      <h2 className="text-lg font-semibold mb-3">
+        {videoModal.nome}
+      </h2>
 
-            {videoCarregando && (
-              <div className="text-center py-10 text-gray-600">
-                Carregando vídeo...
-              </div>
-            )}
+      {videoCarregando && (
+        <div className="text-center py-10 text-gray-600">
+          Carregando vídeo...
+        </div>
+      )}
 
-            {videoErro && (
-              <div className="text-center py-6 text-red-600">
-                {videoErro}
-              </div>
-            )}
+      {videoErro && (
+        <div className="text-center py-6 text-red-600">
+          {videoErro}
+        </div>
+      )}
 
-            {!videoErro && isYouTubeUrl(videoModal.url) && (
-              <div className="aspect-w-16 aspect-h-9">
-                <iframe
-                  src={toYouTubeEmbed(videoModal.url)}
-                  className="w-full h-full rounded-lg"
-                  allowFullScreen
-                ></iframe>
-              </div>
-            )}
-
-            {!videoErro &&
-              !isYouTubeUrl(videoModal.url) &&
-              isVideoUrl(videoModal.url) && (
-                <video
-                  src={videoModal.url}
-                  className="w-full rounded-lg"
-                  controls
-                  autoPlay
-                  onError={() =>
-                    setVideoErro("Não foi possível carregar o vídeo.")
-                  }
-                  onLoadedData={() => setVideoCarregando(false)}
-                />
-              )}
-
-            {!videoErro &&
-              !isVideoUrl(videoModal.url) &&
-              !isYouTubeUrl(videoModal.url) && (
-                <img
-                  src={videoModal.url}
-                  alt={videoModal.nome}
-                  className="w-full rounded-lg"
-                />
-              )}
+      {/* YouTube */}
+      {!videoErro && isYouTubeUrl(videoModal.url) && (
+        <div className="w-full">
+          <div className="aspect-w-16 aspect-h-9 max-h-[70vh]">
+            <iframe
+              src={toYouTubeEmbed(videoModal.url)}
+              className="w-full h-full rounded-lg"
+              allowFullScreen
+            ></iframe>
           </div>
         </div>
       )}
+
+      {/* Vídeo arquivo local / upload */}
+      {!videoErro &&
+        !isYouTubeUrl(videoModal.url) &&
+        isVideoUrl(videoModal.url) && (
+          <div className="w-full flex justify-center">
+            <video
+              src={videoModal.url}
+              className="w-full max-h-[70vh] rounded-lg object-contain"
+              style={{ maxHeight: "70vh" }}
+              controls
+              autoPlay
+              onError={() =>
+                setVideoErro("Não foi possível carregar o vídeo.")
+              }
+              onLoadedData={() => setVideoCarregando(false)}
+            />
+          </div>
+        )}
+
+      {/* Imagem */}
+      {!videoErro &&
+        !isVideoUrl(videoModal.url) &&
+        !isYouTubeUrl(videoModal.url) && (
+          <div className="w-full flex justify-center">
+            <img
+              src={videoModal.url}
+              alt={videoModal.nome}
+              className="w-full max-h-[70vh] rounded-lg object-contain"
+              style={{ maxHeight: "70vh" }}
+            />
+          </div>
+        )}
+    </div>
+  </div>
+)}
 
       {modalAberto && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 flex items-end sm:items-center justify-center p-4">
