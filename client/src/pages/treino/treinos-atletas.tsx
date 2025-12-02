@@ -1834,7 +1834,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
         </div>
       )}
 
-      {/* YouTube */}
       {!videoErro && isYouTubeUrl(videoModal.url) && (
         <div className="w-full">
           <div className="aspect-w-16 aspect-h-9 max-h-[70vh]">
@@ -1847,7 +1846,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
         </div>
       )}
 
-      {/* Vídeo arquivo local / upload */}
       {!videoErro &&
         !isYouTubeUrl(videoModal.url) &&
         isVideoUrl(videoModal.url) && (
@@ -1866,7 +1864,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
           </div>
         )}
 
-      {/* Imagem */}
       {!videoErro &&
         !isVideoUrl(videoModal.url) &&
         !isYouTubeUrl(videoModal.url) && (

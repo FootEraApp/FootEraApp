@@ -79,10 +79,7 @@ interface UsuarioDetalhe extends UsuarioAdmin {
   assinatura?: AssinaturaDTO | null;
 }
 
-const USERS_ENDPOINT = [
-  `${API.BASE_URL}/api/admin/usuarios`,
-  `${API.BASE_URL}/api/usuarios`,
-];
+const USERS_ENDPOINT = `${API.BASE_URL}/api/admin/usuarios`;
 
 const EMPTY_DASH = {
   totalUsuarios: 0,
@@ -223,7 +220,7 @@ export default function AdminDashboard() {
   const [acaoBusy, setAcaoBusy] = useState(false);
 
   const [erroUsuarios, setErroUsuarios] = useState<string>("");
-  const [usersBase, setUsersBase] = useState<string>(USERS_ENDPOINT[0]);
+  const [usersBase] = useState<string>(USERS_ENDPOINT);
 
   const [modPendentes, setModPendentes] = useState<ModeracaoItem[]>([]);
   const [modTotal, setModTotal] = useState(0);
@@ -319,11 +316,12 @@ async function carregarAssOverview() {
   }
 }
 
-function fmtDate(d?: string | null) {
-  return d ? new Date(d).toLocaleString("pt-BR") : "—";
-}
+  function fmtDate(d?: string | null) {
+    return d ? new Date(d).toLocaleString("pt-BR") : "—";
+  }
 
-  const isAdminBase = usersBase === USERS_ENDPOINT[0];
+  const isAdminBase = true;
+
   const isImage = (u: string) => /\.(png|jpe?g|webp|gif|bmp|svg)(\?.*)?$/i.test(u);
 
   function toPlayer(raw?: string | null) {
@@ -542,66 +540,59 @@ function fmtDate(d?: string | null) {
   }
 
   async function carregarUsuarios(targetPage: number) {
-    setCarregandoUsuarios(true);
-    setErroUsuarios("");
-    try {
-      const params = new URLSearchParams();
-      params.set("page", String(targetPage));
-      params.set("pageSize", String(pageSize));
-      if (debouncedQ) params.set("q", debouncedQ);
-      if (tipoFiltro && tipoToServer[tipoFiltro]) {
-        params.set("tipo", tipoToServer[tipoFiltro]);
-      }
+  setCarregandoUsuarios(true);
+  setErroUsuarios("");
+  try {
+    const params = new URLSearchParams();
+    params.set("page", String(targetPage));
+    params.set("pageSize", String(pageSize));
+    if (debouncedQ) params.set("q", debouncedQ);
+    if (tipoFiltro && tipoToServer[tipoFiltro]) {
+      params.set("tipo", tipoToServer[tipoFiltro]);
+    }
 
-      let gotOk = false;
-      let items: UsuarioAdmin[] = [];
-      let total = 0;
-      let lastStatus = 0;
-      let lastBody = "";
+    const url = `${USERS_ENDPOINT}?${params.toString()}`;
+    const res = await fetch(url, { headers: authHeaders() });
 
-      for (const base of USERS_ENDPOINT) {
-        const url = `${base}?${params.toString()}`;
-        const res = await fetch(url, { headers: authHeaders() });
-        lastStatus = res.status;
-
-        if (!res.ok) {
-          try {
-            lastBody = await res.text();
-          } catch {}
-          continue;
-        }
-
-        const json: any = await res.json();
-
-        const arr =
-          Array.isArray(json) ? json : json.items ?? json.data ?? json.usuarios ?? json.users ?? json.rows ?? json.result ?? [];
-
-        items = Array.isArray(arr) ? arr : [];
-        total = json.total ?? json.count ?? (Array.isArray(json) ? json.length : items.length);
-
-        setUsersBase(base);
-        gotOk = true;
-        break;
-      }
-
-      if (!gotOk) {
-        setUsuarios([]);
-        setTotalUsuarios(0);
-        setErroUsuarios(`Falha ao buscar usuários (status ${lastStatus}). ${lastBody || "Verifique se o token é de admin e se a rota existe."}`);
-        return;
-      }
-
-      setUsuarios(items);
-      setTotalUsuarios(total);
-      setPagina(targetPage);
-    } catch (e: any) {
-      setErroUsuarios("Erro inesperado ao carregar usuários.");
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
       setUsuarios([]);
       setTotalUsuarios(0);
-    } finally {
-      setCarregandoUsuarios(false);
+      setErroUsuarios(
+        `Falha ao buscar usuários (status ${res.status}). ${body || "Verifique se o token de admin é válido."}`
+      );
+      return;
     }
+
+    const json: any = await res.json();
+    const arr =
+      Array.isArray(json)
+        ? json
+        : json.items ??
+          json.data ??
+          json.usuarios ??
+          json.users ??
+          json.rows ??
+          json.result ??
+          [];
+
+    const items = Array.isArray(arr) ? arr : [];
+    const total =
+      json.total ??
+      json.count ??
+      (Array.isArray(json) ? json.length : items.length);
+
+    setUsuarios(items);
+    setTotalUsuarios(total);
+    setPagina(targetPage);
+  } catch (e) {
+    setErroUsuarios("Erro inesperado ao carregar usuários.");
+    setUsuarios([]);
+    setTotalUsuarios(0);
+  } finally {
+    setCarregandoUsuarios(false);
   }
+}
 
   async function abrirDetalhes(id: string) {
     setLoadingDetalhe(true);
@@ -718,16 +709,23 @@ function fmtDate(d?: string | null) {
 
   if (!dados) return <div className="p-6">Carregando...</div>;
 
-  function handleLogout() {
+    function handleLogout() {
     try {
-      localStorage.removeItem("token");
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("jwt");
-      localStorage.removeItem("usuarioId");
-      sessionStorage.removeItem("token");
-      (window as any)?.Storage && ((window as any).Storage.token = null);
-    } catch {}
-    window.location.href = "/admin/login";
+      if (typeof localStorage !== "undefined") {
+        localStorage.clear();
+      }
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.clear();
+      }
+
+      if ((window as any)?.Storage) {
+        (window as any).Storage = {};
+      }
+    } catch (e) {
+      console.error("Erro ao limpar storages no logout:", e);
+    } finally {
+      window.location.href = "/admin/login";
+    }
   }
 
   const rotulo = { pendente: "pendentes", aprovado: "aprovados", invalido: "inválidos", todos: "registros" }[modStatus];
