@@ -1,30 +1,22 @@
 import { Router } from "express";
 import { adminDashboard, loginAdmin } from "../controllers/adminController.js";
-import { authenticateToken } from "../middlewares/auth.js";
-import { requireAdmin } from "../middlewares/requireAdmin.js";
-import {
-  listAdminUsers,
-  getAdminUserDetail,
-  patchAdminUser,
-  banUser,
-  unbanUser,
-  removeUserContent,
-} from "../controllers/adminUsersController.js";
-import { strictLimiter } from "../lib/rateLimit.js"; 
-import { listAuditLogs } from "../controllers/adminAuditController.js";
+import { adminAuth } from "server/middlewares/admin-auth.js";
 
 const router = Router();
 
-router.post("/login", strictLimiter("admin_login"), loginAdmin);
-router.use(authenticateToken, requireAdmin);
+router.post("/login", loginAdmin);
 
-router.get("/audit-logs", listAuditLogs);
-router.get("/usuarios/:id", getAdminUserDetail);
-router.patch("/usuarios/:id", patchAdminUser);
-router.post("/usuarios/:id/banir", banUser);
-router.delete("/usuarios/:id/banir", unbanUser);
-router.post("/usuarios/:id/remover-conteudo", removeUserContent);
-router.get("/usuarios", listAdminUsers);
-router.get("/", adminDashboard);
+router.get("/me", adminAuth, (req, res) => {
+  const user = (req as any).user;
+  return res.json({
+    id: user.id,
+    email: user.email,
+    nome: user.nome,
+    tipo: user.tipo || user.tipoUsuario || "Admin",
+    adminNivel: 1,
+    canManageAdmins: true,
+  });
+});
+router.get("/", adminAuth, adminDashboard);
 
 export default router;

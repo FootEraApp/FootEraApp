@@ -1,4 +1,3 @@
-// client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -462,7 +461,7 @@ export default function NovoTreino() {
 
   useEffect(() => {
     if (!toast) return;
-    const id = setTimeout(() => setToast(null), 4000); // some em 4s
+    const id = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(id);
   }, [toast]);
 
@@ -953,7 +952,6 @@ export default function NovoTreino() {
 
         console.log("[NovoTreino] orgSelecionada =", orgSelecionada);
 
-
         if (orgSelecionada === MOSTRAR_TODOS) {
           const urlsTodos = [
             `${API.BASE_URL}/api/atletas`,
@@ -978,13 +976,11 @@ export default function NovoTreino() {
           return;
         }
 
-
         const tipoUsuarioId =
           orgSelecionada ||
           (Storage as any).tipoUsuarioId ||
           localStorage.getItem("tipoUsuarioId") ||
           sessionStorage.getItem("tipoUsuarioId") ||
-
           localStorage.getItem("perfilId") ||
           sessionStorage.getItem("perfilId") ||
           "";

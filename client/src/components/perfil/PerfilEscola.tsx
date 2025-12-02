@@ -400,7 +400,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                 </Link>
                 {canEdit && (
                   <>
-                    {/* 👉 novo botão que leva para GerenciarProfessores */}
                     <Link
                       href="/perfil/GerenciarProfessores"
                       className="text-sm px-3 py-1.5 rounded-md bg-green-100 text-green-900 inline-flex items-center gap-1"
@@ -428,13 +427,11 @@ export default function PerfilEscola({ idDaUrl }: Props) {
               </div>
             }
           >
-            {/* 👇 CONTEÚDO do card Treinos */}
             <p className="text-sm text-green-900/90 mt-2">
               Crie treinos e agrupe seus atletas em <b>turmas</b>. Vincule cada turma a um professor para facilitar a condução do treino.
             </p>
-          </SectionCard> {/* 👈 FECHANDO CORRETAMENTE */}
+          </SectionCard>
 
-          {/* Agora sim, abre o próximo */}
           <SectionCard title="Atividade Recente">
             {atividades && atividades.length > 0 ? (
               <ul className="space-y-3">
