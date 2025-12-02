@@ -1,3 +1,4 @@
+// client/src/components/billing/SubscriptionBanner.tsx
 import React from "react";
 import { Crown, BadgeCheck, X } from "lucide-react";
 import { Link } from "wouter";
@@ -86,67 +87,114 @@ export default function SubscriptionBanner({
   const assinaturaAtiva = Boolean(assinatura?.ativo);
 
   return (
-    <div className={`mb-3 ${className}`}>
-      <div className="flex items-center gap-3 p-3 rounded-xl border mt-4 bg-transparent shadow-sm">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          {assinaturaAtiva ? (
-            <BadgeCheck className="w-5 h-5 text-green-600" />
-          ) : (
-            <Crown className="w-5 h-5 text-yellow-500" />
-          )}
+    <>
+      {/* CSS da animação do GOOOOLL!!! */}
+      <style>{`
+        @keyframes gol-marquee {
+          0% {
+            transform: translateX(100%);
+          }
+          100% {
+            transform: translateX(-100%);
+          }
+        }
 
-          <div className="leading-tight">
-            <div className="font-semibold">
-              {loading
-                ? "Carregando assinatura..."
-                : assinaturaAtiva
-                ? "Assinatura ativa"
-                : "Assinatura gratuita"}
-            </div>
+        .gol-marquee {
+          opacity: 0;
+          transform: translateX(100%);
+        }
 
-            <div className="text-xs text-gray-600">
-              {assinaturaAtiva && assinatura
-                ? `Plano: ${assinatura.plano} — desde ${new Date(
-                    assinatura.startsAt
-                  ).toLocaleDateString()}`
-                : "Sem anúncios, sem limites e recursos Pro."}
+        .group:hover .gol-marquee {
+          opacity: 1;
+          /* passa uma vez só por hover, sem loop */
+          animation: gol-marquee 4s linear forwards;
+        }
+      `}</style>
+
+      <div className={`mb-3 ${className}`}>
+        <div className="flex items-center gap-3 p-3 rounded-xl border mt-4 bg-transparent shadow-sm">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {assinaturaAtiva ? (
+              <BadgeCheck className="w-5 h-5 text-green-600" />
+            ) : (
+              <Crown className="w-5 h-5 text-yellow-500" />
+            )}
+
+            <div className="leading-tight">
+              <div className="font-semibold">
+                {loading
+                  ? "Carregando assinatura..."
+                  : assinaturaAtiva
+                  ? "Assinatura ativa"
+                  : "Assinatura gratuita"}
+              </div>
+
+              <div className="text-xs text-gray-600">
+                {assinaturaAtiva && assinatura
+                  ? `Plano: ${assinatura.plano} — desde ${new Date(
+                      assinatura.startsAt
+                    ).toLocaleDateString()}`
+                  : "Sem anúncios, sem limites e recursos Pro."}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2">
-          <Link href="/pagamentos">
-            <div
-              className={`px-3 py-2 rounded-lg border cursor-pointer text-sm font-semibold ${
-                assinaturaAtiva
-                  ? "bg-green-600 text-white border-green-600"
-                  : "bg-blue-600 text-white border-blue-600"
-              }`}
-              title={
-                assinaturaAtiva
-                  ? "Gerenciar assinatura"
-                  : "Assinar FootEra Pro"
-              }
-            >
-              {assinaturaAtiva ? "Gerenciar" : "Seja Pro"}
-            </div>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/pagamentos">
+              {/* Botão com efeito GOOOOLL!!! passando da direita pra esquerda */}
+              <div
+                className={`relative group px-3 py-2 rounded-lg border cursor-pointer text-sm font-semibold overflow-hidden ${
+                  assinaturaAtiva
+                    ? "bg-green-600 text-white border-green-600"
+                    : "bg-green-800 text-white border-green-800"
+                }`}
+                title={
+                  assinaturaAtiva
+                    ? "Gerenciar assinatura"
+                    : "Assinar FootEra Pro"
+                }
+              >
+                {/* texto principal do botão */}
+                <span className="relative z-20">
+                  {assinaturaAtiva ? "Gerenciar" : "Seja Pro"}
+                </span>
 
-          {dismissible && (
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Fechar aviso"
-              title="Fechar aviso"
-              className="inline-flex h-7 w-7 items-center justify-center
-                         rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100
-                         focus:outline-none focus:ring-2 focus:ring-green-400"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
+                {/* faixa GOOOOLL!!! deslizando por trás quando NÃO é Pro */}
+                {!assinaturaAtiva && (
+                  <span
+                    className="
+                      gol-marquee
+                      pointer-events-none
+                      absolute inset-0
+                      flex items-center justify-center
+                      text-xl font-extrabold uppercase leading-none
+                      tracking-[0.35em]
+                      text-white/25
+                      z-10
+                    "
+                  >
+                    GOOOOLL!!!
+                  </span>
+                )}
+              </div>
+            </Link>
+
+            {dismissible && (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Fechar aviso"
+                title="Fechar aviso"
+                className="inline-flex h-7 w-7 items-center justify-center
+                           rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100
+                           focus:outline-none focus:ring-2 focus:ring-green-400"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
