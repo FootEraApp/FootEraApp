@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { CreditCard, Landmark, QrCode, BadgeCheck, Gift, XCircle, RefreshCcw } from "lucide-react";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
+import { Link } from "wouter";
+import { ArrowLeft } from "lucide-react";
 
 type Periodicidade = "Mensal" | "Anual";
 type MetodoPagamento = "PIX" | "CREDITO" | "DEBITO" | "BOLETO";
@@ -399,6 +401,17 @@ export default function PagamentosPage() {
 
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-8">
+      <Link
+                href="/perfil"
+                aria-label="Voltar para perfil"
+                title="Voltar para perfil"
+                className="inline-flex h-10 w-10 items-center justify-center
+                  rounded-full border border-green-800 bg-white text-green-900
+                  shadow-sm hover:bg-green-50 focus:outline-none
+                  focus:ring-2 focus:ring-green-700/30 mt-2 ml-2"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
       <h1 className="text-2xl md:text-3xl font-bold mb-2">Assinaturas & Pagamentos</h1>
       <p className="text-sm text-gray-600 mb-6">
         Bem-vindo(a)! Aqui você escolhe seu plano, aplica cupons e acompanha o histórico.
