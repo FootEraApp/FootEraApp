@@ -514,7 +514,7 @@ useEffect(() => {
                 let fotoUrl = dadosUsuario.foto;
                 if (dadosUsuario.foto instanceof File) {
                   const formData = new FormData();
-                  formData.append("foto", dadosUsuario.foto);          // bate com upload.single("foto")
+                  formData.append("foto", dadosUsuario.foto);
                   formData.append("usuarioId", usuarioId!);
                   formData.append("tipo", tipoUsuarioOriginal!);
 
@@ -524,7 +524,6 @@ useEffect(() => {
                     { headers: { Authorization: `Bearer ${token}` } }
                   );
 
-                  // backend agora devolve { ok, midia, url, relativeUrl }
                   fotoUrl = uploadRes.data?.url || uploadRes.data?.midia?.url;
                 }
                 const tipo: any = { ...dadosTipo };

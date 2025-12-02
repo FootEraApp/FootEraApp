@@ -953,7 +953,7 @@ export default function NovoTreino() {
 
         console.log("[NovoTreino] orgSelecionada =", orgSelecionada);
 
-        // Caso especial: mostrar todos os atletas
+
         if (orgSelecionada === MOSTRAR_TODOS) {
           const urlsTodos = [
             `${API.BASE_URL}/api/atletas`,
@@ -978,13 +978,13 @@ export default function NovoTreino() {
           return;
         }
 
-        // Dono padrão (professor / escola / clube)
+
         const tipoUsuarioId =
           orgSelecionada ||
           (Storage as any).tipoUsuarioId ||
           localStorage.getItem("tipoUsuarioId") ||
           sessionStorage.getItem("tipoUsuarioId") ||
-          // fallback extra: alguns lugares usam "perfilId"
+
           localStorage.getItem("perfilId") ||
           sessionStorage.getItem("perfilId") ||
           "";
@@ -1332,7 +1332,14 @@ export default function NovoTreino() {
     return v === "professor" || v === "clube" || v === "escolinha";
   }
 
-  // 🔧 AQUI está a função ajustada para usar /api/treinos/rotina/agendar
+  function extrairIdAtleta(a: any): string {
+    if (!a) return "";
+    if (typeof a === "string") return a;
+    if (typeof a.id === "string") return a.id;
+    if (typeof a.atletaId === "string") return a.atletaId;
+    return "";
+  }
+
   async function agendarTreinoEmLote(treinoProgramadoId: string) {
     try {
       const datasValidas = datasAgendamento.filter((d) => d && d.trim());
@@ -1372,9 +1379,7 @@ export default function NovoTreino() {
       const body = {
         treinoProgramadoId,
         datas: datasISO,
-        // nome esperado pelo backend: atletaIds
-        atletaIds: atletasSelecionados,
-        // aproveita elencoSelecionado se tiver
+        atletaIds: atletasSelecionados.map(extrairIdAtleta),
         elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
         incluirObservados: false,
         tituloPadrao: nome || "Treino",
