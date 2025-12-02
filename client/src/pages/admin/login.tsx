@@ -6,24 +6,60 @@ import logo from "/assets/usuarios/footera-logo.png";
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
 const ChevronDown = (p: SvgProps) => (
-  <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}>
+  <svg
+    viewBox="0 0 24 24"
+    className="w-6 h-6"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...p}
+  >
     <path d="m6 9 6 6 6-6" />
   </svg>
 );
 const ChevronUp = (p: SvgProps) => (
-  <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}>
+  <svg
+    viewBox="0 0 24 24"
+    className="w-6 h-6"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...p}
+  >
     <path d="m18 15-6-6-6 6" />
   </svg>
 );
 
 const Eye = (p: SvgProps) => (
-  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}>
+  <svg
+    viewBox="0 0 24 24"
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...p}
+  >
     <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" />
     <circle cx="12" cy="12" r="3" />
   </svg>
 );
 const EyeOff = (p: SvgProps) => (
-  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}>
+  <svg
+    viewBox="0 0 24 24"
+    className="w-5 h-5"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...p}
+  >
     <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.78 20.78 0 0 1 5.06-6.94" />
     <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.82 20.82 0 0 1-4.87 6.82" />
     <line x1="1" y1="1" x2="23" y2="23" />
@@ -68,54 +104,30 @@ export default function AdminLogin() {
 
   function clearAuth() {
     try {
-      localStorage.removeItem("token");
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("jwt");
-      localStorage.removeItem("usuarioId");
-      localStorage.removeItem("tipoUsuario");
-      localStorage.removeItem("nomeUsuario");
-
-      sessionStorage.removeItem("token");
-      sessionStorage.removeItem("usuarioId");
-      sessionStorage.removeItem("tipoUsuario");
-      sessionStorage.removeItem("nomeUsuario");
+      if (typeof localStorage !== "undefined") {
+        localStorage.clear();
+      }
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.clear();
+      }
 
       if ((window as any)?.Storage) {
-        (window as any).Storage.token = null;
+        (window as any).Storage = {};
       }
     } catch {
     }
   }
 
   useEffect(() => {
-    const token =
-      localStorage.getItem("token") || sessionStorage.getItem("token");
-    const tipo = toLower(
-      localStorage.getItem("tipoUsuario") ||
-        sessionStorage.getItem("tipoUsuario")
-    );
-
-    if (!token || tipo !== "admin") return;
-
-    (async () => {
-      try {
-        const res = await fetch(`${API.BASE_URL}/api/admin`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (res.ok) {
-          navigate("/admin");
-        } else if (res.status === 401 || res.status === 403) {
-          clearAuth();
-        }
-      } catch {
-      }
-    })();
-  }, [navigate]);
+    clearAuth();
+  }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setErro("");
+
+    clearAuth();
+
     try {
       const res = await fetch(`${API.BASE_URL}/api/admin/login`, {
         method: "POST",
