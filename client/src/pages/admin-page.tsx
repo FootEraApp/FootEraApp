@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { API } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import ValidacaoVideo from "./validacaovideo.js";
@@ -254,6 +254,7 @@ type AssinanteListItem = {
   };
 };
 
+const [dashErro, setDashErro] = useState<string | null>(null);
 const [assQ, setAssQ] = useState("");
 const [assDebQ, setAssDebQ] = useState("");
 const [assPlano, setAssPlano] = useState<string>("");
@@ -381,20 +382,29 @@ function fmtDate(d?: string | null) {
     carregarUsuarios(1).catch(() => {});
   }, [aba, tipoFiltro, debouncedQ]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${API.BASE_URL}/api/admin`, { headers: authHeaders() });
-        if (!res.ok) {
+    useEffect(() => {
+      (async () => {
+        try {
+          const res = await fetch(`${API.BASE_URL}/api/admin`, { headers: authHeaders() });
+          const txt = await res.text();
+          console.log("GET /api/admin status:", res.status, "body:", txt);
+
+          if (!res.ok) {
+            setDashErro(`Erro ao carregar dashboard: [${res.status}] ${txt || res.statusText}`);
+            setDados(EMPTY_DASH);
+            return;
+          }
+
+          const json = txt ? JSON.parse(txt) : {};
+          setDados(json);
+          setDashErro(null);
+        } catch (e) {
+          console.error("erro /api/admin", e);
+          setDashErro("Erro de rede ao carregar dashboard.");
           setDados(EMPTY_DASH);
-          return;
         }
-        setDados(await res.json());
-      } catch {
-        setDados(EMPTY_DASH);
-      }
-    })();
-  }, []);
+      })();
+    }, []);
 
   useEffect(() => {
     if (!FLAGS.DESAFIOS_ENABLED) return;
@@ -708,12 +718,6 @@ function fmtDate(d?: string | null) {
 
   if (!dados) return <div className="p-6">Carregando...</div>;
 
-  const percent = (val: unknown) => {
-    const n = Number(val ?? 0);
-    const total = Number(dados?.totalUsuarios ?? 0) || 1;
-    return Math.round((n * 100) / total);
-  };
-
   function handleLogout() {
     try {
       localStorage.removeItem("token");
@@ -727,13 +731,6 @@ function fmtDate(d?: string | null) {
   }
 
   const rotulo = { pendente: "pendentes", aprovado: "aprovados", invalido: "inválidos", todos: "registros" }[modStatus];
-
-  const distTipos = [
-    { label: "Atletas", value: Number(dados.totalAtletas || 0) },
-    { label: "Escolas", value: Number(dados.totalEscolinhas || 0) },
-    { label: "Clubes", value: Number(dados.totalClubes || 0) },
-    { label: "Admins", value: Number(dados.totalAdministradores || 0) },
-  ];
   const ver = Number(dados.totalVerificados || 0);
   const nver = Number(dados.totalNaoVerificados || 0);
 
@@ -760,6 +757,12 @@ function fmtDate(d?: string | null) {
         ))}
       </nav>
 
+      {dashErro && (
+        <div className="mb-4 rounded bg-red-50 text-red-700 px-4 py-2 text-sm">
+          {dashErro}
+        </div>
+      )}
+
       <div className="p-4">
         {aba === "dashboard" && (
           <div>
@@ -772,27 +775,7 @@ function fmtDate(d?: string | null) {
               <Card title="Posts Criados" icon="✍️" value={dados?.totalPostsCriados ?? 0} />
             </div>
 
-            <div className="mb-6">
-              <h4 className="font-semibold mb-2">Ferramentas de administração</h4>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <Link href="/admin/metrics">
-                  <a className="block rounded-xl border border-slate-800 bg-slate-900/70 p-4 hover:border-sky-500 hover:bg-slate-900 transition">
-                    <h3 className="text-sm font-semibold mb-1">Observabilidade</h3>
-                    <p className="text-xs text-slate-300">
-                      Ver métricas de capabilities (permitidas/negadas) e latência do can().
-                    </p>
-                  </a>
-                </Link>
-              </div>
-            </div>
-
             <div className="grid lg:grid-cols-2 gap-6 mb-6">
-              <div className="bg-white rounded shadow p-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-semibold mb-2">Distribuição por tipo de usuário</h4>
-                </div>
-                <ColumnChart series={distTipos} />
-              </div>
 
               <div className="bg-white rounded shadow p-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -816,23 +799,17 @@ function fmtDate(d?: string | null) {
             </div>
 
             <h4 className="font-semibold mb-2">Distribuição de Usuários</h4>
-            <div className="bg-white p-3">
-              {[
-                { label: "Atletas", value: dados.totalAtletas },
-                { label: "Escolas de Futebol", value: dados.totalEscolinhas },
-                { label: "Clubes Profissionais", value: dados.totalClubes },
-                { label: "Administradores", value: dados.totalAdministradores },
-                { label: "Profilers", value: dados.totalMidias },
-              ].map((d: any, i: number) => (
-                <Bar key={i} label={d.label} percent={percent(d.value)} />
-              ))}
-            </div>
-
-            <h4 className="font-semibold mt-6 mb-2">Status dos Usuários</h4>
-            <div className="bg-white p-3 grid grid-cols-2 gap-4">
-              <Bar label="Verificados" percent={percent(dados.totalVerificados)} />
-              <Bar label="Não Verificados" percent={percent(dados.totalNaoVerificados)} />
-            </div>
+              <div className="bg-white p-4 rounded shadow">
+                <PieChart
+                  data={[
+                    { label: "Atletas", value: Number(dados.totalAtletas || 0) },
+                    { label: "Escolas de Futebol", value: Number(dados.totalEscolinhas || 0) },
+                    { label: "Clubes Profissionais", value: Number(dados.totalClubes || 0) },
+                    { label: "Administradores", value: Number(dados.totalAdministradores || 0) },
+                    { label: "Profilers", value: Number(dados.totalMidias || 0) },
+                  ]}
+                />
+              </div>
           </div>
         )}
 
@@ -1795,30 +1772,27 @@ function Card({ title, icon, value }: { title: string; icon: string; value: numb
   );
 }
 
-function Bar({ label, percent }: { label: string; percent: number }) {
-  return (
-    <div className="mb-3">
-      <div className="flex justify-between text-sm">
-        <span>{label}</span>
-        <span>{percent}%</span>
-      </div>
-      <div className="w-full h-3 bg-gray-200 rounded">
-        <div className="h-full bg-green-600 rounded" style={{ width: `${percent}%` }} />
-      </div>
-    </div>
-  );
-}
-
 function InfoI({ text, className = "" }: { text: string; className?: string }) {
   return (
     <span className={`relative inline-flex items-center group ${className}`}>
       <span
         aria-label="informação"
-        className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded-full border border-gray-400 text-gray-600 select-none"
+        className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold rounded-full border border-gray-400 text-gray-600 select-none bg-white"
       >
         i
       </span>
-      <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 hidden group-hover:block bg-black text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50 shadow">
+      <span
+        className="
+          pointer-events-none
+          invisible group-hover:visible
+          opacity-0 group-hover:opacity-100
+          transition-opacity
+          absolute top-full left-0 mt-1
+          bg-black text-white text-xs rounded px-2 py-1
+          max-w-xs text-left
+          z-50 shadow
+        "
+      >
         {text}
       </span>
     </span>
@@ -1920,6 +1894,80 @@ function DonutTwoSegments({
   );
 }
 
+function PieChart({
+  data,
+  size = 180,
+}: {
+  data: Array<{ label: string; value: number }>;
+  size?: number;
+}) {
+  const total = data.reduce((acc, d) => acc + (d.value || 0), 0);
+  if (!total) {
+    return <div className="text-sm text-gray-500">Sem dados para exibir.</div>;
+  }
+
+  const radius = size / 2;
+  const cx = radius;
+  const cy = radius;
+
+  const colors = ["#16A34A", "#22C55E", "#4ADE80", "#86EFAC", "#BBF7D0"];
+
+  let currentAngle = 0;
+
+  const segments = data.map((d, idx) => {
+    const value = d.value || 0;
+    const angle = (value / total) * Math.PI * 2;
+    const startAngle = currentAngle;
+    const endAngle = currentAngle + angle;
+    currentAngle = endAngle;
+
+    const x1 = cx + radius * Math.cos(startAngle);
+    const y1 = cy + radius * Math.sin(startAngle);
+    const x2 = cx + radius * Math.cos(endAngle);
+    const y2 = cy + radius * Math.sin(endAngle);
+    const largeArc = angle > Math.PI ? 1 : 0;
+
+    const pathData = [
+      `M ${cx} ${cy}`,
+      `L ${x1} ${y1}`,
+      `A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`,
+      "Z",
+    ].join(" ");
+
+    return {
+      d: pathData,
+      fill: colors[idx % colors.length],
+      label: d.label,
+      value,
+    };
+  });
+
+  return (
+    <div className="flex items-center gap-4">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={radius} fill="#F3F4F6" />
+        {segments.map((s, idx) => (
+          <path key={idx} d={s.d} fill={s.fill} />
+        ))}
+      </svg>
+      <div className="space-y-1 text-sm">
+        {segments.map((s, idx) => (
+          <div key={idx} className="flex items-center gap-2">
+            <span
+              className="inline-block w-3 h-3 rounded"
+              style={{ backgroundColor: s.fill }}
+            />
+            <span className="font-medium">{s.label}</span>
+            <span className="text-gray-500">
+              — {s.value} ({Math.round((s.value * 100) / total)}%)
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Kpi({ title, value, sub }: { title: React.ReactNode; value: any; sub?: string }) {
   return (
     <div className="bg-white rounded shadow p-4">
@@ -1945,56 +1993,83 @@ function AnalyticsPane() {
   const [churn, setChurn] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+  async function safeJson(url: string) {
+    const r = await fetch(url, { headers: authHeaders() });
+    const txt = await r.text();
+    if (!r.ok) {
+      throw new Error(txt || `Erro HTTP ${r.status}`);
+    }
+    return txt ? JSON.parse(txt) : {};
+  }
+
   async function loadAll() {
     setLoading(true);
     try {
       const q = (o: Record<string, string>) => new URLSearchParams(o).toString();
+
       const [ov, au, es, cl, en] = await Promise.all([
-        fetch(`${API.BASE_URL}/api/analises/overview?${q({ to })}`, { headers: authHeaders() }).then((r) => r.json()),
-        fetch(`${API.BASE_URL}/api/analises/users/active?${q({ from, to, granularity: "daily" })}`, { headers: authHeaders() }).then((r) =>
-          r.json()
+        safeJson(`${API.BASE_URL}/api/analises/overview?${q({ to })}`),
+        safeJson(
+          `${API.BASE_URL}/api/analises/users/active?${q({ from, to, granularity: "daily" })}`
         ),
-        fetch(`${API.BASE_URL}/api/analises/conversion/escolinha?${q({ from, to })}`, { headers: authHeaders() }).then((r) => r.json()),
-        fetch(`${API.BASE_URL}/api/analises/conversion/clube?${q({ from, to })}`, { headers: authHeaders() }).then((r) => r.json()),
-        fetch(`${API.BASE_URL}/api/analises/engagement/summary?${q({ from, to })}`, { headers: authHeaders() }).then((r) => r.json()),
+        safeJson(`${API.BASE_URL}/api/analises/conversion/escolinha?${q({ from, to })}`),
+        safeJson(`${API.BASE_URL}/api/analises/conversion/clube?${q({ from, to })}`),
+        safeJson(`${API.BASE_URL}/api/analises/engagement/summary?${q({ from, to })}`),
       ]);
+
       setOverview(ov);
-      setActiveSeries((au || []).map((r: any) => ({ bucket: r.bucket, active: r.active })));
-      setConvE(es || []);
-      setConvC(cl || []);
+      setActiveSeries(
+        (Array.isArray(au) ? au : []).map((r: any) => ({ bucket: r.bucket, active: r.active }))
+      );
+      setConvE(Array.isArray(es) ? es : []);
+      setConvC(Array.isArray(cl) ? cl : []);
       setEngSummary(en);
 
       const fromMonth = from.slice(0, 7);
       const toMonth = to.slice(0, 7);
       try {
-        const ch = await fetch(`${API.BASE_URL}/api/analises/subscriptions/churn?from=${fromMonth}&to=${toMonth}`, {
-          headers: authHeaders(),
-        }).then((r) => r.json());
-        Array.isArray(ch) ? setChurn(ch) : setChurn([]);
-      } catch {
+        const r = await fetch(
+          `${API.BASE_URL}/api/analises/subscriptions/churn?from=${fromMonth}&to=${toMonth}`,
+          { headers: authHeaders() }
+        );
+        const txt = await r.text();
+        if (!r.ok) {
+          console.warn("Erro no churn:", txt);
+          setChurn([]);
+        } else if (txt) {
+          const parsed = JSON.parse(txt);
+          setChurn(Array.isArray(parsed) ? parsed : []);
+        } else {
+          setChurn([]);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar churn:", err);
         setChurn([]);
       }
+    } catch (err) {
+      console.error("Erro ao carregar análises:", err);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadAll();
+    void loadAll();
   }, []);
 
   useEffect(() => {
-    loadAll();
+    void loadAll();
   }, [from, to]);
 
-  function avgLast(series: Array<{active: number}>, take: number, offset: number) {
+  function avgLast(series: Array<{ active: number }>, take: number, offset: number) {
     const end = Math.max(0, series.length - offset);
     const start = Math.max(0, end - take);
     const slice = series.slice(start, end);
     if (!slice.length) return 0;
     const sum = slice.reduce((acc, s) => acc + num(s.active), 0);
     return sum / slice.length;
-    }
+  }
+
   const avg7 = avgLast(activeSeries as any, 7, 0);
   const prev7 = avgLast(activeSeries as any, 7, 7);
   const delta7 = prev7 ? ((avg7 - prev7) / prev7) * 100 : 0;
@@ -2004,11 +2079,21 @@ function AnalyticsPane() {
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <div className="text-sm font-semibold text-gray-600">De</div>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="border px-2 py-1 rounded" />
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="border px-2 py-1 rounded"
+          />
         </div>
         <div>
           <div className="text-sm font-semibold text-gray-600">Até</div>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="border px-2 py-1 rounded" />
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="border px-2 py-1 rounded"
+          />
         </div>
         <button onClick={loadAll} className="px-3 py-2 bg-green-700 text-white rounded">
           {loading ? "Atualizando…" : "Atualizar"}
@@ -2017,37 +2102,79 @@ function AnalyticsPane() {
 
       <div className="grid md:grid-cols-3 gap-4">
         <Kpi
-          title={<span className="inline-flex items-center gap-2">DAU <InfoI text="Daily Active Users — usuários ativos nas últimas 24h." /></span>}
+          title={
+            <span className="inline-flex items-center gap-2">
+              DAU <InfoI text="Daily Active Users — usuários ativos nas últimas 24h." />
+            </span>
+          }
           value={fmt(num(overview?.DAU))}
         />
         <Kpi
-          title={<span className="inline-flex items-center gap-2">WAU <InfoI text="Weekly Active Users — usuários ativos na janela de 7 dias." /></span>}
+          title={
+            <span className="inline-flex items-center gap-2">
+              WAU <InfoI text="Weekly Active Users — usuários ativos na janela de 7 dias." />
+            </span>
+          }
           value={fmt(num(overview?.WAU))}
         />
         <Kpi
-          title={<span className="inline-flex items-center gap-2">MAU <InfoI text="Monthly Active Users — usuários ativos na janela de 30 dias." /></span>}
+          title={
+            <span className="inline-flex items-center gap-2">
+              MAU <InfoI text="Monthly Active Users — usuários ativos na janela de 30 dias." />
+            </span>
+          }
           value={fmt(num(overview?.MAU))}
         />
         <Kpi
-          title={<span className="inline-flex items-center gap-2">Stickiness <InfoI text="WAU/MAU — medida de frequência (quanto mais próximo de 1, melhor)." /></span>}
+          title={
+            <span className="inline-flex items-center gap-2">
+              Stickiness{" "}
+              <InfoI text="WAU/MAU — medida de frequência (quanto mais próximo de 1, melhor)." />
+            </span>
+          }
           value={(overview?.stickiness ?? 0).toFixed(2)}
         />
         <Kpi
-          title={<span className="inline-flex items-center gap-2">D7 <InfoI text="Retenção em 7 dias — % de novos usuários que voltam após 7 dias." /></span>}
+          title={
+            <span className="inline-flex items-center gap-2">
+              D7{" "}
+              <InfoI text="Retenção em 7 dias — % de novos usuários que voltam após 7 dias." />
+            </span>
+          }
           value={`${fmt(num(overview?.D7))}%`}
         />
         <Kpi
-          title={<span className="inline-flex items-center gap-2">D30 <InfoI text="Retenção em 30 dias — % de novos usuários que voltam após 30 dias." /></span>}
+          title={
+            <span className="inline-flex items-center gap-2">
+              D30{" "}
+              <InfoI text="Retenção em 30 dias — % de novos usuários que voltam após 30 dias." />
+            </span>
+          }
           value={`${fmt(num(overview?.D30))}%`}
         />
         <Kpi
-          title={<span className="inline-flex items-center gap-2">Novos (30d) <InfoI text="Novos cadastros nos últimos 30 dias." /></span>}
+          title={
+            <span className="inline-flex items-center gap-2">
+              Novos (30d) <InfoI text="Novos cadastros nos últimos 30 dias." />
+            </span>
+          }
           value={fmt(num(overview?.novos30d))}
         />
         <Kpi
-          title={<span className="inline-flex items-center gap-2">Média 7d <InfoI text="Média de usuários ativos dos últimos 7 dias." /></span>}
+          title={
+            <span className="inline-flex items-center gap-2">
+              Média 7d{" "}
+              <InfoI text="Média de usuários ativos dos últimos 7 dias." />
+            </span>
+          }
           value={Math.round(avg7)}
-          sub={prev7 ? `${delta7 > 0 ? "▲" : delta7 < 0 ? "▼" : "•"} ${Math.abs(delta7).toFixed(1)}% vs 7d anterior` : undefined}
+          sub={
+            prev7
+              ? `${delta7 > 0 ? "▲" : delta7 < 0 ? "▼" : "•"} ${Math.abs(delta7).toFixed(
+                  1
+                )}% vs 7d anterior`
+              : undefined
+          }
         />
       </div>
 
@@ -2068,7 +2195,10 @@ function AnalyticsPane() {
           <Kpi title="Mensagens" value={fmt(num(engSummary?.messages))} />
           <Kpi title="Sub. Treino" value={fmt(num(engSummary?.subTreino))} />
           <Kpi title="Sub. Desafio" value={fmt(num(engSummary?.subDesafio))} />
-          <Kpi title="Treinos agendados" value={fmt(num(engSummary?.treinosAgendados))} />
+          <Kpi
+            title="Treinos agendados"
+            value={fmt(num(engSummary?.treinosAgendados))}
+          />
         </div>
       </div>
 
@@ -2078,14 +2208,24 @@ function AnalyticsPane() {
             Conversão via Escolinha (semanal)
             <InfoI text="Novos vínculos de atletas oriundos de Escolinhas por semana." />
           </div>
-          <LineChart data={(convE || []).map((r: any) => ({ bucket: r.bucket, value: r.novosVinculos }))} />
+          <LineChart
+            data={(convE || []).map((r: any) => ({
+              bucket: r.bucket,
+              value: r.novosVinculos,
+            }))}
+          />
         </div>
         <div className="bg-white rounded shadow p-3">
           <div className="font-semibold mb-2 flex items-center gap-2">
             Conversão via Clube (semanal)
             <InfoI text="Novos vínculos de atletas oriundos de Clubes por semana." />
           </div>
-          <LineChart data={(convC || []).map((r: any) => ({ bucket: r.bucket, value: r.novosVinculos }))} />
+          <LineChart
+            data={(convC || []).map((r: any) => ({
+              bucket: r.bucket,
+              value: r.novosVinculos,
+            }))}
+          />
         </div>
       </div>
 
@@ -2095,7 +2235,9 @@ function AnalyticsPane() {
           <InfoI text="Taxa de cancelamento mensal: cancelados / base." />
         </div>
         {churn.length === 0 ? (
-          <div className="text-sm text-gray-500">Sem dados (adicione o model Assinatura e gere alguns registros).</div>
+          <div className="text-sm text-gray-500">
+            Sem dados (adicione o model Assinatura e gere alguns registros).
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-[560px] text-sm">
@@ -2115,7 +2257,9 @@ function AnalyticsPane() {
                     <td className="px-2 py-1">{r.base}</td>
                     <td className="px-2 py-1">{r.cancelados}</td>
                     <td className="px-2 py-1">{r.novos}</td>
-                    <td className="px-2 py-1">{(r.churnRate * 100).toFixed(2)}%</td>
+                    <td className="px-2 py-1">
+                      {(r.churnRate * 100).toFixed(2)}%
+                    </td>
                   </tr>
                 ))}
               </tbody>

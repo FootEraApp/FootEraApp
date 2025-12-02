@@ -1,25 +1,33 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-export async function adminAuth(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
+const SECRET = process.env.JWT_SECRET || "footera_secret";
 
+export function adminAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ message: "Token não fornecido" });
   }
 
-  const token = authHeader.split(" ")[1];
+  const [, token] = authHeader.split(" ");
 
   try {
-    const decoded: any = jwt.verify(token, process.env.JWT_SECRET as string);
+    const decoded: any = jwt.verify(token, SECRET);
 
-    if (decoded.tipo !== "Admin") {
-      return res.status(403).json({ message: "Acesso restrito a administradores" });
+    const isAdmin =
+      decoded?.tipo === "Admin" ||
+      decoded?.tipoUsuario === "Admin" ||
+      decoded?.role === "admin" ||
+      decoded?.isAdmin === true;
+
+    if (!isAdmin) {
+      return res.status(403).json({ message: "Somente administradores." });
     }
 
-    req.user = decoded;
+    (req as any).user = decoded;
     next();
   } catch (err) {
+    console.error("erro adminAuth", err);
     return res.status(401).json({ message: "Token inválido" });
   }
 }
