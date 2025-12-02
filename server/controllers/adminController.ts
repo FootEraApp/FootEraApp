@@ -9,38 +9,38 @@ const SECRET = process.env.JWT_SECRET || "footera_secret"
 export const adminDashboard = async (_: Request, res: Response) => {
   try {
     const [
-      totalUsuarios,
-      totalAtletas,
-      totalClubes,
-      totalEscolinhas,
-      totalAdministradores,
-      totalMidias,
-      totalVerificados,
-      totalNaoVerificados,
-      totalPostsCriados,
-      totalTreinos,
-      totalDesafios,
-      exercicios,
-      professores,
-      treinos,
-      desafios
-    ] = await Promise.all([
-      prisma.usuario.count(),
-      prisma.atleta.count(),
-      prisma.clube.count(),
-      prisma.escolinha.count(),
-      prisma.usuario.count({ where: { tipo: TipoUsuario.Admin } }),
-      prisma.usuario.count({ where: { tipo: TipoUsuario.Professor } }),
-      prisma.usuario.count({ where: { verified: true } }),
-      prisma.usuario.count({ where: { verified: false } }),
-      prisma.postagem.count(),
-      prisma.treinoProgramado.count(),
-      prisma.desafioOficial.count(),
-      prisma.exercicio.findMany(),
-      prisma.professor.findMany({ include: { usuario: true } }),
-      prisma.treinoProgramado.findMany(),
-      prisma.desafioOficial.findMany()
-    ]);
+        totalUsuarios,
+        totalAtletas,
+        totalClubes,
+        totalEscolinhas,
+        totalAdministradores,
+        totalMidias,
+        totalVerificados,
+        totalNaoVerificados,
+        totalPostsCriados,
+        totalTreinos,
+        totalDesafios,
+        exercicios,
+        professores,
+        treinos,
+        desafios
+      ] = await Promise.all([
+        prisma.usuario.count(),
+        prisma.atleta.count(),
+        prisma.clube.count(),
+        prisma.escolinha.count(),
+        prisma.usuario.count({ where: { tipo: TipoUsuario.Admin } }),
+        prisma.usuario.count({ where: { tipo: TipoUsuario.Olheiro } }),
+        prisma.usuario.count({ where: { verified: true } }),
+        prisma.usuario.count({ where: { verified: false } }),
+        prisma.postagem.count(),
+        prisma.treinoProgramado.count(),
+        prisma.desafioOficial.count(),
+        prisma.exercicio.findMany(),
+        prisma.professor.findMany({ include: { usuario: true } }),
+        prisma.treinoProgramado.findMany(),
+        prisma.desafioOficial.findMany()
+      ]);
 
     const taxaVerificacao = totalUsuarios === 0 ? 0 : totalVerificados / totalUsuarios;
 
@@ -91,10 +91,18 @@ export async function loginAdmin(req: Request, res: Response) {
     }
 
     const token = jwt.sign(
-      { id: usuario.id, tipo: usuario.tipo },
-      SECRET,
-      { expiresIn: "1d" }
-    );
+    {
+      id: usuario.id,
+      tipo: "Admin",
+      tipoUsuario: "Admin",
+      role: "admin",
+      isAdmin: true,
+      email: usuario.email,
+      nome: usuario.nome,
+    },
+    SECRET,
+    { expiresIn: "10h" }
+  );
 
     return res.json({
       message: "Login como administrador realizado com sucesso.",

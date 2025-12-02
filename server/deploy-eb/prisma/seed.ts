@@ -866,7 +866,7 @@ if (atletaAaaaa && professorArthur) {
       atletaId_treinoProgramadoId_dataTreino: {
         atletaId: atletaAaaaa.id,
         treinoProgramadoId: treino.id,
-        dataTreino, // mesma data usada no create
+        dataTreino,
       },
     },
     update: {},
@@ -931,7 +931,6 @@ if (atletaAaaaa && professorArthur) {
     skipDuplicates: true,
   });
 }
-  // garanta que TODOS os usuários fiquem verificados
   await prisma.usuario.updateMany({
     data: { verified: true },
   });

@@ -1,4 +1,3 @@
-// client/src/pages/perfil/GerenciarProfessores.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import axios from "axios";
@@ -258,7 +257,6 @@ const GerenciarProfessores: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
-      {/* topo / voltar */}
       <div className="mb-4 flex items-center justify-between">
         <button
           onClick={() => (window.location.href = "/perfil")}
@@ -278,7 +276,6 @@ const GerenciarProfessores: React.FC = () => {
         </div>
       </div>
 
-      {/* métricas rápidas */}
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-zinc-200 bg-white p-4">
           <div className="flex items-center gap-2 text-zinc-600">
@@ -315,7 +312,6 @@ const GerenciarProfessores: React.FC = () => {
         </div>
       </div>
 
-      {/* abas superiores */}
       <div className="mb-4 inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
         <button
           onClick={() => setAba("professores")}
@@ -339,7 +335,6 @@ const GerenciarProfessores: React.FC = () => {
         </button>
       </div>
 
-      {/* filtro de busca (apenas para aba professores, mas deixei em cima) */}
       <div className="mb-4 max-w-md">
         <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2">
           <SearchIcon className="h-4 w-4 text-zinc-500" />
@@ -511,7 +506,6 @@ const GerenciarProfessores: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* select para escolher professor responsável */}
                   {professores.length > 0 && (
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <label className="text-xs text-zinc-600">
@@ -553,7 +547,6 @@ const GerenciarProfessores: React.FC = () => {
         </div>
       )}
 
-      {/* Modal de Turmas (mesmo usado em GerenciarAtletas / PerfilClube) */}
       {owner && (
         <TurmasManager
           open={turmasOpen}
@@ -567,7 +560,6 @@ const GerenciarProfessores: React.FC = () => {
         />
       )}
 
-      {/* bottom nav igual outras telas principais */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed">
           <House />

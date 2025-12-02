@@ -1,4 +1,3 @@
-// server/routes/mensagens
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateToken } from "../middlewares/auth.js";
