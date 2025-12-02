@@ -5,7 +5,22 @@ const prisma = new PrismaClient();
 
 function assertAdmin(req: Request) {
   const u: any = (req as any).user || {};
-  if (!u?.id || String(u?.tipo) !== "Admin") {
+
+  const tipoRaw =
+    u?.tipo ??
+    u?.tipoUsuario ??
+    u?.role ??
+    u?.perfil ??
+    null;
+
+  const tipo = tipoRaw ? String(tipoRaw).toLowerCase() : "";
+
+  const adminNivel = typeof u?.adminNivel === "number" ? u.adminNivel : 0;
+
+  const isAdminTipo = tipo === "admin";
+  const isAdminNivel = adminNivel > 0;
+
+  if (!u?.id || (!isAdminTipo && !isAdminNivel)) {
     const err: any = new Error("Acesso restrito ao administrador.");
     err.status = 403;
     throw err;

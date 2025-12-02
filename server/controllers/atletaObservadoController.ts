@@ -3,9 +3,6 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-/**
- * Tipo auxiliar para filtros do dono
- */
 type OwnerWhere = {
   professorId?: string;
   clubeId?: string;
@@ -13,9 +10,6 @@ type OwnerWhere = {
   olheiroId?: string;
 };
 
-/**
- * Para filtros (where): usa os campos ID (professorId, clubeId, ...)
- */
 function buildOwnerWhere(tipoRaw: string | undefined, ownerId: string): OwnerWhere {
   const tipo = String(tipoRaw || "").toLowerCase();
 
@@ -50,7 +44,6 @@ function buildOwnerCreate(tipoRaw: string | undefined, ownerId: string) {
     `buildOwnerCreate: tipo de owner inválido ou ausente (tipoRaw="${tipoRaw}", ownerId="${ownerId}")`
   );
 }
-
 
 export async function statusObservacao(req: Request, res: Response) {
   const { atletaId: rawId } = req.params as { atletaId?: string };
@@ -201,7 +194,6 @@ export async function observarAtleta(req: Request, res: Response) {
     return res.status(500).json({ error: "Falha ao observar atleta" });
   }
 }
-
 
 export async function pararDeObservar(req: Request, res: Response) {
   const { atletaId } = req.params;

@@ -40,10 +40,77 @@ export default function AdminLogin() {
   const [, navigate] = useLocation();
   const [infoAberto, setInfoAberto] = useState(false);
 
+  function persistAuth(user: any, token: string) {
+    const storages = [localStorage, sessionStorage];
+
+    for (const store of storages) {
+      try {
+        store.setItem("token", token);
+        store.setItem("usuarioId", user.id);
+        store.setItem(
+          "nomeUsuario",
+          user.nome || user.nomeDeUsuario || "Administrador"
+        );
+        store.setItem(
+          "tipoUsuario",
+          String(user.tipo || "admin").toLowerCase()
+        );
+      } catch {
+      }
+    }
+
+    try {
+      (window as any).Storage = (window as any).Storage || {};
+      (window as any).Storage.token = token;
+    } catch {
+    }
+  }
+
+  function clearAuth() {
+    try {
+      localStorage.removeItem("token");
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("jwt");
+      localStorage.removeItem("usuarioId");
+      localStorage.removeItem("tipoUsuario");
+      localStorage.removeItem("nomeUsuario");
+
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("usuarioId");
+      sessionStorage.removeItem("tipoUsuario");
+      sessionStorage.removeItem("nomeUsuario");
+
+      if ((window as any)?.Storage) {
+        (window as any).Storage.token = null;
+      }
+    } catch {
+    }
+  }
+
   useEffect(() => {
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-    const tipo = toLower(localStorage.getItem("tipoUsuario") || sessionStorage.getItem("tipoUsuario"));
-    if (token && tipo === "admin") navigate("/admin");
+    const token =
+      localStorage.getItem("token") || sessionStorage.getItem("token");
+    const tipo = toLower(
+      localStorage.getItem("tipoUsuario") ||
+        sessionStorage.getItem("tipoUsuario")
+    );
+
+    if (!token || tipo !== "admin") return;
+
+    (async () => {
+      try {
+        const res = await fetch(`${API.BASE_URL}/api/admin`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (res.ok) {
+          navigate("/admin");
+        } else if (res.status === 401 || res.status === 403) {
+          clearAuth();
+        }
+      } catch {
+      }
+    })();
   }, [navigate]);
 
   async function handleLogin(e: React.FormEvent) {
@@ -55,20 +122,28 @@ export default function AdminLogin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: usuario, senha }),
       });
+
       const data = await res.json();
-      if (!res.ok) return setErro(data?.message || "Erro ao fazer login.");
+
+      if (!res.ok) {
+        return setErro(data?.message || "Erro ao fazer login.");
+      }
 
       const token: string | undefined = data.token;
       const user = data.usuario ?? data.user ?? {};
       const tipo = toLower(user.tipo ?? data.tipo);
-      const isAdmin = tipo === "admin" || user.isAdmin === true || data.isAdmin === true;
-      if (!token) return setErro("Resposta inválida do servidor (sem token).");
-      if (!isAdmin) return setErro("Você não é um administrador.");
+      const isAdmin =
+        tipo === "admin" || user.isAdmin === true || data.isAdmin === true;
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("tipoUsuario", "admin");
-      localStorage.setItem("usuarioId", user.id ?? data.id ?? "");
-      localStorage.setItem("nomeUsuario", user.nomeDeUsuario ?? user.nome ?? user.email ?? "");
+      if (!token) {
+        return setErro("Resposta inválida do servidor (sem token).");
+      }
+      if (!isAdmin) {
+        return setErro("Você não é um administrador.");
+      }
+
+      persistAuth(user, token);
+
       navigate("/admin");
     } catch {
       setErro("Erro de conexão com o servidor.");
@@ -80,13 +155,15 @@ export default function AdminLogin() {
       <header className="hidden lg:flex w-full bg-green-900 text-white">
         <div className="max-w-5xl mx-auto flex items-center justify-center gap-3 py-4">
           <img src={logo} alt="FootEra" className="w-6 h-6" />
-          <h1 className="text-2xl font-bold text-center flex-1">Bem-vindo à FootEra</h1>
+          <h1 className="text-2xl font-bold text-center flex-1">
+            Bem-vindo à FootEra
+          </h1>
           <button
             type="button"
             className="p-1 text-white/90 hover:text-white"
             aria-expanded={infoAberto}
             aria-controls="cadastro-info"
-            onClick={() => setInfoAberto(v => !v)}
+            onClick={() => setInfoAberto((v) => !v)}
             title={infoAberto ? "Recolher" : "Expandir"}
           >
             {infoAberto ? <ChevronUp /> : <ChevronDown />}
@@ -99,13 +176,15 @@ export default function AdminLogin() {
           <div className="w-full max-w-[680px]">
             <div className="flex items-center justify-between gap-3 lg:hidden">
               <img src={logo} className="w-10 h-10" alt="FootEra" />
-              <h2 className="flex-1 text-center text-xl font-bold">Bem-vindo à FootEra</h2>
+              <h2 className="flex-1 text-center text-xl font-bold">
+                Bem-vindo à FootEra
+              </h2>
               <button
                 type="button"
                 className="p-2 text-white/90 hover:text-white rounded-full"
                 aria-expanded={infoAberto}
                 aria-controls="cadastro-info"
-                onClick={() => setInfoAberto(v => !v)}
+                onClick={() => setInfoAberto((v) => !v)}
                 title={infoAberto ? "Recolher" : "Expandir"}
               >
                 {infoAberto ? <ChevronUp /> : <ChevronDown />}
@@ -115,15 +194,20 @@ export default function AdminLogin() {
             <div
               id="cadastro-info"
               className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${
-                infoAberto ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0 lg:max-h-[520px] lg:opacity-100"
+                infoAberto
+                  ? "max-h-[520px] opacity-100"
+                  : "max-h-0 opacity-0 lg:max-h-[520px] lg:opacity-100"
               }`}
             >
               <p className="text-center max-w-md text-base lg:text-lg mt-4">
-                Se você sonha em conquistar uma oportunidade, joga por amor ou quer se superar...
-                aqui é o seu lugar. FootEra. A metodologia dos profissionais, para quem vive futebol.
+                Se você sonha em conquistar uma oportunidade, joga por amor ou
+                quer se superar... aqui é o seu lugar. FootEra. A metodologia
+                dos profissionais, para quem vive futebol.
               </p>
               <div className="mt-6 p-5 lg:p-6 rounded-xl text-sm lg:text-base text-left w-full bg-white/10">
-                <h3 className="font-semibold mb-2">O que a FootEra oferece:</h3>
+                <h3 className="font-semibold mb-2">
+                  O que a FootEra oferece:
+                </h3>
                 <ul className="list-disc list-inside space-y-1">
                   <li>Treinamentos personalizados</li>
                   <li>Desafios para testar suas habilidades</li>
@@ -153,7 +237,11 @@ export default function AdminLogin() {
 
           <div className="relative z-10 w-full max-w-md bg-white shadow-lg rounded-2xl p-8 text-center">
             <h2 className="text-[22px] font-bold mb-3">Login Administrativo</h2>
-            <img src="/assets/usuarios/footera-logo.png" alt="Logo FootEra" className="w-[70px] h-[70px] mx-auto mb-3" />
+            <img
+              src="/assets/usuarios/footera-logo.png"
+              alt="Logo FootEra"
+              className="w-[70px] h-[70px] mx-auto mb-3"
+            />
 
             <form onSubmit={handleLogin} className="mt-2 text-left">
               <input
@@ -178,7 +266,7 @@ export default function AdminLogin() {
                 />
                 <button
                   type="button"
-                  onClick={() => setMostrarSenha(v => !v)}
+                  onClick={() => setMostrarSenha((v) => !v)}
                   aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
                   title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
                   className="absolute inset-y-0 right-2 flex items-center px-2 text-gray-500 hover:text-gray-700"
@@ -194,7 +282,9 @@ export default function AdminLogin() {
                 Entrar
               </button>
 
-              {erro && <p className="text-red-600 text-sm mt-3 text-center">{erro}</p>}
+              {erro && (
+                <p className="text-red-600 text-sm mt-3 text-center">{erro}</p>
+              )}
 
               <div className="mt-4 text-center text-sm">
                 <button

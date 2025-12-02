@@ -68,7 +68,7 @@ type DadosExplorar = {
 
 type Filtros = {
   categoria?: string;
-  posicao?: string;
+  posicoes?: string[];
   estado?: string;
   cidade?: string;
   independente?: boolean | null;
@@ -104,6 +104,30 @@ const mapIdadeParaCategoria = (idade?: number | null): string | null => {
   if (idade <= 23) return "Sub-23";
   return "Profissional";
 };
+
+const POSICOES = [
+  "GOL",
+  "LD",
+  "LE",
+  "ZD",
+  "ZC",
+  "ZE",
+  "ALA_D",
+  "ALA_E",
+  "VOL1",
+  "VOL2",
+  "MC1",
+  "MC2",
+  "MEI",
+  "MEI_D",
+  "MEI_E",
+  "MD",
+  "ME",
+  "PD",
+  "PE",
+  "SA",
+  "CA",
+];
 
 function Pill({
   children,
@@ -168,6 +192,9 @@ function Explorar() {
   const [filtros, setFiltros] = useState<Filtros>({ independente: null, pontuacaoMin: null, pontuacaoMax: null });
   const [draft, setDraft] = useState<Filtros>({ independente: null, pontuacaoMin: null, pontuacaoMax: null });
 
+  const updateDraft = (patch: Partial<Filtros>) => {
+    setDraft((prev) => ({ ...prev, ...patch }));
+  };
   const [topGeral, setTopGeral] = useState<RankItem[]>([]);
   const [topPorCategoria, setTopPorCategoria] = useState<Record<string, RankItem[]>>({});
 
@@ -209,6 +236,55 @@ function Explorar() {
 
   const filtrosKey = JSON.stringify(filtros);
 
+  const profissionais = useMemo(
+    () =>
+      [
+        ...(dados.professores || []).map((p) => ({
+          id: p.id,
+          usuario: p.usuario,
+          foto: p.usuario?.foto ?? p.foto,
+          role: "Professor" as const,
+        })),
+        ...(dados.olheiros || []).map((o) => ({
+          id: o.id,
+          usuario: o.usuario,
+          foto: o.usuario?.foto ?? o.foto,
+          role: "Olheiro" as const,
+        })),
+      ].filter((x) => x?.usuario?.id),
+    [dados.professores, dados.olheiros]
+  );
+
+  const atletasFiltrados = useMemo(() => {
+    const f = filtros;
+    const norm = (s?: string | null) => (s || "").toLowerCase();
+    return (dados.atletas || []).filter((a) => {
+      if (f.categoria) {
+        const cat = a.categoriaBase || mapIdadeParaCategoria(a.idade);
+        if (!cat || norm(cat) !== norm(f.categoria)) return false;
+      }
+      if (f.posicoes && f.posicoes.length > 0) {
+        const posNorm = norm(a.posicao);
+        if (!posNorm) return false;
+
+        const bate = f.posicoes.some((p) => posNorm.includes(norm(p)));
+        if (!bate) return false;
+      }
+      if (f.estado && !norm(a.estado).includes(norm(f.estado))) return false;
+      if (f.cidade && !norm(a.cidade).includes(norm(f.cidade))) return false;
+      if (f.independente !== null && f.independente !== undefined) {
+        if (a.independente == null || a.independente !== f.independente) return false;
+      }
+      if (typeof f.pontuacaoMin === "number") {
+        if (typeof a.pontuacao !== "number" || a.pontuacao < f.pontuacaoMin) return false;
+      }
+      if (typeof f.pontuacaoMax === "number") {
+        if (typeof a.pontuacao !== "number" || a.pontuacao > f.pontuacaoMax) return false;
+      }
+      return true;
+    });
+  }, [dados.atletas, filtros]);
+
   useEffect(() => {
     setShowCountAtletas(pageSize);
   }, [pageSize, busca, filtrosKey, dados.atletas.length]);
@@ -226,22 +302,40 @@ function Explorar() {
   }, [pageSize, busca, filtrosKey, dados.professores.length, dados.olheiros.length]);
 
   useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        if (!entry.isIntersecting) return;
-        if (aba === "atletas") setShowCountAtletas((c) => Math.min(c + pageSize, atletasFiltrados.length));
-        else if (aba === "escolas") setShowCountEscolas((c) => Math.min(c + pageSize, dados.escolas.length));
-        else if (aba === "clubes") setShowCountClubes((c) => Math.min(c + pageSize, dados.clubes.length));
-        else if (aba === "profissionais") setShowCountProfs((c) => Math.min(c + pageSize, profissionais.length));
-      },
-      { root: null, rootMargin: "400px", threshold: 0 }
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [aba, pageSize, dados.escolas.length, dados.clubes.length, dados.professores.length, dados.olheiros.length]);
+  const el = sentinelRef.current;
+  if (!el) return;
+
+  const io = new IntersectionObserver(
+    (entries) => {
+      const [entry] = entries;
+      if (!entry.isIntersecting) return;
+
+      if (aba === "atletas") {
+        setShowCountAtletas((c) => Math.min(c + pageSize, atletasFiltrados.length));
+      } else if (aba === "escolas") {
+        setShowCountEscolas((c) => Math.min(c + pageSize, dados.escolas.length));
+      } else if (aba === "clubes") {
+        setShowCountClubes((c) => Math.min(c + pageSize, dados.clubes.length));
+      } else if (aba === "profissionais") {
+        setShowCountProfs((c) => Math.min(c + pageSize, profissionais.length));
+      }
+    },
+    { root: null, rootMargin: "400px", threshold: 0 }
+  );
+
+  io.observe(el);
+  return () => io.disconnect();
+}, [
+  aba,
+  pageSize,
+  dados.escolas.length,
+  dados.clubes.length,
+  dados.professores.length,
+  dados.olheiros.length,
+  dados.atletas.length,
+  atletasFiltrados.length,
+  profissionais.length,
+]);
 
   const loggedUserId = useMemo(
     () => (Storage?.usuarioId ?? (typeof window !== "undefined" ? Storage.usuarioId : "") ?? "") as string,
@@ -278,7 +372,9 @@ function Explorar() {
     const token = Storage?.token ?? (typeof window !== "undefined" ? Storage.token : "");
     const params: any = { q: busca, excludeUsuarioId: loggedUserId };
     if (filtros.categoria) params.categoria = filtros.categoria;
-    if (filtros.posicao) params.posicao = filtros.posicao;
+    if (filtros.posicoes && filtros.posicoes.length) {
+      params.posicoes = filtros.posicoes.join(",");
+    }
     if (filtros.estado) params.estado = filtros.estado;
     if (filtros.cidade) params.cidade = filtros.cidade;
     if (filtros.independente !== null && filtros.independente !== undefined)
@@ -307,49 +403,6 @@ function Explorar() {
       .finally(() => setCarregandoDados(false));
   }, [busca, loggedUserId, filtrosKey, filtrarEu]);
 
-  const profissionais = useMemo(
-    () =>
-      [
-        ...(dados.professores || []).map((p) => ({
-          id: p.id,
-          usuario: p.usuario,
-          foto: p.usuario?.foto ?? p.foto,
-          role: "Professor" as const,
-        })),
-        ...(dados.olheiros || []).map((o) => ({
-          id: o.id,
-          usuario: o.usuario,
-          foto: o.usuario?.foto ?? o.foto,
-          role: "Olheiro" as const,
-        })),
-      ].filter((x) => x?.usuario?.id),
-    [dados.professores, dados.olheiros]
-  );
-
-  const atletasFiltrados = useMemo(() => {
-    const f = filtros;
-    const norm = (s?: string | null) => (s || "").toLowerCase();
-    return (dados.atletas || []).filter((a) => {
-      if (f.categoria) {
-        const cat = a.categoriaBase || mapIdadeParaCategoria(a.idade);
-        if (!cat || norm(cat) !== norm(f.categoria)) return false;
-      }
-      if (f.posicao && !norm(a.posicao).includes(norm(f.posicao))) return false;
-      if (f.estado && !norm(a.estado).includes(norm(f.estado))) return false;
-      if (f.cidade && !norm(a.cidade).includes(norm(f.cidade))) return false;
-      if (f.independente !== null && f.independente !== undefined) {
-        if (a.independente == null || a.independente !== f.independente) return false;
-      }
-      if (typeof f.pontuacaoMin === "number") {
-        if (typeof a.pontuacao !== "number" || a.pontuacao < f.pontuacaoMin) return false;
-      }
-      if (typeof f.pontuacaoMax === "number") {
-        if (typeof a.pontuacao !== "number" || a.pontuacao > f.pontuacaoMax) return false;
-      }
-      return true;
-    });
-  }, [dados.atletas, filtros]);
-
   const abrirFiltros = () => {
     setDraft(filtros);
     setShowFilters(true);
@@ -359,7 +412,12 @@ function Explorar() {
     setShowFilters(false);
   };
   const limparFiltros = () => {
-    const base = { independente: null, pontuacaoMin: null, pontuacaoMax: null } as Filtros;
+    const base: Filtros = {
+      independente: null,
+      pontuacaoMin: null,
+      pontuacaoMax: null,
+      posicoes: [],
+    };
     setDraft(base);
     setFiltros(base);
     setShowFilters(false);
@@ -371,13 +429,13 @@ function Explorar() {
   const hasMoreProfs = showCountProfs < profissionais.length;
 
   const activeFiltersCount =
-    (draft.categoria ? 1 : 0) +
-    (draft.posicao ? 1 : 0) +
-    (draft.estado ? 1 : 0) +
-    (draft.cidade ? 1 : 0) +
-    (draft.independente !== null && draft.independente !== undefined ? 1 : 0) +
-    (typeof draft.pontuacaoMin === "number" ? 1 : 0) +
-    (typeof draft.pontuacaoMax === "number" ? 1 : 0);
+    (filtros.categoria ? 1 : 0) +
+    (filtros.posicoes && filtros.posicoes.length ? 1 : 0) +
+    (filtros.estado ? 1 : 0) +
+    (filtros.cidade ? 1 : 0) +
+    (filtros.independente !== null && filtros.independente !== undefined ? 1 : 0) +
+    (typeof filtros.pontuacaoMin === "number" ? 1 : 0) +
+    (typeof filtros.pontuacaoMax === "number" ? 1 : 0);
 
   return (
     <div className="min-h-screen bg-[#FEFBE9] text-green-900 pb-28 sm:pb-24">
@@ -464,9 +522,242 @@ function Explorar() {
             </Tab>
           </div>
         </div>
-      </div>
+            </div>
 
-      {/* filtros (bottom sheet) omitidos por brevidade – permanecem iguais ao seu código, sem mudança */}
+      {showFilters && (
+        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/40">
+          <div
+            className="absolute inset-0"
+            onClick={() => setShowFilters(false)}
+          />
+
+          <div
+            className="relative z-50 w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-lg p-4 sm:p-5 max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base sm:text-lg font-semibold text-green-900">
+                Filtros
+              </h2>
+              <button
+                onClick={() => setShowFilters(false)}
+                className="p-1 rounded-full hover:bg-gray-100"
+                aria-label="Fechar filtros"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Categoria
+                </label>
+                <select
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  value={draft.categoria ?? ""}
+                  onChange={(e) =>
+                    updateDraft({
+                      categoria: e.target.value || undefined,
+                    })
+                  }
+                >
+                  <option value="">Todas</option>
+                  {CATEGORIAS.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Posição
+                </label>
+
+                <select
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  value="" 
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) return;
+                    const atuais = draft.posicoes || [];
+                    if (!atuais.includes(v)) {
+                      updateDraft({ posicoes: [...atuais, v] });
+                    }
+                    e.target.value = "";
+                  }}
+                >
+                  <option value="">Selecione uma posição...</option>
+                  {POSICOES.map((pos) => (
+                    <option key={pos} value={pos}>
+                      {pos}
+                    </option>
+                  ))}
+                </select>
+
+                {draft.posicoes && draft.posicoes.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {draft.posicoes.map((pos) => (
+                      <button
+                        key={pos}
+                        type="button"
+                        onClick={() =>
+                          updateDraft({
+                            posicoes: (draft.posicoes || []).filter((p) => p !== pos),
+                          })
+                        }
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[11px] bg-emerald-50 border-emerald-200 text-emerald-800"
+                      >
+                        {pos}
+                        <span className="text-[10px]">✕</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Estado
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    placeholder="Ex: SP, RJ..."
+                    value={draft.estado ?? ""}
+                    onChange={(e) =>
+                      updateDraft({
+                        estado: e.target.value || undefined,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Cidade
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    placeholder="Ex: São Paulo"
+                    value={draft.cidade ?? ""}
+                    onChange={(e) =>
+                      updateDraft({
+                        cidade: e.target.value || undefined,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Vínculo do Atleta
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateDraft({ independente: null })}
+                    className={`flex-1 px-3 py-2 rounded-lg border text-xs ${
+                      draft.independente === null || draft.independente === undefined
+                        ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold"
+                        : "bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    Qualquer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateDraft({ independente: true })}
+                    className={`flex-1 px-3 py-2 rounded-lg border text-xs ${
+                      draft.independente === true
+                        ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold"
+                        : "bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    Independente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateDraft({ independente: false })}
+                    className={`flex-1 px-3 py-2 rounded-lg border text-xs ${
+                      draft.independente === false
+                        ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold"
+                        : "bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    Vinculado
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Pontuação
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <span className="block text-[11px] text-gray-600 mb-1">
+                      Mínima
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                      value={draft.pontuacaoMin ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          pontuacaoMin: e.target.value
+                            ? Number(e.target.value)
+                            : null,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[11px] text-gray-600 mb-1">
+                      Máxima
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                      value={draft.pontuacaoMax ?? ""}
+                      onChange={(e) =>
+                        updateDraft({
+                          pontuacaoMax: e.target.value
+                            ? Number(e.target.value)
+                            : null,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                onClick={limparFiltros}
+                className="flex-1 py-2 rounded-lg border text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Limpar
+              </button>
+              <button
+                type="button"
+                onClick={aplicarFiltros}
+                className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700"
+              >
+                Aplicar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto px-4 sm:px-5 mt-3 sm:mt-4">
         {aba === "atletas" && (
@@ -531,8 +822,6 @@ function Explorar() {
                     );
                   })}
                 </div>
-
-                {/* ... resto da aba atletas, só trocando onError pelo handleImgError ... */}
 
                 <h2 className="text-base sm:text-lg font-bold mt-6 mb-2">Top da semana (geral)</h2>
                 {topGeral.length === 0 ? (
@@ -726,7 +1015,6 @@ function Explorar() {
               <p className="text-center text-gray-600">Nenhum profissional encontrado</p>
             )}
 
-            {/* resto da aba profissionais igual */}
           </>
         )}
       </div>

@@ -777,11 +777,12 @@ export default function PaginaSubmissao() {
               {treinoMode === "upload" ? (
                 <>
                   <label className="block text-sm font-medium mb-1">
-                    {" "}
                     Enviar Vídeo
                   </label>
                   <input
                     type="file"
+                    name="arquivo"
+                    data-testid="submissao-file"
                     accept="video/*;capture=camcorder"
                     // @ts-ignore
                     capture={modeParam === "camera" ? "environment" : undefined}

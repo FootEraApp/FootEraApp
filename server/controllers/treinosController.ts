@@ -1,4 +1,3 @@
-//server/controllers/treinosController
 import {
   PrismaClient,
   PosicaoCampo,
@@ -2652,7 +2651,6 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
         message: "Apenas professor, clube ou escolinha podem agendar rotina mensal.",
       });
     }
-
 
     const {
       treinoProgramadoId,
