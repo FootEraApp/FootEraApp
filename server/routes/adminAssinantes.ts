@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { authenticateToken } from "../middlewares/auth.js";
+import { adminAuth } from "../middlewares/admin-auth.js";
 import { listar, overview } from "../controllers/assinaturasAdminController.js";
 
 const router = Router();
 
-router.get("/", authenticateToken, listar);
-router.get("/overview", authenticateToken, overview);
+router.get("/overview", adminAuth, overview);
+router.get("/", adminAuth, listar);
 
 export default router;
