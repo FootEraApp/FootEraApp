@@ -181,12 +181,11 @@ function Explorar() {
   const [showCountClubes, setShowCountClubes] = useState(12);
   const [showCountProfs, setShowCountProfs] = useState(12);
 
-  // ---------- Fallback de imagem padrão, rodando só 1x ----------
   const handleImgError: React.ReactEventHandler<HTMLImageElement> = (e) => {
     const img = e.currentTarget;
-    if (img.dataset.fallbackDone === "1") return; // evita loop infinito
+    if (img.dataset.fallbackDone === "1") return;
     img.dataset.fallbackDone = "1";
-    img.src = "/assets/default-user.png"; // estático do client/public/assets
+    img.src = "/assets/default-user.png";
   };
 
   useEffect(() => {

@@ -260,10 +260,8 @@ useEffect(() => {
 
   if (!token || !ownerId) return;
 
-  // Se não pode observar (perfil não é atleta), nem tenta
   if (!podeObservar) return;
 
-  // Podemos usar o atletaId já resolvido OU o próprio perfilId
   const alvo = alvoAtletaId || perfilId;
   if (!alvo) return;
 
@@ -271,7 +269,6 @@ useEffect(() => {
     const cache = localStorage.getItem(obsKey);
     if (cache === "1") {
       setObservando(true);
-      // mesmo com cache, vamos consultar o backend pra garantir
     }
   }
 
