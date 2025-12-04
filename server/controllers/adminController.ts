@@ -8,41 +8,44 @@ const SECRET = process.env.JWT_SECRET || "footera_secret"
 
 export const adminDashboard = async (_: Request, res: Response) => {
   try {
-    const [
-        totalUsuarios,
-        totalAtletas,
-        totalClubes,
-        totalEscolinhas,
-        totalAdministradores,
-        totalMidias,
-        totalVerificados,
-        totalNaoVerificados,
-        totalPostsCriados,
-        totalTreinos,
-        totalDesafios,
-        exercicios,
-        professores,
-        treinos,
-        desafios
-      ] = await Promise.all([
-        prisma.usuario.count(),
-        prisma.atleta.count(),
-        prisma.clube.count(),
-        prisma.escolinha.count(),
-        prisma.usuario.count({ where: { tipo: TipoUsuario.Admin } }),
-        prisma.usuario.count({ where: { tipo: TipoUsuario.Olheiro } }),
-        prisma.usuario.count({ where: { verified: true } }),
-        prisma.usuario.count({ where: { verified: false } }),
-        prisma.postagem.count(),
-        prisma.treinoProgramado.count(),
-        prisma.desafioOficial.count(),
-        prisma.exercicio.findMany(),
-        prisma.professor.findMany({ include: { usuario: true } }),
-        prisma.treinoProgramado.findMany(),
-        prisma.desafioOficial.findMany()
-      ]);
 
-    const taxaVerificacao = totalUsuarios === 0 ? 0 : totalVerificados / totalUsuarios;
+    const porTipo = await prisma.usuario.groupBy({
+      by: ["tipo"],
+      _count: { _all: true },
+    });
+
+    const map = Object.fromEntries(
+      porTipo.map((r) => [r.tipo, r._count._all])
+    );
+
+    const totalAtletas         = map.Atleta      ?? 0;
+    const totalClubes          = map.Clube       ?? 0;
+    const totalEscolinhas      = map.Escolinha   ?? 0;
+    const totalAdministradores = map.Admin       ?? 0;
+    const totalProfessores     = map.Professor   ?? 0;
+    const totalOlheiros        = map.Olheiro     ?? 0;
+
+    const totalUsuarios =
+      totalAtletas +
+      totalClubes +
+      totalEscolinhas +
+      totalAdministradores +
+      totalProfessores +
+      totalOlheiros;
+
+    const totalVerificados = await prisma.usuario.count({ where: { verified: true } });
+    const totalNaoVerificados = await prisma.usuario.count({ where: { verified: false } });
+
+    const totalPostsCriados = await prisma.postagem.count();
+    const totalTreinos = await prisma.treinoProgramado.count();
+    const totalDesafios = await prisma.desafioOficial.count();
+
+    const exercicios = await prisma.exercicio.findMany();
+    const professores = await prisma.professor.findMany({ include: { usuario: true } });
+    const treinos = await prisma.treinoProgramado.findMany();
+    const desafios = await prisma.desafioOficial.findMany();
+
+    console.log("MAP TIPOS:", map);
 
     res.json({
       totalUsuarios,
@@ -50,23 +53,24 @@ export const adminDashboard = async (_: Request, res: Response) => {
       totalClubes,
       totalEscolinhas,
       totalAdministradores,
-      totalMidias,
+      totalProfessores,
+      totalOlheiros,
       totalVerificados,
       totalNaoVerificados,
       totalPostsCriados,
       totalTreinos,
       totalDesafios,
-      taxaVerificacao,
       exercicios,
       professores,
       treinos,
-      desafios
+      desafios,
     });
   } catch (error) {
     console.error("Erro no dashboard admin:", error);
     res.status(500).json({ error: "Erro ao carregar dados do painel" });
   }
 };
+
 export async function loginAdmin(req: Request, res: Response) {
   const { email, senha } = req.body;
 
