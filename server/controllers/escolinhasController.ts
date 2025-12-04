@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { touchFairUse } from "server/lib/usage.js";
 import { aplicarCorteEscolinha, getRangeFromQuery } from "../utils/analyticsWindow.js";
+import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
 
 const prisma = new PrismaClient();
 
@@ -131,5 +132,59 @@ export const deleteEscolinha = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Erro ao deletar escolinha:", error);
     res.status(500).json({ message: "Erro ao deletar escolinha." });
+  }
+};
+
+export const desvincularAtletaDaEscolinha = async (req: Request, res: Response) => {
+  const { escolinhaId } = req.params;
+  const { atletaId } = req.body;
+
+  if (!escolinhaId || !atletaId) {
+    return res.status(400).json({ message: "escolinhaId e atletaId são obrigatórios." });
+  }
+
+  try {
+    const relacao = await prisma.relacaoTreinamento.findFirst({
+      where: { escolinhaId, atletaId },
+    });
+
+    if (!relacao) {
+      return res.status(404).json({ message: "Relação não encontrada." });
+    }
+
+    const agora = new Date();
+
+    await prisma.relacaoTreinamento.update({
+      where: { id: relacao.id },
+      data: { encerradoEm: agora },
+    });
+
+    await salvarHistoricoAtletaVinculo({
+      atletaId,
+      dono: { tipo: "Escolinha", id: escolinhaId },
+      inicioVinculo: relacao.criadoEm,
+      fimVinculo: agora,
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Erro ao desvincular atleta da escolinha:", err);
+    return res.status(500).json({ message: "Erro ao desvincular atleta da escolinha." });
+  }
+};
+
+export const listarHistoricoAtletasEscolinha = async (req: Request, res: Response) => {
+  const { escolinhaId } = req.params;
+
+  try {
+    const historicos = await prisma.atletaHistoricoVinculo.findMany({
+      where: { escolinhaId },
+      orderBy: { fimVinculo: "desc" },
+    });
+
+    res.json(historicos);
+  } catch (err) {
+    console.error("Erro ao listar histórico de atletas da escolinha:", err);
+    res.status(500).json({ message: "Erro ao listar histórico de atletas da escolinha." });
   }
 };

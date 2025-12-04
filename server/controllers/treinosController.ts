@@ -148,7 +148,7 @@ export async function agendarTreinoPessoal(req: AuthenticatedRequest, res: Respo
 }
 
 export async function agendarTreinoLote(req: AuthenticatedRequest, res: Response) {
-  const user = req.user as any;
+  const user = getUserFromReq(req);
 
   if (!user || !can(user, FEAT.AGENDAMENTO_LOTE)) {
     return res.status(402).json({
@@ -430,8 +430,10 @@ export async function salvarTreinoNaBiblioteca(req: AuthenticatedRequest, res: R
     const user = req.user as any;
     const usuarioId = req.userId!;
 
+    const tipoStr = String(user?.tipo ?? user?.tipoUsuario ?? "").toLowerCase();
+
     let atletaId: string | undefined =
-      user?.tipo === "Atleta" ? user.tipoUsuarioId : undefined;
+      tipoStr === "atleta" ? user.tipoUsuarioId : undefined;
 
     if (!atletaId) {
       const atleta = await prisma.atleta.findFirst({
@@ -698,16 +700,16 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
           }
         }
 
-       const atualizado = await prisma.treinoAgendado.update({
-        where: { id: existente.id },
-        data: {
-          titulo: tituloFinal,
-          dataTreino: quandoBase,
-          dataExpiracao: exp,
-          status: TreinoAgendadoStatus.AGENDADO,
-          execucaoStatus: TreinoStatus.PENDING,
-        },
-      });
+        const atualizado = await prisma.treinoAgendado.update({
+          where: { id: existente.id },
+          data: {
+            titulo: tituloFinal,
+            dataTreino: quandoBase,
+            dataExpiracao: exp,
+            status: TreinoAgendadoStatus.AGENDADO,
+            execucaoStatus: TreinoStatus.PENDING,
+          },
+        });
 
         await audit(req, {
           acao: "ALTERAR_AGENDA",
@@ -717,6 +719,7 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
           meta: { atletaId, dataTreino: atualizado.dataTreino, status: "Agendado" },
         });
 
+        await notificarNovoTreino(req.userId!, atletaId, atualizado.id, tituloFinal);
         return res.status(200).json(atualizado);
       }
     }
@@ -743,6 +746,8 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
         descricao: "Agendamento criado",
         meta: { atletaId, dataTreino: criado.dataTreino, status: "Agendado" },
       });
+
+      await notificarNovoTreino(req.userId!, atletaId, criado.id, tituloFinal);
 
       return res.status(201).json(criado);
     } catch (e: any) {
@@ -775,6 +780,7 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
           meta: { atletaId, dataTreino: criado2.dataTreino, status: "Agendado" },
         });
 
+        await notificarNovoTreino(req.userId!, atletaId, criado2.id, tituloFinal);
         return res.status(201).json(criado2);
       }
       throw e;
@@ -1862,9 +1868,12 @@ export async function criarTreinoProgramado(
       return res.status(400).json({ error: "Categoria(s) inválida(s)" });
     }
 
-    const tipoTreinoNorm = normalizeTipoTreino(tipoTreino);
-    if (tipoTreino && !tipoTreinoNorm) {
-      return res.status(400).json({ error: "TipoTreino inválido" });
+    let tipoTreinoNorm: TipoTreino | undefined = undefined;
+    if (tipoTreino !== undefined) {
+      tipoTreinoNorm = normalizeTipoTreino(tipoTreino);
+      if (!tipoTreinoNorm && tipoTreino !== null) {
+        return res.status(400).json({ message: "TipoTreino inválido" });
+      }
     }
 
     const when = dataTreino || dataAgendada || null;
@@ -2029,13 +2038,11 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
 
     let categoriasNorm: Categoria[] | undefined = undefined;
     if (categoria !== undefined) {
-      const arr = Array.isArray(categoria) ? categoria : [categoria];
-      const norm = arr.map((c: any) => String(c).trim());
-      const valid = norm.filter((c: any) => (Object.values(Categoria) as string[]).includes(c));
-      if (valid.length !== norm.length) {
+      try {
+        categoriasNorm = normalizeCategorias(categoria);
+      } catch {
         return res.status(400).json({ message: "Categoria(s) inválida(s)" });
       }
-      categoriasNorm = valid as Categoria[];
     }
 
     const tipoTreinoNorm = tipoTreino !== undefined ? ((): TipoTreino | undefined => {
@@ -2951,6 +2958,21 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
       midiaUrl?: string;
       midiaTipo?: TipoMidia | string;
     };
+
+    let obsSan: string | null = null;
+      if (observacao && observacao.trim()) {
+        const clean = sanitizeText(observacao, 800);
+        const fail = basicModerationFails(clean);
+        if (fail) {
+          return res.status(422).json({ message: fail });
+        }
+        obsSan = clean;
+      }
+
+      if (req.user?.plano !== "PRO") {
+        const ok = await requireUsage(req as any, res, "treinos_semana");
+        if (!ok) return;
+      }
 
     if (!atletaId || req.user?.tipo !== "Atleta") {
       return res.status(403).json({ message: "Apenas atleta pode finalizar o treino." });
