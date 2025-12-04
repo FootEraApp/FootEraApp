@@ -6,7 +6,7 @@ const router = Router();
 
 router.post("/solicitar", vinculoController.solicitarVinculo);
 router.post("/responder", vinculoController.responderSolicitacao);
-router.get("/pendentes/:entidadeId/:tipo", vinculoController.pendentes);
+router.get("/pendentes/:tipo/:entidadeId", vinculoController.pendentes);
 
 router.get("/", async (req, res) => {
   const { tipo, id } = req.query;

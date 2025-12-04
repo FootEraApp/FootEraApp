@@ -8,12 +8,16 @@ import {
   buscarProfessorPorId,
   listarVinculosProfessor,
   salvarVinculoProfessor,
+  listarHistoricoAtletasProfessor,
+  desvincularAtletaDoProfessor
 } from "../controllers/professoresController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 
 const router = express.Router();
 const upload = multer({ dest: "upload/" });
 
+router.get("/:professorId/historico-atletas", listarHistoricoAtletasProfessor);
+router.post("/:professorId/desvincular-atleta", desvincularAtletaDoProfessor);
 router.put("/:id/vinculos", authenticateToken, salvarVinculoProfessor);
 router.post("/:id/vinculo", authenticateToken, salvarVinculoProfessor);
 router.get("/:id/vinculos", authenticateToken, listarVinculosProfessor);

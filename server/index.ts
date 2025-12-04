@@ -17,6 +17,7 @@ import { gerarSnapshotRanking } from "./jobs/rankingSnapshot.js";
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 import { authenticateToken } from "./middlewares/auth.js";
 import { limparTreinosSalvosExpirados } from "./controllers/treinosSalvosController.js";
+import { PrismaClient } from "@prisma/client";
 
 import adminUsuariosRoutes from "./routes/adminUsuarios.js";
 import adminRoutes from "./routes/admin.js";
@@ -96,6 +97,8 @@ import metricsRoutes from "./routes/metrics.js";
 import { handlePaymentWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const prisma = new PrismaClient();
 
 const envCandidates = [
   path.resolve(__dirname, ".env"),      
@@ -279,6 +282,14 @@ server.listen({ port: PORT, host: "0.0.0.0" }, () => {
     try { qrcode.generate(frontendURL, { small: true }); } catch {}
     console.log(`🔗 Front-end (dev): ${frontendURL}`);
   }
+});
+
+cron.schedule("0 4 * * *", async () => {
+  const now = new Date();
+  await prisma.atletaHistoricoVinculo.deleteMany({
+    where: { expiraEm: { lt: now } },
+  });
+  console.log("[CRON] Histórico de vínculos de atletas limpo");
 });
 
 cron.schedule("0 3 * * *", async () => {

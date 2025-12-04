@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
+import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
 
 const prisma = new PrismaClient();
 
@@ -219,5 +220,63 @@ export const salvarVinculoProfessor = async (req: Request, res: Response) => {
   } catch (err) {
     console.error("Erro ao salvar vínculo do professor:", err);
     res.status(500).json({ message: "Erro ao salvar vínculo." });
+  }
+};
+
+export const listarHistoricoAtletasProfessor = async (req: Request, res: Response) => {
+  const { professorId } = req.params;
+
+  try {
+    const historicos = await prisma.atletaHistoricoVinculo.findMany({
+      where: { professorId },
+      orderBy: { fimVinculo: "desc" },
+    });
+
+    res.json(historicos);
+  } catch (err) {
+    console.error("Erro ao listar histórico de atletas do professor:", err);
+    res.status(500).json({ message: "Erro ao listar histórico de atletas do professor." });
+  }
+};
+
+export const desvincularAtletaDoProfessor = async (req: Request, res: Response) => {
+  const { professorId } = req.params;
+  const { atletaId } = req.body;
+
+  if (!professorId || !atletaId) {
+    return res
+      .status(400)
+      .json({ message: "professorId e atletaId são obrigatórios." });
+  }
+
+  try {
+    const relacao = await prisma.relacaoTreinamento.findFirst({
+      where: { professorId, atletaId },
+    });
+
+    if (!relacao) {
+      return res.status(404).json({ message: "Relação não encontrada." });
+    }
+
+    const agora = new Date();
+
+    await prisma.relacaoTreinamento.update({
+      where: { id: relacao.id },
+      data: { encerradoEm: agora },
+    });
+
+    await salvarHistoricoAtletaVinculo({
+      atletaId,
+      dono: { tipo: "Professor", id: professorId },
+      inicioVinculo: relacao.criadoEm,
+      fimVinculo: agora,
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Erro ao desvincular atleta do professor:", err);
+    return res
+      .status(500)
+      .json({ message: "Erro ao desvincular atleta do professor." });
   }
 };

@@ -89,8 +89,10 @@ const EMPTY_DASH = {
   totalAtletas: 0,
   totalEscolinhas: 0,
   totalClubes: 0,
+  totalProfessores: 0,
+  totalOlheiros: 0,
   totalAdministradores: 0,
-  totalMidias: 0,
+  totalMidias: 0, 
   totalVerificados: 0,
   totalNaoVerificados: 0,
 };
@@ -395,6 +397,16 @@ async function carregarAssOverview() {
 
           const json = txt ? JSON.parse(txt) : {};
           setDados(json);
+          console.log("DADOS DASH:", {
+            totalUsuarios: json.totalUsuarios,
+            totalAtletas: json.totalAtletas,
+            totalClubes: json.totalClubes,
+            totalEscolinhas: json.totalEscolinhas,
+            totalAdministradores: json.totalAdministradores,
+            totalProfessores: json.totalProfessores,
+            totalOlheiros: json.totalOlheiros,
+          });
+
           setDashErro(null);
         } catch (e) {
           console.error("erro /api/admin", e);
@@ -796,18 +808,20 @@ async function carregarAssOverview() {
               </div>
             </div>
 
-            <h4 className="font-semibold mb-2">Distribuição de Usuários</h4>
-              <div className="bg-white p-4 rounded shadow">
-                <PieChart
-                  data={[
-                    { label: "Atletas", value: Number(dados.totalAtletas || 0) },
-                    { label: "Escolas de Futebol", value: Number(dados.totalEscolinhas || 0) },
-                    { label: "Clubes Profissionais", value: Number(dados.totalClubes || 0) },
-                    { label: "Administradores", value: Number(dados.totalAdministradores || 0) },
-                    { label: "Profilers", value: Number(dados.totalMidias || 0) },
-                  ]}
-                />
-              </div>
+                        <h4 className="font-semibold mb-2">Distribuição de Usuários</h4>
+            <div className="bg-white p-4 rounded shadow">
+              {(() => {
+                const distData = [
+                  { label: "Atletas", value: Number(dados.totalAtletas || 0) },
+                  { label: "Escolas de Futebol", value: Number(dados.totalEscolinhas || 0) },
+                  { label: "Clubes Profissionais", value: Number(dados.totalClubes || 0) },
+                  { label: "Professores", value: Number(dados.totalProfessores || 0) },
+                  { label: "Olheiros", value: Number(dados.totalOlheiros || 0) },
+                  { label: "Administradores", value: Number(dados.totalAdministradores || 0) },
+                ].filter((d) => d.value > 0); 
+                return <PieChart data={distData} />;
+              })()}
+            </div>
           </div>
         )}
 
@@ -1908,7 +1922,14 @@ function PieChart({
   const cx = radius;
   const cy = radius;
 
-  const colors = ["#16A34A", "#22C55E", "#4ADE80", "#86EFAC", "#BBF7D0"];
+  const colors = [
+    "#14532D",
+    "#15803D", 
+    "#16A34A", 
+    "#22C55E",
+    "#4ADE80",
+    "#BBF7D0",
+  ];
 
   let currentAngle = 0;
 
@@ -1934,7 +1955,7 @@ function PieChart({
 
     return {
       d: pathData,
-      fill: colors[idx % colors.length],
+      fill: colors[idx] ?? colors[colors.length - 1],
       label: d.label,
       value,
     };
