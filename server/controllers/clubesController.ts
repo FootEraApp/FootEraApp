@@ -1,7 +1,62 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
+import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
 
 const prisma = new PrismaClient();
+
+export const desvincularAtletaDoClube = async (req: Request, res: Response) => {
+  const { clubeId } = req.params;
+  const { atletaId } = req.body;
+
+  if (!clubeId || !atletaId) {
+    return res.status(400).json({ message: "clubeId e atletaId são obrigatórios." });
+  }
+
+  try {
+    const relacao = await prisma.relacaoTreinamento.findFirst({
+      where: { clubeId, atletaId },
+    });
+
+    if (!relacao) {
+      return res.status(404).json({ message: "Relação não encontrada." });
+    }
+
+    const agora = new Date();
+
+    await prisma.relacaoTreinamento.update({
+      where: { id: relacao.id },
+      data: { encerradoEm: agora },
+    });
+
+    await salvarHistoricoAtletaVinculo({
+      atletaId,
+      dono: { tipo: "Clube", id: clubeId },
+      inicioVinculo: relacao.criadoEm,
+      fimVinculo: agora,
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Erro ao desvincular atleta do clube:", err);
+    return res.status(500).json({ message: "Erro ao desvincular atleta do clube." });
+  }
+};
+
+export const listarHistoricoAtletasClube = async (req: Request, res: Response) => {
+  const { clubeId } = req.params;
+
+  try {
+    const historicos = await prisma.atletaHistoricoVinculo.findMany({
+      where: { clubeId },
+      orderBy: { fimVinculo: "desc" },
+    });
+
+    res.json(historicos);
+  } catch (err) {
+    console.error("Erro ao listar histórico de atletas do clube:", err);
+    res.status(500).json({ message: "Erro ao listar histórico de atletas do clube." });
+  }
+};
 
 export const getClubes = async (_req: Request, res: Response) => {
   try {
@@ -22,8 +77,8 @@ export const getClube = async (req: Request, res: Response) => {
       include: {
         atletas: true,
         midias: true,
-        postagens: true
-      }
+        postagens: true,
+      },
     });
 
     if (!clube) {
@@ -39,7 +94,26 @@ export const getClube = async (req: Request, res: Response) => {
 
 export const createClube = async (req: Request, res: Response) => {
   try {
-    const { usuarioId, nome, cnpj, telefone1, telefone2, email, siteOficial, sede, estadio, logradouro, numero, complemento, bairro, cidade, estado, pais, cep, logo } = req.body;
+    const {
+      usuarioId,
+      nome,
+      cnpj,
+      telefone1,
+      telefone2,
+      email,
+      siteOficial,
+      sede,
+      estadio,
+      logradouro,
+      numero,
+      complemento,
+      bairro,
+      cidade,
+      estado,
+      pais,
+      cep,
+      logo,
+    } = req.body;
 
     const clube = await prisma.clube.create({
       data: {
@@ -60,8 +134,8 @@ export const createClube = async (req: Request, res: Response) => {
         estado,
         pais,
         cep,
-        logo
-      }
+        logo,
+      },
     });
 
     res.status(201).json(clube);
@@ -83,7 +157,7 @@ export const updateClube = async (req: Request, res: Response) => {
 
     const clubeAtualizado = await prisma.clube.update({
       where: { id },
-      data: req.body
+      data: req.body,
     });
 
     res.json(clubeAtualizado);
