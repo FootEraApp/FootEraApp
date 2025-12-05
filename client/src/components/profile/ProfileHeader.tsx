@@ -18,6 +18,7 @@ import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import { formatarUrlFoto } from "@/utils/formatarFoto.js";
 import ScoreDeltaBadge from "./ScoreDeltaBadge.js";
+type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha" | "Olheiro";
 
 interface Usuario {
   id: string;
@@ -40,6 +41,8 @@ interface ProfileHeaderProps {
   foto?: string | null;
   isOwnProfile?: boolean;
   perfilId: string;
+  tipoPerfil?: TipoPerfil;
+  tipoPerfilId?: string;
 }
 
 type TreinoRelacaoStatus = "CARREGANDO" | "NUNCA" | "ATIVO" | "DESVINCULADO";
@@ -53,6 +56,27 @@ function pickAtletaId(payload: any, perfilId: string): string | null {
     payload?.usuario?.atletaId ??
     null
   );
+}
+
+function pickOrganizadorId(payload: any): { id: string | null; tipo: string } {
+  const tipoRaw = (
+    payload?.tipo ||
+    payload?.usuario?.tipo ||
+    payload?.tipoUsuario ||
+    payload?.usuario?.tipoUsuario ||
+    ""
+  )
+    .toString()
+    .toLowerCase();
+
+  if (payload?.professor?.id) return { id: payload.professor.id, tipo: "professor" };
+  if (payload?.clube?.id) return { id: payload.clube.id, tipo: "clube" };
+  if (payload?.escolinha?.id) return { id: payload.escolinha.id, tipo: "escolinha" };
+
+  if (payload?.tipoUsuarioId) return { id: payload.tipoUsuarioId, tipo: tipoRaw };
+  if (payload?.usuario?.tipoUsuarioId) return { id: payload.usuario.tipoUsuarioId, tipo: tipoRaw };
+
+  return { id: null, tipo: tipoRaw || "" };
 }
 
 function Badge({ count }: { count?: number }) {
@@ -77,6 +101,8 @@ export default function ProfileHeader({
   foto,
   isOwnProfile = false,
   scoreDelta,
+  tipoPerfil,   // ✅ agora existem
+  tipoPerfilId,
 }: ProfileHeaderProps) {
   const [modalAberto, setModalAberto] = useState(false);
   const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
@@ -87,7 +113,7 @@ export default function ProfileHeader({
   const [ehFavorito, setEhFavorito] = useState(false);
   const [seguindo, setSeguindo] = useState<boolean | null>(null);
 
-  // agora vamos separar melhor o estado de treino
+  // estado de treino
   const [treinoJunto, setTreinoJunto] = useState<boolean>(false);
   const [treinoStatus, setTreinoStatus] =
     useState<TreinoRelacaoStatus>("CARREGANDO");
@@ -239,12 +265,7 @@ export default function ProfileHeader({
 
   // --------- ESTADO DE TREINO / VÍNCULO + HISTÓRICO ---------
   useEffect(() => {
-    if (
-      isOwnProfile ||
-      !perfilId ||
-      !isDonoOrganizador ||
-      !donoId
-    ) {
+    if (isOwnProfile || !perfilId) {
       setTreinoStatus("NUNCA");
       setTreinoJunto(false);
       return;
@@ -253,82 +274,196 @@ export default function ProfileHeader({
     const token = Storage.token;
     if (!token) return;
 
+    const meTipo = tipoUsuarioAtual; // "atleta", "professor", "clube", etc
+    const meTipoId = donoId as string | undefined; // professor/clube/escola/escolinha
+    const meAtletaId =
+      meTipo === "atleta"
+        ? ((Storage as any).tipoUsuarioId as string | undefined)
+        : undefined;
+
+    async function temVinculoAtivo(
+      tokenInner: string,
+      ownerId: string,
+      atletaIdRel: string
+    ): Promise<boolean> {
+      const headers = { Authorization: `Bearer ${tokenInner}` };
+      const urls = [
+        `${API.BASE_URL}/api/treinos/atletas-vinculados?professorId=${encodeURIComponent(
+          ownerId
+        )}`,
+        `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(
+          ownerId
+        )}`,
+      ];
+
+      for (const url of urls) {
+        try {
+          const r = await fetch(url, { headers });
+          if (!r.ok) continue;
+          const lista = await r.json();
+          const arr = Array.isArray(lista)
+            ? lista
+            : lista?.items || lista?.data || [];
+          const ativo = arr.some((a: any) => {
+            const idsPossiveis = [
+              a.atletaId,
+              a.id,
+              a.usuarioId,
+              a.usuario?.id,
+              a.usuario?.usuarioId,
+              a.atleta?.id,
+              a.atleta?.usuarioId,
+            ]
+              .filter(Boolean)
+              .map(String);
+
+            return idsPossiveis.includes(String(atletaIdRel));
+          });
+          if (ativo) return true;
+        } catch {
+          // tenta próxima URL
+        }
+      }
+      return false;
+    }
+
     (async () => {
       try {
         setTreinoStatus("CARREGANDO");
 
-        // 1) Resolve atletaId real
-        const atletaIdReal = await resolverAtletaIdSePrecisoInner();
-        if (!atletaIdReal) {
+        let atletaIdRel: string | null = null;
+        let donoIdRel: string | null = null;
+        let donoTipoNorm = "";
+
+        // 1) DONO (professor/clube/escola/escolinha) vendo atleta
+        if (["professor", "clube", "escola", "escolinha"].includes(meTipo) && meTipoId) {
+          const atletaIdReal = await resolverAtletaIdSePrecisoInner();
+          if (!atletaIdReal) {
+            setTreinoStatus("NUNCA");
+            setTreinoJunto(false);
+            return;
+          }
+          atletaIdRel = atletaIdReal;
+          donoIdRel = meTipoId;
+          donoTipoNorm = meTipo;
+        }
+        // 2) ATLETA logado vendo professor/clube/escolinha
+        else if (meTipo === "atleta" && meAtletaId) {
+          atletaIdRel = meAtletaId;
+
+          let payloadPerfil: any = null;
+          try {
+            const r = await fetch(
+              `${API.BASE_URL}/api/perfil/${encodeURIComponent(perfilId)}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (r.ok) payloadPerfil = await r.json();
+          } catch {}
+
+          const orgInfo = pickOrganizadorId(payloadPerfil || {});
+          donoIdRel = orgInfo.id;
+          donoTipoNorm = orgInfo.tipo;
+        }
+        // 3) Outros tipos (olheiro etc.)
+        else {
           setTreinoStatus("NUNCA");
           setTreinoJunto(false);
           return;
         }
 
-        // 2) Verifica se há vínculo ativo (RelacaoTreinamento)
-        let ativo = false;
-        const rVinc = await fetch(
-          `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(
-            donoId
-          )}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (rVinc.ok) {
-          const lista = await rVinc.json();
-          ativo = (lista || []).some(
-            (a: any) =>
-              (a.id ?? a.atletaId ?? a.usuarioId) === atletaIdReal
-          );
-        }
-
-        if (ativo) {
-          setTreinoJunto(true);
-          setTreinoStatus("ATIVO");
-          localStorage.setItem(storageKey, "1");
+        if (!atletaIdRel || !donoIdRel) {
+          setTreinoStatus("NUNCA");
+          setTreinoJunto(false);
           return;
         }
 
-        // 3) Sem vínculo ativo → checar se já houve vínculo no passado (histórico)
-        let ultimoFim: Date | null = null;
-
-        if (tipoUsuarioAtual === "professor") {
-          const rHist = await fetch(
-            `${API.BASE_URL}/api/professores/${encodeURIComponent(
-              donoId
-            )}/historico-atletas`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          if (rHist.ok) {
-            const historicos = await rHist.json();
-            const registrosAtleta = (historicos || []).filter(
-              (h: any) => h.atletaId === atletaIdReal && h.fimVinculo
+        if (meTipo === "atleta") {
+          try {
+            const r = await fetch(
+              `${API.BASE_URL}/api/relacao-treino/status?atletaId=${encodeURIComponent(
+                atletaIdRel
+              )}&organizadorId=${encodeURIComponent(donoIdRel)}`,
+              { headers: { Authorization: `Bearer ${token}` } }
             );
-            if (registrosAtleta.length > 0) {
-              registrosAtleta.sort(
-                (a: any, b: any) =>
-                  new Date(b.fimVinculo).getTime() -
-                  new Date(a.fimVinculo).getTime()
-              );
-              ultimoFim = new Date(registrosAtleta[0].fimVinculo);
+
+            if (r.ok) {
+              const j = await r.json();
+              if (j?.ativo) {
+                setTreinoStatus("ATIVO");
+                setTreinoJunto(true);
+                localStorage.setItem(storageKey, "1");
+                return;
+              }
             }
+          } catch {
+            // se der erro, segue o fluxo normal (vai cair na parte de histórico)
           }
         }
+        // ---------- Sem vínculo ativo: checar histórico (apenas se dono for professor) ----------
+        let ultimoFim: Date | null = null;
 
-        // TODO: quando você criar os endpoints de histórico para clube/escolinha,
-        // basta replicar a lógica acima mudando a URL e o filtro de acordo com o tipo.
+        if (donoTipoNorm === "professor") {
+          try {
+            const rHist = await fetch(
+              `${API.BASE_URL}/api/professores/${encodeURIComponent(
+                donoIdRel
+              )}/historico-atletas`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (rHist.ok) {
+              const historicos = await rHist.json();
+              const registrosAtleta = (Array.isArray(historicos)
+                ? historicos
+                : []
+              ).filter((h: any) => {
+                const sameAtleta =
+                  String(h.atletaId ?? "") === String(atletaIdRel ?? "");
+                const temFim =
+                  h.fimVinculo || h.dataFim || h.encerradoEm || h.dataFimVinculo;
+                return sameAtleta && !!temFim;
+              });
+
+              if (registrosAtleta.length > 0) {
+                registrosAtleta.sort((a: any, b: any) => {
+                  const da =
+                    new Date(
+                      a.fimVinculo ||
+                      a.dataFim ||
+                      a.encerradoEm ||
+                      a.dataFimVinculo
+                    ).getTime() || 0;
+                  const db =
+                    new Date(
+                      b.fimVinculo ||
+                      b.dataFim ||
+                      b.encerradoEm ||
+                      b.dataFimVinculo
+                    ).getTime() || 0;
+                  return db - da;
+                });
+                ultimoFim = new Date(
+                  registrosAtleta[0].fimVinculo ||
+                  registrosAtleta[0].dataFim ||
+                  registrosAtleta[0].encerradoEm ||
+                  registrosAtleta[0].dataFimVinculo
+                );
+              }
+            }
+          } catch {
+            // ignora, cai para "NUNCA"
+          }
+        }
 
         if (ultimoFim) {
           const umAnoMs = 365 * 24 * 60 * 60 * 1000;
           const diff = Date.now() - ultimoFim.getTime();
           if (diff < umAnoMs) {
-            // Teve vínculo no passado recente → mostrar "Desvinculado"
             setTreinoStatus("DESVINCULADO");
           } else {
-            // Vínculo antigo (mais de 1 ano) → volta a ser "Treinar juntos"
             setTreinoStatus("NUNCA");
           }
         } else {
-          // Nunca teve histórico → estado "NUNCA"
           setTreinoStatus("NUNCA");
         }
 
@@ -342,13 +477,13 @@ export default function ProfileHeader({
 
     async function resolverAtletaIdSePrecisoInner(): Promise<string | null> {
       if (alvoAtletaId) return alvoAtletaId;
-      const token = Storage.token;
-      if (!token) return null;
+      const tokenInner = Storage.token;
+      if (!tokenInner) return null;
 
       try {
         const r = await fetch(
           `${API.BASE_URL}/api/perfil/${encodeURIComponent(perfilId)}`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          { headers: { Authorization: `Bearer ${tokenInner}` } }
         );
         if (r.ok) {
           const data = await r.json();
@@ -358,12 +493,16 @@ export default function ProfileHeader({
             return id1;
           }
         }
-      } catch {}
+      } catch {
+        // ignore
+      }
 
       try {
         const r = await fetch(
-          `${API.BASE_URL}/api/observados/resolve/${encodeURIComponent(perfilId)}`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          `${API.BASE_URL}/api/observados/resolve/${encodeURIComponent(
+            perfilId
+          )}`,
+          { headers: { Authorization: `Bearer ${tokenInner}` } }
         );
         if (r.status === 404) {
           alert("Este perfil não tem cadastro de atleta.");
@@ -376,7 +515,9 @@ export default function ProfileHeader({
           setAlvoAtletaId(id2);
           return id2;
         }
-      } catch {}
+      } catch {
+        // ignore
+      }
 
       return null;
     }
@@ -709,7 +850,8 @@ export default function ProfileHeader({
     };
 
     load();
-    const onFocus = () => document.visibilityState === "visible" && load();
+    const onFocus = () =>
+      document.visibilityState === "visible" && load();
     document.addEventListener("visibilitychange", onFocus);
     return () => document.removeEventListener("visibilitychange", onFocus);
   }, []);
@@ -812,9 +954,6 @@ export default function ProfileHeader({
       return;
     }
 
-    // Por enquanto está apontando para o endpoint de PROFESSOR.
-    // Para clube/escolinha basta criar endpoints equivalentes e
-    // trocar a URL conforme o tipoUsuarioAtual (ver nota na parte 3).
     let baseUrl = `${API.BASE_URL}/api/professores/${encodeURIComponent(
       donoId
     )}/desvincular-atleta`;
@@ -868,7 +1007,6 @@ export default function ProfileHeader({
   }
 
   const toggleTreino = async () => {
-    // Se NÃO for professor/clube/escolinha, mantém o comportamento antigo só de solicitação
     if (!isDonoOrganizador) {
       if (treinoJunto) {
         const ok = await cancelarSolicitacaoTreino(perfilId);
@@ -886,14 +1024,11 @@ export default function ProfileHeader({
       return;
     }
 
-    // DONO (professor/clube/escolinha)
     if (treinoStatus === "ATIVO") {
-      // Estão treinando juntos → clique vira DESVINCULAR
       abrirConfirmDesvincular();
       return;
     }
 
-    // Estados NUNCA ou DESVINCULADO → permite solicitar treino de novo
     const ok = await solicitarTreino();
     if (ok) {
       setTreinoJunto(true);
@@ -1012,7 +1147,7 @@ export default function ProfileHeader({
 
   const treinoBtnExtraClass =
     treinoStatus === "ATIVO"
-      ? "bg-white/10 text-white border border-white/40"
+      ? "bg:white/10 text-white border border-white/40"
       : treinoStatus === "DESVINCULADO"
       ? "bg-gray-300 text-gray-800"
       : "bg-green-400 text-green-900";

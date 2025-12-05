@@ -4,6 +4,27 @@ import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
 
 const prisma = new PrismaClient();
 
+export const listarAtletasDoProfessor = async (req: Request, res: Response) => {
+  const { professorId } = req.params;
+
+  try {
+    const atletas = await prisma.atleta.findMany({
+      where: { professorId },
+      include: {
+        usuario: true,
+        clube: true,
+        escolinha: true,
+      },
+      orderBy: { nome: "asc" }, // ou outro critério
+    });
+
+    res.json(atletas);
+  } catch (error) {
+    console.error("Erro ao listar atletas do professor:", error);
+    res.status(500).json({ message: "Erro ao listar atletas do professor." });
+  }
+};
+
 async function resolveOrganizacao(organizacaoId?: string | null) {
   if (!organizacaoId) return { tipo: null as null, id: null as null };
 
@@ -225,17 +246,78 @@ export const salvarVinculoProfessor = async (req: Request, res: Response) => {
 
 export const listarHistoricoAtletasProfessor = async (req: Request, res: Response) => {
   const { professorId } = req.params;
+  const { atletaNomeUsuario } = req.query;
 
   try {
     const historicos = await prisma.atletaHistoricoVinculo.findMany({
       where: { professorId },
+      include: {
+        atleta: {
+          include: {
+            usuario: true,
+          },
+        },
+      },
       orderBy: { fimVinculo: "desc" },
     });
 
-    res.json(historicos);
+    let resultado = historicos;
+
+    if (typeof atletaNomeUsuario === "string" && atletaNomeUsuario.trim() !== "") {
+      const alvo = atletaNomeUsuario.trim().toLowerCase();
+      resultado = historicos.filter((h) => {
+        const nomeUser = h.atleta?.usuario?.nomeDeUsuario || "";
+        return nomeUser.toLowerCase() === alvo;
+      });
+    }
+
+    res.json(resultado);
   } catch (err) {
     console.error("Erro ao listar histórico de atletas do professor:", err);
     res.status(500).json({ message: "Erro ao listar histórico de atletas do professor." });
+  }
+};
+
+export const vincularAtletaAoProfessor = async (req: Request, res: Response) => {
+  const { professorId } = req.params;
+  const { atletaId } = req.body;
+
+  if (!professorId || !atletaId) {
+    return res.status(400).json({ message: "professorId e atletaId são obrigatórios." });
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // 1) limpa professor anterior (se existir)
+      await tx.atleta.update({
+        where: { id: atletaId },
+        data: { professorId: professorId },
+      });
+
+      // 2) cria/atualiza RelacaoTreinamento para esse par
+      const relacaoExistente = await tx.relacaoTreinamento.findFirst({
+        where: { professorId, atletaId },
+      });
+
+      if (relacaoExistente) {
+        await tx.relacaoTreinamento.update({
+          where: { id: relacaoExistente.id },
+          data: { encerradoEm: null }, // reabriu o vínculo
+        });
+      } else {
+        await tx.relacaoTreinamento.create({
+          data: {
+            professorId,
+            atletaId,
+          },
+        });
+      }
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Erro ao vincular atleta ao professor:", err);
+    return res.status(500).json({ message: "Erro ao vincular atleta ao professor." });
   }
 };
 
@@ -260,11 +342,20 @@ export const desvincularAtletaDoProfessor = async (req: Request, res: Response) 
 
     const agora = new Date();
 
-    await prisma.relacaoTreinamento.update({
-      where: { id: relacao.id },
-      data: { encerradoEm: agora },
+    // 1) encerra relação + limpa professorId
+    await prisma.$transaction(async (tx) => {
+      await tx.relacaoTreinamento.update({
+        where: { id: relacao.id },
+        data: { encerradoEm: agora },
+      });
+
+      await tx.atleta.update({
+        where: { id: atletaId },
+        data: { professorId: null },
+      });
     });
 
+    // 2) salva histórico (fora da tx, usando os dados que já temos em memória)
     await salvarHistoricoAtletaVinculo({
       atletaId,
       dono: { tipo: "Professor", id: professorId },
