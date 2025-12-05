@@ -3072,3 +3072,33 @@ export async function finalizarTreinoAgendado(req: AuthenticatedRequest, res: Re
     return res.status(500).json({ message: "Erro ao finalizar treino agendado." });
   }
 }
+
+export async function relacaoStatus(req: Request, res: Response) {
+  const atletaId = String(req.query.atletaId || "");
+  const organizadorId = String(req.query.organizadorId || "");
+
+  if (!atletaId || !organizadorId) {
+    return res
+      .status(400)
+      .json({ error: "atletaId e organizadorId são obrigatórios" });
+  }
+
+  try {
+    const rel = await prisma.relacaoTreinamento.findFirst({
+      where: {
+        atletaId,
+        ativo: true,
+        OR: [
+          { professorId: organizadorId },
+          { clubeId: organizadorId },
+          { escolinhaId: organizadorId },
+        ],
+      },
+    });
+
+    return res.json({ ativo: !!rel });
+  } catch (err) {
+    console.error("Erro relacaoStatus:", err);
+    return res.status(500).json({ error: "Erro ao consultar status" });
+  }
+}
