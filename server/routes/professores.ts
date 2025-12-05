@@ -9,13 +9,15 @@ import {
   listarVinculosProfessor,
   salvarVinculoProfessor,
   listarHistoricoAtletasProfessor,
-  desvincularAtletaDoProfessor
+  desvincularAtletaDoProfessor,
+  listarAtletasDoProfessor
 } from "../controllers/professoresController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 
 const router = express.Router();
 const upload = multer({ dest: "upload/" });
 
+router.get("/:professorId/atletas", listarAtletasDoProfessor);
 router.get("/:professorId/historico-atletas", listarHistoricoAtletasProfessor);
 router.post("/:professorId/desvincular-atleta", desvincularAtletaDoProfessor);
 router.put("/:id/vinculos", authenticateToken, salvarVinculoProfessor);

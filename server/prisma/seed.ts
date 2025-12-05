@@ -1322,7 +1322,7 @@ async function main() {
     });
   }
 
-  if (atletaFree && atletaPro) {
+    if (atletaFree && atletaPro) {
     const follow1 = await prisma.seguidor.findFirst({
       where: {
         seguidorUsuarioId: atletaFree.id,
@@ -1330,29 +1330,50 @@ async function main() {
       },
     });
 
-    const post1 = await prisma.postagem.create({
-      data: {
-        conteudo: "Primeiro treino do dia!",
-        usuarioId: atletaFree.id,
-        dataCriacao: daysAgo(1),
-      },
+    // POST 1
+    let post1 = await prisma.postagem.findFirst({
+      where: { conteudo: "Primeiro treino do dia!", usuarioId: atletaFree.id },
     });
 
-    const post2 = await prisma.postagem.create({
-      data: {
-        conteudo: "Treino intenso hoje 💪",
-        usuarioId: atletaPro.id,
-        dataCriacao: daysAgo(2),
-      },
+    if (!post1) {
+      post1 = await prisma.postagem.create({
+        data: {
+          conteudo: "Primeiro treino do dia!",
+          usuarioId: atletaFree.id,
+          dataCriacao: daysAgo(1),
+        },
+      });
+    }
+
+    // POST 2
+    let post2 = await prisma.postagem.findFirst({
+      where: { conteudo: "Treino intenso hoje 💪" },
     });
 
-    const post3 = await prisma.postagem.create({
-      data: {
-        conteudo: "Alongamento pós-treino",
-        usuarioId: atletaFree.id,
-        dataCriacao: daysAgo(5),
-      },
+    if (!post2) {
+      post2 = await prisma.postagem.create({
+        data: {
+          conteudo: "Treino intenso hoje 💪",
+          usuarioId: atletaPro.id,
+          dataCriacao: daysAgo(2),
+        },
+      });
+    }
+
+    // POST 3
+    let post3 = await prisma.postagem.findFirst({
+      where: { conteudo: "Alongamento pós-treino" },
     });
+
+    if (!post3) {
+      post3 = await prisma.postagem.create({
+        data: {
+          conteudo: "Alongamento pós-treino",
+          usuarioId: atletaFree.id,
+          dataCriacao: daysAgo(5),
+        },
+      });
+    }
 
     await prisma.comentario.createMany({
       data: [
@@ -1369,6 +1390,7 @@ async function main() {
           dataCriacao: daysAgo(2),
         },
       ],
+      skipDuplicates: true,
     });
 
     await prisma.curtida.createMany({
@@ -1389,6 +1411,7 @@ async function main() {
           createdAt: daysAgo(3),
         },
       ],
+      skipDuplicates: true,
     });
 
     if (!follow1) {
@@ -1420,7 +1443,7 @@ async function main() {
       where: {
         deId: atletaFree.id,
         paraId: atletaPro.id,
-        conteudo: 'Mensagem inicial seed E2E',
+        conteudo: "Mensagem inicial seed E2E",
       },
     });
 
@@ -1429,7 +1452,7 @@ async function main() {
         data: {
           deId: atletaFree.id,
           paraId: atletaPro.id,
-          conteudo: 'Mensagem inicial seed E2E',
+          conteudo: "Mensagem inicial seed E2E",
           tipo: TipoMensagem.NORMAL,
         },
       });
@@ -1440,7 +1463,45 @@ async function main() {
     data: { verified: true },
   });
 
-  console.log("✅ Seed completo executado com sucesso!");
+    // --- Professor vinculado a atleta_free para teste E2E "Já treino junto" ---
+  const profFreeDb = await prisma.professor.findFirst({
+    where: { usuario: { nomeDeUsuario: "prof_free" } },
+  });
+
+  const atletaFreeDb = await prisma.atleta.findFirst({
+    where: { usuario: { nomeDeUsuario: "atleta_free" } },
+  });
+
+  if (profFreeDb && atletaFreeDb) {
+    // Procura se já existe relação professor-atleta
+    const relacaoExistente = await prisma.relacaoTreinamento.findFirst({
+      where: {
+        professorId: profFreeDb.id,
+        atletaId: atletaFreeDb.id,
+      },
+    });
+
+    if (relacaoExistente) {
+      // Atualiza para garantir que está ativa (sem encerradoEm)
+      await prisma.relacaoTreinamento.update({
+        where: { id: relacaoExistente.id },
+        data: {
+          encerradoEm: null,
+        },
+      });
+    } else {
+      // Cria o vínculo novo
+      await prisma.relacaoTreinamento.create({
+        data: {
+          professorId: profFreeDb.id,
+          atletaId: atletaFreeDb.id,
+          criadoEm: new Date(),
+          encerradoEm: null,
+        },
+      });
+    }
+  }
+ console.log("✅ Seed completo executado com sucesso!");
 }
 
 main()
