@@ -127,6 +127,7 @@ model Professor {
   escolinha        Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   clube            Clube?             @relation(fields: [clubeId], references: [id], onDelete: SetNull)
   Turma            Turma[]
+  atletas          Atleta[]
   TreinoSalvo      TreinoSalvo[]
   TreinoSalvoReuso TreinoSalvoReuso[]
 
@@ -220,12 +221,14 @@ model Atleta {
   consentimento                 Boolean                    @default(false)
   clubeId                       String?
   escolinhaId                   String?
+  professorId                   String?
   statusConexao                 StatusConexao              @default(Pendente)
   dataCriacao                   DateTime                   @default(now())
   dataUltimaModificacao         DateTime?
   perfilTipoTreinoAtualizadoEm  DateTime?
   pontosTotal                   Int?                       @default(0)
   perfilTipoTreino              TipoTreino?
+  professor                     Professor?                 @relation(fields: [professorId], references: [id], onDelete: SetNull)
   clube                         Clube?                     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha                     Escolinha?                 @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   usuario                       Usuario                    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -258,6 +261,7 @@ model Atleta {
   AtletaHistoricoVinculo        AtletaHistoricoVinculo[]
 
   @@index([perfilTipoTreino])
+  @@index([professorId])
 }
 
 model TreinoProgramado {
@@ -367,6 +371,8 @@ model RelacaoTreinamento {
   atletaId    String?
   escolinhaId String?
   clubeId     String?
+  organizacaoId String?
+  ativo       Boolean?
   criadoEm    DateTime   @default(now())
   atleta      Atleta?    @relation("RelacaoAtleta", fields: [atletaId], references: [id], onDelete: SetNull)
   clube       Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)

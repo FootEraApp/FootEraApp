@@ -224,6 +224,12 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
 
   const total = pontuacao?.pontuacaoTotal || 0;
 
+  const timeLabel =
+    professor?.nome ||
+    escolaNome ||
+    clubeNome ||
+    (isIndependente ? "Atleta Independente" : undefined);
+
   return (
     <div className="min-h-screen bg-transparent">
       <div className="max-w-3xl mx-auto px-4 py-6">
@@ -231,7 +237,7 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
           nome={perfil.usuario.nome}
           idade={perfil.dadosEspecificos.idade}
           posicao={perfil.dadosEspecificos.posicao}
-          time={undefined}
+          time={timeLabel}
           pontuacao={total}
           scoreDelta={scoreDelta}
           isOwnProfile={isOwnProfile}

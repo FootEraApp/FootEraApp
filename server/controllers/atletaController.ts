@@ -25,6 +25,13 @@ export const getAtletaById = async (req: Request, res: Response) => {
       },
       clube: true,
       escolinha: true,
+
+      // ⬇️ novo
+      professor: {
+        include: {
+          usuario: true, // se quiser mostrar nome/foto do usuário do professor
+        },
+      },
     },
   });
 
@@ -139,21 +146,23 @@ export async function getProfessorDoAtleta(req: Request, res: Response) {
 
     const atleta = await prisma.atleta.findUnique({
       where: { id: atletaId },
-      select: { id: true },
+      include: {
+        professor: {
+          include: { usuario: true },
+        },
+      },
     });
-    if (!atleta)
+
+    if (!atleta) {
       return res.status(404).json({ error: "Atleta não encontrado" });
+    }
 
-    const rel = await prisma.relacaoTreinamento.findFirst({
-      where: { atletaId: atleta.id, professorId: { not: null } },
-      orderBy: { criadoEm: "desc" },
-      include: { professor: { include: { usuario: true } } },
-    });
+    const prof = atleta.professor;
 
-    const payload = rel?.professor
+    const payload = prof
       ? {
-          id: rel.professor.id,
-          nome: rel.professor.nome || rel.professor.usuario?.nome || null,
+          id: prof.id,
+          nome: prof.nome || prof.usuario?.nome || null,
         }
       : null;
 

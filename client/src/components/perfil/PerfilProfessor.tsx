@@ -464,6 +464,8 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         time={time}
         isOwnProfile={isOwn}
         foto={headerFoto}
+        tipoPerfil="Professor"
+        tipoPerfilId={data.professor.id}
         perfilId={data.usuario?.id || data.professor.usuarioId || data.professor.id}
         kpis={[
           { label: "Alunos", value: alunosCount },
