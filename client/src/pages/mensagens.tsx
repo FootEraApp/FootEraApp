@@ -832,10 +832,24 @@ useEffect(() => {
       ...(ultimoId ? { cursor: ultimoId } : {}),
     });
 
-    const res = await fetch(`${API.BASE_URL}/api/mensagem?${query}`, {
+        const res = await fetch(`${API.BASE_URL}/api/mensagem?${query}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    const novas: Mensagem[] = await res.json();
+
+    const json = await res.json();
+    const novas: Mensagem[] = Array.isArray(json)
+      ? json
+      : Array.isArray(json.items)
+      ? json.items
+      : Array.isArray(json.mensagens)
+      ? json.mensagens
+      : [];
+
+    // se não veio nada em array, evita quebrar
+    if (!Array.isArray(novas)) {
+      setTemMaisPriv(false);
+      return;
+    }
 
     const stillSame =
       mySeq === fetchPrivSeqRef.current &&
@@ -864,10 +878,24 @@ useEffect(() => {
       const ultimoId = append && base.length > 0 ? base[0].id : undefined;
       const query = new URLSearchParams({ limit: String(limite), ...(ultimoId ? { cursor: ultimoId } : {}) });
 
-      const res = await fetch(`${API.BASE_URL}/api/mensagem/grupos/${grupoId}?${query.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const novas: MensagemGrupo[] = await res.json();
+      const res = await fetch(
+        `${API.BASE_URL}/api/mensagem/grupos/${grupoId}?${query.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const json = await res.json();
+      const novas: MensagemGrupo[] = Array.isArray(json)
+        ? json
+        : Array.isArray(json.items)
+        ? json.items
+        : Array.isArray(json.mensagens)
+        ? json.mensagens
+        : [];
+
+      if (!Array.isArray(novas)) {
+        setTemMaisGrupo(false);
+        return;
+      }
 
       const stillSame =
         mySeq === fetchGrupoSeqRef.current &&
@@ -1174,83 +1202,115 @@ useEffect(() => {
       } catch {}
     }
 
-          const isDataUrl =
+    const isDataUrl =
         typeof msg.conteudo === "string" && msg.conteudo.startsWith("data:image/");
 
-      const path = isDataUrl ? msg.conteudo : publicImgUrl(msg.conteudo)!;
+        const path = isDataUrl ? msg.conteudo : publicImgUrl(msg.conteudo)!;
 
-      return Shell(<img src={path} alt="Card do atleta" className="w-56 h-auto rounded" />);
-  } 
-    if (msg.tipo === "POST") {
-      const post = postsCache[msg.conteudo];
-      if (!post) return Shell(<div className="text-sm">Carregando post...</div>);
+        return Shell(<img src={path} alt="Card do atleta" className="w-56 h-auto rounded" />);
+    } 
+      if (msg.tipo === "POST") {
+        const post = postsCache[msg.conteudo];
+        if (!post) return Shell(<div className="text-sm">Carregando post...</div>);
 
-      const img = post.imagemUrl ? publicImgUrl(post.imagemUrl) : null;
-      const video = !img && post.videoUrl ? publicImgUrl(post.videoUrl) : null;
+        const img = post.imagemUrl ? publicImgUrl(post.imagemUrl) : null;
+        const video = !img && post.videoUrl ? publicImgUrl(post.videoUrl) : null;
 
-      return Shell(
-        <div onClick={() => navigate(`/post/${post.id}`)} className="cursor-pointer">
-          <div className="flex items-center gap-2 mb-2">
-            <Avatar src={post.usuario.foto} name={post.usuario.nome} className="w-8 h-8" />
-            <span className="text-sm font-semibold">{post.usuario.nome}</span>
+        return Shell(
+          <div onClick={() => navigate(`/post/${post.id}`)} className="cursor-pointer">
+            <div className="flex items-center gap-2 mb-2">
+              <Avatar src={post.usuario.foto} name={post.usuario.nome} className="w-8 h-8" />
+              <span className="text-sm font-semibold">{post.usuario.nome}</span>
+            </div>
+            {img && <img src={img} className="w-60 max-h-48 object-cover rounded mb-2" />}
+            {video && (
+              <video controls className="w-60 max-h-48 rounded mb-2">
+                <source src={video} />
+              </video>
+            )}
+            <p className="text-sm whitespace-pre-wrap">{post.conteudo}</p>
           </div>
-          {img && <img src={img} className="w-60 max-h-48 object-cover rounded mb-2" />}
-          {video && (
-            <video controls className="w-60 max-h-48 rounded mb-2">
-              <source src={video} />
-            </video>
-          )}
-          <p className="text-sm whitespace-pre-wrap">{post.conteudo}</p>
-        </div>
-      );
-    }
-
-    if (msg.tipo === "USUARIO") {
-      const u = usuariosCache[msg.conteudo];
-      if (!u) return Shell(<div className="text-sm">Carregando usuário...</div>);
-      return Shell(
-        <div onClick={() => navigate(`/perfil/${u.id}`)} className="flex items-center gap-2 cursor-pointer">
-          <Avatar src={u.foto} name={u.nome} className="w-12 h-12" />
-          <div>
-            <p className="text-sm font-semibold">{u.nome}</p>
-            <p className="text-xs opacity-80">Ver perfil</p>
-          </div>
-        </div>
-      );
-    }
-
-    if (msg.tipo === "DESAFIO") {
-      if (!FLAGS.DESAFIOS_ENABLED) {
-        return Shell(<div className="text-sm opacity-80">Desafio temporariamente indisponível.</div>);
+        );
       }
 
-      const d = desafiosCache[msg.conteudo];
-      if (!d) return Shell(<div className="text-sm">Carregando desafio...</div>);
-      const imagemSrc = d.imagemUrl ? publicImgUrl(d.imagemUrl) : undefined;
-      return Shell(
-        <div onClick={() => navigate(`/desafios/${d.id}`)} className="cursor-pointer">
-          <div className="flex items-center justify-between mb-2 gap-3">
-            <h3 className="font-semibold text-sm">{d.titulo}</h3>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 font-medium">
-              {d.nivel ?? "—"}
-            </span>
+      if (msg.tipo === "USUARIO") {
+        const u = usuariosCache[msg.conteudo];
+        if (!u) return Shell(<div className="text-sm">Carregando usuário...</div>);
+        return Shell(
+          <div onClick={() => navigate(`/perfil/${u.id}`)} className="flex items-center gap-2 cursor-pointer">
+            <Avatar src={u.foto} name={u.nome} className="w-12 h-12" />
+            <div>
+              <p className="text-sm font-semibold">{u.nome}</p>
+              <p className="text-xs opacity-80">Ver perfil</p>
+            </div>
           </div>
-          {imagemSrc && <img src={imagemSrc} className="w-60 h-36 object-cover rounded mb-2" />}
-          <p className="text-sm opacity-90 mb-2">{d.descricao}</p>
-          <div className="flex items-center justify-between text-[11px] opacity-75">
-            <span>Pontos: {d.pontuacao ?? "-"}</span>
-            <span>{new Date(d.createdAt).toLocaleDateString("pt-BR")}</span>
+        );
+      }
+
+      if (msg.tipo === "DESAFIO") {
+        if (!FLAGS.DESAFIOS_ENABLED) {
+          return Shell(<div className="text-sm opacity-80">Desafio temporariamente indisponível.</div>);
+        }
+
+        const d = desafiosCache[msg.conteudo];
+        if (!d) return Shell(<div className="text-sm">Carregando desafio...</div>);
+        const imagemSrc = d.imagemUrl ? publicImgUrl(d.imagemUrl) : undefined;
+        return Shell(
+          <div onClick={() => navigate(`/desafios/${d.id}`)} className="cursor-pointer">
+            <div className="flex items-center justify-between mb-2 gap-3">
+              <h3 className="font-semibold text-sm">{d.titulo}</h3>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 font-medium">
+                {d.nivel ?? "—"}
+              </span>
+            </div>
+            {imagemSrc && <img src={imagemSrc} className="w-60 h-36 object-cover rounded mb-2" />}
+            <p className="text-sm opacity-90 mb-2">{d.descricao}</p>
+            <div className="flex items-center justify-between text-[11px] opacity-75">
+              <span>Pontos: {d.pontuacao ?? "-"}</span>
+              <span>{new Date(d.createdAt).toLocaleDateString("pt-BR")}</span>
+            </div>
           </div>
-        </div>
-      );
-    }
+        );
+      }
 
-    return Shell(<p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.conteudo}</p>);
-  };
+      // --- DETECTA LINK DE TREINO ---
+      if (typeof msg.conteudo === "string" && msg.conteudo.startsWith("NOVO_TREINO:")) {
+        try {
+          // Formato: NOVO_TREINO:ID:TITULO
+          const [, treinoId, titulo] = msg.conteudo.split(":");
 
-  return (
-    <div className="min-h-screen flex flex-col bg-transparent">
-      <Link
+          return Shell(
+            <div
+              onClick={() => navigate(`/treinos?open=${treinoId}`)}
+              className="cursor-pointer bg-white border border-green-700 rounded-xl p-3 flex flex-col gap-2 hover:bg-green-50"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-full bg-green-800 flex items-center justify-center text-white font-bold">
+                  🏋️
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-sm text-green-900">Novo Treino Criado</p>
+                  <p className="text-xs opacity-80">{titulo}</p>
+                </div>
+              </div>
+
+              <button
+                className="mt-1 text-xs px-3 py-1 bg-green-800 text-white rounded-lg self-start"
+              >
+                Ver treino
+              </button>
+            </div>
+          );
+        } catch (e) {
+          console.warn("Erro ao parsear NOVO_TREINO:", e);
+        }
+      }
+      return Shell(<p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.conteudo}</p>);
+    };
+
+    return (
+      <div className="min-h-screen flex flex-col bg-transparent">
+        <Link
                       href="/perfil"
                       aria-label="Voltar para perfil"
                       className="inline-flex h-10 w-10 items-center justify-center
@@ -1358,8 +1418,13 @@ useEffect(() => {
                 className="flex-1 bg-white border border-green-700 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-700"
                 value={novaMensagem}
                 onChange={(e) => setNovaMensagem(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    enviarMensagem();
+                  }
+                }}
                 placeholder="Digite sua mensagem..."
-                data-testid="chat-input"
               />
               <button
                 onClick={enviarMensagem}

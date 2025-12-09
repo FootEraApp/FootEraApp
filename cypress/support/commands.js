@@ -29,36 +29,22 @@ const TEST_USERS = {
   },
 };
 
-Cypress.Commands.add("loginUi", (tipoUsuarioKey) => {
-  const user = TEST_USERS[tipoUsuarioKey];
-  if (!user) throw new Error(`Usuário de teste não configurado: ${tipoUsuarioKey}`);
+Cypress.Commands.add("loginUi", (userKey) => {
+  cy.session(userKey, () => {
+    cy.visit("/login");
+    cy.get("[data-test=email]").type(Cypress.env(`${userKey}_email`));
+    cy.get("[data-test=senha]").type(Cypress.env(`${userKey}_senha`));
+    cy.get("[data-test=login-btn]").click();
 
-  cy.visit("/login", {
-    onBeforeLoad(win) {
-      win.localStorage.clear();
-      win.sessionStorage.clear();
-    },
-    timeout: 120000,
-  });
+    cy.window().then((win) => {
+      const token =
+        win.localStorage.getItem("token") ||
+        win.sessionStorage.getItem("token");
 
-  cy.url().should("include", "/login");
-
-  cy.get('input[name="nomeDeUsuario"]').should("be.visible");
-  cy.get('input[name="senha"], input[type="password"]').should("be.visible");
-
-  cy.get('input[name="nomeDeUsuario"]').first().type(user.nomeDeUsuario);
-  cy.get('input[name="senha"], input[type="password"], input[placeholder*="senha" i]')
-    .first()
-    .type(user.senha);
-
-    cy.get('button[type="submit"], button[data-testid="btn-login"]')
-        .first()
-        .click();
-
-    cy.url({ timeout: 60000 }).should((url) => {
-        expect(url).to.not.match(/\/login\/?$/);
+      console.log("TOKEN APÓS LOGIN:", token);
+      expect(token, "token após login").to.be.a("string");
     });
-
+  });
 });
 
 Cypress.Commands.add("setToken", (token) => {
