@@ -1,34 +1,16 @@
+// server/routes/catalogoRoutes.ts
 import { Router } from "express";
-import { PrismaClient } from "@prisma/client";
-import { authenticateToken } from "server/middlewares/auth.js";
+import { authenticateToken } from "../middlewares/auth.js";
+import {
+  catalogoClubes,
+  catalogoEscolinhas,
+  catalogoProfessores,
+} from "../controllers/catalogoController.js";
 
-const prisma = new PrismaClient();
-const router = Router();
+const r = Router();
 
-router.get("/clubes", authenticateToken, async (_req, res) => {
-  try {
-    const rows = await prisma.clube.findMany({
-      select: { id: true, nome: true },
-      orderBy: { nome: "asc" },
-    });
-    res.json(rows);
-  } catch (e) {
-    console.error("GET /catalogo/clubes", e);
-    res.status(500).json([]);
-  }
-});
+r.get("/clubes", authenticateToken, catalogoClubes);
+r.get("/escolinhas", authenticateToken, catalogoEscolinhas);
+r.get("/professores", authenticateToken, catalogoProfessores);
 
-router.get("/escolinhas", authenticateToken, async (_req, res) => {
-  try {
-    const rows = await prisma.escolinha.findMany({
-      select: { id: true, nome: true },
-      orderBy: { nome: "asc" },
-    });
-    res.json(rows);
-  } catch (e) {
-    console.error("GET /catalogo/escolinhas", e);
-    res.status(500).json([]);
-  }
-});
-
-export default router;
+export default r;
