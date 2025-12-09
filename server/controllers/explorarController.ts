@@ -1,8 +1,8 @@
+// server/controllers/explorarController
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
-
 
 export async function listarAtletasExplorar(req: Request, res: Response) {
   try {
@@ -35,31 +35,124 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
   }
 }
 
+// === EXPLORAR CORRIGIDO ===
 export async function explorar(req: Request, res: Response) {
-  const { q } = req.query;
-  const userIdLogado = (req as any).userId || null;
+  try {
+    const { q } = req.query;
+    const userIdLogado = (req as any).userId || null;
+    const termo = q ? String(q).trim() : "";
 
-  const atletas = await prisma.atleta.findMany({
-  include: {
-    usuario: { select: { id: true, nome: true, foto: true } },
-  },
-  orderBy: { dataCriacao: "desc" },
-});
+    // ========= ATLETAS =========
+    const atletasRaw = await prisma.atleta.findMany({
+      include: {
+        usuario: { select: { id: true, nome: true, foto: true } },
+      },
+      orderBy: { dataCriacao: "desc" },
+      take: 200,
+    });
 
-const out = atletas.map(a => ({
-  id: a.id,
-  usuario: a.usuario,
-  foto: a.usuario?.foto ?? null,
-  tipoTreino: a.perfilTipoTreino ?? null,
-}));
+    const atletas = atletasRaw.map((a: any) => ({
+      id: a.id,
+      usuario: a.usuario,
+      foto: a.usuario?.foto ?? null,
+      tipoTreino: a.perfilTipoTreino ?? null,
+    }));
 
-  res.json({
-    atletas: out,
-    clubes: [],
-    escolas: [],
-    olheiros: [],
-    professores: [],
-  });
+    // ========= CLUBES =========
+    const clubes = await prisma.clube.findMany({
+      include: {
+        usuario: { select: { id: true, nome: true, foto: true } },
+      },
+      where: termo
+        ? { usuario: { nome: { contains: termo, mode: "insensitive" } } }
+        : {},
+      orderBy: { nome: "asc" },
+      take: 100,
+    });
+
+    // ========= ESCOLINHAS =========
+    const escolas = await prisma.escolinha.findMany({
+      include: {
+        usuario: { select: { id: true, nome: true, foto: true } },
+      },
+      where: termo
+        ? { usuario: { nome: { contains: termo, mode: "insensitive" } } }
+        : {},
+      orderBy: { nome: "asc" },
+      take: 100,
+    });
+
+    // ========= PROFESSORES =========
+    const professores = await prisma.professor.findMany({
+      include: {
+        usuario: { select: { id: true, nome: true, foto: true } },
+      },
+      where: termo
+        ? { usuario: { nome: { contains: termo, mode: "insensitive" } } }
+        : {},
+      orderBy: { usuario: { nome: "asc" } },
+      take: 100,
+    });
+
+    // ========= OLHEIROS =========
+    const olheiros = await prisma.olheiro.findMany({
+      include: {
+        usuario: { select: { id: true, nome: true, foto: true } },
+      },
+      where: termo
+        ? { usuario: { nome: { contains: termo, mode: "insensitive" } } }
+        : {},
+      orderBy: { usuario: { nome: "asc" } },
+      take: 100,
+    });
+
+    // ========= EVENTOS =========
+    const agora = new Date();
+    const whereEvento: any = {
+      status: "ABERTO",
+      inicio: { gte: agora },
+    };
+
+    if (termo) {
+      whereEvento.OR = [
+        { titulo: { contains: termo, mode: "insensitive" } },
+        { cidade: { contains: termo, mode: "insensitive" } },
+        { estado: { contains: termo, mode: "insensitive" } },
+        { pais: { contains: termo, mode: "insensitive" } },
+        { local: { contains: termo, mode: "insensitive" } },
+      ];
+    }
+
+    const eventosRaw = await prisma.evento.findMany({
+      where: whereEvento,
+      include: {
+        clube: { select: { id: true, nome: true, logo: true } },
+        escolinha: { select: { id: true, nome: true, logo: true } },
+        inscricoes: { select: { usuarioId: true } },
+      },
+      orderBy: { inicio: "asc" },
+      take: 50,
+    });
+
+    const eventos = eventosRaw.map((e: any) => ({
+      ...e,
+      inicio: e.inicio?.toISOString(),
+      fim: e.fim?.toISOString(),
+      inscrito: e.inscricoes.some((i: any) => String(i.usuarioId) === String(userIdLogado)),
+    }));
+
+    return res.json({
+      atletas,
+      clubes,
+      escolas,
+      professores,
+      olheiros,
+      eventos,
+    });
+  } catch (error) {
+    console.error("Erro em /api/explorar:", error);
+    return res.status(500).json({ error: "Erro ao carregar dados do explorar" });
+  }
 }
 
 export const buscarExplorar = async (req: Request, res: Response) => {
@@ -92,9 +185,8 @@ export const buscarExplorar = async (req: Request, res: Response) => {
     ]);
 
     res.json({ atletas, clubes, escolas, professores, olheiros });
-
   } catch (error) {
-    console.error("Erro em /api/explorar:", error);
+    console.error("Erro em /api/explorar/buscar:", error);
     res.status(500).json({ error: "Erro ao buscar dados" });
   }
 };
