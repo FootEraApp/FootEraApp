@@ -1,3 +1,4 @@
+// client/src/pages/explorar
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";
@@ -17,6 +18,9 @@ import {
   Goal,
   Shield,
   Heart,
+  CalendarClock,
+  Users,
+  Ticket
 } from "lucide-react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
@@ -39,6 +43,7 @@ type AtletaItem = {
 };
 
 type ProfessorItem = { id: string; usuario: UsuarioBasic; foto?: string | null };
+
 type ClubeItem = {
   id: string;
   usuarioId?: string;
@@ -64,6 +69,7 @@ type DadosExplorar = {
   olheiros: OlheiroItem[];
   clubes: ClubeItem[];
   escolas: EscolaItem[];
+  eventos: EventoItem[];
 };
 
 type Filtros = {
@@ -80,6 +86,38 @@ type RankItem = {
   atletaId: string;
   total: number;
   usuario: { id: string; nome: string; foto?: string | null };
+};
+
+type AbaExplorar = "atletas" | "escolas" | "clubes" | "profissionais" | "eventos";
+
+type EventoItem = {
+  id: string;
+  titulo: string;
+  tipo: "PENEIRA" | "EVENTO"; // compatível com EventoTipo
+  descricao?: string | null;
+  inicio: string;             // ISO string
+  fim?: string | null;
+  local?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  pais?: string | null;
+  endereco?: string | null;
+  vagas?: number | null;
+  status: "ABERTO" | "ENCERRADO" | "CANCELADO";
+  valorInscricao?: string | null;
+  linkInscricao?: string | null;
+  requisitos?: string[] | null;
+
+  clube?: {
+    id: string;
+    nome: string;
+    logo?: string | null;
+  } | null;
+
+  // campos derivados do backend
+  inscrito?: boolean;         // se o usuário logado já se inscreveu
+  totalInscritos?: number;    // quantidade atual de inscritos
+  convidado?: boolean;        // se recebeu convite (evento privado)
 };
 
 const CAT_LABEL: Record<string, string> = {
@@ -128,6 +166,43 @@ const POSICOES = [
   "SA",
   "CA",
 ];
+
+function formatDateRange(inicioIso: string, fimIso?: string | null) {
+  if (!inicioIso) return "";
+  const inicio = new Date(inicioIso);
+  const fim = fimIso ? new Date(fimIso) : null;
+
+  const dia = inicio.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  const horaInicio = inicio.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  if (!fim) return `${dia} • ${horaInicio}h`;
+
+  const mesmaData = inicio.toDateString() === fim.toDateString();
+  const horaFim = fim.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  if (mesmaData) {
+    return `${dia} • ${horaInicio} – ${horaFim}h`;
+  }
+
+  const diaFim = fim.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  return `${dia} ${horaInicio}h → ${diaFim} ${horaFim}h`;
+}
 
 function Pill({
   children,
@@ -179,13 +254,14 @@ function Tab({
 
 function Explorar() {
   const [busca, setBusca] = useState("");
-  const [aba, setAba] = useState<"atletas" | "escolas" | "clubes" | "profissionais">("atletas");
+  const [aba, setAba] = useState<AbaExplorar>("atletas");
   const [dados, setDados] = useState<DadosExplorar>({
     atletas: [],
     professores: [],
     olheiros: [],
     clubes: [],
     escolas: [],
+    eventos: [], 
   });
 
   const [showFilters, setShowFilters] = useState(false);
@@ -207,6 +283,12 @@ function Explorar() {
   const [showCountEscolas, setShowCountEscolas] = useState(12);
   const [showCountClubes, setShowCountClubes] = useState(12);
   const [showCountProfs, setShowCountProfs] = useState(12);
+
+  const [selectedEvento, setSelectedEvento] = useState<EventoItem | null>(null);
+  const [showEventoModal, setShowEventoModal] = useState(false);
+  const [inscrevendoEvento, setInscrevendoEvento] = useState(false);
+  const [erroEvento, setErroEvento] = useState<string | null>(null);
+
 
   const handleImgError: React.ReactEventHandler<HTMLImageElement> = (e) => {
     const img = e.currentTarget;
@@ -233,6 +315,31 @@ function Explorar() {
     setShowCountClubes((c) => Math.max(c, pageSize));
     setShowCountProfs((c) => Math.max(c, pageSize));
   }, [pageSize]);
+
+useEffect(() => {
+  if (aba !== "eventos") return;
+
+  const token = Storage?.token || "";
+
+  console.log("📡 Buscando eventos..."); // Vai aparecer no console também
+
+  axios.get(`${API.BASE_URL}/api/eventos`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
+  .then(res => {
+    console.log("📥 Eventos recebidos:", res.data);
+    setDados(prev => ({
+      ...prev,
+      eventos: res.data || [],
+    }));
+  })
+  .catch(err => {
+    console.error("❌ Erro ao buscar eventos", err);
+    setDados(prev => ({ ...prev, eventos: [] }));
+  });
+
+}, [aba]);
+
 
   const filtrosKey = JSON.stringify(filtros);
 
@@ -284,6 +391,33 @@ function Explorar() {
       return true;
     });
   }, [dados.atletas, filtros]);
+
+const eventosFiltrados = useMemo(() => {
+  const q = (busca || "").toLowerCase();
+
+  return (dados.eventos || []).filter((ev) => {
+    if (!q) return true;
+
+    const organizadorNome =
+      ev.clube?.nome ||
+      (ev as any).escolinha?.nome ||
+      "";
+
+    const campos = [
+      ev.titulo,
+      ev.descricao || "",
+      ev.cidade || "",
+      ev.estado || "",
+      ev.local || "",
+      organizadorNome,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    return campos.includes(q);
+  });
+}, [dados.eventos, busca]);
+
 
   useEffect(() => {
     setShowCountAtletas(pageSize);
@@ -395,10 +529,11 @@ function Explorar() {
           olheiros: filtrarEu<OlheiroItem>(data.olheiros || []),
           clubes: filtrarEu<ClubeItem>(data.clubes || []),
           escolas: filtrarEu<EscolaItem>(data.escolas || []),
+          eventos: (data.eventos || []) as EventoItem[],
         });
       })
       .catch(() => {
-        setDados({ atletas: [], professores: [], olheiros: [], clubes: [], escolas: [] });
+        setDados({ atletas: [], professores: [], olheiros: [], clubes: [], escolas: [], eventos: [] });
       })
       .finally(() => setCarregandoDados(false));
   }, [busca, loggedUserId, filtrosKey, filtrarEu]);
@@ -505,9 +640,18 @@ function Explorar() {
               >
                 Profissionais
               </Tab>
+            <Tab
+              active={aba === "eventos"}
+              onClick={() => setAba("eventos")}
+              icon={<CalendarClock className="h-4 w-4" />}
+              className="min-w-[120px]"
+            >
+              Eventos
+            </Tab>
+
             </div>
           </div>
-          <div className="hidden sm:grid sm:grid-cols-4 sm:gap-2">
+          <div className="hidden sm:grid sm:grid-cols-5 sm:gap-2">
             <Tab active={aba === "atletas"} onClick={() => setAba("atletas")} icon={<Trophy className="h-4 w-4" />}>
               Atletas
             </Tab>
@@ -520,6 +664,10 @@ function Explorar() {
             <Tab active={aba === "profissionais"} onClick={() => setAba("profissionais")} icon={<User className="h-4 w-4" />}>
               Profissionais
             </Tab>
+            <Tab active={aba === "eventos"} onClick={() => setAba("eventos")} icon={<CalendarClock className="h-4 w-4" />}>
+              Eventos
+            </Tab>
+
           </div>
         </div>
             </div>
@@ -1017,7 +1165,305 @@ function Explorar() {
 
           </>
         )}
+
+        {aba === "eventos" && (
+          <>
+            <h2 className="text-base sm:text-lg font-bold my-4">Eventos e Peneiras</h2>
+
+            {eventosFiltrados.length === 0 && !carregandoDados && (
+              <p className="text-sm text-gray-600">Nenhum evento encontrado no momento.</p>
+            )}
+
+            {carregandoDados && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="bg-white rounded-xl p-4 shadow-sm animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-2/3" />
+                    <div className="h-3 bg-gray-200 rounded w-1/3 mt-2" />
+                    <div className="h-3 bg-gray-200 rounded w-1/2 mt-4" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!carregandoDados && eventosFiltrados.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+                {eventosFiltrados.map((ev) => {
+                  const dataLabel = formatDateRange(ev.inicio, ev.fim);
+                  const localLabel =
+                    ev.local || ev.cidade || ev.estado
+                      ? `${ev.local ? ev.local + " • " : ""}${ev.cidade ?? ""}${ev.estado ? ` - ${ev.estado}` : ""}`
+                      : "Local a definir";
+
+                  return (
+                    <button
+                      key={ev.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedEvento(ev);
+                        setShowEventoModal(true);
+                        setErroEvento(null);
+                      }}
+                      className="text-left bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition flex flex-col gap-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-sm sm:text-base line-clamp-2">{ev.titulo}</h3>
+                            {(ev.clube || (ev as any).escolinha) && (
+                              <p className="text-xs text-gray-600">
+                                Organizado por {ev.clube?.nome || (ev as any).escolinha?.nome}
+                              </p>
+                            )}
+                          <p className="mt-1 text-xs text-gray-600">{dataLabel}</p>
+                        </div>
+                        <Pill tone={ev.tipo === "PENEIRA" ? "amber" : "emerald"} className="shrink-0">
+                          {ev.tipo === "PENEIRA" ? "Peneira" : "Evento"}
+                        </Pill>
+                      </div>
+
+                      <p className="text-xs text-gray-700 line-clamp-3">
+                        {ev.descricao || "Sem descrição detalhada."}
+                      </p>
+
+                      <div className="flex flex-wrap gap-1 mt-1 text-[11px] text-gray-700">
+                        <span className="inline-flex items-center gap-1">
+                          <CalendarClock className="h-3 w-3" />
+                          {dataLabel}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {localLabel}
+                        </span>
+                        {typeof ev.totalInscritos === "number" && (
+                          <span className="inline-flex items-center gap-1">
+                            <Users className="h-3 w-3" />
+                            {ev.totalInscritos} inscritos
+                          </span>
+                        )}
+                      </div>
+
+                      {ev.inscrito && (
+                        <Pill tone="emerald" className="mt-1">
+                          <Ticket className="h-3 w-3" /> Você está inscrito
+                        </Pill>
+                      )}
+                      {ev.convidado && !ev.inscrito && (
+                        <Pill tone="sky" className="mt-1">
+                          Convite recebido
+                        </Pill>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
       </div>
+
+      {showEventoModal && selectedEvento && (
+        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/40">
+          <div className="absolute inset-0" onClick={() => setShowEventoModal(false)} />
+
+          <div
+            className="relative z-50 w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-lg p-4 sm:p-5 max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base sm:text-lg font-semibold text-green-900">
+                  {selectedEvento.titulo}
+                </h2>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  <Pill tone={selectedEvento.tipo === "PENEIRA" ? "amber" : "emerald"}>
+                    {selectedEvento.tipo === "PENEIRA" ? "Peneira" : "Evento"}
+                  </Pill>
+                  <Pill tone="gray">
+                    {formatDateRange(selectedEvento.inicio, selectedEvento.fim)}
+                  </Pill>
+                  {selectedEvento.status !== "ABERTO" && (
+                    <Pill tone="rose">
+                      {selectedEvento.status === "ENCERRADO" ? "Encerrado" : "Cancelado"}
+                    </Pill>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowEventoModal(false)}
+                className="p-1 rounded-full hover:bg-gray-100"
+                aria-label="Fechar detalhes do evento"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {(selectedEvento.clube || (selectedEvento as any).escolinha) && (
+              <div className="flex items-center gap-2 mb-3">
+                <img
+                  src={
+                    formatarUrlFoto(selectedEvento.clube?.logo || (selectedEvento as any).escolinha?.logo) ||
+                    "/placeholder.png"
+                  }
+                  alt="Logo do organizador"
+                  className="w-8 h-8 rounded-full object-cover border"
+                />
+                <div className="text-xs text-gray-700">
+                  <div className="font-semibold">
+                    Organizado por{" "}
+                    {selectedEvento.clube?.nome || (selectedEvento as any).escolinha?.nome}
+                  </div>
+                </div>
+              </div>
+            )}
+
+
+            <div className="space-y-3 text-sm text-gray-800">
+              {selectedEvento.descricao && (
+                <p className="whitespace-pre-line">{selectedEvento.descricao}</p>
+              )}
+
+              <div className="flex items-start gap-2">
+                <MapPin className="h-4 w-4 mt-0.5 text-green-800" />
+                <div>
+                  <div>{selectedEvento.local || "Local a definir"}</div>
+                  {(selectedEvento.cidade || selectedEvento.estado || selectedEvento.pais) && (
+                    <div className="text-xs text-gray-600">
+                      {[selectedEvento.cidade, selectedEvento.estado, selectedEvento.pais]
+                        .filter(Boolean)
+                        .join(" • ")}
+                    </div>
+                  )}
+                  {selectedEvento.endereco && (
+                    <div className="text-xs text-gray-600 mt-0.5">{selectedEvento.endereco}</div>
+                  )}
+                </div>
+              </div>
+
+              {typeof selectedEvento.vagas === "number" && (
+                <div className="text-xs text-gray-700">
+                  Vagas: {selectedEvento.vagas}
+                  {typeof selectedEvento.totalInscritos === "number" && (
+                    <> • {selectedEvento.totalInscritos} já inscritos</>
+                  )}
+                </div>
+              )}
+
+              {selectedEvento.valorInscricao && (
+                <div className="text-xs text-gray-700">
+                  Taxa de inscrição: R$ {selectedEvento.valorInscricao}
+                </div>
+              )}
+
+              {selectedEvento.requisitos && selectedEvento.requisitos.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold mb-1">Requisitos:</div>
+                  <ul className="list-disc list-inside text-xs text-gray-700 space-y-0.5">
+                    {selectedEvento.requisitos.map((req, i) => (
+                      <li key={i}>{req}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {erroEvento && (
+                <div className="text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-md px-3 py-2">
+                  {erroEvento}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex flex-col sm:flex-row gap-2">
+              {selectedEvento.linkInscricao && (
+                <a
+                  href={selectedEvento.linkInscricao}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 text-center py-2 rounded-lg border text-sm font-medium text-green-800 hover:bg-emerald-50"
+                >
+                  Ver página do evento
+                </a>
+              )}
+
+              <button
+                type="button"
+                disabled={
+                  selectedEvento.status !== "ABERTO" ||
+                  selectedEvento.inscrito ||
+                  inscrevendoEvento
+                }
+                onClick={async () => {
+                  if (!selectedEvento) return;
+                  const token = Storage?.token || "";
+
+                  if (!token) {
+                    setErroEvento("Faça login para se inscrever no evento.");
+                    return;
+                  }
+
+                  try {
+                    setInscrevendoEvento(true);
+                    setErroEvento(null);
+
+                    await axios.post(
+                      `${API.BASE_URL}/api/eventos/${selectedEvento.id}/inscricoes`,
+                      {},
+                      {
+                        headers: { Authorization: `Bearer ${token}` },
+                      }
+                    );
+
+                    // atualiza state local
+                    setSelectedEvento((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            inscrito: true,
+                            totalInscritos: (prev.totalInscritos ?? 0) + 1,
+                          }
+                        : prev
+                    );
+                    setDados((prev) => ({
+                      ...prev,
+                      eventos: prev.eventos.map((ev) =>
+                        ev.id === selectedEvento.id
+                          ? {
+                              ...ev,
+                              inscrito: true,
+                              totalInscritos: (ev.totalInscritos ?? 0) + 1,
+                            }
+                          : ev
+                      ),
+                    }));
+                  } catch (err: any) {
+                    const msg =
+                      err?.response?.data?.message ||
+                      "Não foi possível concluir sua inscrição. Tente novamente.";
+                    setErroEvento(msg);
+                  } finally {
+                    setInscrevendoEvento(false);
+                  }
+                }}
+                className={`flex-1 inline-flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold ${
+                  selectedEvento.status !== "ABERTO" || selectedEvento.inscrito
+                    ? "bg-gray-200 text-gray-600 cursor-not-allowed"
+                    : "bg-emerald-600 text-white hover:bg-emerald-700"
+                }`}
+              >
+                <Ticket className="h-4 w-4" />
+                {selectedEvento.inscrito
+                  ? "Você já está inscrito"
+                  : selectedEvento.status !== "ABERTO"
+                  ? "Inscrições encerradas"
+                  : inscrevendoEvento
+                  ? "Inscrevendo..."
+                  : "Inscrever-se"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <nav
         className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md"

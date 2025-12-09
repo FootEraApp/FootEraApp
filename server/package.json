@@ -17,8 +17,8 @@
     "seed": "prisma db seed",
     "start:migrate": "prisma migrate deploy && node --enable-source-maps dist/index.js",
     "postinstall": "prisma generate",
-    "seed:ex": "ts-node --transpile-only prisma/seed_exercicios.ts",
-    "seed:base": "ts-node --transpile-only prisma/seed.ts",
+    "seed:ex": "tsx prisma/seed_exercicios.ts",
+    "seed:base": "tsx prisma/seed.ts",
     "seed:all": "npm run seed:ex && npm run seed:base"
   },
   "dependencies": {
@@ -28,6 +28,7 @@
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
+    "date-fns": "^4.1.0",
     "dayjs": "^1.11.18",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
