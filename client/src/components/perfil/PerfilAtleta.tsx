@@ -232,7 +232,7 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
 
   return (
     <div className="min-h-screen bg-transparent">
-      <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="max-w-3xl mx-auto px-4 py-6 bg-transparent">
         <ProfileHeader
           nome={perfil.usuario.nome}
           idade={perfil.dadosEspecificos.idade}

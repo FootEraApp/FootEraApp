@@ -859,6 +859,7 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
   try {
     const atletaIdQuery = typeof req.query.atletaId === "string" ? req.query.atletaId.trim() : "";
     const apenasFuturos = String(req.query.apenasFuturos || "") === "1";
+    const apenasComSubmissao = String(req.query.apenasComSubmissao || "") === "1";
 
     let atletaId: string | null = null;
     let atletaUsuarioId: string | null = null;
@@ -933,7 +934,7 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
 
     const now = new Date();
 
-    const normalizados = rows.map((r) => {
+        const normalizados = rows.map((r) => {
       const tu = tuMap.get(r.id);
       const sub = subMap.get(r.id) ?? { enviados: 0, aprovados: 0 };
 
@@ -952,20 +953,20 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
 
       return {
         ...r,
-treinoProgramado: r.treinoProgramado
-  ? {
-      ...r.treinoProgramado,
-      exercicios: r.treinoProgramado.exercicios.map((e: any) => ({
-        repeticoes: e.repeticoes ?? "",
-        exercicio: {
-          id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
-          nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
-          videoDemonstrativoUrl: e.exercicio?.videoDemonstrativoUrl ?? null,
-          imgDemonstrativaUrl: e.exercicio?.imgDemonstrativaUrl ?? null,
-        },
-      })),
-    }
-  : null,
+        treinoProgramado: r.treinoProgramado
+          ? {
+              ...r.treinoProgramado,
+              exercicios: r.treinoProgramado.exercicios.map((e: any) => ({
+                repeticoes: e.repeticoes ?? "",
+                exercicio: {
+                  id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
+                  nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
+                  videoDemonstrativoUrl: e.exercicio?.videoDemonstrativoUrl ?? null,
+                  imgDemonstrativaUrl: e.exercicio?.imgDemonstrativaUrl ?? null,
+                },
+              })),
+            }
+          : null,
         meuStatus: meu,
         startedAt: tu?.startedAt ?? null,
         completedAt: tu?.completedAt ?? null,
@@ -977,15 +978,24 @@ treinoProgramado: r.treinoProgramado
       };
     });
 
-    if (!apenasFuturos) return res.json(normalizados);
+    // 🔎 A partir daqui aplicamos os filtros opcionais
+    let resultado: any[] = normalizados;
 
-    const hoje = startOfToday();
-    const filtrados = normalizados.filter((r: any) => {
-      const okDataTreino = r.dataTreino && r.dataTreino >= hoje;
-      return okDataTreino || !r.dataTreino;
-    });
+    // Se quiser só treinos futuros
+    if (apenasFuturos) {
+      const hoje = startOfToday();
+      resultado = resultado.filter((r: any) => {
+        const okDataTreino = r.dataTreino && r.dataTreino >= hoje;
+        return okDataTreino || !r.dataTreino;
+      });
+    }
 
-    return res.json(filtrados);
+    // ✅ Se quiser só treinos que já tiveram submissão (não só agendados)
+    if (apenasComSubmissao) {
+      resultado = resultado.filter((r: any) => (r.submissao?.enviados ?? 0) > 0);
+    }
+
+    return res.json(resultado);
   } catch (e) {
     console.error("getTreinosAgendados", e);
     return res.status(500).json({ error: "Erro ao buscar treinos agendados" });

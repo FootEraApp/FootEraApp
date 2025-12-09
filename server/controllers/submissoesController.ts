@@ -41,13 +41,13 @@ async function atletaTemVinculo(atletaId: string) {
 }
 
 export async function criarSubmissaoTreinoUpload(
-   req: AuthenticatedRequest,
-   res: Response
-  ) {
-    if (req.user?.tipo === "Atleta" && req.user?.plano !== "PRO") {
-      const ok = await requireUsage(req, res, "treinos_semana");
-      if (!ok) return; 
-    }
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  if (req.user?.tipo === "Atleta" && req.user?.plano !== "PRO") {
+    const ok = await requireUsage(req, res, "treinos_semana");
+    if (!ok) return;
+  }
 
   try {
     const {
@@ -130,15 +130,23 @@ export async function criarSubmissaoTreinoUpload(
         repeticoes: repeticoesNum,
         midias: { create: [midia] },
       },
-      select: { id: true, aprovado: true },
+      // ⬇️ precisamos do criadoEm para calcular atraso
+      select: { id: true, aprovado: true, criadoEm: true },
     });
 
     if (usuarioIdForActivity) {
-      await prisma.atividadeRecente.create({
-        data: { usuarioId: usuarioIdForActivity, tipo: "treino", imagemUrl: assetUrl },
-      }).catch(() => {});
+      await prisma.atividadeRecente
+        .create({
+          data: {
+            usuarioId: usuarioIdForActivity,
+            tipo: "treino",
+            imagemUrl: assetUrl,
+          },
+        })
+        .catch(() => {});
     }
 
+    // busca o treino agendado + treino programado pra saber duração e data
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id: treinoAgendadoId },
       include: { treinoProgramado: true },
@@ -151,7 +159,10 @@ export async function criarSubmissaoTreinoUpload(
     });
 
     if (tipoStr) {
-      const v = tipoStr.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+      const v = tipoStr
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLowerCase();
       const map: Record<string, TipoTreino> = {
         fisico: "Fisico",
         tecnico: "Tecnico",
@@ -162,22 +173,83 @@ export async function criarSubmissaoTreinoUpload(
       if (enumVal) {
         await prisma.atleta.update({
           where: { id: atletaId },
-          data: { perfilTipoTreino: enumVal, perfilTipoTreinoAtualizadoEm: new Date() },
+          data: {
+            perfilTipoTreino: enumVal,
+            perfilTipoTreinoAtualizadoEm: new Date(),
+          },
         });
       }
     }
 
-    if (created.aprovado) {
-      const minutosParaEstat =
-        duracaoMinutos ? Number(duracaoMinutos)
-        : tempoSegNum != null ? Math.round(tempoSegNum / 60)
-        : undefined;
+    let penalidadeAtraso = false;
+    let minutosConsiderados: number | undefined;
 
-      await aplicarEstatisticasPosSubmissao(created.id, atletaId, treinoAgendadoId, minutosParaEstat).catch(() => {});
+    if (created.aprovado) {
+      // 🔽 minutos base: o que veio da submissão ou a duração do treino programado
+      const minutosBase =
+        duracaoMinutos != null
+          ? Number(duracaoMinutos)
+          : tempoSegNum != null
+          ? Math.round(tempoSegNum / 60)
+          : ag?.treinoProgramado?.duracao != null
+          ? Number(ag.treinoProgramado.duracao)
+          : undefined;
+
+      minutosConsiderados = minutosBase;
+
+      if (minutosBase && ag?.dataTreino && created.criadoEm) {
+        const inicio =
+          ag.dataTreino instanceof Date
+            ? ag.dataTreino
+            : new Date(ag.dataTreino as any);
+
+        const fimPrevisto = new Date(
+          inicio.getTime() + minutosBase * 60 * 1000
+        );
+        const limite = new Date(
+          fimPrevisto.getTime() + 5 * 60 * 1000
+        ); // +5min de tolerância
+
+        const fimReal =
+          created.criadoEm instanceof Date
+            ? created.criadoEm
+            : new Date(created.criadoEm as any);
+
+        // ⏰ se finalizou DEPOIS do limite -> aplica penalidade
+        if (fimReal > limite) {
+          minutosConsiderados = Math.round(minutosBase / 2);
+          penalidadeAtraso = true;
+          console.log(
+            "[SubmissaoTreino] Penalidade de atraso aplicada:",
+            {
+              submissaoId: created.id,
+              atletaId,
+              treinoAgendadoId,
+              minutosBase,
+              minutosConsiderados,
+              inicio,
+              fimPrevisto,
+              limite,
+              fimReal,
+            }
+          );
+        }
+      }
+
+      await aplicarEstatisticasPosSubmissao(
+        created.id,
+        atletaId,
+        treinoAgendadoId,
+        minutosConsiderados
+      ).catch(() => {});
       await recomputePontuacaoAtleta(atletaId).catch(() => {});
 
-      const atleta = await prisma.atleta.findUnique({ where: { id: atletaId }, select: { usuarioId: true } });
-      if (atleta?.usuarioId) atualizarCachePontuacao(atleta.usuarioId).catch(() => {});
+      const atleta = await prisma.atleta.findUnique({
+        where: { id: atletaId },
+        select: { usuarioId: true },
+      });
+      if (atleta?.usuarioId)
+        atualizarCachePontuacao(atleta.usuarioId).catch(() => {});
     }
 
     return res.status(201).json({
@@ -185,14 +257,19 @@ export async function criarSubmissaoTreinoUpload(
       id: created.id,
       autoAprovado: !temVinculo,
       temVinculo,
+      penalidadeAtraso,
+      minutosConsiderados: minutosConsiderados ?? null,
       mensagem: temVinculo
-        ? "Submissão enviada. Aguarde validação do responsável."
+        ? penalidadeAtraso
+          ? "Submissão enviada, mas o treino foi finalizado com atraso. Pontos e minutos reduzidos."
+          : "Submissão enviada. Aguarde validação do responsável."
         : "Submissão aprovada automaticamente (sem pontuação) por ausência de vínculo.",
     });
-
   } catch (error) {
     console.error("Erro ao salvar submissão de treino:", error);
-    return res.status(500).json({ error: "Erro ao salvar submissão de treino." });
+    return res
+      .status(500)
+      .json({ error: "Erro ao salvar submissão de treino." });
   }
 }
 
