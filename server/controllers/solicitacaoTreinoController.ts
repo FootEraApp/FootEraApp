@@ -1,3 +1,4 @@
+// server/controllers/solicitacaoTreinoController
 import { Response, Request } from "express";
 import { PrismaClient } from "@prisma/client";
 import { resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
@@ -177,6 +178,49 @@ export async function criarSolicitacao(req: Request, res: Response) {
   if (!remetenteId) return res.status(401).json({ message: "Não autenticado." });
   if (!destinatarioId) return res.status(400).json({ message: "destinatarioId é obrigatório" });
   if (remetenteId === destinatarioId) return res.status(400).json({ message: "Não é permitido enviar para si mesmo." });
+
+// 1) Verificar se já existe relação real (RelacaoTreinamento)
+const rel = await prisma.relacaoTreinamento.findFirst({
+  where: {
+    OR: [
+      // atleta treinado por professor
+      {
+        atleta: { usuarioId: remetenteId },
+        professor: { usuarioId: destinatarioId }
+      },
+      {
+        atleta: { usuarioId: destinatarioId },
+        professor: { usuarioId: remetenteId }
+      },
+      // atleta treinado por clube
+      {
+        atleta: { usuarioId: remetenteId },
+        clube:   { usuarioId: destinatarioId }
+      },
+      {
+        atleta: { usuarioId: destinatarioId },
+        clube:   { usuarioId: remetenteId }
+      },
+      // atleta treinado por escolinha
+      {
+        atleta: { usuarioId: remetenteId },
+        escolinha: { usuarioId: destinatarioId }
+      },
+      {
+        atleta: { usuarioId: destinatarioId },
+        escolinha: { usuarioId: remetenteId }
+      },
+    ]
+  },
+});
+
+// SE já existe vínculo real → NÃO CRIAR solicitação
+if (rel) {
+  return res.status(409).json({
+    message: "Vocês já possuem vínculo de treinamento.",
+    jaVinculados: true
+  });
+}
 
   const existente = await prisma.solicitacaoTreino.findFirst({
     where: {
@@ -376,5 +420,123 @@ export async function recusarSolicitacao(req: Request, res: Response) {
   } catch (error) {
     console.error("Erro ao recusar solicitação:", error);
     return res.status(500).json({ error: "Erro interno do servidor" });
+  }
+}
+
+export async function verificarVinculoTreino(req: Request, res: Response) {
+  try {
+    const me: string | undefined = (req as any).user?.id || (req as any).userId;
+    if (!me) {
+      return res.status(401).json({ error: "Não autenticado." });
+    }
+
+    // id do outro usuário (perfil que estou vendo)
+    const usuarioAlvoId =
+      (req.query.usuarioAlvoId as string) ||
+      (req.query.alvoId as string) ||
+      (req.query.usuarioId as string);
+
+    if (!usuarioAlvoId) {
+      return res
+        .status(400)
+        .json({ error: "Informe usuarioAlvoId na query string." });
+    }
+
+    // Buscar os dois usuários
+    const usuarios = await prisma.usuario.findMany({
+      where: { id: { in: [me, usuarioAlvoId] } },
+      select: { id: true, tipo: true },
+    });
+
+    const uMe = usuarios.find((u) => u.id === me);
+    const uAlvo = usuarios.find((u) => u.id === usuarioAlvoId);
+
+    if (!uMe || !uAlvo) {
+      return res.status(404).json({ error: "Usuário não encontrado." });
+    }
+
+    // helper local para resolver ids de Atleta/Professor/Clube/Escolinha
+    async function getIdsByTipo(
+      usuarioId: string,
+      tipo?: string
+    ): Promise<{
+      atletaId?: string;
+      professorId?: string;
+      clubeId?: string;
+      escolinhaId?: string;
+    }> {
+      switch (tipo) {
+        case "Professor": {
+          const r = await prisma.professor.findUnique({
+            where: { usuarioId },
+          });
+          return { professorId: r?.id };
+        }
+        case "Atleta": {
+          const r = await prisma.atleta.findUnique({
+            where: { usuarioId },
+          });
+          return { atletaId: r?.id };
+        }
+        case "Escolinha": {
+          const r = await prisma.escolinha.findUnique({
+            where: { usuarioId },
+          });
+          return { escolinhaId: r?.id };
+        }
+        case "Clube": {
+          const r = await prisma.clube.findUnique({
+            where: { usuarioId },
+          });
+          return { clubeId: r?.id };
+        }
+        default:
+          return {};
+      }
+    }
+
+    // Resolver IDs das entidades envolvidas
+    const idsMe = await getIdsByTipo(uMe.id, uMe.tipo);
+    const idsAlvo = await getIdsByTipo(uAlvo.id, uAlvo.tipo);
+
+    // Consolidar: queremos um atleta + (professor | clube | escolinha)
+    const atletaId = idsMe.atletaId || idsAlvo.atletaId;
+    const professorId = idsMe.professorId || idsAlvo.professorId;
+    const clubeId = idsMe.clubeId || idsAlvo.clubeId;
+    const escolinhaId = idsMe.escolinhaId || idsAlvo.escolinhaId;
+
+    if (!atletaId) {
+      return res.status(400).json({
+        error:
+          "Não há atleta envolvido na relação (é necessário um atleta e um professor/clube/escolinha).",
+      });
+    }
+
+    if (!professorId && !clubeId && !escolinhaId) {
+      return res.status(400).json({
+        error:
+          "Não há professor/clube/escolinha envolvido na relação de treinamento.",
+      });
+    }
+
+    // Montar filtro dinâmico para RelacaoTreinamento
+    const where: any = {
+      atletaId,
+      encerradoEm: null, // só vínculo ativo
+    };
+    if (professorId) where.professorId = professorId;
+    if (clubeId) where.clubeId = clubeId;
+    if (escolinhaId) where.escolinhaId = escolinhaId;
+
+    const relacao = await prisma.relacaoTreinamento.findFirst({ where });
+
+    return res.json({
+      vinculo: !!relacao,
+      relacaoId: relacao?.id ?? null,
+      relacao,
+    });
+  } catch (e) {
+    console.error("verificarVinculoTreino erro:", e);
+    return res.status(500).json({ error: "Erro ao verificar vínculo." });
   }
 }

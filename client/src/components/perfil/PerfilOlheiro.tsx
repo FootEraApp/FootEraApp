@@ -1,3 +1,4 @@
+// client/src/components/perfil/perfilOlheiro
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -316,6 +317,12 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
     (typeof data.usuario?.foto === "string" && data.usuario.foto) ||
     (typeof data.olheiro.fotoUrl === "string" && data.olheiro.fotoUrl) ||
     undefined;
+  const perfilUsuarioId: string =
+    (data.usuario && data.usuario.id) ||
+    data.olheiro.usuarioId ||
+    "";
+
+
 
   const clubeColab = data.olheiro.colaboracaoClube || null;
 
@@ -346,14 +353,15 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
         time={time}
         isOwnProfile={isOwn}
         foto={headerFoto}
-        perfilId={data.usuario?.id || data.olheiro.usuarioId || data.olheiro.id}
         kpis={[
           { label: "Atletas", value: atletasCount },
           { label: "Indicações", value: kpiIndicacoes },
           { label: "Reputação", value: reputacaoScore },
         ]}
+        perfilId={perfilUsuarioId}
+        perfilTipoProp="olheiro"
+        perfilTipoIdProp={data.olheiro.id}
       />
-  
       {clubeColab && (
         <div className="px-4 mt-2">
           <Link
