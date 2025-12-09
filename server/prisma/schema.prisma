@@ -368,19 +368,19 @@ model Seguidor {
 }
 
 model RelacaoTreinamento {
-  id          String     @id @default(uuid())
-  professorId String?
-  atletaId    String?
-  escolinhaId String?
-  clubeId     String?
+  id            String     @id @default(uuid())
+  professorId   String?
+  atletaId      String?
+  escolinhaId   String?
+  clubeId       String?
   organizacaoId String?
-  ativo       Boolean?
-  criadoEm    DateTime   @default(now())
-  atleta      Atleta?    @relation("RelacaoAtleta", fields: [atletaId], references: [id], onDelete: SetNull)
-  clube       Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
-  escolinha   Escolinha? @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
-  professor   Professor? @relation("RelacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
-  encerradoEm DateTime?  @default(now())
+  ativo         Boolean?
+  criadoEm      DateTime   @default(now())
+  atleta        Atleta?    @relation("RelacaoAtleta", fields: [atletaId], references: [id], onDelete: SetNull)
+  clube         Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha     Escolinha? @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
+  professor     Professor? @relation("RelacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
+  encerradoEm   DateTime?  @default(now())
 
   @@unique([professorId, atletaId, escolinhaId, clubeId])
 }
@@ -992,13 +992,13 @@ model AtletaElenco {
 }
 
 model Evento {
-  id             String            @id @default(uuid())
+  id          String  @id @default(uuid())
   // agora pode ser de clube OU de escolinha
-  clubeId        String?
-  escolinhaId    String?
+  clubeId     String?
+  escolinhaId String?
 
   titulo         String
-  tipo           EventoTipo        @default(PENEIRA)
+  tipo           EventoTipo   @default(PENEIRA)
   descricao      String?
   inicio         DateTime
   fim            DateTime?
@@ -1008,19 +1008,18 @@ model Evento {
   pais           String?
   endereco       String?
   vagas          Int?
-  valorInscricao Decimal?          @db.Decimal(10, 2)
+  valorInscricao Decimal?     @db.Decimal(10, 2)
   linkInscricao  String?
   requisitos     String[]
-  status         EventoStatus      @default(ABERTO)
-  criadoEm       DateTime          @default(now())
-  atualizadoEm   DateTime          @updatedAt
+  status         EventoStatus @default(ABERTO)
+  criadoEm       DateTime     @default(now())
+  atualizadoEm   DateTime     @updatedAt
 
   // relações
-  clube        Clube?             @relation(fields: [clubeId], references: [id], onDelete: Cascade)
-  escolinha    Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
-  inscricoes   InscricaoEvento[]
+  clube      Clube?            @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  escolinha  Escolinha?        @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
+  inscricoes InscricaoEvento[]
 }
-
 
 model InscricaoEvento {
   id             String                @id @default(uuid())
@@ -1818,21 +1817,21 @@ enum TipoMembro {
 }
 
 enum EventoTipo {
-  PENEIRA      // teste seletivo (já existe)
-  EVENTO       // genérico / misto (já existe)
+  PENEIRA // teste seletivo (já existe)
+  EVENTO // genérico / misto (já existe)
 
-  TORNEIO      // competição com chaveamento ou tabela
-  COPA         // campeonatos em formato de copa
-  LIGA         // competição de pontos corridos
+  TORNEIO // competição com chaveamento ou tabela
+  COPA // campeonatos em formato de copa
+  LIGA // competição de pontos corridos
 
-  AMISTOSO     // jogos amistosos, amistoso de observação, etc.
+  AMISTOSO // jogos amistosos, amistoso de observação, etc.
   TREINO_ABERTO // treino aberto para novos atletas ou observação
-  CAMP         // camp intensivo (vários dias)
-  CLINICA      // clínica técnica, focada em habilidades específicas
+  CAMP // camp intensivo (vários dias)
+  CLINICA // clínica técnica, focada em habilidades específicas
 
-  SHOWCASE     // vitrine para olheiros / scouts
-  WORKSHOP     // evento prático, geralmente com atividades em campo
-  PALESTRA     // evento mais teórico, talks, palestras inspiracionais
+  SHOWCASE // vitrine para olheiros / scouts
+  WORKSHOP // evento prático, geralmente com atividades em campo
+  PALESTRA // evento mais teórico, talks, palestras inspiracionais
 }
 
 enum EventoStatus {
