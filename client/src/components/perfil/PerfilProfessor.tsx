@@ -1,3 +1,4 @@
+// client/src/components/perfil/perfilProfessor
 import { useEffect, useMemo, useState, useCallback, ReactNode} from "react";
 import axios from "axios";
 import { CalendarClock, Activity, PlusCircle, ChevronRight, Trophy } from "lucide-react";
@@ -422,6 +423,12 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   const unlockedFinal = Array.from(new Set([...unlockedIds, ...extraFromGrupos]));
   const conquistasCount = unlockedFinal.length;
   const alunosCount = (vinculados?.length ?? data.metrics.alunosRelacionados ?? 0);
+  const usuarioPerfilId =
+  data.usuario?.id ||
+  data.professor.usuarioId ||
+  usuarioIdStorage || "";
+
+  const professorTipoId = data.professor.id;
 
   async function salvarVinculo() {
     if (!rawToken || !professorId || !orgSelecionada) return;
@@ -464,7 +471,9 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         time={time}
         isOwnProfile={isOwn}
         foto={headerFoto}
-        perfilId={data.usuario?.id || data.professor.usuarioId || data.professor.id}
+        perfilId={usuarioPerfilId}
+        perfilTipoProp="professor"
+        perfilTipoIdProp={professorTipoId}
         kpis={[
           { label: "Alunos", value: alunosCount },
           { label: "Treinos", value: data.metrics.treinosProgramados ?? 0 },

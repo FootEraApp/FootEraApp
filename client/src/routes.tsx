@@ -39,6 +39,8 @@ import PaginaPerfilOlheiro from "./components/perfil/PerfilOlheiro.js";
 import PaginaEventosClube from "./pages/eventosClube.js";
 import PaginaNovoEventoClube from "./pages/eventosClubeNovo.js";
 import PaginaEventoDetalhe from "./pages/eventoDetalhe.js";
+import PaginaEventosEscola from "./pages/eventosEscola.js";
+import PaginaNovoEventoEscola from "./pages/eventosEscolaNovo.js";
 import PaginaTreinoUnico from "./pages/TreinoUnico.js";
 import PaginaTermosEPrivacidade from "./pages/TermosEPrivacidade.js"
 import PaginaOlheiros from "./pages/olheiro/index.js";
@@ -117,6 +119,16 @@ export function AppRoutes() {
         {(params?: { id: string }) =>
           params ? <PaginaEventosClube clubeId={params.id} /> : null}
       </Route>
+
+            <Route path="/eventos/escolas/:id/novo">
+        {(params?: { id: string }) =>
+          params ? <PaginaNovoEventoEscola escolaId={params.id} /> : null}
+      </Route>
+      <Route path="/eventos/escolas/:id">
+        {(params?: { id: string }) =>
+          params ? <PaginaEventosEscola escolaId={params.id} /> : null}
+      </Route>
+
       <Route path="/eventos/:id">
         {(params?: { id: string }) =>
           params ? <PaginaEventoDetalhe eventoId={params.id} /> : null}

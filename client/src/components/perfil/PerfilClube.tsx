@@ -1,3 +1,4 @@
+// client/src/components/perfil/PerfilClube
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
@@ -462,14 +463,18 @@ export default function PerfilClube({ idDaUrl }: Props) {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
-      <ProfileHeader
-        nome={nome}
-        time={time}
-        isOwnProfile={isOwn}
-        foto={headerFoto}
-        perfilId={data.usuario?.id || data.clube.usuarioId || data.clube.id}
-        kpis={kpis}
-      />
+<ProfileHeader
+  nome={nome}
+  time={time}
+  isOwnProfile={isOwn}
+  foto={headerFoto}
+  kpis={kpis}
+
+  perfilId={data.usuario?.id || data.clube.usuarioId}
+  perfilTipoProp="clube"
+  perfilTipoIdProp={data.clube.id}
+/>
+
 
       <div className="mt-4 grid grid-cols-4 gap-2">
         {(canEdit

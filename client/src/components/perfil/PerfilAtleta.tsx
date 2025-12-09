@@ -227,17 +227,19 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   return (
     <div className="min-h-screen bg-transparent">
       <div className="max-w-3xl mx-auto px-4 py-6">
-        <ProfileHeader
-          nome={perfil.usuario.nome}
-          idade={perfil.dadosEspecificos.idade}
-          posicao={perfil.dadosEspecificos.posicao}
-          time={undefined}
-          pontuacao={total}
-          scoreDelta={scoreDelta}
-          isOwnProfile={isOwnProfile}
-          foto={perfil.usuario.foto || perfil.dadosEspecificos.foto || undefined}
-          perfilId={idDaUrl || perfil.usuario.id}
-        />
+<ProfileHeader
+  nome={perfil.usuario.nome}
+  idade={perfil.dadosEspecificos.idade}
+  posicao={perfil.dadosEspecificos.posicao}
+  pontuacao={total}
+  scoreDelta={scoreDelta}
+  isOwnProfile={isOwnProfile}
+  foto={perfil.usuario.foto || perfil.dadosEspecificos.foto || undefined}
+
+  perfilId={perfil.usuario.id}              // SEMPRE usuarioId
+  perfilTipoProp="atleta"
+  perfilTipoIdProp={perfil.dadosEspecificos.id}  // Atleta.id
+/>
 
         <VinculosCard
           professor={professor?.nome || null}

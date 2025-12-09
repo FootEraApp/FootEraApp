@@ -18,7 +18,6 @@ const Storage = {
   get token() {
     return getFromStorage("token");
   },
-  
 };
 
 export default Storage;

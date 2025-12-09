@@ -1,3 +1,4 @@
+// server/controllers/gerenciarAtletasController
 import { PrismaClient, Categoria } from "@prisma/client";
 import { Request, Response } from "express";
 
@@ -52,41 +53,79 @@ export const gerenciarAtletasController = {
         return res.status(400).json({ message: "Parâmetro 'id' (usuarioId da entidade) é obrigatório" });
       }
 
-    let whereByVinculo: any = {};
-    let entidadeId: string | null = null;
+      let whereByVinculo: any = {};
+      let entidadeId: string | null = null;
 
-    if (vinculo === "clube") {
-      let entidade = await prisma.clube.findUnique({
-        where: { usuarioId: entidadeUsuarioId },
-        select: { id: true },
-      });
-      if (!entidade) {
-        entidade = await prisma.clube.findUnique({
-          where: { id: entidadeUsuarioId },
+      if (vinculo === "clube") {
+        let entidade = await prisma.clube.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
           select: { id: true },
         });
-      }
-      if (!entidade) return res.status(404).json({ message: "Entidade não encontrada" });
+        if (!entidade) {
+          entidade = await prisma.clube.findUnique({
+            where: { id: entidadeUsuarioId },
+            select: { id: true },
+          });
+        }
+        if (!entidade) {
+          return res.status(404).json({ message: "Entidade não encontrada" });
+        }
 
-      entidadeId = entidade.id;
-      whereByVinculo = { clubeId: entidade.id };
-    } else if (vinculo === "escolinha") {
-      const entidade = await prisma.escolinha.findUnique({
-        where: { usuarioId: entidadeUsuarioId },
-        select: { id: true },
-      });
-      if (!entidade) return res.status(404).json({ message: "Entidade não encontrada" });
-      entidadeId = entidade.id;
-      whereByVinculo = { escolinhaId: entidade.id };
-    } else {
-      const prof = await prisma.professor.findUnique({
-        where: { usuarioId: entidadeUsuarioId },
-        select: { id: true },
-      });
-      if (!prof) return res.status(404).json({ message: "Professor não encontrado" });
-      entidadeId = prof.id;
-      whereByVinculo = { relacoesTreinamento: { some: { professorId: prof.id } } };
-    }
+        entidadeId = entidade.id;
+
+        // 🔹 Busca todos os atletas ligados por RelacaoTreinamento a esse clube
+        const rels = await prisma.relacaoTreinamento.findMany({
+          where: { clubeId: entidade.id },
+          select: { atletaId: true },
+        });
+        const idsRelacao = rels.map((r) => r.atletaId).filter(Boolean);
+
+        // 🔹 Atleta ligado DIRETO (Atleta.clubeId) OU via RelacaoTreinamento
+        whereByVinculo = {
+          OR: [
+            { clubeId: entidade.id },
+            { id: { in: idsRelacao } },
+          ],
+        };
+      } else if (vinculo === "escolinha") {
+        let entidade = await prisma.escolinha.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
+          select: { id: true },
+        });
+        if (!entidade) {
+          entidade = await prisma.escolinha.findUnique({
+            where: { id: entidadeUsuarioId },
+            select: { id: true },
+          });
+        }
+        if (!entidade) {
+          return res.status(404).json({ message: "Entidade não encontrada" });
+        }
+
+        entidadeId = entidade.id;
+
+        const rels = await prisma.relacaoTreinamento.findMany({
+          where: { escolinhaId: entidade.id },
+          select: { atletaId: true },
+        });
+        const idsRelacao = rels.map((r) => r.atletaId).filter(Boolean);
+
+        whereByVinculo = {
+          OR: [
+            { escolinhaId: entidade.id },
+            { id: { in: idsRelacao } },
+          ],
+        };
+      } else {
+        const prof = await prisma.professor.findUnique({
+          where: { usuarioId: entidadeUsuarioId },
+          select: { id: true },
+        });
+        if (!prof) return res.status(404).json({ message: "Professor não encontrado" });
+        entidadeId = prof.id;
+        whereByVinculo = { relacoesTreinamento: { some: { professorId: prof.id } } };
+      }
+
       const where: any = { ...whereByVinculo };
       if (categoria) where.categoria = { has: categoria };
       if (search) {

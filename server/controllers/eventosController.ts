@@ -1,3 +1,4 @@
+// server/controllers/eventosController.ts
 import { Request, Response, NextFunction } from "express";
 import { PrismaClient } from "@prisma/client";
 import dayjs from "dayjs";
@@ -5,6 +6,27 @@ import jwt from "jsonwebtoken";
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
+
+const EVENTO_TIPO_LABEL: Record<string, string> = {
+  PENEIRA: "Peneira",
+  EVENTO: "Evento",
+  TORNEIO: "Torneio",
+  COPA: "Copa",
+  LIGA: "Liga",
+  AMISTOSO: "Amistoso",
+  TREINO_ABERTO: "Treino aberto",
+  CAMP: "Camp",
+  CLINICA: "Clínica",
+  SHOWCASE: "Showcase",
+  WORKSHOP: "Workshop",
+  PALESTRA: "Palestra",
+};
+
+function mapEventoTipoLabel(tipo?: string | null): string {
+  if (!tipo) return "Evento";
+  const upper = String(tipo).toUpperCase();
+  return EVENTO_TIPO_LABEL[upper] ?? "Evento";
+}
 
 export async function auth(req: any, res: Response, next: NextFunction) {
   try {
@@ -16,12 +38,14 @@ export async function auth(req: any, res: Response, next: NextFunction) {
 
     const payload: any = jwt.verify(token, JWT_SECRET);
 
-    let tipo: string | undefined = payload.tipo;
+    const userId = String(payload.id);
+    let tipo: string | undefined = (payload.tipo || payload.tipoUsuario || "").toLowerCase();
     let tipoUsuarioId: string | undefined = payload.tipoUsuarioId;
 
+    // 1) tenta clube, se ainda não tiver tipoUsuarioId
     if (!tipoUsuarioId) {
       const club = await prisma.clube.findFirst({
-        where: { usuarioId: payload.id },
+        where: { usuarioId: userId },
         select: { id: true },
       });
       if (club) {
@@ -30,20 +54,48 @@ export async function auth(req: any, res: Response, next: NextFunction) {
       }
     }
 
+    // 2) tenta escolinha, se ainda não tiver tipoUsuarioId
+    if (!tipoUsuarioId) {
+      const escola = await prisma.escolinha.findFirst({
+        where: { usuarioId: userId },
+        select: { id: true },
+      });
+      if (escola) {
+        tipo = "escolinha";
+        tipoUsuarioId = escola.id;
+      }
+    }
+
     req.user = {
       id: payload.id,
       role: payload.role,
       tipo,
       tipoUsuarioId,
+      isAdmin:
+        String(payload.role || "").toLowerCase() === "admin" ||
+        payload.isAdmin === true,
     };
+
+    // log temporário pra conferir no console
+    console.log("AUTH eventos =>", {
+      id: req.user.id,
+      tipo: req.user.tipo,
+      tipoUsuarioId: req.user.tipoUsuarioId,
+    });
 
     next();
   } catch (e) {
+    console.error("Erro no auth eventos:", e);
     return res.status(401).json({ error: "Token inválido" });
   }
 }
 
-export async function ehDonoDoClubeOuAdmin(req: any, res: Response, next: NextFunction) {
+
+export async function ehDonoDoClubeOuAdmin(
+  req: any,
+  res: Response,
+  next: NextFunction
+) {
   const { clubeId } = req.params;
   const user = req.user || {};
   const isAdmin = user.role === "admin" || user.tipo === "admin";
@@ -66,11 +118,70 @@ export async function ehDonoDoClubeOuAdmin(req: any, res: Response, next: NextFu
   return res.status(403).json({ error: "Sem permissão" });
 }
 
+export async function ehDonoDaEscolinhaOuAdmin(
+  req: any,
+  res: Response,
+  next: NextFunction
+) {
+  const user = req.user || {};
+  const tipo = String(user.tipo || user.role || "").toLowerCase();
+  const tipoUsuarioId = String(user.tipoUsuarioId || "");
+
+  const isAdmin =
+    tipo === "admin" ||
+    user.isAdmin === true ||
+    String(user.role || "").toLowerCase() === "admin";
+
+  if (isAdmin) return next();
+
+  const paramId = String(
+    (req.params.escolinhaId || req.params.escolaId || "").trim()
+  );
+
+  if (!paramId || !tipoUsuarioId || paramId !== tipoUsuarioId) {
+    return res.status(403).json({
+      error: "Você não tem permissão para gerenciar eventos desta escolinha.",
+    });
+  }
+
+  return next();
+}
+
 function parseDate(v: any): Date | null {
   if (!v) return null;
   const d = dayjs(v);
   return d.isValid() ? d.toDate() : null;
 }
+
+export async function listarPublicos(req: Request & { user?: any }, res: Response){
+  try {
+    const eventos = await prisma.evento.findMany({
+      where: {
+        status: "ABERTO", // se quiser filtrar apenas eventos ativos
+      },
+      include: {
+        clube: true,
+        escolinha: true,
+        inscricoes: true,
+      },
+      orderBy: { inicio: "asc" },
+    });
+
+    const userId = req.user?.id;
+
+    const mapped = eventos.map(ev => ({
+      ...ev,
+      totalInscritos: ev.inscricoes?.length ?? 0,
+      inscrito: userId ? ev.inscricoes.some(i => i.usuarioId === userId) : false
+    }));
+
+    return res.json(mapped);
+  } catch (e) {
+    console.error("Erro listando eventos públicos", e);
+    return res.status(500).json({ message: "Erro interno" });
+  }
+}
+
 
 export async function listarDoClube(req: Request, res: Response) {
   const { clubeId } = req.params;
@@ -82,84 +193,147 @@ export async function listarDoClube(req: Request, res: Response) {
 
   const eventos = await prisma.evento.findMany({
     where,
-    orderBy: { inicio: "asc" },
+    orderBy: { inicio: "asc" }, // campo novo do schema
   });
 
-  res.json(eventos);
+  const items = eventos.map((ev) => ({
+    ...ev,
+    tipoLabel: mapEventoTipoLabel(ev.tipo),
+  }));
+
+  res.json(items);
+}
+
+export async function listarDaEscolinha(req: Request, res: Response) {
+  try {
+    const escolinhaId = String(
+      (req.params as any).escolinhaId || (req.params as any).escolaId || ""
+    ).trim();
+
+    if (!escolinhaId) {
+      return res.status(400).json({ error: "escolinhaId é obrigatório" });
+    }
+
+    const eventos = await prisma.evento.findMany({
+      where: { escolinhaId },
+      orderBy: { inicio: "asc" }, // aqui também usa 'inicio'
+    });
+
+    return res.json(eventos);
+  } catch (e) {
+    console.error("Erro listarDaEscolinha:", e);
+    return res
+      .status(500)
+      .json({ error: "Erro ao listar eventos da escolinha" });
+  }
 }
 
 export async function criar(req: any, res: Response) {
-  const { clubeId } = req.params;
-  const {
-    titulo,
-    tipo = "PENEIRA",
-    descricao,
-    inicio,
-    fim,
-    local,
-    cidade,
-    estado,
-    pais,
-    endereco,
-    vagas,
-    valorInscricao,
-    linkInscricao,
-    requisitos,
-    status = "ABERTO",
-  } = req.body;
+  try {
+    const { clubeId, escolaId, escolinhaId } = req.params as any;
 
-  if (!titulo || !inicio) {
-    return res.status(400).json({ error: "titulo e inicio são obrigatórios" });
-  }
+    const ownerClubeId = clubeId || null;
+    const ownerEscolinhaId = escolinhaId || escolaId || null;
 
-  const inicioDate = parseDate(inicio);
-  const fimDate = parseDate(fim);
-  if (!inicioDate) return res.status(400).json({ error: "inicio inválido" });
+    if (!ownerClubeId && !ownerEscolinhaId) {
+      return res
+        .status(400)
+        .json({ error: "clubeId ou escolinhaId é obrigatório na rota" });
+    }
 
-  const reqs = Array.isArray(requisitos)
-    ? requisitos
-    : (typeof requisitos === "string" && requisitos.trim() !== "")
-    ? requisitos.split(",").map((s: string) => s.trim())
-    : [];
-
-  const valor =
-    valorInscricao != null && valorInscricao !== "" ? Number(valorInscricao) : null;
-
-  const novo = await prisma.evento.create({
-    data: {
-      clubeId,
+    const {
       titulo,
       tipo,
+      status,
+      // nomes novos (preferenciais)
+      inicio,
+      fim,
+      // nomes antigos que o front pode estar usando
+      dataInicio,
+      dataFim,
       descricao,
-      inicio: inicioDate,
-      fim: fimDate ?? undefined,
-      local,
       cidade,
       estado,
       pais,
       endereco,
-      vagas: vagas != null && vagas !== "" ? Number(vagas) : null,
-      valorInscricao: valor as any,
+      local,
+      vagas,
+      valorInscricao,
       linkInscricao,
-      requisitos: reqs,
-      status,
-    },
-  });
+      requisitos,
+    } = req.body;
 
-  res.status(201).json(novo);
+    const rawInicio = inicio || dataInicio;
+    const rawFim = fim || dataFim;
+
+    const inicioDate = parseDate(rawInicio);
+    const fimDate = parseDate(rawFim);
+
+    if (!inicioDate) {
+      return res
+        .status(400)
+        .json({ error: "Data de início (inicio/dataInicio) é obrigatória" });
+    }
+
+    // requisitos no schema é String[]
+    let requisitosArr: string[] = [];
+    if (Array.isArray(requisitos)) {
+      requisitosArr = requisitos.map((r: any) => String(r).trim()).filter(Boolean);
+    } else if (typeof requisitos === "string" && requisitos.trim()) {
+      requisitosArr = requisitos
+        .split(",")
+        .map((r: string) => r.trim())
+        .filter(Boolean);
+    }
+
+    const evento = await prisma.evento.create({
+      data: {
+        ...(ownerClubeId ? { clubeId: ownerClubeId } : {}),
+        ...(ownerEscolinhaId ? { escolinhaId: ownerEscolinhaId } : {}),
+        titulo: String(titulo),
+        tipo: (tipo as any) || "EVENTO",
+        status: (status as any) || "ABERTO",
+        inicio: inicioDate,
+        fim: fimDate || undefined,
+        descricao: descricao || null,
+        cidade: cidade || null,
+        estado: estado || null,
+        pais: pais || null,
+        endereco: endereco || local || null,
+        local: local || null,
+        vagas: vagas != null ? Number(vagas) : null,
+        valorInscricao:
+          valorInscricao != null && valorInscricao !== ""
+            ? (valorInscricao as any)
+            : null,
+        linkInscricao: linkInscricao || null,
+        requisitos: requisitosArr,
+      },
+    });
+
+    return res.status(201).json(evento);
+  } catch (e) {
+    console.error("Erro ao criar evento:", e);
+    return res.status(500).json({ error: "Erro ao criar evento" });
+  }
 }
 
 export async function obter(req: Request, res: Response) {
   const { id } = req.params;
   const ev = await prisma.evento.findUnique({ where: { id } });
   if (!ev) return res.status(404).json({ error: "Evento não encontrado" });
-  res.json(ev);
+
+  res.json({
+    ...ev,
+    tipoLabel: mapEventoTipoLabel(ev.tipo),
+  });
 }
 
 function mapEventoToAgendaItem(ev: any) {
   return {
     id: ev.id,
     tipo: (ev.tipo as any) || "EVENTO",
+    tipoLabel: mapEventoTipoLabel(ev.tipo),
     titulo: ev.titulo,
     inicio: ev.inicio,
     fim: ev.fim,
@@ -212,13 +386,16 @@ export async function minhaAgenda(req: any, res: Response) {
     return res.json(items);
   } catch (e) {
     console.error("Erro em eventos.minhaAgenda:", e);
-    return res.status(500).json({ error: "Erro ao carregar agenda de eventos" });
+    return res
+      .status(500)
+      .json({ error: "Erro ao carregar agenda de eventos" });
   }
 }
 
 export async function eventosDoAtleta(req: any, res: Response) {
   try {
     const { usuarioId } = req.params;
+    void usuarioId; // ainda não filtramos por atleta, mas mantemos o param
 
     const agora = new Date();
 
@@ -235,6 +412,8 @@ export async function eventosDoAtleta(req: any, res: Response) {
     return res.json(items);
   } catch (e) {
     console.error("Erro em eventos.eventosDoAtleta:", e);
-    return res.status(500).json({ error: "Erro ao carregar eventos do atleta" });
+    return res
+      .status(500)
+      .json({ error: "Erro ao carregar eventos do atleta" });
   }
 }

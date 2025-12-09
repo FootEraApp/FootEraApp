@@ -1,8 +1,13 @@
+// client/src/components/perfil/PerfilEscola.tsx
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
-  ChevronRight, CalendarClock, Activity,
-  Trophy, Shield, PlusCircle
+  ChevronRight,
+  CalendarClock,
+  Activity,
+  Trophy,
+  Shield,
+  PlusCircle,
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
@@ -12,17 +17,45 @@ import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 
 type Props = { idDaUrl?: string };
-type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
-type Escolinha = {
-  id: string; usuarioId?: string | null; nome: string;
-  cnpj?: string | null; telefone1?: string | null; telefone2?: string | null;
-  email?: string | null; siteOficial?: string | null; sede?: string | null;
-  logradouro?: string | null; numero?: string | null; complemento?: string | null;
-  bairro?: string | null; cidade?: string | null; estado?: string | null;
-  pais?: string | null; cep?: string | null; logo?: string | null; dataCriacao: string;
+type UsuarioMin = {
+  id: string;
+  nome: string;
+  email: string;
+  foto?: string | null;
 };
-type Metrics = { atletas: number; treinosProgramados: number; postagens: number; conquistas?: number };
-type PayloadEscola = { tipo: "Escolinha"; usuario: UsuarioMin | null; escolinha: Escolinha; metrics: Metrics; };
+type Escolinha = {
+  id: string;
+  usuarioId?: string | null;
+  nome: string;
+  cnpj?: string | null;
+  telefone1?: string | null;
+  telefone2?: string | null;
+  email?: string | null;
+  siteOficial?: string | null;
+  sede?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  pais?: string | null;
+  cep?: string | null;
+  logo?: string | null;
+  dataCriacao: string;
+};
+type Metrics = {
+  atletas: number;
+  treinosProgramados: number;
+  postagens: number;
+  conquistas?: number;
+};
+type PayloadEscola = {
+  tipo: "Escolinha";
+  usuario: UsuarioMin | null;
+  escolinha: Escolinha;
+  metrics: Metrics;
+};
 
 type AtletaItem = {
   id: string;
@@ -39,13 +72,18 @@ type AtletaItem = {
 };
 
 type SolicitacaoItem = {
-  id: string; remetenteId: string;
-  remetente: { id: string; nomeDeUsuario: string; foto: string | null; };
-  status?: "PENDENTE" | "APROVADO" | "REJEITADO"; criadaEm?: string;
+  id: string;
+  remetenteId: string;
+  remetente: { id: string; nomeDeUsuario: string; foto: string | null };
+  status?: "PENDENTE" | "APROVADO" | "REJEITADO";
+  criadaEm?: string;
 };
 type AtividadeRecente = {
-  id: string; tipo: "Treino" | "Desafio" | "Vídeo" | "Postagem";
-  titulo: string; criadoEm: string; imagemUrl?: string | null;
+  id: string;
+  tipo: "Treino" | "Desafio" | "Vídeo" | "Postagem";
+  titulo: string;
+  criadoEm: string;
+  imagemUrl?: string | null;
 };
 
 type ProfessorItem = {
@@ -67,7 +105,15 @@ type Turma = {
   alunosCount?: number | null;
 };
 
-function SectionCard({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
+function SectionCard({
+  title,
+  children,
+  right,
+}: {
+  title: string;
+  children: React.ReactNode;
+  right?: React.ReactNode;
+}) {
   return (
     <section className="bg-white/90 rounded-2xl shadow-sm border border-green-100">
       <div className="px-4 py-3 flex items-center justify-between border-b border-green-100">
@@ -100,7 +146,8 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   const [data, setData] = useState<PayloadEscola | null>(null);
   const [loading, setLoading] = useState(true);
 
-  type Aba = "visao" | "atletas" | "conquistas" | "professores";
+  // 👉 adicionamos "eventos" aqui
+  type Aba = "visao" | "eventos" | "atletas" | "conquistas" | "professores";
   const [aba, setAba] = useState<Aba>("visao");
 
   type SubAba = "vinculados" | "observados" | "solicitacoes";
@@ -108,14 +155,18 @@ export default function PerfilEscola({ idDaUrl }: Props) {
 
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
-  const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(null);
+  const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(
+    null
+  );
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
   const [professores, setProfessores] = useState<ProfessorItem[]>([]);
   const [professoresLoading, setProfessoresLoading] = useState(false);
   const [turmas, setTurmas] = useState<Turma[]>([]);
   const [turmasLoading, setTurmasLoading] = useState(false);
   const [turmasOpen, setTurmasOpen] = useState(false);
-  const [professorSelecionado, setProfessorSelecionado] = useState<string | undefined>();
+  const [professorSelecionado, setProfessorSelecionado] = useState<
+    string | undefined
+  >();
 
   const escolinhaId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
 
@@ -144,17 +195,20 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         if (!cancel) setLoading(false);
       }
     })();
-    return () => { cancel = true; };
+    return () => {
+      cancel = true;
+    };
   }, [targetId, token]);
 
   useEffect(() => {
     if (!token) return;
     const cancel = { v: false };
 
-    const targetUserForActivities = isOwn ? "me" : (data?.usuario?.id ?? "");
+    const targetUserForActivities = isOwn ? "me" : data?.usuario?.id ?? "";
 
     async function loadAtividadesIfNeeded() {
-      if (aba !== "visao" || atividades != null || !targetUserForActivities) return;
+      if (aba !== "visao" || atividades != null || !targetUserForActivities)
+        return;
       try {
         const { data: itens } = await axios.get<AtividadeRecente[]>(
           `${API.BASE_URL}/api/perfil/${targetUserForActivities}/atividades`,
@@ -218,17 +272,22 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     if (aba === "atletas") {
       if (subAba === "vinculados" && vinculados == null) fetchVinculados();
       if (subAba === "observados" && observados == null) fetchObservados();
-      if (subAba === "solicitacoes" && solicitacoes == null) fetchSolicitacoes();
+      if (subAba === "solicitacoes" && solicitacoes == null)
+        fetchSolicitacoes();
     }
 
-    return () => { cancel.v = true; };
+    return () => {
+      cancel.v = true;
+    };
   }, [
-    aba, subAba, token,
+    aba,
+    subAba,
+    token,
     isOwn,
     data?.usuario?.id,
     data?.escolinha?.id,
     escolinhaId,
-    atividades
+    atividades,
   ]);
 
   async function loadProfessores() {
@@ -239,7 +298,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         headers,
         params: { organizacaoId: escolinhaId },
       });
-      const arr = Array.isArray(data) ? data : (data?.items ?? data?.data ?? []);
+      const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
       setProfessores(
         (arr ?? []).map((p: any) => ({
           id: String(p.id),
@@ -265,7 +324,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         headers,
         params: { ownerTipo: "Escolinha", ownerId: escolinhaId },
       });
-      const arr = Array.isArray(data) ? data : (data?.items ?? data?.data ?? []);
+      const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
       setTurmas(
         (arr ?? []).map((t: any) => ({
           id: String(t.id),
@@ -292,8 +351,18 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, canEdit, escolinhaId, token]);
 
-  if (loading) return <div className="text-center p-10 text-green-800">Carregando perfil...</div>;
-  if (!data || !data.escolinha) return <div className="text-center p-10 text-red-600">Escolinha não encontrada.</div>;
+  if (loading)
+    return (
+      <div className="text-center p-10 text-green-800">
+        Carregando perfil...
+      </div>
+    );
+  if (!data || !data.escolinha)
+    return (
+      <div className="text-center p-10 text-red-600">
+        Escolinha não encontrada.
+      </div>
+    );
 
   const nome = data.escolinha.nome || data.usuario?.nome || "Escola";
   const headerFoto: string | undefined =
@@ -301,43 +370,64 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     (typeof data.usuario?.foto === "string" && data.usuario.foto) ||
     undefined;
 
-  const localidade =
-    data.escolinha.cidade
-      ? `${data.escolinha.cidade}${data.escolinha.estado ? " - " + data.escolinha.estado : ""}`
-      : undefined;
+  const perfilUsuarioId: string =
+    (data.usuario && data.usuario.id) ||
+    data.escolinha.usuarioId ||
+    "";
+
+  const localidade = data.escolinha.cidade
+    ? `${data.escolinha.cidade}${
+        data.escolinha.estado ? " - " + data.escolinha.estado : ""
+      }`
+    : undefined;
 
   const conquistasCount = data.metrics.conquistas ?? 0;
+  const escolinhaIdStr = data.escolinha.id;
 
   return (
     <div className="max-w-md mx-auto">
       <ProfileHeader
         nome={nome}
-        time={"Escola de Futebol"}
+        time="Escola de Futebol"
         isOwnProfile={isOwn}
         foto={headerFoto}
-        perfilId={data.usuario?.id || data.escolinha.usuarioId || data.escolinha.id}
         kpis={[
           { label: "Atletas", value: data.metrics.atletas ?? 0 },
           { label: "Treinos", value: data.metrics.treinosProgramados ?? 0 },
           { label: "Conquistas", value: (data.metrics as any).conquistas ?? 0 },
         ]}
+        perfilId={perfilUsuarioId}
+        perfilTipoProp="escolinha"
+        perfilTipoIdProp={data.escolinha.id}
       />
-
       <div className="mt-4 px-4">
-        <div className="bg-white/90 rounded-xl p-1 grid grid-cols-4 gap-1 border border-green-100">
-           {(canEdit ? [
-              { id:"visao",label:"Visão Geral"},
-              { id:"atletas",label:"Atletas"},
-              { id:"conquistas",label:"Conquistas"},
-              { id:"professores",label:"Professores"}, 
-            ] : [
-              { id:"visao",label:"Visão Geral"},
-              { id:"conquistas",label:"Conquistas"}
-            ]).map(t => (
+        <div
+          className={
+            canEdit
+              ? "bg-white/90 rounded-xl p-1 grid grid-cols-5 gap-1 border border-green-100"
+              : "bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100"
+          }
+        >
+          {(canEdit
+            ? [
+                { id: "visao", label: "Visão Geral" },
+                { id: "eventos", label: "Eventos" },
+                { id: "atletas", label: "Atletas" },
+                { id: "conquistas", label: "Conquistas" },
+                { id: "professores", label: "Professores" },
+              ]
+            : [
+                { id: "visao", label: "Visão Geral" },
+                { id: "eventos", label: "Eventos" },
+                { id: "conquistas", label: "Conquistas" },
+              ]
+          ).map((t) => (
             <button
               key={t.id}
               onClick={() => setAba(t.id as Aba)}
-              className={`py-2 rounded-lg text-sm font-medium ${aba === t.id ? "bg-green-600 text-white" : "text-green-900"}`}
+              className={`py-2 rounded-lg text-sm font-medium ${
+                aba === t.id ? "bg-green-600 text-white" : "text-green-900"
+              }`}
             >
               {t.label}
             </button>
@@ -349,18 +439,47 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         <div className="mt-4 px-4 grid gap-4">
           <SectionCard title="Informações da Escola">
             <ul className="text-sm text-green-900/90 space-y-2">
-              <li><b>Nome:</b> {data.escolinha.nome}</li>
-              <li><b>Tipo:</b> Escola de Futebol</li>
-              {localidade && <li><b>Local:</b> {localidade}</li>}
-              <li><b>Email:</b> {data.escolinha.email ?? "Não informado"}</li>
-              {data.escolinha.siteOficial && <li><b>Site:</b> {data.escolinha.siteOficial}</li>}
-              {(data.escolinha.telefone1 || data.escolinha.telefone2) && (
-                <li><b>Telefones:</b> {[data.escolinha.telefone1, data.escolinha.telefone2].filter(Boolean).join(" / ")}</li>
+              <li>
+                <b>Nome:</b> {data.escolinha.nome}
+              </li>
+              <li>
+                <b>Tipo:</b> Escola de Futebol
+              </li>
+              {localidade && (
+                <li>
+                  <b>Local:</b> {localidade}
+                </li>
               )}
-              {(data.escolinha.logradouro || data.escolinha.bairro || data.escolinha.cidade) && (
+              <li>
+                <b>Email:</b> {data.escolinha.email ?? "Não informado"}
+              </li>
+              {data.escolinha.siteOficial && (
+                <li>
+                  <b>Site:</b> {data.escolinha.siteOficial}
+                </li>
+              )}
+              {(data.escolinha.telefone1 || data.escolinha.telefone2) && (
+                <li>
+                  <b>Telefones:</b>{" "}
+                  {[data.escolinha.telefone1, data.escolinha.telefone2]
+                    .filter(Boolean)
+                    .join(" / ")}
+                </li>
+              )}
+              {(data.escolinha.logradouro ||
+                data.escolinha.bairro ||
+                data.escolinha.cidade) && (
                 <li>
                   <b>Endereço:</b>{" "}
-                  {[data.escolinha.logradouro, data.escolinha.numero, data.escolinha.complemento, data.escolinha.bairro, data.escolinha.cidade, data.escolinha.estado, data.escolinha.cep]
+                  {[
+                    data.escolinha.logradouro,
+                    data.escolinha.numero,
+                    data.escolinha.complemento,
+                    data.escolinha.bairro,
+                    data.escolinha.cidade,
+                    data.escolinha.estado,
+                    data.escolinha.cep,
+                  ]
                     .filter(Boolean)
                     .join(", ")}
                 </li>
@@ -368,25 +487,27 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             </ul>
           </SectionCard>
 
-          {canEdit && <SectionCard 
-            title="FootEra Formadores" 
-            right={
-              <Link href="/formadores">
-                <button
-                  className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-green-600 text-white"
-                  onClick={() => {}}
-                >
-                  <Shield className="w-4 h-4" />
-                  Acessar Módulo Formadores
-                </button>
-              </Link>
-            }
-          >
-            <p className="text-sm text-green-900/90">
-              Gerencie vínculos de formação de atletas e documentos para mecanismo de solidariedade.
-            </p>
-          </SectionCard>
-          }
+          {canEdit && (
+            <SectionCard
+              title="FootEra Formadores"
+              right={
+                <Link href="/formadores">
+                  <button
+                    className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-green-600 text-white"
+                    onClick={() => {}}
+                  >
+                    <Shield className="w-4 h-4" />
+                    Acessar Módulo Formadores
+                  </button>
+                </Link>
+              }
+            >
+              <p className="text-sm text-green-900/90">
+                Gerencie vínculos de formação de atletas e documentos para
+                mecanismo de solidariedade.
+              </p>
+            </SectionCard>
+          )}
 
           <SectionCard
             title="Treinos"
@@ -409,7 +530,9 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                     </Link>
 
                     <button
-                      onClick={() => { setAba("professores"); }}
+                      onClick={() => {
+                        setAba("professores");
+                      }}
                       className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
                     >
                       Administrar turmas
@@ -428,7 +551,8 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             }
           >
             <p className="text-sm text-green-900/90 mt-2">
-              Crie treinos e agrupe seus atletas em <b>turmas</b>. Vincule cada turma a um professor para facilitar a condução do treino.
+              Crie treinos e agrupe seus atletas em <b>turmas</b>. Vincule cada
+              turma a um professor para facilitar a condução do treino.
             </p>
           </SectionCard>
 
@@ -439,8 +563,12 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                   <li key={a.id} className="flex items-center gap-3">
                     <CalendarClock className="w-5 h-5 text-green-700" />
                     <div className="text-sm">
-                      <div className="font-medium text-green-900">{a.titulo}</div>
-                      <div className="text-xs text-green-900/70">{new Date(a.criadoEm).toLocaleString()}</div>
+                      <div className="font-medium text-green-900">
+                        {a.titulo}
+                      </div>
+                      <div className="text-xs text-green-900/70">
+                        {new Date(a.criadoEm).toLocaleString()}
+                      </div>
                     </div>
                   </li>
                 ))}
@@ -452,6 +580,39 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         </div>
       )}
 
+      {/* 👉 NOVA ABA EVENTOS, espelhando o clube */}
+      {aba === "eventos" && (
+        <div className="mt-4 px-4 grid gap-4">
+          <SectionCard
+            title="Eventos e Peneiras"
+right={
+  <Link
+    href={`/eventos/escolas/${escolinhaIdStr}`}
+    className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
+  >
+    Ver eventos
+  </Link>
+}
+          >
+            <p className="text-sm text-green-900/80 mt-1">
+              Crie e gerencie seus eventos, peneiras, amistosos e avaliações
+              para atletas.
+            </p>
+
+{isOwn && (
+  <div className="mt-4">
+    <Link
+      href={`/eventos/escolas/${escolinhaIdStr}/novo`}
+      className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-4 py-2"
+    >
+      <span>+</span> Criar novo evento
+    </Link>
+  </div>
+)}
+          </SectionCard>
+        </div>
+      )}
+
       {aba === "atletas" && (
         <div className="mt-4 px-4">
           <div className="bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100">
@@ -459,11 +620,13 @@ export default function PerfilEscola({ idDaUrl }: Props) {
               { id: "vinculados", label: "Vinculados" },
               { id: "observados", label: "Observados" },
               { id: "solicitacoes", label: "Solicitações" },
-            ].map(t => (
+            ].map((t) => (
               <button
                 key={t.id}
                 onClick={() => setSubAba(t.id as SubAba)}
-                className={`py-2 rounded-lg text-sm font-medium ${subAba === t.id ? "bg-green-600 text-white" : "text-green-900"}`}
+                className={`py-2 rounded-lg text-sm font-medium ${
+                  subAba === t.id ? "bg-green-600 text-white" : "text-green-900"
+                }`}
               >
                 {t.label}
               </button>
@@ -475,20 +638,38 @@ export default function PerfilEscola({ idDaUrl }: Props) {
               <SectionCard
                 title="Atletas Vinculados"
                 right={
-                  <Link href="/perfil/GerenciarAtletas"
-                    className="text-sm text-green-800">Gerenciar Atletas
+                  <Link
+                    href="/perfil/GerenciarAtletas"
+                    className="text-sm text-green-800"
+                  >
+                    Gerenciar Atletas
                   </Link>
                 }
               >
                 {vinculados && vinculados.length > 0 ? (
                   <ul className="grid grid-cols-1 gap-3">
                     {vinculados.map((a) => (
-                      <li key={a.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-                        <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
+                      <li
+                        key={a.id}
+                        className="flex items-center gap-3 rounded-xl border border-green-100 p-3"
+                      >
+                        <Avatar
+                          foto={a.foto ?? null}
+                          alt={a.nome}
+                          className="w-10 h-10"
+                        />
                         <div className="flex-1">
-                          <div className="text-sm font-medium text-green-900">{a.nome}</div>
+                          <div className="text-sm font-medium text-green-900">
+                            {a.nome}
+                          </div>
                           <div className="text-xs text-green-900/70">
-                            {[a.posicao, a.idade ? `${a.idade} anos` : null, a.categoria].filter(Boolean).join(" • ")}
+                            {[
+                              a.posicao,
+                              a.idade ? `${a.idade} anos` : null,
+                              a.categoria,
+                            ]
+                              .filter(Boolean)
+                              .join(" • ")}
                           </div>
                         </div>
                         {typeof a.pontuacao === "number" && (
@@ -510,7 +691,9 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                     <EmptyState text="Nenhum atleta vinculado ainda" />
                     <div className="flex justify-center">
                       <Link href="/explorar">
-                       <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">Ver atletas</button>
+                        <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">
+                          Ver atletas
+                        </button>
                       </Link>
                     </div>
                   </div>
@@ -522,7 +705,10 @@ export default function PerfilEscola({ idDaUrl }: Props) {
               <SectionCard
                 title="Atletas Observados"
                 right={
-                  <Link href="/explorar" className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-amber-500 text-white">
+                  <Link
+                    href="/explorar"
+                    className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md bg-amber-500 text-white"
+                  >
                     <PlusCircle className="w-4 h-4" />
                     Descobrir novos atletas
                   </Link>
@@ -531,12 +717,27 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                 {observados && observados.length > 0 ? (
                   <ul className="grid grid-cols-1 gap-3">
                     {observados.map((a) => (
-                      <li key={a.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3">
-                        <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
+                      <li
+                        key={a.id}
+                        className="flex items-center gap-3 rounded-xl border border-green-100 p-3"
+                      >
+                        <Avatar
+                          foto={a.foto ?? null}
+                          alt={a.nome}
+                          className="w-10 h-10"
+                        />
                         <div className="flex-1">
-                          <div className="text-sm font-medium text-green-900">{a.nome}</div>
+                          <div className="text-sm font-medium text-green-900">
+                            {a.nome}
+                          </div>
                           <div className="text-xs text-green-900/70">
-                            {[a.posicao ?? "-", a.idade ? `${a.idade} anos` : null, a.categoria].filter(Boolean).join(" • ")}
+                            {[
+                              a.posicao ?? "-",
+                              a.idade ? `${a.idade} anos` : null,
+                              a.categoria,
+                            ]
+                              .filter(Boolean)
+                              .join(" • ")}
                           </div>
                         </div>
                         {typeof a.pontuacao === "number" && (
@@ -544,9 +745,11 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                             {a.pontuacao} pts
                           </span>
                         )}
-                        <Link href={`/perfil/${a.usuarioId}`}
-                           className="ml-2 text-sm text-green-800 inline-flex items-center gap-1">
-                            Ver perfil <ChevronRight className="w-4 h-4" />
+                        <Link
+                          href={`/perfil/${a.usuarioId}`}
+                          className="ml-2 text-sm text-green-800 inline-flex items-center gap-1"
+                        >
+                          Ver perfil <ChevronRight className="w-4 h-4" />
                         </Link>
                       </li>
                     ))}
@@ -556,7 +759,9 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                     <EmptyState text="Você ainda não observa nenhum atleta" />
                     <div className="flex justify-center">
                       <Link href="/explorar">
-                        <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">Ver atletas observados</button>
+                        <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">
+                          Ver atletas observados
+                        </button>
                       </Link>
                     </div>
                   </div>
@@ -567,24 +772,49 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             {subAba === "solicitacoes" && (
               <SectionCard
                 title="Solicitações de Atletas"
-                right={<Link href="/notificacoes" className="text-sm text-green-800">Abrir notificações</Link>}
+                right={
+                  <Link
+                    href="/notificacoes"
+                    className="text-sm text-green-800"
+                  >
+                    Abrir notificações
+                  </Link>
+                }
               >
                 {solicitacoes && solicitacoes.length > 0 ? (
                   <div className="space-y-3">
                     <ul className="grid grid-cols-1 gap-3">
                       {solicitacoes.map((s) => (
-                        <li key={s.id} className="flex items-center gap-3 rounded-xl border border-green-100 p-3 hover:bg-green-50">
-                          <Link href={`/perfil/${s.remetenteId}`}
-                             className="flex items-center gap-3 flex-1">
-                              <Avatar foto={s.remetente.foto ?? null} alt={s.remetente.nomeDeUsuario} className="w-10 h-10" />
-                              <div className="flex-1">
-                                <div className="text-sm font-medium text-green-900">{s.remetente.nomeDeUsuario}</div>
-                                <div className="text-xs text-green-900/70">
-                                  {s.criadaEm ? new Date(s.criadaEm).toLocaleString() : "—"}{s.status ? ` • ${s.status}` : ""}
-                                </div>
-                                <div className="text-xs text-green-900/80">quer treinar junto com você</div>
+                        <li
+                          key={s.id}
+                          className="flex items-center gap-3 rounded-xl border border-green-100 p-3 hover:bg-green-50"
+                        >
+                          <Link
+                            href={`/perfil/${s.remetenteId}`}
+                            className="flex items-center gap-3 flex-1"
+                          >
+                            <Avatar
+                              foto={s.remetente.foto ?? null}
+                              alt={s.remetente.nomeDeUsuario}
+                              className="w-10 h-10"
+                            />
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-green-900">
+                                {s.remetente.nomeDeUsuario}
                               </div>
-                              <ChevronRight className="w-4 h-4 text-green-800" />
+                              <div className="text-xs text-green-900/70">
+                                {s.criadaEm
+                                  ? new Date(
+                                      s.criadaEm
+                                    ).toLocaleString()
+                                  : "—"}
+                                {s.status ? ` • ${s.status}` : ""}
+                              </div>
+                              <div className="text-xs text-green-900/80">
+                                quer treinar junto com você
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-green-800" />
                           </Link>
                         </li>
                       ))}
@@ -604,11 +834,18 @@ export default function PerfilEscola({ idDaUrl }: Props) {
           <SectionCard title="Conquistas e Troféus">
             {conquistasCount > 0 ? (
               <div className="grid grid-cols-2 gap-3">
-                {[...Array(conquistasCount)].map((_, i) => (
-                  <div key={i} className="rounded-xl p-4 border border-green-100 text-center">
+                {Array.from({ length: conquistasCount }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="rounded-xl p-4 border border-green-100 text-center"
+                  >
                     <Trophy className="mx-auto mb-2" />
-                    <div className="text-sm font-medium text-green-900">Conquista #{i + 1}</div>
-                    <div className="text-xs text-green-900/70">da sua escola ou atleta</div>
+                    <div className="text-sm font-medium text-green-900">
+                      Conquista #{i + 1}
+                    </div>
+                    <div className="text-xs text-green-900/70">
+                      da sua escola ou atleta
+                    </div>
                   </div>
                 ))}
               </div>
@@ -625,7 +862,10 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             title="Professores da Escolinha"
             right={
               <button
-                onClick={() => { setProfessorSelecionado(undefined); setTurmasOpen(true); }}
+                onClick={() => {
+                  setProfessorSelecionado(undefined);
+                  setTurmasOpen(true);
+                }}
                 className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
               >
                 <PlusCircle className="w-4 h-4" />
@@ -634,28 +874,50 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             }
           >
             {professoresLoading ? (
-              <div className="text-sm text-green-900/70">Carregando professores…</div>
+              <div className="text-sm text-green-900/70">
+                Carregando professores…
+              </div>
             ) : professores.length ? (
               <ul className="grid grid-cols-1 gap-3">
                 {professores.map((p) => (
-                  <li key={p.id} className="flex items-center justify-between rounded-xl border border-green-100 p-3">
+                  <li
+                    key={p.id}
+                    className="flex items-center justify-between rounded-xl border border-green-100 p-3"
+                  >
                     <div className="flex items-center gap-3">
-                      <Avatar foto={p.fotoUrl ?? null} alt={p.nome} className="w-10 h-10" />
+                      <Avatar
+                        foto={p.fotoUrl ?? null}
+                        alt={p.nome}
+                        className="w-10 h-10"
+                      />
                       <div>
-                        <div className="text-sm font-medium text-green-900">{p.nome}</div>
+                        <div className="text-sm font-medium text-green-900">
+                          {p.nome}
+                        </div>
                         <div className="text-xs text-green-900/70">
-                          {[p.codigo ? `Código ${p.codigo}` : "", p.cref ? `CREF ${p.cref}` : ""].filter(Boolean).join(" • ") || "—"}
+                          {[
+                            p.codigo ? `Código ${p.codigo}` : "",
+                            p.cref ? `CREF ${p.cref}` : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" • ") || "—"}
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => { setProfessorSelecionado(String(p.id)); setTurmasOpen(true); }}
+                        onClick={() => {
+                          setProfessorSelecionado(String(p.id));
+                          setTurmasOpen(true);
+                        }}
                         className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
                       >
                         Administrar turmas
                       </button>
-                      <Link href={`/perfil/${p.usuarioId ?? p.id}`} className="text-sm text-green-800 inline-flex items-center gap-1">
+                      <Link
+                        href={`/perfil/${p.usuarioId ?? p.id}`}
+                        className="text-sm text-green-800 inline-flex items-center gap-1"
+                      >
                         Ver perfil <ChevronRight className="w-4 h-4" />
                       </Link>
                     </div>
@@ -670,10 +932,14 @@ export default function PerfilEscola({ idDaUrl }: Props) {
           <SectionCard title="Turmas da Escolinha">
             <div className="flex items-center justify-between mb-3">
               <div className="text-sm text-green-900/80">
-                Crie turmas e defina o professor responsável. Alunos vinculados à escolinha podem ser adicionados às turmas.
+                Crie turmas e defina o professor responsável. Alunos vinculados
+                à escolinha podem ser adicionados às turmas.
               </div>
               <button
-                onClick={() => { setProfessorSelecionado(undefined); setTurmasOpen(true); }}
+                onClick={() => {
+                  setProfessorSelecionado(undefined);
+                  setTurmasOpen(true);
+                }}
                 className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
               >
                 <PlusCircle className="w-4 h-4" />
@@ -682,20 +948,38 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             </div>
 
             {turmasLoading ? (
-              <div className="text-sm text-green-900/70">Carregando turmas…</div>
+              <div className="text-sm text-green-900/70">
+                Carregando turmas…
+              </div>
             ) : turmas.length ? (
               <ul className="space-y-2">
                 {turmas.map((t) => (
-                  <li key={t.id} className="border rounded-xl p-3 flex flex-col gap-2">
+                  <li
+                    key={t.id}
+                    className="border rounded-xl p-3 flex flex-col gap-2"
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-medium text-green-900">{t.nome}</div>
+                        <div className="text-sm font-medium text-green-900">
+                          {t.nome}
+                        </div>
                         <div className="text-xs text-green-900/70">
-                          {t.professorNome ? `Professor: ${t.professorNome}` : "Professor: —"} • {typeof t.alunosCount === "number" ? `${t.alunosCount} alunos` : "—"}
+                          {t.professorNome
+                            ? `Professor: ${t.professorNome}`
+                            : "Professor: —"}{" "}
+                          •{" "}
+                          {typeof t.alunosCount === "number"
+                            ? `${t.alunosCount} alunos`
+                            : "—"}
                         </div>
                       </div>
                       <button
-                        onClick={() => { setProfessorSelecionado(t.professorId ?? undefined); setTurmasOpen(true); }}
+                        onClick={() => {
+                          setProfessorSelecionado(
+                            t.professorId ?? undefined
+                          );
+                          setTurmasOpen(true);
+                        }}
                         className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
                       >
                         Administrar
@@ -719,13 +1003,18 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                               alert("Professor atualizado na turma!");
                             } catch (err) {
                               console.error(err);
-                              alert("Não foi possível atualizar o professor.");
+                              alert(
+                                "Não foi possível atualizar o professor."
+                              );
                             }
                           }}
                         >
                           <option value="">— Sem professor —</option>
                           {professores.map((p) => (
-                            <option key={p.id} value={p.id}>{p.nome}{p.cref ? ` • CREF ${p.cref}` : ""}</option>
+                            <option key={p.id} value={p.id}>
+                              {p.nome}
+                              {p.cref ? ` • CREF ${p.cref}` : ""}
+                            </option>
                           ))}
                         </select>
                       </div>
@@ -743,8 +1032,16 @@ export default function PerfilEscola({ idDaUrl }: Props) {
       {canEdit && (
         <TurmasManager
           open={turmasOpen}
-          onClose={() => { setTurmasOpen(false); loadTurmas(); loadProfessores(); }}
-          owner={escolinhaId ? { tipo: "Escolinha", id: escolinhaId } : undefined}
+          onClose={() => {
+            setTurmasOpen(false);
+            loadTurmas();
+            loadProfessores();
+          }}
+          owner={
+            escolinhaId
+              ? { tipo: "Escolinha", id: escolinhaId }
+              : undefined
+          }
           professorId={professorSelecionado}
         />
       )}

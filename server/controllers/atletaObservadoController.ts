@@ -3,11 +3,13 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+// deixa esse type aqui em cima do arquivo
 type OwnerWhere = {
   professorId?: string;
-  clubeId?: string;
   escolinhaId?: string;
+  clubeId?: string;
   olheiroId?: string;
+  OR?: OwnerWhere[];
 };
 
 function buildOwnerWhere(tipoRaw: string | undefined, ownerId: string): OwnerWhere {
@@ -18,7 +20,15 @@ function buildOwnerWhere(tipoRaw: string | undefined, ownerId: string): OwnerWhe
   if (tipo === "escola" || tipo === "escolinha") return { escolinhaId: ownerId };
   if (tipo === "olheiro") return { olheiroId: ownerId };
 
-  return { professorId: ownerId };
+  // ⚠ quando não vier tipo (caso atual), tenta em TODAS as colunas de dono
+  return {
+    OR: [
+      { professorId: ownerId },
+      { escolinhaId: ownerId },
+      { clubeId: ownerId },
+      { olheiroId: ownerId },
+    ],
+  };
 }
 
 function buildOwnerCreate(tipoRaw: string | undefined, ownerId: string) {
@@ -109,6 +119,7 @@ export async function listarObservados(req: Request, res: Response) {
     "";
 
   if (!ownerId) {
+    console.log("[OBSERVADOS] ownerId vazio. Query =", q, "User =", user);
     return res.json([]);
   }
 
@@ -120,7 +131,15 @@ export async function listarObservados(req: Request, res: Response) {
     (user.tipoUsuario as string) ||
     "";
 
+  console.log("========== [OBSERVADOS] listarObservados ==========");
+  console.log("[OBSERVADOS] query:", q);
+  console.log("[OBSERVADOS] user:", user);
+  console.log("[OBSERVADOS] ownerId:", ownerId);
+  console.log("[OBSERVADOS] tipoRaw:", tipoRaw);
+
   const ownerWhere = buildOwnerWhere(tipoRaw, ownerId);
+
+  console.log("[OBSERVADOS] ownerWhere usado no findMany:", ownerWhere);
 
   const rows = await prisma.atletaObservado.findMany({
     where: ownerWhere,
@@ -128,12 +147,23 @@ export async function listarObservados(req: Request, res: Response) {
     orderBy: { criadoEm: "desc" },
   });
 
+  console.log("[OBSERVADOS] rows.length:", rows.length);
+  if (rows.length > 0) {
+    console.log(
+      "[OBSERVADOS] Exemplo de row[0]:",
+      JSON.stringify(rows[0], null, 2)
+    );
+  }
+
   const incluirPontuacao = String(q.incluirPontuacao ?? "").trim() !== "";
   const incluirNotas = String(q.incluirNotas ?? "").trim() !== "";
 
+  console.log("[OBSERVADOS] incluirPontuacao:", incluirPontuacao);
+  console.log("[OBSERVADOS] incluirNotas:", incluirNotas);
+
   const lista = rows.map((r) => {
     const rr: any = r;
-    return {
+    const item = {
       id: r.atleta?.usuario?.id ?? r.atleta?.usuarioId ?? r.atletaId,
       usuarioId: r.atleta?.usuario?.id ?? r.atleta?.usuarioId ?? "",
       atletaId: r.atletaId,
@@ -149,7 +179,13 @@ export async function listarObservados(req: Request, res: Response) {
       notaInterna: incluirNotas ? rr.notaInterna ?? null : null,
       alertarMudancas: incluirNotas ? rr.alertarMudancas ?? null : null,
     };
+
+    console.log("[OBSERVADOS] item mapeado:", item);
+    return item;
   });
+
+  console.log("[OBSERVADOS] lista final length:", lista.length);
+  console.log("========== [OBSERVADOS] fim listarObservados ==========");
 
   return res.json(lista);
 }

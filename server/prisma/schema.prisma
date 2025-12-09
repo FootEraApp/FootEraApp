@@ -74,6 +74,8 @@ model Usuario {
   Cupom                  Cupom[]
   CupomResgate           CupomResgate[]
   LogAuditoria           LogAuditoria[]
+  inscricoesEvento       InscricaoEvento[]
+  convitesEvento         InscricaoEvento[]         @relation("ConvitesEvento")
 }
 
 model EmailVerification {
@@ -87,17 +89,17 @@ model EmailVerification {
 }
 
 model Assinatura {
-  id         String    @id @default(uuid())
-  usuarioId  String    @unique
-  plano      String
-  periodicidade   String 
-  startsAt        DateTime
-  renovaEm        DateTime
-  canceledAt DateTime?
-  ativo      Boolean   @default(true)
-  lembreteEnviado Boolean  @default(false)
-  usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  providerSubscriptionId String?  @unique 
+  id                     String    @id @default(uuid())
+  usuarioId              String    @unique
+  plano                  String
+  periodicidade          String
+  startsAt               DateTime
+  renovaEm               DateTime
+  canceledAt             DateTime?
+  ativo                  Boolean   @default(true)
+  lembreteEnviado        Boolean   @default(false)
+  usuario                Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  providerSubscriptionId String?   @unique
 
   @@index([startsAt])
   @@index([canceledAt])
@@ -198,62 +200,62 @@ model Mensagem {
 }
 
 model Atleta {
-  id                           String                     @id @default(uuid())
-  usuarioId                    String                     @unique
-  nome                         String?
-  sobrenome                    String?
-  email                        String?                    @unique
-  senhaHash                    String?
-  idade                        Int
-  cpf                          String?
-  telefone1                    String?
-  telefone2                    String?
-  nacionalidade                String?
-  naturalidade                 String?
-  posicao                      PosicaoCampo?
-  altura                       Decimal?
-  peso                         Decimal?
-  seloQualidade                String?
-  foto                         String?
-  categoria                    Categoria[]
-  consentimento                Boolean                    @default(false)
-  clubeId                      String?
-  escolinhaId                  String?
-  statusConexao                StatusConexao              @default(Pendente)
-  dataCriacao                  DateTime                   @default(now())
-  dataUltimaModificacao        DateTime?
-  perfilTipoTreinoAtualizadoEm DateTime?
-  pontosTotal                  Int?                       @default(0)
-  perfilTipoTreino             TipoTreino?
-  clube                        Clube?                     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
-  escolinha                    Escolinha?                 @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
-  usuario                      Usuario                    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  AtletaElenco                 AtletaElenco[]
-  observadores                 AtletaObservado[]          @relation("ObservacaoAtleta")
-  EstatisticaAtleta            EstatisticaAtleta?
-  Indicacao                    Indicacao[]
-  mensagens                    Mensagem[]                 @relation("AtletaMensagens")
-  midias                       Midia[]
-  pontuacao                    PontuacaoAtleta?
-  postagens                    Postagem[]
-  Ranking                      Ranking?
-  relacoesTreinamento          RelacaoTreinamento[]       @relation("RelacaoAtleta")
-  solicitacoesVinculo          SolicitacaoVinculo[]
-  submissoesDesafio            SubmissaoDesafio[]
-  SubmissaoTreino              SubmissaoTreino[]
-  treinosAgendados             TreinoAgendado[]
-  treinosLivres                TreinoLivre[]
-  treinosRecebidos             TreinoProgramadoRecebido[]
-  Video                        Video[]
-  VinculoFormacao              VinculoFormacao[]
-  TransferenciaFormador        TransferenciaFormador[]
-  DocumentoFormador            DocumentoFormador[]
-  TreinoRotinaAtribuicao       TreinoRotinaAtribuicao[]
-  ListaOlheiroItem             ListaOlheiroItem[]
-  dataNascimento                 DateTime?
-  contatoOlheiroPermitido        Boolean  @default(false)
-  contatoOlheiroConsentidoEm     DateTime?
-  contatoOlheiroConsentidoPorId  String?
+  id                            String                     @id @default(uuid())
+  usuarioId                     String                     @unique
+  nome                          String?
+  sobrenome                     String?
+  email                         String?                    @unique
+  senhaHash                     String?
+  idade                         Int
+  cpf                           String?
+  telefone1                     String?
+  telefone2                     String?
+  nacionalidade                 String?
+  naturalidade                  String?
+  posicao                       PosicaoCampo?
+  altura                        Decimal?
+  peso                          Decimal?
+  seloQualidade                 String?
+  foto                          String?
+  categoria                     Categoria[]
+  consentimento                 Boolean                    @default(false)
+  clubeId                       String?
+  escolinhaId                   String?
+  statusConexao                 StatusConexao              @default(Pendente)
+  dataCriacao                   DateTime                   @default(now())
+  dataUltimaModificacao         DateTime?
+  perfilTipoTreinoAtualizadoEm  DateTime?
+  pontosTotal                   Int?                       @default(0)
+  perfilTipoTreino              TipoTreino?
+  clube                         Clube?                     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha                     Escolinha?                 @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  usuario                       Usuario                    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  AtletaElenco                  AtletaElenco[]
+  observadores                  AtletaObservado[]          @relation("ObservacaoAtleta")
+  EstatisticaAtleta             EstatisticaAtleta?
+  Indicacao                     Indicacao[]
+  mensagens                     Mensagem[]                 @relation("AtletaMensagens")
+  midias                        Midia[]
+  pontuacao                     PontuacaoAtleta?
+  postagens                     Postagem[]
+  Ranking                       Ranking?
+  relacoesTreinamento           RelacaoTreinamento[]       @relation("RelacaoAtleta")
+  solicitacoesVinculo           SolicitacaoVinculo[]
+  submissoesDesafio             SubmissaoDesafio[]
+  SubmissaoTreino               SubmissaoTreino[]
+  treinosAgendados              TreinoAgendado[]
+  treinosLivres                 TreinoLivre[]
+  treinosRecebidos              TreinoProgramadoRecebido[]
+  Video                         Video[]
+  VinculoFormacao               VinculoFormacao[]
+  TransferenciaFormador         TransferenciaFormador[]
+  DocumentoFormador             DocumentoFormador[]
+  TreinoRotinaAtribuicao        TreinoRotinaAtribuicao[]
+  ListaOlheiroItem              ListaOlheiroItem[]
+  dataNascimento                DateTime?
+  contatoOlheiroPermitido       Boolean                    @default(false)
+  contatoOlheiroConsentidoEm    DateTime?
+  contatoOlheiroConsentidoPorId String?
 
   @@index([perfilTipoTreino])
 }
@@ -431,10 +433,10 @@ model Postagem {
 }
 
 model Midia {
-  id                 String    @id @default(uuid())
-  url                String    @unique
+  id                 String       @id @default(uuid())
+  url                String       @unique
   tipo               TipoMidia
-  dataCriacao        DateTime  @default(now())
+  dataCriacao        DateTime     @default(now())
   dataEnvio          DateTime
   descricao          String
   titulo             String
@@ -443,17 +445,17 @@ model Midia {
   clubeId            String?
   submissaoDesafioId String?
   submissaoTreinoId  String?
-  criadoEm           DateTime  @default(now())
+  criadoEm           DateTime     @default(now())
   durationSec        Int?
   width              Int?
   height             Int?
   sizeBytes          Int?
-  processedUrl       String? 
+  processedUrl       String?
   thumbUrl           String?
   fps                Int?
   lastAccessAt       DateTime?
-  storageClass       StorageClass 
-  atualizadoEm       DateTime @updatedAt
+  storageClass       StorageClass
+  atualizadoEm       DateTime     @updatedAt
 
   atleta           Atleta?           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   clube            Clube?            @relation(fields: [clubeId], references: [id], onDelete: SetNull)
@@ -493,6 +495,7 @@ model Escolinha {
   Turma               Turma[]
   TreinoSalvo         TreinoSalvo[]
   TreinoRotina        TreinoRotina[]
+  eventos   Evento[]
 }
 
 model Comentario {
@@ -979,10 +982,13 @@ model AtletaElenco {
 }
 
 model Evento {
-  id             String       @id @default(uuid())
-  clubeId        String
+  id             String            @id @default(uuid())
+  // agora pode ser de clube OU de escolinha
+  clubeId        String?
+  escolinhaId    String?
+
   titulo         String
-  tipo           EventoTipo   @default(PENEIRA)
+  tipo           EventoTipo        @default(PENEIRA)
   descricao      String?
   inicio         DateTime
   fim            DateTime?
@@ -992,13 +998,35 @@ model Evento {
   pais           String?
   endereco       String?
   vagas          Int?
-  valorInscricao Decimal?     @db.Decimal(10, 2)
+  valorInscricao Decimal?          @db.Decimal(10, 2)
   linkInscricao  String?
   requisitos     String[]
-  status         EventoStatus @default(ABERTO)
-  criadoEm       DateTime     @default(now())
-  atualizadoEm   DateTime     @updatedAt
-  clube          Clube        @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  status         EventoStatus      @default(ABERTO)
+  criadoEm       DateTime          @default(now())
+  atualizadoEm   DateTime          @updatedAt
+
+  // relações
+  clube        Clube?             @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  escolinha    Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
+  inscricoes   InscricaoEvento[]
+}
+
+
+model InscricaoEvento {
+  id             String                @id @default(uuid())
+  eventoId       String
+  usuarioId      String
+  status         InscricaoEventoStatus @default(PENDENTE)
+  convidadoPorId String? // quem convidou (para eventos privados), opcional
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  evento       Evento   @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  usuario      Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  convidadoPor Usuario? @relation("ConvitesEvento", fields: [convidadoPorId], references: [id])
+
+  @@unique([eventoId, usuarioId]) // garante que 1 usuário não se inscreve 2x no mesmo evento
 }
 
 model Indicacao {
@@ -1534,7 +1562,7 @@ model PartidaElenco {
   finalizadoEm       DateTime?
   vencedorElencoId   String?
   proximaPartidaId   String?
-  proximaPartidaSlot String? 
+  proximaPartidaSlot String?
 
   evento EventoElenco @relation(fields: [eventoId], references: [id], onDelete: Cascade)
 
@@ -1568,16 +1596,16 @@ model EventoPagamento {
 }
 
 model AuditLog {
-  id           String   @id @default(cuid())
-  usuarioId    String?
-  ip           String?
-  userAgent    String?
-  acao         String
-  entidade     String?
-  entidadeId   String?
-  descricao    String?
-  meta         Json?
-  criadoEm     DateTime @default(now())
+  id         String   @id @default(cuid())
+  usuarioId  String?
+  ip         String?
+  userAgent  String?
+  acao       String
+  entidade   String?
+  entidadeId String?
+  descricao  String?
+  meta       Json?
+  criadoEm   DateTime @default(now())
 }
 
 enum StorageClass {
@@ -1740,14 +1768,35 @@ enum TipoMembro {
 }
 
 enum EventoTipo {
-  PENEIRA
-  EVENTO
+  PENEIRA      // teste seletivo (já existe)
+  EVENTO       // genérico / misto (já existe)
+
+  TORNEIO      // competição com chaveamento ou tabela
+  COPA         // campeonatos em formato de copa
+  LIGA         // competição de pontos corridos
+
+  AMISTOSO     // jogos amistosos, amistoso de observação, etc.
+  TREINO_ABERTO // treino aberto para novos atletas ou observação
+  CAMP         // camp intensivo (vários dias)
+  CLINICA      // clínica técnica, focada em habilidades específicas
+
+  SHOWCASE     // vitrine para olheiros / scouts
+  WORKSHOP     // evento prático, geralmente com atividades em campo
+  PALESTRA     // evento mais teórico, talks, palestras inspiracionais
 }
 
 enum EventoStatus {
   ABERTO
   ENCERRADO
   CANCELADO
+}
+
+enum InscricaoEventoStatus {
+  PENDENTE // inscrição criada, ainda não confirmada
+  CONFIRMADA // inscrito confirmado
+  CANCELADA // cancelou antes do evento
+  PRESENCA_OK // presença confirmada no dia do evento
+  FALTOU // não compareceu
 }
 
 enum TreinoAgendadoStatus {
