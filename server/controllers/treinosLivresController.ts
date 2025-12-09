@@ -53,37 +53,82 @@ export const treinosLivresController = {
 
   async create(req: Request, res: Response) {
     try {
-      const { atletaId, data, descricao, duracaoMin, tipoAtividade, categoria, urlEvidencia } = req.body;
+      // se estiver usando multer, os campos vêm como string aqui
+      const {
+        atletaId,
+        data,
+        descricao,
+        duracaoMin,
+        tipoAtividade,
+        categoria,
+      } = req.body as any;
 
       const userId = (req as any).user?.id;
-      const tipo = (req as any).user?.tipo;           
+      const tipo = (req as any).user?.tipo;
       const tipoUsuarioId = (req as any).user?.tipoUsuarioId;
 
       if (tipo === "atleta" && tipoUsuarioId !== atletaId) {
-        return res.status(403).json({ message: "Sem permissão para registrar treino para outro atleta." });
+        return res
+          .status(403)
+          .json({ message: "Sem permissão para registrar treino para outro atleta." });
       }
-      const atletaExiste = await prisma.atleta.findUnique({ where: { id: atletaId } });
-      if (!atletaExiste) return res.status(400).json({ message: "Atleta inválido" });
+
+      const atletaExiste = await prisma.atleta.findUnique({
+        where: { id: String(atletaId) },
+      });
+      if (!atletaExiste)
+        return res.status(400).json({ message: "Atleta inválido" });
 
       if (!data || !duracaoMin || !(tipoAtividade ?? descricao)?.trim()) {
-        return res.status(400).json({ message: "Campos obrigatórios: data, duração e atividade/descrição." });
+        return res.status(400).json({
+          message: "Campos obrigatórios: data, duração e atividade/descrição.",
+        });
       }
+
+      // ⬅️ pega o arquivo salvo pelo multer (se tiver)
+      const file = (req as any).file as Express.Multer.File | undefined;
+      const urlEvidencia = file
+        ? `/uploads/treinos-livres/${file.filename}`
+        : null;
 
       const novo = await prisma.treinoLivre.create({
         data: {
-          atletaId,
+          atletaId: String(atletaId),
           data: new Date(data),
           descricao: (descricao ?? "").trim(),
           duracaoMin: Number(duracaoMin) || 0,
-          tipoAtividade: tipoAtividade ?? null,
-          categoria: categoria ?? null,
-          urlEvidencia: urlEvidencia ?? null,
+          tipoAtividade: tipoAtividade || null,
+          categoria: categoria || null,
+          urlEvidencia, // salva caminho da foto/vídeo
         },
       });
 
-      res.status(201).json(novo);
+      // 🔹 registra atividade recente para o perfil do atleta (mantive sua lógica)
+      try {
+        const atleta = await prisma.atleta.findUnique({
+          where: { id: String(atletaId) },
+          select: { usuarioId: true },
+        });
+
+        if (atleta?.usuarioId) {
+          await prisma.atividadeRecente.create({
+            data: {
+              usuarioId: atleta.usuarioId,
+              tipo: "treino",
+              imagemUrl: urlEvidencia,
+            },
+          });
+        }
+      } catch {
+        // não quebra o fluxo
+      }
+
+      return res.status(201).json(novo);
     } catch (err) {
-      res.status(500).json({ message: "Erro ao criar treino", error: err });
+      console.error("Erro ao criar treino livre:", err);
+      return res
+        .status(500)
+        .json({ message: "Erro ao criar treino", error: err });
     }
   },
 

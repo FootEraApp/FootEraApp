@@ -411,70 +411,211 @@ export const getTreinosPorUsuario = async (req: Request, res: Response) => {
 };
 
 export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Response) => {
-  const userId = req.params.id;
+  try {
+    const userId = req.params.id;
+    console.log("[AtividadesRecentes] userId:", userId);
 
-  const atleta = await prisma.atleta.findUnique({
-    where: { usuarioId: userId },
-    select: { id: true },
-  });
-  if (!atleta) return res.json([]);
+    const atleta = await prisma.atleta.findFirst({
+      where: { usuarioId: userId },
+      select: { id: true },
+    });
 
-  const [subsTreino, subsDesafio] = await Promise.all([
-    prisma.submissaoTreino.findMany({
-      where: { atletaId: atleta.id, aprovado: true },
-      include: { treinoAgendado: { include: { treinoProgramado: { include: { exercicios: true } } } } },
+    console.log("[AtividadesRecentes] atleta resolvido:", atleta);
+
+    if (!atleta) {
+      console.log("[AtividadesRecentes] nenhum atleta para esse usuarioId, retornando [].");
+      return res.json([]);
+    }
+
+    // 0) Treinos livres (tabela TreinoLivre = o que você usa em treinosLivresHistorico)
+    const treinosLivres = await prisma.treinoLivre.findMany({
+      where: { atletaId: atleta.id },
+      orderBy: { data: "desc" },
+      take: 10,
+    });
+
+    console.log(
+      "[AtividadesRecentes] treinosLivres brutos:",
+      treinosLivres.map((t) => ({
+        id: t.id,
+        data: t.data,
+        duracaoMin: t.duracaoMin,
+        urlEvidencia: t.urlEvidencia,
+        descricao: t.descricao,
+      }))
+    );
+
+    // 1) Submissões de treino (somente o que já foi submetido)
+    const subsTreino = await prisma.submissaoTreino.findMany({
+      where: {
+        atletaId: atleta.id,
+        OR: [
+          // Treino Livre: sempre entra se o snapshot tiver "livre"
+          {
+            treinoTituloSnapshot: {
+              contains: "livre",
+              mode: "insensitive",
+            },
+          },
+          // Outros treinos: só se APROVADOS e com mídia/observação
+          {
+            AND: [
+              { aprovado: true as any },
+              {
+                OR: [
+                  { midiaUrl: { not: null } },
+                  { observacao: { not: null } },
+                  { midias: { some: {} } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      include: {
+        treinoAgendado: {
+          include: { treinoProgramado: { include: { exercicios: true } } },
+        },
+      },
       orderBy: { criadoEm: "desc" },
       take: 10,
-    }),
-    prisma.submissaoDesafio.findMany({
-      where: { atletaId: atleta.id, aprovado: true },
+    });
+
+    console.log(
+      "[AtividadesRecentes] subsTreino brutos:",
+      subsTreino.map((s) => ({
+        id: s.id,
+        aprovado: s.aprovado,
+        treinoAgendadoId: s.treinoAgendadoId,
+        treinoTituloSnapshot: s.treinoTituloSnapshot,
+        midiaUrl: s.midiaUrl,
+        observacao: s.observacao,
+        criadoEm: s.criadoEm,
+      }))
+    );
+
+    // 2) Desafios individuais aprovados
+    const subsDesafio = await prisma.submissaoDesafio.findMany({
+      where: { atletaId: atleta.id, aprovado: true as any },
       include: { desafio: true },
       orderBy: { createdAt: "desc" },
       take: 10,
-    }),
-  ]);
+    });
 
-  const parts = await getParticipacoesGrupo(userId, atleta.id);
-  const itensGrupo = parts.map(mapGrupoToAtividade);
+    console.log(
+      "[AtividadesRecentes] subsDesafio brutos:",
+      subsDesafio.map((s) => ({
+        id: s.id,
+        desafioId: s.desafioId,
+        titulo: s.desafio?.titulo,
+        videoUrl: s.videoUrl,
+        createdAt: s.createdAt,
+      }))
+    );
 
-const itens = [
-  ...subsTreino.map((s: any) => {
-    const dur = s.duracaoMinutos ?? s.treinoAgendado?.treinoProgramado?.duracao ?? null;
-    const pts =
-      s.pontosCreditados ??
-      s.pontuacaoSnapshot ??
-      s.treinoAgendado?.treinoProgramado?.pontuacao ??
-      s.treinoAgendado?.treinoProgramado?.exercicios?.length ??
-      0;
+    // 3) Desafios em grupo
+    const parts = await getParticipacoesGrupo(userId, atleta.id);
+    const itensGrupo = parts.map(mapGrupoToAtividade);
 
-    return {
-      id: `t-${s.id}`,
-      tipo: "Treino" as const,
-      imagemUrl: s.treinoAgendado?.treinoProgramado?.imagemUrl ?? null,
-      nome: s.treinoAgendado?.treinoProgramado?.nome ?? s.treinoAgendado?.titulo ?? "Treino",
-      data: s.criadoEm,
-      duracao: typeof dur === "number" && dur > 0 ? `${dur} min` : undefined,
-      pontuacao: Number(pts) || 0,
-      categoria:
-        s.tipoTreinoSnapshot ?? s.treinoAgendado?.treinoProgramado?.tipoTreino ?? null,
-    };
-  }),
-  ...subsDesafio.map((s: any) => ({
-    id: `d-${s.id}`,
-    tipo: "Desafio" as const,
-    imagemUrl: s.desafio?.imagemUrl ?? s.videoUrl ?? null,
-    nome: s.desafio?.titulo ?? "Desafio",
-    data: s.createdAt,
-    duracao: undefined,
-    pontuacao: Number(s.desafio?.pontuacao ?? 0),
-  })),
-  ...itensGrupo,
-]
-  .sort((a, b) => +new Date(b.data as any) - +new Date(a.data as any))
-  .slice(0, 10);
+    console.log(
+      "[AtividadesRecentes] desafios em grupo brutos:",
+      itensGrupo.map((g) => ({
+        id: g.id,
+        nome: g.nome,
+        data: g.data,
+        pontuacao: g.pontuacao,
+      }))
+    );
 
-return res.json(itens);
-}
+    // 4) Monta os cards finais
+    const itens = [
+      // Treino Livre vindo da tabela TreinoLivre
+      ...treinosLivres.map((t: any) => ({
+        id: `tl-${t.id}`,
+        tipo: "Treino Livre",
+        imagemUrl: t.urlEvidencia ?? null,
+        nome: t.descricao || "Treino Livre",
+        data: t.data,
+        duracao:
+          typeof t.duracaoMin === "number" && t.duracaoMin > 0
+            ? `${t.duracaoMin} min`
+            : undefined,
+        pontuacao: 0,
+      })),
+
+      // Submissões de treino (programados + livres submetidos)
+      ...subsTreino.map((s: any) => {
+        const dur =
+          s.duracaoMinutos ??
+          s.treinoAgendado?.treinoProgramado?.duracao ??
+          null;
+
+        const pts =
+          s.pontosCreditados ??
+          s.pontuacaoSnapshot ??
+          s.treinoAgendado?.treinoProgramado?.pontuacao ??
+          s.treinoAgendado?.treinoProgramado?.exercicios?.length ??
+          0;
+
+        const titulo =
+          s.treinoAgendado?.treinoProgramado?.nome ??
+          s.treinoAgendado?.titulo ??
+          "Treino";
+
+        const snapshot = String(s.treinoTituloSnapshot || "").toLowerCase();
+        const isLivre = snapshot.includes("livre");
+
+        return {
+          id: `t-${s.id}`,
+          tipo: isLivre ? "Treino Livre" : "Treino",
+          imagemUrl: s.treinoAgendado?.treinoProgramado?.imagemUrl ?? null,
+          nome: titulo,
+          data: s.criadoEm,
+          duracao:
+            typeof dur === "number" && dur > 0 ? `${dur} min` : undefined,
+          pontuacao: Number(pts) || 0,
+          categoria:
+            s.tipoTreinoSnapshot ??
+            s.treinoAgendado?.treinoProgramado?.tipoTreino ??
+            null,
+        };
+      }),
+
+      // Desafios individuais
+      ...subsDesafio.map((s: any) => ({
+        id: `d-${s.id}`,
+        tipo: "Desafio" as const,
+        imagemUrl: s.desafio?.imagemUrl ?? s.videoUrl ?? null,
+        nome: s.desafio?.titulo ?? "Desafio",
+        data: s.createdAt,
+        duracao: undefined,
+        pontuacao: Number(s.desafio?.pontuacao ?? 0),
+      })),
+
+      // Desafios em grupo
+      ...itensGrupo,
+    ]
+      .sort((a, b) => +new Date(b.data as any) - +new Date(a.data as any))
+      .slice(0, 10);
+
+    console.log(
+      "[AtividadesRecentes] itens enviados pro front:",
+      itens.map((i) => ({
+        id: i.id,
+        tipo: i.tipo,
+        nome: i.nome,
+        data: i.data,
+      }))
+    );
+
+    return res.json(itens);
+  } catch (e) {
+    console.error("[AtividadesRecentes] erro:", e);
+    return res
+      .status(500)
+      .json({ message: "Erro ao buscar atividades recentes." });
+  }
+};
 
 export const getBadges = async (_req: Request, res: Response) => {
   try {
@@ -1549,7 +1690,7 @@ export async function getPerfilEscola(req: Request, res: Response) {
   }
 }
 
-export async function getPerfilOlheiro(req: Request, res: Response) {
+export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response) {
   if (req.user?.tipo === 'Olheiro') {
     await requireUsage(req, res, 'perfis_vistos_dia');
   }
