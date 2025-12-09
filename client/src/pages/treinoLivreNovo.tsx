@@ -12,30 +12,46 @@ export default function TreinoLivreNovo() {
   const [duracaoMin, setDuracaoMin] = useState<number>(30);
   const [tipoAtividade, setTipoAtividade] = useState<string>("");
   const [categoria, setCategoria] = useState<string>("");
+  const [arquivoMidia, setArquivoMidia] = useState<File | null>(null); // ⬅️ novo
 
   async function salvar() {
     const token = (Storage as any).token ?? localStorage.getItem("token");
-    const atletaId = (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
+    const atletaId =
+      (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
     if (!token || !atletaId) return alert("Sessão expirada.");
 
+    if (!descricao.trim()) {
+      return alert("Descreva rapidamente o treino (ex.: Corrida 5km).");
+    }
+
     try {
+      const form = new FormData();
+      form.append("atletaId", atletaId);
+      form.append(
+        "data",
+        data ? new Date(data).toISOString() : new Date().toISOString()
+      );
+      form.append("descricao", descricao);
+      form.append("duracaoMin", String(duracaoMin || 0));
+      if (tipoAtividade) form.append("tipoAtividade", tipoAtividade);
+      if (categoria) form.append("categoria", categoria);
+      if (arquivoMidia) form.append("midia", arquivoMidia); // ⬅️ arquivo opcional
+
       const r = await fetch(`${API.BASE_URL}/api/treinos-livres`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          atletaId,
-          descricao,
-          data: data ? new Date(data).toISOString() : new Date().toISOString(),
-          duracaoMin,
-          tipoAtividade: tipoAtividade || null,
-          categoria: categoria || null,
-        }),
+        headers: {
+          Authorization: `Bearer ${token}`,
+          // NÃO colocar Content-Type aqui, o browser define com boundary
+        },
+        body: form,
       });
+
       if (!r.ok) {
         const txt = await r.text();
         console.error("Falha ao salvar treino livre:", r.status, txt);
         return alert("Não foi possível salvar o treino.");
       }
+
       alert("Treino livre registrado!");
       navigate("/treinos/livre/historico");
     } catch (e) {
@@ -54,10 +70,12 @@ export default function TreinoLivreNovo() {
           rounded-full border border-green-800 bg-white text-green-900
           shadow-sm hover:bg-green-50 focus:outline-none
           focus:ring-2 focus:ring-green-700/30 mt-2 ml-2"
-        >
+      >
         <ArrowLeft className="h-5 w-5" />
       </Link>
-      <h2 className="text-lg font-bold mb-4">Registrar Treino Livre</h2>
+
+      <h2 className="text-lg font-bold mb-4 mt-4">Registrar Treino Livre</h2>
+
       <label className="block text-sm mb-1">Descrição da atividade</label>
       <input
         className="border w-full p-2 rounded mb-3"
@@ -80,7 +98,9 @@ export default function TreinoLivreNovo() {
         min={1}
         className="border w-full p-2 rounded mb-3"
         value={duracaoMin}
-        onChange={(e) => setDuracaoMin(parseInt(e.target.value || "0") || 0)}
+        onChange={(e) =>
+          setDuracaoMin(parseInt(e.target.value || "0", 10) || 0)
+        }
       />
 
       <label className="block text-sm mb-1">Tipo</label>
@@ -98,17 +118,37 @@ export default function TreinoLivreNovo() {
 
       <label className="block text-sm mb-1">Categoria (opcional)</label>
       <input
-        className="border w-full p-2 rounded mb-4"
+        className="border w-full p-2 rounded mb-3"
         placeholder='Ex.: "Base", "Avançado"'
         value={categoria}
         onChange={(e) => setCategoria(e.target.value)}
       />
 
+      {/* ⬇️ Novo campo de foto/vídeo */}
+      <label className="block text-sm mb-1">Foto / Vídeo (opcional)</label>
+      <input
+        type="file"
+        accept="image/*,video/*"
+        className="border w-full p-2 rounded mb-4 bg-white"
+        onChange={(e) => setArquivoMidia(e.target.files?.[0] ?? null)}
+      />
+      {arquivoMidia && (
+        <p className="text-xs text-gray-600 mb-3">
+          Arquivo selecionado: <strong>{arquivoMidia.name}</strong>
+        </p>
+      )}
+
       <div className="flex gap-2 justify-end">
-        <button onClick={() => navigate("/treinos")} className="px-4 py-2 rounded border">
+        <button
+          onClick={() => navigate("/treinos")}
+          className="px-4 py-2 rounded border bg-white"
+        >
           Cancelar
         </button>
-        <button onClick={salvar} className="px-4 py-2 rounded bg-emerald-700 text-white">
+        <button
+          onClick={salvar}
+          className="px-4 py-2 rounded bg-emerald-700 text-white"
+        >
           Salvar
         </button>
       </div>

@@ -34,7 +34,14 @@ interface TreinoProgramado {
   pontuacao?: number | null;
 }
 interface UsuarioLogado {
-  tipo: "admin" | "atleta" | "escola" | "escolinha" | "clube" | "professor" | "olheiro";
+  tipo:
+    | "admin"
+    | "atleta"
+    | "escola"
+    | "escolinha"
+    | "clube"
+    | "professor"
+    | "olheiro";
   usuarioId: string;
   tipoUsuarioId: string;
 }
@@ -49,9 +56,27 @@ interface SubmissaoParaValidacao {
   observacao?: string | null;
 }
 
+// NOVO: tipo para atleta vinculado
+interface AtletaVinculado {
+  id: string;
+  usuario: {
+    id: string;
+    nome: string;
+    foto?: string | null;
+  };
+}
+
 function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <rect x="3" y="4" width="18" height="16" rx="2" />
       <line x1="12" y1="4" x2="12" y2="20" />
       <circle cx="12" cy="12" r="2.25" />
@@ -64,7 +89,8 @@ const PLACEHOLDER_USER = "/assets/usuarios/default-user.png";
 function resolveUploadUrl(raw?: string | null) {
   if (!raw) return "";
   if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-  if (raw.startsWith("/assets/") || raw.startsWith("/attached_assets/")) return raw;
+  if (raw.startsWith("/assets/") || raw.startsWith("/attached_assets/"))
+    return raw;
   if (raw.startsWith("/uploads/")) return `${API.BASE_URL}${raw}`;
   return `${API.BASE_URL}/uploads/${raw.replace(/^\/+/, "")}`;
 }
@@ -76,20 +102,40 @@ function isVideoUrl(url: string) {
   return /\.(mp4|webm|ogg|mov|m4v)$/i.test(clean);
 }
 const getToken = () =>
-  (Storage as any).token ?? localStorage.getItem("token") ?? sessionStorage.getItem("token") ?? "";
+  (Storage as any).token ??
+  localStorage.getItem("token") ??
+  sessionStorage.getItem("token") ??
+  "";
 
-export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo"] | "" }) {
+export default function TreinosInstrutores({
+  tipo,
+}: {
+  tipo: UsuarioLogado["tipo"] | "";
+}) {
   const [, navigate] = useLocation();
 
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
-  const [abaProfessor, setAbaProfessor] = useState<"avaliar" | "criar">("avaliar");
+  const [abaProfessor, setAbaProfessor] = useState<"avaliar" | "criar">(
+    "avaliar",
+  );
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
-  const [submissoesPendentes, setSubmissoesPendentes] = useState<SubmissaoParaValidacao[]>([]);
+  const [submissoesPendentes, setSubmissoesPendentes] = useState<
+    SubmissaoParaValidacao[]
+  >([]);
   const [carregandoSubmissoes, setCarregandoSubmissoes] = useState(false);
   const [page, setPage] = useState({ total: 0, limit: 20, offset: 0 });
 
-  const [dataAgendarById, setDataAgendarById] = useState<Record<string, string>>({});
+  const [dataAgendarById, setDataAgendarById] = useState<Record<string, string>>(
+    {},
+  );
   const [obsById, setObsById] = useState<Record<string, string>>({});
+
+  // NOVO: atletas vinculados e atleta selecionado por treino
+  const [atletasVinculados, setAtletasVinculados] = useState<
+    AtletaVinculado[]
+  >([]);
+  const [atletaSelecionadoByTreinoId, setAtletaSelecionadoByTreinoId] =
+    useState<Record<string, string>>({});
 
   useEffect(() => {
     const tipoSalvo =
@@ -99,12 +145,27 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
       localStorage.getItem("tipoUsuario") ??
       sessionStorage.getItem("tipoUsuario");
 
-    const usuarioId = (Storage as any).usuarioId ?? localStorage.getItem("usuarioId");
-    const tipoUsuarioId = (Storage as any).tipoUsuarioId ?? localStorage.getItem("tipoUsuarioId");
+    const usuarioId =
+      (Storage as any).usuarioId ?? localStorage.getItem("usuarioId");
+    const tipoUsuarioId =
+      (Storage as any).tipoUsuarioId ??
+      localStorage.getItem("tipoUsuarioId") ??
+      "";
 
     const t = String(tipoSalvo || "").toLowerCase() as UsuarioLogado["tipo"];
-    if (["admin", "atleta", "escola", "escolinha", "clube", "professor", "olheiro"].includes(t) && usuarioId) {
-      setUsuario({ tipo: t, usuarioId, tipoUsuarioId: tipoUsuarioId ?? "" });
+    if (
+      [
+        "admin",
+        "atleta",
+        "escola",
+        "escolinha",
+        "clube",
+        "professor",
+        "olheiro",
+      ].includes(t) &&
+      usuarioId
+    ) {
+      setUsuario({ tipo: t, usuarioId, tipoUsuarioId });
     } else {
       console.warn("Tipo/IDs inválidos", { tipoSalvo, usuarioId, tipoUsuarioId });
     }
@@ -113,44 +174,109 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
   useEffect(() => {
     const token = getToken();
     if (!token) return;
+
     const t = (usuario?.tipo ?? tipo ?? "").toLowerCase();
 
     (async () => {
       try {
-        const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/programados`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!resTreinos.ok) throw new Error(`/treinos/programados: ${resTreinos.status}`);
+        const resTreinos = await fetch(
+          `${API.BASE_URL}/api/treinos/programados`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!resTreinos.ok)
+          throw new Error(`/treinos/programados: ${resTreinos.status}`);
         const jsonTreinos = await resTreinos.json();
-        const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map((tr: any) => ({
-          id: tr.id,
-          nome: tr.nome,
-          descricao: tr.descricao ?? undefined,
-          nivel: tr.nivel,
-          dataAgendada: tr.dataAgendada ?? undefined,
-          duracao: tr.duracao ?? undefined,
-          objetivo: tr.objetivo ?? undefined,
-          dicas: Array.isArray(tr.dicas) ? tr.dicas : [],
-          professorId: tr.professorId ?? undefined,
-          escolinhaId: tr.escolinhaId ?? undefined,
-          clubeId: tr.clubeId ?? undefined,
-          pontuacao: tr.pontuacao ?? undefined,
-          exercicios: (tr.exercicios ?? []).map((ex: any) => ({
-            id: ex.exercicio?.id ?? ex.id ?? "",
-            nome: ex.exercicio?.nome ?? ex.nome ?? "",
-            repeticoes: ex.repeticoes ?? undefined,
-          })),
-        })) as TreinoProgramado[];
+        const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map(
+          (tr: any) => ({
+            id: tr.id,
+            nome: tr.nome,
+            descricao: tr.descricao ?? undefined,
+            nivel: tr.nivel,
+            dataAgendada: tr.dataAgendada ?? undefined,
+            duracao: tr.duracao ?? undefined,
+            objetivo: tr.objetivo ?? undefined,
+            dicas: Array.isArray(tr.dicas) ? tr.dicas : [],
+            professorId: tr.professorId ?? undefined,
+            escolinhaId: tr.escolinhaId ?? undefined,
+            clubeId: tr.clubeId ?? undefined,
+            pontuacao: tr.pontuacao ?? undefined,
+            exercicios: (tr.exercicios ?? []).map((ex: any) => ({
+              id: ex.exercicio?.id ?? ex.id ?? "",
+              nome: ex.exercicio?.nome ?? ex.nome ?? "",
+              repeticoes: ex.repeticoes ?? undefined,
+            })),
+          }),
+        ) as TreinoProgramado[];
         setTreinos(normTreinos);
       } catch (e) {
         console.error(e);
         setTreinos([]);
       }
 
-      if (["professor", "admin", "escola", "escolinha", "clube"].includes(t)) {
+      if (
+        ["professor", "admin", "escola", "escolinha", "clube"].includes(t) &&
+        (usuario?.tipoUsuarioId ||
+          (Storage as any).tipoUsuarioId ||
+          (Storage as any).professorId)
+      ) {
         carregarSubmissoes();
+        carregarAtletasVinculados();
       }
+
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario?.tipoUsuarioId, tipo]);
+
+    async function carregarAtletasVinculados() {
+    const token = getToken();
+    if (!token) return;
+
+    // pega o id certo do professor/escola/clube
+    const tipoUsuarioIdRaw =
+      (Storage as any).tipoUsuarioId ||
+      (Storage as any).professorId ||
+      usuario?.tipoUsuarioId ||
+      "";
+
+    if (!tipoUsuarioIdRaw) {
+      console.warn("[treinos] sem tipoUsuarioId para carregar atletas vinculados");
+      return;
+    }
+
+    try {
+      const url = `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(
+        tipoUsuarioIdRaw,
+      )}`;
+
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        throw new Error(`/treinos/atletas-vinculados: ${res.status}`);
+      }
+
+      const data = await res.json();
+      const items = Array.isArray(data) ? data : data.items ?? [];
+
+      const norm: AtletaVinculado[] = items.map((a: any) => ({
+        id: a.id,
+        usuario: {
+          id: a.usuario?.id ?? a.usuarioId ?? "",
+          nome: a.usuario?.nome ?? a.nome ?? "Atleta",
+          foto: a.usuario?.foto ?? a.foto ?? null,
+        },
+      }));
+
+      console.log("[treinos] atletas-vinculados norm:", norm);
+      console.log("[treinos] qtd atletas vinculados:", norm.length);
+
+      setAtletasVinculados(norm);
+    } catch (e) {
+      console.error(e);
+      setAtletasVinculados([]);
+    }
+  }
 
   async function carregarSubmissoes(append = false) {
     const token = getToken();
@@ -162,7 +288,9 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
     setCarregandoSubmissoes(true);
     try {
       const res = await fetch(
-        `${API.BASE_URL}/api/treinos/submissoes?tipoUsuarioId=${usuario.tipoUsuarioId}&status=pendente&limit=${limit}&offset=${offset}`,
+        `${API.BASE_URL}/api/treinos/submissoes?tipoUsuarioId=${
+          usuario.tipoUsuarioId
+        }&status=pendente&limit=${limit}&offset=${offset}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (!res.ok) throw new Error(`Falha /treinos/submissoes: ${res.status}`);
@@ -170,7 +298,11 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
       const items = Array.isArray(data) ? data : data.items ?? [];
 
       setSubmissoesPendentes((prev) => (append ? [...prev, ...items] : items));
-      setPage({ total: data.total ?? items.length, limit: data.limit ?? limit, offset });
+      setPage({
+        total: data.total ?? items.length,
+        limit: data.limit ?? limit,
+        offset,
+      });
     } catch (e) {
       console.error(e);
       if (!append) setSubmissoesPendentes([]);
@@ -179,31 +311,48 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
     }
   }
 
-  async function validarSubmissao(id: string, aprovado: boolean, pontosSug?: number) {
+  async function validarSubmissao(
+    id: string,
+    aprovado: boolean,
+    pontosSug?: number,
+  ) {
     const token = getToken();
     if (!token || !usuario) return;
 
     let pontos = 0;
     if (aprovado) {
-      const inp = prompt("Pontos a creditar para este treino:", String(pontosSug ?? 0));
+      const inp = prompt(
+        "Pontos a creditar para este treino:",
+        String(pontosSug ?? 0),
+      );
       if (inp === null) return;
       const n = Number(inp);
       pontos = Number.isFinite(n) && n >= 0 ? n : 0;
     }
 
     try {
-      const res = await fetch(`${API.BASE_URL}/api/treinos/submissoes/${id}/validar?tipoUsuarioId=${usuario.tipoUsuarioId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ aprovado, pontos }),
-      });
+      const res = await fetch(
+        `${API.BASE_URL}/api/treinos/submissoes/${id}/validar?tipoUsuarioId=${usuario.tipoUsuarioId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ aprovado, pontos }),
+        },
+      );
       if (!res.ok) {
         const txt = await res.text();
         console.error("Falha ao validar:", res.status, txt);
         return alert("Não foi possível validar a submissão.");
       }
       setSubmissoesPendentes((prev) => prev.filter((s) => s.id !== id));
-      alert(aprovado ? "Submissão aprovada e pontos creditados!" : "Submissão reprovada.");
+      alert(
+        aprovado
+          ? "Submissão aprovada e pontos creditados!"
+          : "Submissão reprovada.",
+      );
     } catch (e) {
       console.error(e);
       alert("Erro inesperado ao validar.");
@@ -212,20 +361,60 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
   const aprovar = (id: string, pontos?: number) => validarSubmissao(id, true, pontos);
   const reprovar = (id: string) => validarSubmissao(id, false, 0);
 
-  async function agendarTreinoProgramado(treino: TreinoProgramado, dataSelecionadaISO: string, observacao?: string) {
+  async function agendarTreinoProgramado(
+    treino: TreinoProgramado,
+    dataSelecionadaISO: string,
+    observacao?: string,
+  ) {
     const token = getToken();
-    const atletaId = (Storage as any).tipoUsuarioId || (Storage as any).atletaId;
-    if (!token || !atletaId) {
-      alert("Para agendar um treino, acesse com um atleta.");
+    if (!token) {
+      alert("Faça login para agendar um treino.");
       return;
     }
-    const dia = (dataSelecionadaISO || new Date(Date.now() + 86400000).toISOString()).slice(0, 10);
+
+    const tipoUser = String(
+      usuario?.tipo ?? (Storage as any).tipoSalvo ?? "",
+    ).toLowerCase();
+
+    let atletaId: string | undefined;
+
+    if (tipoUser === "atleta") {
+      // atleta agenda para ele mesmo
+      atletaId =
+        (Storage as any).tipoUsuarioId ||
+        (Storage as any).atletaId ||
+        usuario?.tipoUsuarioId;
+    } else {
+      // professor/escola/escolinha/clube/admin: precisa escolher atleta vinculado
+      const selecionado = atletaSelecionadoByTreinoId[treino.id];
+      if (!selecionado) {
+        alert("Selecione um atleta para agendar este treino.");
+        return;
+      }
+      atletaId = selecionado;
+    }
+
+    if (!atletaId) {
+      alert(
+        "Atleta não identificado. Tente novamente fazendo login como atleta ou selecione um atleta vinculado.",
+      );
+      return;
+    }
+
+    const dia =
+      (dataSelecionadaISO || new Date(Date.now() + 86400000).toISOString()).slice(
+        0,
+        10,
+      );
     const quandoISO = `${dia}T23:59:59.000Z`;
 
     try {
       const r = await fetch(`${API.BASE_URL}/api/treinos/agendados`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           titulo: treino.nome,
           dataTreino: quandoISO,
@@ -238,13 +427,16 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
 
       if (!r.ok) {
         const txt = await r.text().catch(() => "");
-        if (r.status === 409) return alert("Você já tem um agendamento futuro desse treino.");
+        if (r.status === 409)
+          return alert("Você já tem um agendamento futuro desse treino.");
         console.error("Falha ao agendar:", r.status, txt);
         return alert("Não foi possível agendar o treino.");
       }
 
       const novo = await r.json();
-      window.dispatchEvent(new CustomEvent("treino:agendado", { detail: novo }));
+      window.dispatchEvent(
+        new CustomEvent("treino:agendado", { detail: novo }),
+      );
       alert("Treino agendado!");
     } catch (e) {
       console.error(e);
@@ -253,43 +445,129 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
   }
 
   const formatarDataHora = (iso?: string | null) =>
-    iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
+    iso
+      ? new Date(iso).toLocaleString("pt-BR", {
+          dateStyle: "short",
+          timeStyle: "short",
+        })
+      : "";
 
   const renderTreinoCard = (treino: TreinoProgramado) => {
-    const temAtletaNoStorage = Boolean((Storage as any).tipoUsuarioId || (Storage as any).atletaId);
+    const tipoBruto = String(
+      usuario?.tipo ?? (Storage as any).tipoSalvo ?? "",
+    ).toLowerCase();
+
+    const tipoUser =
+      tipoBruto.startsWith("professor") ? "professor"
+      : tipoBruto.startsWith("atleta") ? "atleta"
+      : tipoBruto.startsWith("clube") ? "clube"
+      : tipoBruto.startsWith("escolinha") ? "escolinha"
+      : tipoBruto.startsWith("escola") ? "escola"
+      : tipoBruto.startsWith("admin") ? "admin"
+      : tipoBruto.startsWith("olheiro") ? "olheiro"
+      : tipoBruto;
+
+    const podeAgendarComoAtleta =
+      tipoUser === "atleta" &&
+      Boolean(
+        (Storage as any).tipoUsuarioId ||
+          (Storage as any).atletaId ||
+          usuario?.tipoUsuarioId,
+      );
+
+    const podeAgendarComoGestor =
+      ["professor", "admin", "escola", "escolinha", "clube"].includes(
+        tipoUser,
+      ) && atletasVinculados.length > 0;
+
+    const mostrarBlocoAgendar = podeAgendarComoAtleta || podeAgendarComoGestor;
+
+    console.log("[treinos] renderTreinoCard", {
+      treinoId: treino.id,
+      tipoUser,
+      atletasVinculados: atletasVinculados.length,
+      podeAgendarComoAtleta,
+      podeAgendarComoGestor,
+      mostrarBlocoAgendar,
+    });
     return (
-      <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
+      <div
+        key={treino.id}
+        className="bg-white p-4 rounded-xl shadow-sm border mb-4"
+      >
         <div className="flex items-start justify-between gap-3">
-          <h4 className="font-bold text-lg text-green-800 cursor-pointer hover:underline" onClick={() => navigate(`/treinos/unico?programadoId=${treino.id}`)}>
+          <h4
+            className="font-bold text-lg text-green-800 cursor-pointer hover:underline"
+            onClick={() =>
+              navigate(`/treinos/unico?programadoId=${treino.id}`)
+            }
+          >
             {treino.nome}
           </h4>
           {typeof treino.pontuacao === "number" && (
-            <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">+{treino.pontuacao} pts</span>
+            <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+              +{treino.pontuacao} pts
+            </span>
           )}
         </div>
 
-        {treino.descricao && <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>}
+        {treino.descricao && (
+          <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>
+        )}
 
         <div className="mt-3 flex flex-col gap-2">
-          {temAtletaNoStorage && (
+          {mostrarBlocoAgendar && (
             <div className="flex flex-col sm:flex-row gap-2">
+              {podeAgendarComoGestor && (
+                <select
+                  className="px-3 py-2 border rounded-lg min-w-[180px]"
+                  value={atletaSelecionadoByTreinoId[treino.id] ?? ""}
+                  onChange={(e) =>
+                    setAtletaSelecionadoByTreinoId((prev) => ({
+                      ...prev,
+                      [treino.id]: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="">Selecione o atleta</option>
+                  {atletasVinculados.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.usuario.nome}
+                    </option>
+                  ))}
+                </select>
+              )}
+
               <input
                 type="date"
                 className="px-3 py-2 border rounded-lg"
                 value={dataAgendarById[treino.id] ?? ""}
-                onChange={(e) => setDataAgendarById((p) => ({ ...p, [treino.id]: e.target.value }))}
+                onChange={(e) =>
+                  setDataAgendarById((p) => ({
+                    ...p,
+                    [treino.id]: e.target.value,
+                  }))
+                }
               />
               <input
                 type="text"
                 placeholder="Observação (opcional)"
                 className="px-3 py-2 border rounded-lg flex-1"
                 value={obsById[treino.id] ?? ""}
-                onChange={(e) => setObsById((p) => ({ ...p, [treino.id]: e.target.value }))}
+                onChange={(e) =>
+                  setObsById((p) => ({ ...p, [treino.id]: e.target.value }))
+                }
               />
               <button
                 onClick={() => {
-                  const iso = dataAgendarById[treino.id] || new Date().toISOString().slice(0, 10);
-                  agendarTreinoProgramado(treino, iso, obsById[treino.id]);
+                  const iso =
+                    dataAgendarById[treino.id] ||
+                    new Date().toISOString().slice(0, 10);
+                  agendarTreinoProgramado(
+                    treino,
+                    iso,
+                    obsById[treino.id],
+                  );
                 }}
                 className="bg-green-800 text-white px-3 py-2 rounded-lg"
               >
@@ -300,10 +578,24 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
         </div>
 
         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700">
-          <p><strong>Nível:</strong> {treino.nivel}</p>
-          {treino.dataAgendada && <p><strong>Data:</strong> {formatarData(treino.dataAgendada)}</p>}
-          {typeof treino.duracao === "number" && <p><strong>Duração:</strong> {treino.duracao} min</p>}
-          {treino.objetivo && <p className="sm:col-span-2"><strong>Objetivo:</strong> {treino.objetivo}</p>}
+          <p>
+            <strong>Nível:</strong> {treino.nivel}
+          </p>
+          {treino.dataAgendada && (
+            <p>
+              <strong>Data:</strong> {formatarData(treino.dataAgendada)}
+            </p>
+          )}
+          {typeof treino.duracao === "number" && (
+            <p>
+              <strong>Duração:</strong> {treino.duracao} min
+            </p>
+          )}
+          {treino.objetivo && (
+            <p className="sm:col-span-2">
+              <strong>Objetivo:</strong> {treino.objetivo}
+            </p>
+          )}
         </div>
 
         {treino.exercicios?.length > 0 && (
@@ -311,8 +603,16 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
             <strong className="text-sm text-gray-800">Exercícios:</strong>
             <div className="max-h-40 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
               {treino.exercicios.map((ex, i) => (
-                <div key={ex.id || `${i}-${ex.nome || "ex"}`} className="border-b pb-1 last:border-b-0">
-                  <strong>{i + 1}.</strong> {ex.nome} {ex.repeticoes && <span className="text-gray-500">({ex.repeticoes})</span>}
+                <div
+                  key={ex.id || `${i}-${ex.nome || "ex"}`}
+                  className="border-b pb-1 last:border-b-0"
+                >
+                  <strong>{i + 1}.</strong> {ex.nome}{" "}
+                  {ex.repeticoes && (
+                    <span className="text-gray-500">
+                      ({ex.repeticoes})
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -324,9 +624,12 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
 
   const isGestor =
     usuario?.tipo &&
-    ["professor", "admin", "escola", "escolinha", "clube"].includes(String(usuario.tipo).toLowerCase());
+    ["professor", "admin", "escola", "escolinha", "clube"].includes(
+      String(usuario.tipo).toLowerCase(),
+    );
 
-  const isOlheiro = String((Storage as any).tipoSalvo ?? "").toLowerCase() === "olheiro";
+  const isOlheiro =
+    String((Storage as any).tipoSalvo ?? "").toLowerCase() === "olheiro";
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-24">
@@ -342,7 +645,9 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
                 <button
                   onClick={() => setAbaProfessor("avaliar")}
                   className={`px-4 py-2 rounded-lg border text-sm ${
-                    abaProfessor === "avaliar" ? "bg-green-800 text-white border-green-900" : "bg-white text-gray-800 border-gray-200"
+                    abaProfessor === "avaliar"
+                      ? "bg-green-800 text-white border-green-900"
+                      : "bg-white text-gray-800 border-gray-200"
                   }`}
                 >
                   Avaliar Treinos
@@ -350,14 +655,18 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
                 <button
                   onClick={() => setAbaProfessor("criar")}
                   className={`px-4 py-2 rounded-lg border text-sm ${
-                    abaProfessor === "criar" ? "bg-green-800 text-white border-green-900" : "bg-white text-gray-800 border-gray-200"
+                    abaProfessor === "criar"
+                      ? "bg-green-800 text-white border-green-900"
+                      : "bg-white text-gray-800 border-gray-200"
                   }`}
                 >
                   Meus Treinos
                 </button>
               </div>
             ) : (
-              <div className="text-lg font-semibold text-green-900">Treinos</div>
+              <div className="text-lg font-semibold text-green-900">
+                Treinos
+              </div>
             )}
 
             <Link
@@ -374,21 +683,35 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
         <div className="space-y-6">
           {isGestor && abaProfessor === "avaliar" && (
             <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-              <h3 className="text-lg font-semibold mb-3">Treinos dos atletas afiliados</h3>
+              <h3 className="text-lg font-semibold mb-3">
+                Treinos dos atletas afiliados
+              </h3>
 
               {carregandoSubmissoes ? (
-                <p className="text-gray-500">Carregando submissões pendentes...</p>
+                <p className="text-gray-500">
+                  Carregando submissões pendentes...
+                </p>
               ) : submissoesPendentes.length === 0 ? (
-                <p className="text-gray-500">Nenhum treino pendente para avaliação no momento.</p>
+                <p className="text-gray-500">
+                  Nenhum treino pendente para avaliação no momento.
+                </p>
               ) : (
                 <>
                   <ul className="space-y-3">
                     {submissoesPendentes.map((s) => {
-                      const foto = s.atleta?.foto ? resolveUploadUrl(s.atleta.foto) : PLACEHOLDER_USER;
-                      const midias = (Array.isArray(s.midias) ? s.midias : []).map(resolveUploadUrl);
+                      const foto = s.atleta?.foto
+                        ? resolveUploadUrl(s.atleta.foto)
+                        : PLACEHOLDER_USER;
+                      const midias = (Array.isArray(s.midias)
+                        ? s.midias
+                        : []
+                      ).map(resolveUploadUrl);
 
                       return (
-                        <li key={s.id} className="rounded-xl border bg-white shadow-sm hover:shadow-md transition p-3 sm:p-4">
+                        <li
+                          key={s.id}
+                          className="rounded-xl border bg-white shadow-sm hover:shadow-md transition p-3 sm:p-4"
+                        >
                           <div className="flex items-start gap-3 sm:gap-4">
                             <img
                               src={foto}
@@ -403,14 +726,18 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
 
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                <div className="font-semibold text-green-900 truncate">{s.treino.titulo}</div>
+                                <div className="font-semibold text-green-900 truncate">
+                                  {s.treino.titulo}
+                                </div>
                                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
                                   +{s.pontosSugeridos ?? 0} pts
                                 </span>
 
                                 <div className="ml-auto flex items-center gap-2 w-full sm:w-auto">
                                   <button
-                                    onClick={() => aprovar(s.id, s.pontosSugeridos)}
+                                    onClick={() =>
+                                      aprovar(s.id, s.pontosSugeridos)
+                                    }
                                     className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
                                     title="Aprovar e creditar pontos"
                                   >
@@ -426,8 +753,15 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
                                 </div>
                               </div>
 
-                              <div className="text-sm text-gray-600 truncate">{s.atleta?.nome}</div>
-                              <div className="text-xs text-gray-500">{formatarData(s.criadoEm)} • {new Date(s.criadoEm).toLocaleTimeString("pt-BR")}</div>
+                              <div className="text-sm text-gray-600 truncate">
+                                {s.atleta?.nome}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {formatarData(s.criadoEm)} •{" "}
+                                {new Date(s.criadoEm).toLocaleTimeString(
+                                  "pt-BR",
+                                )}
+                              </div>
 
                               {!!midias.length && (
                                 <div className="mt-3 sm:mt-4">
@@ -435,7 +769,10 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
                                     {midias.map((src, idx) => {
                                       const isVid = isVideoUrl(src);
                                       return isVid ? (
-                                        <div key={`${src}-${idx}`} className="relative w-full overflow-hidden rounded-lg bg-black border pt-[56.25%]">
+                                        <div
+                                          key={`${src}-${idx}`}
+                                          className="relative w-full overflow-hidden rounded-lg bg-black border pt-[56.25%]"
+                                        >
                                           <video
                                             src={src}
                                             className="absolute inset-0 h-full w-full object-cover group-hover:scale-[1.02] transition"
@@ -447,7 +784,14 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
                                           />
                                         </div>
                                       ) : (
-                                        <a key={`${src}-${idx}`} href={src} target="_blank" rel="noreferrer" className="block group" title="Abrir imagem">
+                                        <a
+                                          key={`${src}-${idx}`}
+                                          href={src}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="block group"
+                                          title="Abrir imagem"
+                                        >
                                           <div className="relative w-full overflow-hidden rounded-lg border bg-gray-50 pt-[56.25%]">
                                             <img
                                               src={src}
@@ -472,7 +816,10 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
 
                   {submissoesPendentes.length < page.total && (
                     <div className="mt-3 flex justify-center">
-                      <button onClick={() => carregarSubmissoes(true)} className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
+                      <button
+                        onClick={() => carregarSubmissoes(true)}
+                        className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                      >
                         Carregar mais
                       </button>
                     </div>
@@ -485,34 +832,47 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
           {abaProfessor === "criar" && (
             <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                <h3 className="text-lg font-semibold">{usuario?.tipo === "admin" ? "Todos os Treinos" : "Treinos que você criou"}</h3>
-                <button className="bg-green-800 text-white px-4 py-2 rounded-lg" onClick={() => navigate("/treinos/novo")}>
+                <h3 className="text-lg font-semibold">
+                  {usuario?.tipo === "admin"
+                    ? "Todos os Treinos"
+                    : "Treinos que você criou"}
+                </h3>
+                <button
+                  className="bg-green-800 text-white px-4 py-2 rounded-lg"
+                  onClick={() => navigate("/treinos/novo")}
+                >
                   Criar novo treino
                 </button>
               </div>
 
-              {(usuario?.tipo === "admin"
-                ? treinos
-                : treinos.filter(
-                    (t) =>
-                      t.professorId === usuario?.tipoUsuarioId ||
-                      t.escolinhaId === usuario?.tipoUsuarioId ||
-                      t.clubeId === usuario?.tipoUsuarioId,
-                  )
+              {(
+                usuario?.tipo === "admin"
+                  ? treinos
+                  : treinos.filter(
+                      (t) =>
+                        t.professorId === usuario?.tipoUsuarioId ||
+                        t.escolinhaId === usuario?.tipoUsuarioId ||
+                        t.clubeId === usuario?.tipoUsuarioId,
+                    )
               ).length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(usuario?.tipo === "admin"
-                    ? treinos
-                    : treinos.filter(
-                        (t) =>
-                          t.professorId === usuario?.tipoUsuarioId ||
-                          t.escolinhaId === usuario?.tipoUsuarioId ||
-                          t.clubeId === usuario?.tipoUsuarioId,
-                      )
+                  {(
+                    usuario?.tipo === "admin"
+                      ? treinos
+                      : treinos.filter(
+                          (t) =>
+                            t.professorId === usuario?.tipoUsuarioId ||
+                            t.escolinhaId === usuario?.tipoUsuarioId ||
+                            t.clubeId === usuario?.tipoUsuarioId,
+                        )
                   ).map(renderTreinoCard)}
                 </div>
               ) : (
-                <p className="text-gray-500">{usuario?.tipo === "admin" ? "Nenhum treino cadastrado." : "Você ainda não criou nenhum treino."}</p>
+                <p className="text-gray-500">
+                  {usuario?.tipo === "admin"
+                    ? "Nenhum treino cadastrado."
+                    : "Você ainda não criou nenhum treino."}
+                </p>
               )}
             </div>
           )}
@@ -523,13 +883,21 @@ export default function TreinosInstrutores({ tipo }: { tipo: UsuarioLogado["tipo
         <Link href="/feed" className="hover:opacity-90" aria-label="Feed">
           <House />
         </Link>
-        <Link href="/explorar" className="hover:opacity-90" aria-label="Explorar">
+        <Link
+          href="/explorar"
+          className="hover:opacity-90"
+          aria-label="Explorar"
+        >
           <Search />
         </Link>
         <Link href="/post" className="hover:opacity-90" aria-label="Novo post">
           <CirclePlus />
         </Link>
-        <Link href={isOlheiro ? "/olheiros" : "/treinos"} className="hover:opacity-90" aria-label="Treinos">
+        <Link
+          href={isOlheiro ? "/olheiros" : "/treinos"}
+          className="hover:opacity-90"
+          aria-label="Treinos"
+        >
           <Volleyball />
         </Link>
         <Link href="/perfil" className="hover:opacity-90" aria-label="Perfil">

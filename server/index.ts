@@ -18,6 +18,7 @@ import { gerarSnapshotRanking } from "./jobs/rankingSnapshot.js";
 import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 import { authenticateToken } from "./middlewares/auth.js";
 import { limparTreinosSalvosExpirados } from "./controllers/treinosSalvosController.js";
+import { PrismaClient } from "@prisma/client";
 
 import adminUsuariosRoutes from "./routes/adminUsuarios.js";
 import adminRoutes from "./routes/admin.js";
@@ -93,10 +94,13 @@ import auditoriaRouter from "./routes/auditoria.js";
 import adsRoutes from "./routes/ads.js";
 import consentimentoRoutes from "./routes/consentimento.js";
 import metricsRoutes from "./routes/metrics.js";
+import treinarJuntosRoute from "./routes/treinarJuntos.js";
 
 import { handlePaymentWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const prisma = new PrismaClient();
 
 const envCandidates = [
   path.resolve(__dirname, ".env"),      
@@ -272,6 +276,7 @@ app.use("/api/consentimento", authenticateToken, consentimentoRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
 app.use("/api/jogos-elenco", jogosElencoRoutes);
+app.use("/api/treinar-juntos", treinarJuntosRoute);
 
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
@@ -280,6 +285,14 @@ server.listen({ port: PORT, host: "0.0.0.0" }, () => {
     try { qrcode.generate(frontendURL, { small: true }); } catch {}
     console.log(`🔗 Front-end (dev): ${frontendURL}`);
   }
+});
+
+cron.schedule("0 4 * * *", async () => {
+  const now = new Date();
+  await prisma.atletaHistoricoVinculo.deleteMany({
+    where: { expiraEm: { lt: now } },
+  });
+  console.log("[CRON] Histórico de vínculos de atletas limpo");
 });
 
 cron.schedule("0 3 * * *", async () => {

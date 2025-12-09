@@ -265,19 +265,19 @@ function AchievementShareCard({ parsed }: { parsed: ParsedAchievement }) {
   );
 }
 
-  function BottomSheet({
-    open,
-    onClose,
-    heightPct = 40,
-    children,
-    ariaLabel = "Painel",
-  }: {
-    open: boolean;
-    onClose: () => void;
-    heightPct?: number;
-    children: React.ReactNode;
-    ariaLabel?: string;
-  }) {
+function BottomSheet({
+  open,
+  onClose,
+  heightPct = 40,
+  children,
+  ariaLabel = "Painel",
+}: {
+  open: boolean;
+  onClose: () => void;
+  heightPct?: number;
+  children?: React.ReactNode;
+  ariaLabel?: string;
+}) {
   useEffect(() => {
     if (!open) return;
 
@@ -292,7 +292,6 @@ function AchievementShareCard({ parsed }: { parsed: ParsedAchievement }) {
       document.body.style.overflow = prev;
     };
   }, [open, onClose]);
-
 
   if (!open) return null;
 
@@ -323,7 +322,9 @@ function AchievementShareCard({ parsed }: { parsed: ParsedAchievement }) {
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
-  const [comentarioTextoPorPost, setComentarioTextoPorPost] = useState<Record<string, string>>({});
+  const [comentarioTextoPorPost, setComentarioTextoPorPost] = useState<Record<string, string>>(
+    {}
+  );
 
   const [modalAberto, setModalAberto] = useState(false);
   const [linkCompartilhado, setLinkCompartilhado] = useState("");
@@ -336,7 +337,9 @@ function PaginaFeed(): JSX.Element {
   const [enviandoDM, setEnviandoDM] = useState(false);
 
   const [idCompartilhado, setIdCompartilhado] = useState<string | null>(null);
-  const [filtro, setFiltro] = useState<"todos" | "seguindo" | "favoritos" | "meus">("todos");
+
+  // 🔁 AGORA o filtro NÃO tem mais "meus"
+  const [filtro, setFiltro] = useState<"todos" | "seguindo" | "favoritos">("todos");
   const [agendaFeed, setAgendaFeed] = useState<AgendaItem[]>([]);
   const [carregandoAgenda, setCarregandoAgenda] = useState(false);
 
@@ -347,7 +350,7 @@ function PaginaFeed(): JSX.Element {
     sessionStorage.getItem("tipoUsuario") ??
     "";
 
-   React.useEffect(() => {
+  React.useEffect(() => {
     setModalAberto(false);
     setComentariosModalAberto(false);
     setPostSelecionado(null);
@@ -360,73 +363,77 @@ function PaginaFeed(): JSX.Element {
         (el as HTMLElement).remove();
       });
   }, []);
-  
+
   useEffect(() => {
-  if (tipoUsuario !== "ATLETA") {
-    setAgendaFeed([]);
-    setCarregandoAgenda(false);
-    return;
-  }
-
-  (async () => {
-    try {
-      setCarregandoAgenda(true);
-
-      const hoje = new Date();
-      const daqui7 = new Date();
-      daqui7.setDate(hoje.getDate() + 7);
-
-      const rows = await TreinosApi.getCalendario(hoje, daqui7);
-
-      const normalizados: AgendaItem[] = (Array.isArray(rows) ? rows : []).map(
-        (item: any) => ({
-          id: item.id,
-          tipo: (item.tipo as AgendaTipo) ?? "OUTRO",
-          titulo: item.titulo ?? "Atividade",
-          inicio: item.inicio ?? item.start ?? item.data ?? new Date().toISOString(),
-          fim: item.fim ?? item.end ?? item.dataFim ?? null,
-          origem: item.origem ?? "API",
-        })
-      );
-
-      normalizados.sort((a, b) => a.inicio.localeCompare(b.inicio));
-      setAgendaFeed(normalizados);
-    } catch (e) {
-      console.error("Erro ao carregar agenda do feed:", e);
+    if (tipoUsuario !== "ATLETA") {
       setAgendaFeed([]);
-    } finally {
       setCarregandoAgenda(false);
+      return;
     }
-  })();
-}, [tipoUsuario]);
+
+    (async () => {
+      try {
+        setCarregandoAgenda(true);
+
+        const hoje = new Date();
+        const daqui7 = new Date();
+        daqui7.setDate(hoje.getDate() + 7);
+
+        const rows = await TreinosApi.getCalendario(hoje, daqui7);
+
+        const normalizados: AgendaItem[] = (Array.isArray(rows) ? rows : []).map(
+          (item: any) => ({
+            id: item.id,
+            tipo: (item.tipo as AgendaTipo) ?? "OUTRO",
+            titulo: item.titulo ?? "Atividade",
+            inicio: item.inicio ?? item.start ?? item.data ?? new Date().toISOString(),
+            fim: item.fim ?? item.end ?? item.dataFim ?? null,
+            origem: item.origem ?? "API",
+          })
+        );
+
+        normalizados.sort((a, b) => a.inicio.localeCompare(b.inicio));
+        setAgendaFeed(normalizados);
+      } catch (e) {
+        console.error("Erro ao carregar agenda do feed:", e);
+        setAgendaFeed([]);
+      } finally {
+        setCarregandoAgenda(false);
+      }
+    })();
+  }, [tipoUsuario]);
 
   useEffect(() => {
-  async function carregar() {
-    try {
-      const dados: PostagemComUsuario[] = await getFeedPosts(filtro);
+    async function carregar() {
+      try {
+        const usuarioLogadoId = Storage.usuarioId as string | null;
 
-      const unicos: PostagemComUsuario[] = Array.from(
-        new Map<string, PostagemComUsuario>(
-          dados.map((p) => [p.id, p] as const)
-        ).values()
-      );
+        let dados: PostagemComUsuario[] = await getFeedPosts(filtro);
 
-      setPosts(unicos);
-    } catch (e) {
-      console.error("Falha ao carregar feed:", e);
-      setPosts([]);
+        // 🔴 AQUI: removemos as postagens do próprio usuário do feed
+        if (usuarioLogadoId) {
+          dados = dados.filter((p) => p.usuario?.id !== usuarioLogadoId);
+        }
+
+        const unicos: PostagemComUsuario[] = Array.from(
+          new Map<string, PostagemComUsuario>(dados.map((p) => [p.id, p] as const)).values()
+        );
+
+        setPosts(unicos);
+      } catch (e) {
+        console.error("Falha ao carregar feed:", e);
+        setPosts([]);
+      }
     }
-  }
-  carregar();
-}, [filtro]);
+    carregar();
+  }, [filtro]);
 
   useEffect(() => {
     const onNovoPost = (novo: PostagemComUsuario) => {
       setPosts((prev) => {
-        if (filtro === "meus" && novo.usuario?.id !== Storage.usuarioId) return prev;
-        if (filtro === "todos" && novo.usuario?.id === Storage.usuarioId) return prev;
+        // 🔴 Nunca adiciona post do próprio usuário no feed
+        if (novo.usuario?.id === Storage.usuarioId) return prev;
         if (prev.some((p) => p.id === novo.id)) return prev;
-
         return [novo, ...prev];
       });
     };
@@ -435,7 +442,7 @@ function PaginaFeed(): JSX.Element {
     return () => {
       socket.off("feed:novoPost", onNovoPost as any);
     };
-  }, [filtro]);
+  }, []);
 
   const handleLike = async (postId: string) => {
     if (!userId) {
@@ -464,7 +471,11 @@ function PaginaFeed(): JSX.Element {
   const handleComentario = async (postId: string, texto: string) => {
     if (texto.trim()) {
       await comentarPost(postId, texto);
-      const dados = await getFeedPosts(filtro);
+      const usuarioLogadoId = Storage.usuarioId as string | null;
+      let dados = await getFeedPosts(filtro);
+      if (usuarioLogadoId) {
+        dados = dados.filter((p) => p.usuario?.id !== usuarioLogadoId);
+      }
       setPosts(dados);
       setComentarioTextoPorPost((prev) => ({ ...prev, [postId]: "" }));
     }
@@ -478,7 +489,7 @@ function PaginaFeed(): JSX.Element {
     try {
       setCarregandoMutuos(true);
       setSelecionados(new Set());
-      const lista = await getUsuariosMutuos(); 
+      const lista = await getUsuariosMutuos();
       setUsuariosMutuos(lista);
     } catch (e) {
       console.error(e);
@@ -561,8 +572,9 @@ function PaginaFeed(): JSX.Element {
     <div className="px-4 py-6 space-y-6 pb-24">
       <HeaderSliderLite title="Feed de Postagens" start="feed" />
 
+      {/* BOTÕES DE FILTRO – sem "Meus" */}
       <div className="flex gap-2 justify-center mb-4">
-        {(["todos", "seguindo", "favoritos", "meus"] as const).map((f) => (
+        {(["todos", "seguindo", "favoritos"] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFiltro(f)}
@@ -572,13 +584,7 @@ function PaginaFeed(): JSX.Element {
                 : "bg-white text-green-700 border-green-700"
             }`}
           >
-            {f === "todos"
-              ? "Todos"
-              : f === "seguindo"
-              ? "Seguindo"
-              : f === "favoritos"
-              ? "Favoritos"
-              : "Meus"}
+            {f === "todos" ? "Todos" : f === "seguindo" ? "Seguindo" : "Favoritos"}
           </button>
         ))}
       </div>
@@ -591,25 +597,17 @@ function PaginaFeed(): JSX.Element {
               seguindo:
                 "Você ainda não segue ninguém — ou ninguém que você segue postou ainda.",
               favoritos: "Você não tem nenhum usuário favoritado.",
-              meus: "Você ainda não postou nada.",
             }[filtro]}
           </p>
 
-          {filtro === "seguindo" || filtro === "favoritos" ? (
+          {(filtro === "seguindo" || filtro === "favoritos") && (
             <Link
               href="/explorar"
               className="text-green-700 underline mt-2 inline-block"
             >
               Explorar perfis
             </Link>
-          ) : filtro === "meus" ? (
-            <Link
-              href="/post"
-              className="text-green-700 underline mt-2 inline-block"
-            >
-              Criar minha primeira postagem
-            </Link>
-          ) : null}
+          )}
         </div>
       )}
 
@@ -892,6 +890,8 @@ function PaginaFeed(): JSX.Element {
         </Link>
       </nav>
 
+      {/* BottomSheet de compartilhar e comentários continua igual */}
+      {/* == COMPARTILHAR POSTAGEM == */}
       <BottomSheet
         open={modalAberto}
         onClose={() => setModalAberto(false)}
@@ -1008,6 +1008,7 @@ function PaginaFeed(): JSX.Element {
         </div>
       </BottomSheet>
 
+      {/* == COMENTÁRIOS == */}
       <BottomSheet
         open={comentariosModalAberto && !!postSelecionado}
         onClose={() => setComentariosModalAberto(false)}
@@ -1040,7 +1041,9 @@ function PaginaFeed(): JSX.Element {
                   <div key={comentario.id} className="flex gap-3">
                     <Link
                       href={`/perfil/${comentario.usuarioId ?? ""}`}
-                      title={`Ver perfil de ${comentario.usuario?.nome ?? "Usuário"}`}
+                      title={`Ver perfil de ${
+                        comentario.usuario?.nome ?? "Usuário"
+                      }`}
                       className="shrink-0"
                     >
                       <img

@@ -6,7 +6,8 @@ import { publicImgUrl } from "@/utils/publicUrl.js";
 
 interface Activity {
   id: string;
-  tipo: "Desafio" | "Treino" | "Vídeo";
+  // deixa string genérico pra aceitar "Treino Livre", "Treino Agendado", etc.
+  tipo: string;
   imagemUrl?: string | null;
   nome: string;
 }
@@ -20,8 +21,16 @@ type VideoItem = {
   curtidas?: number;
 };
 
+// Activity usado internamente no grid, opcionalmente ligado a um vídeo
+type ActivityCard = Activity & {
+  video?: VideoItem | null;
+};
+
 function guessTreinoImage(nome: string) {
   const n = (nome || "").toLowerCase();
+  if (n.includes("livre")) return "/assets/treinos/treino-livre.jpg";
+  if (n.includes("agendado")) return "/assets/treinos/treino-agendado.jpg";
+  if (n.includes("desafio")) return "/assets/treinos/desafio.jpg";
   if (n.includes("controle")) return "/assets/treinos/controle.jpg";
   if (n.includes("agilidade")) return "/assets/treinos/agilidade.jpg";
   if (n.includes("resist")) return "/assets/treinos/resistencia.jpg";
@@ -70,6 +79,7 @@ export default function ActivityGrid({
     [token]
   );
 
+  // busca vídeos de desafios para esse usuário
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -91,40 +101,92 @@ export default function ActivityGrid({
     };
   }, [perfilUsuarioId, headers]);
 
+  // junta TODAS as atividades:
+  // - activities (treino livre, treino agendado concluído, desafio etc.)
+  // - vídeos aprovados de desafios
+  const cards: ActivityCard[] = useMemo(() => {
+    const base: ActivityCard[] = (activities || []).map((a) => ({
+      ...a,
+      video: null,
+    }));
+
+    const videoCards: ActivityCard[] = (videos || []).map((v) => ({
+      id: `video-${v.id}`,
+      tipo: "Vídeo",
+      imagemUrl: v.thumb || v.videoUrl,
+      nome: v.titulo,
+      video: v,
+    }));
+
+    // se quiser limitar em N mais recentes, pode fazer slice aqui
+    return [...base, ...videoCards];
+  }, [activities, videos]);
+
   return (
     <div className="my-6">
       <h2 className="text-green-900 font-bold text-lg px-4 mt-2 mb-2 hover:underline">
         Atividades Recentes
       </h2>
 
-      {videos.length === 0 ? (
-        <div className="text-sm text-green-800 px-4 pb-2">Sem vídeos aprovados ainda.</div>
+      {cards.length === 0 ? (
+        <div className="text-sm text-green-800 px-4 pb-2">
+          Nenhuma atividade recente ainda.
+        </div>
       ) : (
         <div className="grid grid-cols-3 gap-4 px-0">
-          {videos.map((v) => {
-            const thumbCandidate =
-              v.thumb && v.thumb.trim()
-                ? v.thumb
-                : "/assets/treinos/placeholder.png";
+          {cards.map((card) => {
+            const isVideo = !!card.video;
+
+            let thumbCandidate: string;
+            if (isVideo) {
+              thumbCandidate =
+                card.video?.thumb && card.video.thumb.trim()
+                  ? card.video.thumb
+                  : "/assets/treinos/placeholder.png";
+            } else if (card.imagemUrl && card.imagemUrl.trim()) {
+              thumbCandidate = card.imagemUrl;
+            } else {
+              thumbCandidate = guessTreinoImage(card.nome);
+            }
+
             const thumb =
               publicImgUrl(thumbCandidate) ??
               `${APP.FRONTEND_BASE_URL}/assets/treinos/placeholder.png`;
 
             return (
               <button
-                key={v.id}
+                key={card.id}
                 className="rounded-lg overflow-hidden shadow relative group bg-black"
-                onClick={() => setSel(v)}
-                title={v.titulo}
+                onClick={() => {
+                  if (isVideo && card.video) setSel(card.video);
+                }}
+                type="button"
               >
-                <img src={thumb} alt={v.titulo} className="w-full h-24 object-cover opacity-80 group-hover:opacity-60 transition" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow">
-                    <svg viewBox="0 0 24 24" className="w-6 h-6">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </div>
+                <img
+                  src={thumb}
+                  alt={card.nome}
+                  className="w-full h-24 object-cover opacity-80 group-hover:opacity-60 transition"
+                />
+
+                {/* faixa com o tipo embaixo */}
+                <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[11px] text-white px-2 py-1 flex justify-between items-center">
+                  <span className="truncate max-w-[70%]">{card.nome}</span>
+                  <span className="ml-1 font-semibold">
+                    {card.tipo === "Vídeo"
+                      ? "Vídeo"
+                      : card.tipo || "Atividade"}
+                  </span>
                 </div>
+
+                {isVideo && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow">
+                      <svg viewBox="0 0 24 24" className="w-6 h-6">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
               </button>
             );
           })}
@@ -155,7 +217,9 @@ export default function ActivityGrid({
               {isYouTube(sel.videoUrl) ? (
                 <iframe
                   className="w-full aspect-video"
-                  src={`https://www.youtube.com/embed/${getYouTubeId(sel.videoUrl) || ""}?autoplay=1&rel=0`}
+                  src={`https://www.youtube.com/embed/${
+                    getYouTubeId(sel.videoUrl) || ""
+                  }?autoplay=1&rel=0`}
                   title={sel.titulo}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen

@@ -104,7 +104,11 @@ interface Exercicio {
   videoDemonstrativoUrl?: string;
   descricao?: string;
   nivel?: string;
+  categorias?: string[];        // ex.: ["Sub13", "Sub15"]
+  duracaoMinutos?: number | null; // duração sugerida daquele exercício
+  tipoTreino?: string | null;   // ex.: "Tecnico", "Fisico", "Tatico"
 }
+
 
 interface AtletaVinculado {
   id: string;
@@ -151,6 +155,7 @@ type TreinoAgendadoResp = {
 };
 
 const SAVE_KEY = "novoTreinoState";
+const RESTORE_FLAG_KEY = "novoTreino-shouldRestore";
 const MAX_SLOTS_TREINOS_SALVOS = 5;
 
 function toCategoriaEnum(val?: string | null): string | null {
@@ -177,7 +182,7 @@ async function apiListarTreinosSalvos(
   ownerId: string,
 ) {
   const headers = authHeaders();
-  const url = `${API.BASE_URL}/api/treinos-salvos?tipoUsuario=${encodeURIComponent(
+  const url = `${API.BASE_URL}/api/treinosSalvos?tipoUsuario=${encodeURIComponent(
     ownerTipo,
   )}&tipoUsuarioId=${encodeURIComponent(ownerId)}&includePublic=0`;
   const r = await fetch(url, { headers });
@@ -195,7 +200,7 @@ async function apiListarTreinosSalvos(
 async function apiDeletarTreinoSalvo(id: string) {
   const headers = authHeaders();
   const r = await fetch(
-    `${API.BASE_URL}/api/treinos-salvos/${encodeURIComponent(id)}`,
+    `${API.BASE_URL}/api/treinosSalvos/${encodeURIComponent(id)}`,
     { method: "DELETE", headers },
   );
   if (!r.ok) throw new Error("Falha ao apagar treino salvo");
@@ -204,7 +209,7 @@ async function apiDeletarTreinoSalvo(id: string) {
 
 async function apiCriarTreinoSalvo(body: any) {
   const headers = authHeaders();
-  const r = await fetch(`${API.BASE_URL}/api/treinos-salvos`, {
+  const r = await fetch(`${API.BASE_URL}/api/treinosSalvos`, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
@@ -310,6 +315,8 @@ function saveState(partial: any) {
     const prev = safeParse<any>(sessionStorage.getItem(SAVE_KEY), {});
     const next = { ...prev, ...partial };
     sessionStorage.setItem(SAVE_KEY, JSON.stringify(next));
+    // marca que este rascunho deve ser restaurado em um próximo acesso
+    sessionStorage.setItem(RESTORE_FLAG_KEY, "1");
   } catch {}
 }
 
@@ -413,7 +420,7 @@ export default function NovoTreino() {
   const [nivel, setNivel] = useState("Base");
   const [duracao, setDuracao] = useState<number>(60);
   const [dataTreino, setDataTreino] = useState<string>("");
-  const [categoria, setCategoria] = useState<string>("Sub13");
+  const [categorias, setCategorias] = useState<string[]>(["Sub13"]);
   const [tipoTreino, setTipoTreino] = useState<string>("Tecnico");
   const [objetivo, setObjetivo] = useState<string>("");
   const [iniciado, setIniciado] = useState<boolean>(false);
@@ -423,6 +430,8 @@ export default function NovoTreino() {
   const [dicas, setDicas] = useState<string[]>([]);
   const [dicaAtual, setDicaAtual] = useState<string>("");
   const [filtroEx, setFiltroEx] = useState("");
+  const [filtroCategorias, setFiltroCategorias] = useState<string[]>([]);
+  const [filtroNiveis, setFiltroNiveis] = useState<string[]>([]);
   const restoredRef = useRef(false);
   const [idsProgramadosBloqueados, setIdsProgramadosBloqueados] = useState<
     Set<string>
@@ -786,6 +795,24 @@ export default function NovoTreino() {
               "",
             descricao: e.descricao ?? e.resumo ?? "",
             nivel: e.nivel ?? e.dificuldade ?? "",
+
+            // NOVO – tenta puxar dos campos que você colocou no backend
+            categorias: Array.isArray(e.categorias)
+              ? e.categorias
+              : e.categoria
+              ? [e.categoria]
+              : [],
+            duracaoMinutos:
+              typeof e.duracao === "number"
+                ? e.duracao
+                : typeof e.duracaoMinutos === "number"
+                ? e.duracaoMinutos
+                : typeof e.tempoMinutos === "number"
+                ? e.tempoMinutos
+                : typeof e.tempo === "number"
+                ? e.tempo
+                : null,
+            tipoTreino: e.tipoTreino ?? e.tipo ?? null,
           }));
           setExerciciosDisponiveis(itens);
           return;
@@ -833,33 +860,46 @@ export default function NovoTreino() {
     setUsuarioId(id);
 
     if (!restoredRef.current) {
-      const saved = safeParse<any>(sessionStorage.getItem(SAVE_KEY), null);
-      if (saved) {
-        setEtapa(saved.etapa ?? 1);
-        setNome(saved.nome ?? "");
-        setDescricao(saved.descricao ?? "");
-        setNivel(saved.nivel ?? "Base");
-        setDuracao(saved.duracao ?? 60);
-        setDataTreino(saved.dataTreino ?? "");
-        setCategoria(saved.categoria ?? "Sub13");
-        setTipoTreino(saved.tipoTreino ?? "Tecnico");
-        setObjetivo(saved.objetivo ?? "");
-        const exOld = Array.isArray(saved.exerciciosSelecionados)
-          ? saved.exerciciosSelecionados
-          : [];
-        const exUi: ExItemUI[] = exOld.map((x: any, idx: number) => ({
-          idCatalogo: x.exercicioId ?? null,
-          nome: x.nome ?? "",
-          descricao: x.descricao ?? null,
-          repeticoes: x.repeticoes ?? "",
-          ordem: x.ordem ?? idx + 1,
-          series: x.series ?? "",
-        }));
-        setExerciciosSelecionados(exUi);
-        setDicas(saved.dicas ?? []);
-        setAtletasSelecionados(saved.atletasSelecionados ?? []);
-        setDatasAgendamento(saved.datasAgendamento ?? []);
+      const shouldRestore =
+        sessionStorage.getItem(RESTORE_FLAG_KEY) === "1";
+
+      if (shouldRestore) {
+        const saved = safeParse<any>(sessionStorage.getItem(SAVE_KEY), null);
+        if (saved) {
+          setEtapa(saved.etapa ?? 1);
+          setNome(saved.nome ?? "");
+          setDescricao(saved.descricao ?? "");
+          setNivel(saved.nivel ?? "Base");
+          setDuracao(saved.duracao ?? 60);
+          setDataTreino(saved.dataTreino ?? "");
+          setCategorias(
+            saved.categorias ??
+              (saved.categoria
+                ? Array.isArray(saved.categoria)
+                  ? saved.categoria
+                  : [saved.categoria]
+                : ["Sub13"]),
+          );
+          setTipoTreino(saved.tipoTreino ?? "Tecnico");
+          setObjetivo(saved.objetivo ?? "");
+          const exOld = Array.isArray(saved.exerciciosSelecionados)
+            ? saved.exerciciosSelecionados
+            : [];
+          const exUi: ExItemUI[] = exOld.map((x: any, idx: number) => ({
+            idCatalogo: x.exercicioId ?? null,
+            nome: x.nome ?? "",
+            descricao: x.descricao ?? null,
+            repeticoes: x.repeticoes ?? "",
+            ordem: x.ordem ?? idx + 1,
+            series: x.series ?? "",
+          }));
+          setExerciciosSelecionados(exUi);
+          setDicas(saved.dicas ?? []);
+          setAtletasSelecionados(saved.atletasSelecionados ?? []);
+          setDatasAgendamento(saved.datasAgendamento ?? []);
+        }
       }
+
       restoredRef.current = true;
     }
 
@@ -1057,7 +1097,9 @@ export default function NovoTreino() {
       nivel,
       duracao,
       dataTreino,
-      categoria,
+      categorias,
+      // salva também o primeiro para compatibilidade com o estado antigo
+      categoria: categorias[0] ?? "",
       tipoTreino,
       objetivo,
       exerciciosSelecionados,
@@ -1072,7 +1114,7 @@ export default function NovoTreino() {
     nivel,
     duracao,
     dataTreino,
-    categoria,
+    categorias,
     tipoTreino,
     objetivo,
     exerciciosSelecionados,
@@ -1222,15 +1264,40 @@ export default function NovoTreino() {
   }
 
   const exerciciosFiltrados = useMemo(() => {
+    let lista = [...exerciciosDisponiveis];
+
+    // 🔎 BUSCA POR NOME / DESCRIÇÃO / NÍVEL
     const q = filtroEx.trim().toLowerCase();
-    if (!q) return exerciciosDisponiveis;
-    return exerciciosDisponiveis.filter((e) => {
-      const nome = (e.nome || "").toLowerCase();
-      const desc = (e.descricao || "").toLowerCase();
-      const nivel = (e.nivel || "").toLowerCase();
-      return nome.includes(q) || desc.includes(q) || nivel.includes(q);
-    });
-  }, [filtroEx, exerciciosDisponiveis]);
+    if (q) {
+      lista = lista.filter((e) => {
+        const nome = (e.nome || "").toLowerCase();
+        const desc = (e.descricao || "").toLowerCase();
+        const nivel = (e.nivel || "").toLowerCase();
+        return nome.includes(q) || desc.includes(q) || nivel.includes(q);
+      });
+    }
+
+    // 🧩 CATEGORIAS (Sub9, Sub11, Sub17, Livre...) – AGORA MULTI
+    if (filtroCategorias.length > 0) {
+      const catsFiltro = filtroCategorias.map((c) => c.toLowerCase());
+      lista = lista.filter((e) => {
+        const cats = (e.categorias || []).map((c) => String(c).toLowerCase());
+        if (!cats.length) return false;
+        return cats.some((c) => catsFiltro.includes(c));
+      });
+    }
+
+    // 🎯 NÍVEIS (Base, Avancado, Performance) – AGORA MULTI
+    if (filtroNiveis.length > 0) {
+      const niveisFiltro = filtroNiveis.map((n) => n.toLowerCase());
+      lista = lista.filter((e) => {
+        if (!e.nivel) return false;
+        return niveisFiltro.includes(String(e.nivel).toLowerCase());
+      });
+    }
+
+    return lista;
+  }, [exerciciosDisponiveis, filtroEx, filtroCategorias, filtroNiveis]);
 
   const adicionarExercicio = () => {
     setExerciciosSelecionados((prev) => [
@@ -1465,7 +1532,10 @@ export default function NovoTreino() {
         usuarioId,
         tipoUsuario: tipoUsuarioNorm,
         tipoUsuarioId,
-        categoria: categoria ? [mapCategoria(categoria)!] : [],
+        categoria:
+        categorias.length > 0
+          ? categorias.map(mapCategoria).filter(Boolean)
+          : [],
         tipoTreino: mapTipoTreino(tipoTreino),
         objetivo: objetivo || null,
         duracao: duracao ? Number(duracao) : null,
@@ -1596,9 +1666,11 @@ export default function NovoTreino() {
         console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
       }
 
-      showToast(msgPrincipal + extra, "success");
+            showToast(msgPrincipal + extra, "success");
 
       sessionStorage.removeItem(SAVE_KEY);
+      sessionStorage.removeItem(RESTORE_FLAG_KEY);
+
       setEtapa(1);
       setCompletedUntil(1);
       setNome("");
@@ -1606,7 +1678,7 @@ export default function NovoTreino() {
       setNivel("Base");
       setDuracao(60);
       setDataTreino("");
-      setCategoria("Sub13");
+      setCategorias(["Sub13"]);
       setTipoTreino("Tecnico");
       setObjetivo("");
       setExerciciosSelecionados([]);
@@ -1614,19 +1686,34 @@ export default function NovoTreino() {
       setDicaAtual("");
       setAtletasSelecionados([]);
       setDatasAgendamento([]);
-    } catch (e: any) {
-      console.error(
-        "Falha inesperada ao criar treino:",
-        e?.response?.data || e,
-      );
 
-      const msgErro =
-        e?.response?.data?.error ||
-        e?.response?.data?.message ||
-        "Erro inesperado ao criar treino.";
+      // 👉 Depois de criar, vai para /treinos
+      setTimeout(() => {
+        navigate("/treinos");
+      }, 500);
+      
+      } catch (e: any) {
+        console.error(
+          "Falha inesperada ao criar treino:",
+          e?.response?.data || e,
+        );
 
-      showToast(msgErro, "error");
-    }
+        const msgErro =
+          e?.response?.data?.error ||
+          e?.response?.data?.message ||
+          "Erro inesperado ao criar treino.";
+
+        showToast(msgErro, "error");
+
+        // mesmo com erro, não queremos reabrir o próximo treino
+        // com os dados antigos
+        sessionStorage.removeItem(SAVE_KEY);
+        sessionStorage.removeItem(RESTORE_FLAG_KEY);
+
+        setTimeout(() => {
+          navigate("/treinos");
+        }, 800);
+      }
   };
 
   const agendarTreino = async (t: TreinoProgramado) => {
@@ -1796,12 +1883,15 @@ export default function NovoTreino() {
                   }))
                 }
               />
-              <button
-                className="mt-3 bg-green-800 text-white px-5 py-2 rounded ml-3"
-                onClick={() => agendarTreino(t)}
-              >
-                Agendar este treino
-              </button>
+              <div className="flex justify-end mt-2">
+                <button
+                  className="mt-3 bg-green-800 text-white px-3 py-1 rounded text-sm w-fit"
+                  style={{ alignSelf: "flex-end" }}
+                  onClick={() => agendarTreino(t)}
+                >
+                  Agendar treino
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -1864,13 +1954,15 @@ export default function NovoTreino() {
                 setNivel("Base");
                 setDuracao(60);
                 setDataTreino("");
-                setCategoria("Sub13");
+                setCategorias(["Sub13"]);
                 setTipoTreino("Tecnico");
                 setObjetivo("");
                 setExerciciosSelecionados([]);
                 setDicas([]);
                 setDicaAtual("");
                 setAtletasSelecionados([]);
+                sessionStorage.removeItem(SAVE_KEY);
+                sessionStorage.removeItem(RESTORE_FLAG_KEY);
               }
             }}
             className="text-sm text-red-700 underline justify-self-end col-start-3"
@@ -1925,11 +2017,17 @@ export default function NovoTreino() {
                   Categoria (Faixa Etária)
                 </label>
                 <select
-                  className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
-                  value={categoria}
-                  onChange={(e) => setCategoria(e.target.value)}
+                  multiple
+                  size={7}
+                  className="border w-full mb-2 p-2 rounded text-sm sm:text-base h-32"
+                  value={categorias}
+                  onChange={(e) => {
+                    const selected = Array.from(e.target.selectedOptions).map(
+                      (opt) => opt.value
+                    );
+                    setCategorias(selected);
+                  }}
                 >
-                  <option value="">--</option>
                   <option value="Sub9">Sub-9</option>
                   <option value="Sub11">Sub-11</option>
                   <option value="Sub13">Sub-13</option>
@@ -1938,6 +2036,10 @@ export default function NovoTreino() {
                   <option value="Sub20">Sub-20</option>
                   <option value="Livre">Livre</option>
                 </select>
+                <p className="text-xs text-gray-600">
+                  Segure <b>Ctrl</b> (ou toque e selecione) para escolher mais de uma
+                  faixa etária.
+                </p>
               </div>
 
               <div>
@@ -2137,19 +2239,89 @@ export default function NovoTreino() {
             <div className="h-4" />
 
             <StepCard title="Exercícios Disponíveis">
-              <div className="mb-3 flex items-center gap-2">
-                <div className="relative flex-1">
-                  <input
-                    className="border w-full p-2 pl-9 rounded text-sm"
-                    placeholder="Buscar por nome, nível ou descrição..."
-                    value={filtroEx}
-                    onChange={(e) => setFiltroEx(e.target.value)}
-                  />
-                  <SearchIcon className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              {/* BUSCA + CONTADOR */}
+              <div className="mb-3 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      className="border w-full p-2 pl-9 rounded text-sm"
+                      placeholder="Buscar por nome, nível ou descrição..."
+                      value={filtroEx}
+                      onChange={(e) => setFiltroEx(e.target.value)}
+                    />
+                    <SearchIcon className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  </div>
+                  <span className="text-xs text-gray-600 whitespace-nowrap">
+                    {exerciciosFiltrados.length} resultado(s)
+                  </span>
                 </div>
-                <span className="text-xs text-gray-600 whitespace-nowrap">
-                  {exerciciosFiltrados.length} resultado(s)
-                </span>
+
+                {/* NOVOS FILTROS */}
+                {/* NOVOS FILTROS */}
+                <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
+                  {/* CATEGORIA – MULTI */}
+                  <div>
+                    <select
+                      multiple
+                      size={7}
+                      className="border w-full p-2 rounded text-xs sm:text-sm h-32"
+                      value={filtroCategorias}
+                      onChange={(e) => {
+                        const values = Array.from(e.target.selectedOptions).map(
+                          (opt) => opt.value,
+                        );
+                        setFiltroCategorias(values);
+                      }}
+                    >
+                      <option value="Sub9">Sub-9</option>
+                      <option value="Sub11">Sub-11</option>
+                      <option value="Sub13">Sub-13</option>
+                      <option value="Sub15">Sub-15</option>
+                      <option value="Sub17">Sub-17</option>
+                      <option value="Sub20">Sub-20</option>
+                      <option value="Livre">Livre</option>
+                    </select>
+                    <p className="text-[10px] sm:text-xs text-gray-600 mt-1">
+                      Segure <b>Ctrl</b> (ou toque e selecione) para escolher mais de uma categoria.
+                    </p>
+                  </div>
+
+                  {/* NÍVEL – MULTI */}
+                  <div>
+                    <select
+                      multiple
+                      size={4}
+                      className="border w-full p-2 rounded text-xs sm:text-sm h-24"
+                      value={filtroNiveis}
+                      onChange={(e) => {
+                        const values = Array.from(e.target.selectedOptions).map(
+                          (opt) => opt.value,
+                        );
+                        setFiltroNiveis(values);
+                      }}
+                    >
+                      <option value="Base">Base</option>
+                      <option value="Avancado">Avançado</option>
+                      <option value="Performance">Performance</option>
+                    </select>
+                    <p className="text-[10px] sm:text-xs text-gray-600 mt-1">
+                      Você pode combinar vários níveis (ex.: Base + Avançado).
+                    </p>
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFiltroEx("");
+                      setFiltroCategorias([]);
+                      setFiltroNiveis([]);
+                    }}
+                    className="text-[11px] sm:text-xs text-gray-600 underline"
+                  >
+                    Limpar filtros
+                  </button>
+                </div>
               </div>
 
               <ul className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1">
@@ -2195,6 +2367,33 @@ export default function NovoTreino() {
                               {exercicio.descricao}
                             </p>
                           ) : null}
+
+                          {/* NOVO – tags de categoria / tipo / duração */}
+                          {(exercicio.tipoTreino ||
+                            exercicio.duracaoMinutos ||
+                            (exercicio.categorias && exercicio.categorias.length > 0)) && (
+                            <div className="flex flex-wrap gap-1 mt-1 text-[11px] text-gray-700">
+                              {exercicio.tipoTreino && (
+                                <span className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200">
+                                  {exercicio.tipoTreino}
+                                </span>
+                              )}
+                              {typeof exercicio.duracaoMinutos === "number" &&
+                                exercicio.duracaoMinutos > 0 && (
+                                  <span className="px-2 py-0.5 rounded-full bg-purple-50 border border-purple-200">
+                                    {exercicio.duracaoMinutos} min
+                                  </span>
+                                )}
+                              {exercicio.categorias?.map((cat) => (
+                                <span
+                                  key={cat}
+                                  className="px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200"
+                                >
+                                  {cat}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         <button

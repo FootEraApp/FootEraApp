@@ -34,7 +34,8 @@ import {
   agendarTreinoLote,
   agendarTreinoPessoal,
   salvarTreinoNaBiblioteca,
-  getCalendarioTreinos
+  getCalendarioTreinos,
+  relacaoStatus,
 } from "server/controllers/treinosController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
 import { requireCapability, requireOrgSeat } from "server/middlewares/guards.js";
@@ -42,6 +43,7 @@ import { requireCapability, requireOrgSeat } from "server/middlewares/guards.js"
 const router = Router();
 router.use(authenticateToken);
 
+router.get("/relacao-treino/status", relacaoStatus);
 router.get("/elencos/:id/escala", requireElencoOwner, getEscalaPorElencoId);
 router.get("/elencos/escala-por-dono", getEscalaPorDono);
 router.get("/elencos", listarElencos);

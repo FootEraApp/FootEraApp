@@ -40,6 +40,11 @@ type AtletaMin = {
   posicao?: Posicao | null;
   pontuacao?: number | null;
   ativoRecentemente?: boolean;
+
+  // 👇 novos campos vindos da API (se tiver)
+  clubeNome?: string | null;
+  escolinhaNome?: string | null;
+  professorNome?: string | null;
 };
 
 type ProfessorMin = {
@@ -249,16 +254,25 @@ const GerenciarAtletas: React.FC = () => {
       const lista = (data?.atletas || []) as any[];
 
       const normalizados: AtletaMin[] = lista.map((a) => ({
-        id: a.id,
-        usuarioId: a.usuarioId,
-        nome: a.nome,
-        idade: a.idade ?? null,
-        foto: a.foto ?? null,
-        posicao: (posicoesMap as any)[a.posicao] ?? a.posicao ?? null,
-        categoria: apiToUiCategoria(a.categoria),
-        pontuacao: a.pontuacao ?? null,
-        ativoRecentemente: !!a.ativoRecentemente,
-      }));
+      id: a.id,
+      usuarioId: a.usuarioId,
+      nome: a.nome,
+      idade: a.idade ?? null,
+      foto: a.foto ?? null,
+      posicao: (posicoesMap as any)[a.posicao] ?? a.posicao ?? null,
+      categoria: apiToUiCategoria(a.categoria),
+      pontuacao: a.pontuacao ?? null,
+      ativoRecentemente: !!a.ativoRecentemente,
+
+      // 👇 tenta pegar do que a API mandar (ajuste conforme o shape real)
+      clubeNome: a.clube?.nome ?? a.clubeNome ?? null,
+      escolinhaNome: a.escolinha?.nome ?? a.escolinhaNome ?? null,
+      professorNome:
+        a.professor?.nome ??
+        a.professor?.usuario?.nome ??
+        a.professorNome ??
+        null,
+    }));
 
       setAtletas(normalizados);
     } catch (err: any) {
@@ -784,6 +798,8 @@ const carregarProfessores = async () => {
                       <th className="p-3">Nome</th>
                       <th className="w-28 p-3">Categoria</th>
                       <th className="w-32 p-3">Posição</th>
+                      <th className="w-40 p-3">Time</th>        {/* novo */}
+                      <th className="w-40 p-3">Professor</th>    {/* novo */}
                       <th className="w-28 p-3">Pontuação</th>
                       <th className="w-28 p-3">Status</th>
                       <th className="w-32 p-3">Ações</th>
@@ -816,7 +832,22 @@ const carregarProfessores = async () => {
                           </td>
                           <td className="p-3 text-sm text-zinc-700">{a.categoria ?? "—"}</td>
                           <td className="p-3 text-sm text-zinc-700">{a.posicao ?? "—"}</td>
+
+                          {/* 👇 novo: time / vínculo */}
+                          <td className="p-3 text-sm text-zinc-700">
+                            {a.clubeNome ?? a.escolinhaNome ?? "Independente"}
+                          </td>
+
+                          {/* 👇 novo: professor */}
+                          <td className="p-3 text-sm text-zinc-700">
+                            {a.professorNome ?? "Sem professor"}
+                          </td>
+
                           <td className="p-3 text-sm text-zinc-900">{numberOrDash(a.pontuacao)}</td>
+                          <td className="p-3">
+                            <StatusBadge ativo={a.ativoRecentemente} />
+                          </td>
+
                           <td className="p-3">
                             <StatusBadge ativo={a.ativoRecentemente} />
                           </td>
