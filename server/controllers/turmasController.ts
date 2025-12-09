@@ -223,40 +223,58 @@ export async function listarMinhasTurmas(req: AuthenticatedRequest, res: Respons
 }
 
 export async function listarTurmas(req: Request, res: Response) {
-  const ownerTipo = String(req.query.ownerTipo || "");
-  const ownerId   = String(req.query.ownerId || "");
-  const professorId = req.query.professorId ? String(req.query.professorId) : undefined;
+  try {
+    const ownerTipoRaw = req.query.ownerTipo ? String(req.query.ownerTipo) : "";
+    const ownerIdRaw   = req.query.ownerId   ? String(req.query.ownerId)   : "";
+    const professorId  = req.query.professorId ? String(req.query.professorId) : undefined;
 
-  if (!ownerTipo || !ownerId) {
-    return res.status(400).json({ message: "ownerTipo e ownerId são obrigatórios" });
+    // Agora aceitamos:
+    // - ownerTipo + ownerId
+    // - professorId
+    if (!ownerTipoRaw && !ownerIdRaw && !professorId) {
+      return res.status(400).json({
+        message: "Informe ownerTipo + ownerId OU professorId",
+      });
+    }
+
+    const where: any = {};
+
+    // se veio ownerTipo + ownerId, filtra pelo dono (clube/escolinha)
+    if (ownerTipoRaw && ownerIdRaw) {
+      if (ownerTipoRaw === "Clube")     where.clubeId     = ownerIdRaw;
+      if (ownerTipoRaw === "Escolinha") where.escolinhaId = ownerIdRaw;
+    }
+
+    // se veio professorId, também filtra pelo professor
+    if (professorId) {
+      where.professorId = professorId;
+    }
+
+    const rows = await prisma.turma.findMany({
+      where,
+      include: {
+        professor: { select: { id: true, nome: true } },
+        _count: { select: { membros: true } }, // se no seu schema não for "membros", ajusta aqui
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const items = rows.map((t) => ({
+      id: t.id,
+      nome: t.nome,
+      categoria: t.categoria,
+      professorId: t.professorId,
+      professorNome: t.professor?.nome ?? null,
+      alunosCount: t._count.membros,
+      ownerTipo: ownerTipoRaw || null,
+      ownerId: ownerIdRaw || null,
+    }));
+
+    return res.json(items);
+  } catch (e: any) {
+    console.error("[listarTurmas] erro:", e);
+    return res.status(500).json({ message: e.message || "Erro ao listar turmas" });
   }
-
-  const where: any = {};
-  if (ownerTipo === "Clube") where.clubeId = ownerId;
-  if (ownerTipo === "Escolinha") where.escolinhaId = ownerId;
-  if (professorId) where.professorId = professorId;
-
-  const rows = await prisma.turma.findMany({
-    where,
-    include: {
-      professor: { select: { id: true, nome: true } },
-      _count: { select: { membros: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  const items = rows.map((t) => ({
-    id: t.id,
-    nome: t.nome,
-    categoria: t.categoria,
-    professorId: t.professorId,
-    professorNome: t.professor?.nome ?? null,
-    alunosCount: t._count.membros,
-    ownerTipo,
-    ownerId,
-  }));
-
-  return res.json(items);
 }
 
 export async function criarTurma(req: Request, res: Response) {
