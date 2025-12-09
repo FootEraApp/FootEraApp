@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, Prisma, StatusConexao } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -35,15 +35,20 @@ export const vinculoController = {
       };
 
       if (!atletaId || !entidadeId || !tipoVinculo) {
-        return res.status(400).json({ message: "Campos obrigatórios: atletaId, entidadeId, tipoVinculo" });
+        return res
+          .status(400)
+          .json({ message: "Campos obrigatórios: atletaId, entidadeId, tipoVinculo" });
       }
+
       if (!["clube", "escolinha"].includes(tipoVinculo)) {
         return res.status(400).json({ message: "Tipo de vínculo inválido" });
       }
 
       const entidadeRealId = await resolveEntityId(prisma, tipoVinculo, entidadeId);
       if (!entidadeRealId) {
-        return res.status(404).json({ message: `${tipoVinculo === "clube" ? "Clube" : "Escolinha"} não encontrado(a)` });
+        return res.status(404).json({
+          message: `${tipoVinculo === "clube" ? "Clube" : "Escolinha"} não encontrado(a)`,
+        });
       }
 
       const jaExiste = await prisma.solicitacaoVinculo.findFirst({
@@ -55,8 +60,12 @@ export const vinculoController = {
         },
         select: { id: true, status: true },
       });
+
       if (jaExiste) {
-        return res.status(409).json({ message: "Já existe uma solicitação ativa para esse vínculo.", solicitacao: jaExiste });
+        return res.status(409).json({
+          message: "Já existe uma solicitação ativa para esse vínculo.",
+          solicitacao: jaExiste,
+        });
       }
 
       const solicitacao = await prisma.solicitacaoVinculo.create({
@@ -68,18 +77,28 @@ export const vinculoController = {
         },
       });
 
-      return res.status(201).json({ message: "Solicitação enviada com sucesso", solicitacao });
+      return res
+        .status(201)
+        .json({ message: "Solicitação enviada com sucesso", solicitacao });
     } catch (error) {
-      console.error(error);
-      return res.status(500).json({ message: "Erro ao solicitar vínculo", error });
+      console.error("Erro em solicitarVinculo:", error);
+      return res
+        .status(500)
+        .json({ message: "Erro ao solicitar vínculo", error: String(error) });
     }
   },
 
   async responderSolicitacao(req: Request, res: Response) {
     try {
-      const { solicitacaoId, aprovar } = req.body as { solicitacaoId?: string; aprovar?: boolean };
+      const { solicitacaoId, aprovar } = req.body as {
+        solicitacaoId?: string;
+        aprovar?: boolean;
+      };
+
       if (!solicitacaoId || typeof aprovar !== "boolean") {
-        return res.status(400).json({ message: "Campos obrigatórios: solicitacaoId, aprovar" });
+        return res
+          .status(400)
+          .json({ message: "Campos obrigatórios: solicitacaoId, aprovar" });
       }
 
       await prisma.$transaction(async (tx) => {
@@ -87,15 +106,21 @@ export const vinculoController = {
           where: { id: solicitacaoId },
           include: { atleta: true },
         });
-        if (!solicitacao) throw new Error("Solicitação não encontrada");
+
+        if (!solicitacao) {
+          throw new Error("Solicitação não encontrada");
+        }
 
         const novoStatus = aprovar ? "aceito" : "recusado";
+
         await tx.solicitacaoVinculo.update({
           where: { id: solicitacaoId },
           data: { status: novoStatus },
         });
 
-        const statusConexao = aprovar ? "Aprovado" : "Recusado" as const;
+        const statusConexao = aprovar
+          ? StatusConexao.Aprovado
+          : StatusConexao.Recusado;
 
         if (!aprovar) {
           await tx.atleta.update({
@@ -112,14 +137,18 @@ export const vinculoController = {
             where: { id: solicitacao.entidadeId },
             select: { id: true },
           });
-          if (!escolinha) throw new Error("Escolinha não encontrada para aprovação");
+          if (!escolinha) {
+            throw new Error("Escolinha não encontrada para aprovação");
+          }
           dadosUpdate.escolinha = { connect: { id: escolinha.id } };
         } else {
           const clube = await tx.clube.findUnique({
             where: { id: solicitacao.entidadeId },
             select: { id: true },
           });
-          if (!clube) throw new Error("Clube não encontrado para aprovação");
+          if (!clube) {
+            throw new Error("Clube não encontrado para aprovação");
+          }
           dadosUpdate.clube = { connect: { id: clube.id } };
         }
 
@@ -137,21 +166,30 @@ export const vinculoController = {
 
       return res.json({ ok: true });
     } catch (error: any) {
-      console.error(error);
-      return res.status(500).json({ message: "Erro ao responder solicitação", error: error.message });
+      console.error("Erro em responderSolicitacao:", error);
+      return res.status(500).json({
+        message: "Erro ao responder solicitação",
+        error: error?.message ?? String(error),
+      });
     }
   },
 
   async pendentes(req: Request, res: Response) {
     try {
-      const { entidadeId, tipo } = req.params as { entidadeId: string; tipo: TipoVinculo };
+      const { entidadeId, tipo } = req.params as {
+        entidadeId: string;
+        tipo: TipoVinculo;
+      };
+
       if (!["clube", "escolinha"].includes(tipo)) {
         return res.status(400).json({ message: "Tipo inválido" });
       }
 
       const realId = await resolveEntityId(prisma, tipo, entidadeId);
       if (!realId) {
-        return res.status(404).json({ message: `${tipo === "clube" ? "Clube" : "Escolinha"} não encontrado(a)` });
+        return res
+          .status(404)
+          .json({ message: `${tipo === "clube" ? "Clube" : "Escolinha"} não encontrado(a)` });
       }
 
       const solicitacoes = await prisma.solicitacaoVinculo.findMany({
@@ -162,8 +200,10 @@ export const vinculoController = {
 
       return res.json(solicitacoes);
     } catch (error) {
-      console.error(error);
-      return res.status(500).json({ message: "Erro ao buscar solicitações pendentes", error });
+      console.error("Erro em pendentes:", error);
+      return res
+        .status(500)
+        .json({ message: "Erro ao buscar solicitações pendentes", error });
     }
   },
 };

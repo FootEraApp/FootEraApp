@@ -129,14 +129,16 @@ model Professor {
   escolinha        Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   clube            Clube?             @relation(fields: [clubeId], references: [id], onDelete: SetNull)
   Turma            Turma[]
+  atletas          Atleta[]
   TreinoSalvo      TreinoSalvo[]
   TreinoSalvoReuso TreinoSalvoReuso[]
 
-  estatExerciciosRecomendados EstatisticaExercicio[] @relation("ExEstRec_Rec")
-  estatExerciciosUltimo       EstatisticaExercicio[] @relation("ExEstRec_Ult")
+  estatExerciciosRecomendados EstatisticaExercicio[]   @relation("ExEstRec_Rec")
+  estatExerciciosUltimo       EstatisticaExercicio[]   @relation("ExEstRec_Ult")
   TreinoAgendado              TreinoAgendado[]
   TreinoProfessorUso          TreinoProfessorUso[]
   TreinoRotina                TreinoRotina[]
+  AtletaHistoricoVinculo      AtletaHistoricoVinculo[]
 
   @@index([escolinhaId])
   @@index([clubeId])
@@ -221,12 +223,14 @@ model Atleta {
   consentimento                 Boolean                    @default(false)
   clubeId                       String?
   escolinhaId                   String?
+  professorId                   String?
   statusConexao                 StatusConexao              @default(Pendente)
   dataCriacao                   DateTime                   @default(now())
   dataUltimaModificacao         DateTime?
   perfilTipoTreinoAtualizadoEm  DateTime?
   pontosTotal                   Int?                       @default(0)
   perfilTipoTreino              TipoTreino?
+  professor                     Professor?                 @relation(fields: [professorId], references: [id], onDelete: SetNull)
   clube                         Clube?                     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha                     Escolinha?                 @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   usuario                       Usuario                    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -256,8 +260,10 @@ model Atleta {
   contatoOlheiroPermitido       Boolean                    @default(false)
   contatoOlheiroConsentidoEm    DateTime?
   contatoOlheiroConsentidoPorId String?
+  AtletaHistoricoVinculo        AtletaHistoricoVinculo[]
 
   @@index([perfilTipoTreino])
+  @@index([professorId])
 }
 
 model TreinoProgramado {
@@ -367,6 +373,8 @@ model RelacaoTreinamento {
   atletaId    String?
   escolinhaId String?
   clubeId     String?
+  organizacaoId String?
+  ativo       Boolean?
   criadoEm    DateTime   @default(now())
   atleta      Atleta?    @relation("RelacaoAtleta", fields: [atletaId], references: [id], onDelete: SetNull)
   clube       Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
@@ -465,37 +473,38 @@ model Midia {
 }
 
 model Escolinha {
-  id                  String               @id @default(uuid())
-  usuarioId           String?              @unique
-  nome                String               @unique
-  cnpj                String?              @unique
-  telefone1           String?
-  telefone2           String?
-  email               String?              @unique
-  siteOficial         String?
-  sede                String?
-  logradouro          String?
-  numero              String?
-  complemento         String?
-  bairro              String?
-  cidade              String?
-  estado              String?
-  pais                String?
-  cep                 String?
-  logo                String?
-  dataCriacao         DateTime             @default(now())
-  atletas             Atleta[]
-  observacoes         AtletaObservado[]    @relation("ObservacaoEscolinha")
-  usuario             Usuario?             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  midias              Midia[]
-  postagens           Postagem[]
-  relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoEscolinha")
-  treinoProgramado    TreinoProgramado[]
-  Professor           Professor[]
-  Turma               Turma[]
-  TreinoSalvo         TreinoSalvo[]
-  TreinoRotina        TreinoRotina[]
-  eventos   Evento[]
+  id                     String                   @id @default(uuid())
+  usuarioId              String?                  @unique
+  nome                   String                   @unique
+  cnpj                   String?                  @unique
+  telefone1              String?
+  telefone2              String?
+  email                  String?                  @unique
+  siteOficial            String?
+  sede                   String?
+  logradouro             String?
+  numero                 String?
+  complemento            String?
+  bairro                 String?
+  cidade                 String?
+  estado                 String?
+  pais                   String?
+  cep                    String?
+  logo                   String?
+  dataCriacao            DateTime                 @default(now())
+  atletas                Atleta[]
+  observacoes            AtletaObservado[]        @relation("ObservacaoEscolinha")
+  usuario                Usuario?                 @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  midias                 Midia[]
+  postagens              Postagem[]
+  relacoesTreinamento    RelacaoTreinamento[]     @relation("RelacaoEscolinha")
+  treinoProgramado       TreinoProgramado[]
+  Professor              Professor[]
+  Turma                  Turma[]
+  TreinoSalvo            TreinoSalvo[]
+  TreinoRotina           TreinoRotina[]
+  eventos                Evento[]
+  AtletaHistoricoVinculo AtletaHistoricoVinculo[]
 }
 
 model Comentario {
@@ -539,21 +548,22 @@ model Clube {
   descricao   String?
   responsavel String?
 
-  categorias          Categoria[]
-  atletas             Atleta[]
-  observacoes         AtletaObservado[]    @relation("ObservacaoClube")
-  usuario             Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  Evento              Evento[]
-  Indicacao           Indicacao[]
-  midias              Midia[]
-  Olheiro             Olheiro[]
-  postagens           Postagem[]
-  relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoClube")
-  treinoProgramado    TreinoProgramado[]
-  Professor           Professor[]
-  Turma               Turma[]
-  TreinoSalvo         TreinoSalvo[]
-  TreinoRotina        TreinoRotina[]
+  categorias             Categoria[]
+  atletas                Atleta[]
+  observacoes            AtletaObservado[]        @relation("ObservacaoClube")
+  usuario                Usuario                  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  Evento                 Evento[]
+  Indicacao              Indicacao[]
+  midias                 Midia[]
+  Olheiro                Olheiro[]
+  postagens              Postagem[]
+  relacoesTreinamento    RelacaoTreinamento[]     @relation("RelacaoClube")
+  treinoProgramado       TreinoProgramado[]
+  Professor              Professor[]
+  Turma                  Turma[]
+  TreinoSalvo            TreinoSalvo[]
+  TreinoRotina           TreinoRotina[]
+  AtletaHistoricoVinculo AtletaHistoricoVinculo[]
 }
 
 model SolicitacaoVinculo {
@@ -1606,6 +1616,46 @@ model AuditLog {
   descricao  String?
   meta       Json?
   criadoEm   DateTime @default(now())
+}
+
+model AtletaHistoricoVinculo {
+  id String @id @default(uuid())
+
+  atletaId    String?
+  atleta      Atleta? @relation(fields: [atletaId], references: [id], onDelete: SetNull)
+  professorId String?
+  escolinhaId String?
+  clubeId     String?
+
+  professor Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
+  escolinha Escolinha? @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+  clube     Clube?     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+
+  nome          String?
+  sobrenome     String?
+  email         String?
+  cpf           String?
+  foto          String?
+  idade         Int?
+  posicao       PosicaoCampo?
+  nacionalidade String?
+  naturalidade  String?
+  altura        Decimal?
+  peso          Decimal?
+  categoria     Categoria[]
+  seloQualidade String?
+
+  inicioVinculo DateTime?
+  fimVinculo    DateTime?
+
+  criadoEm DateTime @default(now())
+  expiraEm DateTime
+
+  @@index([atletaId])
+  @@index([professorId])
+  @@index([escolinhaId])
+  @@index([clubeId])
+  @@index([expiraEm])
 }
 
 enum StorageClass {

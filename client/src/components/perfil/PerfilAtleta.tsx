@@ -224,6 +224,12 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
 
   const total = pontuacao?.pontuacaoTotal || 0;
 
+  const timeLabel =
+    professor?.nome ||
+    escolaNome ||
+    clubeNome ||
+    (isIndependente ? "Atleta Independente" : undefined);
+
   return (
     <div className="min-h-screen bg-transparent">
       <div className="max-w-3xl mx-auto px-4 py-6">

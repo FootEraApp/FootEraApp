@@ -18,15 +18,23 @@ export default function AcoesTreino({ treinoId, className }: Props) {
   const [repeticoes, setRepeticoes] = useState<number | "">("");
   const [observacao, setObservacao] = useState("");
 
+  // mensagem informativa (inclui penalidade por atraso)
+  const [infoMsg, setInfoMsg] = useState<string | null>(null);
+
   useEffect(() => {
     const token = Storage.token;
     if (!token || !treinoId) return;
 
     (async () => {
       try {
-        const r = await fetch(`${API.BASE_URL}/api/treinos/${encodeURIComponent(treinoId)}/status`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const r = await fetch(
+          `${API.BASE_URL}/api/treinos/${encodeURIComponent(
+            treinoId
+          )}/status`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         const d = await r.json();
         setStatus((d?.status as Status) ?? "PENDING");
       } catch {
@@ -40,11 +48,29 @@ export default function AcoesTreino({ treinoId, className }: Props) {
     if (!token) return alert("Sessão expirada.");
     try {
       setLoading(true);
-      await fetch(`${API.BASE_URL}/api/treinos/${encodeURIComponent(treinoId)}/start`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const r = await fetch(
+        `${API.BASE_URL}/api/treinos/${encodeURIComponent(
+          treinoId
+        )}/start`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!r.ok) {
+        const err = await r.json().catch(() => null);
+        const msg =
+          err?.mensagem ||
+          err?.message ||
+          err?.error ||
+          "Não foi possível iniciar o treino.";
+        alert(msg);
+        return;
+      }
+
       setStatus("IN_PROGRESS");
+      setInfoMsg(null);
     } catch (e) {
       console.error(e);
       alert("Não foi possível iniciar o treino.");
@@ -58,17 +84,62 @@ export default function AcoesTreino({ treinoId, className }: Props) {
     if (!token) return alert("Sessão expirada.");
     try {
       setLoading(true);
-      await fetch(`${API.BASE_URL}/api/treinos/${encodeURIComponent(treinoId)}/complete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          tempoSeg: tempoSeg === "" ? undefined : Number(tempoSeg),
-          repeticoes: repeticoes === "" ? undefined : Number(repeticoes),
-          observacao: observacao || undefined,
-        }),
-      });
+      const r = await fetch(
+        `${API.BASE_URL}/api/treinos/${encodeURIComponent(
+          treinoId
+        )}/complete`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            tempoSeg: tempoSeg === "" ? undefined : Number(tempoSeg),
+            repeticoes:
+              repeticoes === "" ? undefined : Number(repeticoes),
+            observacao: observacao || undefined,
+          }),
+        }
+      );
+
+      const data = await r.json().catch(() => null);
+
+      if (!r.ok) {
+        const msg =
+          data?.mensagem ||
+          data?.message ||
+          data?.error ||
+          "Não foi possível concluir o treino.";
+        alert(msg);
+        return;
+      }
+
+      // aqui já vem os campos que configuramos no backend:
+      // penalidadeAtraso, minutosConsiderados, mensagem
+      const penalidade = !!data?.penalidadeAtraso;
+      const minutosConsiderados = data?.minutosConsiderados ?? null;
+
+      let msg: string;
+
+      if (penalidade) {
+        msg =
+          data?.mensagem ||
+          "Treino finalizado com atraso. Você recebeu menos pontos e só parte do tempo de treino.";
+      } else {
+        msg =
+          data?.mensagem ||
+          "Treino concluído com sucesso! Pontos e minutos contabilizados normalmente.";
+      }
+
+      if (minutosConsiderados != null) {
+        msg += ` (Tempo considerado: ${minutosConsiderados} min.)`;
+      }
+
       setStatus("COMPLETED");
       setOpenFinish(false);
+      setInfoMsg(msg);
+      alert(msg);
     } catch (e) {
       console.error(e);
       alert("Não foi possível concluir o treino.");
@@ -104,6 +175,13 @@ export default function AcoesTreino({ treinoId, className }: Props) {
         </span>
       )}
 
+      {/* mensagenzinha discreta embaixo do botão / status */}
+      {infoMsg && (
+        <p className="mt-2 text-xs text-amber-700 max-w-xs">
+          {infoMsg}
+        </p>
+      )}
+
       {openFinish && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-4 w-80">
@@ -114,7 +192,11 @@ export default function AcoesTreino({ treinoId, className }: Props) {
               type="number"
               className="w-full border rounded px-3 py-2 mb-3"
               value={tempoSeg}
-              onChange={(e) => setTempoSeg(e.target.value === "" ? "" : Number(e.target.value))}
+              onChange={(e) =>
+                setTempoSeg(
+                  e.target.value === "" ? "" : Number(e.target.value)
+                )
+              }
             />
 
             <label className="block text-sm mb-1">Repetições</label>
@@ -122,10 +204,16 @@ export default function AcoesTreino({ treinoId, className }: Props) {
               type="number"
               className="w-full border rounded px-3 py-2 mb-3"
               value={repeticoes}
-              onChange={(e) => setRepeticoes(e.target.value === "" ? "" : Number(e.target.value))}
+              onChange={(e) =>
+                setRepeticoes(
+                  e.target.value === "" ? "" : Number(e.target.value)
+                )
+              }
             />
 
-            <label className="block text-sm mb-1">Observação (opcional)</label>
+            <label className="block text-sm mb-1">
+              Observação (opcional)
+            </label>
             <textarea
               className="w-full border rounded px-3 py-2 mb-4"
               rows={3}
@@ -135,7 +223,10 @@ export default function AcoesTreino({ treinoId, className }: Props) {
             />
 
             <div className="flex justify-end gap-2">
-              <button onClick={() => setOpenFinish(false)} className="px-3 py-2 rounded border">
+              <button
+                onClick={() => setOpenFinish(false)}
+                className="px-3 py-2 rounded border"
+              >
                 Cancelar
               </button>
               <button
