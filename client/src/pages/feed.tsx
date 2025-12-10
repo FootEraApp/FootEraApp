@@ -1,3 +1,4 @@
+// client/src/pages/feed
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FaHeart,
@@ -52,6 +53,8 @@ async function getUsuariosMutuos(): Promise<Usuario[]> {
   const { data } = await http.get<Usuario[]>("/api/seguidores/mutuos");
   return data;
 }
+
+const ENABLE_TOP_HOME_BUTTON = false;
 
 function HeaderSliderLite({
   title,
@@ -109,69 +112,90 @@ function HeaderSliderLite({
   const trophyOpacity = pos;
 
   return (
-    <div ref={wrapRef} className="relative h-16 sm:h-20 -mx-4 px-4 sm:mx-0 mb-2">
-      <div className="absolute right-2 top-1/2 -translate-y-1/2 z-20">
-        <Link
-          href="/mensagens"
-          aria-label="Abrir mensagens"
-          className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center
-                    rounded-full bg-white border shadow-lg hover:bg-gray-50 active:scale-95"
-        >
-          <Send className="w-5 h-5 text-green-900" />
-        </Link>
-      </div>
+    <div
+      ref={wrapRef}
+      className="relative h-16 sm:h-20 -mx-4 mb-2"
+    >
+      {/* Faixa verde cobrindo 100% da largura */}
+      <div className="absolute inset-0 bg-green-900 z-0" />
 
-      <div className="absolute inset-0 z-0">
-        <div
-          className={`absolute inset-y-2 left-0 right-0 rounded-full border overflow-hidden transition-colors duration-150 ${
-            dragging
-              ? "bg-green-100/70 border-green-200 shadow-inner"
-              : "bg-transparent border-transparent"
-          }`}
-        />
-        <div
-          className="absolute inset-y-2 left-0 rounded-full bg-green-200/60 transition-[width,opacity] duration-150"
-          style={{ width: `${px}px`, opacity: dragging ? 1 : 0 }}
-        />
-        <div
-          className={`absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-green-800/70 text-xs sm:text-sm transition-opacity duration-150 ${
-            dragging ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <House className="w-4 h-4" />
-          <span className="hidden sm:inline">Feed</span>
+      {/* Conteúdo por cima da faixa */}
+      <div className="relative z-10 h-full">
+        {/* Título centralizado */}
+        <div className="h-full flex items-center justify-center pointer-events-none">
+          {title && (
+            <h1 className="text-lg sm:text-xl font-extrabold tracking-wide text-white">
+              {title}
+            </h1>
+          )}
         </div>
-        <div
-          className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-yellow-700/80 text-xs sm:text-sm transition-opacity duration-150 ${
-            dragging ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <span className="hidden sm:inline">Desafios</span>
-          <Trophy className="w-4 h-4" />
-        </div>
-      </div>
 
-      <div className="relative z-10 h-full flex items-center justify-center pointer-events-none">
-        <h1 className="text-2xl font-bold">{title}</h1>
-      </div>
-
-      <button
-        aria-label="Trocar entre Feed e Desafios (arraste)"
-        onPointerDown={onDown}
-        onPointerMove={onMove}
-        onPointerUp={onUp}
-        onPointerCancel={onUp}
-        className="absolute top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white shadow-lg border active:scale-[0.98] touch-none"
-        style={{
-          left: Math.max(6, Math.min(px - 20, (widthRef.current || 0) - 46)),
-          transition: dragging ? "none" : "left 140ms ease",
-        }}
-      >
-        <div className="relative w-full h-full flex items-center justify-center">
-          <House className="absolute" style={{ opacity: houseOpacity }} />
-          <Trophy className="absolute text-yellow-600" style={{ opacity: trophyOpacity }} />
+        {/* Botão de mensagens */}
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 z-20">
+          <Link
+            href="/mensagens"
+            aria-label="Abrir mensagens"
+            className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center
+              rounded-full bg-white border shadow-lg hover:bg-gray-50 active:scale-95"
+          >
+            <Send className="w-5 h-5 text-green-900" />
+          </Link>
         </div>
-      </button>
+
+        {/* Fundo do slider / trilha (se quiser usar depois) */}
+        <div className="absolute inset-0">
+          <div
+            className={`absolute inset-y-2 left-0 right-0 rounded-full border overflow-hidden transition-colors duration-150 ${
+              dragging
+                ? "bg-green-100/70 border-green-200 shadow-inner"
+                : "bg-transparent border-transparent"
+            }`}
+          />
+          <div
+            className="absolute inset-y-2 left-0 rounded-full bg-green-200/60 transition-[width,opacity] duration-150"
+            style={{ width: `${px}px`, opacity: dragging ? 1 : 0 }}
+          />
+          <div
+            className={`absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-green-800/70 text-xs sm:text-sm transition-opacity duration-150 ${
+              dragging ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <House className="w-4 h-4" />
+            <span className="hidden sm:inline">Feed</span>
+          </div>
+          <div
+            className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-yellow-700/80 text-xs sm:text-sm transition-opacity duration-150 ${
+              dragging ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <span className="hidden sm:inline">Desafios</span>
+            <Trophy className="w-4 h-4" />
+          </div>
+        </div>
+
+        {ENABLE_TOP_HOME_BUTTON && (
+          <button
+            aria-label="Trocar entre Feed e Desafios (arraste)"
+            onPointerDown={onDown}
+            onPointerMove={onMove}
+            onPointerUp={onUp}
+            onPointerCancel={onUp}
+            className="absolute top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white shadow-lg border active:scale-[0.98] touch-none"
+            style={{
+              left: Math.max(6, Math.min(px - 20, (widthRef.current || 0) - 46)),
+              transition: dragging ? "none" : "left 140ms ease",
+            }}
+          >
+            <div className="relative w-full h-full flex items-center justify-center">
+              <House className="absolute" style={{ opacity: houseOpacity }} />
+              <Trophy
+                className="absolute text-yellow-600"
+                style={{ opacity: trophyOpacity }}
+              />
+            </div>
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -342,6 +366,10 @@ function PaginaFeed(): JSX.Element {
   const [filtro, setFiltro] = useState<"todos" | "seguindo" | "favoritos">("todos");
   const [agendaFeed, setAgendaFeed] = useState<AgendaItem[]>([]);
   const [carregandoAgenda, setCarregandoAgenda] = useState(false);
+
+  const toggleFiltro = (target: "seguindo" | "favoritos") => {
+    setFiltro((atual) => (atual === target ? "todos" : target));
+  };
 
   const userId = Storage.usuarioId as string | null;
   const tipoUsuario =
@@ -569,25 +597,35 @@ function PaginaFeed(): JSX.Element {
   };
 
   return (
-    <div className="px-4 py-6 space-y-6 pb-24">
+  <div className="px-4 pt-0 pb-24 space-y-6">
       <HeaderSliderLite title="Feed de Postagens" start="feed" />
 
-      {/* BOTÕES DE FILTRO – sem "Meus" */}
-      <div className="flex gap-2 justify-center mb-4">
-        {(["todos", "seguindo", "favoritos"] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFiltro(f)}
-            className={`px-3 py-1 rounded-full text-sm border ${
-              filtro === f
-                ? "bg-green-700 text-white border-green-700"
-                : "bg-white text-green-700 border-green-700"
-            }`}
-          >
-            {f === "todos" ? "Todos" : f === "seguindo" ? "Seguindo" : "Favoritos"}
-          </button>
-        ))}
-      </div>
+{/* BOTÕES DE FILTRO — alinhados com os posts */}
+<div className="max-w-xl mx-auto flex gap-2 justify-start mb-4 px-1">
+  <button
+    onClick={() => toggleFiltro("seguindo")}
+    className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition
+      ${
+        filtro === "seguindo"
+          ? "bg-green-700 text-white border-green-700"
+          : "bg-white text-green-700 border-green-200"
+      }`}
+  >
+    Seguindo
+  </button>
+
+  <button
+    onClick={() => toggleFiltro("favoritos")}
+    className={`px-3 py-1 rounded-full text-xs sm:text-sm border transition
+      ${
+        filtro === "favoritos"
+          ? "bg-green-700 text-white border-green-700"
+          : "bg-white text-green-700 border-green-200"
+      }`}
+  >
+    Favoritos
+  </button>
+</div>
 
       {posts.length === 0 && (
         <div className="max-w-xl mx-auto bg-white rounded-2xl shadow p-6 text-center text-gray-600">

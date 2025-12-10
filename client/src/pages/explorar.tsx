@@ -25,6 +25,8 @@ import {
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 
+const ENABLE_EVENTOS_TAB = false; 
+
 type UsuarioBasic = { id: string; nome: string; foto?: string | null };
 
 type AtletaItem = {
@@ -317,7 +319,7 @@ function Explorar() {
   }, [pageSize]);
 
 useEffect(() => {
-  if (aba !== "eventos") return;
+  if (!ENABLE_EVENTOS_TAB || aba !== "eventos") return;
 
   const token = Storage?.token || "";
 
@@ -640,18 +642,25 @@ const eventosFiltrados = useMemo(() => {
               >
                 Profissionais
               </Tab>
-            <Tab
-              active={aba === "eventos"}
-              onClick={() => setAba("eventos")}
-              icon={<CalendarClock className="h-4 w-4" />}
-              className="min-w-[120px]"
-            >
-              Eventos
-            </Tab>
+              {ENABLE_EVENTOS_TAB && (
+                <Tab
+                  active={aba === "eventos"}
+                  onClick={() => setAba("eventos")}
+                  icon={<CalendarClock className="h-4 w-4" />}
+                  className="min-w-[120px]"
+                >
+                  Eventos
+                </Tab>
+              )}
 
             </div>
           </div>
-          <div className="hidden sm:grid sm:grid-cols-5 sm:gap-2">
+
+          <div
+            className={`hidden sm:grid sm:gap-2 ${
+              ENABLE_EVENTOS_TAB ? "sm:grid-cols-5" : "sm:grid-cols-4"
+            }`}
+          >
             <Tab active={aba === "atletas"} onClick={() => setAba("atletas")} icon={<Trophy className="h-4 w-4" />}>
               Atletas
             </Tab>
@@ -664,11 +673,13 @@ const eventosFiltrados = useMemo(() => {
             <Tab active={aba === "profissionais"} onClick={() => setAba("profissionais")} icon={<User className="h-4 w-4" />}>
               Profissionais
             </Tab>
-            <Tab active={aba === "eventos"} onClick={() => setAba("eventos")} icon={<CalendarClock className="h-4 w-4" />}>
-              Eventos
-            </Tab>
-
+            {ENABLE_EVENTOS_TAB && (
+              <Tab active={aba === "eventos"} onClick={() => setAba("eventos")} icon={<CalendarClock className="h-4 w-4" />}>
+                Eventos
+              </Tab>
+            )}
           </div>
+
         </div>
             </div>
 
@@ -1166,7 +1177,7 @@ const eventosFiltrados = useMemo(() => {
           </>
         )}
 
-        {aba === "eventos" && (
+        {ENABLE_EVENTOS_TAB && aba === "eventos" && (
           <>
             <h2 className="text-base sm:text-lg font-bold my-4">Eventos e Peneiras</h2>
 
