@@ -1,9 +1,17 @@
+// client/src/pages/notificacoes
 import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
-import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import {
+  ArrowLeft,
+  Volleyball,
+  User,
+  CirclePlus,
+  Search,
+  House,
+} from "lucide-react";
 
 type StatusSolicitacao = "pendente" | "ativa";
 
@@ -29,12 +37,18 @@ export default function PaginaNotificacoes() {
 
     (async () => {
       try {
-        const resp = await fetch(`${API.BASE_URL}/api/solicitacoes-treino`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        // 🔧 AJUSTE AQUI: buscar apenas as solicitações que eu RECEBI
+        const resp = await fetch(
+          `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         if (!resp.ok) {
           const txt = await resp.text();
-          throw new Error(`GET /solicitacoes-treino falhou (${resp.status}): ${txt}`);
+          throw new Error(
+            `GET /solicitacoes-treino/recebidas falhou (${resp.status}): ${txt}`
+          );
         }
         const data: Solicitacao[] = await resp.json();
         setSolicitacoes(data);
@@ -52,7 +66,9 @@ export default function PaginaNotificacoes() {
     }
 
     try {
-      const url = `${API.BASE_URL}/api/solicitacoes-treino/${id}/${aceitar ? "aceitar" : "recusar"}`;
+      const url = `${API.BASE_URL}/api/solicitacoes-treino/${id}/${
+        aceitar ? "aceitar" : "recusar"
+      }`;
       const resp = await fetch(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -60,9 +76,14 @@ export default function PaginaNotificacoes() {
 
       if (!resp.ok) {
         const txt = await resp.text();
-        throw new Error(`Falha ao ${aceitar ? "aceitar" : "recusar"} (HTTP ${resp.status}): ${txt}`);
+        throw new Error(
+          `Falha ao ${aceitar ? "aceitar" : "recusar"} (HTTP ${
+            resp.status
+          }): ${txt}`
+        );
       }
 
+      // Remove da lista depois de tratar
       setSolicitacoes((prev) => prev.filter((s) => s.id !== id));
     } catch (err) {
       console.error("Erro ao responder solicitação:", err);
@@ -75,17 +96,18 @@ export default function PaginaNotificacoes() {
   return (
     <div className="p-4 max-w-xl mx-auto">
       <div className="mb-3">
-       <Link
-                             href="/perfil"
-                             aria-label="Voltar para perfil"
-                             className="inline-flex h-10 w-10 items-center justify-center
-                               rounded-full border border-green-800 bg-white text-green-900
-                               shadow-sm hover:bg-green-50 focus:outline-none
-                               focus:ring-2 focus:ring-green-700/30 mt-2 ml-2 mb-2"
-                             >
-                             <ArrowLeft className="h-5 w-5" />
-                           </Link>
+        <Link
+          href="/perfil"
+          aria-label="Voltar para perfil"
+          className="inline-flex h-10 w-10 items-center justify-center
+            rounded-full border border-green-800 bg-white text-green-900
+            shadow-sm hover:bg-green-50 focus:outline-none
+            focus:ring-2 focus:ring-green-700/30 mt-2 ml-2 mb-2"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
       </div>
+
       <h2 className="text-2xl font-bold mb-4">Notificações</h2>
 
       {solicitacoes.length === 0 ? (
@@ -96,7 +118,9 @@ export default function PaginaNotificacoes() {
             const foto = solicitacao.remetente?.foto;
             const fotoSrc = foto ? formatarUrlFoto(foto, "usuarios") : "";
 
-            const podeResponder = solicitacao.status === "pendente" || solicitacao.status === "ativa";
+            const podeResponder =
+              solicitacao.status === "pendente" ||
+              solicitacao.status === "ativa";
 
             return (
               <div
@@ -140,22 +164,26 @@ export default function PaginaNotificacoes() {
                   className="flex items-center gap-2"
                   onClick={(e) => e.stopPropagation()}
                 >
-                {podeResponder && (
-                  <>
-                    <button
-                      className="bg-green-500 hover:bg-green-600 text-white rounded px-3 py-1"
-                      onClick={() => responderSolicitacao(solicitacao.id, true)}
-                    >
-                      Aceitar
-                    </button>
-                    <button
-                      className="bg-red-500 hover:bg-red-600 text-white rounded px-3 py-1"
-                      onClick={() => responderSolicitacao(solicitacao.id, false)}
-                    >
-                      Rejeitar
-                    </button>
-                  </>
-                )}
+                  {podeResponder && (
+                    <>
+                      <button
+                        className="bg-green-500 hover:bg-green-600 text-white rounded px-3 py-1"
+                        onClick={() =>
+                          responderSolicitacao(solicitacao.id, true)
+                        }
+                      >
+                        Aceitar
+                      </button>
+                      <button
+                        className="bg-red-500 hover:bg-red-600 text-white rounded px-3 py-1"
+                        onClick={() =>
+                          responderSolicitacao(solicitacao.id, false)
+                        }
+                      >
+                        Rejeitar
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             );
@@ -164,13 +192,22 @@ export default function PaginaNotificacoes() {
       )}
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed" className="hover:underline"><House /></Link>
-        <Link href="/explorar" className="hover:underline"><Search /></Link>
-        <Link href="/post" className="hover:underline"><CirclePlus /></Link>
-        <Link href="/treinos" className="hover:underline"><Volleyball /></Link>
-        <Link href="/perfil" className="hover:underline"><User /></Link>
+        <Link href="/feed" className="hover:underline">
+          <House />
+        </Link>
+        <Link href="/explorar" className="hover:underline">
+          <Search />
+        </Link>
+        <Link href="/post" className="hover:underline">
+          <CirclePlus />
+        </Link>
+        <Link href="/treinos" className="hover:underline">
+          <Volleyball />
+        </Link>
+        <Link href="/perfil" className="hover:underline">
+          <User />
+        </Link>
       </nav>
-
     </div>
   );
 }

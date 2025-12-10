@@ -1,3 +1,4 @@
+// server/controllers/atletaController
 import { Request, Response } from "express";
 import { PrismaClient, TipoMidia, StorageClass } from "@prisma/client";
 
@@ -170,5 +171,36 @@ export async function getProfessorDoAtleta(req: Request, res: Response) {
   } catch (e) {
     console.error("getProfessorDoAtleta erro:", e);
     res.status(500).json({ error: "Erro ao buscar professor do atleta" });
+  }
+}
+
+export async function vinculosBasic(req: Request, res: Response) {
+  try {
+    const { id } = req.params; // id do Atleta
+
+    // Buscar todas as relações que envolvem esse atleta
+    const rels = await prisma.relacaoTreinamento.findMany({
+      where: { atletaId: id, encerradoEm: null },
+      include: {
+        professor: { select: { id: true, nome: true } },
+        clube:     { select: { id: true, nome: true } },
+        escolinha: { select: { id: true, nome: true } },
+      },
+    });
+
+    let professor = null;
+    let clube = null;
+    let escolinha = null;
+
+    for (const r of rels) {
+      if (r.professor)   professor = r.professor;
+      if (r.clube)       clube = r.clube;
+      if (r.escolinha)   escolinha = r.escolinha;
+    }
+
+    return res.json({ professor, clube, escolinha });
+  } catch (e) {
+    console.error("Erro em vinculos-basic:", e);
+    return res.status(500).json({ error: "Erro ao carregar vínculos" });
   }
 }

@@ -104,18 +104,22 @@ export const gerenciarAtletasController = {
 
         entidadeId = entidade.id;
 
-        const rels = await prisma.relacaoTreinamento.findMany({
-          where: { escolinhaId: entidade.id },
-          select: { atletaId: true },
-        });
-        const idsRelacao = rels.map((r) => r.atletaId).filter(Boolean);
+const rels = await prisma.relacaoTreinamento.findMany({
+  where: { escolinhaId: entidade.id, ativo: true }, // se quiser, filtra só ativo
+  select: { atletaId: true },
+});
 
-        whereByVinculo = {
-          OR: [
-            { escolinhaId: entidade.id },
-            { id: { in: idsRelacao } },
-          ],
-        };
+const idsRelacao = rels.map((r) => r.atletaId).filter(Boolean);
+
+// se não houver nenhuma relação, já retorna vazio
+if (!idsRelacao.length) {
+  return res.json({ atletas: [] });
+}
+
+whereByVinculo = {
+  id: { in: idsRelacao },
+};
+
       } else {
         const prof = await prisma.professor.findUnique({
           where: { usuarioId: entidadeUsuarioId },
