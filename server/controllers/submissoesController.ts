@@ -130,7 +130,6 @@ export async function criarSubmissaoTreinoUpload(
         repeticoes: repeticoesNum,
         midias: { create: [midia] },
       },
-      // ⬇️ precisamos do criadoEm para calcular atraso
       select: { id: true, aprovado: true, criadoEm: true },
     });
 
@@ -146,7 +145,6 @@ export async function criarSubmissaoTreinoUpload(
         .catch(() => {});
     }
 
-    // busca o treino agendado + treino programado pra saber duração e data
     const ag = await prisma.treinoAgendado.findUnique({
       where: { id: treinoAgendadoId },
       include: { treinoProgramado: true },
@@ -185,7 +183,6 @@ export async function criarSubmissaoTreinoUpload(
     let minutosConsiderados: number | undefined;
 
     if (created.aprovado) {
-      // 🔽 minutos base: o que veio da submissão ou a duração do treino programado
       const minutosBase =
         duracaoMinutos != null
           ? Number(duracaoMinutos)
@@ -208,14 +205,13 @@ export async function criarSubmissaoTreinoUpload(
         );
         const limite = new Date(
           fimPrevisto.getTime() + 5 * 60 * 1000
-        ); // +5min de tolerância
+        );
 
         const fimReal =
           created.criadoEm instanceof Date
             ? created.criadoEm
             : new Date(created.criadoEm as any);
 
-        // ⏰ se finalizou DEPOIS do limite -> aplica penalidade
         if (fimReal > limite) {
           minutosConsiderados = Math.round(minutosBase / 2);
           penalidadeAtraso = true;
@@ -376,7 +372,7 @@ export async function criarSubmissaoDesafioUpload(
       select: { id: true },
     });
 
-    const usuarioIdForActivity = await resolveUsuarioIdForActivity((req as any).userId, atletaId);
+    const usuarioIdForActivity = await resolveUsuarioIdForActivity(req.userId, atletaId);
     if (usuarioIdForActivity && uploadedUrl) {
       await prisma.atividadeRecente
         .create({
@@ -442,5 +438,220 @@ export async function getUltimaSubmissaoTreino(req: Request, res: Response) {
   } catch (e) {
     console.error(e);
     return res.status(500).json({ message: "Erro ao buscar submissão." });
+  }
+}
+
+export async function criarSubmissaoTreinoSessaoUpload(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const {
+      sessaoId,
+      observacao,
+      pontos,       // vindo do front (awardPontos)
+      tempoSeg,     // opcional
+      repeticoes,   // opcional
+    } = req.body as {
+      sessaoId?: string;
+      observacao?: string;
+      pontos?: number | string;
+      tempoSeg?: number | string;
+      repeticoes?: number | string;
+    };
+
+    const file = (req as any).file as Express.Multer.File | undefined;
+
+    if (!sessaoId) return res.status(400).json({ error: "Informe sessaoId." });
+    if (!file) return res.status(400).json({ error: "Envie um arquivo (imagem/vídeo)." });
+
+    // 1) Busca sessão + turma + treino + presenças
+    const sessao = await prisma.sessaoTreinoTurma.findUnique({
+      where: { id: sessaoId },
+      include: {
+        turma: true,
+        treino: true,     // espera ter pontuacao/duracao aqui
+        presencas: true,  // [{ atletaId, presente }]
+      },
+    });
+
+    if (!sessao) return res.status(404).json({ error: "Sessão não encontrada." });
+
+    // 2) Atletas presentes
+    const presentesIds: string[] = Array.isArray((sessao as any).presencas)
+      ? (sessao as any).presencas
+          .filter((p: any) => p.presente !== false)
+          .map((p: any) => String(p.atletaId))
+          .filter(Boolean)
+      : [];
+
+    if (!presentesIds.length) {
+      return res.status(400).json({ error: "Nenhum atleta presente encontrado para esta sessão." });
+    }
+
+    // 3) Descobre TreinoAgendado de cada atleta (se seu schema exigir)
+    function startOfDay(d: Date) {
+      const x = new Date(d);
+      x.setHours(0, 0, 0, 0);
+      return x;
+    }
+    function endOfDay(d: Date) {
+      const x = new Date(d);
+      x.setHours(23, 59, 59, 999);
+      return x;
+    }
+
+    const sessaoData = sessao.data instanceof Date ? sessao.data : new Date(sessao.data as any);
+
+    const agendados = await prisma.treinoAgendado.findMany({
+      where: {
+        atletaId: { in: presentesIds },
+        treinoProgramadoId: (sessao as any).treinoProgramadoId, // mantém como você já tinha
+        dataTreino: { gte: startOfDay(sessaoData), lte: endOfDay(sessaoData) },
+      },
+      select: { id: true, atletaId: true },
+    });
+
+    const agendadoByAtleta = new Map<string, string>();
+    agendados.forEach((a) => agendadoByAtleta.set(a.atletaId, a.id));
+
+    const faltando = presentesIds.filter((id) => !agendadoByAtleta.get(id));
+    if (faltando.length) {
+      return res.status(400).json({
+        error: "Alguns atletas presentes não possuem TreinoAgendado para este treino.",
+        faltando,
+      });
+    }
+
+    // 4) Pontos base (prioriza front; fallback: treino da sessão)
+    const pontosBase =
+      Number(pontos ?? (sessao as any)?.treino?.pontuacao ?? 0) || 0;
+
+    // 5) Duração base (pra penalidade): prioriza treino.duracao; fallback tempoSeg
+    const tempoSegNum = tempoSeg != null ? Number(tempoSeg) : undefined;
+    const repeticoesNum = repeticoes != null ? Number(repeticoes) : undefined;
+
+    const minutosBase =
+      (sessao as any)?.treino?.duracao != null
+        ? Number((sessao as any).treino.duracao)
+        : tempoSegNum != null
+          ? Math.max(1, Math.round(tempoSegNum / 60))
+          : undefined;
+
+    // 6) Penalidade de atraso (sessão terminou tarde): tempo do treino + 5min
+    let penalidadeAtraso = false;
+    let pontosConsiderados = pontosBase;
+    let minutosConsiderados: number | undefined = minutosBase;
+
+    if (minutosBase && sessaoData) {
+      const fimPrevisto = new Date(sessaoData.getTime() + minutosBase * 60 * 1000);
+      const limite = new Date(fimPrevisto.getTime() + 5 * 60 * 1000);
+      const agora = new Date();
+
+      if (agora > limite) {
+        penalidadeAtraso = true;
+        pontosConsiderados = Math.floor(pontosBase / 2);
+        minutosConsiderados = Math.max(1, Math.round(minutosBase / 2));
+      }
+    }
+
+    // 7) Mídia (única)
+    const assetUrl = `/uploads/${file.filename}`;
+    const isVideo = !!file.mimetype?.startsWith("video");
+
+    // 8) Cria 1 submissão por atleta + aplica estatísticas + recomputa pontuação
+    const criadas = await prisma.$transaction(
+      presentesIds.map((atletaId) =>
+        prisma.submissaoTreino.create({
+          data: {
+            atletaId,
+            treinoAgendadoId: agendadoByAtleta.get(atletaId)!,
+            observacao,
+            aprovado: true,
+
+            // ✅ agora credita corretamente (com penalidade se houver)
+            pontosCreditados: pontosConsiderados,
+            pontuacaoSnapshot: pontosConsiderados,
+
+            // ✅ opcional: guardar tempo/reps se seu model tiver esses campos
+            duracaoSegundos: tempoSegNum,
+            repeticoes: repeticoesNum,
+
+            midias: {
+              create: [
+                {
+                  url: assetUrl,
+                  tipo: isVideo ? TipoMidia.Video : TipoMidia.Imagem,
+                  dataEnvio: new Date(),
+                  descricao: "",
+                  titulo: "",
+                  storageClass: StorageClass.HOT,
+                },
+              ],
+            },
+          },
+          select: { id: true, atletaId: true, treinoAgendadoId: true, criadoEm: true },
+        })
+      )
+    );
+
+    // 9) Atividades recentes para TODOS (você já fazia; mantive)
+    await Promise.allSettled(
+      presentesIds.map(async (atletaId) => {
+        const usuarioIdForActivity = await resolveUsuarioIdForActivity(req.user?.id, atletaId);
+        if (!usuarioIdForActivity) return;
+
+        await prisma.atividadeRecente.create({
+          data: {
+            usuarioId: usuarioIdForActivity,
+            tipo: "treino",
+            imagemUrl: assetUrl,
+          },
+        });
+      })
+    );
+
+    // 10) Estatísticas + pontuação/cache por atleta (o que faltava!)
+    await Promise.allSettled(
+      criadas.map(async (c) => {
+        // atualiza estatísticas/minutos (se quiser refletir “horas treinadas” etc.)
+        await aplicarEstatisticasPosSubmissao(
+          c.id,
+          c.atletaId,
+          c.treinoAgendadoId,
+          minutosConsiderados
+        ).catch(() => {});
+
+        await recomputePontuacaoAtleta(c.atletaId).catch(() => {});
+
+        const atleta = await prisma.atleta.findUnique({
+          where: { id: c.atletaId },
+          select: { usuarioId: true },
+        });
+
+        if (atleta?.usuarioId) {
+          await atualizarCachePontuacao(atleta.usuarioId).catch(() => {});
+        }
+      })
+    );
+
+    return res.status(201).json({
+      ok: true,
+      sessaoId,
+      criadas: criadas.length,
+      atletas: criadas.map((c) => ({ atletaId: c.atletaId, submissaoId: c.id })),
+      assetUrl,
+      pontosBase,
+      pontosCreditados: pontosConsiderados,
+      penalidadeAtraso,
+      minutosBase: minutosBase ?? null,
+      minutosConsiderados: minutosConsiderados ?? null,
+      mensagem: penalidadeAtraso
+        ? "Submissão da sessão criada com atraso. Pontos e minutos foram reduzidos pela metade."
+        : "Submissão da sessão criada e pontuação creditada.",
+    });
+  } catch (error) {
+    console.error("Erro ao salvar submissão de sessão:", error);
+    return res.status(500).json({ error: "Erro ao salvar submissão da sessão." });
   }
 }

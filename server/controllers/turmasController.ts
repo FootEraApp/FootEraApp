@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
+import type { TurmaUsuario, Usuario as UsuarioModel, Atleta as AtletaModel } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -35,88 +36,80 @@ const REL_ATLETA  = [
   "atletasTurma","jogadoresTurma","membrosTurma","participantesTurma"
 ];
 
-export const getAlunosTurma = async (req: Request, res: Response) => {
-  const id = String(req.params.id);
-  try {
-    for (const rel of REL_USUARIO) {
-      try {
-        const row = await prisma.turma.findUnique({
-          where: { id },
-          select: { [rel]: { select: { id: true } } } as any,
-        });
-        const arr = (row as any)?.[rel];
-        if (Array.isArray(arr)) {
-          const usuarioIds = arr.map((u: any) => String(u.id)).filter(Boolean);
-          return res.json({ usuarioIds });
-        }
-      } catch {}
-    }
-
-    for (const rel of REL_ATLETA) {
-      try {
-        const row = await prisma.turma.findUnique({
-          where: { id },
-          select: { [rel]: { select: { usuarioId: true } } } as any,
-        });
-        const arr = (row as any)?.[rel];
-        if (Array.isArray(arr)) {
-          const usuarioIds = arr.map((a: any) => String(a.usuarioId)).filter(Boolean);
-          return res.json({ usuarioIds });
-        }
-      } catch {}
-      try {
-        const row = await prisma.turma.findUnique({
-          where: { id },
-          select: { [rel]: { select: { id: true } } } as any,
-        });
-        const arr = (row as any)?.[rel];
-        if (Array.isArray(arr) && arr.length) {
-          const atletaIds = arr.map((a: any) => String(a.id)).filter(Boolean);
-          const atletas = await prisma.atleta.findMany({
-            where: { id: { in: atletaIds } },
-            select: { usuarioId: true },
-          });
-          const usuarioIds = atletas.map((a) => String(a.usuarioId)).filter(Boolean);
-          return res.json({ usuarioIds });
-        }
-      } catch {}
-    }
-
-    const pivot = getTurmaPivot();
-    if (!pivot) {
-      return res.status(500).json({
-        message:
-          "Não foi possível ler alunos: nem relação direta nem pivô encontrado. Verifique o schema da Turma.",
-      });
-    }
-
-    try {
-      const rows = await pivot.findMany({
-        where: { turmaId: id },
-        select: { turmaId: true, usuarioId: true },
-      });
-      const usuarioIds = rows.map((r: any) => String(r.usuarioId)).filter(Boolean);
-      return res.json({ usuarioIds });
-    } catch {}
-
-    const rows = await pivot.findMany({
-      where: { turmaId: id },
-      select: { turmaId: true, atletaId: true },
-    });
-    const atletaIds = rows.map((r: any) => String(r.atletaId)).filter(Boolean);
-    if (!atletaIds.length) return res.json({ usuarioIds: [] });
-
-    const atletas = await prisma.atleta.findMany({
-      where: { id: { in: atletaIds } },
-      select: { usuarioId: true },
-    });
-    const usuarioIds = atletas.map((a) => String(a.usuarioId)).filter(Boolean);
-    return res.json({ usuarioIds });
-  } catch (e) {
-    console.error("[getAlunosTurma]", e);
-    return res.status(500).json({ message: "Erro ao carregar alunos da turma" });
-  }
+type AlunoTurmaDTO = {
+  id: string;
+  usuarioId: string;
+  nome: string;
+  foto: string | null;
+  usuario?: {
+    id: string;
+    nome: string;
+    foto: string | null;
+  };
 };
+
+type TurmaUsuarioComUsuario = TurmaUsuario & {
+  usuario: Pick<UsuarioModel, "id" | "nome" | "foto"> | null;
+};
+
+export async function getAlunosTurma(req: Request, res: Response) {
+  const { id } = req.params;
+
+  try {
+    const turma = await prisma.turma.findUnique({
+      where: { id },
+      include: {
+        membros: {
+          include: {
+            usuario: { select: { id: true, nome: true, foto: true } },
+          },
+        },
+      },
+    });
+
+    if (!turma) {
+      return res.status(404).json({ error: "Turma não encontrada" });
+    }
+
+    const usuarioIds = turma.membros.map((m) => m.usuarioId).filter(Boolean);
+
+    // ✅ pega atletaId de cada usuário (se existir)
+    const atletas = usuarioIds.length
+      ? await prisma.atleta.findMany({
+          where: { usuarioId: { in: usuarioIds } },
+          select: { id: true, usuarioId: true },
+        })
+      : [];
+
+    const atletaIdByUsuarioId = new Map(atletas.map((a) => [a.usuarioId, a.id]));
+
+    // ✅ retorna ambos: atletaId e usuarioId
+    const alunos = turma.membros.map((m) => {
+      const usuarioId = m.usuarioId;
+      const atletaId = atletaIdByUsuarioId.get(usuarioId) ?? null;
+
+      return {
+        atletaId,            // ✅ o que seu agendamento precisa
+        usuarioId,           // ✅ para mostrar foto/nome e compatibilidade
+        id: atletaId ?? usuarioId, // ✅ fallback (mas ideal é usar atletaId)
+        usuario: {
+          id: m.usuario?.id ?? usuarioId,
+          nome: m.usuario?.nome ?? "Atleta da turma",
+          foto: m.usuario?.foto ?? null,
+        },
+      };
+    });
+
+    return res.json({
+      alunos,
+      atletaIds: alunos.map((a) => a.atletaId).filter(Boolean),
+      usuarioIds,
+    });
+  } catch (e) {
+    console.error("[turmas] erro ao buscar alunos da turma", id, e);
+    return res.status(500).json({ error: "Erro interno ao buscar alunos" });
+  }
+}
 
 export const setAlunosTurma = async (req: Request, res: Response) => {
   const id = String(req.params.id);
@@ -195,11 +188,24 @@ export const setAlunosTurma = async (req: Request, res: Response) => {
 
 export async function obterAlunosTurma(req: Request, res: Response) {
   const { id } = req.params;
+
   const membros = await prisma.turmaUsuario.findMany({
     where: { turmaId: id },
     select: { usuarioId: true },
   });
-  return res.json({ usuarioIds: membros.map(m => m.usuarioId) });
+
+  const usuarioIds = membros.map((m) => m.usuarioId).filter(Boolean);
+
+  const atletas = usuarioIds.length
+    ? await prisma.atleta.findMany({
+        where: { usuarioId: { in: usuarioIds } },
+        select: { id: true, usuarioId: true },
+      })
+    : [];
+
+  const atletaIds = atletas.map((a) => a.id);
+
+  return res.json({ usuarioIds, atletaIds });
 }
 
 export async function listarMinhasTurmas(req: AuthenticatedRequest, res: Response) {
@@ -228,9 +234,6 @@ export async function listarTurmas(req: Request, res: Response) {
     const ownerIdRaw   = req.query.ownerId   ? String(req.query.ownerId)   : "";
     const professorId  = req.query.professorId ? String(req.query.professorId) : undefined;
 
-    // Agora aceitamos:
-    // - ownerTipo + ownerId
-    // - professorId
     if (!ownerTipoRaw && !ownerIdRaw && !professorId) {
       return res.status(400).json({
         message: "Informe ownerTipo + ownerId OU professorId",
@@ -239,13 +242,11 @@ export async function listarTurmas(req: Request, res: Response) {
 
     const where: any = {};
 
-    // se veio ownerTipo + ownerId, filtra pelo dono (clube/escolinha)
     if (ownerTipoRaw && ownerIdRaw) {
       if (ownerTipoRaw === "Clube")     where.clubeId     = ownerIdRaw;
       if (ownerTipoRaw === "Escolinha") where.escolinhaId = ownerIdRaw;
     }
 
-    // se veio professorId, também filtra pelo professor
     if (professorId) {
       where.professorId = professorId;
     }
@@ -254,7 +255,7 @@ export async function listarTurmas(req: Request, res: Response) {
       where,
       include: {
         professor: { select: { id: true, nome: true } },
-        _count: { select: { membros: true } }, // se no seu schema não for "membros", ajusta aqui
+        _count: { select: { membros: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -278,19 +279,80 @@ export async function listarTurmas(req: Request, res: Response) {
 }
 
 export async function criarTurma(req: Request, res: Response) {
-  const { ownerTipo, ownerId, nome, categoria, professorId } = req.body || {};
-  if (!ownerTipo || !ownerId || !nome) {
-    return res.status(400).json({ message: "ownerTipo, ownerId e nome são obrigatórios" });
+  try {
+    const {
+      ownerTipo,
+      ownerId,
+      nome,
+      categoria,
+      professorId,
+      atletaIds,
+      usuarioIds,
+    } = req.body || {};
+
+    if (!ownerTipo || !ownerId || !nome) {
+      return res.status(400).json({
+        message: "ownerTipo, ownerId e nome são obrigatórios",
+      });
+    }
+
+    const data: any = { nome: String(nome).trim() };
+
+    if (categoria)   data.categoria = String(categoria);
+    if (professorId) data.professorId = String(professorId);
+
+    if (ownerTipo === "Clube") {
+      data.clubeId = String(ownerId);
+    }
+    if (ownerTipo === "Escolinha") {
+      data.escolinhaId = String(ownerId);
+    }
+
+    const turma = await prisma.turma.create({ data });
+
+    let usuarioIdsFinal: string[] = [];
+
+    if (Array.isArray(usuarioIds)) {
+      usuarioIdsFinal.push(
+        ...usuarioIds.map(String).filter((x) => x && x.trim()),
+      );
+    }
+
+    if (Array.isArray(atletaIds) && atletaIds.length) {
+      const atletas = await prisma.atleta.findMany({
+        where: { id: { in: atletaIds.map(String) } },
+        select: { usuarioId: true },
+      });
+
+      usuarioIdsFinal.push(
+        ...atletas
+          .map((a) => a.usuarioId)
+          .filter((id): id is string => Boolean(id)),
+      );
+    }
+
+    usuarioIdsFinal = Array.from(new Set(usuarioIdsFinal));
+
+    if (usuarioIdsFinal.length) {
+      await prisma.turmaUsuario.createMany({
+        data: usuarioIdsFinal.map((uid) => ({
+          turmaId: turma.id,
+          usuarioId: uid,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    return res.status(201).json({
+      id: turma.id,
+      totalMembros: usuarioIdsFinal.length,
+    });
+  } catch (e: any) {
+    console.error("[criarTurma] erro:", e);
+    return res
+      .status(500)
+      .json({ message: e.message || "Erro ao criar turma" });
   }
-
-  const data: any = { nome: String(nome).trim() };
-  if (categoria)   data.categoria = String(categoria);
-  if (professorId) data.professorId = String(professorId);
-  if (ownerTipo === "Clube")     data.clubeId = String(ownerId);
-  if (ownerTipo === "Escolinha") data.escolinhaId = String(ownerId);
-
-  const turma = await prisma.turma.create({ data });
-  return res.status(201).json({ id: turma.id });
 }
 
 export async function updateTurma(req: Request, res: Response) {

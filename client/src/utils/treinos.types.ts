@@ -9,6 +9,7 @@ export type ExercicioTemporario = {
   descricao?: string | null;
   repeticoes?: string | null;
   ordem?: number;
+  videoDemonstrativoUrl?: string;
 };
 
 export type TreinoCreatePayload = {
@@ -39,4 +40,6 @@ export type ExItemUI = {
   repeticoes?: string | null;
   ordem?: number;
   series?: string; 
+  exercicioId?: string; // 👈 ADD
+  repeticoesTexto?: string | null;
 };

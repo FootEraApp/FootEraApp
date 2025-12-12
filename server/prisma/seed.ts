@@ -1300,16 +1300,23 @@ async function main() {
       },
     });
 
-    await prisma.submissaoTreino.upsert({
-      where: { observacao: "Concluído com sucesso" },
-      update: {},
-      create: {
-        atleta: { connect: { id: atletaAaaaa.id } },
-        treinoAgendado: { connect: { id: treinoAgendado.id } },
-        observacao: "Concluído com sucesso",
-        aprovado: true,
+    const jaExiste = await prisma.submissaoTreino.findFirst({
+      where: {
+        atletaId: atletaAaaaa.id,
+        treinoAgendadoId: treinoAgendado.id,
       },
     });
+
+    if (!jaExiste) {
+      await prisma.submissaoTreino.create({
+        data: {
+          atletaId: atletaAaaaa.id,
+          treinoAgendadoId: treinoAgendado.id,
+          observacao: "Concluído com sucesso",
+          aprovado: true,
+        },
+      });
+    }
 
     await prisma.atividadeRecente.createMany({
       data: [
