@@ -1,4 +1,4 @@
-import React, { useEffect, useState, type SVGProps } from "react";
+import React, { useEffect, useState, useRef, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Volleyball,
@@ -9,10 +9,30 @@ import {
   Check,
   X,
 } from "lucide-react";
-import Storage from "../../../../server/utils/storage.js";
-import { API, FLAGS } from "../../config.js";
+import { API } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
-import { useRef } from "react";
+
+const Storage = {
+  get token() {
+    return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+  },
+  get tipoSalvo() {
+    return localStorage.getItem("tipoUsuario") || sessionStorage.getItem("tipoUsuario") || "";
+  },
+  get usuarioId() {
+    return localStorage.getItem("usuarioId") || sessionStorage.getItem("usuarioId") || "";
+  },
+  get tipoUsuarioId() {
+    return localStorage.getItem("tipoUsuarioId") || sessionStorage.getItem("tipoUsuarioId") || "";
+  },
+  get plano() {
+    return localStorage.getItem("plano") || sessionStorage.getItem("plano") || "";
+  },
+  get assinaturaPlano() {
+    return localStorage.getItem("assinaturaPlano") || sessionStorage.getItem("assinaturaPlano") || "";
+  },
+};
+
 interface ExercicioSessaoDetalhe {
   id: string;
   nome: string;
@@ -117,22 +137,18 @@ const PLACEHOLDER_USER = "/assets/usuarios/default-user.png";
 function resolveUploadUrl(raw?: string | null): string | null {
   if (!raw) return null;
 
-  // URLs absolutas
   if (raw.startsWith("http://") || raw.startsWith("https://")) {
     return raw;
   }
 
-  // Assets públicos do front (Vite / React)
   if (raw.startsWith("/assets/")) {
     return raw;
   }
 
-  // Uploads do backend
   if (raw.startsWith("/uploads/")) {
     return `${API.BASE_URL}${raw}`;
   }
 
-  // fallback seguro
   return raw;
 }
 
@@ -240,7 +256,7 @@ export default function TreinosInstrutores({
   const [clockNow, setClockNow] = useState<number>(Date.now());
 
   const [videoByExId, setVideoByExId] = useState<Record<string, string>>({});
-  const startMsRef = useRef<number | null>(null);
+  const startedAtRef = useRef<string | null>(null);
 
   useEffect(() => {
   const token = getToken();
@@ -287,8 +303,6 @@ export default function TreinosInstrutores({
       );
 
       if (!res.ok) {
-        // ❌ não use usuarioIds como id de atleta
-        // se o backend não devolver atletaId, não dá pra agendar/iniciar corretamente
         console.warn("[treinos] rota /turmas/:id/alunos não retornou alunos com atletaId");
         return [];
       }
@@ -303,7 +317,6 @@ export default function TreinosInstrutores({
           const usuarioId = a.usuario?.id ?? a.usuarioId ?? "";
           const atletaId  = a.atletaId ?? a.id ?? null;
 
-          // ✅ id NO FRONT = atletaId (porque é o que agenda)
           const id = atletaId || "";
 
           if (!id) return null;
@@ -312,7 +325,7 @@ export default function TreinosInstrutores({
           const foto = a.usuario?.foto ?? a.foto ?? null;
 
           return {
-            id, // ✅ atletaId
+            id, 
             usuario: { id: usuarioId || id, nome, foto },
           };
         })
@@ -321,7 +334,6 @@ export default function TreinosInstrutores({
       return alunos;
       }
 
-      // ❌ Removido fallback por usuarioIds (id precisa ser atletaId)
       console.warn("[treinos] backend não retornou alunos com atletaId. Ajuste /api/turmas/:id/alunos para retornar alunos[].atletaId");
       return [];
 
@@ -334,21 +346,18 @@ export default function TreinosInstrutores({
  async function finalizarTreinoSessao(sessaoId: string) {
   const token = getToken();
 
-  // ✅ 1) calcula o tempo (preferindo startedAt do backend)
   const sessao = sessoesDeHoje.find((x: any) => x.id === sessaoId);
 
   let tempoSeg = 0;
 
   if (sessao?.startedAt) {
     const inicioMs = new Date(sessao.startedAt).getTime();
-    const diffMs = Date.now() - inicioMs;
-    tempoSeg = Math.max(1, Math.round(diffMs / 1000));
-  } else if (startMsRef.current) {
-    // fallback (caso você esteja usando startMsRef)
-    tempoSeg = Math.max(1, Math.round((Date.now() - startMsRef.current) / 1000));
+    tempoSeg = Math.max(1, Math.round((Date.now() - inicioMs) / 1000));
+  } else if (startedAtRef.current) {
+    const inicioMs = new Date(startedAtRef.current).getTime();
+    tempoSeg = Math.max(1, Math.round((Date.now() - inicioMs) / 1000));
   }
 
-  // ✅ 2) finaliza no backend
   const res = await fetch(
     `${API.BASE_URL}/api/sessoes-turma/${encodeURIComponent(sessaoId)}/finalizar`,
     {
@@ -363,7 +372,6 @@ export default function TreinosInstrutores({
     return;
   }
 
-  // ✅ 3) manda pontos + tempoSeg pra submissão
   const pontos = encodeURIComponent(String(js?.pontosAplicadosPorAtleta ?? 0));
   const tempo = encodeURIComponent(String(tempoSeg));
 
@@ -409,7 +417,7 @@ export default function TreinosInstrutores({
           const foto = a.usuario?.foto ?? a.foto ?? null;
 
           return {
-            id: String(atletaId),                 // ✅ atletaId
+            id: String(atletaId),              
             usuario: { id: String(usuarioId || atletaId), nome, foto },
           };
         })
@@ -458,7 +466,9 @@ export default function TreinosInstrutores({
       return;
     }
 
-    startMsRef.current = Date.now();
+    const js = await res.json().catch(() => ({}));
+
+    startedAtRef.current = js?.startedAt ?? new Date().toISOString();
     
     setModalSessaoId(null);
     setSessaoAbertaExerciciosId(sessaoId);
@@ -472,15 +482,6 @@ export default function TreinosInstrutores({
 function extrairExerciciosSessao(s: any): ExercicioSessaoDetalhe[] {
   let list: any[] = Array.isArray(s.exercicios) ? s.exercicios : [];
 
-  console.log("[sessao] exercicios origem/quantidade:", {
-    sessaoId: s?.id,
-    lenSessaoExercicios: Array.isArray(s?.exercicios) ? s.exercicios.length : 0,
-    lenTreinoExercicios: Array.isArray(s?.treino?.exercicios) ? s.treino.exercicios.length : 0,
-    exemploSessao: s?.exercicios?.[0],
-    exemploTreino: s?.treino?.exercicios?.[0],
-  });
-
-  // fallback: alguns controllers podem mandar dentro de s.treino.exercicios
   if (!list.length && Array.isArray(s.treino?.exercicios)) {
     list = s.treino.exercicios;
   }
@@ -489,7 +490,7 @@ function extrairExerciciosSessao(s: any): ExercicioSessaoDetalhe[] {
    .map((item: any, idx: number) => {
     const ex =
       item.exercicio ||
-      item.exercicioTemporario || // ✅ add
+      item.exercicioTemporario ||
       item.exercicioRef ||
       item.Exercicio ||
       item.treinoExercicio?.exercicio ||
@@ -532,11 +533,10 @@ const videoUrlRaw =
   item?.exercicio?.videoDemonstrativoUrl ||
   item?.exercicioTemporario?.videoDemonstrativoUrl ||
   item?.videoDemonstrativoUrl ||
-  (exId ? videoByExId[exId] : null) ||   // ✅ fallback catálogo
+  (exId ? videoByExId[exId] : null) ||
   null;
 
   const videoUrl = videoUrlRaw ? String(videoUrlRaw) : null;
-      // ---------- CAMPOS BRUTOS ----------
       const repRaw =
         item.repeticoes ||
         item.repeticao ||
@@ -548,7 +548,6 @@ const videoUrlRaw =
         ex.seriesRepeticoes ||
         "";
 
-      // campos numéricos que podemos usar para montar "Sx R reps" / "Sx Ts"
       const series =
         item.series ??
         item.qtdSeries ??
@@ -580,20 +579,17 @@ const videoUrlRaw =
       let repeticoes = "";
       const repText = String(repRaw || "").trim();
 
-      // verifica se o texto já parece "formatado bonitinho"
       const temFormatoRich = /x|seg|s\b|min|rep|descanso|,/i.test(repText);
 
       if (
         repText &&
         (
-          temFormatoRich || // já veio bonito: "4x 45s + 15s descanso"
-          (!series && !reps && !tempoSeg && !descansoSeg) // não temos info melhor
+          temFormatoRich || 
+          (!series && !reps && !tempoSeg && !descansoSeg) 
         )
       ) {
-        // usa o texto como está
         repeticoes = repText;
       } else {
-        // monta com base nos campos numéricos
         const partes: string[] = [];
 
         if (series != null && tempoSeg != null) {
@@ -614,8 +610,7 @@ const videoUrlRaw =
 
         repeticoes = partes.join(" ");
       }
-      console.log("[video-check]", { nome, videoUrl });
-
+      
       return {
         id: String(safeId),
         nome,
@@ -642,14 +637,27 @@ const videoUrlRaw =
     const data = await res.json();
 
     const norm = (Array.isArray(data) ? data : []).map((s: any) => {
-      const statusRaw = String(s.status || "").toUpperCase();
+      const statusRaw = String(s.status ?? "")
+        .trim()
+        .toUpperCase();
 
       let status: "nao_iniciada" | "em_andamento" | "finalizada";
-      if (statusRaw === "EM_ANDAMENTO") status = "em_andamento";
-      else if (statusRaw === "FINALIZADO" || statusRaw === "FINALIZADA")
-        status = "finalizada";
-      else status = "nao_iniciada";
 
+      switch (statusRaw) {
+        case "EM_ANDAMENTO":
+          status = "em_andamento";
+          break;
+
+        case "FINALIZADO":
+          status = "finalizada";
+          break;
+
+        case "AGENDADO":
+        case "CANCELADO":
+        default:
+          status = "nao_iniciada";
+          break;
+      }
       const exercicios = extrairExerciciosSessao(s);
 
       return {
@@ -774,14 +782,10 @@ async function excluirSessao(sessaoId: string) {
     }
 
     setSessoesDeHoje((prev) => prev.filter((s) => s.id !== sessaoId));
-
-    // ✅ fecha modal/popup se for o mesmo item
     setSessaoAbertaExerciciosId((prev) => (prev === sessaoId ? null : prev));
 
     alert("Treino removido da sua agenda.");
 
-    // (opcional) manter pra garantir consistência com o backend
-    // await carregarSessoesDeHoje();
   } catch (e) {
     console.error("[treinos] erro inesperado ao excluir sessão:", e);
     alert("Erro inesperado ao excluir o treino.");
@@ -813,59 +817,6 @@ async function salvarProgressoSessao(sessaoId: string) {
   }
 }
 
-  async function finalizarSessao(sessaoId: string) {
-    const token = getToken();
-    if (!token) {
-      alert("Faça login para finalizar a sessão.");
-      return;
-    }
-
-    if (!window.confirm("Tem certeza que deseja finalizar este treino?")) {
-      return;
-    }
-
-    const marcados = exerciciosMarcadosBySessao[sessaoId];
-    if (marcados && marcados.length) {
-      await salvarProgressoSessao(sessaoId);
-    }
-
-    try {
-      const res = await fetch(
-        `${API.BASE_URL}/api/sessoes-turma/${encodeURIComponent(
-          sessaoId,
-        )}/finalizar`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        console.error("Falha ao finalizar sessão:", res.status, txt);
-        alert("Não foi possível finalizar esse treino.");
-        return;
-      }
-
-      const atualizada = await res.json().catch(() => null);
-
-      if (atualizada && atualizada.penalidadeAtraso) {
-        alert(
-          "Treino finalizado, mas foi concluído com atraso. Pontos e tempo considerados foram reduzidos pela metade.",
-        );
-      } else {
-        alert("Treino finalizado com sucesso!");
-      }
-
-      await carregarSessoesDeHoje();
-    } catch (e) {
-      console.error("Erro inesperado ao finalizar sessão:", e);
-      alert("Erro inesperado ao finalizar o treino.");
-    }
-  }
-  
   useEffect(() => {
     const tipoSalvo =
       (Storage as any).tipoSalvo ??
@@ -1928,6 +1879,11 @@ async function salvarProgressoSessao(sessaoId: string) {
                         <div className="text-sm text-gray-600">
                           Turma: {s.turma?.nome ?? "Turma"}
                         </div>
+                        {typeof s.treino?.duracao === "number" && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Duração programada: {s.treino.duracao} min
+                          </div>
+                        )}
 
                         {labelTempo && (
                           <div className="text-xs text-gray-500 mt-1">{labelTempo}</div>

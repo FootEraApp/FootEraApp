@@ -112,7 +112,7 @@ model Professor {
   cref                String?
   areaFormacao        String
   escola              String?
-  fotoUrl             String?              @unique
+  fotoUrl             String?              
   nome                String               @unique
   usuarioId           String?              @unique
   statusCref          StatusCref?
@@ -326,7 +326,7 @@ model Exercicio {
   descricao                  String?
   nivel                      Nivel
   categorias                 Categoria[]
-  videoDemonstrativoUrl      String?                      @unique
+  videoDemonstrativoUrl      String?                      
   treinoProgramadoExercicios TreinoProgramadoExercicio[]
   EstatisticaExercicio       EstatisticaExercicio[]
   SessaoTreinoTurmaExercicio SessaoTreinoTurmaExercicio[]
@@ -352,7 +352,7 @@ model DesafioOficial {
   id               String             @id @default(uuid())
   titulo           String             @unique
   descricao        String
-  imagemUrl        String?            @unique
+  imagemUrl        String?            
   nivel            Nivel
   categoria        Categoria[]
   createdAt        DateTime           @default(now())
@@ -386,7 +386,7 @@ model RelacaoTreinamento {
   clube         Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha     Escolinha? @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
   professor     Professor? @relation("RelacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
-  encerradoEm   DateTime?  @default(now())
+  encerradoEm   DateTime?  
 
   @@unique([professorId, atletaId, escolinhaId, clubeId])
 }

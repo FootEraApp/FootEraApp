@@ -1,8 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, Search, House } from "lucide-react";
-import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
+
+const Storage = {
+  get token() {
+    return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+  },
+  get tipoUsuarioId() {
+    return (
+      localStorage.getItem("tipoUsuarioId") ||
+      sessionStorage.getItem("tipoUsuarioId") ||
+      ""
+    );
+  },
+};
 
 export default function PaginaSubmissao() {
   const ATTEMPT_LIMIT = 2;
@@ -15,22 +27,17 @@ export default function PaginaSubmissao() {
   const [treinoAgendadoId, setTreinoAgendadoId] = useState<string | null>(null);
   const [desafioId, setDesafioId] = useState<string | null>(null);
   const [modeParam, setModeParam] = useState<"camera" | "galeria" | null>(null);
-
   const [atletaId, setAtletaId] = useState<string | null>(null);
-
   const [observacao, setObservacao] = useState("");
   const [tempoTexto, setTempoTexto] = useState("");
   const [tempoSegFixado, setTempoSegFixado] = useState<number | null>(null);
   const [reps, setReps] = useState<string>("");
-
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-
   const [sessaoId, setSessaoId] = useState<string | null>(null);
   const [awardPontos, setAwardPontos] = useState<number>(0);
   const [awardAtletas, setAwardAtletas] = useState<{ atletaId: string; nome: string }[]>([]);
   const isSessaoTreino = Boolean(sessaoId);
-
   const [isRecording, setIsRecording] = useState(false);
   const [attemptsUsed, setAttemptsUsed] = useState<number>(0);
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
@@ -40,7 +47,6 @@ export default function PaginaSubmissao() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const liveVideoRef = useRef<HTMLVideoElement | null>(null);
-
   const [treinoMode, setTreinoMode] = useState<"upload" | "live">("upload");
   const [treinoIsRecording, setTreinoIsRecording] = useState(false);
   const [treinoRecordedBlob, setTreinoRecordedBlob] = useState<Blob | null>(null);
@@ -50,14 +56,11 @@ export default function PaginaSubmissao() {
   const treinoMediaRecorderRef = useRef<MediaRecorder | null>(null);
   const treinoChunksRef = useRef<BlobPart[]>([]);
   const treinoLiveVideoRef = useRef<HTMLVideoElement | null>(null);
-
   const isDesafio = Boolean(desafioId);
   const isTreino = Boolean(treinoAgendadoId) || Boolean(sessaoId);
-
   const isSecureContext =
     typeof window !== "undefined" &&
     (window.location.protocol === "https:" || window.location.hostname === "localhost");
-
   const dualStorage = {
     getItem(key: string): string | null {
       let a: string | null = null;
@@ -303,7 +306,6 @@ export default function PaginaSubmissao() {
     if (sId) setSessaoId(sId);
     if (Number.isFinite(pontosParam)) setAwardPontos(pontosParam);
 
-    // 👇 tenta preencher via rota da sessão (mais confiável)
     if (sId) {
       try {
         const token =
@@ -338,11 +340,9 @@ export default function PaginaSubmissao() {
           );
         }
       } catch (e) {
-        // opcional: console.warn("Falha ao carregar sessão", e);
       }
     }
 
-    // 👇 fallback: se vier pela URL (atletas=...)
     if (atletasParam) {
       try {
         const arr = JSON.parse(decodeURIComponent(atletasParam));
@@ -636,8 +636,7 @@ export default function PaginaSubmissao() {
   }
 
   const handleEnviar = async () => {
-    // antes era obrigatório atletaId. Agora, se for sessão, não.
-    if (!sessaoId && (!atletaId || (!treinoAgendadoId && !desafioId))) {
+    if (!isSessaoTreino && !atletaId) {
       alert("Preencha todos os campos obrigatórios.");
       return;
     }
@@ -645,14 +644,34 @@ export default function PaginaSubmissao() {
     const formData = new FormData();
     formData.append("observacao", observacao);
 
-    // 👇 só manda atletaId quando NÃO for sessão
-    if (!isSessaoTreino && atletaId) {
-      formData.append("atletaId", atletaId);
-    }
-
     let url = "";
 
-    if (isTreino) {
+    if (isDesafio) {
+      if (!desafioId) {
+        alert("Desafio inválido.");
+        return;
+      }
+      if (!recordedBlob) {
+        alert("Grave o vídeo do desafio antes de enviar.");
+        return;
+      }
+
+      formData.append("desafioId", desafioId);
+      formData.append("atletaId", atletaId!);
+
+      const seg = tempoSegFixado != null ? tempoSegFixado : parseTempoToSeconds(tempoTexto);
+      if (seg != null) formData.append("tempoSeg", String(seg));
+
+      formData.append(
+        "arquivo",
+        recordedBlob,
+        `desafio-${desafioId}-${Date.now()}.webm`
+      );
+
+      url = `${API.BASE_URL}/api/submissoes/desafio`;
+    }
+
+    else if (isTreino) {
       if (treinoMode === "live") {
         if (!treinoRecordedBlob) {
           alert("Grave um vídeo do treino antes de enviar.");
@@ -661,7 +680,7 @@ export default function PaginaSubmissao() {
         formData.append(
           "arquivo",
           treinoRecordedBlob,
-          `treino-${treinoAgendadoId ?? "livre"}-${Date.now()}.webm`
+          `treino-${treinoAgendadoId ?? sessaoId ?? "livre"}-${Date.now()}.webm`
         );
       } else {
         if (!arquivo) {
@@ -671,48 +690,28 @@ export default function PaginaSubmissao() {
         formData.append("arquivo", arquivo);
       }
 
-      const seg =
-        tempoSegFixado != null ? tempoSegFixado : parseTempoToSeconds(tempoTexto);
-
-      if (seg != null) formData.append("tempoSeg", String(seg));
-      if (reps) formData.append("repeticoes", String(Number(reps)));
-
-      if (isSessaoTreino) {
-      // envia UM vídeo, mas o backend cria a submissão/registro para cada atleta da lista
-      formData.append("sessaoId", sessaoId!);
-      formData.append("pontos", String(awardPontos)); // opcional, backend pode ignorar e recalcular
-      formData.append("atletas", JSON.stringify(awardAtletas)); // manda a lista (backend confere)
-
-      // tempo/reps também pode entrar
       const seg = tempoSegFixado != null ? tempoSegFixado : parseTempoToSeconds(tempoTexto);
       if (seg != null) formData.append("tempoSeg", String(seg));
-      if (reps) formData.append("repeticoes", String(Number(reps)));
+      if (reps) formData.append("repeticoes", reps);
 
-      url = `${API.BASE_URL}/api/submissoes/treino/sessao`;
-    } else {
-      // seu fluxo normal do atleta (treinoAgendadoId)
-      formData.append("atletaId", atletaId!);
-      formData.append("treinoAgendadoId", treinoAgendadoId!);
-      url = `${API.BASE_URL}/api/submissoes/treino`;
-    }
-    } else if (isDesafio) {
-      if (!recordedBlob) {
-        alert("Grave sua execução do desafio antes de enviar.");
-        return;
+      if (isSessaoTreino) {
+        formData.append("sessaoId", sessaoId!);
+        formData.append("pontos", String(awardPontos));
+        formData.append("atletas", JSON.stringify(awardAtletas));
+        url = `${API.BASE_URL}/api/submissoes/treino/sessao`;
+      } else {
+        if (!treinoAgendadoId) {
+          alert("Treino agendado inválido.");
+          return;
+        }
+        formData.append("atletaId", atletaId!);
+        formData.append("treinoAgendadoId", treinoAgendadoId);
+        url = `${API.BASE_URL}/api/submissoes/treino`;
       }
-      const filename = `desafio-${desafioId}-tentativa${Math.max(
-        1,
-        attemptsUsed
-      )}.webm`;
-      formData.append("arquivo", recordedBlob, filename);
-      formData.append("desafioId", desafioId!);
-      formData.append(
-        "repeticoes",
-        String(Math.max(1, Math.min(ATTEMPT_LIMIT, attemptsUsed)))
-      );
-      url = `${API.BASE_URL}/api/submissoes/desafio`;
-    } else {
-      alert("Defina se é treino ou desafio.");
+    }
+
+    else {
+      alert("Nada para enviar.");
       return;
     }
 
@@ -726,20 +725,19 @@ export default function PaginaSubmissao() {
       const js = await res.json().catch(() => ({}));
 
       if (res.ok) {
-        const msg = (js as any)?.autoAprovado
-          ? "Submissão enviada e aprovada automaticamente (sem pontuação por ausência de vínculo)."
-          : (js as any)?.mensagem ||
-            "Submissão enviada com sucesso! Aguarde validação.";
+        const msg =
+          (js as any)?.autoAprovado
+            ? "Submissão enviada e aprovada automaticamente (sem pontuação por ausência de vínculo)."
+            : (js as any)?.mensagem ||
+              (js as any)?.message ||
+              "Submissão enviada com sucesso!";
+
         alert(msg);
         navigate("/treinos");
         return;
       } else {
         console.error("Erro:", js);
-        alert(
-          (js as any)?.erro ||
-            (js as any)?.message ||
-            "Erro ao enviar submissão."
-        );
+        alert((js as any)?.error || (js as any)?.erro || (js as any)?.message || "Erro ao enviar submissão.");
       }
     } catch (err) {
       console.error("Erro no envio:", err);
@@ -864,7 +862,7 @@ export default function PaginaSubmissao() {
                     type="file"
                     name="arquivo"
                     data-testid="submissao-file"
-                    accept="video/*;capture=camcorder"
+                    accept="video/*,image/*"
                     // @ts-ignore
                     capture={modeParam === "camera" ? "environment" : undefined}
                     onChange={handleVideo}
