@@ -1,3 +1,4 @@
+// client/src/pages/admin-page.tsx
 import React, { useEffect, useState } from "react";
 import { API } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
@@ -16,7 +17,8 @@ type Tab =
   | "moderacao"
   | "analises"
   | "configuracoes"
-  | "assinaturas";
+  | "assinaturas"
+  | "feedback";
 
 interface Treinos {
   id: string;
@@ -196,6 +198,7 @@ export default function AdminDashboard() {
     "professores",
     ...(FLAGS.DESAFIOS_ENABLED ? (["desafios", "validacao", "moderacao"] as Tab[]) : []),
     "assinaturas",
+    "feedback",
     "analises",
     "configuracoes",
   ];
@@ -253,6 +256,21 @@ type AssinanteListItem = {
   };
 };
 
+interface FeedbackAdmin {
+  id: string;
+  tipo: string;
+  mensagem: string;
+  createdAt: string;
+  lidoEm?: string | null;
+  usuario?: {
+    id: string;
+    nome?: string | null;
+    nomeDeUsuario?: string | null;
+    email?: string | null;
+    tipo?: string | null;
+  } | null;
+}
+
 const [dashErro, setDashErro] = useState<string | null>(null);
 const [assQ, setAssQ] = useState("");
 const [assDebQ, setAssDebQ] = useState("");
@@ -266,6 +284,13 @@ const [assinantes, setAssinantes] = useState<AssinanteListItem[]>([]);
 const [assTotal, setAssTotal] = useState(0);
 const [assOverview, setAssOverview] = useState<{ total: number; ativos: number; cancelados: number; porPlano: Record<string, {total:number; ativos:number}> } | null>(null);
 
+const [fbItems, setFbItems] = useState<FeedbackAdmin[]>([]);
+const [fbLoading, setFbLoading] = useState(false);
+const [fbError, setFbError] = useState<string | null>(null);
+const [fbTipo, setFbTipo] = useState<string>("");
+const [fbFrom, setFbFrom] = useState<string>("");
+const [fbOnlyUnread, setFbOnlyUnread] = useState(false);
+
 useEffect(() => {
   const h = setTimeout(() => setAssDebQ(assQ.trim()), 400);
   return () => clearTimeout(h);
@@ -276,6 +301,12 @@ useEffect(() => {
   void carregarAssinantes(1);
   void carregarAssOverview();
 }, [aba, assPlano, assAtivo, assDebQ]);
+
+useEffect(() => {
+  if (aba !== "feedback") return;
+  void carregarFeedback();
+}, [aba, fbTipo, fbFrom, fbOnlyUnread]);
+
 
 async function carregarAssinantes(page: number) {
   setAssLoading(true);
@@ -317,6 +348,64 @@ async function carregarAssOverview() {
     setAssOverview(null);
   }
 }
+
+async function carregarFeedback() {
+  setFbLoading(true);
+  setFbError(null);
+  try {
+    const params = new URLSearchParams();
+    if (fbTipo) params.set("tipo", fbTipo);
+    if (fbFrom) params.set("from", fbFrom);
+
+    const url = `${API.BASE_URL}/api/feedback?${params.toString()}`;
+    const r = await fetch(url, { headers: authHeaders() });
+    const txt = await r.text();
+
+    if (!r.ok) {
+      throw new Error(txt || `Erro HTTP ${r.status}`);
+    }
+
+    const data = txt ? JSON.parse(txt) : [];
+    let arr: FeedbackAdmin[] = Array.isArray(data) ? data : data.items ?? [];
+
+    if (fbOnlyUnread) {
+      arr = arr.filter((f) => !f.lidoEm);
+    }
+
+    setFbItems(arr);
+  } catch (err: any) {
+    console.error("Erro ao carregar feedbacks:", err);
+    setFbError(err?.message || "Erro ao carregar feedbacks.");
+    setFbItems([]);
+  } finally {
+    setFbLoading(false);
+  }
+}
+
+async function marcarFeedbackComoLido(id: string) {
+  try {
+    const r = await fetch(`${API.BASE_URL}/api/feedback/${id}/lido`, {
+      method: "PATCH",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+    });
+
+    if (!r.ok) {
+      const txt = await r.text();
+      alert(`Erro ao marcar como lido: ${txt || r.status}`);
+      return;
+    }
+
+    setFbItems((prev) =>
+      prev.map((f) =>
+        f.id === id ? { ...f, lidoEm: new Date().toISOString() } : f
+      )
+    );
+  } catch (e) {
+    console.error(e);
+    alert("Falha ao marcar feedback como lido.");
+  }
+}
+
 
   function fmtDate(d?: string | null) {
     return d ? new Date(d).toLocaleString("pt-BR") : "—";
@@ -1482,6 +1571,161 @@ async function carregarAssOverview() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {aba === "feedback" && (
+          <div>
+            <h3 className="text-xl font-bold mb-3">Feedback dos usuários</h3>
+
+            <div className="flex flex-wrap gap-3 items-end mb-4">
+              <div>
+                <div className="text-sm text-gray-700">Tipo</div>
+                <select
+                  value={fbTipo}
+                  onChange={(e) => setFbTipo(e.target.value)}
+                  className="border rounded px-3 py-2"
+                >
+                  <option value="">Todos</option>
+                  <option value="sugestao">Sugestão</option>
+                  <option value="bug">Erro / Bug</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="text-sm text-gray-700">A partir de</div>
+                <input
+                  type="date"
+                  value={fbFrom}
+                  onChange={(e) => setFbFrom(e.target.value)}
+                  className="border rounded px-3 py-2"
+                />
+              </div>
+
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={fbOnlyUnread}
+                  onChange={(e) => setFbOnlyUnread(e.target.checked)}
+                />
+                Mostrar apenas não lidos
+              </label>
+
+              <button
+                onClick={() => carregarFeedback()}
+                className="px-3 py-2 rounded bg-gray-200 text-sm"
+              >
+                Recarregar
+              </button>
+
+              <div className="ml-auto text-sm text-gray-600">
+                {fbLoading ? "Carregando…" : `${fbItems.length} registros`}
+              </div>
+            </div>
+
+            {fbError && (
+              <div className="mb-3 text-sm text-red-600">{fbError}</div>
+            )}
+
+            <div className="bg-white rounded shadow overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Tipo</th>
+                    <th className="px-3 py-2 text-left">Mensagem</th>
+                    <th className="px-3 py-2 text-left">Usuário</th>
+                    <th className="px-3 py-2 text-left">Data</th>
+                    <th className="px-3 py-2 text-left">Status</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fbItems.map((f) => {
+                    const u = f.usuario;
+                    const nome =
+                      u?.nome ||
+                      u?.nomeDeUsuario ||
+                      "(sem nome)";
+                    const tipoBadge =
+                      f.tipo === "bug"
+                        ? "bg-red-100 text-red-700 border-red-200"
+                        : f.tipo === "sugestao"
+                        ? "bg-green-100 text-green-700 border-green-200"
+                        : "bg-gray-100 text-gray-700 border-gray-200";
+
+                    return (
+                      <tr key={f.id} className="border-t align-top">
+                        <td className="px-3 py-2">
+                          <span
+                            className={`inline-flex px-2 py-1 rounded-full border text-xs font-medium capitalize ${tipoBadge}`}
+                          >
+                            {f.tipo || "outro"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 max-w-xl">
+                          <div className="whitespace-pre-wrap">
+                            {f.mensagem}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          {u ? (
+                            <>
+                              <div className="font-medium">
+                                {nome}
+                              </div>
+                              <div className="text-xs text-gray-600">
+                                {u.email ?? "—"}{" "}
+                                {u.tipo ? `(${u.tipo})` : ""}
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-gray-500 text-xs">
+                              usuário não encontrado
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {formatDate(f.createdAt)}
+                        </td>
+                        <td className="px-3 py-2">
+                          {f.lidoEm ? (
+                            <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
+                              Lido
+                            </span>
+                          ) : (
+                            <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700">
+                              Novo
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {!f.lidoEm && (
+                            <button
+                              onClick={() => marcarFeedbackComoLido(f.id)}
+                              className="text-xs px-3 py-1 rounded bg-green-700 text-white hover:bg-green-800"
+                            >
+                              Marcar como lido
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {!fbLoading && fbItems.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="px-3 py-8 text-center text-gray-500"
+                      >
+                        Nenhum feedback encontrado com os filtros atuais.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

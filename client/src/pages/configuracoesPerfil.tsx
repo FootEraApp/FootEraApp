@@ -1,9 +1,16 @@
+// client/src/pages/configuracoesPerfil
 import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
+
+// ⚠️ Componente que vamos criar depois em client/src/components/Atualizacoes.tsx
+// (arquivo .tsx, importado aqui como .js, igual aos outros componentes do projeto)
+import Atualizacoes from "../components/Atualizacoes.js";
+
+type FeedbackTipo = "sugestao" | "bug";
 
 export default function ConfiguracoesPerfil() {
   const [, setLocation] = useLocation();
@@ -17,6 +24,15 @@ export default function ConfiguracoesPerfil() {
   const [confirmText, setConfirmText] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // 🔔 Novos estados para Atualizações + Feedback
+  const [showUpdatesModal, setShowUpdatesModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackTipo, setFeedbackTipo] = useState<FeedbackTipo>("sugestao");
+  const [feedbackMensagem, setFeedbackMensagem] = useState("");
+  const [feedbackSending, setFeedbackSending] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [feedbackSuccess, setFeedbackSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const token = Storage.token;
@@ -68,6 +84,49 @@ export default function ConfiguracoesPerfil() {
 
   const matchConfirm = confirmText.trim() === REQUIRED_PHRASE;
 
+  // 💌 Envio de feedback (bug / sugestão)
+  async function enviarFeedback(e: React.FormEvent) {
+    e.preventDefault();
+    setFeedbackError(null);
+    setFeedbackSuccess(null);
+
+    const mensagem = feedbackMensagem.trim();
+    if (!mensagem) {
+      setFeedbackError("Digite uma mensagem antes de enviar.");
+      return;
+    }
+
+    try {
+      setFeedbackSending(true);
+
+      const resp = await fetch(`${API.REST}/feedback`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Storage.token}`,
+        },
+        body: JSON.stringify({
+          tipo: feedbackTipo,
+          mensagem,
+        }),
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data?.message || "Não foi possível enviar seu feedback.");
+      }
+
+      setFeedbackSuccess("Feedback enviado com sucesso! Obrigado por ajudar a melhorar a FootEra ⚽");
+      setFeedbackMensagem("");
+      // Se quiser fechar o modal automaticamente depois:
+      // setTimeout(() => setShowFeedbackModal(false), 1500);
+    } catch (err: any) {
+      setFeedbackError(err?.message || "Erro ao enviar seu feedback.");
+    } finally {
+      setFeedbackSending(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-transparent pb-24">
       <header className="bg-green-900 text-white text-center py-3 text-xl font-bold">FOOTERA</header>
@@ -83,6 +142,7 @@ export default function ConfiguracoesPerfil() {
         <ArrowLeft className="h-5 w-5" />
       </Link>
 
+      {/* Conta */}
       <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <h2 className="text-gray-800 font-bold mb-3">Conta</h2>
         <div className="flex justify-between py-2 items-start border-b">
@@ -110,6 +170,7 @@ export default function ConfiguracoesPerfil() {
         </div>
       </div>
 
+      {/* Dados e Privacidade */}
       <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <h2 className="text-gray-800 font-bold mb-3">Dados e Privacidade</h2>
 
@@ -129,6 +190,37 @@ export default function ConfiguracoesPerfil() {
         </div>
       </div>
 
+      {/* 🔄 Atualizações e Feedback */}
+      <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
+        <h2 className="text-gray-800 font-bold mb-1">Atualizações e Feedback</h2>
+        <p className="text-sm text-gray-600 mb-3">
+          Veja o que mudou na FootEra e nos conte como podemos melhorar a plataforma. 🚀
+        </p>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => setShowUpdatesModal(true)}
+            className="w-full sm:w-1/2 inline-flex items-center justify-center rounded-md border border-green-700 text-green-800 px-3 py-2 text-sm font-semibold hover:bg-green-50"
+          >
+            📅 Ver últimas atualizações
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setShowFeedbackModal(true);
+              setFeedbackError(null);
+              setFeedbackSuccess(null);
+            }}
+            className="w-full sm:w-1/2 inline-flex items-center justify-center rounded-md bg-green-700 text-white px-3 py-2 text-sm font-semibold hover:bg-green-800"
+          >
+            💬 Enviar feedback / reportar erro
+          </button>
+        </div>
+      </div>
+
+      {/* Ações da Conta */}
       <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <h2 className="text-gray-800 font-bold mb-3">Ações da Conta</h2>
         <button
@@ -139,6 +231,7 @@ export default function ConfiguracoesPerfil() {
         </button>
       </div>
 
+      {/* Excluir conta */}
       <div className="mx-4 mb-4 rounded-xl shadow bg-white border border-red-200 p-4">
         <h3 className="text-red-700 font-bold text-lg">Excluir conta</h3>
         <p className="text-sm text-red-700 mt-1">
@@ -159,6 +252,7 @@ export default function ConfiguracoesPerfil() {
         </div>
       </div>
 
+      {/* Modal Excluir Conta */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-5">
@@ -215,6 +309,150 @@ export default function ConfiguracoesPerfil() {
         </div>
       )}
 
+      {/* Modal Atualizações */}
+      {showUpdatesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold text-gray-900">Novidades da FootEra</h3>
+              <button
+                type="button"
+                onClick={() => setShowUpdatesModal(false)}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mt-1 mb-3">
+              Acompanhe o que mudou em cada versão da plataforma. Sempre que sair uma atualização,
+              vamos listar aqui o que foi melhorado, corrigido ou lançado. 🙂
+            </p>
+
+            <div className="mt-1 flex-1 overflow-y-auto border-t pt-3">
+              {/* Conteúdo vindo do componente separado Atualizacoes.tsx */}
+              <Atualizacoes />
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowUpdatesModal(false)}
+                className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Feedback */}
+      {showFeedbackModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold text-gray-900">Enviar feedback / reportar erro</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFeedbackModal(false);
+                  setFeedbackError(null);
+                  setFeedbackSuccess(null);
+                }}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mt-1">
+              Sua opinião ajuda a deixar a FootEra cada vez melhor. Conte pra gente o que deu errado
+              ou o que você sente falta na plataforma. ⚽✨
+            </p>
+
+            <form onSubmit={enviarFeedback} className="mt-4 space-y-3">
+              <div>
+                <span className="text-sm font-medium text-gray-700">Tipo de mensagem</span>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFeedbackTipo("sugestao")}
+                    className={`flex-1 rounded-md border px-3 py-2 text-sm ${
+                      feedbackTipo === "sugestao"
+                        ? "border-green-700 bg-green-50 text-green-800 font-semibold"
+                        : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    💡 Sugestão
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFeedbackTipo("bug")}
+                    className={`flex-1 rounded-md border px-3 py-2 text-sm ${
+                      feedbackTipo === "bug"
+                        ? "border-red-600 bg-red-50 text-red-700 font-semibold"
+                        : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    🐞 Erro / Bug
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  Mensagem
+                </label>
+                <textarea
+                  rows={5}
+                  value={feedbackMensagem}
+                  onChange={(e) => setFeedbackMensagem(e.target.value)}
+                  placeholder={
+                    feedbackTipo === "bug"
+                      ? "Conte o que você estava fazendo, em qual tela, e o que aconteceu de estranho..."
+                      : "Conte o que você gostaria de ver na FootEra, melhorias, novas funções..."
+                  }
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-200 resize-none"
+                  required
+                />
+              </div>
+
+              {feedbackError && (
+                <div className="text-sm text-red-600">{feedbackError}</div>
+              )}
+
+              {feedbackSuccess && (
+                <div className="text-sm text-green-700">{feedbackSuccess}</div>
+              )}
+
+              <div className="mt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFeedbackModal(false);
+                    setFeedbackError(null);
+                    setFeedbackSuccess(null);
+                  }}
+                  className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm"
+                  disabled={feedbackSending}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-md bg-green-700 text-white hover:bg-green-800 text-sm disabled:opacity-60"
+                  disabled={feedbackSending}
+                >
+                  {feedbackSending ? "Enviando..." : "Enviar feedback"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Navbar inferior */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
           <House />

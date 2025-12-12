@@ -260,14 +260,18 @@ export default function PaginaPostagem() {
 
   return (
     <div className="min-h-screen bg-[#FEFBE9] pb-24">
-      <div className="h-24 bg-green-900 text-white">
-        <div className="max-w-xl mx-auto h-full px-6 flex items-center justify-center">
-          <div className="flex items-center gap-3">
-            <Flag className="h-7 w-7 opacity-90" />
-            <h1 className="text-xl font-extrabold tracking-wide">Nova Postagem</h1>
-          </div>
-        </div>
-      </div>
+
+<div className="bg-green-900 text-white h-16 sm:h-20">
+  <div className="max-w-xl mx-auto h-full px-6 flex items-center justify-center">
+    <div className="flex items-center gap-3">
+      <Flag className="h-7 w-7 opacity-90" />
+      <h1 className="text-xl font-extrabold tracking-wide">
+        Nova Postagem
+      </h1>
+    </div>
+  </div>
+</div>
+
 
       <div className="p-6 max-w-xl mx-auto">
         <label className="block text-sm font-semibold text-emerald-900 mb-2">Texto da postagem</label>

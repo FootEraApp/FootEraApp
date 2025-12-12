@@ -76,6 +76,7 @@ model Usuario {
   LogAuditoria           LogAuditoria[]
   inscricoesEvento       InscricaoEvento[]
   convitesEvento         InscricaoEvento[]         @relation("ConvitesEvento")
+  feedbacks              Feedback[]
 }
 
 model EmailVerification {
@@ -726,6 +727,20 @@ model LogErro {
   usuarioId    String
   postagem     Postagem @relation(fields: [postagemId], references: [id], onDelete: Cascade)
   usuario      Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+model Feedback {
+  id        String    @id @default(uuid())
+  usuarioId String
+  tipo      String // ex.: "sugestao", "bug"
+  mensagem  String
+  createdAt DateTime  @default(now())
+  lidoEm    DateTime? // quando um admin marcar como lido, opcional
+  meta      Json? // se quiser guardar info extra (página, device, etc.) no futuro
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, createdAt])
 }
 
 model Curtida {

@@ -95,9 +95,9 @@ type AbaExplorar = "atletas" | "escolas" | "clubes" | "profissionais" | "eventos
 type EventoItem = {
   id: string;
   titulo: string;
-  tipo: "PENEIRA" | "EVENTO"; // compatível com EventoTipo
+  tipo: "PENEIRA" | "EVENTO";
   descricao?: string | null;
-  inicio: string;             // ISO string
+  inicio: string;
   fim?: string | null;
   local?: string | null;
   cidade?: string | null;
@@ -116,10 +116,9 @@ type EventoItem = {
     logo?: string | null;
   } | null;
 
-  // campos derivados do backend
-  inscrito?: boolean;         // se o usuário logado já se inscreveu
-  totalInscritos?: number;    // quantidade atual de inscritos
-  convidado?: boolean;        // se recebeu convite (evento privado)
+  inscrito?: boolean;
+  totalInscritos?: number;
+  convidado?: boolean;
 };
 
 const CAT_LABEL: Record<string, string> = {
