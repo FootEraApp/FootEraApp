@@ -1,4 +1,3 @@
-// server/controllers/feedbackController.ts
 import type { Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import type { AuthenticatedRequest, AuthUser } from "../middlewares/auth.js";
@@ -27,8 +26,6 @@ function assertAdmin(req: AuthenticatedRequest) {
 export async function create(req: AuthenticatedRequest, res: Response) {
   try {
     const user = req.authUser;
-
-    console.log("TOKEN USER (authUser) =>", user);
 
     if (!user?.id) {
       return res.status(401).json({ message: "Usuário não autenticado." });
@@ -109,7 +106,6 @@ export async function listAll(req: AuthenticatedRequest, res: Response) {
     }
 
     if (typeof to === "string" && to.trim()) {
-      // inclui o dia inteiro
       const d = new Date(to.trim() + "T23:59:59.999Z");
       if (!where.createdAt) where.createdAt = {};
       where.createdAt.lte = d;
@@ -162,7 +158,6 @@ export async function marcarComoLido(req: AuthenticatedRequest, res: Response) {
     console.error("Erro ao marcar feedback como lido:", err);
 
     if (err?.code === "P2025") {
-      // registro não encontrado
       return res.status(404).json({ message: "Feedback não encontrado." });
     }
 

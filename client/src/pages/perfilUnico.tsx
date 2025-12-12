@@ -15,8 +15,6 @@ import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
 import PerfilProfessor from "../components/perfil/PerfilProfessor.js";
 import PerfilClube from "../components/perfil/PerfilClube.js";
 import PerfilEscola from "../components/perfil/PerfilEscola.js";
-
-// 👇 imports para posts
 import { format } from "date-fns";
 import {
   getFeedPosts,
@@ -36,8 +34,6 @@ interface PerfilMinimo {
   tipo: TipoPerfil;
   usuario: { id: string };
 }
-
-/* ===== Helpers para conquistas (mesmo estilo do feed/perfil) ===== */
 
 type ParsedAchievement = {
   ach?: AchievementLite;
@@ -125,8 +121,6 @@ function AchievementShareCard({ parsed }: { parsed: ParsedAchievement }) {
   );
 }
 
-/* ===== Seção de posts para o perfil único ===== */
-
 function ProfilePostsSection({ usuarioId }: { usuarioId: string }) {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
@@ -137,11 +131,8 @@ function ProfilePostsSection({ usuarioId }: { usuarioId: string }) {
       try {
         setLoadingPosts(true);
 
-        // pega o feed "todos" e filtra só do usuário do perfil
         let dados = await getFeedPosts("todos");
         dados = (dados || []).filter((p) => p.usuario?.id === usuarioId);
-
-        // opcional: ordenar do mais recente pro mais antigo
         dados.sort(
           (a, b) =>
             new Date(b.dataCriacao).getTime() -
@@ -266,8 +257,6 @@ function ProfilePostsSection({ usuarioId }: { usuarioId: string }) {
   );
 }
 
-/* ===== Página PerfilUnico ===== */
-
 export default function PerfilUnico() {
   const { id } = useParams<{ id: string }>();
 
@@ -343,7 +332,6 @@ export default function PerfilUnico() {
       {tipo === "Clube" && <PerfilClube idDaUrl={id} />}
       {tipo === "Escolinha" && <PerfilEscola idDaUrl={id} />}
 
-      {/* 🔥 posts desse usuário (independente do tipo) */}
       {usuarioId && <ProfilePostsSection usuarioId={usuarioId} />}
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">

@@ -1,4 +1,3 @@
-// client/src/pages/eventosEscola.tsx
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";

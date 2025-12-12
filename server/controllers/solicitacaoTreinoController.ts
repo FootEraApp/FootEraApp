@@ -1,4 +1,3 @@
-// server/controllers/solicitacaoTreinoController
 import { Response, Request } from "express";
 import { PrismaClient } from "@prisma/client";
 import { resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
@@ -181,11 +180,9 @@ export async function criarSolicitacao(req: Request, res: Response) {
     return res.status(400).json({ message: "Não é permitido enviar para si mesmo." });
   }
 
-  // 1) Verificar se já existe relação real (RelacaoTreinamento)
   const rel = await prisma.relacaoTreinamento.findFirst({
     where: {
       OR: [
-        // atleta treinado por professor
         {
           atleta: { usuarioId: remetenteId },
           professor: { usuarioId: destinatarioId },
@@ -194,7 +191,6 @@ export async function criarSolicitacao(req: Request, res: Response) {
           atleta: { usuarioId: destinatarioId },
           professor: { usuarioId: remetenteId },
         },
-        // atleta treinado por clube
         {
           atleta: { usuarioId: remetenteId },
           clube: { usuarioId: destinatarioId },
@@ -203,7 +199,6 @@ export async function criarSolicitacao(req: Request, res: Response) {
           atleta: { usuarioId: destinatarioId },
           clube: { usuarioId: remetenteId },
         },
-        // atleta treinado por escolinha
         {
           atleta: { usuarioId: remetenteId },
           escolinha: { usuarioId: destinatarioId },
@@ -216,7 +211,6 @@ export async function criarSolicitacao(req: Request, res: Response) {
     },
   });
 
-  // SE já existe vínculo real → NÃO CRIAR solicitação
   if (rel) {
     return res.status(409).json({
       message: "Vocês já possuem vínculo de treinamento.",
@@ -224,7 +218,6 @@ export async function criarSolicitacao(req: Request, res: Response) {
     });
   }
 
-  // 2) Verificar se já existe solicitação pendente/ativa entre os dois
   const existente = await prisma.solicitacaoTreino.findFirst({
     where: {
       status: { in: ["pendente", "ativa"] },
@@ -236,20 +229,12 @@ export async function criarSolicitacao(req: Request, res: Response) {
   });
 
   if (existente) {
-    // Devolve a existente, sem criar nada novo
     return res.status(200).json({ ...existente, ok: true });
   }
 
-  // 3) Criar uma NOVA solicitação com status "pendente"
   const row = await prisma.solicitacaoTreino.create({
     data: { remetenteId, destinatarioId, status: "pendente" },
   });
-
-  // ❌ IMPORTANTE:
-  // NÃO chama autoVincularAtleta aqui
-  // NÃO muda status para "ativa"
-  // Vínculo REAL só é criado em aceitarSolicitacao / PUT legacy
-
   return res.status(201).json({ ...row, ok: true });
 }
 
@@ -428,7 +413,6 @@ export async function verificarVinculoTreino(req: Request, res: Response) {
       return res.status(401).json({ error: "Não autenticado." });
     }
 
-    // id do outro usuário (perfil que estou vendo)
     const usuarioAlvoId =
       (req.query.usuarioAlvoId as string) ||
       (req.query.alvoId as string) ||
@@ -440,7 +424,6 @@ export async function verificarVinculoTreino(req: Request, res: Response) {
         .json({ error: "Informe usuarioAlvoId na query string." });
     }
 
-    // Buscar os dois usuários
     const usuarios = await prisma.usuario.findMany({
       where: { id: { in: [me, usuarioAlvoId] } },
       select: { id: true, tipo: true },
@@ -453,7 +436,6 @@ export async function verificarVinculoTreino(req: Request, res: Response) {
       return res.status(404).json({ error: "Usuário não encontrado." });
     }
 
-    // helper local para resolver ids de Atleta/Professor/Clube/Escolinha
     async function getIdsByTipo(
       usuarioId: string,
       tipo?: string
@@ -493,11 +475,8 @@ export async function verificarVinculoTreino(req: Request, res: Response) {
       }
     }
 
-    // Resolver IDs das entidades envolvidas
     const idsMe = await getIdsByTipo(uMe.id, uMe.tipo);
     const idsAlvo = await getIdsByTipo(uAlvo.id, uAlvo.tipo);
-
-    // Consolidar: queremos um atleta + (professor | clube | escolinha)
     const atletaId = idsMe.atletaId || idsAlvo.atletaId;
     const professorId = idsMe.professorId || idsAlvo.professorId;
     const clubeId = idsMe.clubeId || idsAlvo.clubeId;
@@ -517,10 +496,9 @@ export async function verificarVinculoTreino(req: Request, res: Response) {
       });
     }
 
-    // Montar filtro dinâmico para RelacaoTreinamento
     const where: any = {
       atletaId,
-      encerradoEm: null, // só vínculo ativo
+      encerradoEm: null, 
     };
     if (professorId) where.professorId = professorId;
     if (clubeId) where.clubeId = clubeId;
