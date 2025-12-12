@@ -1,4 +1,3 @@
-// server/index
 import express from "express";
 import cors from "cors";
 import path, { dirname } from "path";
@@ -96,6 +95,7 @@ import consentimentoRoutes from "./routes/consentimento.js";
 import metricsRoutes from "./routes/metrics.js";
 import treinarJuntosRoute from "./routes/treinarJuntos.js";
 import feedbackRoutes from "./routes/feedback.js";
+import sessoesTurmaRoutes from "./routes/sessoesTurma.js";
 
 import { handlePaymentWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
@@ -274,12 +274,13 @@ app.use("/api/olheiro/listas", listasOlheiroRoutes);
 app.use("/api/auditoria", auditoriaRouter);
 app.use("/api/ads", adsRoutes);
 app.use("/api/consentimento", authenticateToken, consentimentoRoutes);
-app.use("/api", authenticateToken, treinoLivreRoutes);
-app.use("/api", authenticateToken, scoutNotesRoutes);
 app.use("/api/jogos-elenco", jogosElencoRoutes);
 app.use("/api/treinar-juntos", treinarJuntosRoute);
 app.use("/api/feedback", feedbackRoutes);
 
+app.use("/api/sessoes-turma", sessoesTurmaRoutes);
+app.use("/api", authenticateToken, treinoLivreRoutes);
+app.use("/api", authenticateToken, scoutNotesRoutes);
 
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);

@@ -113,7 +113,6 @@ export default function ProfileHeader({
     onYes: () => Promise<void> | void;
   } | null>(null);
 
-  // badge de notificações
   useEffect(() => {
     const onBadge = (e: Event) => {
       const total = (e as CustomEvent<number>).detail ?? 0;
@@ -513,21 +512,19 @@ export default function ProfileHeader({
         });
 
         if (minhaComEsseUsuario) {
-
           setTreinoJunto(true);
           setSouSolicitanteTreino(true);
           localStorage.setItem(storageKey, "1");
         } else if (recebidaDesseUsuario) {
-
           setTreinoJunto(true);
           setSouSolicitanteTreino(false);
           localStorage.removeItem(storageKey);
         } else {
-
           setTreinoJunto(false);
           setSouSolicitanteTreino(null);
           localStorage.removeItem(storageKey);
         }
+
       } catch {
         setTreinoJunto(false);
         setSouSolicitanteTreino(null);
@@ -1086,16 +1083,13 @@ export default function ProfileHeader({
     treinoLabel = "...";
     treinoTitle = "Carregando...";
   } else if (temVinculoTreino) {
-
     treinoLabel = "Já treino junto";
     treinoTitle = "Vocês já possuem vínculo de treinamento";
   } else if (treinoJunto && souSolicitanteTreino) {
-
     treinoLabel = "Solicitação enviada";
     treinoTitle = "Cancelar solicitação de treino em conjunto";
     treinoBtnClass = "bg-white/10 text-white border border-white/40";
   } else if (treinoJunto && souSolicitanteTreino === false) {
-
     treinoLabel = "Responder convite";
     treinoTitle = "Você recebeu um convite para treinar junto";
     treinoBtnClass = "bg-amber-300 text-green-900";

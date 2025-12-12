@@ -173,13 +173,7 @@ export function canDetailed(user: UserContext, cap: Capability, want = 1) {
     planoEfetivo,
   });
 
-  if (
-    cap === "agendamento.lote" &&
-    (papelEfetivo === "professor" ||
-      papelEfetivo === "escolinha" ||
-      papelEfetivo === "admin" ||
-      user?.isAdmin)
-  ) {
+  if (cap === "agendamento.pessoal" || cap === "agendamento.lote") {
     return { ok: true, http: 200 as const, reason: "ok" };
   }
 
@@ -188,9 +182,7 @@ export function canDetailed(user: UserContext, cap: Capability, want = 1) {
 
   const needPlan =
     planoEfetivo === "FREE" &&
-    ["agendamento.pessoal", "agendamento.lote", "templates:criar", "templates"].includes(
-      cap
-    );
+    ["templates:criar", "templates"].includes(cap);
 
   return {
     ok: false,
