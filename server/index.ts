@@ -94,7 +94,6 @@ import adsRoutes from "./routes/ads.js";
 import consentimentoRoutes from "./routes/consentimento.js";
 import metricsRoutes from "./routes/metrics.js";
 import treinarJuntosRoute from "./routes/treinarJuntos.js";
-import feedbackRoutes from "./routes/feedback.js";
 import sessoesTurmaRoutes from "./routes/sessoesTurma.js";
 
 import { handlePaymentWebhook } from "./controllers/billingController.js";
@@ -113,7 +112,6 @@ const envCandidates = [
 for (const p of envCandidates) {
   if (fs.existsSync(p)) {
     dotenv.config({ path: p });
-    console.log("🔑 .env carregado de:", p);
     break;
   }
 }
@@ -165,7 +163,6 @@ app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
 if (NODE_ENV !== "production") {
   app.use((req, _res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
     next();
   });
 }
@@ -276,8 +273,6 @@ app.use("/api/ads", adsRoutes);
 app.use("/api/consentimento", authenticateToken, consentimentoRoutes);
 app.use("/api/jogos-elenco", jogosElencoRoutes);
 app.use("/api/treinar-juntos", treinarJuntosRoute);
-app.use("/api/feedback", feedbackRoutes);
-
 app.use("/api/sessoes-turma", sessoesTurmaRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
@@ -296,11 +291,9 @@ cron.schedule("0 4 * * *", async () => {
   await prisma.atletaHistoricoVinculo.deleteMany({
     where: { expiraEm: { lt: now } },
   });
-  console.log("[CRON] Histórico de vínculos de atletas limpo");
 });
 
 cron.schedule("0 3 * * *", async () => {
-  console.log("[CRON] Rodando verificação diária de assinaturas...");
   await processarRenovacoesDiarias();
   runColdStorageJob().catch((e) => console.error("Cold storage job failed", e));
 });

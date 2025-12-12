@@ -53,7 +53,6 @@ export const treinosLivresController = {
 
   async create(req: Request, res: Response) {
     try {
-      // se estiver usando multer, os campos vêm como string aqui
       const {
         atletaId,
         data,
@@ -85,7 +84,6 @@ export const treinosLivresController = {
         });
       }
 
-      // ⬅️ pega o arquivo salvo pelo multer (se tiver)
       const file = (req as any).file as Express.Multer.File | undefined;
       const urlEvidencia = file
         ? `/uploads/treinos-livres/${file.filename}`
@@ -99,11 +97,10 @@ export const treinosLivresController = {
           duracaoMin: Number(duracaoMin) || 0,
           tipoAtividade: tipoAtividade || null,
           categoria: categoria || null,
-          urlEvidencia, // salva caminho da foto/vídeo
+          urlEvidencia, 
         },
       });
 
-      // 🔹 registra atividade recente para o perfil do atleta (mantive sua lógica)
       try {
         const atleta = await prisma.atleta.findUnique({
           where: { id: String(atletaId) },
@@ -120,7 +117,6 @@ export const treinosLivresController = {
           });
         }
       } catch {
-        // não quebra o fluxo
       }
 
       return res.status(201).json(novo);

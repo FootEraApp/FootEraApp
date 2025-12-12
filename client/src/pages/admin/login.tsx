@@ -1,4 +1,3 @@
-// client/src/pages/admin/login.tsx
 import { useEffect, useState, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import axios from "axios";
@@ -72,7 +71,7 @@ const EyeOff = (p: SvgProps) => (
 const isE2E = typeof window !== "undefined" && (window as any).Cypress;
 
 export default function AdminLogin() {
-  const [usuario, setUsuario] = useState(""); // pode ser email OU nomeDeUsuario
+  const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [lembrarDeMim, setLembrarDeMim] = useState(true);
@@ -108,7 +107,6 @@ export default function AdminLogin() {
       ""
     ).toLowerCase();
 
-    // se já está logado e for admin -> vai direto pro admin
     if (tipo === "admin") navigate("/admin");
   }, []);
 
@@ -124,15 +122,9 @@ export default function AdminLogin() {
     clearAuth();
 
     try {
-      // ✅ mesma rota do login normal
       const url = `${API.BASE_URL}/api/auth/login`;
-
-      // ✅ mesma ideia do login normal: manda nomeDeUsuario
-      // (se você estiver digitando email aqui, o backend precisa aceitar email como login,
-      //  senão use o nomeDeUsuario do admin)
       const resp = await axios.post(url, { nomeDeUsuario: usuario, senha });
       const data = resp.data ?? {};
-
       const user = data.usuario ?? {};
       const token = data.token;
       const usuarioId = user.id ?? data.id ?? "";
@@ -156,25 +148,19 @@ export default function AdminLogin() {
       }
 
       const plano = user.plano ?? data.plano ?? "FREE";
-
       const store = lembrarDeMim ? localStorage : sessionStorage;
 
-      // ✅ igual ao login normal: grava em ambos para evitar “sumir” em telas
       sessionStorage.setItem("token", token);
       localStorage.setItem("token", token);
-
       sessionStorage.setItem("usuarioId", usuarioId);
       localStorage.setItem("usuarioId", usuarioId);
-
       sessionStorage.setItem("nomeUsuario", usuarioNome);
       localStorage.setItem("nomeUsuario", usuarioNome);
 
-      // tipo vindo do servidor (normalizado)
       const tipoServer = String(user.tipo || data.tipo || "admin").toLowerCase();
       sessionStorage.setItem("tipoUsuario", tipoServer);
       localStorage.setItem("tipoUsuario", tipoServer);
 
-      // força tipo admin no store “principal”
       store.setItem("tipoUsuario", "admin");
       store.setItem("usuarioTipoRaw", rawTipo);
 
@@ -188,7 +174,6 @@ export default function AdminLogin() {
       sessionStorage.setItem("plano", String(plano));
       localStorage.setItem("plano", String(plano));
 
-      // mantém compat com código que lê Storage.token
       try {
         (window as any).Storage = (window as any).Storage || {};
         (window as any).Storage.token = token;

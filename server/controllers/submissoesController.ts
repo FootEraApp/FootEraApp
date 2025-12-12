@@ -117,13 +117,6 @@ export async function criarSubmissaoTreinoUpload(
           ? Math.max(1, Number(duracaoMinutos))
           : undefined;
 
-    console.log("[SUBMISSAO TREINO] tempoSeg recebido:", tempoSeg,
-      "tempoSegNum:", tempoSegNum,
-      "duracaoMinutosFinal:", duracaoMinutosFinal,
-      "treinoAgendadoId:", treinoAgendadoId,
-      "atletaId:", atletaId
-    );
-
     let penalidadeAtraso = false;
     let minutosConsiderados: number | undefined =
       minutosReais ?? minutosProgramados ?? undefined;
@@ -537,14 +530,6 @@ export async function criarSubmissaoTreinoSessaoUpload(
           : undefined;
 
     const minutosReais = toMinutos(tempoRealSeg);
-
-    console.log("[SUBMISSAO SESSAO] tempoSeg recebido:", tempoSeg,
-      "tempoSegNum:", tempoSegNum,
-      "tempoRealSeg:", tempoRealSeg,
-      "minutosReais:", minutosReais,
-      "minutosProgramados:", minutosProgramados,
-      "sessaoId:", sessaoId
-    );
 
     let minutosConsiderados: number | undefined = minutosReais ?? minutosProgramados ?? undefined;
 
