@@ -40,6 +40,6 @@ export type ExItemUI = {
   repeticoes?: string | null;
   ordem?: number;
   series?: string; 
-  exercicioId?: string; // 👈 ADD
+  exercicioId?: string; 
   repeticoesTexto?: string | null;
 };

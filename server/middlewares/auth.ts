@@ -36,14 +36,6 @@ function toTipoUsuario(s: string): TipoUsuario {
 export const authenticateToken: RequestHandler = async (req, res, next) => {
   const auth = req.headers.authorization || "";
 
-  console.log(
-    "[AUTH] header em",
-    req.method,
-    req.originalUrl,
-    "=",
-    auth || "<vazio>",
-  );
-
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : auth;
 
   if (!token) {
