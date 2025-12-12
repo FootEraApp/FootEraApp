@@ -433,7 +433,7 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
       return res.json([]);
     }
 
-    // 0) Treinos livres (tabela TreinoLivre = o que você usa em treinosLivresHistorico)
+
     const treinosLivres = await prisma.treinoLivre.findMany({
       where: { atletaId: atleta.id },
       orderBy: { data: "desc" },
@@ -451,19 +451,19 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
       }))
     );
 
-    // 1) Submissões de treino (somente o que já foi submetido)
+
     const subsTreino = await prisma.submissaoTreino.findMany({
       where: {
         atletaId: atleta.id,
         OR: [
-          // Treino Livre: sempre entra se o snapshot tiver "livre"
+
           {
             treinoTituloSnapshot: {
               contains: "livre",
               mode: "insensitive",
             },
           },
-          // Outros treinos: só se APROVADOS e com mídia/observação
+
           {
             AND: [
               { aprovado: true as any },
@@ -519,7 +519,6 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
       }))
     );
 
-    // 3) Desafios em grupo
     const parts = await getParticipacoesGrupo(userId, atleta.id);
     const itensGrupo = parts.map(mapGrupoToAtividade);
 
@@ -533,9 +532,9 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
       }))
     );
 
-    // 4) Monta os cards finais
+
     const itens = [
-      // Treino Livre vindo da tabela TreinoLivre
+
       ...treinosLivres.map((t: any) => ({
         id: `tl-${t.id}`,
         tipo: "Treino Livre",
@@ -549,7 +548,6 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
         pontuacao: 0,
       })),
 
-      // Submissões de treino (programados + livres submetidos)
       ...subsTreino.map((s: any) => {
         const dur =
           s.duracaoMinutos ??
@@ -832,7 +830,6 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
     });
 
     if (atleta) {
-// Buscar vínculos reais via RelacaoTreinamento
 const vinculos = await prisma.relacaoTreinamento.findMany({
   where: { atletaId: atleta.id, encerradoEm: null },
   include: {
@@ -842,7 +839,6 @@ const vinculos = await prisma.relacaoTreinamento.findMany({
   }
 });
 
-// Escolher vínculos mais recentes
 let professorMin = null;
 let escolaMin = null;
 let clubeMin = null;
@@ -853,7 +849,6 @@ for (const v of vinculos) {
   if (v.clube)      clubeMin    = v.clube;
 }
 
-// Aplicar fallback APENAS se não houver vínculo real
 if (!escolaMin && atleta.escolinhaId) {
   escolaMin = await prisma.escolinha.findUnique({
     where: { id: atleta.escolinhaId },
@@ -884,7 +879,6 @@ dadosEspecificos = {
   seloQualidade: atleta.seloQualidade,
   foto: atleta.foto,
 
-  // Agroa SEMPRE vindo da RelacaoTreinamento
   escola: escolaMin?.nome ?? null,
   clube: clubeMin?.nome ?? null,
   professor: professorMin?.nome ?? null,

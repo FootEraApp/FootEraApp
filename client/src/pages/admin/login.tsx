@@ -1,6 +1,9 @@
+// client/src/pages/admin/login.tsx
 import { useEffect, useState, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
+import axios from "axios";
 import { API } from "../../config.js";
+import Storage from "../../../../server/utils/storage.js";
 import logo from "/assets/usuarios/footera-logo.png";
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
@@ -66,99 +69,136 @@ const EyeOff = (p: SvgProps) => (
   </svg>
 );
 
-const toLower = (v: any) => (v ?? "").toString().trim().toLowerCase();
+const isE2E = typeof window !== "undefined" && (window as any).Cypress;
 
 export default function AdminLogin() {
-  const [usuario, setUsuario] = useState("");
+  const [usuario, setUsuario] = useState(""); // pode ser email OU nomeDeUsuario
   const [senha, setSenha] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [lembrarDeMim, setLembrarDeMim] = useState(true);
   const [erro, setErro] = useState("");
   const [, navigate] = useLocation();
   const [infoAberto, setInfoAberto] = useState(false);
 
-  function persistAuth(user: any, token: string) {
-    const storages = [localStorage, sessionStorage];
-
-    for (const store of storages) {
-      try {
-        store.setItem("token", token);
-        store.setItem("usuarioId", user.id);
-        store.setItem(
-          "nomeUsuario",
-          user.nome || user.nomeDeUsuario || "Administrador"
-        );
-        store.setItem(
-          "tipoUsuario",
-          String(user.tipo || "admin").toLowerCase()
-        );
-      } catch {
-      }
-    }
-
-    try {
-      (window as any).Storage = (window as any).Storage || {};
-      (window as any).Storage.token = token;
-    } catch {
-    }
-  }
-
   function clearAuth() {
     try {
-      if (typeof localStorage !== "undefined") {
-        localStorage.clear();
-      }
-      if (typeof sessionStorage !== "undefined") {
-        sessionStorage.clear();
-      }
-
-      if ((window as any)?.Storage) {
-        (window as any).Storage = {};
-      }
-    } catch {
-    }
+      ["token", "usuarioId", "nomeUsuario", "tipoUsuario", "usuarioTipoRaw", "tipoUsuarioId", "plano"].forEach(
+        (k) => {
+          localStorage.removeItem(k);
+          sessionStorage.removeItem(k);
+        }
+      );
+      if ((window as any)?.Storage) (window as any).Storage = {};
+    } catch {}
   }
 
   useEffect(() => {
-    clearAuth();
+    if (isE2E) return;
+
+    const token =
+      Storage.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token");
+
+    if (!token) return;
+
+    const tipo = (
+      localStorage.getItem("tipoUsuario") ||
+      sessionStorage.getItem("tipoUsuario") ||
+      ""
+    ).toLowerCase();
+
+    // se já está logado e for admin -> vai direto pro admin
+    if (tipo === "admin") navigate("/admin");
   }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setErro("");
 
+    if (!usuario || !senha) {
+      setErro("Por favor, preencha todos os campos.");
+      return;
+    }
+
     clearAuth();
 
     try {
-      const res = await fetch(`${API.BASE_URL}/api/admin/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: usuario, senha }),
-      });
+      // ✅ mesma rota do login normal
+      const url = `${API.BASE_URL}/api/auth/login`;
 
-      const data = await res.json();
+      // ✅ mesma ideia do login normal: manda nomeDeUsuario
+      // (se você estiver digitando email aqui, o backend precisa aceitar email como login,
+      //  senão use o nomeDeUsuario do admin)
+      const resp = await axios.post(url, { nomeDeUsuario: usuario, senha });
+      const data = resp.data ?? {};
 
-      if (!res.ok) {
-        return setErro(data?.message || "Erro ao fazer login.");
-      }
+      const user = data.usuario ?? {};
+      const token = data.token;
+      const usuarioId = user.id ?? data.id ?? "";
+      const usuarioNome = user.nomeDeUsuario ?? user.nome ?? data.nomeDeUsuario ?? "Administrador";
+      const rawTipo = String(user.tipo ?? data.tipo ?? "").toLowerCase();
 
-      const token: string | undefined = data.token;
-      const user = data.usuario ?? data.user ?? {};
-      const tipo = toLower(user.tipo ?? data.tipo);
       const isAdmin =
-        tipo === "admin" || user.isAdmin === true || data.isAdmin === true;
+        rawTipo === "admin" ||
+        user.isAdmin === true ||
+        data.isAdmin === true ||
+        String(user.tipo ?? "").toLowerCase() === "admin";
 
-      if (!token) {
-        return setErro("Resposta inválida do servidor (sem token).");
+      if (!token || !usuarioId) {
+        setErro("Resposta inválida do servidor (sem token/usuarioId).");
+        return;
       }
+
       if (!isAdmin) {
-        return setErro("Você não é um administrador.");
+        setErro("Você não é um administrador.");
+        return;
       }
 
-      persistAuth(user, token);
+      const plano = user.plano ?? data.plano ?? "FREE";
+
+      const store = lembrarDeMim ? localStorage : sessionStorage;
+
+      // ✅ igual ao login normal: grava em ambos para evitar “sumir” em telas
+      sessionStorage.setItem("token", token);
+      localStorage.setItem("token", token);
+
+      sessionStorage.setItem("usuarioId", usuarioId);
+      localStorage.setItem("usuarioId", usuarioId);
+
+      sessionStorage.setItem("nomeUsuario", usuarioNome);
+      localStorage.setItem("nomeUsuario", usuarioNome);
+
+      // tipo vindo do servidor (normalizado)
+      const tipoServer = String(user.tipo || data.tipo || "admin").toLowerCase();
+      sessionStorage.setItem("tipoUsuario", tipoServer);
+      localStorage.setItem("tipoUsuario", tipoServer);
+
+      // força tipo admin no store “principal”
+      store.setItem("tipoUsuario", "admin");
+      store.setItem("usuarioTipoRaw", rawTipo);
+
+      const tipoUsuarioId =
+        data.tipoUsuarioId ||
+        data?.administrador?.id ||
+        null;
+      if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
+
+      store.setItem("plano", String(plano));
+      sessionStorage.setItem("plano", String(plano));
+      localStorage.setItem("plano", String(plano));
+
+      // mantém compat com código que lê Storage.token
+      try {
+        (window as any).Storage = (window as any).Storage || {};
+        (window as any).Storage.token = token;
+      } catch {}
 
       navigate("/admin");
-    } catch {
-      setErro("Erro de conexão com o servidor.");
+    } catch (err: any) {
+      console.error("Erro no login admin:", err?.response?.status, err?.response?.data || err?.message);
+      const data = err?.response?.data;
+      setErro(data?.message || "Nome de usuário ou senha inválidos.");
     }
   }
 
@@ -257,8 +297,8 @@ export default function AdminLogin() {
 
             <form onSubmit={handleLogin} className="mt-2 text-left">
               <input
-                type="email"
-                placeholder="Email do Usuário"
+                type="text"
+                placeholder="Nome de usuário do Admin"
                 value={usuario}
                 onChange={(e) => setUsuario(e.target.value)}
                 required
@@ -286,6 +326,15 @@ export default function AdminLogin() {
                   {mostrarSenha ? <EyeOff /> : <Eye />}
                 </button>
               </div>
+
+              <label className="mb-4 flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={lembrarDeMim}
+                  onChange={(e) => setLembrarDeMim(e.target.checked)}
+                />
+                Lembrar de mim
+              </label>
 
               <button
                 type="submit"

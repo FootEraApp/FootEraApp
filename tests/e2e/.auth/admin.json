@@ -1,0 +1,30 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:5173",
+      "localStorage": [
+        {
+          "name": "token",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImViMDJmZmZjLTQ1YmItNDY1ZS1iNjc2LTRlMTFmNGFkODI0ZSIsInRpcG8iOiJBZG1pbiIsImlhdCI6MTc2NTU1NTQzNSwiZXhwIjoxNzY2MTYwMjM1fQ.eIlRYy3DJGo-aZUxpZAWb4ElEVzHDUbTnXcD5p-m_3Q"
+        },
+        {
+          "name": "tipoUsuario",
+          "value": "admin"
+        },
+        {
+          "name": "nomeUsuario",
+          "value": "admin"
+        },
+        {
+          "name": "plano",
+          "value": "FREE"
+        },
+        {
+          "name": "usuarioId",
+          "value": "eb02fffc-45bb-465e-b676-4e11f4ad824e"
+        }
+      ]
+    }
+  ]
+}

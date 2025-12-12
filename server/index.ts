@@ -95,6 +95,7 @@ import adsRoutes from "./routes/ads.js";
 import consentimentoRoutes from "./routes/consentimento.js";
 import metricsRoutes from "./routes/metrics.js";
 import treinarJuntosRoute from "./routes/treinarJuntos.js";
+import feedbackRoutes from "./routes/feedback.js";
 
 import { handlePaymentWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
@@ -277,6 +278,8 @@ app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
 app.use("/api/jogos-elenco", jogosElencoRoutes);
 app.use("/api/treinar-juntos", treinarJuntosRoute);
+app.use("/api/feedback", feedbackRoutes);
+
 
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
