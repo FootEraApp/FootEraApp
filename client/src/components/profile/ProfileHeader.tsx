@@ -1,4 +1,3 @@
-// client/src/components/profile/ProfileHeader
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Users, Settings, Edit, Bell, Mail, CircleX, CircleCheck, Send, Eye, UserPlus, Share2 } from "lucide-react";
@@ -98,7 +97,6 @@ export default function ProfileHeader({
     onYes: () => Promise<void> | void;
   } | null>(null);
 
-  // badge de notificações
   useEffect(() => {
     const onBadge = (e: Event) => {
       const total = (e as CustomEvent<number>).detail ?? 0;
@@ -116,8 +114,6 @@ export default function ProfileHeader({
     setPerfilTipoId(perfilTipoIdProp ?? null);
   }, [perfilTipoIdProp]);
 
-
-  // carregar dados do perfil (tipo, atletaId, tipoUsuarioId, etc.)
   useEffect(() => {
     if (isOwnProfile || !perfilId) {
       setPodeObservar(false);
@@ -127,7 +123,6 @@ export default function ProfileHeader({
       return;
     }
 
-    // ✅ Se o pai já passou tipo / tipoUsuarioId, usa e NÃO faz fetch
     if (perfilTipoIdProp || perfilTipoProp) {
       setPerfilTipo(perfilTipoProp ?? null);
       setPerfilTipoId(perfilTipoIdProp ?? null);
@@ -176,11 +171,6 @@ export default function ProfileHeader({
       });
   }, [perfilId, isOwnProfile, perfilTipoIdProp, perfilTipoProp]);
 
-
-  // checar se já existe vínculo REAL de treino
-  // 1) usuario x usuario  -> /api/solicitacoes-treino/vinculo?usuarioAlvoId=USUARIO_ID
-  // 2) professor x atleta -> /api/treinos/atletas-vinculados?professorId=PROFESSOR_ID
-  // 3) clube/escolinha x atleta -> /api/gerenciar/atletas?vinculo=clube|escolinha&id=ENTIDADE_ID
   useEffect(() => {
     if (isOwnProfile || !perfilId) return;
 
@@ -213,20 +203,9 @@ export default function ProfileHeader({
         const perfilEhClube = tipoPerfilLower === "clube";
         const perfilEhEscolinha = tipoPerfilLower === "escolinha";
 
-        const entidadeId = perfilTipoIdProp || perfilTipoId || null; // Professor.id / Clube.id / Escolinha.id
-
-        // 🔹 1) vínculo genérico usuario x usuario
-        //    aqui SEMPRE usa o id do USUÁRIO do perfil (perfilId)
+        const entidadeId = perfilTipoIdProp || perfilTipoId || null; 
         try {
           const usuarioAlvoId = perfilId;
-
-          console.log("[ProfileHeader] checando vínculo REAL (genérico)", {
-            perfilId,
-            usuarioAlvoId,
-            perfilTipo,
-            perfilTipoId,
-            perfilTipoIdProp,
-          });
 
           const resp = await fetch(
             `${API.BASE_URL}/api/solicitacoes-treino/vinculo?usuarioAlvoId=${encodeURIComponent(
@@ -251,13 +230,8 @@ export default function ProfileHeader({
           );
         }
 
-        // 🔹 2) professor x atleta -> /treinos/atletas-vinculados?professorId=PROFESSOR_ID
         if (!temVinculo && souAtleta && perfilEhProfessor && entidadeId && meuTipoId) {
           try {
-            console.log("[ProfileHeader] checando vínculo via atletas-vinculados (professor)", {
-              professorId: entidadeId,
-              meuTipoId,
-            });
 
             const url = `${API.BASE_URL}/api/treinos/atletas-vinculados?professorId=${encodeURIComponent(
               entidadeId
@@ -281,9 +255,6 @@ export default function ProfileHeader({
 
               if (achou) {
                 temVinculo = true;
-                console.log(
-                  "[ProfileHeader] vínculo encontrado em atletas-vinculados (professor, estado 3)"
-                );
               }
             }
           } catch (e) {
@@ -294,7 +265,6 @@ export default function ProfileHeader({
           }
         }
 
-        // 🔹 3) clube / escolinha x atleta -> /gerenciar/atletas?vinculo=...&id=ENTIDADE_ID
         if (
           !temVinculo &&
           souAtleta &&
@@ -304,11 +274,6 @@ export default function ProfileHeader({
         ) {
           try {
             const vinculoTipo = perfilEhClube ? "clube" : "escolinha";
-
-            console.log(
-              "[ProfileHeader] checando vínculo via gerenciar/atletas",
-              { vinculoTipo, entidadeId, meuTipoId }
-            );
 
             const url = `${API.BASE_URL}/api/gerenciar/atletas?vinculo=${encodeURIComponent(
               vinculoTipo
@@ -332,9 +297,6 @@ export default function ProfileHeader({
 
               if (achou) {
                 temVinculo = true;
-                console.log(
-                  "[ProfileHeader] vínculo encontrado em gerenciar/atletas (clube/escolinha, estado 3)"
-                );
               }
             }
           } catch (e) {
@@ -423,7 +385,6 @@ export default function ProfileHeader({
           );
         };
 
-        // 👇 Solicitações que EU enviei para esse perfil
         const minhaComEsseUsuario = (arrMinhas || []).find((x: any) => {
           const envolvidos: string[] = [
             x.destinatarioId,
@@ -433,7 +394,6 @@ export default function ProfileHeader({
           return envolvidos.includes(perfilId) && isAtiva(x);
         });
 
-        // 👇 Solicitações que EU recebi desse perfil
         const recebidaDesseUsuario = (arrRecebidas || []).find((x: any) => {
           const envolvidos: string[] = [
             x.remetenteId,
@@ -445,10 +405,10 @@ export default function ProfileHeader({
 
         if (minhaComEsseUsuario) {
           setTreinoJunto(true);
-          setSouSolicitanteTreino(true);   // ESTADO 2 (solicitação criada) – só pra quem enviou
+          setSouSolicitanteTreino(true); 
         } else if (recebidaDesseUsuario) {
           setTreinoJunto(true);
-          setSouSolicitanteTreino(false);  // recebi convite
+          setSouSolicitanteTreino(false);  
         } else {
           const cache = localStorage.getItem(storageKey) === "1";
           setTreinoJunto(cache ? true : false);
@@ -900,16 +860,13 @@ const observarAtleta = async (
     treinoLabel = "...";
     treinoTitle = "Carregando...";
   } else if (temVinculoTreino) {
-    // ESTADO 3 – já existe relação
     treinoLabel = "Já treino junto";
     treinoTitle = "Vocês já possuem vínculo de treinamento";
   } else if (treinoJunto && souSolicitanteTreino) {
-    // ESTADO 2 – eu enviei a solicitação
     treinoLabel = "Solicitação enviada";
     treinoTitle = "Cancelar solicitação de treino em conjunto";
     treinoBtnClass = "bg-white/10 text-white border border-white/40";
   } else if (treinoJunto && souSolicitanteTreino === false) {
-    // Tenho convite pendente
     treinoLabel = "Responder convite";
     treinoTitle = "Você recebeu um convite para treinar junto";
     treinoBtnClass = "bg-amber-300 text-green-900";
