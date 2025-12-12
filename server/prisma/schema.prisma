@@ -77,6 +77,7 @@ model Usuario {
   inscricoesEvento       InscricaoEvento[]
   convitesEvento         InscricaoEvento[]         @relation("ConvitesEvento")
   feedbacks              Feedback[]
+  SessaoTreinoTurma      SessaoTreinoTurma[]
 }
 
 model EmailVerification {
@@ -112,7 +113,7 @@ model Professor {
   cref                String?
   areaFormacao        String
   escola              String?
-  fotoUrl             String?              @unique
+  fotoUrl             String?              
   nome                String               @unique
   usuarioId           String?              @unique
   statusCref          StatusCref?
@@ -262,6 +263,7 @@ model Atleta {
   contatoOlheiroConsentidoEm    DateTime?
   contatoOlheiroConsentidoPorId String?
   AtletaHistoricoVinculo        AtletaHistoricoVinculo[]
+  PresencaSessaoTreino          PresencaSessaoTreino[]
 
   @@index([perfilTipoTreino])
   @@index([professorId])
@@ -299,6 +301,7 @@ model TreinoProgramado {
   EstatisticaTreino        EstatisticaTreino[]
   TreinoProfessorUso       TreinoProfessorUso[]
   TreinoRotinaItem         TreinoRotinaItem[]
+  SessaoTreinoTurma        SessaoTreinoTurma[]
 }
 
 model TreinoProgramadoExercicio {
@@ -318,27 +321,30 @@ model TreinoProgramadoExercicio {
 }
 
 model Exercicio {
-  id                         String                      @id @default(uuid())
-  codigo                     String                      @unique
-  nome                       String                      @unique
+  id                         String                       @id @default(uuid())
+  codigo                     String                       @unique
+  nome                       String                       @unique
   descricao                  String?
   nivel                      Nivel
   categorias                 Categoria[]
-  videoDemonstrativoUrl      String?                     @unique
+  videoDemonstrativoUrl      String?                      
   treinoProgramadoExercicios TreinoProgramadoExercicio[]
   EstatisticaExercicio       EstatisticaExercicio[]
+  SessaoTreinoTurmaExercicio SessaoTreinoTurmaExercicio[]
 }
 
 model ExercicioTemporario {
-  id                 String                      @id @default(uuid())
-  treinoProgramadoId String
-  codigo             String?
-  nome               String
-  descricao          String?
-  nivel              Nivel
-  categorias         Categoria[]
-  treinoProgramado   TreinoProgramado            @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
-  treinos            TreinoProgramadoExercicio[]
+  id                         String                       @id @default(uuid())
+  treinoProgramadoId         String
+  codigo                     String?
+  nome                       String
+  descricao                  String?
+  nivel                      Nivel
+  videoDemonstrativoUrl      String?
+  categorias                 Categoria[]
+  treinoProgramado           TreinoProgramado             @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+  treinos                    TreinoProgramadoExercicio[]
+  SessaoTreinoTurmaExercicio SessaoTreinoTurmaExercicio[]
 
   @@index([treinoProgramadoId])
 }
@@ -347,7 +353,7 @@ model DesafioOficial {
   id               String             @id @default(uuid())
   titulo           String             @unique
   descricao        String
-  imagemUrl        String?            @unique
+  imagemUrl        String?            
   nivel            Nivel
   categoria        Categoria[]
   createdAt        DateTime           @default(now())
@@ -381,7 +387,7 @@ model RelacaoTreinamento {
   clube         Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha     Escolinha? @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
   professor     Professor? @relation("RelacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
-  encerradoEm   DateTime?  @default(now())
+  encerradoEm   DateTime?  
 
   @@unique([professorId, atletaId, escolinhaId, clubeId])
 }
@@ -443,7 +449,7 @@ model Postagem {
 
 model Midia {
   id                 String       @id @default(uuid())
-  url                String       @unique
+  url                String       
   tipo               TipoMidia
   dataCriacao        DateTime     @default(now())
   dataEnvio          DateTime
@@ -591,7 +597,7 @@ model SubmissaoDesafio {
   id                 String                    @id @default(uuid())
   atletaId           String
   desafioId          String
-  videoUrl           String                    @unique
+  videoUrl           String                    
   aprovado           Boolean?
   createdAt          DateTime                  @default(now())
   usuarioId          String?
@@ -616,7 +622,7 @@ model SubmissaoTreino {
   atletaId             String
   treinoAgendadoId     String
   aprovado             Boolean?
-  observacao           String?        @unique
+  observacao           String?       
   criadoEm             DateTime       @default(now())
   atualizadoEm         DateTime       @updatedAt
   usuarioId            String?
@@ -633,6 +639,8 @@ model SubmissaoTreino {
   Usuario              Usuario?       @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   duracaoSegundos      Int?
   repeticoes           Int?
+
+  @@unique([atletaId, treinoAgendadoId])
 }
 
 model Grupo {
@@ -864,7 +872,7 @@ model AtividadeRecente {
   id        String   @id @default(uuid())
   usuarioId String
   tipo      String
-  imagemUrl String?  @unique
+  imagemUrl String?  
   createdAt DateTime @default(now())
   usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 }
@@ -1008,7 +1016,6 @@ model AtletaElenco {
 
 model Evento {
   id          String  @id @default(uuid())
-  // agora pode ser de clube OU de escolinha
   clubeId     String?
   escolinhaId String?
 
@@ -1030,7 +1037,6 @@ model Evento {
   criadoEm       DateTime     @default(now())
   atualizadoEm   DateTime     @updatedAt
 
-  // relações
   clube      Clube?            @relation(fields: [clubeId], references: [id], onDelete: Cascade)
   escolinha  Escolinha?        @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
   inscricoes InscricaoEvento[]
@@ -1041,7 +1047,7 @@ model InscricaoEvento {
   eventoId       String
   usuarioId      String
   status         InscricaoEventoStatus @default(PENDENTE)
-  convidadoPorId String? // quem convidou (para eventos privados), opcional
+  convidadoPorId String?
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
@@ -1050,7 +1056,7 @@ model InscricaoEvento {
   usuario      Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   convidadoPor Usuario? @relation("ConvitesEvento", fields: [convidadoPorId], references: [id])
 
-  @@unique([eventoId, usuarioId]) // garante que 1 usuário não se inscreve 2x no mesmo evento
+  @@unique([eventoId, usuarioId])
 }
 
 model Indicacao {
@@ -1290,9 +1296,10 @@ model Turma {
 
   membros TurmaUsuario[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  Elenco    Elenco[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  Elenco            Elenco[]
+  SessaoTreinoTurma SessaoTreinoTurma[]
 }
 
 model TurmaUsuario {
@@ -1672,6 +1679,66 @@ model AtletaHistoricoVinculo {
   @@index([expiraEm])
 }
 
+model SessaoTreinoTurma {
+  id                 String                  @id @default(uuid())
+  treinoProgramadoId String
+  turmaId            String
+  criadorId          String
+  data               DateTime
+  status             StatusSessaoTreinoTurma @default(AGENDADO)
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  observacoes        String?
+  duracaoMinutosReal Int?
+  penalidadeAtraso   Boolean                 @default(false)
+
+  treino  TreinoProgramado @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+  turma   Turma            @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  criador Usuario          @relation(fields: [criadorId], references: [id], onDelete: Cascade)
+
+  presencas  PresencaSessaoTreino[]
+  exercicios SessaoTreinoTurmaExercicio[]
+}
+
+model PresencaSessaoTreino {
+  id       String  @id @default(uuid())
+  sessaoId String
+  atletaId String
+  presente Boolean @default(true)
+
+  sessao SessaoTreinoTurma @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
+  atleta Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([sessaoId, atletaId])
+}
+
+model SessaoTreinoTurmaExercicio {
+  id          String    @id @default(uuid())
+  sessaoId    String
+  ordem       Int?
+  concluido   Boolean   @default(false)
+  concluidoEm DateTime?
+
+  exercicioId String?
+  exercicio   Exercicio? @relation(fields: [exercicioId], references: [id])
+
+  exercicioTemporarioId String?
+  exercicioTemporario   ExercicioTemporario? @relation(fields: [exercicioTemporarioId], references: [id])
+
+  sessao SessaoTreinoTurma @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
+
+  @@index([sessaoId])
+}
+
+enum StatusSessaoTreinoTurma {
+  AGENDADO
+  EM_ANDAMENTO
+  FINALIZADO
+  CANCELADO
+}
+
 enum StorageClass {
   HOT
   COLD
@@ -1832,21 +1899,18 @@ enum TipoMembro {
 }
 
 enum EventoTipo {
-  PENEIRA // teste seletivo (já existe)
-  EVENTO // genérico / misto (já existe)
-
-  TORNEIO // competição com chaveamento ou tabela
-  COPA // campeonatos em formato de copa
-  LIGA // competição de pontos corridos
-
-  AMISTOSO // jogos amistosos, amistoso de observação, etc.
-  TREINO_ABERTO // treino aberto para novos atletas ou observação
-  CAMP // camp intensivo (vários dias)
-  CLINICA // clínica técnica, focada em habilidades específicas
-
-  SHOWCASE // vitrine para olheiros / scouts
-  WORKSHOP // evento prático, geralmente com atividades em campo
-  PALESTRA // evento mais teórico, talks, palestras inspiracionais
+  PENEIRA
+  EVENTO
+  TORNEIO
+  COPA
+  LIGA
+  AMISTOSO
+  TREINO_ABERTO
+  CAMP
+  CLINICA
+  SHOWCASE
+  WORKSHOP
+  PALESTRA
 }
 
 enum EventoStatus {
@@ -1856,11 +1920,11 @@ enum EventoStatus {
 }
 
 enum InscricaoEventoStatus {
-  PENDENTE // inscrição criada, ainda não confirmada
-  CONFIRMADA // inscrito confirmado
-  CANCELADA // cancelou antes do evento
-  PRESENCA_OK // presença confirmada no dia do evento
-  FALTOU // não compareceu
+  PENDENTE
+  CONFIRMADA
+  CANCELADA
+  PRESENCA_OK
+  FALTOU
 }
 
 enum TreinoAgendadoStatus {

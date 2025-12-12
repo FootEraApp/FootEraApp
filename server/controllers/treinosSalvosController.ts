@@ -23,15 +23,23 @@ function ownerWhere(tipoUsuario?: string, tipoUsuarioId?: string) {
 }
 
 export const criarTreinoSalvo = async (req: Request, res: Response) => {
-  await enforceTotalLimit(req, res, "treinos_salvos_total", async () => {
-    const where = { criadoPorUsuarioId: (req as any).user!.id };
-    return prisma.treinoSalvo.count({ where });
-  });
-
   try {
-    const user = (req as any).user as { id: string; tipo: string; plano?: string };
+    const user = (req as any).user as
+      | { id: string; tipo: string; plano?: string }
+      | undefined;
 
-    if (user?.tipo === "Atleta" && user?.plano !== "PRO") {
+    if (!user || !user.id) {
+      return res
+        .status(401)
+        .json({ message: "Usuário não autenticado para salvar treino." });
+    }
+
+    await enforceTotalLimit(req, res, "treinos_salvos_total", async () => {
+      const where = { criadoPorUsuarioId: user.id };
+      return prisma.treinoSalvo.count({ where });
+    });
+
+    if (user.tipo === "Atleta" && user.plano !== "PRO") {
       const ok = await requireUsage(req, res, "treinos_salvos_total");
       if (!ok) return;
     }
@@ -56,6 +64,7 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
 
     const owner = ownerWhere(tipoUsuario, tipoUsuarioId);
     const ownerKeys = Object.keys(owner);
+
     if (ownerKeys.length !== 1) {
       return res.status(400).json({
         message:
@@ -69,10 +78,11 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
         OR: [{ expiraEm: null }, { expiraEm: { gt: new Date() } }],
       },
     });
+
     if (!publico && ativosCount >= MAX_SLOTS) {
-      return res
-        .status(400)
-        .json({ message: `Limite de ${MAX_SLOTS} treinos salvos atingido para este dono.` });
+      return res.status(400).json({
+        message: `Limite de ${MAX_SLOTS} treinos salvos atingido para este dono.`,
+      });
     }
 
     if (
@@ -81,9 +91,9 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
       !Array.isArray(conteudo.exercicios) ||
       conteudo.exercicios.length === 0
     ) {
-      return res
-        .status(400)
-        .json({ message: "Título e pelo menos 1 exercício são obrigatórios." });
+      return res.status(400).json({
+        message: "Título e pelo menos 1 exercício são obrigatórios.",
+      });
     }
 
     const expiraEm = publico || naoExpira ? null : addDays(new Date(), TTL_DIAS);
@@ -114,12 +124,13 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
       },
     });
 
-    res.status(201).json(created);
+    return res.status(201).json(created);
   } catch (err: any) {
     console.error("criarTreinoSalvo", err);
-    res
-      .status(500)
-      .json({ message: "Erro ao criar treino salvo", error: String(err?.message || err) });
+    return res.status(500).json({
+      message: "Erro ao criar treino salvo",
+      error: String(err?.message || err),
+    });
   }
 };
 

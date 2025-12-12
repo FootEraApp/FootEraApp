@@ -15,8 +15,11 @@ import {
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { TreinosApi } from "../utils/treinosApi.js";
-import { montarExerciciosParaPayload } from "../utils/treinos.helpers.js";
 import type { ExItemUI, TreinoCreatePayload } from "../utils/treinos.types.js";
+import {
+  montarExerciciosParaPayload,
+  parseRepeticoesStr,
+} from "../utils/treinos.helpers.js";
 
 type Organizacao = { id: string; nome: string; tipo: "Escolinha" | "Clube" };
 
@@ -29,6 +32,12 @@ type PontuacaoDetalhe = {
   dicas: number;
   exCount: number;
 };
+
+const getToken = () =>
+  (Storage as any).token ??
+  localStorage.getItem("token") ??
+  sessionStorage.getItem("token") ??
+  "";
 
 const PONTOS = {
   NIVEL: { Base: 0, Avancado: 10, Performance: 20 } as Record<string, number>,
@@ -104,9 +113,9 @@ interface Exercicio {
   videoDemonstrativoUrl?: string;
   descricao?: string;
   nivel?: string;
-  categorias?: string[];        // ex.: ["Sub13", "Sub15"]
-  duracaoMinutos?: number | null; // duração sugerida daquele exercício
-  tipoTreino?: string | null;   // ex.: "Tecnico", "Fisico", "Tatico"
+  categorias?: string[];      
+  duracaoMinutos?: number | null; 
+  tipoTreino?: string | null; 
 }
 
 
@@ -114,6 +123,7 @@ interface AtletaVinculado {
   id: string;
   nome: string;
   foto?: string;
+  usuarioId?: string;
 }
 
 interface TreinoProgramado {
@@ -226,6 +236,11 @@ async function tentarSalvarComoTreinoSalvo(
   scoreTotal: number,
 ) {
   try {
+    const token = getToken();
+    if (!token) {
+      return { saved: false, reason: "sem-token" as const };
+    }
+
     const ownerTipo = payload.tipoUsuario;
     const ownerId = payload.tipoUsuarioId;
 
@@ -315,7 +330,6 @@ function saveState(partial: any) {
     const prev = safeParse<any>(sessionStorage.getItem(SAVE_KEY), {});
     const next = { ...prev, ...partial };
     sessionStorage.setItem(SAVE_KEY, JSON.stringify(next));
-    // marca que este rascunho deve ser restaurado em um próximo acesso
     sessionStorage.setItem(RESTORE_FLAG_KEY, "1");
   } catch {}
 }
@@ -401,6 +415,7 @@ export default function NovoTreino() {
 
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
+  const [isFreePlan, setIsFreePlan] = useState(false);
   const [prazos, setPrazos] = useState<Record<string, string>>({});
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<
     Exercicio[]
@@ -467,6 +482,143 @@ export default function NovoTreino() {
   ) {
     setToast({ message, type });
   }
+
+  function detectarSeFree(): boolean {
+    try {
+      const candidatos = [
+        (Storage as any).plano,
+        (Storage as any).assinaturaPlano,
+        localStorage.getItem("planoAtual"),
+        localStorage.getItem("plano"),
+        sessionStorage.getItem("planoAtual"),
+        sessionStorage.getItem("plano"),
+      ].filter(Boolean) as string[];
+
+      if (!candidatos.length) return false;
+
+      const txt = candidatos.join(" ").toLowerCase();
+      return (
+        txt.includes("free") ||
+        txt.includes("gratuito") ||
+        txt.includes("grátis") ||
+        txt.includes("gratis")
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  useEffect(() => {
+  let cancel = false;
+
+  (async () => {
+    try {
+      const token =
+        (Storage as any).token ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token") ||
+        "";
+
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+      const urls = [
+        `${API.BASE_URL}/api/exercicios`,
+        `${API.BASE_URL}/api/exercicios?ativos=1`,
+        `${API.BASE_URL}/api/exercicios/listar`,
+      ];
+
+      console.log("[NovoTreino] carregando exercicios...");
+
+      let arr: any[] = [];
+      for (const url of urls) {
+        console.log("[NovoTreino] tentando:", url);
+        const r = await fetch(url, { headers });
+        const txt = await r.text();
+
+        if (!r.ok) {
+          console.warn("[NovoTreino] falha:", r.status, txt);
+          continue;
+        }
+
+        let j: any = null;
+        try {
+          j = txt ? JSON.parse(txt) : null;
+        } catch {
+          j = null;
+        }
+
+        const list = Array.isArray(j)
+          ? j
+          : j?.items ?? j?.data ?? j?.rows ?? j?.result ?? [];
+
+        if (Array.isArray(list) && list.length) {
+          arr = list;
+          break;
+        }
+      }
+
+      const normalizados: Exercicio[] = (arr || [])
+        .map((e: any) => {
+          // tenta cobrir variações de nome de campo
+          const video =
+            e.videoDemonstrativoUrl ??
+            e.videoDemonstrativoURL ??
+            e.videoUrl ??
+            e.video ??
+            e.midiaUrl ??
+            e?.midia?.url ??
+            null;
+
+          const cats =
+            e.categorias ??
+            e.categoria ??
+            e.categoriaBase ??
+            e.faixaEtaria ??
+            [];
+
+          const categoriasArray = Array.isArray(cats)
+            ? cats.map(String)
+            : cats
+            ? [String(cats)]
+            : [];
+
+          return {
+            id: String(e.id),
+            nome: String(e.nome ?? e.titulo ?? ""),
+            descricao: e.descricao ?? e.desc ?? "",
+            nivel: e.nivel ?? e.dificuldade ?? null,
+            repeticoes: e.repeticoes ?? e.reps ?? "",
+            videoDemonstrativoUrl: video ? String(video) : undefined,
+            categorias: categoriasArray,
+            duracaoMinutos:
+              typeof e.duracaoMinutos === "number"
+                ? e.duracaoMinutos
+                : typeof e.duracao === "number"
+                ? e.duracao
+                : null,
+            tipoTreino: e.tipoTreino ?? null,
+          } as Exercicio;
+        })
+        .filter((x) => x.id && x.nome);
+
+      console.log("[NovoTreino] exercicios carregados:", normalizados.length, normalizados[0]);
+
+      if (!cancel) setExerciciosDisponiveis(normalizados);
+    } catch (err) {
+      console.error("[NovoTreino] erro ao carregar exercicios:", err);
+      if (!cancel) setExerciciosDisponiveis([]);
+    }
+  })();
+
+  return () => {
+    cancel = true;
+  };
+}, []);
+
+  useEffect(() => {
+    const ehFree = detectarSeFree();
+    setIsFreePlan(ehFree);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -599,12 +751,50 @@ export default function NovoTreino() {
 
   function mapAtletas(items: any[]): AtletaVinculado[] {
     return (items || [])
-      .map((a: any) => ({
-        id: a.atletaId || a.id || a.usuarioId || "",
-        nome: a.nome ?? a?.usuario?.nome ?? a?.atleta?.nome ?? "Atleta",
-        foto:
-          a.foto ?? a?.usuario?.foto ?? a?.atleta?.usuario?.foto ?? undefined,
-      }))
+      .map((a: any) => {
+        const atletaId =
+          a.atletaId ||
+          a.id ||
+          a?.atleta?.id ||
+          "";
+
+        const usuarioId =
+          a.usuarioId ||
+          a?.usuario?.id ||
+          a?.atleta?.usuarioId ||
+          a?.atleta?.usuario?.id ||
+          "";
+
+        const primeiroNome =
+          a.nome ??
+          a?.usuario?.nome ??
+          a?.atleta?.nome ??
+          "Atleta";
+
+        const sobrenome =
+          a.sobrenome ??
+          a?.usuario?.sobrenome ??
+          a?.atleta?.sobrenome ??
+          "";
+
+        let nomeCompleto = primeiroNome;
+        if (sobrenome && !String(primeiroNome).includes(sobrenome)) {
+          nomeCompleto = `${primeiroNome} ${sobrenome}`;
+        }
+
+        const foto =
+          a.foto ??
+          a?.usuario?.foto ??
+          a?.atleta?.usuario?.foto ??
+          undefined;
+
+        return {
+          id: String(atletaId || usuarioId),
+          nome: nomeCompleto,
+          foto,
+          usuarioId: usuarioId ? String(usuarioId) : undefined,
+        } as AtletaVinculado;
+      })
       .filter((x) => x.id);
   }
 
@@ -667,7 +857,7 @@ export default function NovoTreino() {
     };
   }, []);
 
-  useEffect(() => {
+    useEffect(() => {
     (async () => {
       try {
         const token =
@@ -675,42 +865,77 @@ export default function NovoTreino() {
           localStorage.getItem("token") ||
           sessionStorage.getItem("token") ||
           "";
-        const headers = token
-          ? { Authorization: `Bearer ${token}` }
-          : undefined;
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-        if (!orgSelecionada) {
+        const baseTipoUsuarioId =
+          (Storage as any).tipoUsuarioId ||
+          localStorage.getItem("tipoUsuarioId") ||
+          sessionStorage.getItem("tipoUsuarioId") ||
+          "";
+
+        const orgId =
+          orgSelecionada && orgSelecionada !== MOSTRAR_TODOS
+            ? orgSelecionada
+            : null;
+
+        console.log("[NovoTreino] carregando turmas", {
+          orgSelecionada,
+          baseTipoUsuarioId,
+          orgId,
+        });
+
+        if (!baseTipoUsuarioId) {
+          console.warn(
+            "[NovoTreino] sem tipoUsuarioId do dono; não há como carregar turmas",
+          );
           setElencos([]);
           setElencoSelecionado("");
           return;
         }
 
-        try {
-          const r = await fetch(
-            `${API.BASE_URL}/api/treinos/elencos?tipoUsuarioId=${encodeURIComponent(
-              orgSelecionada,
-            )}`,
-            { headers },
-          );
-          if (r.ok) {
-            const j = await r.json();
-            const arr = Array.isArray(j)
-              ? j
-              : j.items ?? j.data ?? j.rows ?? j.result ?? [];
-            setElencos(
-              (arr || []).map((e: any) => ({
-                id: String(e.id),
-                nome: e.nome ?? e.titulo ?? "Turma",
-                atletasIds:
-                  e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
-              })),
-            );
-            return;
-          }
-        } catch {}
+        if (!orgId) {
+          try {
+            const urlMinhas = `${API.BASE_URL}/api/turmas/minhas?tipoUsuarioId=${encodeURIComponent(
+              baseTipoUsuarioId,
+            )}`;
+            console.log("[NovoTreino] tentando /api/turmas/minhas", urlMinhas);
+            const r = await fetch(urlMinhas, { headers });
 
-        const ownerId = orgSelecionada;
+            if (r.ok) {
+              const data = await r.json();
+              const arr = Array.isArray(data)
+                ? data
+                : data.items ?? data.data ?? data.rows ?? data.result ?? [];
+
+              const norm = (arr || []).map((t: any) => ({
+                id: String(t.id),
+                nome: t.nome ?? t.titulo ?? "Turma",
+                atletasIds:
+                  t.atletasIds ??
+                  t.membros?.map((m: any) => m.atletaId ?? m.id) ??
+                  [],
+              }));
+
+              console.log("[NovoTreino] turmas (minhas) carregadas:", norm);
+              setElencos(norm);
+              return;
+            } else {
+              console.warn(
+                "[NovoTreino] falha em /api/turmas/minhas",
+                r.status,
+              );
+            }
+          } catch (e) {
+            console.error("[NovoTreino] erro em /api/turmas/minhas", e);
+          }
+        }
+
+        const ownerId = orgId || baseTipoUsuarioId;
+
         const urls = [
+          `${API.BASE_URL}/api/treinos/elencos?tipoUsuarioId=${encodeURIComponent(
+            ownerId,
+          )}`,
           `${API.BASE_URL}/api/elencos?organizacaoId=${encodeURIComponent(
             ownerId,
           )}`,
@@ -723,105 +948,45 @@ export default function NovoTreino() {
         ];
 
         for (const url of urls) {
-          const r = await fetch(url, { headers });
-          if (!r.ok) continue;
-          const j = await r.json();
-          const arr = Array.isArray(j)
-            ? j
-            : j.items ?? j.data ?? j.rows ?? j.result ?? [];
-          if (Array.isArray(arr)) {
-            setElencos(
-              arr.map((e: any) => ({
-                id: e.id,
+          try {
+            console.log("[NovoTreino] tentando carregar turmas em", url);
+            const r = await fetch(url, { headers });
+            if (!r.ok) continue;
+
+            const j = await r.json();
+            const arr = Array.isArray(j)
+              ? j
+              : j.items ?? j.data ?? j.rows ?? j.result ?? [];
+
+            if (Array.isArray(arr) && arr.length) {
+              const norm = arr.map((e: any) => ({
+                id: String(e.id),
                 nome: e.nome ?? e.titulo ?? "Turma",
                 atletasIds:
-                  e.atletasIds ?? e.atletas?.map((a: any) => a.id) ?? [],
-              })),
-            );
-            return;
+                  e.atletasIds ??
+                  e.atletas?.map((a: any) => a.id) ??
+                  e.membros?.map((m: any) => m.atletaId ?? m.id) ??
+                  [],
+              }));
+
+              console.log(
+                "[NovoTreino] turmas carregadas via fallback:",
+                norm,
+              );
+              setElencos(norm);
+              return;
+            }
+          } catch (e) {
+            console.error("[NovoTreino] erro ao buscar turmas em", url, e);
           }
         }
+
         setElencos([]);
-      } catch {
-        setElencos([]);
-      }
-    })();
-  }, [orgSelecionada]);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const token =
-          (Storage as any).token ||
-          localStorage.getItem("token") ||
-          sessionStorage.getItem("token") ||
-          "";
-        const headers = token
-          ? { Authorization: `Bearer ${token}` }
-          : undefined;
-
-        const ownerId =
-          orgSelecionada ||
-          (Storage as any).tipoUsuarioId ||
-          localStorage.getItem("tipoUsuarioId") ||
-          sessionStorage.getItem("tipoUsuarioId") ||
-          "";
-
-        const tries = [
-          `${API.BASE_URL}/api/treinos/exercicios?tipoUsuarioId=${encodeURIComponent(
-            ownerId,
-          )}`,
-          `${API.BASE_URL}/api/exercicios?ownerId=${encodeURIComponent(
-            ownerId,
-          )}`,
-          `${API.BASE_URL}/api/exercicios`,
-        ];
-
-        for (const url of tries) {
-          const r = await fetch(url, { headers });
-          if (!r.ok) continue;
-          const j = await r.json();
-          const arr = Array.isArray(j)
-            ? j
-            : j.items ?? j.data ?? j.rows ?? j.result ?? [];
-          const itens: Exercicio[] = (arr || []).map((e: any) => ({
-            id: String(e.id),
-            nome: e.nome ?? e.titulo ?? "Sem nome",
-            videoDemonstrativoUrl:
-              e.videoDemonstrativoUrl ??
-              e.videoUrl ??
-              e.video ??
-              e.demonstracaoUrl ??
-              "",
-            descricao: e.descricao ?? e.resumo ?? "",
-            nivel: e.nivel ?? e.dificuldade ?? "",
-
-            // NOVO – tenta puxar dos campos que você colocou no backend
-            categorias: Array.isArray(e.categorias)
-              ? e.categorias
-              : e.categoria
-              ? [e.categoria]
-              : [],
-            duracaoMinutos:
-              typeof e.duracao === "number"
-                ? e.duracao
-                : typeof e.duracaoMinutos === "number"
-                ? e.duracaoMinutos
-                : typeof e.tempoMinutos === "number"
-                ? e.tempoMinutos
-                : typeof e.tempo === "number"
-                ? e.tempo
-                : null,
-            tipoTreino: e.tipoTreino ?? e.tipo ?? null,
-          }));
-          setExerciciosDisponiveis(itens);
-          return;
-        }
-
-        setExerciciosDisponiveis([]);
+        setElencoSelecionado("");
       } catch (e) {
-        console.error("Falha ao carregar exercícios:", e);
-        setExerciciosDisponiveis([]);
+        console.error("[NovoTreino] erro inesperado ao carregar turmas", e);
+        setElencos([]);
+        setElencoSelecionado("");
       }
     })();
   }, [orgSelecionada]);
@@ -1098,7 +1263,6 @@ export default function NovoTreino() {
       duracao,
       dataTreino,
       categorias,
-      // salva também o primeiro para compatibilidade com o estado antigo
       categoria: categorias[0] ?? "",
       tipoTreino,
       objetivo,
@@ -1123,92 +1287,135 @@ export default function NovoTreino() {
     datasAgendamento,
   ]);
 
-  const criarTurmaComSelecionados = async () => {
-    if (!orgSelecionada) {
-      alert("Selecione uma organização primeiro.");
+  async function criarTurmaComSelecionados() {
+    const token =
+      (Storage as any).token ??
+      localStorage.getItem("token") ??
+      sessionStorage.getItem("token");
+
+    if (!token) {
+      alert("Faça login novamente para criar uma turma.");
       return;
     }
-    if (!novaTurmaNome.trim()) {
-      alert("Informe o nome da turma.");
+
+    if (!novaTurmaNome || !novaTurmaNome.trim()) {
+      alert("Dê um nome para a turma.");
       return;
     }
-    if (atletasSelecionados.length === 0) {
-      alert("Selecione ao menos 1 atleta.");
+
+    if (!atletasSelecionados || atletasSelecionados.length === 0) {
+      alert("Selecione pelo menos 1 atleta para a turma.");
       return;
     }
+
+    const tipoUsuarioIdRaw =
+      (Storage as any).tipoUsuarioId ||
+      (Storage as any).professorId ||
+      localStorage.getItem("tipoUsuarioId") ||
+      sessionStorage.getItem("tipoUsuarioId") ||
+      "";
+
+    if (!tipoUsuarioIdRaw) {
+      console.warn("[NovoTreino] sem tipoUsuarioId para criar turma", {
+        tipoUsuario: usuario?.tipo,
+      });
+      alert(
+        "Não foi possível identificar seu perfil (professor/escolinha/clube). Tente sair e entrar de novo.",
+      );
+      return;
+    }
+
+    const tipoBruto =
+      String(
+        usuario?.tipo ??
+          (Storage as any).tipoSalvo ??
+          (Storage as any).tipo ??
+          "",
+      ).toLowerCase();
+
+    const ownerTipo = tipoBruto.startsWith("professor")
+      ? "professor"
+      : tipoBruto.startsWith("clube")
+      ? "clube"
+      : tipoBruto.startsWith("escolinha") || tipoBruto.startsWith("escola")
+      ? "escolinha"
+      : tipoBruto.startsWith("admin")
+      ? "admin"
+      : "outro";
+
+    const atletasSelecionadosObjs = atletasVinculados.filter((a) =>
+      atletasSelecionados.includes(a.id),
+    );
+
+    const atletaIds = atletasSelecionadosObjs.map((a) => a.id);
+
+    const usuarioIds = atletasSelecionadosObjs
+      .map((a) => a.usuarioId)
+      .filter((id): id is string => Boolean(id));
+
+    const ownerTipoCapital =
+      ownerTipo === "clube"
+        ? "Clube"
+        : ownerTipo === "escolinha" 
+        ? "Escolinha"
+        : undefined;
+
+    const professorId =
+      ownerTipo === "professor" ? tipoUsuarioIdRaw : undefined;
+
+    const payload = {
+      ownerTipo: ownerTipoCapital,
+      ownerId: tipoUsuarioIdRaw,
+      nome: novaTurmaNome.trim(),
+      professorId,
+      atletaIds,
+      usuarioIds,
+    };
 
     try {
-      const token =
-        (Storage as any).token ||
-        localStorage.getItem("token") ||
-        sessionStorage.getItem("token") ||
-        "";
-      const headers: any = token
-        ? {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          }
-        : { "Content-Type": "application/json" };
+      const resp = await fetch(`${API.BASE_URL}/api/turmas`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-      let ok = false,
-        created: any = null;
+      const data = await resp.json().catch(() => null);
 
-      const ownerTipoRaw = orgsVinculadas.find(
-        (o) => o.id === orgSelecionada,
-      )?.tipo;
-      const tipoUsuario =
-        (ownerTipoRaw || "").toLowerCase() === "clube" ? "clube" : "escolinha";
+      console.log("[NovoTreino] criarTurma /api/turmas", resp.status, data);
 
-      const tentativas = [
-        { url: `${API.BASE_URL}/api/treinos/elencos`, method: "POST" },
-        { url: `${API.BASE_URL}/api/elencos`, method: "POST" },
-        { url: `${API.BASE_URL}/api/turmas`, method: "POST" },
-      ];
-
-      for (const t of tentativas) {
-        const base = {
-          nome: novaTurmaNome.trim(),
-          atletasIds: atletasSelecionados,
-        };
-        const body = t.url.includes("/api/treinos/elencos")
-          ? { ...base, tipoUsuario, tipoUsuarioId: orgSelecionada }
-          : { ...base, organizacaoId: orgSelecionada };
-
-        const r = await fetch(t.url, {
-          method: t.method,
-          headers,
-          body: JSON.stringify(body),
-        });
-
-        const txt = await r.text();
-
-        if (!r.ok) continue;
-        created = txt ? JSON.parse(txt) : null;
-        ok = true;
-        break;
+      if (!resp.ok) {
+        alert(
+          data?.message ||
+            data?.erro ||
+            "Não foi possível criar a turma. Veja o console para mais detalhes.",
+        );
+        return;
       }
 
-      if (ok) {
-        alert("Turma criada!");
-        setNovaTurmaNome("");
+      if (data && data.id) {
         setElencos((prev) => [
           ...prev,
           {
-            id: String(created?.id ?? Date.now()),
-            nome: created?.nome ?? novaTurmaNome.trim(),
-            atletasIds: created?.atletasIds ?? atletasSelecionados,
+            id: String(data.id),
+            nome: data.nome ?? novaTurmaNome.trim(),
+            atletasIds: atletaIds,
           },
         ]);
-      } else {
-        alert(
-          "Falha ao criar turma (verifique os logs no console para o motivo do 400).",
-        );
+        setElencoSelecionado(String(data.id));
       }
+
+      alert("Turma criada com sucesso!");
+
+      setNovaTurmaNome("");
+      setAtletasSelecionados([]);
     } catch (e) {
-      console.error(e);
-      alert("Erro inesperado ao criar turma.");
+      console.error("[NovoTreino] erro ao criar turma", e);
+      alert("Erro inesperado ao criar a turma.");
     }
-  };
+  }
 
   const incluirElencoNoTreino = () => {
     if (!elencoSelecionado) return;
@@ -1220,22 +1427,6 @@ export default function NovoTreino() {
       el.atletasIds!.forEach((id) => set.add(id));
       return Array.from(set);
     });
-  };
-
-  const adicionarDataAgendamento = () => {
-    setDatasAgendamento((prev) => [...prev, ""]);
-  };
-
-  const atualizarDataAgendamento = (index: number, valor: string) => {
-    setDatasAgendamento((prev) => {
-      const copia = [...prev];
-      copia[index] = valor;
-      return copia;
-    });
-  };
-
-  const removerDataAgendamento = (index: number) => {
-    setDatasAgendamento((prev) => prev.filter((_, i) => i !== index));
   };
 
   const [completedUntil, setCompletedUntil] = useState<number>(1);
@@ -1266,7 +1457,6 @@ export default function NovoTreino() {
   const exerciciosFiltrados = useMemo(() => {
     let lista = [...exerciciosDisponiveis];
 
-    // 🔎 BUSCA POR NOME / DESCRIÇÃO / NÍVEL
     const q = filtroEx.trim().toLowerCase();
     if (q) {
       lista = lista.filter((e) => {
@@ -1277,7 +1467,6 @@ export default function NovoTreino() {
       });
     }
 
-    // 🧩 CATEGORIAS (Sub9, Sub11, Sub17, Livre...) – AGORA MULTI
     if (filtroCategorias.length > 0) {
       const catsFiltro = filtroCategorias.map((c) => c.toLowerCase());
       lista = lista.filter((e) => {
@@ -1287,7 +1476,6 @@ export default function NovoTreino() {
       });
     }
 
-    // 🎯 NÍVEIS (Base, Avancado, Performance) – AGORA MULTI
     if (filtroNiveis.length > 0) {
       const niveisFiltro = filtroNiveis.map((n) => n.toLowerCase());
       lista = lista.filter((e) => {
@@ -1340,15 +1528,19 @@ export default function NovoTreino() {
         alert("Este exercício já foi adicionado ao treino.");
         return prev;
       }
+
+      // se vier "3x10" ou "10", quebramos em séries + reps
+      const { series, repeticoes } = parseRepeticoesStr(exercicio.repeticoes);
+
       return [
         ...prev,
         {
           idCatalogo: String(exercicio.id),
           nome: exercicio.nome,
-          descricao: "",
-          repeticoes: "",
+          descricao: exercicio.descricao ?? "",
+          repeticoes,
+          series,
           ordem: prev.length + 1,
-          series: "",
         },
       ];
     });
@@ -1403,15 +1595,41 @@ export default function NovoTreino() {
     return "";
   }
 
-  async function agendarTreinoEmLote(treinoProgramadoId: string) {
+    async function agendarTreinoEmLote(treinoProgramadoId: string) {
     try {
       const datasValidas = datasAgendamento.filter((d) => d && d.trim());
 
-      const datasBase = datasValidas.length
+      let datasBase = datasValidas.length
         ? datasValidas
         : dataTreino
         ? [dataTreino]
         : [];
+
+      if (isFreePlan && datasBase.length) {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        const limite = new Date(hoje);
+        limite.setDate(limite.getDate() + 30);
+
+        const dentroDaJanela = (str: string) => {
+          const d = new Date(str.includes("T") ? str : `${str}T00:00:00`);
+          if (isNaN(d.getTime())) return false;
+          d.setHours(0, 0, 0, 0);
+          return d >= hoje && d <= limite;
+        };
+
+        const filtradas = datasBase.filter(dentroDaJanela);
+
+        if (filtradas.length < datasBase.length) {
+          showToast(
+            "No plano Free, treinos só podem ser agendados em até 30 dias a partir de hoje. Datas fora desse intervalo foram ignoradas.",
+            "info",
+          );
+        }
+
+        datasBase = filtradas;
+      }
 
       if (!datasBase.length || !atletasSelecionados.length) {
         return 0;
@@ -1621,7 +1839,8 @@ export default function NovoTreino() {
             .slice()
             .sort()
             .map((str) => {
-              const d = new Date(str);
+              const iso = str.includes("T") ? str : `${str}T00:00:00`;
+              const d = new Date(iso);
               if (isNaN(d.getTime())) return str;
               return d.toLocaleDateString("pt-BR", {
                 day: "2-digit",
@@ -1687,11 +1906,10 @@ export default function NovoTreino() {
       setAtletasSelecionados([]);
       setDatasAgendamento([]);
 
-      // 👉 Depois de criar, vai para /treinos
       setTimeout(() => {
         navigate("/treinos");
       }, 500);
-      
+
       } catch (e: any) {
         console.error(
           "Falha inesperada ao criar treino:",
@@ -1705,8 +1923,6 @@ export default function NovoTreino() {
 
         showToast(msgErro, "error");
 
-        // mesmo com erro, não queremos reabrir o próximo treino
-        // com os dados antigos
         sessionStorage.removeItem(SAVE_KEY);
         sessionStorage.removeItem(RESTORE_FLAG_KEY);
 
@@ -1895,24 +2111,6 @@ export default function NovoTreino() {
             </div>
           ))
         )}
-
-        <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-2 flex justify-around items-center shadow-md">
-          <Link href="/feed" className="hover:underline">
-            <House />
-          </Link>
-          <Link href="/explorar" className="hover:underline">
-            <SearchIcon />
-          </Link>
-          <Link href="/post" className="hover:underline">
-            <CirclePlus />
-          </Link>
-          <Link href="/treinos" className="hover:underline">
-            <Volleyball />
-          </Link>
-          <Link href="/perfil" className="hover:underline">
-            <User />
-          </Link>
-        </nav>
       </div>
     );
   }
@@ -2111,6 +2309,12 @@ export default function NovoTreino() {
 
                   const ehDoBanco = Boolean(ex.idCatalogo);
 
+                  {exerciciosDisponiveis.length === 0 && (
+                    <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-3 mb-3">
+                      Nenhum exercício foi carregado. Verifique no console o log: <b>[NovoTreino] carregando exercicios...</b>
+                    </div>
+                  )}
+
                   return (
                     <div
                       key={i}
@@ -2239,7 +2443,6 @@ export default function NovoTreino() {
             <div className="h-4" />
 
             <StepCard title="Exercícios Disponíveis">
-              {/* BUSCA + CONTADOR */}
               <div className="mb-3 flex flex-col gap-2">
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
@@ -2256,10 +2459,7 @@ export default function NovoTreino() {
                   </span>
                 </div>
 
-                {/* NOVOS FILTROS */}
-                {/* NOVOS FILTROS */}
                 <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
-                  {/* CATEGORIA – MULTI */}
                   <div>
                     <select
                       multiple
@@ -2286,7 +2486,6 @@ export default function NovoTreino() {
                     </p>
                   </div>
 
-                  {/* NÍVEL – MULTI */}
                   <div>
                     <select
                       multiple
@@ -2368,7 +2567,6 @@ export default function NovoTreino() {
                             </p>
                           ) : null}
 
-                          {/* NOVO – tags de categoria / tipo / duração */}
                           {(exercicio.tipoTreino ||
                             exercicio.duracaoMinutos ||
                             (exercicio.categorias && exercicio.categorias.length > 0)) && (
@@ -2610,6 +2808,13 @@ export default function NovoTreino() {
                     criado sem agendamento automático. Depois você poderá
                     agendar manualmente para os atletas na tela de treinos.
                   </p>
+                  {isFreePlan && (
+                    <p className="mt-1 text-[11px] text-green-700">
+                      No plano <b>Free</b>, o agendamento automático fica limitado
+                      da data de hoje até 30 dias à frente. Para mais liberdade de
+                      agenda, migre para o plano Pro. 😉
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -2677,7 +2882,34 @@ export default function NovoTreino() {
                   semanas.push(dias.slice(i, i + 7));
                 }
 
+                let hoje: Date | null = null;
+                let limite: Date | null = null;
+                if (isFreePlan) {
+                  hoje = new Date();
+                  hoje.setHours(0, 0, 0, 0);
+
+                  limite = new Date(hoje);
+                  limite.setDate(limite.getDate() + 30);
+                }
+
+                const diaForaDaJanela = (dia: number) => {
+                  if (!isFreePlan || !hoje || !limite) return false;
+                  const dateStr = formatYMD(ano, mes, dia);
+                  const d = new Date(`${dateStr}T00:00:00`);
+                  if (isNaN(d.getTime())) return true;
+                  d.setHours(0, 0, 0, 0);
+                  return d < hoje || d > limite;
+                };
+
                 const toggleDia = (dia: number) => {
+                  if (diaForaDaJanela(dia)) {
+                    showToast(
+                      "No plano Free, você só pode agendar treinos da data de hoje até 30 dias à frente.",
+                      "info",
+                    );
+                    return;
+                  }
+
                   const dateStr = formatYMD(ano, mes, dia);
                   setDatasAgendamento((prev) => {
                     if (prev.includes(dateStr)) {
@@ -2705,14 +2937,19 @@ export default function NovoTreino() {
                           const selecionado =
                             datasAgendamento.includes(dateStr);
 
+                          const bloqueado = diaForaDaJanela(dia);
+
                           return (
                             <button
                               key={idxDia}
                               type="button"
                               onClick={() => toggleDia(dia)}
+                              disabled={bloqueado}
                               className={[
                                 "h-8 sm:h-9 text-xs sm:text-sm flex items-center justify-center rounded-full border transition-all",
-                                selecionado
+                                bloqueado
+                                  ? "bg-gray-100 text-gray-400 border-dashed border-gray-300 cursor-not-allowed"
+                                  : selecionado
                                   ? "bg-green-700 text-white border-green-700 shadow-sm"
                                   : "bg-white text-gray-800 border-gray-300 hover:bg-green-50",
                               ].join(" ")}
@@ -2734,7 +2971,8 @@ export default function NovoTreino() {
                     .slice()
                     .sort()
                     .map((str) => {
-                      const d = new Date(str);
+                      const iso = str.includes("T") ? str : `${str}T00:00:00`;
+                      const d = new Date(iso);
                       if (isNaN(d.getTime())) return str;
                       return d.toLocaleDateString("pt-BR", {
                         day: "2-digit",
