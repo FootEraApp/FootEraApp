@@ -1,4 +1,3 @@
-// client/src/pages/feed
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FaHeart,
@@ -116,12 +115,9 @@ function HeaderSliderLite({
       ref={wrapRef}
       className="relative h-16 sm:h-20 -mx-4 mb-2"
     >
-      {/* Faixa verde cobrindo 100% da largura */}
       <div className="absolute inset-0 bg-green-900 z-0" />
 
-      {/* Conteúdo por cima da faixa */}
       <div className="relative z-10 h-full">
-        {/* Título centralizado */}
         <div className="h-full flex items-center justify-center pointer-events-none">
           {title && (
             <h1 className="text-lg sm:text-xl font-extrabold tracking-wide text-white">
@@ -130,7 +126,6 @@ function HeaderSliderLite({
           )}
         </div>
 
-        {/* Botão de mensagens (mais discreto no tema) */}
         <div className="absolute right-3 top-1/2 -translate-y-1/2 z-20">
           <Link
             href="/mensagens"
@@ -144,8 +139,6 @@ function HeaderSliderLite({
           </Link>
         </div>
 
-
-        {/* Fundo do slider / trilha (se quiser usar depois) */}
         <div className="absolute inset-0">
           <div
             className={`absolute inset-y-2 left-0 right-0 rounded-full border overflow-hidden transition-colors duration-150 ${
@@ -362,10 +355,7 @@ function PaginaFeed(): JSX.Element {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [carregandoMutuos, setCarregandoMutuos] = useState(false);
   const [enviandoDM, setEnviandoDM] = useState(false);
-
   const [idCompartilhado, setIdCompartilhado] = useState<string | null>(null);
-
-  // 🔁 AGORA o filtro NÃO tem mais "meus"
   const [filtro, setFiltro] = useState<"todos" | "seguindo" | "favoritos">("todos");
   const [agendaFeed, setAgendaFeed] = useState<AgendaItem[]>([]);
   const [carregandoAgenda, setCarregandoAgenda] = useState(false);
@@ -441,7 +431,6 @@ function PaginaFeed(): JSX.Element {
 
         let dados: PostagemComUsuario[] = await getFeedPosts(filtro);
 
-        // 🔴 AQUI: removemos as postagens do próprio usuário do feed
         if (usuarioLogadoId) {
           dados = dados.filter((p) => p.usuario?.id !== usuarioLogadoId);
         }
@@ -462,7 +451,6 @@ function PaginaFeed(): JSX.Element {
   useEffect(() => {
     const onNovoPost = (novo: PostagemComUsuario) => {
       setPosts((prev) => {
-        // 🔴 Nunca adiciona post do próprio usuário no feed
         if (novo.usuario?.id === Storage.usuarioId) return prev;
         if (prev.some((p) => p.id === novo.id)) return prev;
         return [novo, ...prev];
@@ -603,7 +591,6 @@ function PaginaFeed(): JSX.Element {
   <div className="px-4 pt-0 pb-24 space-y-6">
       <HeaderSliderLite title="Feed de Postagens" start="feed" />
 
-{/* BOTÕES DE FILTRO — alinhados com os posts */}
 <div className="max-w-xl mx-auto flex gap-2 justify-start mb-4 px-1">
   <button
     onClick={() => toggleFiltro("seguindo")}
@@ -931,8 +918,6 @@ function PaginaFeed(): JSX.Element {
         </Link>
       </nav>
 
-      {/* BottomSheet de compartilhar e comentários continua igual */}
-      {/* == COMPARTILHAR POSTAGEM == */}
       <BottomSheet
         open={modalAberto}
         onClose={() => setModalAberto(false)}
@@ -1049,7 +1034,6 @@ function PaginaFeed(): JSX.Element {
         </div>
       </BottomSheet>
 
-      {/* == COMENTÁRIOS == */}
       <BottomSheet
         open={comentariosModalAberto && !!postSelecionado}
         onClose={() => setComentariosModalAberto(false)}

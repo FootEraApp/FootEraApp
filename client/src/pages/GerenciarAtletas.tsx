@@ -40,8 +40,6 @@ type AtletaMin = {
   posicao?: Posicao | null;
   pontuacao?: number | null;
   ativoRecentemente?: boolean;
-
-  // 👇 novos campos vindos da API (se tiver)
   clubeNome?: string | null;
   escolinhaNome?: string | null;
   professorNome?: string | null;
@@ -263,8 +261,6 @@ const GerenciarAtletas: React.FC = () => {
       categoria: apiToUiCategoria(a.categoria),
       pontuacao: a.pontuacao ?? null,
       ativoRecentemente: !!a.ativoRecentemente,
-
-      // 👇 tenta pegar do que a API mandar (ajuste conforme o shape real)
       clubeNome: a.clube?.nome ?? a.clubeNome ?? null,
       escolinhaNome: a.escolinha?.nome ?? a.escolinhaNome ?? null,
       professorNome:
@@ -798,8 +794,8 @@ const carregarProfessores = async () => {
                       <th className="p-3">Nome</th>
                       <th className="w-28 p-3">Categoria</th>
                       <th className="w-32 p-3">Posição</th>
-                      <th className="w-40 p-3">Time</th>        {/* novo */}
-                      <th className="w-40 p-3">Professor</th>    {/* novo */}
+                      <th className="w-40 p-3">Time</th>       
+                      <th className="w-40 p-3">Professor</th>  
                       <th className="w-28 p-3">Pontuação</th>
                       <th className="w-28 p-3">Status</th>
                       <th className="w-32 p-3">Ações</th>
@@ -833,12 +829,10 @@ const carregarProfessores = async () => {
                           <td className="p-3 text-sm text-zinc-700">{a.categoria ?? "—"}</td>
                           <td className="p-3 text-sm text-zinc-700">{a.posicao ?? "—"}</td>
 
-                          {/* 👇 novo: time / vínculo */}
                           <td className="p-3 text-sm text-zinc-700">
                             {a.clubeNome ?? a.escolinhaNome ?? "Independente"}
                           </td>
 
-                          {/* 👇 novo: professor */}
                           <td className="p-3 text-sm text-zinc-700">
                             {a.professorNome ?? "Sem professor"}
                           </td>

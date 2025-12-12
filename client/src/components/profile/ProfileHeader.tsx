@@ -1,4 +1,3 @@
-// client/src/components/profile/ProfileHeader
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
@@ -953,7 +952,6 @@ export default function ProfileHeader({
       return;
     }
 
-    // Eu enviei a solicitação -> cancelar
     if (treinoJunto && souSolicitanteTreino) {
       const ok = await cancelarSolicitacaoTreino(perfilId);
       if (ok) {
@@ -964,13 +962,11 @@ export default function ProfileHeader({
       return;
     }
 
-    // Tenho convite pendente -> vai pra tela de notificações
     if (treinoJunto && souSolicitanteTreino === false) {
       window.location.href = "/notificacoes";
       return;
     }
 
-    // Enviar nova solicitação
     const ok = await solicitarTreino();
     if (ok) {
       setTreinoJunto(true);
@@ -1199,7 +1195,6 @@ export default function ProfileHeader({
         )}
       </div>
 
-      {/* AÇÕES QUANDO NÃO É MEU PRÓPRIO PERFIL */}
       {!isOwnProfile && (
         <div className="w-full max-w-2xl px-3 mt-4 mb-2">
           <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">

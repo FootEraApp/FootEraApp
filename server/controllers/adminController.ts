@@ -35,17 +35,13 @@ export const adminDashboard = async (_: Request, res: Response) => {
 
     const totalVerificados = await prisma.usuario.count({ where: { verified: true } });
     const totalNaoVerificados = await prisma.usuario.count({ where: { verified: false } });
-
     const totalPostsCriados = await prisma.postagem.count();
     const totalTreinos = await prisma.treinoProgramado.count();
     const totalDesafios = await prisma.desafioOficial.count();
-
     const exercicios = await prisma.exercicio.findMany();
     const professores = await prisma.professor.findMany({ include: { usuario: true } });
     const treinos = await prisma.treinoProgramado.findMany();
     const desafios = await prisma.desafioOficial.findMany();
-
-    console.log("MAP TIPOS:", map);
 
     res.json({
       totalUsuarios,
