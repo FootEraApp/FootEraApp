@@ -49,10 +49,10 @@ router.get("/elencos/escala-por-dono", getEscalaPorDono);
 router.get("/elencos", listarElencos);
 router.post(
   "/elencos",
-  requireCapability("agendamento:lote"),
   requireOrgSeat(req => (req.body?.escolinhaId as string) || (req.body?.clubeId as string)),
   criarElenco
 );
+
 router.put("/elencos/:id", requireElencoOwner, atualizarElenco);
 
 router.post("/agendados/:id/iniciar", iniciarTreino);
