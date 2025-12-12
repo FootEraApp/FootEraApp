@@ -4,7 +4,8 @@ import { authenticateToken, AuthenticatedRequest } from "../middlewares/auth.js"
 import {
   criarSubmissaoTreinoUpload,
   criarSubmissaoDesafioUpload,
-  getUltimaSubmissaoTreino
+  getUltimaSubmissaoTreino,
+  criarSubmissaoTreinoSessaoUpload
 } from "../controllers/submissoesController.js";
 
 const router = Router();
@@ -17,6 +18,13 @@ const storage = multer.diskStorage({
   },
 });
 const upload = multer({ storage });
+
+router.post(
+  "/treino/sessao",
+  authenticateToken,
+  upload.single("arquivo"),
+  (req: AuthenticatedRequest, res) => criarSubmissaoTreinoSessaoUpload(req, res)
+);
 
 router.post(
   "/treino",

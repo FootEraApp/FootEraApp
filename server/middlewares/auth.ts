@@ -36,7 +36,13 @@ function toTipoUsuario(s: string): TipoUsuario {
 export const authenticateToken: RequestHandler = async (req, res, next) => {
   const auth = req.headers.authorization || "";
 
-  console.log("[AUTH] header em", req.method, req.originalUrl, "=", auth || "<vazio>");
+  console.log(
+    "[AUTH] header em",
+    req.method,
+    req.originalUrl,
+    "=",
+    auth || "<vazio>",
+  );
 
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : auth;
 
@@ -54,14 +60,19 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
       req.originalUrl,
       "->",
       err.name,
-      err.message
+      err.message,
     );
     return res.status(401).json({ message: "Invalid/expired token" });
   }
 
   const userId = payload.id || payload.sub;
   if (!userId) {
-    console.error("[AUTH] payload sem id/sub em", req.originalUrl, "payload =", payload);
+    console.error(
+      "[AUTH] payload sem id/sub em",
+      req.originalUrl,
+      "payload =",
+      payload,
+    );
     return res.status(401).json({ message: "Invalid token payload" });
   }
 
@@ -73,15 +84,21 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
 
     const user: UserPayload = {
       id: userId,
-      tipo: ctx.tipo,
+      tipo: ctx.tipo, 
       tipoUsuarioId: ctx.tipoUsuarioId ?? null,
-      plano: (ctx.plano as PlanoName) ?? "FREE",
+      plano: ((ctx.plano as PlanoName) ?? "FREE") as PlanoName,
       isAdmin: !!ctx.isAdmin,
     };
 
     reqAuthed.authUser = user;
+    (reqAuthed as any).user = user;
   } catch (e: any) {
-    console.error("[AUTH] resolveUserContext failed em", req.originalUrl, "->", e);
+    console.error(
+      "[AUTH] resolveUserContext failed em",
+      req.originalUrl,
+      "->",
+      e,
+    );
 
     const tipoRaw = String(payload.tipo || "").toLowerCase();
     const tipo =
@@ -93,13 +110,16 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
         ? (toTipoUsuario(tipoRaw) as any)
         : ("Atleta" as any);
 
-    reqAuthed.authUser = {
+    const user: UserPayload = {
       id: userId,
       tipo,
       tipoUsuarioId: null,
-      plano: "FREE",
+      plano: "FREE" as PlanoName,
       isAdmin: tipoRaw === "admin",
     };
+
+    reqAuthed.authUser = user;
+    (reqAuthed as any).user = user;
   }
 
   return next();
