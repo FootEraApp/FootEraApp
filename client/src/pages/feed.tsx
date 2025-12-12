@@ -130,17 +130,20 @@ function HeaderSliderLite({
           )}
         </div>
 
-        {/* Botão de mensagens */}
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 z-20">
+        {/* Botão de mensagens (mais discreto no tema) */}
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 z-20">
           <Link
             href="/mensagens"
             aria-label="Abrir mensagens"
-            className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center
-              rounded-full bg-white border shadow-lg hover:bg-gray-50 active:scale-95"
+            className="pointer-events-auto inline-flex h-9 w-9 items-center justify-center
+              rounded-full border border-green-700/70 bg-green-800/80 text-white
+              shadow-md hover:bg-green-700 hover:border-green-500
+              active:scale-95 transition-colors"
           >
-            <Send className="w-5 h-5 text-green-900" />
+            <Send className="w-4 h-4" />
           </Link>
         </div>
+
 
         {/* Fundo do slider / trilha (se quiser usar depois) */}
         <div className="absolute inset-0">
