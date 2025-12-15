@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "server": ["./index.ts"],
+      "server/*": ["./*"],
+      "@shared/*": ["shared/*"]
+    },
+    "typeRoots": ["./node_modules/@types"],
+    "types": ["node", "express"],
+    "outDir": "dist",
+    "rootDir": ".",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "sourceMap": true
+  },
+  "include": ["**/*.ts", "types/**/*.d.ts"],
+  "exclude": ["node_modules", "dist", "vite.ts", "_ignore.db.ts", "_ignore.storage.ts"]
+}

@@ -1,3 +1,4 @@
+// server/index
 import express from "express";
 import cors from "cors";
 import path, { dirname } from "path";
@@ -148,20 +149,52 @@ const ALLOWED = new Set(
   ].filter(Boolean) as string[]
 );
 
-app.use(cors({
+const allowedRegex = /^https:\/\/(www\.)?footera\.app\.br$/;
+
+const corsConfig: cors.CorsOptions = {
   origin(origin, cb) {
     if (!origin) return cb(null, true);
-    cb(null, ALLOWED.has(origin));
+
+    const o = origin.replace(/\/+$/, "");
+
+    if (allowedRegex.test(o)) return cb(null, true);
+    if (ALLOWED.has(o)) return cb(null, true);
+
+    console.log("[CORS BLOCKED]", { origin, normalized: o, allowed: Array.from(ALLOWED) });
+    return cb(new Error("Not allowed by CORS"));
   },
-  methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "authorization"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+  ],
   credentials: true,
   maxAge: 86400,
-}));
+  optionsSuccessStatus: 204,
+  preflightContinue: false,
+};
 
-app.options("*", cors());
+app.use(cors(corsConfig));
+app.options("*", cors(corsConfig));
+
+app.use((err: any, _req: any, res: any, next: any) => {
+  if (err && (err.message === "Not allowed by CORS" || err.message?.includes("CORS"))) {
+    console.error("[CORS ERROR MIDDLEWARE]", err.message);
+    return res.status(403).json({ ok: false, error: "CORS_BLOCKED" });
+  }
+  return next(err);
+});
+
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ limit: "20mb", extended: true }));
+
+app.use(
+  express.static(path.join(__dirname, "..", "public"))
+);
 
 if (NODE_ENV !== "production") {
   app.use((req, _res, next) => {

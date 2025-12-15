@@ -238,6 +238,12 @@ export default function AdminDashboard() {
   const [canManageAdmins, setCanManageAdmins] = useState(false);
   const [adminNivel, setAdminNivel] = useState<number>(0);
 
+  const [profDeleteModalOpen, setProfDeleteModalOpen] = useState(false);
+  const [profToDelete, setProfToDelete] = useState<{ id: string; nome?: string } | null>(null);
+  const [profDeleteBusy, setProfDeleteBusy] = useState(false);
+  const [profDeleteErr, setProfDeleteErr] = useState<string>("");
+
+
 type AssinanteListItem = {
   id: string;
   plano: string;
@@ -695,6 +701,50 @@ async function marcarFeedbackComoLido(id: string) {
   }
 }
 
+function abrirModalExcluirProfessor(p: any) {
+  setProfDeleteErr("");
+  setProfToDelete({ id: p.id, nome: p.nome });
+  setProfDeleteModalOpen(true);
+}
+
+function fecharModalExcluirProfessor() {
+  if (profDeleteBusy) return;
+  setProfDeleteModalOpen(false);
+  setProfToDelete(null);
+  setProfDeleteErr("");
+}
+
+async function confirmarExcluirProfessor() {
+  if (!profToDelete?.id) return;
+
+  setProfDeleteBusy(true);
+  setProfDeleteErr("");
+
+  try {
+    const response = await fetch(`${API.BASE_URL}/api/professores/${profToDelete.id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    if (!response.ok) {
+      const txt = await response.text().catch(() => "");
+      setProfDeleteErr(txt || `Erro ao excluir (HTTP ${response.status}).`);
+      return;
+    }
+
+    // remove da lista
+    setProfessores((prev) => prev.filter((x) => x.id !== profToDelete.id));
+
+    fecharModalExcluirProfessor();
+    alert("Professor e conta vinculada foram excluídos!");
+  } catch (e: any) {
+    setProfDeleteErr(e?.message || "Falha de rede ao excluir.");
+  } finally {
+    setProfDeleteBusy(false);
+  }
+}
+
+
   async function abrirDetalhes(id: string) {
     setLoadingDetalhe(true);
     setDetalheAberto(true);
@@ -776,6 +826,7 @@ async function marcarFeedbackComoLido(id: string) {
     setUserSelecionado(prev => prev ? ({ ...prev, assinatura: upd }) : prev);
     alert("Plano atualizado.");
   }
+
   async function cancelarAssinatura(usuarioId: string) {
     if (!confirm("Cancelar assinatura deste usuário?")) return;
     const resp = await fetch(`${API.BASE_URL}/api/assinaturas/${usuarioId}/cancelar`, {
@@ -787,6 +838,7 @@ async function marcarFeedbackComoLido(id: string) {
     setUserSelecionado(prev => prev ? ({ ...prev, assinatura: upd }) : prev);
     alert("Assinatura cancelada.");
   }
+
   async function reativarAssinatura(usuarioId: string) {
     const resp = await fetch(`${API.BASE_URL}/api/assinaturas/${usuarioId}/reativar`, {
       method: "POST",
@@ -807,6 +859,7 @@ async function marcarFeedbackComoLido(id: string) {
       return String(v);
     }
   }
+
 
   if (!dados) return <div className="p-6">Carregando...</div>;
 
@@ -1231,16 +1284,15 @@ async function marcarFeedbackComoLido(id: string) {
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => (window.location.href = `/admin/professores/create?id=${p.id}`)}>✏️</button>
-                    <button
-                      onClick={async () => {
-                        const confirmar = confirm("Deseja excluir este professor?");
-                        if (!confirmar) return;
-                        const response = await fetch(`${API.BASE_URL}/api/professores/${p.id}`, { method: "DELETE" });
-                        response.ok ? alert("Professor excluído!") : alert("Erro ao excluir.");
-                      }}
-                    >
-                      🗑️
-                    </button>
+
+<button
+  onClick={() => abrirModalExcluirProfessor(p)}
+  className="text-red-600"
+  title="Excluir professor"
+>
+  🗑️
+</button>
+
                   </div>
                 </li>
               ))}
@@ -2005,6 +2057,67 @@ async function marcarFeedbackComoLido(id: string) {
           </div>
         </div>
       )}
+
+      {profDeleteModalOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={fecharModalExcluirProfessor} />
+
+          <div className="relative bg-white w-full max-w-lg rounded-lg shadow-xl p-5">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-lg font-semibold text-gray-900">Confirmar exclusão</h4>
+              <button
+                onClick={fecharModalExcluirProfessor}
+                className="text-gray-600 hover:text-gray-800"
+                disabled={profDeleteBusy}
+                title="Fechar"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="text-sm text-gray-700 space-y-2">
+              <p>
+                Você tem certeza que deseja excluir o professor{" "}
+                <strong>{profToDelete?.nome || "selecionado"}</strong>?
+              </p>
+
+              <div className="rounded bg-red-50 border border-red-200 p-3 text-red-800">
+                <div className="font-semibold">Atenção</div>
+                <div>
+                  Esta ação é <strong>irreversível</strong> e também irá excluir a{" "}
+                  <strong>conta (usuário) vinculada</strong> a esse professor.
+                </div>
+              </div>
+
+              {profDeleteErr && (
+                <div className="rounded bg-amber-50 border border-amber-200 p-3 text-amber-900">
+                  {profDeleteErr}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                onClick={fecharModalExcluirProfessor}
+                disabled={profDeleteBusy}
+                className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+
+              <button
+                onClick={confirmarExcluirProfessor}
+                disabled={profDeleteBusy}
+                className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {profDeleteBusy ? "Excluindo..." : "Excluir professor e conta"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
     </div>
   );
 }
