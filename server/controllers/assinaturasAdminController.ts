@@ -7,7 +7,6 @@ type AdminReq = Request & { user?: any };
 
 function assertAdmin(req: AdminReq) {
   const u: any = req.user || {};
-  console.log("assertAdmin /admin/assinantes user =", u);
 
   if (!u || !u.id) {
     const err: any = new Error("Acesso restrito ao administrador.");

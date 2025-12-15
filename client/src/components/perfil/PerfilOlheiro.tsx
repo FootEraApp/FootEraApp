@@ -1,4 +1,3 @@
-// client/src/components/perfil/perfilOlheiro
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {

@@ -1,4 +1,3 @@
-// server/controllers/atletaController
 import { Request, Response } from "express";
 import { PrismaClient, TipoMidia, StorageClass } from "@prisma/client";
 
@@ -26,11 +25,9 @@ export const getAtletaById = async (req: Request, res: Response) => {
       },
       clube: true,
       escolinha: true,
-
-      // ⬇️ novo
       professor: {
         include: {
-          usuario: true, // se quiser mostrar nome/foto do usuário do professor
+          usuario: true,
         },
       },
     },
@@ -176,9 +173,7 @@ export async function getProfessorDoAtleta(req: Request, res: Response) {
 
 export async function vinculosBasic(req: Request, res: Response) {
   try {
-    const { id } = req.params; // id do Atleta
-
-    // Buscar todas as relações que envolvem esse atleta
+    const { id } = req.params;
     const rels = await prisma.relacaoTreinamento.findMany({
       where: { atletaId: id, encerradoEm: null },
       include: {

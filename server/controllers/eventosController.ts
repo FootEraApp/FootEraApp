@@ -1,4 +1,3 @@
-// server/controllers/eventosController.ts
 import { Request, Response, NextFunction } from "express";
 import { PrismaClient } from "@prisma/client";
 import dayjs from "dayjs";
@@ -42,7 +41,6 @@ export async function auth(req: any, res: Response, next: NextFunction) {
     let tipo: string | undefined = (payload.tipo || payload.tipoUsuario || "").toLowerCase();
     let tipoUsuarioId: string | undefined = payload.tipoUsuarioId;
 
-    // 1) tenta clube, se ainda não tiver tipoUsuarioId
     if (!tipoUsuarioId) {
       const club = await prisma.clube.findFirst({
         where: { usuarioId: userId },
@@ -54,7 +52,6 @@ export async function auth(req: any, res: Response, next: NextFunction) {
       }
     }
 
-    // 2) tenta escolinha, se ainda não tiver tipoUsuarioId
     if (!tipoUsuarioId) {
       const escola = await prisma.escolinha.findFirst({
         where: { usuarioId: userId },
@@ -75,21 +72,12 @@ export async function auth(req: any, res: Response, next: NextFunction) {
         String(payload.role || "").toLowerCase() === "admin" ||
         payload.isAdmin === true,
     };
-
-    // log temporário pra conferir no console
-    console.log("AUTH eventos =>", {
-      id: req.user.id,
-      tipo: req.user.tipo,
-      tipoUsuarioId: req.user.tipoUsuarioId,
-    });
-
     next();
   } catch (e) {
     console.error("Erro no auth eventos:", e);
     return res.status(401).json({ error: "Token inválido" });
   }
 }
-
 
 export async function ehDonoDoClubeOuAdmin(
   req: any,
@@ -157,7 +145,7 @@ export async function listarPublicos(req: Request & { user?: any }, res: Respons
   try {
     const eventos = await prisma.evento.findMany({
       where: {
-        status: "ABERTO", // se quiser filtrar apenas eventos ativos
+        status: "ABERTO",
       },
       include: {
         clube: true,
@@ -193,7 +181,7 @@ export async function listarDoClube(req: Request, res: Response) {
 
   const eventos = await prisma.evento.findMany({
     where,
-    orderBy: { inicio: "asc" }, // campo novo do schema
+    orderBy: { inicio: "asc" }, 
   });
 
   const items = eventos.map((ev) => ({
@@ -216,7 +204,7 @@ export async function listarDaEscolinha(req: Request, res: Response) {
 
     const eventos = await prisma.evento.findMany({
       where: { escolinhaId },
-      orderBy: { inicio: "asc" }, // aqui também usa 'inicio'
+      orderBy: { inicio: "asc" }, 
     });
 
     return res.json(eventos);
@@ -245,10 +233,8 @@ export async function criar(req: any, res: Response) {
       titulo,
       tipo,
       status,
-      // nomes novos (preferenciais)
       inicio,
       fim,
-      // nomes antigos que o front pode estar usando
       dataInicio,
       dataFim,
       descricao,
@@ -275,7 +261,6 @@ export async function criar(req: any, res: Response) {
         .json({ error: "Data de início (inicio/dataInicio) é obrigatória" });
     }
 
-    // requisitos no schema é String[]
     let requisitosArr: string[] = [];
     if (Array.isArray(requisitos)) {
       requisitosArr = requisitos.map((r: any) => String(r).trim()).filter(Boolean);
@@ -395,7 +380,7 @@ export async function minhaAgenda(req: any, res: Response) {
 export async function eventosDoAtleta(req: any, res: Response) {
   try {
     const { usuarioId } = req.params;
-    void usuarioId; // ainda não filtramos por atleta, mas mantemos o param
+    void usuarioId;
 
     const agora = new Date();
 

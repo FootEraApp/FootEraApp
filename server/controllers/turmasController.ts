@@ -73,7 +73,6 @@ export async function getAlunosTurma(req: Request, res: Response) {
 
     const usuarioIds = turma.membros.map((m) => m.usuarioId).filter(Boolean);
 
-    // ✅ pega atletaId de cada usuário (se existir)
     const atletas = usuarioIds.length
       ? await prisma.atleta.findMany({
           where: { usuarioId: { in: usuarioIds } },
@@ -83,15 +82,14 @@ export async function getAlunosTurma(req: Request, res: Response) {
 
     const atletaIdByUsuarioId = new Map(atletas.map((a) => [a.usuarioId, a.id]));
 
-    // ✅ retorna ambos: atletaId e usuarioId
     const alunos = turma.membros.map((m) => {
       const usuarioId = m.usuarioId;
       const atletaId = atletaIdByUsuarioId.get(usuarioId) ?? null;
 
       return {
-        atletaId,            // ✅ o que seu agendamento precisa
-        usuarioId,           // ✅ para mostrar foto/nome e compatibilidade
-        id: atletaId ?? usuarioId, // ✅ fallback (mas ideal é usar atletaId)
+        atletaId,           
+        usuarioId,          
+        id: atletaId ?? usuarioId, 
         usuario: {
           id: m.usuario?.id ?? usuarioId,
           nome: m.usuario?.nome ?? "Atleta da turma",

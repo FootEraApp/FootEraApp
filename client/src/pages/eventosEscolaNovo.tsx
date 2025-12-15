@@ -1,4 +1,3 @@
-// client/src/pages/eventosEscolaNovo.tsx
 import { useState } from "react";
 import axios from "axios";
 import { useLocation } from "wouter";

@@ -632,15 +632,10 @@ const isLista = (id: string) =>
 const isPosicao = (id: string) => id.startsWith("pos:");
 
 const handleDragEnd = (result: DropResult) => {
-  console.log("[Elenco] onDragEnd RAW:", result);
 
   const { source, destination, reason } = result;
 
   if (!destination) {
-    console.log("[Elenco] drop sem destination (soltou fora da lista/campo)", {
-      source,
-      reason,
-    });
 
     if (isPosicao(source.droppableId) && ativo) {
       const posId = source.droppableId.replace("pos:", "") as PosicaoCampo;
@@ -662,7 +657,6 @@ const handleDragEnd = (result: DropResult) => {
   }
 
   if (!ativo) {
-    console.log("[Elenco] onDragEnd sem elenco ativo");
     return;
   }
 
@@ -673,17 +667,6 @@ const handleDragEnd = (result: DropResult) => {
   const toLista = isLista(toId);
   const fromPos = isPosicao(fromId);
   const toPos = isPosicao(toId);
-
-  console.log("[Elenco] drag result:", {
-    fromId,
-    toId,
-    fromLista,
-    toLista,
-    fromPos,
-    toPos,
-    sourceIndex: source.index,
-    destIndex: destination.index,
-  });
 
   if (fromPos && toPos) {
     const from = fromId.replace("pos:", "") as PosicaoCampo;

@@ -129,7 +129,6 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
     return sessao.id;
   });
 
-    // ✅ devolve completo (inclui temporários também)
     const sessaoCompleta = await prisma.sessaoTreinoTurma.findUnique({
       where: { id: sessaoId },
       include: {
@@ -212,7 +211,6 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
             pontuacao: true,
             duracao: true,
             exercicios: {
-              // ✅ aqui é TreinoProgramadoExercicio (NÃO tem concluido/concluidoEm)
               select: {
                 id: true,
                 exercicioId: true,
@@ -236,7 +234,6 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
           },
         },
         exercicios: {
-          // ✅ aqui é SessaoTreinoTurmaExercicio
           select: {
             id: true,
             exercicioId: true,
@@ -262,7 +259,6 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
       orderBy: { data: "asc" },
     });
 
-    // 🔥 merge de reps (funciona para normal e temporário)
     const enriquecidas = sessoes.map((sessao: any) => {
       const mapaReps = new Map<string, string | null>();
 
@@ -294,67 +290,65 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
         return {
           ...se,
           repeticoes: (key && mapaReps.get(key)) ?? null,
-          videoDemonstrativoUrl: video, // ✅ pronto pro front
+          videoDemonstrativoUrl: video, 
         };
       });
 
       return { ...sessao, exercicios: exerciciosComReps };
     });
 
-    // ✅ fallback: se temporário não tem videoDemonstrativoUrl, tenta achar pelo nome em Exercicio
-const nomesTemporariosSemVideo = new Set<string>();
+    const nomesTemporariosSemVideo = new Set<string>();
 
-for (const sessao of enriquecidas as any[]) {
-  for (const se of sessao.exercicios ?? []) {
-    const nomeTmp = se.exercicioTemporario?.nome;
-    const jaTemVideo =
-      se.exercicioTemporario?.videoDemonstrativoUrl ||
-      se.exercicio?.videoDemonstrativoUrl ||
-      se.videoDemonstrativoUrl;
+    for (const sessao of enriquecidas as any[]) {
+      for (const se of sessao.exercicios ?? []) {
+        const nomeTmp = se.exercicioTemporario?.nome;
+        const jaTemVideo =
+          se.exercicioTemporario?.videoDemonstrativoUrl ||
+          se.exercicio?.videoDemonstrativoUrl ||
+          se.videoDemonstrativoUrl;
 
-    if (nomeTmp && !jaTemVideo) {
-      nomesTemporariosSemVideo.add(String(nomeTmp).trim());
-    }
-  }
-}
-
-if (nomesTemporariosSemVideo.size) {
-  const nomes = Array.from(nomesTemporariosSemVideo);
-
-  const exerciciosBase = await prisma.exercicio.findMany({
-    where: {
-      nome: { in: nomes, mode: "insensitive" },
-      NOT: [{ videoDemonstrativoUrl: null }, { videoDemonstrativoUrl: "" }],
-    },
-    select: { nome: true, videoDemonstrativoUrl: true },
-  });
-
-  const mapaVideoPorNome = new Map<string, string>();
-  exerciciosBase.forEach((e) => {
-    if (e.videoDemonstrativoUrl) {
-      mapaVideoPorNome.set(String(e.nome).trim().toLowerCase(), String(e.videoDemonstrativoUrl));
-    }
-  });
-
-  // injeta vídeo no payload (sem precisar atualizar o banco)
-  for (const sessao of enriquecidas as any[]) {
-    sessao.exercicios = (sessao.exercicios ?? []).map((se: any) => {
-      const nomeTmp = se.exercicioTemporario?.nome;
-      const temVideo =
-        se.videoDemonstrativoUrl ||
-        se.exercicio?.videoDemonstrativoUrl ||
-        se.exercicioTemporario?.videoDemonstrativoUrl;
-
-      if (!temVideo && nomeTmp) {
-        const v = mapaVideoPorNome.get(String(nomeTmp).trim().toLowerCase());
-        if (v) {
-          return { ...se, videoDemonstrativoUrl: v };
+        if (nomeTmp && !jaTemVideo) {
+          nomesTemporariosSemVideo.add(String(nomeTmp).trim());
         }
       }
-      return se;
-    });
-  }
-}
+    }
+
+    if (nomesTemporariosSemVideo.size) {
+      const nomes = Array.from(nomesTemporariosSemVideo);
+
+      const exerciciosBase = await prisma.exercicio.findMany({
+        where: {
+          nome: { in: nomes, mode: "insensitive" },
+          NOT: [{ videoDemonstrativoUrl: null }, { videoDemonstrativoUrl: "" }],
+        },
+        select: { nome: true, videoDemonstrativoUrl: true },
+      });
+
+      const mapaVideoPorNome = new Map<string, string>();
+      exerciciosBase.forEach((e) => {
+        if (e.videoDemonstrativoUrl) {
+          mapaVideoPorNome.set(String(e.nome).trim().toLowerCase(), String(e.videoDemonstrativoUrl));
+        }
+      });
+
+      for (const sessao of enriquecidas as any[]) {
+        sessao.exercicios = (sessao.exercicios ?? []).map((se: any) => {
+          const nomeTmp = se.exercicioTemporario?.nome;
+          const temVideo =
+            se.videoDemonstrativoUrl ||
+            se.exercicio?.videoDemonstrativoUrl ||
+            se.exercicioTemporario?.videoDemonstrativoUrl;
+
+          if (!temVideo && nomeTmp) {
+            const v = mapaVideoPorNome.get(String(nomeTmp).trim().toLowerCase());
+            if (v) {
+              return { ...se, videoDemonstrativoUrl: v };
+            }
+          }
+          return se;
+        });
+      }
+    }
 
     return res.json(enriquecidas);
   } catch (err: any) {
@@ -489,15 +483,14 @@ export async function remarcarSessao(
       });
     }
 
-    // 👇 aqui entra o trecho que você mandou
     const apenasData = novaDataISO.slice(0, 10);
     const novaData = new Date(`${apenasData}T00:00:00-03:00`);
 
     const atualizada = await prisma.sessaoTreinoTurma.update({
       where: { id },
       data: {
-        data: novaData,       // campo certo do schema
-        status: StatusSessaoTreinoTurma.AGENDADO,   // volta para agendado
+        data: novaData,       
+        status: StatusSessaoTreinoTurma.AGENDADO,   
         startedAt: null,
         finishedAt: null,
       },
@@ -543,7 +536,6 @@ export async function atualizarProgresso(req: AuthenticatedRequest, res: Respons
       prisma.sessaoTreinoTurmaExercicio.update({
         where: { id: ex.id },
         data: {
-          // ✅ compara pelo ID da tabela de sessão
           concluido: concluidoSet.has(ex.id),
           concluidoEm: concluidoSet.has(ex.id) ? new Date() : null,
         },
@@ -624,12 +616,6 @@ export async function finalizarSessao(
     if (minutosReal > minutosBase + 5) {
       penalidadeAtraso = true;
       minutosConsiderados = Math.max(1, Math.round(minutosBase / 2));
-      console.log("[SessaoTurma] Penalidade atraso aplicada", {
-        sessaoId: sessao.id,
-        minutosReal,
-        minutosBase,
-        minutosConsiderados,
-      });
     }
 
     const pontosBase = sessao.treino.pontuacao ?? 0;
@@ -717,14 +703,12 @@ export async function excluirSessao(
       return res.status(404).json({ error: "Sessão não encontrada." });
     }
 
-    // 🔒 segurança: só quem criou (ou admin) pode excluir
     if (sessao.criadorId !== usuarioId && !u.isAdmin) {
       return res.status(403).json({
         error: "Você não pode excluir uma sessão criada por outro usuário.",
       });
     }
 
-    // 🧹 limpar dependências primeiro
     await prisma.presencaSessaoTreino.deleteMany({
       where: { sessaoId: id },
     });
@@ -733,7 +717,6 @@ export async function excluirSessao(
       where: { sessaoId: id },
     });
 
-    // 🗑️ excluir a sessão
     await prisma.sessaoTreinoTurma.delete({
       where: { id },
     });
@@ -775,12 +758,10 @@ export async function obterSessao(req: AuthenticatedRequest, res: Response) {
 
     if (!sessao) return res.status(404).json({ error: "Sessão não encontrada." });
 
-    // 🔒 segurança: só criador (ou admin) pode ver
     if (sessao.criadorId !== usuarioId && !u.isAdmin) {
       return res.status(403).json({ error: "Você não pode acessar uma sessão criada por outro usuário." });
     }
 
-    // ✅ devolve presentes (e também todos, se você quiser usar depois)
     const alunos = (sessao.presencas || []).map((p: any) => ({
       atletaId: String(p.atletaId),
       presente: Boolean(p.presente),
@@ -794,8 +775,8 @@ export async function obterSessao(req: AuthenticatedRequest, res: Response) {
       status: sessao.status,
       treino: sessao.treino,
       turma: sessao.turma,
-      alunos,      // todos
-      presentes,   // só os presentes
+      alunos,     
+      presentes,   
     });
   } catch (err: any) {
     console.error("Erro obterSessao", err);

@@ -24,17 +24,14 @@ describe("Botão Treinar Juntos no profile", () => {
 
   beforeEach(() => {
     cy.loginUi("professorFree");
-    getAuthFromWindow(); // garante token/tipoUsuarioId
+    getAuthFromWindow();
   });
 
   it("mostra 'Já treino junto' quando há vínculo ativo (professor com atleta vinculado)", () => {
     cy.visit(`/perfil/${ATLETA_FREE_USUARIO_ID}`);
-
-    // debug opcional
     cy.get("button").then(($btns) => {
       const textos = [...$btns].map((b) => b.innerText);
       // eslint-disable-next-line no-console
-      console.log("Botoes na tela:", textos);
     });
 
     cy.contains("button", /j[aá] treino junto/i, { timeout: 20000 }).should(
@@ -45,7 +42,6 @@ describe("Botão Treinar Juntos no profile", () => {
   it("vincula e depois desvincula, tirando da lista de vinculados e registrando no histórico", () => {
     cy.visit(`/perfil/${ATLETA_FREE_USUARIO_ID}`);
 
-    // 1) Se estiver em 'Treinar juntos', cria o vínculo
     cy.contains("button", /treinar juntos|j[aá] treino junto|desvinculado/i, {
       timeout: 20000,
     })
@@ -61,9 +57,7 @@ describe("Botão Treinar Juntos no profile", () => {
         }
       });
 
-    // 2) Usa token + tipoUsuarioId pra falar com a API
     getAuthFromWindow().then(({ token, tipoUsuarioId }) => {
-      // 2a) Confere que atleta_free está na lista de vinculados ANTES de desvincular
       cy.request({
         method: "GET",
         url: `${baseUrl}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(
@@ -88,18 +82,14 @@ describe("Botão Treinar Juntos no profile", () => {
         ).to.be.true;
       });
 
-      // 3) Desvincula pela UI
       cy.contains("button", /j[aá] treino junto/i, {
         timeout: 20000,
       }).click();
       cy.contains(/sim/i).click();
-
-      // 4) Botão vira 'Desvinculado'
       cy.contains("button", /desvinculado/i, {
         timeout: 20000,
       }).should("be.visible");
 
-      // 5) Confere que saiu da lista de vinculados
       cy.request({
         method: "GET",
         url: `${baseUrl}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(
@@ -124,7 +114,6 @@ describe("Botão Treinar Juntos no profile", () => {
         ).to.be.false;
       });
 
-      // 6) Confere que entrou um registro no histórico de atletas do professor
       cy.request({
         method: "GET",
         url: `${baseUrl}/api/professores/${encodeURIComponent(

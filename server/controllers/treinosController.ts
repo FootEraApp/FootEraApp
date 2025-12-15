@@ -66,7 +66,6 @@ const FEAT = {
   AGENDAMENTO_PESSOAL: "agendamento.pessoal"  as CanKey,  
 } as const;
 
-// ✅ HERDAR VÍDEO: se o temporário não tiver vídeo, tenta puxar do catálogo pelo nome
 async function herdarVideoParaTemporario(nome: string): Promise<string | null> {
   const clean = String(nome || "").trim();
   if (!clean) return null;
@@ -674,7 +673,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
       return res.status(400).json({ message: "dataExpiracao inválida" });
     }
 
-    // ✅ Checagem de permissão (organizador agendando para atleta)
     const tipo = String(req.user?.tipo ?? "").toLowerCase();
     const turmaId = typeof turmaIdRaw === "string" ? turmaIdRaw.trim() : "";
     const elencoId = typeof elencoIdRaw === "string" ? elencoIdRaw.trim() : "";
@@ -702,7 +700,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
         ]);
 
         if (!temVinc && !ehObservado) {
-          // ✅ Permite via turma/elenco (se informado)
           if (turmaId) {
             const membro = await prisma.turmaUsuario.findFirst({
               where: { turmaId, usuarioId: atleta.usuarioId ?? "__none__" },
@@ -756,7 +753,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
       }
     }
 
-    // ✅ Se já existe agendamento desse treino programado para o atleta, remarca
     const now = new Date();
 
     const existente = await prisma.treinoAgendado.findFirst({
@@ -807,7 +803,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
       }
     }
 
-    // ✅ Criar novo agendamento
     const criado = await prisma.treinoAgendado.create({
       data: {
         titulo: tituloFinal,
@@ -1889,16 +1884,6 @@ export async function criarTreinoProgramado(
       pontuacao,
     } = req.body as any;
 
-    console.log("[criarTreinoProgramado] body recebido:", {
-      nome,
-      nivel,
-      tipoUsuario,
-      tipoUsuarioId,
-      qtdExercicios: Array.isArray(exercicios) ? exercicios.length : "NAO_ARRAY",
-      atletasIds,
-      elencosIds,
-    });
-
     if (!nome || !nivel || !Array.isArray(exercicios) || !usuarioId || !tipoUsuarioId) {
       console.warn("[criarTreinoProgramado] Dados inválidos:", {
         nome,
@@ -1990,8 +1975,6 @@ export async function criarTreinoProgramado(
       },
     });
 
-    console.log("[criarTreinoProgramado] treino criado:", treino.id);
-
     const exsBanco = (exercicios as any[]).filter((e) => e.exercicioId);
     const exsTemp = (exercicios as any[]).filter(
       (e) => !e.exercicioId && e.nome
@@ -2014,7 +1997,6 @@ export async function criarTreinoProgramado(
 
   const videoHerdado = await herdarVideoParaTemporario(nomeTemp);
 
-  // ✅ se já existir temporário com mesmo nome neste treino, reaproveita
   let temp = await prisma.exercicioTemporario.findFirst({
     where: {
       treinoProgramadoId: treino.id,
@@ -2032,13 +2014,11 @@ export async function criarTreinoProgramado(
         descricao: e.descricao ?? null,
         nivel,
         categorias,
-        // ✅ salva vídeo herdado no temporário
         videoDemonstrativoUrl: videoHerdado ?? null,
       },
       select: { id: true, videoDemonstrativoUrl: true },
     });
   } else if ((!temp.videoDemonstrativoUrl || temp.videoDemonstrativoUrl === "") && videoHerdado) {
-    // ✅ se já existe mas está sem vídeo, preenche
     await prisma.exercicioTemporario.update({
       where: { id: temp.id },
       data: { videoDemonstrativoUrl: videoHerdado },
@@ -2085,11 +2065,6 @@ export async function criarTreinoProgramado(
       new Set(atletasResolvidos.map((a) => a.id))
     );
 
-    console.log(
-      "[criarTreinoProgramado] atletas vinculados resolvidos:",
-      atletaIdsResolved
-    );
-
     if (atletaIdsResolved.length > 0) {
       try {
         const whenDate = treino.dataAgendada ?? new Date();
@@ -2111,11 +2086,6 @@ export async function criarTreinoProgramado(
           skipDuplicates: true,
         });
 
-        console.log(
-          "[criarTreinoProgramado] treinos auto-agendados para",
-          atletaIdsResolved.length,
-          "atletas"
-        );
       } catch (e) {
         console.error(
           "[criarTreinoProgramado] ERRO ao auto-agendar para atletas (não é crítico):",
@@ -2304,7 +2274,6 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
 
         const videoHerdado = await herdarVideoParaTemporarioTx(tx as any, nomeTemp);
 
-        // ✅ reaproveita temporário com mesmo nome neste treino
         let temp = await (tx as any).exercicioTemporario.findFirst({
           where: {
             treinoProgramadoId: id,

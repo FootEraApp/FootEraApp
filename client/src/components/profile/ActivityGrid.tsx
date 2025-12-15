@@ -6,7 +6,6 @@ import { publicImgUrl } from "@/utils/publicUrl.js";
 
 interface Activity {
   id: string;
-  // deixa string genérico pra aceitar "Treino Livre", "Treino Agendado", etc.
   tipo: string;
   imagemUrl?: string | null;
   nome: string;
@@ -21,7 +20,6 @@ type VideoItem = {
   curtidas?: number;
 };
 
-// Activity usado internamente no grid, opcionalmente ligado a um vídeo
 type ActivityCard = Activity & {
   video?: VideoItem | null;
 };
@@ -79,7 +77,6 @@ export default function ActivityGrid({
     [token]
   );
 
-  // busca vídeos de desafios para esse usuário
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -101,9 +98,6 @@ export default function ActivityGrid({
     };
   }, [perfilUsuarioId, headers]);
 
-  // junta TODAS as atividades:
-  // - activities (treino livre, treino agendado concluído, desafio etc.)
-  // - vídeos aprovados de desafios
   const cards: ActivityCard[] = useMemo(() => {
     const base: ActivityCard[] = (activities || []).map((a) => ({
       ...a,
@@ -118,7 +112,6 @@ export default function ActivityGrid({
       video: v,
     }));
 
-    // se quiser limitar em N mais recentes, pode fazer slice aqui
     return [...base, ...videoCards];
   }, [activities, videos]);
 
@@ -168,7 +161,6 @@ export default function ActivityGrid({
                   className="w-full h-24 object-cover opacity-80 group-hover:opacity-60 transition"
                 />
 
-                {/* faixa com o tipo embaixo */}
                 <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[11px] text-white px-2 py-1 flex justify-between items-center">
                   <span className="truncate max-w-[70%]">{card.nome}</span>
                   <span className="ml-1 font-semibold">
