@@ -742,11 +742,11 @@ model LogErro {
 model Feedback {
   id        String    @id @default(uuid())
   usuarioId String
-  tipo      String // ex.: "sugestao", "bug"
+  tipo      String
   mensagem  String
   createdAt DateTime  @default(now())
-  lidoEm    DateTime? // quando um admin marcar como lido, opcional
-  meta      Json? // se quiser guardar info extra (página, device, etc.) no futuro
+  lidoEm    DateTime? 
+  meta      Json?
 
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 

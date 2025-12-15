@@ -71,18 +71,13 @@ const EditarPerfil = () => {
   const [clubeQuery, setClubeQuery] = useState("");
   const [clubes, setClubes] = useState<ResultadoBuscaClube[]>([]);
   const [clubeSel, setClubeSel] = useState<ResultadoBuscaClube | null>(null);
-
   const [listaClubes, setListaClubes] = useState<OptionMin[]>([]);
   const [listaEscolinhas, setListaEscolinhas] = useState<OptionMin[]>([]);
   const [listaProfessores, setListaProfessores] = useState<OptionMin[]>([]);
-
   const [clubeSelId, setClubeSelId] = useState<string | null>(null);
   const [escolinhaSelId, setEscolinhaSelId] = useState<string | null>(null);
   const [professorSelId, setProfessorSelId] = useState<string | null>(null);
 
-  // -----------------------------------------------------------
-  // 1) BUSCA DO PERFIL + VÍNCULOS EXISTENTES
-  // -----------------------------------------------------------
   useEffect(() => {
     if (!usuarioId || !token) {
       console.error("[EditarPerfil] Sem usuarioId ou token — verifique login.");
@@ -109,8 +104,6 @@ const EditarPerfil = () => {
           dadosEsp.siteOficial = dadosEsp.site;
         }
 
-        // ---- Vínculos vindos do backend (mesma lógica do card Vínculos) ----
-        // Tentamos achar IDs de professor, clube e escolinha em vários formatos
         const vinculos = res.data.vinculos || res.data.vinculo || {};
 
         const professorVinculoId =
@@ -151,7 +144,6 @@ const EditarPerfil = () => {
 
         setDadosTipo(dadosEsp);
 
-        // tipo para decidir quais campos específicos renderizar
         const tipoSrv = res.data?.tipo ?? tipoUsuarioOriginal ?? "";
         const t = String(tipoSrv).toLowerCase();
         setTipoRender((t === "escolinha" ? "escola" : (t as TipoRender)));
@@ -174,9 +166,6 @@ const EditarPerfil = () => {
     fetchDados();
   }, [usuarioId, token]);
 
-  // -----------------------------------------------------------
-  // 2) BUSCA DE CLUBES PARA O OLHEIRO (campo de busca livre)
-  // -----------------------------------------------------------
   useEffect(() => {
     let cancelado = false;
     (async () => {
@@ -209,9 +198,6 @@ const EditarPerfil = () => {
     };
   }, [clubeQuery, API?.BASE_URL, token]);
 
-  // -----------------------------------------------------------
-  // 3) CATÁLOGOS DE CLUBES / ESCOLINHAS / PROFESSORES (para selects)
-  // -----------------------------------------------------------
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -250,10 +236,6 @@ const EditarPerfil = () => {
       cancel = true;
     };
   }, [API?.BASE_URL, token]);
-
-  // -------------------------------------------------------------------
-  // resto do componente (handleChange, renderCamposEspecificos, JSX)
-  // -------------------------------------------------------------------
 
   if (loading) {
     return (
@@ -358,7 +340,6 @@ const EditarPerfil = () => {
             {renderInput("Peso (kg)", "peso", "number")}
             {renderInput("Selo de Qualidade", "seloQualidade")}
 
-            {/* Escolinha vinculada */}
             <div className="mb-4">
               <label className="block text-sm font-medium">Escolinha</label>
               <select
@@ -378,7 +359,6 @@ const EditarPerfil = () => {
               </select>
             </div>
 
-            {/* Clube vinculado */}
             <div className="mb-4">
               <label className="block text-sm font-medium">Clube</label>
               <select
@@ -398,7 +378,6 @@ const EditarPerfil = () => {
               </select>
             </div>
 
-            {/* Professor vinculado */}
             <div className="mb-4">
               <label className="block text-sm font-medium">Professor</label>
               <select
@@ -420,9 +399,6 @@ const EditarPerfil = () => {
           </>
         );
 
-      // … demais cases (professor, escola, olheiro, clube) permanecem IGUAIS
-      // (copie exatamente do seu arquivo anterior, não mexi neles)
-      // -------------------------------------------------------------------
       case "professor":
         return (
           <>

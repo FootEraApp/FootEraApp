@@ -1,4 +1,3 @@
-// client/src/pages/admin-page.tsx
 import React, { useEffect, useState } from "react";
 import { API } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
@@ -482,7 +481,6 @@ async function marcarFeedbackComoLido(id: string) {
         try {
           const res = await fetch(`${API.BASE_URL}/api/admin`, { headers: authHeaders() });
           const txt = await res.text();
-          console.log("GET /api/admin status:", res.status, "body:", txt);
 
           if (!res.ok) {
             setDashErro(`Erro ao carregar dashboard: [${res.status}] ${txt || res.statusText}`);
@@ -492,16 +490,6 @@ async function marcarFeedbackComoLido(id: string) {
 
           const json = txt ? JSON.parse(txt) : {};
           setDados(json);
-          console.log("DADOS DASH:", {
-            totalUsuarios: json.totalUsuarios,
-            totalAtletas: json.totalAtletas,
-            totalClubes: json.totalClubes,
-            totalEscolinhas: json.totalEscolinhas,
-            totalAdministradores: json.totalAdministradores,
-            totalProfessores: json.totalProfessores,
-            totalOlheiros: json.totalOlheiros,
-          });
-
           setDashErro(null);
         } catch (e) {
           console.error("erro /api/admin", e);

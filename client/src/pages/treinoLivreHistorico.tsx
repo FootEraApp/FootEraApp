@@ -1,4 +1,3 @@
-// client/src/pages/treinosLivresHistorico.tsx
 import { useEffect, useState } from "react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
@@ -15,13 +14,11 @@ type TL = {
   urlEvidencia?: string | null;
 };
 
-// helper pra saber se é vídeo
 function isVideo(url: string) {
   const clean = url.split("?")[0].toLowerCase();
   return clean.endsWith(".mp4") || clean.endsWith(".webm") || clean.endsWith(".ogg");
 }
 
-// abre em nova aba/janela, ocupando a tela
 function openMediaFullscreen(url: string) {
   if (typeof window === "undefined") return;
 
@@ -117,7 +114,6 @@ export default function TreinosLivresHistorico() {
         return;
       }
 
-      // remove da lista local
       setItens((prev) => prev.filter((t) => t.id !== id));
     } catch (e) {
       console.error(e);
@@ -186,7 +182,6 @@ export default function TreinosLivresHistorico() {
                   </div>
                 </div>
 
-                {/* botão lixeira */}
                 <button
                   type="button"
                   onClick={() => handleDelete(t.id)}

@@ -41,7 +41,6 @@ Cypress.Commands.add("loginUi", (userKey) => {
         win.localStorage.getItem("token") ||
         win.sessionStorage.getItem("token");
 
-      console.log("TOKEN APÓS LOGIN:", token);
       expect(token, "token após login").to.be.a("string");
     });
   });

@@ -1,4 +1,3 @@
-//server/controllers/perfilController
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
@@ -274,7 +273,6 @@ async function resolveByUsuarioOrEntity(opts: {
 async function countAtletasPorEntidade(opts: { escolinhaId?: string; clubeId?: string }) {
   const { escolinhaId, clubeId } = opts;
 
-  // Agora só olhamos para a tabela RelacaoTreinamento
   const where: any = {
     atletaId: { not: null },
   };
@@ -292,7 +290,6 @@ async function countAtletasPorEntidade(opts: { escolinhaId?: string; clubeId?: s
     select: { atletaId: true },
   });
 
-  // garante únicos
   const idsUnicos = new Set<string>(
     relacoes
       .map((r) => r.atletaId!)
@@ -440,17 +437,13 @@ export const getTreinosPorUsuario = async (req: Request, res: Response) => {
 export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.params.id;
-    console.log("[AtividadesRecentes] userId:", userId);
 
     const atleta = await prisma.atleta.findFirst({
       where: { usuarioId: userId },
       select: { id: true },
     });
 
-    console.log("[AtividadesRecentes] atleta resolvido:", atleta);
-
     if (!atleta) {
-      console.log("[AtividadesRecentes] nenhum atleta para esse usuarioId, retornando [].");
       return res.json([]);
     }
 
@@ -460,18 +453,6 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
       orderBy: { data: "desc" },
       take: 10,
     });
-
-    console.log(
-      "[AtividadesRecentes] treinosLivres brutos:",
-      treinosLivres.map((t) => ({
-        id: t.id,
-        data: t.data,
-        duracaoMin: t.duracaoMin,
-        urlEvidencia: t.urlEvidencia,
-        descricao: t.descricao,
-      }))
-    );
-
 
     const subsTreino = await prisma.submissaoTreino.findMany({
       where: {
@@ -508,19 +489,6 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
       take: 10,
     });
 
-    console.log(
-      "[AtividadesRecentes] subsTreino brutos:",
-      subsTreino.map((s) => ({
-        id: s.id,
-        aprovado: s.aprovado,
-        treinoAgendadoId: s.treinoAgendadoId,
-        treinoTituloSnapshot: s.treinoTituloSnapshot,
-        midiaUrl: s.midiaUrl,
-        observacao: s.observacao,
-        criadoEm: s.criadoEm,
-      }))
-    );
-
     const subsDesafio = await prisma.submissaoDesafio.findMany({
       where: { atletaId: atleta.id, aprovado: true as any },
       include: { desafio: true },
@@ -528,29 +496,8 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
       take: 10,
     });
 
-    console.log(
-      "[AtividadesRecentes] subsDesafio brutos:",
-      subsDesafio.map((s) => ({
-        id: s.id,
-        desafioId: s.desafioId,
-        titulo: s.desafio?.titulo,
-        videoUrl: s.videoUrl,
-        createdAt: s.createdAt,
-      }))
-    );
-
     const parts = await getParticipacoesGrupo(userId, atleta.id);
     const itensGrupo = parts.map(mapGrupoToAtividade);
-
-    console.log(
-      "[AtividadesRecentes] desafios em grupo brutos:",
-      itensGrupo.map((g) => ({
-        id: g.id,
-        nome: g.nome,
-        data: g.data,
-        pontuacao: g.pontuacao,
-      }))
-    );
 
     const itens = [
       ...treinosLivres.map((t: any) => ({
@@ -617,16 +564,6 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
     ]
       .sort((a, b) => +new Date(b.data as any) - +new Date(a.data as any))
       .slice(0, 10);
-
-    console.log(
-      "[AtividadesRecentes] itens enviados pro front:",
-      itens.map((i) => ({
-        id: i.id,
-        tipo: i.tipo,
-        nome: i.nome,
-        data: i.data,
-      }))
-    );
 
     return res.json(itens);
   } catch (e) {

@@ -1,4 +1,3 @@
-// client/src/components/perfil/perfilProfessor
 import { useEffect, useMemo, useState, useCallback, ReactNode} from "react";
 import axios from "axios";
 import { CalendarClock, Activity, PlusCircle, ChevronRight, Trophy } from "lucide-react";

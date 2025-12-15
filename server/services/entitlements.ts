@@ -165,14 +165,6 @@ export function canDetailed(user: UserContext, cap: Capability, want = 1) {
   const planoEfetivo = normPlano(user?.plano);
   const papelEfetivo = normPapel(user?.tipo || "atleta");
 
-  console.log("[entitlements.canDetailed]", {
-    cap,
-    rawTipo: user?.tipo,
-    papelEfetivo,
-    rawPlano: user?.plano,
-    planoEfetivo,
-  });
-
   if (cap === "agendamento.pessoal" || cap === "agendamento.lote") {
     return { ok: true, http: 200 as const, reason: "ok" };
   }

@@ -12,7 +12,7 @@ export default function TreinoLivreNovo() {
   const [duracaoMin, setDuracaoMin] = useState<number>(30);
   const [tipoAtividade, setTipoAtividade] = useState<string>("");
   const [categoria, setCategoria] = useState<string>("");
-  const [arquivoMidia, setArquivoMidia] = useState<File | null>(null); // ⬅️ novo
+  const [arquivoMidia, setArquivoMidia] = useState<File | null>(null); 
 
   async function salvar() {
     const token = (Storage as any).token ?? localStorage.getItem("token");
@@ -35,13 +35,12 @@ export default function TreinoLivreNovo() {
       form.append("duracaoMin", String(duracaoMin || 0));
       if (tipoAtividade) form.append("tipoAtividade", tipoAtividade);
       if (categoria) form.append("categoria", categoria);
-      if (arquivoMidia) form.append("midia", arquivoMidia); // ⬅️ arquivo opcional
+      if (arquivoMidia) form.append("midia", arquivoMidia);
 
       const r = await fetch(`${API.BASE_URL}/api/treinos-livres`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
-          // NÃO colocar Content-Type aqui, o browser define com boundary
         },
         body: form,
       });
@@ -124,7 +123,6 @@ export default function TreinoLivreNovo() {
         onChange={(e) => setCategoria(e.target.value)}
       />
 
-      {/* ⬇️ Novo campo de foto/vídeo */}
       <label className="block text-sm mb-1">Foto / Vídeo (opcional)</label>
       <input
         type="file"

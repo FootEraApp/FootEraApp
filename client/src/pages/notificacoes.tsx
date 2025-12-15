@@ -1,4 +1,3 @@
-// client/src/pages/notificacoes
 import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
@@ -37,7 +36,6 @@ export default function PaginaNotificacoes() {
 
     (async () => {
       try {
-        // 🔧 AJUSTE AQUI: buscar apenas as solicitações que eu RECEBI
         const resp = await fetch(
           `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
           {
@@ -83,7 +81,6 @@ export default function PaginaNotificacoes() {
         );
       }
 
-      // Remove da lista depois de tratar
       setSolicitacoes((prev) => prev.filter((s) => s.id !== id));
     } catch (err) {
       console.error("Erro ao responder solicitação:", err);

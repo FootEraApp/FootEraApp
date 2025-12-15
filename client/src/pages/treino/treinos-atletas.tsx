@@ -591,7 +591,6 @@ function abrirMidiaExercicioDireto(
         };
       });
 
-      console.log("[TREINOS] agendados normalizados:", listaAdaptada);
       setTreinosAgendados(listaAdaptada);
     } catch (e) {
       console.error("Erro ao carregar treinos agendados:", e);

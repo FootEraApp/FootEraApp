@@ -1,4 +1,3 @@
-// client/src/components/billing/SubscriptionBanner.tsx
 import React from "react";
 import { Crown, BadgeCheck, X } from "lucide-react";
 import { Link } from "wouter";
@@ -88,7 +87,6 @@ export default function SubscriptionBanner({
 
   return (
     <>
-      {/* CSS da animação do GOOOOLL!!! */}
       <style>{`
         @keyframes gol-marquee {
           0% {
@@ -106,7 +104,6 @@ export default function SubscriptionBanner({
 
         .group:hover .gol-marquee {
           opacity: 1;
-          /* passa uma vez só por hover, sem loop */
           animation: gol-marquee 4s linear forwards;
         }
       `}</style>
@@ -141,7 +138,6 @@ export default function SubscriptionBanner({
 
           <div className="flex items-center gap-2">
             <Link href="/pagamentos">
-              {/* Botão com efeito GOOOOLL!!! passando da direita pra esquerda */}
               <div
                 className={`relative group px-3 py-2 rounded-lg border cursor-pointer text-sm font-semibold overflow-hidden ${
                   assinaturaAtiva
@@ -154,12 +150,10 @@ export default function SubscriptionBanner({
                     : "Assinar FootEra Pro"
                 }
               >
-                {/* texto principal do botão */}
                 <span className="relative z-20">
                   {assinaturaAtiva ? "Gerenciar" : "Seja Pro"}
                 </span>
 
-                {/* faixa GOOOOLL!!! deslizando por trás quando NÃO é Pro */}
                 {!assinaturaAtiva && (
                   <span
                     className="
