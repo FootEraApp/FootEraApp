@@ -2444,8 +2444,6 @@ async function main() {
             videoDemonstrativoUrl: '/assets/videos/exercicios/coordenativo_unilateral_com_chapa.mp4',
         },
     ];
-    console.log('[seed_exercicios] Iniciando seed dos exercícios...');
-    console.log(`[seed_exercicios] Total de exercícios a processar: ${exercicios.length}`);
     let count = 0;
     for (const ex of exercicios) {
         count++;

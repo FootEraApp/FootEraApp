@@ -1,4 +1,3 @@
-// server/routes/perfil
 import { Router } from "express";
 import {
   getPerfilUsuario, getAtividadesRecentes, getBadges,

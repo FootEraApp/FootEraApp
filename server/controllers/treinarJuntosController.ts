@@ -1,4 +1,3 @@
-// server/controllers/treinarJuntosController.ts
 import type { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
@@ -11,15 +10,6 @@ type SideInfo = {
   escolinhaId: string | null;
 };
 
-/**
- * Descobre de que "lado" o usuário está:
- * - se é atleta -> retorna atletaId
- * - se é professor -> professorId
- * - se é clube -> clubeId
- * - se é escolinha -> escolinhaId
- *
- * Usa sempre o usuarioId (da tabela Usuario).
- */
 async function getSide(usuarioId: string): Promise<SideInfo | null> {
   if (!usuarioId) return null;
 
@@ -74,7 +64,6 @@ export const treinarJuntosController = {
           .json({ message: "perfilUsuarioId é obrigatório na URL" });
       }
 
-      // Olhando o próprio perfil => nunca mostra como "treinando junto"
       if (viewerUsuarioId === perfilUsuarioId) {
         return res.json({
           treinandoJunto: false,
@@ -95,7 +84,6 @@ export const treinarJuntosController = {
 
       const orClauses: any[] = [];
 
-      // viewer é entidade, perfil é atleta
       if (perfilSide.atletaId) {
         if (viewerSide.professorId) {
           orClauses.push({
@@ -117,7 +105,6 @@ export const treinarJuntosController = {
         }
       }
 
-      // perfil é entidade, viewer é atleta
       if (viewerSide.atletaId) {
         if (perfilSide.professorId) {
           orClauses.push({
@@ -146,7 +133,6 @@ export const treinarJuntosController = {
         });
       }
 
-      // 1) Ver se há RELAÇÃO ATIVA
       const relAtiva = await prisma.relacaoTreinamento.findFirst({
         where: {
           OR: orClauses,
@@ -173,17 +159,15 @@ export const treinarJuntosController = {
         });
       }
 
-      // 2) Sem ativo → procurar no HISTÓRICO e ver se ainda está no prazo de 1 ano
       const umAnoAtras = new Date();
       umAnoAtras.setFullYear(umAnoAtras.getFullYear() - 1);
 
-      // ⚠️ Ajusta aqui pro nome REAL da tua tabela e campo de fim do vínculo
       const historico =
         await prisma.atletaHistoricoVinculo.findFirst({
           where: {
             OR: orClauses,
             fimVinculo: {
-              gte: umAnoAtras, // fim dentro do último ano
+              gte: umAnoAtras, 
             },
           },
           orderBy: { fimVinculo: "desc" },
@@ -201,7 +185,6 @@ export const treinarJuntosController = {
         });
       }
 
-      // 3) Sem relação ativa e sem histórico recente
       return res.json({
         treinandoJunto: false,
         status: "NUNCA",

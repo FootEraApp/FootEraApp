@@ -527,11 +527,8 @@ export default function NovoTreino() {
         `${API.BASE_URL}/api/exercicios/listar`,
       ];
 
-      console.log("[NovoTreino] carregando exercicios...");
-
       let arr: any[] = [];
       for (const url of urls) {
-        console.log("[NovoTreino] tentando:", url);
         const r = await fetch(url, { headers });
         const txt = await r.text();
 
@@ -559,7 +556,6 @@ export default function NovoTreino() {
 
       const normalizados: Exercicio[] = (arr || [])
         .map((e: any) => {
-          // tenta cobrir variações de nome de campo
           const video =
             e.videoDemonstrativoUrl ??
             e.videoDemonstrativoURL ??
@@ -600,8 +596,6 @@ export default function NovoTreino() {
           } as Exercicio;
         })
         .filter((x) => x.id && x.nome);
-
-      console.log("[NovoTreino] exercicios carregados:", normalizados.length, normalizados[0]);
 
       if (!cancel) setExerciciosDisponiveis(normalizados);
     } catch (err) {
@@ -878,12 +872,6 @@ export default function NovoTreino() {
             ? orgSelecionada
             : null;
 
-        console.log("[NovoTreino] carregando turmas", {
-          orgSelecionada,
-          baseTipoUsuarioId,
-          orgId,
-        });
-
         if (!baseTipoUsuarioId) {
           console.warn(
             "[NovoTreino] sem tipoUsuarioId do dono; não há como carregar turmas",
@@ -898,7 +886,6 @@ export default function NovoTreino() {
             const urlMinhas = `${API.BASE_URL}/api/turmas/minhas?tipoUsuarioId=${encodeURIComponent(
               baseTipoUsuarioId,
             )}`;
-            console.log("[NovoTreino] tentando /api/turmas/minhas", urlMinhas);
             const r = await fetch(urlMinhas, { headers });
 
             if (r.ok) {
@@ -916,7 +903,6 @@ export default function NovoTreino() {
                   [],
               }));
 
-              console.log("[NovoTreino] turmas (minhas) carregadas:", norm);
               setElencos(norm);
               return;
             } else {
@@ -949,7 +935,6 @@ export default function NovoTreino() {
 
         for (const url of urls) {
           try {
-            console.log("[NovoTreino] tentando carregar turmas em", url);
             const r = await fetch(url, { headers });
             if (!r.ok) continue;
 
@@ -969,10 +954,6 @@ export default function NovoTreino() {
                   [],
               }));
 
-              console.log(
-                "[NovoTreino] turmas carregadas via fallback:",
-                norm,
-              );
               setElencos(norm);
               return;
             }
@@ -1155,8 +1136,6 @@ export default function NovoTreino() {
           ? { Authorization: `Bearer ${token}` }
           : undefined;
 
-        console.log("[NovoTreino] orgSelecionada =", orgSelecionada);
-
         if (orgSelecionada === MOSTRAR_TODOS) {
           const urlsTodos = [
             `${API.BASE_URL}/api/atletas`,
@@ -1164,10 +1143,6 @@ export default function NovoTreino() {
             `${API.BASE_URL}/api/relacoes/atletas?todos=1`,
           ];
           for (const url of urlsTodos) {
-            console.log(
-              "[NovoTreino] tentando carregar TODOS atletas em",
-              url,
-            );
             const r = await fetch(url, { headers });
             if (!r.ok) continue;
             const j = await r.json();
@@ -1190,11 +1165,6 @@ export default function NovoTreino() {
           sessionStorage.getItem("perfilId") ||
           "";
 
-        console.log(
-          "[NovoTreino] tipoUsuarioId usado em atletas-vinculados =",
-          tipoUsuarioId,
-        );
-
         if (!tipoUsuarioId) {
           console.warn(
             "[NovoTreino] nenhum tipoUsuarioId/perfilId encontrado; não dá para chamar /api/treinos/atletas-vinculados",
@@ -1206,8 +1176,6 @@ export default function NovoTreino() {
         const url = `${API.BASE_URL}/api/treinos/atletas-vinculados?tipoUsuarioId=${encodeURIComponent(
           tipoUsuarioId,
         )}&incluirPontuacao=1`;
-
-        console.log("[NovoTreino] GET", url);
 
         const r = await fetch(url, { headers });
         const txt = await r.text();
@@ -1235,10 +1203,6 @@ export default function NovoTreino() {
 
         if (!cancel) {
           setAtletasVinculados(mapAtletas(items));
-          console.log(
-            "[NovoTreino] atletas-vinculados carregados:",
-            mapAtletas(items),
-          );
         }
       } catch (e) {
         console.error(
@@ -1384,8 +1348,6 @@ export default function NovoTreino() {
 
       const data = await resp.json().catch(() => null);
 
-      console.log("[NovoTreino] criarTurma /api/turmas", resp.status, data);
-
       if (!resp.ok) {
         alert(
           data?.message ||
@@ -1529,7 +1491,6 @@ export default function NovoTreino() {
         return prev;
       }
 
-      // se vier "3x10" ou "10", quebramos em séries + reps
       const { series, repeticoes } = parseRepeticoesStr(exercicio.repeticoes);
 
       return [

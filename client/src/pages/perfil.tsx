@@ -18,8 +18,6 @@ import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
 import HealthBanner from "../components/legal/HealthBanner.js";
 import SubscriptionBanner from "../components/billing/SubscriptionBanner.js";
 import { http } from "../services/http.js";
-
-// 👇 novos imports para postagens
 import { format } from "date-fns";
 import {
   getFeedPosts,
@@ -50,7 +48,6 @@ type AssinaturaLite = {
   ativo: boolean;
 };
 
-// ====== Helpers para conquistas (igual ao feed) ======
 type ParsedAchievement = {
   ach?: AchievementLite;
   headTitle?: string;
@@ -154,7 +151,6 @@ function ProfilePostsSection({ usuarioId }: { usuarioId: string }) {
   }, [usuarioId]);
 
   return (
-    // puxa um pouco pra cima e cria um "cardzão" branco
     <div className="max-w-3xl mx-auto px-4 -mt-2 pb-10">
       <div className="bg-white rounded-2xl shadow-sm pt-4 pb-4">
         <h2 className="text-green-900 font-bold text-lg px-4 mb-2">
@@ -359,7 +355,6 @@ export default function ProfilePage() {
       {tipo === "Escolinha" && <PerfilEscola idDaUrl={idDaUrl} />}
       {tipo === "Olheiro" && <PerfilOlheiro idDaUrl={idDaUrl} />}
 
-      {/* 🔥 NOVO: bloco de postagens do usuário, independente do tipo de perfil */}
       {usuarioId && <ProfilePostsSection usuarioId={usuarioId} />}
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">

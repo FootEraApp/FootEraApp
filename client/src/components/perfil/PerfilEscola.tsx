@@ -1,4 +1,3 @@
-// client/src/components/perfil/PerfilEscola.tsx
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -146,7 +145,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   const [data, setData] = useState<PayloadEscola | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 👉 adicionamos "eventos" aqui
   type Aba = "visao" | "eventos" | "atletas" | "conquistas" | "professores";
   const [aba, setAba] = useState<Aba>("visao");
 
@@ -580,7 +578,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         </div>
       )}
 
-      {/* 👉 NOVA ABA EVENTOS, espelhando o clube */}
       {aba === "eventos" && (
         <div className="mt-4 px-4 grid gap-4">
           <SectionCard

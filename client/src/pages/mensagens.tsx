@@ -845,7 +845,6 @@ useEffect(() => {
       ? json.mensagens
       : [];
 
-    // se não veio nada em array, evita quebrar
     if (!Array.isArray(novas)) {
       setTemMaisPriv(false);
       return;
@@ -1273,10 +1272,8 @@ useEffect(() => {
         );
       }
 
-      // --- DETECTA LINK DE TREINO ---
       if (typeof msg.conteudo === "string" && msg.conteudo.startsWith("NOVO_TREINO:")) {
         try {
-          // Formato: NOVO_TREINO:ID:TITULO
           const [, treinoId, titulo] = msg.conteudo.split(":");
 
           return Shell(

@@ -599,7 +599,6 @@ export async function startCheckout(req: Request, res: Response) {
         });
 
         const mpBody: any = mpResp?.body || mpResp;
-        console.log("MP PIX response:", JSON.stringify(mpBody, null, 2));
 
         const qr_code =
           mpBody.point_of_interaction?.transaction_data?.qr_code ?? null;
