@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation} from "wouter";
 import axios from "axios";
 import {
   ArrowLeft,
@@ -267,6 +267,15 @@ export default function PerfilUnico() {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
+  const [, navigate] = useLocation();
+
+  function handleBack() {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    navigate("/perfil"); 
+  }
   useEffect(() => {
     if (!id || !token) return;
 
@@ -314,17 +323,18 @@ export default function PerfilUnico() {
   return (
     <div className="min-h-screen bg-transparent pb-20">
       <div className="mb-3">
-        <Link
-          href="/explorar"
-          aria-label="Voltar para explorar"
-          title="Voltar para explorar"
+        <button
+          type="button"
+          onClick={handleBack}
+          aria-label="Voltar"
+          title="Voltar"
           className="inline-flex h-10 w-10 items-center justify-center
                     rounded-full border border-green-800 bg-white text-green-900
                     shadow-sm hover:bg-green-50 focus:outline-none
                     focus:ring-2 focus:ring-green-700/30 mt-6 ml-4"
         >
           <ArrowLeft className="h-5 w-5" />
-        </Link>
+        </button>
       </div>
 
       {tipo === "Atleta" && <PerfilAtleta idDaUrl={id} />}
