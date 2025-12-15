@@ -8,8 +8,9 @@ import { Link } from "wouter";
 import { Activity, ChevronRight, PlusCircle } from "lucide-react";
 import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
+import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 
-type Props = { idDaUrl?: string };
+type Props = { idDaUrl?: string; usuarioId?: string | null };
 
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
 
@@ -43,7 +44,7 @@ type PayloadClube = {
   metrics: { atletas: number; eventos?: number; conquistas?: number };
 };
 
-type AbaTopo = "perfil" | "eventos" | "atletas" | "professores";
+type AbaTopo = "perfil" | "eventos" | "atletas" | "professores" | "postagens";
 type SubAbaAtletas = "vinculados" | "observados" | "solicitacoes";
 
 type AtletaItem = {
@@ -116,7 +117,7 @@ function SectionCard({
   );
 }
 
-export default function PerfilClube({ idDaUrl }: Props) {
+export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
@@ -482,10 +483,12 @@ export default function PerfilClube({ idDaUrl }: Props) {
               { key: "eventos", label: "Eventos" },
               { key: "atletas", label: "Atletas" },
               { key: "professores", label: "Professores" },
+              { key: "postagens", label: "Postagens" }
             ]
           : [
               { key: "perfil", label: "Perfil" },
               { key: "eventos", label: "Eventos" },
+              { key: "postagens", label: "Postagens" },
             ]
         ).map((t) => (
           <button
@@ -678,6 +681,18 @@ export default function PerfilClube({ idDaUrl }: Props) {
               </div>
             )}
           </div>
+        </section>
+      )}
+
+      {aba === "postagens" && (
+        <section className="mt-4">
+          {usuarioId ? (
+            <ProfilePostsSection usuarioId={usuarioId} />
+          ) : (
+            <div className="bg-white/70 rounded-xl p-4 shadow-sm text-sm text-green-900/70">
+              Não foi possível carregar o usuário das postagens.
+            </div>
+          )}
         </section>
       )}
 
