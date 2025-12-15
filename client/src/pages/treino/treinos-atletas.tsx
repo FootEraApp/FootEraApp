@@ -1,3 +1,4 @@
+// client/src/pages/treino/treinos-atletas
 import React, { useEffect, useRef, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -77,6 +78,7 @@ interface TreinoAgendado {
         id: string;
         nome: string;
         videoDemonstrativoUrl?: string | null;
+        imgDemonstrativaUrl?: string | null;
       };
       repeticoes: string;
     }[];
@@ -151,11 +153,21 @@ function formatHHMMSS(totalSec: number) {
 
 function resolveUploadUrl(raw?: string | null) {
   if (!raw) return "";
+
   if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-  if (raw.startsWith("/assets/") || raw.startsWith("/attached_assets/")) return raw;
-  if (raw.startsWith("/uploads/")) return `${API.BASE_URL}${raw}`;
-  return `${API.BASE_URL}/uploads/${raw.replace(/^\/+/, "")}`;
+  if (raw.startsWith("/assets/")) return raw;
+
+  if (raw.startsWith("/exercicios/")) {
+    return `${API.BASE_URL}${raw}`;
+  }
+
+  if (raw.startsWith("/uploads/")) {
+    return `${API.BASE_URL}${raw}`;
+  }
+
+  return `${API.BASE_URL}/${raw.replace(/^\/+/, "")}`;
 }
+
 
 function isVideoUrl(url: string) {
   const clean = url.split("?")[0].toLowerCase();
@@ -328,6 +340,47 @@ export default function TreinosAtletas() {
   } | null>(null);
   const [videoCarregando, setVideoCarregando] = useState(false);
   const [videoErro, setVideoErro] = useState<string | null>(null);
+
+  function pickMidiaFromExercicioPayload(ex: any): string {
+  return (
+    ex?.videoDemonstrativoUrl ||
+    ex?.imgDemonstrativaUrl ||
+    ex?.videoUrl ||
+    ex?.imagemUrl ||
+    ex?.midiaUrl ||
+    ex?.midias?.[0]?.url ||
+    ""
+  );
+}
+
+function abrirMidiaExercicioDireto(
+  exercicioId: string,
+  nome: string,
+  midiaRaw?: string | null
+) {
+  setVideoErro(null);
+  setVideoCarregando(true);
+
+  if (!midiaRaw) {
+    setVideoErro("Este exercício ainda não tem vídeo ou imagem cadastrados.");
+    setVideoCarregando(false);
+    return;
+  }
+
+  const finalUrl = resolveUploadUrl(midiaRaw);
+
+  setVideoModal({
+    exercicioId,
+    nome,
+    url: finalUrl,
+  });
+
+  if (isYouTubeUrl(finalUrl)) {
+    setVideoCarregando(false);
+  }
+}
+
+
 
   const [modalAberto, setModalAberto] = useState(false);
   const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
@@ -513,8 +566,8 @@ export default function TreinosAtletas() {
                     exercicio: {
                       id: ex.exercicio?.id ?? "",
                       nome: ex.exercicio?.nome ?? "",
-                      videoDemonstrativoUrl:
-                        ex.exercicio?.videoDemonstrativoUrl ?? null,
+                      videoDemonstrativoUrl: ex.exercicio?.videoDemonstrativoUrl ?? null,
+                      imgDemonstrativaUrl: ex.exercicio?.imgDemonstrativaUrl ?? null,
                     },
                     repeticoes: ex.repeticoes ?? "",
                   })) ?? [],
@@ -1022,40 +1075,31 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
 
 <button
   disabled={isMissedTreino}
-  className={`text-green-700 underline text-sm shrink-0 ${
-    isMissedTreino
-      ? "text-gray-400 no-underline cursor-not-allowed"
-      : ""
+  className={`text-green-700 underline text-sm ${
+    isMissedTreino ? "text-gray-400 no-underline cursor-not-allowed" : ""
   }`}
   onClick={() => {
     if (isMissedTreino) return;
 
-    const rawUrl = ex.exercicio.videoDemonstrativoUrl || "";
+    const midia =
+      ex.exercicio.videoDemonstrativoUrl ||
+      (ex.exercicio as any).imgDemonstrativaUrl ||
+      null;
 
-    if (!rawUrl) {
-      setVideoErro("Este exercício ainda não tem vídeo/imagem cadastrados.");
-      setVideoModal({
-        exercicioId: ex.exercicio.id,
-        nome: ex.exercicio.nome,
-        url: "",
-      });
+    console.log("[MIDIA] exercicio:", ex.exercicio.id, ex.exercicio.nome, "midia:", midia);
+
+    if (!midia) {
+      alert("Esse exercício está sem vídeo cadastrado no banco (videoDemonstrativoUrl = null).");
       return;
     }
 
-    const finalUrl = resolveUploadUrl(rawUrl);
-
-    setVideoErro(null);
-    setVideoCarregando(true);
-
-    setVideoModal({
-      exercicioId: ex.exercicio.id,
-      nome: ex.exercicio.nome,
-      url: finalUrl,
-    });
+    abrirMidiaExercicioDireto(ex.exercicio.id, ex.exercicio.nome, midia);
   }}
+
 >
   Ver vídeo
 </button>
+
 
           </div>
         );
@@ -1868,12 +1912,17 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
         !isVideoUrl(videoModal.url) &&
         !isYouTubeUrl(videoModal.url) && (
           <div className="w-full flex justify-center">
-            <img
-              src={videoModal.url}
-              alt={videoModal.nome}
-              className="w-full max-h-[70vh] rounded-lg object-contain"
-              style={{ maxHeight: "70vh" }}
-            />
+          <img
+            src={videoModal.url}
+            alt={videoModal.nome}
+            className="w-full max-h-[70vh] rounded-lg object-contain"
+            style={{ maxHeight: "70vh" }}
+            onLoad={() => setVideoCarregando(false)}
+            onError={() => {
+              setVideoCarregando(false);
+              setVideoErro("Não foi possível carregar a imagem.");
+            }}
+          />
           </div>
         )}
     </div>

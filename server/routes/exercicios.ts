@@ -1,3 +1,4 @@
+// server/routes/exercicios
 import express from "express";
 import {uploadVideo, criarExercicio, editarExercicio, excluirExercicio, listarExercicios, buscarExercicioPorId } from "../controllers/exerciciosController.js";
 
