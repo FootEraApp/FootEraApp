@@ -684,6 +684,34 @@ export default function ProfileHeader({
     return null;
   }
 
+  function extrairIdsSeguindo(resp: any): string[] {
+  const arr =
+    (Array.isArray(resp) ? resp : null) ??
+    (Array.isArray(resp?.ids) ? resp.ids : null) ??
+    (Array.isArray(resp?.seguindo) ? resp.seguindo : null) ??
+    (Array.isArray(resp?.items) ? resp.items : null) ??
+    (Array.isArray(resp?.data) ? resp.data : null) ??
+    [];
+
+  return arr
+    .map((x: any) => {
+      if (!x) return "";
+      // aceita vários formatos comuns do backend
+      return String(
+        x.id ??
+        x.usuarioId ??
+        x.usuarioAlvoId ??
+        x.seguidoUsuarioId ??
+        x.seguidoId ??
+        x.seguindoId ??
+        x.seguido?.id ??
+        x.usuario?.id ??
+        x
+      ).trim();
+    })
+    .filter(Boolean);
+}
+
   async function readBodySafe(r: Response) {
     try {
       return await r.json();
@@ -868,6 +896,63 @@ export default function ProfileHeader({
   }, []);
 
   useEffect(() => {
+  if (isOwnProfile || !perfilId) return;
+
+  const token =
+    Storage.token ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    "";
+
+  if (!token) return;
+
+  const me = String(Storage.usuarioId || localStorage.getItem("usuarioId") || "");
+  const cacheKey = me ? `follow_${me}_${perfilId}` : null;
+
+  // 1) aplica cache pra não “voltar pra Seguir” no refresh enquanto carrega
+  if (cacheKey) {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached === "1") setSeguindo(true);
+    if (cached === "0") setSeguindo(false);
+  }
+
+  let alive = true;
+
+  (async () => {
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/seguidores`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!r.ok) {
+        if (alive) {
+          // se falhar, mantém o que já estava (não força false)
+          setSeguindo((v) => v ?? false);
+        }
+        return;
+      }
+
+      const j = await r.json().catch(() => null);
+      const ids = extrairIdsSeguindo(j);
+
+      const isSeguindo = ids.includes(String(perfilId).trim());
+
+      if (!alive) return;
+      setSeguindo(isSeguindo);
+
+      if (cacheKey) localStorage.setItem(cacheKey, isSeguindo ? "1" : "0");
+    } catch {
+      // não derruba pra false se já tinha estado anterior
+      if (alive) setSeguindo((v) => v ?? false);
+    }
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [perfilId, isOwnProfile]);
+
+  useEffect(() => {
     if (!alvoUsuarioId) return;
     const token = Storage.token;
     if (!token) return;
@@ -915,14 +1000,24 @@ export default function ProfileHeader({
     return isDuplicado(resp, body);
   };
 
+  const me = String(Storage.usuarioId || localStorage.getItem("usuarioId") || "");
+  const cacheKey = me ? `follow_${me}_${perfilId}` : null;
+
   const toggleSeguir = async () => {
     if (seguindo) {
       const ok = await deixarDeSeguir(perfilId);
-      if (ok) setSeguindo(false);
+      if (ok) {
+        setSeguindo(false);
+        if (cacheKey) localStorage.setItem(cacheKey, "0");
+      }
       return;
     }
+
     const ok = await seguirUsuario();
-    if (ok) setSeguindo(true);
+    if (ok) {
+      setSeguindo(true);
+      if (cacheKey) localStorage.setItem(cacheKey, "1");
+    }
   };
 
   const solicitarTreino = async (): Promise<boolean> => {
