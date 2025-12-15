@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { X, Loader2, Plus, Users, User, List, Save } from "lucide-react";
+import { X, Loader2, Plus, Users, User, List, Save, Search } from "lucide-react";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 
@@ -14,7 +14,7 @@ type TurmaMin = {
 };
 
 type ProfessorMin = { id: string; nome: string };
-type AtletaMin = { usuarioId: string; nome: string; checked?: boolean };
+type AtletaMin = { usuarioId: string; nome: string; sobrenome?: string; checked?: boolean };
 
 type Owner = { tipo: "Clube" | "Escolinha"; id: string; usuarioId?: string };
 
@@ -42,6 +42,7 @@ export default function TurmasManager({
   const [filtroProf, setFiltroProf] = useState<string>(professorId || "");
   const [selecionada, setSelecionada] = useState<string>("");
 
+  const [filtroAluno, setFiltroAluno] = useState("");
   const [novoNome, setNovoNome] = useState("");
   const [novoCategoria, setNovoCategoria] = useState<
     "" | "Sub-9" | "Sub-11" | "Sub-13" | "Sub-15" | "Sub-17" | "Sub-20" | "Livre"
@@ -93,8 +94,38 @@ export default function TurmasManager({
             limit: 1000,
           },
         });
-        const la = (resA.data?.atletas || resA.data || []) as any[];
-        setAlunos(la.map((a) => ({ usuarioId: a.usuarioId || a.id, nome: a.nome })));
+
+        let la = (resA.data?.atletas || resA.data || []) as any[];
+
+        if (la.length < 3) {
+          const resAll = await axios.get(`${API.BASE_URL}/api/atletas`, {
+            headers,
+            params: {
+              clubeId: owner.tipo === "Clube" ? owner.id : undefined,
+              escolinhaId: owner.tipo === "Escolinha" ? owner.id : undefined,
+              limit: 2000,
+            },
+          });
+
+          la = (resAll.data?.items || resAll.data?.atletas || resAll.data || []) as any[];
+        }
+
+        setAlunos(
+          la.map((a) => {
+            const usuarioId = String(a.usuarioId ?? a.usuario?.id ?? a.id);
+
+            const nome = String(a.nome ?? a.usuario?.nome ?? "").trim();
+            const sobrenome = String(a.sobrenome ?? a.usuario?.sobrenome ?? "").trim();
+
+            const nomeCompleto = [nome, sobrenome].filter(Boolean).join(" ").trim() || "Atleta";
+
+            return {
+              usuarioId,
+              nome: nomeCompleto,
+              sobrenome: sobrenome || undefined,
+            };
+          })
+        );
 
         await carregarTurmas(owner, professorId || "");
       } finally {
@@ -122,7 +153,7 @@ export default function TurmasManager({
         categoria: t.categoria ?? null,
         professorId: t.professorId ?? null,
         professorNome: t.professor?.nome ?? null,
-        alunosCount: t._count?.alunos ?? t.alunosCount ?? 0,
+        alunosCount: t._count?.membros ?? t.alunosCount ?? 0,
       }))
     );
   };
@@ -134,9 +165,18 @@ export default function TurmasManager({
 
   const abrirTurma = async (id: string) => {
     setSelecionada(id);
+
     const res = await axios.get(`${API.BASE_URL}/api/turmas/${id}/alunos`, { headers });
-    const membros: string[] = (res.data?.usuarioIds || res.data || []) as string[];
-    setAlunos((prev) => prev.map((a) => ({ ...a, checked: membros.includes(a.usuarioId) })));
+
+    const usuarioIds: string[] = Array.isArray(res.data?.usuarioIds)
+      ? res.data.usuarioIds.map(String)
+      : Array.isArray(res.data?.alunos)
+        ? res.data.alunos.map((x: any) => String(x.usuarioId)).filter(Boolean)
+        : [];
+
+    setAlunos((prev) =>
+      prev.map((a) => ({ ...a, checked: usuarioIds.includes(a.usuarioId) }))
+    );
   };
 
   const salvarMembros = async () => {
@@ -185,6 +225,13 @@ export default function TurmasManager({
       setSalvando(false);
     }
   };
+
+  const alunosFiltrados = alunos.filter((a) => {
+    const nome = (a.nome || "").toLowerCase();
+    const termo = filtroAluno.trim().toLowerCase();
+    if (!termo) return true;
+    return nome.includes(termo);
+  });
 
   if (!open) return null;
 
@@ -320,12 +367,24 @@ export default function TurmasManager({
                       Salvar alterações
                     </button>
                   </div>
+                  <div className="border-b border-zinc-100 p-3 flex-none">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                      <input
+                        value={filtroAluno}
+                        onChange={(e) => setFiltroAluno(e.target.value)}
+                        placeholder="Procurar aluno..."
+                        className="w-full rounded-lg border border-zinc-200 pl-9 pr-3 py-2 text-sm outline-none focus:border-emerald-400"
+                      />
+                    </div>
+                  </div>
+
                   <div
                     className="flex-1 min-h-0 overflow-auto p-3 overscroll-contain"
                     style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" as any }}
                   >
                     <ul className="divide-y divide-green-100">
-                      {alunos.map((a) => (
+                      {alunosFiltrados.map((a) => (
                         <li key={a.usuarioId} className="py-2 flex items-center gap-3">
                           <div className="flex-1">
                             <div className="text-sm font-medium text-green-900">{a.nome}</div>

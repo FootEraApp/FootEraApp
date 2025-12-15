@@ -12,13 +12,10 @@ type Props = {
 export default function AcoesTreino({ treinoId, className }: Props) {
   const [status, setStatus] = useState<Status>("PENDING");
   const [loading, setLoading] = useState(false);
-
   const [openFinish, setOpenFinish] = useState(false);
   const [tempoSeg, setTempoSeg] = useState<number | "">("");
   const [repeticoes, setRepeticoes] = useState<number | "">("");
   const [observacao, setObservacao] = useState("");
-
-  // mensagem informativa (inclui penalidade por atraso)
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -115,8 +112,6 @@ export default function AcoesTreino({ treinoId, className }: Props) {
         return;
       }
 
-      // aqui já vem os campos que configuramos no backend:
-      // penalidadeAtraso, minutosConsiderados, mensagem
       const penalidade = !!data?.penalidadeAtraso;
       const minutosConsiderados = data?.minutosConsiderados ?? null;
 
@@ -175,7 +170,6 @@ export default function AcoesTreino({ treinoId, className }: Props) {
         </span>
       )}
 
-      {/* mensagenzinha discreta embaixo do botão / status */}
       {infoMsg && (
         <p className="mt-2 text-xs text-amber-700 max-w-xs">
           {infoMsg}

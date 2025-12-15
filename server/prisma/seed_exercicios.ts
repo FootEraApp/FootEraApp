@@ -2448,11 +2448,6 @@ async function main() {
     },
     ];
 
-  console.log('[seed_exercicios] Iniciando seed dos exercícios...');
-  console.log(
-    `[seed_exercicios] Total de exercícios a processar: ${exercicios.length}`
-  );
-
   let count = 0;
 
   for (const ex of exercicios) {

@@ -1,4 +1,3 @@
-// server/routes/gerenciarAtletas
 import { Router } from "express";
 import { authenticateToken } from "../middlewares/auth.js";
 import { gerenciarAtletasController as ctrl } from "../controllers/gerenciarAtletasController.js";

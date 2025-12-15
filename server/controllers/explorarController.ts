@@ -1,4 +1,3 @@
-// server/controllers/explorarController
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
@@ -35,14 +34,11 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
   }
 }
 
-// === EXPLORAR CORRIGIDO ===
 export async function explorar(req: Request, res: Response) {
   try {
     const { q } = req.query;
     const userIdLogado = (req as any).userId || null;
     const termo = q ? String(q).trim() : "";
-
-    // ========= ATLETAS =========
     const atletasRaw = await prisma.atleta.findMany({
       include: {
         usuario: { select: { id: true, nome: true, foto: true } },
@@ -58,7 +54,6 @@ export async function explorar(req: Request, res: Response) {
       tipoTreino: a.perfilTipoTreino ?? null,
     }));
 
-    // ========= CLUBES =========
     const clubes = await prisma.clube.findMany({
       include: {
         usuario: { select: { id: true, nome: true, foto: true } },
@@ -70,7 +65,6 @@ export async function explorar(req: Request, res: Response) {
       take: 100,
     });
 
-    // ========= ESCOLINHAS =========
     const escolas = await prisma.escolinha.findMany({
       include: {
         usuario: { select: { id: true, nome: true, foto: true } },
@@ -82,7 +76,6 @@ export async function explorar(req: Request, res: Response) {
       take: 100,
     });
 
-    // ========= PROFESSORES =========
     const professores = await prisma.professor.findMany({
       include: {
         usuario: { select: { id: true, nome: true, foto: true } },
@@ -94,7 +87,6 @@ export async function explorar(req: Request, res: Response) {
       take: 100,
     });
 
-    // ========= OLHEIROS =========
     const olheiros = await prisma.olheiro.findMany({
       include: {
         usuario: { select: { id: true, nome: true, foto: true } },
@@ -106,7 +98,6 @@ export async function explorar(req: Request, res: Response) {
       take: 100,
     });
 
-    // ========= EVENTOS =========
     const agora = new Date();
     const whereEvento: any = {
       status: "ABERTO",

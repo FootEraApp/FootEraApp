@@ -1,4 +1,3 @@
-// client/src/pages/explorar
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";
@@ -322,13 +321,10 @@ useEffect(() => {
 
   const token = Storage?.token || "";
 
-  console.log("📡 Buscando eventos..."); // Vai aparecer no console também
-
   axios.get(`${API.BASE_URL}/api/eventos`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   })
   .then(res => {
-    console.log("📥 Eventos recebidos:", res.data);
     setDados(prev => ({
       ...prev,
       eventos: res.data || [],
@@ -1424,7 +1420,6 @@ const eventosFiltrados = useMemo(() => {
                       }
                     );
 
-                    // atualiza state local
                     setSelectedEvento((prev) =>
                       prev
                         ? {

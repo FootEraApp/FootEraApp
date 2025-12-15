@@ -1,13 +1,9 @@
-// client/src/pages/configuracoesPerfil
 import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
-
-// ⚠️ Componente que vamos criar depois em client/src/components/Atualizacoes.tsx
-// (arquivo .tsx, importado aqui como .js, igual aos outros componentes do projeto)
 import Atualizacoes from "../components/Atualizacoes.js";
 
 type FeedbackTipo = "sugestao" | "bug";
@@ -24,8 +20,6 @@ export default function ConfiguracoesPerfil() {
   const [confirmText, setConfirmText] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  // 🔔 Novos estados para Atualizações + Feedback
   const [showUpdatesModal, setShowUpdatesModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackTipo, setFeedbackTipo] = useState<FeedbackTipo>("sugestao");
@@ -84,7 +78,6 @@ export default function ConfiguracoesPerfil() {
 
   const matchConfirm = confirmText.trim() === REQUIRED_PHRASE;
 
-  // 💌 Envio de feedback (bug / sugestão)
   async function enviarFeedback(e: React.FormEvent) {
     e.preventDefault();
     setFeedbackError(null);
@@ -118,8 +111,6 @@ export default function ConfiguracoesPerfil() {
 
       setFeedbackSuccess("Feedback enviado com sucesso! Obrigado por ajudar a melhorar a FootEra ⚽");
       setFeedbackMensagem("");
-      // Se quiser fechar o modal automaticamente depois:
-      // setTimeout(() => setShowFeedbackModal(false), 1500);
     } catch (err: any) {
       setFeedbackError(err?.message || "Erro ao enviar seu feedback.");
     } finally {
@@ -142,7 +133,6 @@ export default function ConfiguracoesPerfil() {
         <ArrowLeft className="h-5 w-5" />
       </Link>
 
-      {/* Conta */}
       <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <h2 className="text-gray-800 font-bold mb-3">Conta</h2>
         <div className="flex justify-between py-2 items-start border-b">
@@ -170,7 +160,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       </div>
 
-      {/* Dados e Privacidade */}
       <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <h2 className="text-gray-800 font-bold mb-3">Dados e Privacidade</h2>
 
@@ -190,7 +179,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       </div>
 
-      {/* 🔄 Atualizações e Feedback */}
       <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <h2 className="text-gray-800 font-bold mb-1">Atualizações e Feedback</h2>
         <p className="text-sm text-gray-600 mb-3">
@@ -220,7 +208,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       </div>
 
-      {/* Ações da Conta */}
       <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <h2 className="text-gray-800 font-bold mb-3">Ações da Conta</h2>
         <button
@@ -231,7 +218,6 @@ export default function ConfiguracoesPerfil() {
         </button>
       </div>
 
-      {/* Excluir conta */}
       <div className="mx-4 mb-4 rounded-xl shadow bg-white border border-red-200 p-4">
         <h3 className="text-red-700 font-bold text-lg">Excluir conta</h3>
         <p className="text-sm text-red-700 mt-1">
@@ -252,7 +238,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       </div>
 
-      {/* Modal Excluir Conta */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-5">
@@ -309,7 +294,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       )}
 
-      {/* Modal Atualizações */}
       {showUpdatesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5 max-h-[80vh] flex flex-col">
@@ -330,7 +314,6 @@ export default function ConfiguracoesPerfil() {
             </p>
 
             <div className="mt-1 flex-1 overflow-y-auto border-t pt-3">
-              {/* Conteúdo vindo do componente separado Atualizacoes.tsx */}
               <Atualizacoes />
             </div>
 
@@ -347,7 +330,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       )}
 
-      {/* Modal Feedback */}
       {showFeedbackModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
@@ -452,7 +434,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       )}
 
-      {/* Navbar inferior */}
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed" className="hover:underline">
           <House />

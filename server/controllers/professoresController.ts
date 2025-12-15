@@ -16,7 +16,7 @@ export const listarAtletasDoProfessor = async (req: Request, res: Response) => {
         clube: true,
         escolinha: true,
       },
-      orderBy: { nome: "asc" }, // ou outro critério
+      orderBy: { nome: "asc" },
     });
 
     res.json(atletas);
@@ -372,13 +372,11 @@ export const vincularAtletaAoProfessor = async (req: Request, res: Response) => 
 
   try {
     await prisma.$transaction(async (tx) => {
-      // 1) limpa professor anterior (se existir)
       await tx.atleta.update({
         where: { id: atletaId },
         data: { professorId: professorId },
       });
 
-      // 2) cria/atualiza RelacaoTreinamento para esse par
       const relacaoExistente = await tx.relacaoTreinamento.findFirst({
         where: { professorId, atletaId },
       });
@@ -386,7 +384,7 @@ export const vincularAtletaAoProfessor = async (req: Request, res: Response) => 
       if (relacaoExistente) {
         await tx.relacaoTreinamento.update({
           where: { id: relacaoExistente.id },
-          data: { encerradoEm: null }, // reabriu o vínculo
+          data: { encerradoEm: null },
         });
       } else {
         await tx.relacaoTreinamento.create({
@@ -426,7 +424,6 @@ export const desvincularAtletaDoProfessor = async (req: Request, res: Response) 
 
     const agora = new Date();
 
-    // 1) encerra relação + limpa professorId
     await prisma.$transaction(async (tx) => {
       await tx.relacaoTreinamento.update({
         where: { id: relacao.id },
@@ -439,7 +436,6 @@ export const desvincularAtletaDoProfessor = async (req: Request, res: Response) 
       });
     });
 
-    // 2) salva histórico (fora da tx, usando os dados que já temos em memória)
     await salvarHistoricoAtletaVinculo({
       atletaId,
       dono: { tipo: "Professor", id: professorId },

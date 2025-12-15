@@ -6,6 +6,5 @@ async function main() {
     where: { email: "seu-admin@exemplo.com" },
     data: { tipo: "Admin" }, 
   });
-  console.log("Feito!");
 }
 main().finally(() => prisma.$disconnect());
