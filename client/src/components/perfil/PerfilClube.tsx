@@ -61,6 +61,7 @@ type AtletaItem = {
   pontuacao?: number | null;
   notaInterna?: string | null;
   alertarMudancas?: boolean | null;
+  usuarioId?: string | null;
 };
 
 type Solicitacao = {
@@ -192,8 +193,9 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
         setAtletasHeaderCount(rows.length);
         setVinculadosPreview(
           rows.slice(0, 5).map((r) => ({
-            id: r.id || r.usuarioId || r.atletaId,
-            atletaId: r.atletaId || r.usuarioId || r.id,
+            id: r.id || r.atletaId,                 // pode ser atletaId, ok
+            atletaId: r.atletaId || r.id,
+            usuarioId: r.usuarioId ?? r.usuario?.id ?? null,  // 👈 O QUE IMPORTA PRO PERFIL
             nome: r.nome,
             foto: r.foto ?? null,
             posicao: r.posicao ?? null,
@@ -763,8 +765,9 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                         </div>
                       </div>
                       <Link
-                        href={`/perfil/${a.id}`}
+                        href={`/perfil/${a.usuarioId ?? a.id}`}
                         className="text-xs text-green-800"
+                      
                       >
                         Ver
                       </Link>
