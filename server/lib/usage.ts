@@ -1,3 +1,4 @@
+// server/lib/usage.ts
 import { PrismaClient } from "@prisma/client";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
@@ -108,12 +109,23 @@ const WINDOW_LABEL: Record<Window, string> = {
   total: "TOTAL",
 };
 
+
+
 export function planLimitFor(
-  userPlan: "FREE" | "PRO" | "ORG" | null | undefined,
+  userPlan: "FREE" | "PRO" | "ORG" | string | null | undefined,
   key: UsageKey
 ) {
-  const plan = (userPlan ?? "FREE") as "FREE" | "PRO" | "ORG";
-  const v = (LIMITS[plan] as any)[key];
+  const raw = String(userPlan ?? "FREE").trim().toUpperCase();
+
+  const plan =
+    raw === "PRO" ? "PRO" :
+    raw === "ORG" ? "ORG" :
+    "FREE";
+
+  const limits = LIMITS[plan] ?? LIMITS.FREE;
+
+  const v = (limits as any)?.[key];
+
   return v === Infinity ? Infinity : Number(v ?? Infinity);
 }
 
@@ -155,7 +167,7 @@ export async function requireUsage(
   res: Response,
   key: UsageKey
 ): Promise<boolean> {
-  const plan = (req.user as any)?.plano as "FREE" | "PRO" | "ORG" | undefined;
+  const plan = (req.user as any)?.plano as string | undefined;
   const limit = planLimitFor(plan, key);
   const win = WINDOW_BY_KEY[key];
 
@@ -204,23 +216,32 @@ export async function incAndCheck(
 ) {
   const { windowStart, windowEnd, periodRef, windowKind } = boundsFor(win, new Date());
 
-  const updated = await prisma.usageCounter.updateMany({
-    where: { userId, key, windowKind, windowStart },
-    data: { count: { increment: 1 }, windowEnd, periodRef, updatedAt: new Date() },
-  });
-
-  if (updated.count === 0) {
-    await prisma.usageCounter.create({
-      data: { userId, key, windowKind, windowStart, windowEnd, periodRef, count: 1, value: 0 },
-    });
-  }
-
-  const row = await prisma.usageCounter.findFirst({
-    where: { userId, key, windowKind, windowStart },
+  // ✅ precisa existir este unique compound no Prisma Client:
+  // userId_key_windowKind_windowStart
+  const row = await prisma.usageCounter.upsert({
+    where: {
+      userId_key_windowKind_windowStart: { userId, key, windowKind, windowStart },
+    },
+    create: {
+      userId,
+      key,
+      windowKind,
+      windowStart,
+      windowEnd,
+      periodRef,
+      count: 1,
+      value: 0,
+    },
+    update: {
+      count: { increment: 1 },
+      windowEnd,
+      periodRef,
+      updatedAt: new Date(),
+    },
     select: { count: true },
   });
 
-  const used = row?.count ?? 1;
+  const used = row.count;
   const remaining = Math.max(0, limit - used);
   const allowed = used <= limit;
 

@@ -1,3 +1,4 @@
+// server/controller/treinosController
 import {
   PrismaClient,
   PosicaoCampo,
@@ -1002,15 +1003,20 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
         treinoProgramado: r.treinoProgramado
           ? {
               ...r.treinoProgramado,
-              exercicios: r.treinoProgramado.exercicios.map((e: any) => ({
-                repeticoes: e.repeticoes ?? "",
-                exercicio: {
-                  id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
-                  nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
-                  videoDemonstrativoUrl: e.exercicio?.videoDemonstrativoUrl ?? null,
-                  imgDemonstrativaUrl: e.exercicio?.imgDemonstrativaUrl ?? null,
-                },
-              })),
+              exercicios: r.treinoProgramado.exercicios.map((e: any) => {
+                // 🔑 ponto central: referência única
+                const exRef = e.exercicio ?? e.exercicioTemporario;
+
+                return {
+                  repeticoes: e.repeticoes ?? "",
+                  exercicio: {
+                    id: exRef?.id ?? "",
+                    nome: exRef?.nome ?? "",
+                    videoDemonstrativoUrl: exRef?.videoDemonstrativoUrl ?? null,
+                    // ❌ remover imgDemonstrativaUrl (não existe no schema)
+                  },
+                };
+              }),
             }
           : null,
         meuStatus: meu,
@@ -1845,6 +1851,8 @@ export async function criarTreinoProgramado(
     user.plano = "FREE";
   }
 
+  user.plano = String(user.plano ?? "FREE").trim().toUpperCase();
+
   const isOrganizador =
     tipoStr === "professor" ||
     tipoStr === "clube" ||
@@ -1857,12 +1865,8 @@ export async function criarTreinoProgramado(
     });
   }
 
-  if (user.plano === "FREE") {
-    const ok = await requireUsage(req as any, res, "treinos_programados_mes");
-    if (!ok) {
-      return;
-    }
-  }
+  const ok = await requireUsage(req as any, res, "treinos_programados_mes");
+  if (!ok) return;
 
   try {
     const {

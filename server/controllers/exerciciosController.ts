@@ -1,3 +1,4 @@
+// server/controllers/exerciciosController
 import { Request, Response } from "express";
 import multer from "multer";
 import path, { dirname } from "path";

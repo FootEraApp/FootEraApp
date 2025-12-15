@@ -1,3 +1,4 @@
+// server/controllers/professoresController
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
@@ -147,15 +148,98 @@ export const editarProfessor = async (req: Request, res: Response) => {
 };
 
 export const excluirProfessor = async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const { id: professorId } = req.params;
+
   try {
-    await prisma.professor.delete({ where: { id } });
-    res.status(204).send();
-  } catch (error) {
+    const professor = await prisma.professor.findUnique({
+      where: { id: professorId },
+      select: {
+        id: true,
+        usuarioId: true,
+      },
+    });
+
+    if (!professor) {
+      return res.status(404).json({ message: "Professor não encontrado." });
+    }
+
+    if (!professor.usuarioId) {
+      return res.status(400).json({
+        message: "Professor não possui usuário vinculado.",
+      });
+    }
+
+    const usuarioId = professor.usuarioId as string;
+
+    await prisma.$transaction(async (tx) => {
+      // 1️⃣ Apaga observações do professor (EVITA violar CHECK one_owner)
+      const observacoes = await tx.atletaObservado.findMany({
+        where: { professorId },
+        select: { id: true },
+      });
+
+      const obsIds = observacoes.map((o) => o.id);
+
+      if (obsIds.length) {
+        // Limpa dependências
+        await tx.treinoRotinaAtribuicao.deleteMany({
+          where: { atletaObservadoId: { in: obsIds } },
+        });
+
+        await tx.atletaObservado.deleteMany({
+          where: { id: { in: obsIds } },
+        });
+      }
+
+      // 2️⃣ Encerra vínculos ativos
+      await tx.relacaoTreinamento.updateMany({
+        where: { professorId },
+        data: {
+          professorId: null,
+          ativo: false,
+          encerradoEm: new Date(),
+        },
+      });
+
+      await tx.atleta.updateMany({
+        where: { professorId },
+        data: {
+          professorId: null,
+          statusConexao: "Pendente",
+        },
+      });
+
+      await tx.turma.updateMany({
+        where: { professorId },
+        data: { professorId: null },
+      });
+
+      await tx.treinoAgendado.updateMany({
+        where: { criadoPorProfessorId: professorId },
+        data: { criadoPorProfessorId: null },
+      });
+
+      // 3️⃣ 🔥 AGORA sim: apaga o USUÁRIO (cascade apaga o professor)
+      await tx.usuario.delete({
+        where: { id: usuarioId },
+      });
+    });
+
+    return res.status(204).send();
+  } catch (error: any) {
     console.error("Erro ao excluir professor:", error);
-    res.status(500).json({ message: "Erro ao excluir professor." });
+
+    if (error?.code === "P2003") {
+      return res.status(409).json({
+        message:
+          "Não foi possível excluir o professor por vínculos pendentes. Verifique dependências.",
+      });
+    }
+
+    return res.status(500).json({ message: "Erro ao excluir professor." });
   }
 };
+
 
 export const listarVinculosProfessor = async (req: Request, res: Response) => {
   try {

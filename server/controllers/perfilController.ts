@@ -219,7 +219,6 @@ export async function historicoPontuacaoAtleta(req: AuthenticatedRequest, res: R
   }
 }
 
-
 function mapGrupoToHistorico(p: any) {
   const g = p.desafioEmGrupo;
   const desafio = g?.desafioOficial;
@@ -857,75 +856,77 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       },
     });
 
-    if (atleta) {
-const vinculosRows = await prisma.relacaoTreinamento.findMany({
-  where: { atletaId: atleta.id, encerradoEm: null },
-  include: {
-    professor: { select: { id: true, nome: true } },
-    escolinha: { select: { id: true, nome: true } },
-    clube:     { select: { id: true, nome: true } }
+if (atleta) {
+  const vinculosRows = await prisma.relacaoTreinamento.findMany({
+    where: { atletaId: atleta.id, encerradoEm: null },
+    include: {
+      professor: { select: { id: true, nome: true } },
+      escolinha: { select: { id: true, nome: true } },
+      clube:     { select: { id: true, nome: true } },
+    },
+  });
+
+  let professorMin: { id: string; nome: string } | null = null;
+  let escolaMin: { id: string; nome: string } | null = null;
+  let clubeMin: { id: string; nome: string } | null = null;
+
+  // ✅ aqui era "for (const v of vinculos)" (ERRADO)
+  for (const v of vinculosRows) {
+    if (v.professor) professorMin = v.professor;
+    if (v.escolinha) escolaMin = v.escolinha;
+    if (v.clube) clubeMin = v.clube;
   }
-});
 
-let professorMin = null;
-let escolaMin = null;
-let clubeMin = null;
+  if (!escolaMin && atleta.escolinhaId) {
+    escolaMin = await prisma.escolinha.findUnique({
+      where: { id: atleta.escolinhaId },
+      select: { id: true, nome: true },
+    });
+  }
 
-for (const v of vinculos) {
-  if (v.professor)  professorMin = v.professor;
-  if (v.escolinha)  escolaMin   = v.escolinha;
-  if (v.clube)      clubeMin    = v.clube;
+  if (!clubeMin && atleta.clubeId) {
+    clubeMin = await prisma.clube.findUnique({
+      where: { id: atleta.clubeId },
+      select: { id: true, nome: true },
+    });
+  }
+
+  dadosEspecificos = {
+    atletaId: atleta.id,
+    nome: atleta.nome,
+    sobrenome: atleta.sobrenome,
+    idade: atleta.idade,
+    telefone1: atleta.telefone1,
+    telefone2: atleta.telefone2,
+    nacionalidade: atleta.nacionalidade,
+    naturalidade: atleta.naturalidade,
+    posicao: atleta.posicao,
+    altura: atleta.altura,
+    peso: atleta.peso,
+    seloQualidade: atleta.seloQualidade,
+    foto: atleta.foto,
+
+    escola: escolaMin?.nome ?? null,
+    clube: clubeMin?.nome ?? null,
+    professor: professorMin?.nome ?? null,
+
+    escolinhaId: escolaMin?.id ?? null,
+    clubeId: clubeMin?.id ?? null,
+  };
+
+  tipoPerfil = "Atleta";
+
+  // (se você quiser manter esse retorno "vinculos" como objeto resumo)
+  vinculos = {
+    escolinhaId: atleta.escolinhaId ?? null,
+    clubeId: atleta.clubeId ?? null,
+    professorId: professorMin?.id ?? null,
+    professor: professorMin,
+    escola: escolaMin,
+    clube: clubeMin,
+  };
 }
 
-if (!escolaMin && atleta.escolinhaId) {
-  escolaMin = await prisma.escolinha.findUnique({
-    where: { id: atleta.escolinhaId },
-    select: { id: true, nome: true }
-  });
-}
-
-if (!clubeMin && atleta.clubeId) {
-  clubeMin = await prisma.clube.findUnique({
-    where: { id: atleta.clubeId },
-    select: { id: true, nome: true }
-  });
-}
-
-
-dadosEspecificos = {
-  atletaId: atleta.id,
-  nome: atleta.nome,
-  sobrenome: atleta.sobrenome,
-  idade: atleta.idade,
-  telefone1: atleta.telefone1,
-  telefone2: atleta.telefone2,
-  nacionalidade: atleta.nacionalidade,
-  naturalidade: atleta.naturalidade,
-  posicao: atleta.posicao,
-  altura: atleta.altura,
-  peso: atleta.peso,
-  seloQualidade: atleta.seloQualidade,
-  foto: atleta.foto,
-
-  escola: escolaMin?.nome ?? null,
-  clube: clubeMin?.nome ?? null,
-  professor: professorMin?.nome ?? null,
-
-  escolinhaId: escolaMin?.id ?? null,
-  clubeId: clubeMin?.id ?? null,
-};
-
-      tipoPerfil = "Atleta";
-
-      vinculos = {
-        escolinhaId: atleta.escolinhaId ?? null,
-        clubeId: atleta.clubeId ?? null,
-        professorId: professorMin?.id ?? null,
-        professor: professorMin,
-        escola: escolaMin,
-        clube: clubeMin,
-      };
-    }
 
     const professor = await prisma.professor.findUnique({ where: { usuarioId: id } });
     if (professor) {
