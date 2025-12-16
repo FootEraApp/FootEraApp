@@ -10,6 +10,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Play,
   Calendar as CalendarIcon,
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
@@ -20,6 +21,10 @@ import {
   montarExerciciosParaPayload,
   parseRepeticoesStr,
 } from "../utils/treinos.helpers.js";
+
+type ExItemUILocal = ExItemUI & {
+  videoUrl?: string | null;
+};
 
 type Organizacao = { id: string; nome: string; tipo: "Escolinha" | "Clube" };
 
@@ -74,6 +79,9 @@ function formatYMD(ano: number, mesZeroBased: number, dia: number): string {
 function resolveVideoUrl(raw?: string) {
   if (!raw) return "";
   const p = raw.replace(/\\/g, "/");
+
+  if (p.startsWith("blob:") || p.startsWith("data:")) return p;
+
   if (p.startsWith("http")) return p;
   if (p.startsWith("/assets/")) return p;
   return `${API.BASE_URL}${p.startsWith("/") ? p : `/${p}`}`;
@@ -174,6 +182,39 @@ function toCategoriaEnum(val?: string | null): string | null {
   if (m) return `Sub${m[1]}`;
   if (/^livre$/i.test(String(val))) return "Livre";
   return val;
+}
+
+async function uploadVideo(file: File): Promise<string> {
+  const token = getToken();
+  if (!token) throw new Error("Sem token");
+
+  const fd = new FormData();
+  fd.append("foto", file);
+
+  const base = (API as any)?.BASE_URL || "http://localhost:3001";
+
+  const r = await fetch(`${base}/api/upload/perfil`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+
+  const txt = await r.text();
+  if (!r.ok) throw new Error(txt || "Falha no upload");
+
+  const j = txt ? JSON.parse(txt) : null;
+
+  const url =
+    j?.url ||
+    j?.fileUrl ||
+    j?.path ||
+    j?.file?.url ||
+    j?.data?.url ||
+    "";
+
+  if (!url) throw new Error("Upload não retornou URL");
+
+  return String(url);
 }
 
 function authHeaders() {
@@ -413,6 +454,7 @@ function StepCard({
 export default function NovoTreino() {
   const [, navigate] = useLocation();
 
+  const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [isFreePlan, setIsFreePlan] = useState(false);
@@ -439,9 +481,7 @@ export default function NovoTreino() {
   const [tipoTreino, setTipoTreino] = useState<string>("Tecnico");
   const [objetivo, setObjetivo] = useState<string>("");
   const [iniciado, setIniciado] = useState<boolean>(false);
-  const [exerciciosSelecionados, setExerciciosSelecionados] = useState<
-    ExItemUI[]
-  >([]);
+  const [exerciciosSelecionados, setExerciciosSelecionados] = useState<ExItemUILocal[]>([]);
   const [dicas, setDicas] = useState<string[]>([]);
   const [dicaAtual, setDicaAtual] = useState<string>("");
   const [filtroEx, setFiltroEx] = useState("");
@@ -455,7 +495,6 @@ export default function NovoTreino() {
   const [orgSelecionada, setOrgSelecionada] = useState<string>("");
   const [novaTurmaNome, setNovaTurmaNome] = useState<string>("");
   const [datasAgendamento, setDatasAgendamento] = useState<string[]>([]);
-
   const [toast, setToast] = useState<{
     type: "success" | "error" | "info";
     message: string;
@@ -475,6 +514,14 @@ export default function NovoTreino() {
     const d = base ? new Date(base) : hoje;
     return { ano: d.getFullYear(), mes: d.getMonth() };
   });
+
+  function setVideoNoEx(index: number, videoUrl: string | null) {
+    setExerciciosSelecionados((prev: ExItemUILocal[]) => {
+      const copia = [...prev];
+      copia[index] = { ...copia[index], videoUrl };
+      return copia;
+    });
+  }
 
   function showToast(
     message: string,
@@ -1459,6 +1506,7 @@ export default function NovoTreino() {
         repeticoes: "",
         ordem: prev.length + 1,
         series: "",
+        videoUrl: null,
       },
     ]);
   };
@@ -1502,6 +1550,7 @@ export default function NovoTreino() {
           repeticoes,
           series,
           ordem: prev.length + 1,
+          videoUrl: null,
         },
       ];
     });
@@ -1675,7 +1724,17 @@ export default function NovoTreino() {
         return;
       }
 
-      const exercicios = montarExerciciosParaPayload(exerciciosSelecionados);
+      const exercicios = montarExerciciosParaPayload(
+        exerciciosSelecionados.map((e) => {
+          const v = e.videoUrl ?? null;
+          const videoFinal = v && String(v).startsWith("blob:") ? null : v;
+
+          return {
+            ...e,
+            videoDemonstrativoUrl: videoFinal,
+          };
+        }) as any,
+      );
 
       const mapNivel = (s: string) =>
         ({
@@ -1688,6 +1747,7 @@ export default function NovoTreino() {
           Tecnico: "Tecnico",
           Fisico: "Fisico",
           Tatico: "Tatico",
+          Mental: "Mental",
         } as const)[s] ?? null;
       const mapCategoria = (s: string) => {
         const m = String(s || "").match(/sub[\s\-]?(\d{1,2})/i);
@@ -1846,7 +1906,7 @@ export default function NovoTreino() {
         console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
       }
 
-            showToast(msgPrincipal + extra, "success");
+      showToast(msgPrincipal + extra, "success");
 
       sessionStorage.removeItem(SAVE_KEY);
       sessionStorage.removeItem(RESTORE_FLAG_KEY);
@@ -2253,6 +2313,12 @@ export default function NovoTreino() {
                 </div>
               )}
 
+              {exerciciosDisponiveis.length === 0 && (
+                <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-3 mb-3">
+                  Nenhum exercício foi carregado. Verifique no console o log: <b>[NovoTreino] carregando exercicios...</b>
+                </div>
+              )}
+
               <div className="space-y-3">
                 {exerciciosSelecionados.map((ex, i) => {
                   const base = ex.idCatalogo
@@ -2260,21 +2326,13 @@ export default function NovoTreino() {
                         (e) => e.id === ex.idCatalogo,
                       )
                     : undefined;
-                  const videoSrc = resolveVideoUrl(
-                    base?.videoDemonstrativoUrl,
-                  );
+                  const videoSrc = resolveVideoUrl(ex.videoUrl || base?.videoDemonstrativoUrl);
 
                   const nomeFinal = base?.nome ?? ex.nome ?? "";
                   const nivelFinal = base?.nivel ?? undefined;
                   const descFinal = base?.descricao ?? ex.descricao ?? "";
 
                   const ehDoBanco = Boolean(ex.idCatalogo);
-
-                  {exerciciosDisponiveis.length === 0 && (
-                    <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-3 mb-3">
-                      Nenhum exercício foi carregado. Verifique no console o log: <b>[NovoTreino] carregando exercicios...</b>
-                    </div>
-                  )}
 
                   return (
                     <div
@@ -2290,19 +2348,82 @@ export default function NovoTreino() {
                       </button>
 
                       <div className="flex flex-col sm:flex-row gap-3 items-start">
-                        {videoSrc ? (
-                          <video
-                            className="w-full h-44 sm:w-44 sm:h-28 rounded bg-black object-cover shrink-0"
-                            src={videoSrc}
-                            controls
-                            preload="metadata"
-                          />
-                        ) : (
-                          <div className="w-full h-44 sm:w-44 sm:h-28 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600 shrink-0">
-                            sem vídeo
-                          </div>
-                        )}
+                        <div className="w-full sm:w-44 shrink-0">
+                          {videoSrc ? (
+                            <button
+                              type="button"
+                              className="relative w-full h-44 sm:h-28 rounded overflow-hidden bg-black"
+                              onClick={() => setVideoModalSrc(videoSrc)}
+                              title="Ver vídeo"
+                            >
+                              <video
+                                className="w-full h-full object-cover"
+                                src={videoSrc}
+                                preload="metadata"
+                                muted
+                                playsInline
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
+                                  <Play className="w-5 h-5 text-white" />
+                                </span>
+                              </div>
+                            </button>
+                          ) : (
+                            <div className="w-full h-44 sm:h-28 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600">
+                              sem vídeo
+                            </div>
+                          )}
 
+                          {/* ✅ upload só para exercício personalizado */}
+                          {!ehDoBanco && (
+                            <div className="mt-2 flex items-center gap-2">
+                              <label className="text-xs px-3 py-1.5 rounded bg-gray-100 border cursor-pointer">
+                                {ex.videoUrl ? "Trocar vídeo" : "Upload de vídeo"}
+                                <input
+                                  type="file"
+                                  accept="video/*"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+
+                                    const old = exerciciosSelecionados[i]?.videoUrl;
+                                    if (old && old.startsWith("blob:")) URL.revokeObjectURL(old);
+
+                                    const localPreview = URL.createObjectURL(file);
+                                    setVideoNoEx(i, localPreview);
+
+                                    try {
+                                      const url = await uploadVideo(file); 
+                                      setVideoNoEx(i, url);               
+                                      URL.revokeObjectURL(localPreview);
+                                    } catch (err: any) {
+                                      console.error(err);
+                                      alert(err?.message || "Erro ao enviar vídeo");
+                                    } finally {
+                                      e.currentTarget.value = "";
+                                    }
+                                  }}
+                                />
+                              </label>
+
+                              <button
+                                type="button"
+                                className="text-xs text-red-600 underline"
+                                onClick={() => {
+                                  const v = exerciciosSelecionados[i]?.videoUrl;
+                                  if (v && v.startsWith("blob:")) URL.revokeObjectURL(v);
+                                  setVideoNoEx(i, null);
+                                }}
+                                disabled={!ex.videoUrl}
+                                title="Deixar sem vídeo"
+                              >
+                                Remover vídeo
+                              </button>
+                            </div>
+                          )}
+                        </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             {ehDoBanco ? (
@@ -2498,18 +2619,20 @@ export default function NovoTreino() {
                   return (
                     <li key={exercicio.id} className="py-3">
                       <div className="flex flex-col sm:flex-row gap-3 items-start">
-                        {videoSrc ? (
-                          <video
-                            className="w-full h-40 sm:w-40 sm:h-24 rounded bg-black object-cover shrink-0"
-                            src={videoSrc}
-                            controls
-                            preload="metadata"
-                          />
-                        ) : (
-                          <div className="w-full h-40 sm:w-40 sm:h-24 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600 shrink-0">
-                            sem vídeo
-                          </div>
-                        )}
+                        <div className="w-full sm:w-44 shrink-0">
+                          {videoSrc ? (
+                            <video
+                              className="w-full h-44 sm:h-28 rounded bg-black object-cover"
+                              src={videoSrc}
+                              controls
+                              preload="metadata"
+                            />
+                          ) : (
+                            <div className="w-full h-44 sm:h-28 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600">
+                              sem vídeo
+                            </div>
+                          )}
+                        </div>
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
@@ -2985,6 +3108,35 @@ export default function NovoTreino() {
             ].join(" ")}
           >
             {toast.message}
+          </div>
+        </div>
+      )}
+
+      {videoModalSrc && (
+        <div
+          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+          onClick={() => setVideoModalSrc(null)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-2xl p-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-end mb-2">
+              <button
+                className="text-sm text-gray-700 underline"
+                onClick={() => setVideoModalSrc(null)}
+              >
+                Fechar
+              </button>
+            </div>
+
+            <video
+              className="w-full max-h-[70vh] rounded bg-black"
+              src={videoModalSrc}
+              controls
+              autoPlay
+              playsInline
+            />
           </div>
         </div>
       )}
