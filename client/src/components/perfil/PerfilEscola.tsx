@@ -14,6 +14,7 @@ import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
+import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 
 type Props = { idDaUrl?: string };
 type UsuarioMin = {
@@ -115,7 +116,7 @@ function SectionCard({
 }) {
   return (
     <section className="bg-white/90 rounded-2xl shadow-sm border border-green-100">
-      <div className="px-4 py-3 flex items-center justify-between border-b border-green-100">
+      <div className="px-3 sm:px-4 py-3 flex items-center justify-between border-b border-green-100">
         <h3 className="font-semibold text-green-900">{title}</h3>
         {right}
       </div>
@@ -145,7 +146,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   const [data, setData] = useState<PayloadEscola | null>(null);
   const [loading, setLoading] = useState(true);
 
-  type Aba = "visao" | "eventos" | "atletas" | "conquistas" | "professores";
+  type Aba = "visao" | "eventos" | "atletas" | "conquistas" | "postagens"| "professores";
   const [aba, setAba] = useState<Aba>("visao");
 
   type SubAba = "vinculados" | "observados" | "solicitacoes";
@@ -383,7 +384,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   const escolinhaIdStr = data.escolinha.id;
 
   return (
-    <div className="max-w-md mx-auto">
+    <div className="w-full max-w-2xl mx-auto">
       <ProfileHeader
         nome={nome}
         time="Escola de Futebol"
@@ -398,43 +399,41 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         perfilTipoProp="escolinha"
         perfilTipoIdProp={data.escolinha.id}
       />
-      <div className="mt-4 px-4">
-        <div
-          className={
-            canEdit
-              ? "bg-white/90 rounded-xl p-1 grid grid-cols-5 gap-1 border border-green-100"
-              : "bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100"
-          }
-        >
-          {(canEdit
-            ? [
-                { id: "visao", label: "Visão Geral" },
-                { id: "eventos", label: "Eventos" },
-                { id: "atletas", label: "Atletas" },
-                { id: "conquistas", label: "Conquistas" },
-                { id: "professores", label: "Professores" },
-              ]
-            : [
-                { id: "visao", label: "Visão Geral" },
-                { id: "eventos", label: "Eventos" },
-                { id: "conquistas", label: "Conquistas" },
-              ]
-          ).map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setAba(t.id as Aba)}
-              className={`py-2 rounded-lg text-sm font-medium ${
-                aba === t.id ? "bg-green-600 text-white" : "text-green-900"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+      <div className="mt-4 px-3 sm:px-4">
+        <div className="bg-white/90 rounded-xl p-1 border border-green-100">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar px-1">
+            {(canEdit
+              ? [
+                  { id: "visao", label: "Visão Geral" },
+                  { id: "eventos", label: "Eventos" },
+                  { id: "atletas", label: "Atletas" },
+                  { id: "conquistas", label: "Conquistas" },
+                  { id: "postagens", label: "Postagens" },
+                  { id: "professores", label: "Professores" },
+                ]
+              : [
+                  { id: "visao", label: "Visão Geral" },
+                  { id: "eventos", label: "Eventos" },
+                  { id: "conquistas", label: "Conquistas" },
+                  { id: "postagens", label: "Postagens" },
+                ]
+            ).map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setAba(t.id as Aba)}
+                className={`shrink-0 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${
+                  aba === t.id ? "bg-green-600 text-white" : "text-green-900"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {aba === "visao" && (
-        <div className="mt-4 px-4 grid gap-4">
+        <div className="mt-4 px-3 sm:px-4 grid gap-4">
           <SectionCard title="Informações da Escola">
             <ul className="text-sm text-green-900/90 space-y-2">
               <li>
@@ -579,7 +578,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
       )}
 
       {aba === "eventos" && (
-        <div className="mt-4 px-4 grid gap-4">
+        <div className="mt-4 px-3 sm:px-4 grid gap-4">
           <SectionCard
             title="Eventos e Peneiras"
 right={
@@ -600,7 +599,7 @@ right={
   <div className="mt-4">
     <Link
       href={`/eventos/escolas/${escolinhaIdStr}/novo`}
-      className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-4 py-2"
+      className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-3 sm:px-4 py-2"
     >
       <span>+</span> Criar novo evento
     </Link>
@@ -611,7 +610,7 @@ right={
       )}
 
       {aba === "atletas" && (
-        <div className="mt-4 px-4">
+        <div className="mt-4 px-3 sm:px-4">
           <div className="bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100">
             {[
               { id: "vinculados", label: "Vinculados" },
@@ -688,7 +687,7 @@ right={
                     <EmptyState text="Nenhum atleta vinculado ainda" />
                     <div className="flex justify-center">
                       <Link href="/explorar">
-                        <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">
+                        <button className="px-3 sm:px-4 py-2 rounded-md border border-green-200 text-green-900">
                           Ver atletas
                         </button>
                       </Link>
@@ -756,7 +755,7 @@ right={
                     <EmptyState text="Você ainda não observa nenhum atleta" />
                     <div className="flex justify-center">
                       <Link href="/explorar">
-                        <button className="px-4 py-2 rounded-md border border-green-200 text-green-900">
+                        <button className="px-3 sm:px-4 py-2 rounded-md border border-green-200 text-green-900">
                           Ver atletas observados
                         </button>
                       </Link>
@@ -827,7 +826,7 @@ right={
       )}
 
       {aba === "conquistas" && (
-        <div className="mt-4 px-4 grid gap-4">
+        <div className="mt-4 px-3 sm:px-4 grid gap-4">
           <SectionCard title="Conquistas e Troféus">
             {conquistasCount > 0 ? (
               <div className="grid grid-cols-2 gap-3">
@@ -853,8 +852,16 @@ right={
         </div>
       )}
 
+      {aba === "postagens" && (
+        <div className="mt-4 px-3 sm:px-4 grid gap-4">
+          <SectionCard title="Postagens">
+            <ProfilePostsSection usuarioId={perfilUsuarioId} />
+          </SectionCard>
+        </div>
+      )}
+
       {aba === "professores" && canEdit && (
-        <div className="mt-4 px-4 grid gap-4">
+        <div className="mt-4 px-3 sm:px-4 grid gap-4">
           <SectionCard
             title="Professores da Escolinha"
             right={

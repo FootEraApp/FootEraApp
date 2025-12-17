@@ -23,8 +23,20 @@ function ChevronUp(props: SvgProps) {
 
 type TipoPerfil = "Atleta" | "Professor" | "Escolinha" | "Clube" | "Olheiro";
 type Etapa = 1 | 2 | 3;
+const mapTipo = {
+  Atleta: "ATLETA",
+  Professor: "PROFESSOR",
+  Escolinha: "ESCOLINHA",
+  Clube: "CLUBE",
+  Olheiro: "OLHEIRO",
+} as const;
 
-type CamposProfessor = { treinaEscolinha: "sim" | "nao" | ""; areaFormacao: string; cref?: string; statusCref?: "Ativo" | "Desativo" | "Pendente" };
+type CamposProfessor = {
+  treinaEscolinha: "sim" | "nao" | "";
+  areaFormacao: string;
+  cref?: string;
+  statusCref?: StatusCrefUI | undefined;
+};
 type CamposClube = { cnpjClube: string; cidadeClube: string };
 type CamposEscolinha = { cnpjEscolinha: string; cidadeEscolinha: string };
 type CamposOlheiro = {
@@ -37,6 +49,9 @@ type Responsavel = { nome: string; email: string; telefone?: string };
 
 const CATEGORIAS_ATLETA = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"] as const;
 type CategoriaAtleta = typeof CATEGORIAS_ATLETA[number];
+
+const STATUS_CREF = ["Pendente", "Ativo", "Desativo"] as const;
+type StatusCrefUI = typeof STATUS_CREF[number];
 
 type CamposAtleta = {
   idade: number | "";
@@ -107,7 +122,7 @@ export default function Cadastro() {
   const [resendMsg, setResendMsg] = useState("");
 
   const [atleta, setAtleta] = useState<CamposAtleta>({ idade: "", categoria: "", treinaEscolinha: "" });
-  const [professor, setProfessor] = useState<CamposProfessor>({ treinaEscolinha: "", areaFormacao: "", statusCref: "Pendente", cref: "" });
+  const [professor, setProfessor] = useState<CamposProfessor>({ treinaEscolinha: "", areaFormacao: "", statusCref: undefined, cref: "" });
   const [clube, setClube] = useState<CamposClube>({ cnpjClube: "", cidadeClube: "" });
   const [escolinha, setEscolinha] = useState<CamposEscolinha>({ cnpjEscolinha: "", cidadeEscolinha: "" });
   const [olheiro, setOlheiro] = useState<CamposOlheiro>({
@@ -157,8 +172,8 @@ export default function Cadastro() {
     } catch { setUserDisp(null); }
   }, 350), []);
 
-  useEffect(() => { verificarEmail(email.trim().toLowerCase()); }, [email]);
-  useEffect(() => { verificarUsername(nomeDeUsuario.trim().toLowerCase()); }, [nomeDeUsuario]);
+  useEffect(() => { verificarEmail(email.trim().toLowerCase()); }, [email, verificarEmail]);
+  useEffect(() => { verificarUsername(nomeDeUsuario.trim().toLowerCase()); }, [nomeDeUsuario, verificarUsername]);
 
   const buscarCEP = useMemo(() => debounce(async (valor: string) => {
     const num = somenteDigitos(valor);
@@ -240,34 +255,12 @@ export default function Cadastro() {
     return true;
   };
 
-  async function reenviarVerificacao() {
-    try {
-      setResendLoading(true);
-      setResendMsg("");
-      const r = await fetch(`${API.BASE_URL}/api/auth/cadastro/resend-verification`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email?.trim().toLowerCase(),
-          nomeDeUsuario: nomeDeUsuario?.trim().toLowerCase(),
-        }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j?.message || "Falha ao reenviar e-mail.");
-      setResendMsg(`Reenviado para: ${j?.emailDestino || email}`);
-    } catch (e: any) {
-      setResendMsg(e?.message || "Falha ao reenviar e-mail.");
-    } finally {
-      setResendLoading(false);
-    }
-  }
-
   const handleFinalizar = async () => {
     setErro("");
     setSucesso("");
     try {
       const payload: any = {
-        tipo: tipoPerfil,
+        tipo: mapTipo[tipoPerfil],
         nome,
         email,
         nomeDeUsuario,
@@ -286,10 +279,15 @@ export default function Cadastro() {
       }
       if (tipoPerfil === "Professor") {
         payload.areaFormacao = professor.areaFormacao;
-        if (professor.cref) payload.cref = professor.cref;
-        if (professor.statusCref) payload.statusCref = professor.statusCref;
         payload.treinaEscolinha = professor.treinaEscolinha || "nao";
+
+        const crefLimpo = (professor.cref || "").trim();
+        if (crefLimpo) {
+          payload.cref = crefLimpo;
+          payload.statusCref = professor.statusCref || "Pendente";
+        }
       }
+
       if (tipoPerfil === "Clube") {
         payload.cnpjClube = clube.cnpjClube || undefined;
       }
@@ -327,6 +325,7 @@ export default function Cadastro() {
       }
 
       const data = await res.json();
+      const token = data?.token || data?.accessToken || data?.jwt;
 
       setSucesso("Cadastro salvo com sucesso! Redirecionando para a página de login…");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -336,7 +335,7 @@ export default function Cadastro() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(data?.token ? { Authorization: `Bearer ${data.token}` } : {}),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
             doc: idade !== null && idade < 18 ? "Termos e Privacidade (menor)" : "Termos e Privacidade",
@@ -355,7 +354,7 @@ export default function Cadastro() {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              ...(data?.token ? { Authorization: `Bearer ${data.token}` } : {}),
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             body: JSON.stringify({ destinatarioId: vinculo.destinatarioId }),
           });
@@ -681,13 +680,40 @@ export default function Cadastro() {
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-sm font-medium mb-1">CREF (opcional)</label>
-                      <input className="w-full border rounded px-3 py-2" value={professor.cref || ""} onChange={(e) => setProfessor(p => ({ ...p, cref: e.target.value }))} />
+                      <input
+                        className="w-full border rounded px-3 py-2"
+                        value={professor.cref || ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setProfessor((p) => ({
+                            ...p,
+                            cref: v,
+                            statusCref: v.trim() ? (p.statusCref ?? "Pendente") : undefined,
+                          }));
+                        }}
+                      />
                     </div>
+
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-medium mb-1">Status do CREF</label>
-                      <select className="w-full border rounded px-3 py-2" value={professor.statusCref || "Pendente"} onChange={(e) => setProfessor(p => ({ ...p, statusCref: e.target.value as any }))}>
-                        <option>Pendente</option><option>Ativo</option><option>Desativo</option>
+                      <select
+                        className="w-full border rounded px-3 py-2"
+                        value={professor.statusCref ?? "Pendente"}
+                        disabled={!String(professor.cref || "").trim()}
+                        onChange={(e) =>
+                          setProfessor((p) => ({ ...p, statusCref: e.target.value as StatusCrefUI }))
+                        }
+                      >
+                        {STATUS_CREF.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
                       </select>
+
+                      {!String(professor.cref || "").trim() && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Preencha o CREF para liberar o status.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </>

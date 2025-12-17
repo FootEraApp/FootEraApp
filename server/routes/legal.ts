@@ -7,7 +7,11 @@ const prisma = new PrismaClient();
 
 router.post("/consentimentos", authenticateToken, async (req, res) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId =
+      (req as any).user?.id ||
+      (req as any).userId ||
+      (req as any).user?.userId;
+
     if (!userId) return res.status(401).json({ error: "unauthorized" });
 
     const { doc, versao, hashes, metodo } = req.body || {};
