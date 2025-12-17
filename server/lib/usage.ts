@@ -118,14 +118,12 @@ export function planLimitFor(
   const raw = String(userPlan ?? "FREE").trim().toUpperCase();
 
   const plan =
-    raw === "PRO" ? "PRO" :
-    raw === "ORG" ? "ORG" :
+    raw === "ORG" || raw.includes("ORG") ? "ORG" :
+    raw === "PRO" || raw.includes("PRO") ? "PRO" :
     "FREE";
 
   const limits = LIMITS[plan] ?? LIMITS.FREE;
-
   const v = (limits as any)?.[key];
-
   return v === Infinity ? Infinity : Number(v ?? Infinity);
 }
 
@@ -156,7 +154,7 @@ function boundsFor(win: Window, ref = new Date()) {
     windowStart = s; windowEnd = e; periodRef = `${s.getFullYear()}-${String(s.getMonth()+1).padStart(2,"0")}`;
   } else {
     windowStart = new Date(0);
-    windowEnd = new Date(8640000000000000);
+    windowEnd = new Date("9999-12-31T23:59:59.999Z");
     periodRef = "TOTAL";
   }
   return { windowStart, windowEnd, periodRef, windowKind: WIN_KIND_MAP[win] };
@@ -232,7 +230,11 @@ export async function incAndCheck(
       count: 1,
       value: 0,
     },
-    update: {
+    update: win === "total"  ? {
+      count: { increment: 1 },
+      updatedAt: new Date(),
+    }
+  : {
       count: { increment: 1 },
       windowEnd,
       periodRef,
