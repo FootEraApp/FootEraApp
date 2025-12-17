@@ -1,4 +1,3 @@
-// server/controller/treinosController
 import {
   PrismaClient,
   PosicaoCampo,
@@ -41,6 +40,22 @@ type AuthenticatedRequest = ExpressRequest & {
   user?: any;
   auth?: any;
 };
+
+function parseDateInput(raw: any): Date {
+  let s = String(raw ?? "").trim();
+  if (!s) return new Date(NaN);
+
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    s = s.slice(0, 10);
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+  }
+
+  return new Date(s);
+}
 
 function getUserFromReq(req: AuthenticatedRequest) {
   const anyReq = req as any;
@@ -143,8 +158,12 @@ export async function agendarTreinoPessoal(req: AuthenticatedRequest, res: Respo
     return res.status(400).json({ message: "Título e data são obrigatórios." });
   }
 
-  const novaData = new Date(dataTreino);
-  const dataExpiracao = new Date(novaData.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const novaData = parseDateInput(dataTreino);
+    if (Number.isNaN(novaData.getTime())) {
+      return res.status(400).json({ message: "dataTreino inválida" });
+    }
+
+  const dataExpiracao = new Date(novaData.getTime() + 3 * 24 * 60 * 60 * 1000);
 
   const treino = await prisma.treinoAgendado.create({
     data: {
@@ -183,8 +202,12 @@ export async function agendarTreinoLote(req: AuthenticatedRequest, res: Response
     return res.status(400).json({ message: "Dados incompletos para agendamento em lote." });
   }
 
-  const dt = new Date(dataTreino);
-  const dataExpiracao = new Date(dt.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const dt = parseDateInput(dataTreino);
+  if (Number.isNaN(dt.getTime())) {
+    return res.status(400).json({ message: "dataTreino inválida" });
+  }
+
+  const dataExpiracao = new Date(dt.getTime() + 3 * 24 * 60 * 60 * 1000);
 
   await prisma.$transaction(
     atletasIds.map((atletaId) =>
@@ -266,8 +289,12 @@ export async function getCalendarioTreinos(req: Request, res: Response) {
         .json({ error: "Parâmetros 'start' e 'end' são obrigatórios" });
     }
 
-    const startDate = new Date(String(start));
-    const endDate = new Date(String(end));
+    const startDate = parseDateInput(start);
+    const endDate = parseDateInput(end);
+
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      return res.status(400).json({ error: "Datas 'start'/'end' inválidas" });
+    }
 
     const atleta = await prisma.atleta.findUnique({
       where: { usuarioId },
@@ -488,8 +515,9 @@ export async function salvarTreinoNaBiblioteca(req: AuthenticatedRequest, res: R
       plano,
     });
 
-    const existente = await prisma.treinoSalvo.findFirst({
-      where: { usuarioId, treinoProgramadoId },
+    const existente = await prisma.treinoAgendado.findFirst({
+      where: { atletaId, treinoProgramadoId },
+      orderBy: { dataTreino: "desc" },
     });
 
     if (existente) {
@@ -660,24 +688,29 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
 
     const tituloFinal = titulo && String(titulo).trim() ? String(titulo).trim() : (tp.nome ?? "Treino");
 
-    const quandoBase = new Date(dataTreino);
+    const quandoBase = parseDateInput(dataTreino);
     if (Number.isNaN(quandoBase.getTime())) {
       return res.status(400).json({ message: "dataTreino inválida" });
     }
 
     const exp = dataExpiracao
-      ? new Date(dataExpiracao)
-      : new Date(quandoBase.getTime() + 7 * 24 * 60 * 60 * 1000);
+      ? parseDateInput(dataExpiracao)
+      : new Date(quandoBase.getTime() + 3 * 24 * 60 * 60 * 1000);
 
     if (Number.isNaN(exp.getTime())) {
       return res.status(400).json({ message: "dataExpiracao inválida" });
     }
 
-    const tipo = String(req.user?.tipo ?? "").toLowerCase();
+    if (Number.isNaN(exp.getTime())) {
+      return res.status(400).json({ message: "dataExpiracao inválida" });
+    }
+
     const turmaId = typeof turmaIdRaw === "string" ? turmaIdRaw.trim() : "";
     const elencoId = typeof elencoIdRaw === "string" ? elencoIdRaw.trim() : "";
+    const tipoUser = String(req.user?.tipo ?? req.user?.tipoUsuario ?? "").toLowerCase();
+    const criadoPorProfessorId = tipoUser === "professor" ? req.user?.tipoUsuarioId ?? null : null;
 
-    if (["professor", "clube", "escolinha"].includes(tipo)) {
+    if (["professor", "clube", "escolinha"].includes(tipoUser)) {
       const resolved = await resolveEntidade(req.userId!);
 
       if (resolved) {
@@ -999,7 +1032,6 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
           ? {
               ...r.treinoProgramado,
               exercicios: r.treinoProgramado.exercicios.map((e: any) => {
-                // 🔑 ponto central: referência única
                 const exRef = e.exercicio ?? e.exercicioTemporario;
 
                 return {
@@ -1008,7 +1040,6 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
                     id: exRef?.id ?? "",
                     nome: exRef?.nome ?? "",
                     videoDemonstrativoUrl: exRef?.videoDemonstrativoUrl ?? null,
-                    // ❌ remover imgDemonstrativaUrl (não existe no schema)
                   },
                 };
               }),
@@ -1569,9 +1600,13 @@ export async function atualizarAgendamento(req: AuthenticatedRequest, res: Respo
   const { id } = req.params;
   const { dataTreino } = req.body;
 
+  const dt = dataTreino ? parseDateInput(dataTreino) : null;
+  if (dt && Number.isNaN(dt.getTime())) {
+    return res.status(400).json({ message: "dataTreino inválida" });
+  }
   const row = await prisma.treinoAgendado.update({
     where: { id },
-    data: { dataTreino: dataTreino ? new Date(dataTreino) : null },
+    data: { dataTreino: dt },
   });
 
   await audit(req, {
@@ -1952,13 +1987,18 @@ export async function criarTreinoProgramado(
       }
     }
 
+    const whenDate = when ? parseDateInput(when) : null;
+      if (whenDate && Number.isNaN(whenDate.getTime())) {
+        return res.status(400).json({ message: "dataAgendada inválida" });
+      }
+
     const treino = await prisma.treinoProgramado.create({
       data: {
         nome,
         descricao,
         nivel,
         codigo: `${nome}-${Date.now()}`,
-        dataAgendada: when ? new Date(when) : undefined,
+        dataAgendada: whenDate ?? undefined,
         objetivo,
         duracao,
         dicas,
@@ -2069,7 +2109,7 @@ export async function criarTreinoProgramado(
       try {
         const whenDate = treino.dataAgendada ?? new Date();
         const dataExpiracao = new Date(
-          whenDate.getTime() + 7 * 24 * 60 * 60 * 1000
+          whenDate.getTime() + 3 * 24 * 60 * 60 * 1000
         );
 
         await prisma.treinoAgendado.createMany({
@@ -2219,7 +2259,15 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           ...(categoriasNorm !== undefined ? { categoria: categoriasNorm } : {}),
           ...(tipoTreinoNorm !== undefined ? { tipoTreino: tipoTreinoNorm } : {}),
           ...(dataAgendada !== undefined
-            ? { dataAgendada: dataAgendada ? new Date(dataAgendada) : null }
+            ? {
+                dataAgendada: dataAgendada
+                  ? (() => {
+                      const d = parseDateInput(dataAgendada);
+                      if (Number.isNaN(d.getTime())) throw new Error("dataAgendada inválida");
+                      return d;
+                    })()
+                  : null,
+              }
             : {}),
           ...(objetivo !== undefined ? { objetivo } : {}),
           ...(duracao !== undefined ? { duracao: duracao != null ? Number(duracao) : null } : {}),
@@ -2229,8 +2277,18 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           ...(pontuacao !== undefined
             ? { pontuacao: pontuacao != null ? Number(pontuacao) : null }
             : {}),
-          ...(expiraEm !== undefined ? { expiraEm: expiraEm ? new Date(expiraEm) : null } : {}),
-          ...(naoExpira !== undefined ? { naoExpira: Boolean(naoExpira) } : {}),
+          ...(expiraEm !== undefined
+            ? {
+                expiraEm: expiraEm
+                  ? (() => {
+                      const d = parseDateInput(expiraEm);
+                      if (Number.isNaN(d.getTime())) throw new Error("expiraEm inválida");
+                      return d;
+                    })()
+                  : null,
+              }
+            : {}),
+      ...(naoExpira !== undefined ? { naoExpira: Boolean(naoExpira) } : {}),
           ...donoUpdate,
         },
       });
@@ -2622,7 +2680,7 @@ export async function statusDesafiosSemanais(req: AuthenticatedRequest, res: Res
         const start = new Date(w0);
         start.setDate(start.getDate() - i * 7);
         const end = new Date(start);
-        end.setDate(end.getDate() + 7);
+        end.setDate(end.getDate() + 3);
         return { start, end, index: i + 1 };
       }
     );
@@ -2862,10 +2920,15 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
       if (!diaISO) continue;
 
       const dataTreino = /T/.test(diaISO)
-        ? new Date(diaISO)
-        : new Date(`${diaISO}T23:59:59.000Z`);
+        ? parseDateInput(diaISO)
+        : (() => {
+            const d = parseDateInput(diaISO);
+            d.setHours(23, 59, 59, 0);     
+            return d;
+          })();
+
       const dataExpiracao = new Date(
-        dataTreino.getTime() + 7 * 24 * 60 * 60 * 1000
+        dataTreino.getTime() + 3 * 24 * 60 * 60 * 1000
       );
 
       for (const atletaId of atletaIdsFinal) {

@@ -1,4 +1,3 @@
-// server/routes/treinos
 import { Router } from "express";
 import { authenticateToken } from "server/middlewares/auth.js";
 import {
@@ -38,6 +37,7 @@ import {
   getCalendarioTreinos,
   relacaoStatus,
 } from "server/controllers/treinosController.js";
+import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
 import { requireCapability, requireOrgSeat } from "server/middlewares/guards.js";
 
@@ -106,6 +106,7 @@ router.post(
   agendarRotinaMensal
 );
 
+router.post("/avaliacoes", authenticateToken, criarAvaliacaoTreino);
 router.post(
   "/org/:orgId/rotina/agendar",
   requireOrgSeat(req => (req.params?.orgId as string) || (req.body?.escolinhaId as string) || (req.body?.clubeId as string)),
