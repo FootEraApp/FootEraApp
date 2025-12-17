@@ -1,3 +1,4 @@
+// server/controllers/atletaObservadoController
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
@@ -179,34 +180,40 @@ export async function observarAtleta(req: Request, res: Response) {
   };
 
   if (!atletaId || !ownerId) {
-    return res
-      .status(400)
-      .json({ message: "atletaId e ownerId são obrigatórios" });
+    return res.status(400).json({ message: "atletaId e ownerId são obrigatórios" });
   }
 
-  const ownerWhere = buildOwnerWhere(tipo, ownerId);
-  const ownerCreate = buildOwnerCreate(tipo, ownerId);
+  const t = String(tipo || "").toLowerCase();
+
+  // monta o "único owner" diretamente nos campos *_Id (garante o CHECK do Postgres)
+  const ownerData: any = {};
+  if (t === "professor") ownerData.professorId = ownerId;
+  else if (t === "clube") ownerData.clubeId = ownerId;
+  else if (t === "escola" || t === "escolinha") ownerData.escolinhaId = ownerId;
+  else if (t === "olheiro") ownerData.olheiroId = ownerId;
+  else {
+    return res.status(400).json({ message: `tipo inválido: "${tipo}"` });
+  }
 
   try {
     const row = await prisma.atletaObservado.create({
       data: {
-        atleta: { connect: { id: atletaId } },
-        ...ownerCreate,
+        atletaId,
+        ...ownerData,
       },
     });
 
     return res.status(201).json({ ok: true, observando: true, id: row.id });
   } catch (e: any) {
+    // duplicado (unique)
     if (e?.code === "P2002") {
+      const ownerWhere = buildOwnerWhere(tipo, ownerId);
       const ja = await prisma.atletaObservado.findFirst({
         where: { atletaId, ...ownerWhere },
       });
-      return res.status(200).json({
-        ok: true,
-        observando: true,
-        id: ja?.id ?? null,
-      });
+      return res.status(200).json({ ok: true, observando: true, id: ja?.id ?? null });
     }
+
     console.error("observarAtleta error", e);
     return res.status(500).json({ error: "Falha ao observar atleta" });
   }
