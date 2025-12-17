@@ -10,7 +10,7 @@ import { transcodeTo720p } from "../services/transcodeService.js";
 
 const prisma = new PrismaClient();
 const MAX_VIDEO_SEC = 60;
-const MAX_FILE_BYTES = 50 * 1024 * 1024;
+const MAX_FILE_BYTES = 100 * 1024 * 1024;
 
 const queueTranscode = {
   add: async (_name: string, data: { midiaId: string; localPath: string }) => {
@@ -33,7 +33,10 @@ const storage = multer.diskStorage({
   },
 });
 
-export const upload = multer({ storage });
+export const upload = multer({
+  storage,
+  limits: { fileSize: MAX_FILE_BYTES },
+});
 
 export const uploadMidia = [
   upload.single("foto"),
@@ -58,7 +61,7 @@ export const uploadMidia = [
       if (sizeBytes > MAX_FILE_BYTES) {
         fs.unlink(localPath, () => {});
         return res.status(400).json(
-          uploadError("FILE_TOO_LARGE", "O arquivo enviado é maior que 50MB.", {
+          uploadError("FILE_TOO_LARGE", "O arquivo enviado é maior que 100MB.", {
             maxBytes: MAX_FILE_BYTES,
           })
         );

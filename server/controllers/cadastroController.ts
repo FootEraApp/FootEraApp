@@ -58,7 +58,7 @@ async function issueEmailVerification(params: {
     create: { usuarioId: params.userId, token: raw, expiraEm: addHours(new Date(), 24) },
   });
 
-  const verifyUrl = `${API_BASE_URL}/api/cadastro/verify?token=${raw}`;
+  const verifyUrl = `${API_BASE_URL}/api/auth/cadastro/verify?token=${raw}`;
 
   await sendEmailVerification({
     to: params.emailDestino,
@@ -301,15 +301,22 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
 
     switch (tipoEnum) {
       case TipoUsuario.Atleta: {
+        const categorias = Array.isArray((req.body as any)?.categorias)
+          ? (req.body as any).categorias
+          : Array.isArray((req.body as any)?.categoria)
+          ? (req.body as any).categoria
+          : [];
+
         const atleta = await prisma.atleta.create({
           data: {
             usuarioId: usuario.id,
             idade: typeof idade === "number" ? idade : 0,
-            categoria: Array.isArray(categoria) ? categoria : [],
+            categoria: categorias,
             email: emailNorm,
           },
           select: { id: true },
         });
+
         await prisma.pontuacaoAtleta.create({ data: { atletaId: atleta.id } });
         tipoUsuarioId = atleta.id;
         break;
@@ -557,7 +564,7 @@ export async function resendVerification(req: Request, res: Response) {
     const destino = (isMenor && usuario.responsavelEmail) ? usuario.responsavelEmail : usuario.email;
     if (!destino) return res.status(400).json({ message: "Usuário sem e-mail cadastrado." });
 
-    const verifyUrl = `${API_BASE_URL}/api/cadastro/verify?token=${raw}`;
+    const verifyUrl = `${API_BASE_URL}/api/auth/cadastro/verify?token=${raw}`;
     await sendEmailVerification({
       to: destino,
       verifyUrl,
