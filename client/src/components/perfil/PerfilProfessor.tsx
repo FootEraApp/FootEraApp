@@ -7,6 +7,7 @@ import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
+import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 
 const ACHIEVEMENTS: Record<
   string,
@@ -128,7 +129,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   const [data, setData] = useState<PayloadProfessor | null>(null);
   const [loading, setLoading] = useState(true);
 
-  type Aba = "visao" | "atletas" | "conquistas";
+  type Aba = "visao" | "atletas" | "conquistas" | "postagens";
   const [aba, setAba] = useState<Aba>("visao");
 
   type SubAba = "vinculados" | "observados" | "solicitacoes";
@@ -157,6 +158,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     { id: "visao", label: "Visão Geral" },
     { id: "atletas", label: `Atletas` },
     { id: "conquistas", label: "Conquistas" },
+    { id: "postagens", label: "Postagens" },
   ] as const;
 
   const owner = useMemo(() => {
@@ -481,8 +483,8 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
       />
 
       <div className="mt-4 px-4">
-        <div className="bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100">
-          {abas.map((t) => (
+        <div className="bg-white/90 rounded-xl p-1 grid grid-cols-4 gap-1 border border-green-100">
+         {abas.map((t) => (
             <button
               key={t.id}
               onClick={() => setAba(t.id as any)}
@@ -785,6 +787,14 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
             ) : (
               <EmptyState text="Nenhuma conquista registrada ainda" />
             )}
+          </SectionCard>
+        </div>
+      )}
+
+      {aba === "postagens" && (
+        <div className="mt-4 px-4 grid gap-4">
+          <SectionCard title="Postagens">
+            <ProfilePostsSection usuarioId={usuarioPerfilId} />
           </SectionCard>
         </div>
       )}
