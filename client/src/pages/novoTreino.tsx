@@ -76,6 +76,42 @@ function formatYMD(ano: number, mesZeroBased: number, dia: number): string {
   return `${ano}-${m}-${d}`;
 }
 
+function toDateOnlyBR(input: string): string {
+  const s = String(input || "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return s.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return "";
+  return formatYMD(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function toDatetimeLocalValue(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${day}T${hh}:${mm}`; 
+}
+
+function toLocalISO_NoZ(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  const ss = String(date.getSeconds()).padStart(2, "0");
+  return `${y}-${m}-${d}T${hh}:${mm}:${ss}`;
+}
+
+function parseDateOnlyToLocalMidnight(dateOnly: string): Date {
+  const s = toDateOnlyBR(dateOnly);
+  if (!s) return new Date(NaN);
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+}
+
 function resolveVideoUrl(raw?: string) {
   if (!raw) return "";
   const p = raw.replace(/\\/g, "/");
@@ -830,13 +866,13 @@ export default function NovoTreino() {
           undefined;
 
         return {
-          id: String(atletaId || usuarioId),
+          id: String(atletaId),
           nome: nomeCompleto,
           foto,
           usuarioId: usuarioId ? String(usuarioId) : undefined,
         } as AtletaVinculado;
       })
-      .filter((x) => x.id);
+      .filter((x) => x.id && x.id !== "undefined" && x.id !== "null")
   }
 
   useEffect(() => {
@@ -1623,9 +1659,8 @@ export default function NovoTreino() {
         limite.setDate(limite.getDate() + 30);
 
         const dentroDaJanela = (str: string) => {
-          const d = new Date(str.includes("T") ? str : `${str}T00:00:00`);
+          const d = parseDateOnlyToLocalMidnight(str);
           if (isNaN(d.getTime())) return false;
-          d.setHours(0, 0, 0, 0);
           return d >= hoje && d <= limite;
         };
 
@@ -1659,17 +1694,17 @@ export default function NovoTreino() {
           ? dataTreino.split("T")[1].slice(0, 5)
           : "18:00";
 
-      const datasISO = datasBase.map((d) => {
-        if (d.includes("T")) {
-          return new Date(d).toISOString();
-        }
-        const dt = new Date(`${d}T${baseTime}`);
-        return dt.toISOString();
-      });
+      const datasLocal = datasBase.map((d) => {
+      const dateOnly = toDateOnlyBR(d);
+      if (!dateOnly) return "";
+
+      const dt = new Date(`${dateOnly}T${baseTime}:00`);
+      return toLocalISO_NoZ(dt);
+    }).filter(Boolean);
 
       const body = {
         treinoProgramadoId,
-        datas: datasISO,
+        datas: datasLocal,
         atletaIds: atletasSelecionados.map(extrairIdAtleta),
         elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
         incluirObservados: false,
@@ -1694,7 +1729,7 @@ export default function NovoTreino() {
       const json = await res.json().catch(() => null);
       return typeof json?.count === "number"
         ? json.count
-        : datasISO.length * atletasSelecionados.length;
+        : datasLocal.length * atletasSelecionados.length;
     } catch (e) {
       console.error("Erro em agendarTreinoEmLote:", e);
       return 0;
@@ -1962,13 +1997,35 @@ export default function NovoTreino() {
         return;
       }
 
-      const prazoSelecionado = prazos[t.id];
-      const quando = prazoSelecionado
-        ? new Date(prazoSelecionado)
-        : new Date(Date.now() + 24 * 60 * 60 * 1000);
-      const expira = new Date(
-        quando.getTime() + 7 * 24 * 60 * 60 * 1000,
-      );
+      const prazoSelecionadoRaw = (prazos[t.id] || "").trim();
+
+      if (!prazoSelecionadoRaw) {
+        alert("Selecione o prazo para envio antes de agendar.");
+        return;
+      }
+
+      const prazoComSegundos =
+        prazoSelecionadoRaw.length === 16 ? `${prazoSelecionadoRaw}:00` : prazoSelecionadoRaw;
+
+      const quando = new Date(prazoComSegundos);
+
+      if (isNaN(quando.getTime())) {
+        alert("Prazo inválido. Selecione novamente.");
+        return;
+      }
+
+      const expira = new Date(quando.getTime() + 3 * 24 * 60 * 60 * 1000);
+      const dataTreinoLocal = toLocalISO_NoZ(quando);
+      const dataExpiracaoLocal = toLocalISO_NoZ(expira);
+
+      console.log("[NovoTreino] agendarTreino atleta", {
+        prazoSelecionadoRaw,
+        quando_local: quando.toString(),
+        quando_send: dataTreinoLocal,
+        expira_local: expira.toString(),
+        expira_send: dataExpiracaoLocal,
+        tzOffsetMin: new Date().getTimezoneOffset(),
+      });
 
       const res = await fetch(`${API.BASE_URL}/api/treinos/agendados`, {
         method: "POST",
@@ -1978,8 +2035,8 @@ export default function NovoTreino() {
         },
         body: JSON.stringify({
           titulo: t.nome,
-          dataTreino: quando.toISOString(),
-          dataExpiracao: expira.toISOString(),
+          dataTreino: dataTreinoLocal,
+          dataExpiracao: dataExpiracaoLocal,
           atletaId,
           treinoProgramadoId: t.id,
         }),
@@ -1993,28 +2050,15 @@ export default function NovoTreino() {
       }
 
       const novo: TreinoAgendadoResp = await res.json();
-      sessionStorage.setItem("lastAgendamento", JSON.stringify(novo));
-      setIdsProgramadosBloqueados(
-        (prev) => new Set(prev).add(novo.treinoProgramadoId),
-      );
-      navigate("/treinos");
-      const once = () => {
-        window.removeEventListener("treinos:ready", once as any);
-        window.dispatchEvent(
-          new CustomEvent("treino:agendado", { detail: novo }),
-        );
-      };
-      window.addEventListener("treinos:ready", once as any);
 
-      setTimeout(
-        () =>
-          window.dispatchEvent(
-            new CustomEvent("treino:agendado", { detail: novo }),
-          ),
-        50,
-      );
+      sessionStorage.setItem("lastAgendamento", JSON.stringify(novo));
+      window.dispatchEvent(new CustomEvent("treino:agendado", { detail: novo }));
+
+      setIdsProgramadosBloqueados((prev) => new Set(prev).add(novo.treinoProgramadoId));
       setPrazos(({ [t.id]: _, ...rest }) => rest);
+      
       alert("Treino agendado com sucesso!");
+      navigate("/treinos");
     } catch (e) {
       console.error(e);
       alert("Erro inesperado ao agendar treino.");
@@ -2113,6 +2157,14 @@ export default function NovoTreino() {
                 type="datetime-local"
                 className="border p-2 rounded"
                 value={prazos[t.id] || ""}
+                onFocus={() => {
+                  if (!prazos[t.id]) {
+                    setPrazos((prev) => ({
+                      ...prev,
+                      [t.id]: toDatetimeLocalValue(new Date()),
+                    }));
+                  }
+                }}
                 onChange={(e) =>
                   setPrazos((prev) => ({
                     ...prev,
