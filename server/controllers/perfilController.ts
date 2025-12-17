@@ -1,3 +1,4 @@
+// server/controllers/perfilController
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
@@ -1798,17 +1799,10 @@ export async function getPerfilEscola(req: Request, res: Response) {
 }
 
 export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response) {
-  if (req.user?.tipo === 'Olheiro') {
-    await requireUsage(req, res, 'perfis_vistos_dia');
-  }
   try {
     const { id } = req.params;
-    
-    if (req.user?.tipo === "Olheiro" && req.user?.plano !== "PRO") {
-      const ok = await requireUsage(req, res, "listas_salvas_total");
-      if (!ok) return;
-    }
 
+    // resolve o olheiro alvo primeiro
     const olheiro: any = await resolveByUsuarioOrEntity({
       entity: "olheiro",
       usuarioOrEntityId: id,
@@ -1826,7 +1820,6 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
         siteOuLinkedin: true,
         reputacaoScore: true,
         totalIndicacoes: true,
-        colaboracaoClubeId: true,
         colaboracaoClube: { select: { id: true, usuarioId: true, nome: true, logo: true } },
         createdAt: true,
         updatedAt: true,
@@ -1835,7 +1828,22 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
 
     if (!olheiro) return res.status(404).json({ error: "Olheiro não encontrado" });
 
-    const usuarioMin = (olheiro as any).usuario ?? null;
+    // ✅ só conta “perfil visto” quando o viewer é olheiro e está vendo OUTRO usuário
+    const viewerIsOlheiro = req.user?.tipo === "Olheiro";
+    const isOwnProfile = !!req.userId && (req.userId === olheiro.usuarioId);
+
+    if (viewerIsOlheiro && !isOwnProfile) {
+      const ok = await requireUsage(req, res, "perfis_vistos_dia");
+      if (!ok) return;
+    }
+
+    // ❌ REMOVA COMPLETAMENTE isso daqui:
+    // if (req.user?.tipo === "Olheiro" && req.user?.plano !== "PRO") {
+    //   const ok = await requireUsage(req, res, "listas_salvas_total");
+    //   if (!ok) return;
+    // }
+
+    const usuarioMin = olheiro.usuario ?? null;
 
     return res.json({
       tipo: "Olheiro" as const,
@@ -1855,7 +1863,7 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
           id: olheiro.colaboracaoClube.id,
           usuarioId: olheiro.colaboracaoClube.usuarioId,
           nome: olheiro.colaboracaoClube.nome,
-          logo: (olheiro as any).colaboracaoClube?.logo ?? null,
+          logo: olheiro.colaboracaoClube.logo ?? null,
         } : null,
         createdAt: olheiro.createdAt,
         updatedAt: olheiro.updatedAt,

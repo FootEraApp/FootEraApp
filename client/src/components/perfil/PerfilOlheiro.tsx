@@ -1,3 +1,4 @@
+// client/src/components/perfil/PerfilOlheiro
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -8,6 +9,7 @@ import { API } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
+import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 
 type Props = { idDaUrl?: string };
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null; nomeDeUsuario?: string };
@@ -122,7 +124,7 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
   const [data, setData] = useState<PayloadOlheiro | null>(null);
   const [loading, setLoading] = useState(true);
 
-  type Aba = "visao" | "atletas" | "indicacoes";
+  type Aba = "visao" | "atletas" | "indicacoes" | "postagens";
   const [aba, setAba] = useState<Aba>("visao");
 
   type SubAbaAtletas = "observados";
@@ -380,11 +382,12 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
       )}
 
       <div className="mt-4 px-4">
-        <div className="bg-white/90 rounded-xl p-1 grid grid-cols-3 gap-1 border border-green-100">
+        <div className="bg-white/90 rounded-xl p-1 grid grid-cols-4 gap-1 border border-green-100">
           {[
             { id: "visao", label: "Visão Geral" },
             { id: "atletas", label: "Atletas" },
             { id: "indicacoes", label: "Indicações" },
+            { id: "postagens", label: "Postagens" },
           ].map(t => (
             <button
               key={t.id}
@@ -700,6 +703,19 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
           </SectionCard>
         </div>
       )}
+
+      {aba === "postagens" && (
+        <section className="mt-4 px-4">
+          {perfilUsuarioId ? (
+            <ProfilePostsSection usuarioId={perfilUsuarioId} />
+          ) : (
+            <div className="bg-white/70 rounded-xl p-4 shadow-sm text-sm text-green-900/70">
+              Não foi possível carregar o usuário das postagens.
+            </div>
+          )}
+        </section>
+      )}
+
       <div className="h-6" />
     </div>
   );

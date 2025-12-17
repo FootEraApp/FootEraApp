@@ -1,3 +1,4 @@
+// client/src/components/profile/ProfileHeader
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
@@ -102,6 +103,14 @@ export default function ProfileHeader({
   const [perfilTipo, setPerfilTipo] = useState<string | null>(perfilTipoProp ?? null);
   const [perfilTipoId, setPerfilTipoId] = useState<string | null>(perfilTipoIdProp ?? null);
 
+  const viewerTipo =
+  (Storage as any).tipoSalvo ??
+  localStorage.getItem("tipoUsuario") ??
+  sessionStorage.getItem("tipoUsuario") ??
+  "";
+
+  const viewerCanObserve = /olheiro|professor|clube|escolinha/i.test(String(viewerTipo));
+
   const obsKey =
     Storage.usuarioId && alvoAtletaId ? `obs_${Storage.usuarioId}_${alvoAtletaId}` : null;
   const storageKey = `tj_${Storage.usuarioId}_${perfilId}`;
@@ -139,8 +148,19 @@ export default function ProfileHeader({
     }
 
     if (perfilTipoIdProp || perfilTipoProp) {
-      setPerfilTipo(perfilTipoProp ?? null);
+      const tipoStr = String(perfilTipoProp || "").toLowerCase();
+
+      setPerfilTipo(tipoStr || null);
       setPerfilTipoId(perfilTipoIdProp ?? null);
+
+      const atletaIdGuess =
+        tipoStr === "atleta" ? String(perfilTipoIdProp || "") : "";
+
+      setAlvoAtletaId(atletaIdGuess ? atletaIdGuess : null);
+
+      // ✅ regra correta: viewer pode observar + alvo é atleta + tem atletaId
+      setPodeObservar(viewerCanObserve && tipoStr === "atleta");
+
       return;
     }
 
@@ -157,7 +177,7 @@ export default function ProfileHeader({
         const id = pickAtletaId(data, perfilId);
         const tipoStr = (data?.tipo || data?.tipoUsuario || "").toString().toLowerCase();
 
-        setPodeObservar(!!id || tipoStr === "atleta");
+        setPodeObservar(viewerCanObserve && tipoStr === "atleta");
         setAlvoAtletaId(id ?? null);
         setPerfilTipo(tipoStr || null);
 
@@ -1076,6 +1096,7 @@ export default function ProfileHeader({
     try {
       const token = Storage.token;
       const ownerId = Storage.tipoUsuarioId;
+      
       const tipo =
         (Storage as any).tipoSalvo ??
         localStorage.getItem("tipoUsuario") ??
@@ -1358,7 +1379,7 @@ export default function ProfileHeader({
               <span className="truncate">{treinoLabel}</span>
             </button>
 
-            {podeObservar && (
+            {viewerCanObserve && podeObservar && (
               <button
                 disabled={carregandoObs}
                 aria-pressed={!!observando}
