@@ -1,3 +1,4 @@
+// client/src/components/perfil/PerfilAtleta
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { API } from "../../config.js";
@@ -242,9 +243,14 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   isOwnProfile={isOwnProfile}
   foto={perfil.usuario.foto || perfil.dadosEspecificos.foto || undefined}
 
-  perfilId={perfil.usuario.id}          
+  perfilId={perfil.usuario.id}
   perfilTipoProp="atleta"
-  perfilTipoIdProp={perfil.dadosEspecificos.id} 
+  perfilTipoIdProp={
+    (perfil as any)?.dadosEspecificos?.atletaId ??
+    perfil?.atleta?.id ??
+    perfil?.tipoUsuarioId ??
+    undefined
+  }
 />
 
         <VinculosCard

@@ -1,3 +1,4 @@
+// client/src/pages/olheiro/index.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import axios from "axios";
@@ -173,19 +174,22 @@ export default function PainelOlheiro() {
                   >
                     Indicar
                   </Link>
-                   <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-                    <Link href="/feed"><House /></Link>
-                    <Link href="/explorar"><Search /></Link>
-                    <Link href="/post"><CirclePlus /></Link>
-                    <Link href="/olheiros"><Eye /></Link>
-                    <Link href="/perfil"><User /></Link>
-                   </nav>
                 </div>
               </li>
             );
           })}
         </ul>
       )}
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md z-50">
+        <Link href="/feed"><House /></Link>
+        <Link href="/explorar"><Search /></Link>
+        <Link href="/post"><CirclePlus /></Link>
+        <Link href="/olheiros"><Eye /></Link>
+        <Link href="/perfil"><User /></Link>
+      </nav>
+
+
     </div>
   );
 }

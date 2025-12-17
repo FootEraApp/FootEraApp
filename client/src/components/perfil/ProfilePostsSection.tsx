@@ -1,3 +1,4 @@
+// client/src/components/perfil/ProfilePostsSection
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { publicImgUrl } from "../../utils/publicUrl.js";
