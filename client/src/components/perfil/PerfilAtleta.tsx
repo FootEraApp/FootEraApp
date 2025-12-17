@@ -8,6 +8,7 @@ import ActivityGrid from "../profile/ActivityGrid.js";
 import { BadgesList } from "../profile/BadgesList.js";
 import ScorePanel from "../profile/ScorePanel.js";
 import TrainingProgress from "../profile/TrainingProgress.js";
+import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 
 type TipoAtividade = "Desafio" | "Treino" | "Vídeo";
 
@@ -51,21 +52,6 @@ interface Pontuacao {
 type Props = {
   idDaUrl?: string;
 };
-
-function pickProfessorNome(anyData: any): string | null {
-  if (!anyData) return null;
-  const o = Array.isArray(anyData) ? anyData[0] : anyData;
-
-  if (o?.professor?.nome) return o.professor.nome;
-  if (o?.treinador?.nome) return o.treinador.nome;
-  if (o?.dadosEspecificos?.professor) return o.dadosEspecificos.professor;
-  if (o?.dadosEspecificos?.professorNome) return o.dadosEspecificos.professorNome;
-
-  if (o?.tipo === "Professor" && o?.nome) return o.nome;
-  if (o?.usuario?.tipo === "Professor" && o?.usuario?.nome) return o.usuario.nome;
-
-  return null;
-}
 
 function VinculosCard({
   professor,
@@ -115,6 +101,9 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   const [escolaNome, setEscolaNome] = useState<string | null>(null);
   const [clubeNome, setClubeNome] = useState<string | null>(null);
   const [scoreDelta, setScoreDelta] = useState(0);
+
+  type AbaTopo = "perfil" | "postagens";
+  const [aba, setAba] = useState<AbaTopo>("perfil");
 
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -169,7 +158,6 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
       setEscolaNome(escola);
       setClubeNome(clube);
       setProfessor(prof ? { nome: prof } : null);
-
       setActivities((atividades || []).map((a: any) => ({
         id: a.id,
         tipo: a.tipo as TipoAtividade,
@@ -267,22 +255,51 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
           </div>
         )}
 
-        <TrainingProgress
-          userId={perfil.usuario.id}
-          tipoUsuarioId={
-            perfil.tipoUsuarioId ?? perfil.dadosEspecificos?.id ?? perfil.atleta?.id ?? null
-          }
-        />
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {[
+            { key: "perfil", label: "Perfil" },
+            { key: "postagens", label: "Postagens" },
+          ].map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setAba(t.key as AbaTopo)}
+              className={`py-2 rounded-lg text-sm font-medium ${
+                aba === t.key
+                  ? "bg-green-100 text-green-900"
+                  : "bg-white/70 text-green-900 hover:bg-white"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
 
-        <ActivityGrid activities={activities} perfilUsuarioId={usuarioId ?? perfil.usuario.id} />
-        <BadgesList userId={usuarioId ?? undefined} badges={badges} />
+        {aba === "perfil" && (
+          <>
+            <TrainingProgress
+              userId={perfil.usuario.id}
+              tipoUsuarioId={
+                perfil.tipoUsuarioId ?? perfil.dadosEspecificos?.id ?? perfil.atleta?.id ?? null
+              }
+            />
 
-        {pontuacao && (
-          <ScorePanel
-            performance={pontuacao.pontuacaoPerformance}
-            disciplina={pontuacao.pontuacaoDisciplina}
-            responsabilidade={pontuacao.pontuacaoResponsabilidade}
-          />
+            <ActivityGrid activities={activities} perfilUsuarioId={usuarioId ?? perfil.usuario.id} />
+            <BadgesList userId={usuarioId ?? undefined} badges={badges} />
+
+            {pontuacao && (
+              <ScorePanel
+                performance={pontuacao.pontuacaoPerformance}
+                disciplina={pontuacao.pontuacaoDisciplina}
+                responsabilidade={pontuacao.pontuacaoResponsabilidade}
+              />
+            )}
+          </>
+        )}
+
+        {aba === "postagens" && (
+          <section className="mt-4">
+            <ProfilePostsSection usuarioId={perfil.usuario.id} />
+          </section>
         )}
       </div>
     </div>
