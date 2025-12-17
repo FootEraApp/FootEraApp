@@ -1,4 +1,3 @@
-// client/src/pages/treino/treinos-atletas
 import React, { useEffect, useRef, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -220,6 +219,31 @@ const getToken = () =>
   sessionStorage.getItem("token") ??
   "";
 
+  function parseDateSafe(raw?: string | null): Date | null {
+  if (!raw) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [y, m, d] = raw.split("-").map(Number);
+    return new Date(y, (m || 1) - 1, d || 1);
+  }
+
+  const dt = new Date(raw);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function getDataExibicaoTreino(t: TreinoAgendado): Date | null {
+  return (
+    parseDateSafe(t.prazoEnvio) ||
+    parseDateSafe(t.dataTreino) ||
+    parseDateSafe(t.treinoProgramado?.dataAgendada ?? null) ||
+    null
+  );
+}
+
+function getDataExibicaoTreinoRaw(t: TreinoAgendado): string | null {
+  return (t.prazoEnvio || t.dataTreino || t.treinoProgramado?.dataAgendada || null) as any;
+}
+
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
 const sameDay = (a?: Date | null, b?: Date | null) =>
@@ -301,14 +325,29 @@ function getCriadorLabel(t: TreinoAgendado): string | null {
 }
 
 export default function TreinosAtletas() {
-  const [, navigate] = useLocation();
-
+  const [location, navigate] = useLocation();
   const [treinosAgendados, setTreinosAgendados] = useState<TreinoAgendado[]>([]);
   const [desafios, setDesafios] = useState<Desafio[]>([]);
   const [semanasDesafio, setSemanasDesafio] = useState<WeekStatus[]>([]);
   const [idsAgendadosSubmetidos, setIdsAgendadosSubmetidos] = useState<
     Set<string>
   >(new Set());
+  const [midiaPorNomeExercicio, setMidiaPorNomeExercicio] = useState<
+    Record<string, { video?: string | null; img?: string | null }>
+  >({});
+
+  function normNome(n?: string | null) {
+    return String(n || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function midiaDoCatalogo(nome?: string | null) {
+    const k = normNome(nome);
+    return midiaPorNomeExercicio[k] || null;
+  }
 
   const [statusPorTreino, setStatusPorTreino] = useState<
     Record<
@@ -340,6 +379,37 @@ export default function TreinosAtletas() {
   } | null>(null);
   const [videoCarregando, setVideoCarregando] = useState(false);
   const [videoErro, setVideoErro] = useState<string | null>(null);
+
+  async function carregarCatalogoExercicios() {
+  try {
+    const token = getToken();
+    if (!token) return;
+
+    const r = await fetch(`${API.BASE_URL}/api/exercicios`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!r.ok) return;
+
+    const js = await r.json();
+    const arr: any[] = Array.isArray(js) ? js : js.items ?? js.exercicios ?? [];
+
+    const mapa: Record<string, { video?: string | null; img?: string | null }> = {};
+    for (const ex of arr) {
+      const key = normNome(ex?.nome);
+      if (!key) continue;
+
+      mapa[key] = {
+        video: ex?.videoDemonstrativoUrl ?? ex?.videoUrl ?? null,
+        img: ex?.imgDemonstrativaUrl ?? ex?.imagemUrl ?? null,
+      };
+    }
+
+    setMidiaPorNomeExercicio(mapa);
+  } catch (e) {
+    console.warn("[TREINOS] falha ao carregar catálogo de exercícios:", e);
+  }
+}
 
   function pickMidiaFromExercicioPayload(ex: any): string {
   return (
@@ -401,6 +471,17 @@ function abrirMidiaExercicioDireto(
   const [easterEggMsg, setEasterEggMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    carregarCatalogoExercicios();
+  }, []);
+
+  useEffect(() => {
+    if (location === "/treinos") {
+      carregarTreinosAgendados();
+      carregarEventosAtleta();
+    }
+  }, [location]);
+
+  useEffect(() => {
     if (!easterEggMsg) return;
 
     const id = window.setTimeout(() => {
@@ -442,7 +523,7 @@ function abrirMidiaExercicioDireto(
   async function enviarDesafioDM() {
     if (selecionados.size === 0 || !desafioParaCompartilhar) return;
 
-    const token = Storage.token;
+    const token = getToken();
     setEnviandoDM(true);
 
     try {
@@ -532,10 +613,10 @@ function abrirMidiaExercicioDireto(
         return {
           id: item.id,
           titulo: item.titulo ?? tp?.nome ?? "Treino",
-          dataTreino: item.dataTreino ?? tp?.dataAgendada ?? null,
+          prazoEnvio: item.prazoEnvio ?? null,
+          dataTreino: item.prazoEnvio ?? item.dataTreino ?? tp?.dataAgendada ?? null,
           dataExpiracao: item.dataExpiracao ?? null,
           nivel: tp?.nivel ?? null,
-          prazoEnvio: item.prazoEnvio ?? null,
           duracaoMinutos:
             item.duracaoMinutos ??
             (item.duracaoSegundos
@@ -602,12 +683,14 @@ function abrirMidiaExercicioDireto(
     const arr: AgendaItem[] = [];
 
     treinosAgendados.forEach((t) => {
-      if (!t.dataTreino) return;
+      const inicio = getDataExibicaoTreinoRaw(t);
+      if (!inicio) return;
+
       arr.push({
         id: t.id,
         tipo: "TREINO",
         titulo: t.titulo,
-        inicio: t.dataTreino,
+        inicio,
         fim: t.dataExpiracao ?? null,
         origem: "treino",
       });
@@ -644,18 +727,19 @@ function abrirMidiaExercicioDireto(
   }, []);
 
   useEffect(() => {
-    function onAgendado() {
-      setTimeout(() => {
-        window.dispatchEvent(new Event("treinos:ready"));
-      }, 50);
-    }
+    const onAgendado = () => {
+      carregarTreinosAgendados();
+    };
 
     window.addEventListener("treino:agendado", onAgendado);
-    return () => window.removeEventListener("treino:agendado", onAgendado);
-  }, []);
 
-  useEffect(() => {
-    window.dispatchEvent(new Event("treinos:ready"));
+    const last = sessionStorage.getItem("lastAgendamento");
+    if (last) {
+      carregarTreinosAgendados();
+      sessionStorage.removeItem("lastAgendamento");
+    }
+
+    return () => window.removeEventListener("treino:agendado", onAgendado);
   }, []);
 
   const tipo = String(
@@ -699,8 +783,8 @@ function abrirMidiaExercicioDireto(
   }, [treinosAgendados.length, desafios.length]);
 
   const ordenados = [...treinosAgendados].sort((a, b) => {
-    const ad = a.dataTreino ? +new Date(a.dataTreino) : 0;
-    const bd = b.dataTreino ? +new Date(b.dataTreino) : 0;
+    const ad = +(getDataExibicaoTreino(a)?.getTime() ?? 0);
+    const bd = +(getDataExibicaoTreino(b)?.getTime() ?? 0);
     return ad - bd;
   });
 
@@ -717,7 +801,7 @@ function abrirMidiaExercicioDireto(
   };
 
   function computeTile(t: TreinoAgendado): TileInfo {
-    const d = t.dataTreino ? new Date(t.dataTreino) : null;
+    const d = getDataExibicaoTreino(t);
     const isToday = d ? sameDay(d, hoje) : false;
 
     const st = (t.meuStatus ?? statusPorTreino[t.id]?.status) as
@@ -1080,12 +1164,26 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
   onClick={() => {
     if (isMissedTreino) return;
 
-    const midia =
+    const midiaDireta =
       ex.exercicio.videoDemonstrativoUrl ||
       (ex.exercicio as any).imgDemonstrativaUrl ||
       null;
 
-    console.log("[MIDIA] exercicio:", ex.exercicio.id, ex.exercicio.nome, "midia:", midia);
+    const midiaFallback = (() => {
+      const m = midiaDoCatalogo(ex.exercicio.nome);
+      return m?.video || m?.img || null;
+    })();
+
+    const midia = midiaDireta || midiaFallback;
+
+    console.log(
+      "[MIDIA]",
+      "exercicio:", ex.exercicio.id,
+      ex.exercicio.nome,
+      "direta:", midiaDireta,
+      "fallback:", midiaFallback,
+      "final:", midia
+    );
 
     if (!midia) {
       alert("Esse exercício está sem vídeo cadastrado no banco (videoDemonstrativoUrl = null).");
@@ -1259,9 +1357,7 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                         );
                         if (!treino) return null;
 
-                        const d = treino.dataTreino
-                          ? new Date(treino.dataTreino)
-                          : null;
+                        const d = getDataExibicaoTreino(treino);
                         const isHoje = d ? sameDay(d, hoje) : false;
                         const diaStr = d
                           ? String(d.getDate()).padStart(2, "0")
@@ -1851,11 +1947,15 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
         </div>
       )}
 
-{videoModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-    <div className="relative w-full max-w-2xl bg-white rounded-xl shadow-lg p-4">
-      <button
-        onClick={() => setVideoModal(null)}
+      {videoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="relative w-full max-w-2xl bg-white rounded-xl shadow-lg p-4">
+            <button
+        onClick={() => {
+          setVideoModal(null);
+          setVideoCarregando(false);
+          setVideoErro(null);
+        }}
         className="absolute top-3 right-3 text-gray-600 hover:text-gray-800"
       >
         <X className="w-6 h-6" />
@@ -1899,9 +1999,10 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
               style={{ maxHeight: "70vh" }}
               controls
               autoPlay
-              onError={() =>
+              onError={() => {
+                setVideoCarregando(false);
                 setVideoErro("Não foi possível carregar o vídeo.")
-              }
+              }}
               onLoadedData={() => setVideoCarregando(false)}
             />
           </div>
