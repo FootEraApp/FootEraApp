@@ -1,5 +1,7 @@
 import { Router } from "express";
 import * as ctrl from "../controllers/eventosController.js";
+import { authenticateToken } from "../middlewares/auth.js";
+import { getConvocacaoEvento, upsertConvocacaoEvento } from "../controllers/eventoConvocacaoController.js";
 
 const r = Router();
 
@@ -19,6 +21,8 @@ r.post(
   ctrl.ehDonoDaEscolinhaOuAdmin,
   ctrl.criar
 );
+r.get("/:eventoId/convocacao", authenticateToken, getConvocacaoEvento);
+r.put("/:eventoId/convocacao", authenticateToken, upsertConvocacaoEvento);
 r.get("/:id", ctrl.obter);
 r.get("/", ctrl.listarPublicos);
 

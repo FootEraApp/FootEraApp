@@ -1,9 +1,10 @@
+import { getBadge, listarMinhasNotificacoes } from "../controllers/notificacoesController.js";
 import { Router } from "express";
 import { authenticateToken } from "../middlewares/auth.js";
-import { getBadge } from "../controllers/notificacoesController.js";
 
-const r = Router();
+const router = Router();
 
-r.get("/badge", authenticateToken, getBadge);
+router.get("/me", authenticateToken, listarMinhasNotificacoes);
+router.get("/badge", authenticateToken, getBadge);
 
-export default r;
+export default router;

@@ -1087,6 +1087,29 @@ useEffect(() => {
 
   const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
+  function parseConvocacaoEvento(text: string) {
+  if (typeof text !== "string") return null;
+  if (!text.includes("[CONVOCACAO_EVENTO:")) return null;
+
+  const linkMatch = text.match(/🔗\s*Link:\s*(\/eventos\/[^\s]+)/i);
+  const link = linkMatch?.[1] ?? null;
+  const tituloMatch = text.match(/📣\s*Convocação:\s*(.+)/i);
+  const papelMatch  = text.match(/✅\s*Você foi convocado como\s*(.+)\.?/i);
+  const dataMatch   = text.match(/🗓️\s*Data\/Hora:\s*(.+)/i);
+
+  return {
+    link,
+    titulo: tituloMatch?.[1]?.trim() ?? "Evento",
+    papel:  papelMatch?.[1]?.trim() ?? "",
+    data:   dataMatch?.[1]?.trim() ?? "",
+    raw: text,
+  };
+}
+
+function stripConvocacaoTag(text: string) {
+  return String(text).replace(/^\[CONVOCACAO_EVENTO:[^\]]+\]\s*\n?/, "");
+}
+
   const deletarMensagem = async (id: string) => {
     try {
       const msgPriv = mensagensPrivadas.find(m => m.id === id);
@@ -1149,6 +1172,55 @@ useEffect(() => {
         </div>
       );
     }
+    if (typeof msg.conteudo === "string" && msg.conteudo.includes("[CONVOCACAO_EVENTO:")) {
+      const parsed = parseConvocacaoEvento(msg.conteudo);
+
+      if (parsed?.link) {
+        return Shell(
+          <div
+            onClick={() => navigate(parsed.link!)}
+            className="cursor-pointer bg-white/90 border border-green-700 rounded-xl p-3 flex flex-col gap-2 hover:bg-green-50"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-full bg-green-800 flex items-center justify-center text-white font-bold">
+                📣
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm text-green-900 truncate">
+                  {parsed.titulo}
+                </p>
+                {parsed.papel && (
+                  <p className="text-xs text-green-900/80 truncate">
+                    {parsed.papel}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {parsed.data && (
+              <p className="text-[12px] text-gray-600">
+                🗓️ {parsed.data}
+              </p>
+            )}
+
+            <button className="mt-1 text-xs px-3 py-1 bg-green-800 text-white rounded-lg self-start">
+              Ver evento
+            </button>
+
+            <p className="text-[12px] text-gray-600 whitespace-pre-wrap break-words">
+              {stripConvocacaoTag(parsed.raw).replace(/🔗\s*Link:\s*\/eventos\/[^\s]+/i, "").trim()}
+            </p>
+          </div>
+        );
+      }
+
+      return Shell(
+        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+          {stripConvocacaoTag(msg.conteudo)}
+        </p>
+      );
+    }
+
     return Shell(<p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.conteudo}</p>);
   };
 
