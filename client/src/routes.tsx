@@ -4,6 +4,7 @@ import RequireAdmin from "./routes/RequireAdmin.js";
 import { FLAGS } from "./config.js";
 
 import AdminDashboard from "./pages/admin-page.js";
+import AvaliarTreino from "./pages/treino/avaliarTreino.js";
 import PaginaLogin from "./pages/login.js";
 import PaginaCadastro from "./pages/cadastro.js";
 import PaginaFeed from "./pages/feed.js";
@@ -153,7 +154,8 @@ export function AppRoutes() {
       )}
 
       <Route path="/feed"><Private><PaginaFeed /></Private></Route>
-
+      
+      <Route path="/treinos/avaliar" component={AvaliarTreino} />
       <Route path="/treinos/livre/novo" component={PaginaTreinoLivreNovo} />
       <Route path="/treinos/livre/historico" component={PaginaTreinoLivresHistorico} />
       <Route path="/treinos/elenco"><Private><PaginaElenco /></Private></Route>
