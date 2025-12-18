@@ -1,3 +1,4 @@
+// server/routes/feedback
 import { Router } from "express";
 import { authenticateToken } from "../middlewares/auth.js";
 import * as ctrl from "../controllers/feedbackController.js";

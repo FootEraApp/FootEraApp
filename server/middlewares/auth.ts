@@ -1,3 +1,4 @@
+// server/middlewares/auth
 import { RequestHandler, Request } from "express";
 import jwt from "jsonwebtoken";
 import { TipoUsuario } from "@prisma/client";
@@ -34,6 +35,17 @@ function toTipoUsuario(s: string): TipoUsuario {
 }
 
 export const authenticateToken: RequestHandler = async (req, res, next) => {
+  const publicPrefixes = [
+    "/api/status/maintenance",
+    "/api/status",
+    "/api/auth",
+  ];
+
+  const url = req.originalUrl || "";
+  if (publicPrefixes.some((p) => url.startsWith(p))) {
+    return next();
+  }
+
   const auth = req.headers.authorization || "";
 
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : auth;

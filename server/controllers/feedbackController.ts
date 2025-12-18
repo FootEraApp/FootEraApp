@@ -1,3 +1,4 @@
+// server/controllers/feedbackController
 import type { Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import type { AuthenticatedRequest, AuthUser } from "../middlewares/auth.js";

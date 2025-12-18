@@ -1,3 +1,4 @@
+// server/routes/configuracoes
 import express from "express";
 import {
   getConfiguracoes,

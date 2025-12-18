@@ -1,8 +1,11 @@
+// login/src/pages/login
 import { useState, useEffect, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import axios from "axios";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
+import MaintenanceScreen from "../components/MaintenanceScreen";
+
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -87,6 +90,9 @@ export default function PaginaLogin() {
   const [emailDestino, setEmailDestino] = useState<string | null>(null);
   const [sendingResend, setSendingResend] = useState(false);
   const [infoAberto, setInfoAberto] = useState(false);
+
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceChecked, setMaintenanceChecked] = useState(false);
 
   async function handleResend() {
     try {
@@ -230,6 +236,40 @@ export default function PaginaLogin() {
 
     navigate(tipo === "admin" ? "/admin" : "/feed");
   }, []);
+
+  useEffect(() => {
+    if (isE2E) return;
+
+    (async () => {
+      try {
+        // rota que vamos criar no backend: GET /api/status/maintenance
+        const r = await axios.get(`${API.BASE_URL}/api/status/maintenance`, {
+          timeout: 8000,
+        });
+        setMaintenanceMode(!!r.data?.maintenanceMode);
+      } catch {
+        // se der erro, não trava login
+        setMaintenanceMode(false);
+      } finally {
+        setMaintenanceChecked(true);
+      }
+    })();
+  }, []);
+
+  if (!maintenanceChecked) {
+    return <div className="p-6">Carregando…</div>;
+  }
+
+  if (maintenanceMode) {
+    return (
+      <MaintenanceScreen
+        title="Vai se aquecendo!"
+        subtitle="Enquanto isso, estamos em manutenção por aqui. Já já voltamos! ⚽🔥"
+        hint="Se estiver demorando, tente recarregar."
+        onRetry={() => window.location.reload()}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row h-screen">
