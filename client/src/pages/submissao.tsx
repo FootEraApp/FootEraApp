@@ -733,7 +733,22 @@ export default function PaginaSubmissao() {
               "Submissão enviada com sucesso!";
 
         alert(msg);
-        navigate("/treinos");
+        const submissaoId =
+          String(
+            (js as any)?.submissao?.id ??
+            (js as any)?.id ??
+            (js as any)?.submissaoTreinoId ??
+            ""
+          ) || "";
+
+        if (!treinoAgendadoId) {
+          navigate("/treinos");
+          return;
+        }
+
+        navigate(
+          `/treinos/avaliar?treinoAgendadoId=${encodeURIComponent(treinoAgendadoId)}&submissaoTreinoId=${encodeURIComponent(submissaoId)}`
+        );
         return;
       } else {
         console.error("Erro:", js);
