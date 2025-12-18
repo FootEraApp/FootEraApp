@@ -26,9 +26,19 @@ interface Solicitacao {
   };
 }
 
+type NotificacaoItem = {
+  id: string;
+  titulo: string;
+  mensagem: string;
+  link?: string | null;
+  criadaEm?: string | null;
+  lida?: boolean | null;
+};
+
 export default function PaginaNotificacoes() {
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [, setLocation] = useLocation();
+  const [notificacoes, setNotificacoes] = useState<NotificacaoItem[]>([]);
 
   useEffect(() => {
     const token = Storage.token;
@@ -55,6 +65,33 @@ export default function PaginaNotificacoes() {
       }
     })();
   }, []);
+
+  const NOTIFS_BASE = `${API.BASE_URL}/api/notificacoes/me`;
+
+useEffect(() => {
+  const token = Storage.token;
+  if (!token) return;
+
+  (async () => {
+    try {
+      const r = await fetch(NOTIFS_BASE, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!r.ok) {
+        console.warn("GET /notificacoes/me falhou:", r.status, await r.text());
+        return;
+      }
+
+      const json = await r.json();
+      console.log("NOTIFS:", json?.items); // <- confirma que chegou
+
+      setNotificacoes(Array.isArray(json?.items) ? json.items : []);
+    } catch (e) {
+      console.error("Erro ao buscar notificações", e);
+    }
+  })();
+}, []);
 
   const responderSolicitacao = async (id: string, aceitar: boolean) => {
     const token = Storage.token;
@@ -106,6 +143,23 @@ export default function PaginaNotificacoes() {
       </div>
 
       <h2 className="text-2xl font-bold mb-4">Notificações</h2>
+
+      {notificacoes.length > 0 && (
+        <div className="mb-6 space-y-3">
+          {notificacoes.map((n) => (
+            <div key={n.id} className="bg-white shadow-md rounded-xl p-4">
+              <p className="font-semibold">{n.titulo}</p>
+              <p className="text-sm text-gray-700 mt-1">{n.mensagem}</p>
+
+              {n.link && (
+                <Link href={n.link} className="inline-block mt-2 text-sm text-green-800 underline">
+                  Abrir
+                </Link>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {solicitacoes.length === 0 ? (
         <p className="text-gray-500">Nenhuma solicitação no momento.</p>
