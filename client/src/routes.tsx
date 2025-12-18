@@ -55,6 +55,8 @@ import PaginaCreateAdmin from "./pages/createAdmin.js";
 import PaginaPagamentos from "./pages/pagamentos/index.js";
 import PaginaJogosElenco from "./pages/jogos-elenco.js";
 import PaginaGerenciarProfessores from "./pages/GerenciarProfessores.js"
+import PaginaConvocarEvento from "./pages/eventos/convocar.js";
+
 export function AppRoutes() {
   return (
     <Switch>
@@ -112,6 +114,8 @@ export function AppRoutes() {
       <Route path="/perfil/GerenciarProfessores"><PaginaGerenciarProfessores /></Route>
       <Route path="/formadores" component={PaginaFormadores} />
 
+      <Route path="/eventos/convocar" component={PaginaConvocarEvento} />
+
       <Route path="/eventos/clubes/:id/novo">
         {(params?: { id: string }) =>
           params ? <PaginaNovoEventoClube clubeId={params.id} /> : null}
@@ -121,7 +125,7 @@ export function AppRoutes() {
           params ? <PaginaEventosClube clubeId={params.id} /> : null}
       </Route>
 
-            <Route path="/eventos/escolas/:id/novo">
+      <Route path="/eventos/escolas/:id/novo">
         {(params?: { id: string }) =>
           params ? <PaginaNovoEventoEscola escolaId={params.id} /> : null}
       </Route>

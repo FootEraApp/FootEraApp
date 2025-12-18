@@ -15,6 +15,7 @@ import { ArrowLeft, Plus, X, ListFilter, Trash2 } from "lucide-react";
 const ELENCOS_BASE = `${API.BASE_URL}/api/elencos`;
 const PONTOS_BASE  = `${API.BASE_URL}/api/treinos/pontuacoes`;
 const TURMAS_BASE  = `${API.BASE_URL}/api/turmas/minhas`;
+const TURMA_MEMBROS_BASE = `${API.BASE_URL}/api/turmas`; 
 
 type PontuacaoDTO = {
   atletaId: string;
@@ -67,7 +68,6 @@ const POSICOES: { id: PosicaoCampo; label: string }[] = [
   { id: "ZE",    label: "Zagueiro Esq." },
   { id: "ALA_D", label: "Ala Dir." },
   { id: "ALA_E", label: "Ala Esq." },
-
   { id: "VOL1",  label: "Volante" },
   { id: "VOL2",  label: "Volante" },
   { id: "MC1",   label: "Meia Central" },
@@ -77,7 +77,6 @@ const POSICOES: { id: PosicaoCampo; label: string }[] = [
   { id: "MEI_E", label: "Meia Ofensivo Esq." },
   { id: "MD",    label: "Meia Direita" },
   { id: "ME",    label: "Meia Esquerda" },
-
   { id: "PD",    label: "Ponta Direita" },
   { id: "PE",    label: "Ponta Esquerda" },
   { id: "SA",    label: "Segundo Atacante" },
@@ -95,6 +94,33 @@ const MID_BASE: PosicaoCampo[] = [
 const ATT_BASE: PosicaoCampo[] = [
   "PD", "SA", "CA", "PE",
 ];
+
+const posSlotCurta = (pos: PosicaoCampo) =>
+  pos
+    .replace(/_\w+$/g, "")  
+    .replace(/\d+$/g, "");   
+
+const posicaoParaSigla = (pos?: string | null) => {
+  const p = String(pos ?? "").trim();
+  if (!p) return "";
+
+  const up = p.toUpperCase();
+
+  if (["GOL","GK","LD","LE","MC","VOL","MEI","ME","MD","PD","PE","CA","SA","ZAG","ZC","ATA"].includes(up)) {
+    return up === "GK" ? "GOL" : up;
+  }
+
+  if (up.includes("GOLE")) return "GOL";
+  if (up.includes("VOL")) return "VOL";
+  if (up.includes("MEIA") || up.includes("MEI")) return "MEI";
+  if (up.includes("CENTROAV") || up.includes("CENTRO") || up.includes("9")) return "CA";
+  if (up.includes("ATAC")) return "ATA";
+  if (up.includes("ZAG")) return "ZAG";
+  if (up.includes("LATERAL")) return "LAT";
+  if (up.includes("PONTA") || up.includes("EXTREMO")) return "PON";
+
+  return up.slice(0, 3);
+};
 
 function getDefPositions(qtd: number): PosicaoCampo[] {
   switch (qtd) {
@@ -219,15 +245,16 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
 
 const CardAtletaShield: React.FC<{
   atleta: Atleta;
+  slotPos?: PosicaoCampo;
   ovr?: number; perf?: number; disc?: number; resp?: number;
   size?: { w: number; h: number };
   goldenMinOVR?: number;
-}> = ({ atleta, ovr, perf, disc, resp, size, goldenMinOVR }) => {
+}> = ({ atleta, slotPos, ovr, perf, disc, resp, size, goldenMinOVR }) => {
   const W = size?.w ?? SHIELD_W_DESK;
   const H = size?.h ?? SHIELD_H_DESK;
-  const clipId = `shieldClip-${atleta.atletaId}-${size?.w}x${size?.h}`;
+  const clipId = `shieldClip-${atleta.atletaId || atleta.id}-${W}x${H}`;
   const fotoUrl = atleta.foto ? `${atleta.foto}` : "/default-avatar.png";
-
+  const posShow = slotPos ? posSlotCurta(slotPos) : posicaoParaSigla(atleta.posicao);
   const ovrShow  = Number.isFinite(ovr)  ? Math.round(Number(ovr))  : 0;
   const perfShow = Number.isFinite(perf) ? Math.round(Number(perf)) : 0;
   const discShow = Number.isFinite(disc) ? Math.round(Number(disc)) : 0;
@@ -265,20 +292,29 @@ const CardAtletaShield: React.FC<{
       <path d={SHIELD_PATH} fill="none" stroke="#13244b" strokeWidth="1" />
 
       <text x="18" y="50" fontSize="28" fontWeight={800} fill="#F7D87C">{ovrShow}</text>
-      <text x={184 - 18} y="50" textAnchor="end" fontSize="14" fontWeight={700} fill="#d8e6ff">{atleta.posicao ?? ""}</text>
+      <text
+        x={184 - 18}
+        y="50"
+        textAnchor="end"
+        fontSize="14"
+        fontWeight={700}
+        fill="#d8e6ff"
+      >
+        {posShow}
+      </text>
 
       <g>
         <rect x={24} y={160} rx="8" ry="8" width="44" height="28" fill="rgba(10,18,40,0.55)" stroke="#d7b46a" strokeWidth="0.6" />
         <text x={34} y={178} fontSize="12" fontWeight={800} fill="#F7D87C">P</text>
-        <text x={62} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{Math.round(perf ?? 0)}</text>
+        <text x={62}  y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{perfShow}</text>
 
         <rect x={70} y={160} rx="8" ry="8" width="44" height="28" fill="rgba(10,18,40,0.55)" stroke="#d7b46a" strokeWidth="0.6" />
         <text x={80} y={178} fontSize="12" fontWeight={800} fill="#F7D87C">D</text>
-        <text x={108} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{Math.round(disc ?? 0)}</text>
+        <text x={108} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{discShow}</text>
 
         <rect x={116} y={160} rx="8" ry="8" width="44" height="28" fill="rgba(10,18,40,0.55)" stroke="#d7b46a" strokeWidth="0.6" />
         <text x={126} y={178} fontSize="12" fontWeight={800} fill="#F7D87C">R</text>
-        <text x={154} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{Math.round(resp ?? 0)}</text>
+        <text x={154} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{respShow}</text>
       </g>
 
       <text x="92" y="204" textAnchor="middle" fontSize="13" fontWeight={700} fill="#ffffff">
@@ -289,20 +325,38 @@ const CardAtletaShield: React.FC<{
   );
 };
 
-const CardAtleta: React.FC<{ atleta: Atleta }> = ({ atleta }) => (
-  <div className="p-2 bg-white rounded-md shadow w-[180px] sm:w-[200px] flex items-center gap-3 will-change-transform">
-    <img
-      src={atleta.foto ? `${atleta.foto}` : "/default-avatar.png"}
-      alt={atleta.nome}
-      className="w-10 h-10 rounded-full object-cover"
-    />
-    <div className="min-w-0">
-      <p className="font-medium text-sm truncate">{atleta.nome}</p>
-      {atleta.posicao && <p className="text-xs opacity-70">{atleta.posicao}</p>}
-      {typeof atleta.idade === "number" && <p className="text-xs opacity-70">{atleta.idade} anos</p>}
+const CardAtleta: React.FC<{ atleta: Atleta }> = ({ atleta }) => {
+  const sigla = posicaoParaSigla(atleta.posicao);
+
+  return (
+    <div className="p-2 bg-white rounded-md shadow w-[180px] sm:w-[200px] flex items-center gap-3 will-change-transform">
+      <img
+        src={atleta.foto ? `${atleta.foto}` : "/default-avatar.png"}
+        alt={atleta.nome}
+        className="w-10 h-10 rounded-full object-cover"
+      />
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="font-medium text-sm truncate">{atleta.nome}</p>
+
+          {sigla && (
+            <span
+              title={atleta.posicao ?? ""}
+              className="shrink-0 text-[10px] px-2 py-0.5 rounded-full border border-green-300 bg-green-50 text-green-900 font-extrabold"
+            >
+              {sigla}
+            </span>
+          )}
+        </div>
+
+        {typeof atleta.idade === "number" && (
+          <p className="text-xs opacity-70">{atleta.idade} anos</p>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const safeUUID = () => {
   try {
@@ -319,15 +373,31 @@ function normalizeAtletas(raw: any): Atleta[] {
     ? raw.items
     : Array.isArray(raw?.atletas)
     ? raw.atletas
+    : Array.isArray(raw?.alunos)
+    ? raw.alunos
     : [];
-  return list.map((a: any) => ({
-    id: String(a.id ?? a.usuarioId ?? a.atletaId ?? safeUUID()),
-    atletaId: String(a.atletaId ?? a.usuarioId ?? a.id ?? ""),
-    nome: a.nome ?? a.usuario?.nome ?? a.atleta?.nome ?? "",
-    foto: a.foto ?? a.usuario?.foto ?? a.atleta?.foto ?? null,
-    idade: a.idade ?? a.usuario?.idade ?? a.atleta?.idade ?? null,
-    posicao: a.posicao ?? a.usuario?.posicao ?? a.atleta?.posicao ?? null,
-  }));
+
+  return list.map((a: any) => {
+    const pos =
+      a?.posicao ??
+      a?.atleta?.posicao ??
+      a?.Atleta?.posicao ??
+      a?.usuario?.posicao ??                 // se algum dia vier no Usuario
+      a?.usuario?.atleta?.posicao ??
+      a?.usuario?.Atleta?.posicao ??
+      a?.aluno?.posicao ??
+      a?.aluno?.atleta?.posicao ??
+      null;
+
+    return {
+      id: String(a.id ?? a.usuarioId ?? a.atletaId ?? safeUUID()),
+      atletaId: String(a.atletaId ?? a.usuarioId ?? a.id ?? ""),
+      nome: a.nome ?? a.usuario?.nome ?? a.atleta?.nome ?? "",
+      foto: a.foto ?? a.usuario?.foto ?? a.atleta?.foto ?? null,
+      idade: a.idade ?? a.usuario?.idade ?? a.atleta?.idade ?? null,
+      posicao: pos,
+    };
+  });
 }
 
 const emptyPosicoes = (): Record<PosicaoCampo, Atleta | null> =>
@@ -338,7 +408,27 @@ const emptyPosicoes = (): Record<PosicaoCampo, Atleta | null> =>
 
 type LinhaFormacao = "atacantes" | "meio" | "defesa";
 
-export default function PaginaElenco() {
+type ModoTela = "elenco" | "convocacao";
+
+type PaginaElencoProps = {
+  modo?: ModoTela;
+  titulo?: string;
+  permitirReservas?: boolean;
+  onSalvar?: (payload: {
+    turmaId: string;
+    nome: string;
+    formacao: string;
+    escala: Record<PosicaoCampo, string | null>;
+    reservasIds: string[];
+  }) => Promise<void> | void;
+};
+
+export default function PaginaElenco({
+  modo = "elenco",
+  titulo,
+  permitirReservas = false,
+  onSalvar,
+}: PaginaElencoProps) {
   const isMobile = useIsMobile();
 
   const [turmas, setTurmas] = useState<Array<{ id: string; nome: string }>>([]);
@@ -350,12 +440,12 @@ export default function PaginaElenco() {
   const [todosAtletas, setTodosAtletas] = useState<Atleta[]>([]);
   const [elencos, setElencos] = useState<ElencoUI[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
-
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [filtro, setFiltro] = useState("");
-
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [reservasIds, setReservasIds] = useState<string[]>([]);
 
+  const MAX_RESERVAS = 11;
   const ativo = elencos[activeIndex];
   const posicoesAtivas = ativo?.posicoes ?? emptyPosicoes();
   const atletasLivresAtivo = (ativo?.livres ?? []).filter(a => {
@@ -372,7 +462,21 @@ export default function PaginaElenco() {
     [posicoesAtivas]
   );
 
-    const totalEscalados = elencoAtual.length;
+  const reservas = useMemo(() => {
+    if (!permitirReservas) return [];
+    const map = new Map(todosAtletas.map(a => [a.atletaId, a]));
+    return reservasIds.map(id => map.get(id)).filter(Boolean) as Atleta[];
+  }, [reservasIds, todosAtletas, permitirReservas]);
+
+  const reservasDisponiveis = useMemo(() => {
+    if (!permitirReservas) return [];
+    const escaladosIds = new Set(elencoAtual.map(a => a.atletaId));
+    const reservasSet = new Set(reservasIds);
+
+    return atletasLivresAtivo.filter(a => !escaladosIds.has(a.atletaId) && !reservasSet.has(a.atletaId));
+  }, [permitirReservas, atletasLivresAtivo, elencoAtual, reservasIds]);
+
+  const totalEscalados = elencoAtual.length;
 
   const [formacao, setFormacao] = useState<{ atacantes: number; meio: number; defesa: number }>({
     atacantes: 3,
@@ -382,6 +486,10 @@ export default function PaginaElenco() {
 
   useEffect(() => {
     setFormacao({ atacantes: 3, meio: 3, defesa: 4 });
+  }, [activeIndex]);
+
+  useEffect(() => {
+    setReservasIds([]);
   }, [activeIndex]);
 
   const fetchPontuacoes = async (ids: string[]) => {
@@ -476,7 +584,34 @@ export default function PaginaElenco() {
       livres,
     };
   }
+
+  function filterReservasForTurma(baseAtletas: Atleta[], prev: string[]) {
+    const baseIds = new Set(baseAtletas.map(a => a.atletaId));
+    return prev.filter(id => baseIds.has(id));
+  }
   
+  function rebuildElencosKeepingLayout(prevElencos: ElencoUI[], baseAtletas: Atleta[]) {
+    const baseIds = new Set(baseAtletas.map(a => a.atletaId));
+
+    return prevElencos.map((old) => {
+      const escala: Record<PosicaoCampo, string | null> = POSICOES.reduce((acc, p) => {
+        const a = old.posicoes[p.id];
+        acc[p.id] = a && baseIds.has(a.atletaId) ? a.atletaId : null;
+        return acc;
+      }, {} as Record<PosicaoCampo, string | null>);
+
+      return buildElencoUI(
+        {
+          id: old.id ?? null,
+          nome: old.nome,
+          maxJogadores: old.maxJogadores,
+          escala,
+        } as any,
+        baseAtletas
+      );
+    });
+  }
+
   useEffect(() => {
     const t = String((Storage as any).tipoSalvo || "").toLowerCase();
     if (t === "atleta") {
@@ -490,48 +625,53 @@ export default function PaginaElenco() {
         const token = Storage.token;
         const tipoUsuarioId = Storage.tipoUsuarioId;
         if (!token || !tipoUsuarioId) return;
+
         const r = await axios.get(TURMAS_BASE, {
           params: { tipoUsuarioId },
           headers: { Authorization: `Bearer ${token}` },
         });
+
         const lista = Array.isArray(r.data?.items) ? r.data.items : [];
         setTurmas(lista);
+
         if (!turmaId && lista.length) setTurmaId(lista[0].id);
+
+        if (!lista.length) setLoading(false);
       } catch (e) {
         console.error("Erro ao listar turmas:", e);
+        setLoading(false);
       }
     })();
-  }, [turmaId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); 
 
   useEffect(() => {
-    (async () => {
-      try {
-        const tipoUsuarioId = Storage.tipoUsuarioId;
-        const token = Storage.token;
-        if (!token) { setLoading(false); return; }
+  let cancelled = false;
 
-        const resAtletas = await axios.get(
-          `${API.BASE_URL}/api/treinos/atletas-vinculados`,
-          { params: { tipoUsuarioId }, headers: { Authorization: `Bearer ${token}` } }
-        );
-        const baseAtletas = normalizeAtletas(resAtletas.data);
-        setTodosAtletas(baseAtletas);
+  (async () => {
+    const token = Storage.token;
 
-        const resElencos = await axios.get(ELENCOS_BASE, {
-          params: { tipoUsuarioId },
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    if (!token || !turmaId) {
+      setLoading(false);
+      return;
+    }
 
-        const data = resElencos.data as ElencoServidor | ElencoServidor[] | null | undefined;
-        let lista: ElencoServidor[] = [];
-        if (Array.isArray(data)) lista = data;
-        else if (data && (data as ElencoServidor).id) lista = [data as ElencoServidor];
+    try {
+      setLoading(true);
 
-        let elencosUI: ElencoUI[] = [];
-        if (lista.length) {
-          elencosUI = lista.slice(0, 10).map(e => buildElencoUI(e, baseAtletas));
-        } else {
-          elencosUI = [{
+      const res = await axios.get(
+        `${API.BASE_URL}/api/turmas/${turmaId}/alunos`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (cancelled) return;
+
+      const baseAtletas = normalizeAtletas(res.data);
+
+      setTodosAtletas(baseAtletas);
+      setElencos((prev) => {
+        if (!prev.length) {
+          return [{
             id: null,
             nome: "Elenco 1",
             maxJogadores: 11,
@@ -539,45 +679,26 @@ export default function PaginaElenco() {
             livres: baseAtletas.slice(),
           }];
         }
+        return rebuildElencosKeepingLayout(prev, baseAtletas);
+      });
+      setReservasIds((prev) => filterReservasForTurma(baseAtletas, prev));
+    } catch (e) {
+      console.error("Erro ao carregar membros da turma:", e);
+      if (cancelled) return;
 
-        setElencos(elencosUI);
-        setActiveIndex(0);
+      setTodosAtletas([]);
+      setElencos((prev) => prev.map(el => ({ ...el, livres: [] })));
+      setReservasIds([]);
+    } finally {
+      if (!cancelled) setLoading(false);
+    }
+  })();
 
-        try {
-          const resEscala = await axios.get(`${ELENCOS_BASE}/escala-por-dono`, {
-            params: { tipoUsuarioId },
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const enriched = resEscala.data as { id?: string; nome?: string; maxJogadores?: number; escala?: EscalaEnriquecida } | null;
-
-          if (enriched?.escala) {
-            setElencos(prev => {
-              if (!prev.length) return prev;
-              const idx = enriched.id ? prev.findIndex(e => e.id === enriched.id) : 0;
-              const targetIdx = idx >= 0 ? idx : 0;
-              const updated = buildElencoUI(
-                {
-                  id: prev[targetIdx]?.id ?? (enriched.id ?? null),
-                  nome: enriched.nome ?? prev[targetIdx]?.nome,
-                  maxJogadores: enriched.maxJogadores ?? prev[targetIdx]?.maxJogadores ?? 11,
-                  escala: enriched.escala,
-                } as any,
-                baseAtletas
-              );
-              const arr = [...prev];
-              arr[targetIdx] = updated;
-              return arr;
-            });
-          }
-        } catch {}
-      } catch (err) {
-        console.error("Erro ao carregar elencos/atletas:", err);
-      } finally {
-        setLoading(false);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  return () => {
+    cancelled = true;
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [turmaId]);
 
   const fieldBox = useSize<HTMLDivElement>();
 
@@ -722,6 +843,7 @@ const handleDragEnd = (result: DropResult) => {
 
       const livres = Array.from(e.livres);
       const [atleta] = livres.splice(source.index, 1);
+      setReservasIds(prev => prev.filter(id => id !== atleta.atletaId));
 
       const anterior = e.posicoes[posId];
       e.posicoes = { ...e.posicoes, [posId]: atleta };
@@ -753,33 +875,65 @@ const handleDragEnd = (result: DropResult) => {
   }
 };
 
-const salvarElencoAtivo = async () => {
-  const token = Storage.token;
-  const tipoUsuarioId = Storage.tipoUsuarioId;
-  const tipoUsuarioRaw = Storage.tipoSalvo || "";
-  const tipoUsuario = tipoUsuarioRaw.toLowerCase() as
-    | "professor"
-    | "escolinha"
-    | "clube"
-    | "atleta"
-    | string;
-
+const montarPayloadEscala = () => {
   const e = ativo;
-  if (!e) return;
+  if (!e) return null;
+
+  const escala: Record<PosicaoCampo, string | null> = POSICOES.reduce((acc, p) => {
+    acc[p.id] = e.posicoes[p.id]?.atletaId ?? null;
+    return acc;
+  }, {} as Record<PosicaoCampo, string | null>);
+
+  const formacaoStr = `${formacao.defesa}-${formacao.meio}-${formacao.atacantes}`;
+
+  return {
+    nome: e.nome,
+    escala,
+    formacao: formacaoStr,
+    reservasIds: permitirReservas ? reservasIds.slice() : [],
+  };
+};
+
+const salvarElencoAtivo = async () => {
+  const payloadBase = montarPayloadEscala();
+  if (!payloadBase) return;
+
+  if (permitirReservas && reservasIds.length > MAX_RESERVAS) {
+    alert("Você pode selecionar no máximo 11 reservas.");
+    return;
+  }
 
   const totalEscaladosSalvar = POSICOES.reduce(
-    (acc, p) => (e.posicoes[p.id] ? acc + 1 : acc),
+    (acc, p) => (ativo?.posicoes[p.id] ? acc + 1 : acc),
     0
   );
 
   if (totalEscaladosSalvar !== 11) {
     alert(
-      `Seu elenco precisa ter exatamente 11 jogadores escalados para salvar.\n` +
+      `Seu time titular precisa ter exatamente 11 jogadores escalados.\n` +
       `Atualmente: ${totalEscaladosSalvar}/11.`
     );
     return;
   }
 
+  if (modo === "convocacao") {
+    if (!onSalvar) {
+      alert("Tela em modo convocação mas não foi passado onSalvar.");
+      return;
+    }
+    try {
+      await onSalvar({ ...payloadBase, turmaId });
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao salvar convocação.");
+    }
+    return;
+  }
+
+  const token = Storage.token;
+  const tipoUsuarioId = Storage.tipoUsuarioId;
+  const tipoUsuarioRaw = Storage.tipoSalvo || "";
+  const tipoUsuario = tipoUsuarioRaw.toLowerCase();
 
   if (!token) {
     alert("Você não está autenticado. Faça login novamente.");
@@ -790,18 +944,7 @@ const salvarElencoAtivo = async () => {
     return;
   }
 
-  const escala: Record<PosicaoCampo, string | null> = POSICOES.reduce((acc, p) => {
-    acc[p.id] = e.posicoes[p.id]?.atletaId ?? null;
-    return acc;
-  }, {} as Record<PosicaoCampo, string | null>);
-
-  const formacaoStr = `${formacao.defesa}-${formacao.meio}-${formacao.atacantes}`;
-
-  const donoRef: {
-    professorId?: string;
-    clubeId?: string;
-    escolinhaId?: string;
-  } =
+  const donoRef =
     tipoUsuario === "professor"
       ? { professorId: tipoUsuarioId }
       : tipoUsuario === "clube"
@@ -811,22 +954,22 @@ const salvarElencoAtivo = async () => {
       : {};
 
   const payload = {
-    nome: e.nome,
-    ...donoRef, 
-    atletasIds: (POSICOES.map((p) => e.posicoes[p.id]).filter(Boolean) as Atleta[]).map(
+    nome: payloadBase.nome,
+    ...donoRef,
+    atletasIds: (POSICOES.map((p) => ativo!.posicoes[p.id]).filter(Boolean) as Atleta[]).map(
       (a) => a.atletaId
     ),
-    maxJogadores: e.maxJogadores,
-    escala,
-    tipoUsuario,   
-    tipoUsuarioId, 
+    maxJogadores: ativo!.maxJogadores,
+    escala: payloadBase.escala,
+    tipoUsuario,
+    tipoUsuarioId,
     turmaId: turmaId || undefined,
-    formacao: formacaoStr,
+    formacao: payloadBase.formacao,
   };
 
   try {
-    if (e.id) {
-      await axios.put(`${ELENCOS_BASE}/${e.id}`, payload, {
+    if (ativo?.id) {
+      await axios.put(`${ELENCOS_BASE}/${ativo.id}`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
       alert("Elenco atualizado com sucesso!");
@@ -847,7 +990,6 @@ const salvarElencoAtivo = async () => {
     alert("Erro ao salvar elenco.");
   }
 };
-
 
 const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) => {
   const a = posicoesAtivas[pos];
@@ -899,6 +1041,7 @@ const Slot: React.FC<{ pos: PosicaoCampo; label: string }> = ({ pos, label }) =>
                   >
                     <CardAtletaShield
                       atleta={a}
+                      slotPos={pos}
                       ovr={ovr}
                       perf={perf}
                       disc={disc}
@@ -1045,38 +1188,33 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
       return { ...prev, [linha]: atual + 1 };
     });
   } else {
-    setFormacao((prev) => {
-      const atual = prev[linha];
-      if (atual <= 0) return prev;
+    const atual = formacao[linha];
+    if (atual <= 0) return;
 
-      const linhaPositions =
-        linha === "defesa"
-          ? getDefPositions(atual)
-          : linha === "meio"
-          ? getMidPositions(atual)
-          : getAttPositions(atual);
+    const linhaPositions =
+      linha === "defesa"
+        ? getDefPositions(atual)
+        : linha === "meio"
+        ? getMidPositions(atual)
+        : getAttPositions(atual);
 
-      const posToClear = linhaPositions[linhaPositions.length - 1];
+    const posToClear = linhaPositions[linhaPositions.length - 1];
 
-      setElencos((prevElencos) => {
-        const arr = [...prevElencos];
-        const e = { ...arr[activeIndex] };
-        const jogador = e.posicoes[posToClear];
+    setElencos((prevElencos) => {
+      const arr = [...prevElencos];
+      const e = { ...arr[activeIndex] };
+      const jogador = e.posicoes[posToClear];
 
-        if (jogador) {
-          e.livres = [...e.livres, jogador];
-        }
+      if (jogador) e.livres = [...e.livres, jogador];
 
-        e.posicoes = { ...e.posicoes, [posToClear]: null };
-        arr[activeIndex] = e;
-        return arr;
-      });
-
-      return { ...prev, [linha]: atual - 1 };
+      e.posicoes = { ...e.posicoes, [posToClear]: null };
+      arr[activeIndex] = e;
+      return arr;
     });
-  }
-};
 
+    setFormacao((prev) => ({ ...prev, [linha]: prev[linha] - 1 }));
+  }
+  };
 
   if (loading) {
     return (
@@ -1100,6 +1238,12 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
+
+          {titulo && (
+            <h1 className="text-lg font-bold text-green-900 text-center">
+              {titulo}
+            </h1>
+          )}
 
           <div className="flex-1 flex items-center justify-center px-3 gap-2">
             {turmas.length > 0 && (
@@ -1265,7 +1409,54 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
 
         {!isMobile && (
           <div className="w-full md:w-80 bg-white shadow-md p-4 border-l border-green-200">
-            <h2 className="text-lg font-bold mb-3">Atletas Vinculados</h2>
+            <h2 className="text-lg font-bold mb-3">Membros da Turma</h2>
+            {permitirReservas && (
+              <div className="mb-3 p-3 rounded-lg border border-yellow-300 bg-yellow-50">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-sm text-yellow-900">Reservas ({reservasIds.length})</h3>
+                  <button
+                    className="text-xs px-2 py-1 rounded border border-yellow-300 hover:bg-yellow-100"
+                    onClick={() => setReservasIds([])}
+                    type="button"
+                  >
+                    Limpar
+                  </button>
+                </div>
+
+                <div className="mt-2 flex flex-col gap-2">
+                  {reservas.map((a) => (
+                    <div key={a.atletaId} className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <img
+                          src={a.foto ? `${a.foto}` : "/default-avatar.png"}
+                          className="w-8 h-8 rounded-full object-cover"
+                        />
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold truncate">{a.nome}</div>
+                         {posicaoParaSigla(a.posicao) && (
+                            <div className="text-[11px] opacity-70">
+                              {posicaoParaSigla(a.posicao)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="text-xs px-2 py-1 rounded border border-yellow-300 text-yellow-900 hover:bg-yellow-100"
+                        onClick={() => setReservasIds(prev => prev.filter(id => id !== a.atletaId))}
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ))}
+
+                  {reservasDisponiveis.length === 0 && reservas.length === 0 && (
+                    <div className="text-xs text-yellow-900/70">Selecione atletas na lista para virar reserva.</div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <label htmlFor="buscaDesk" className="sr-only">Buscar por nome/posição</label>
             <input
               id="buscaDesk"
@@ -1297,7 +1488,38 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
                             snapshot.isDragging ? "shadow-2xl z-50" : ""
                           } will-change-transform`}
                         >
-                          <CardAtleta atleta={atleta} />
+                          <div className="flex items-center gap-2">
+                            <CardAtleta atleta={atleta} />
+
+                            {permitirReservas && (
+                              <button
+                                type="button"
+                                disabled={
+                                  reservasIds.includes(atleta.atletaId) ||
+                                  reservasIds.length >= MAX_RESERVAS
+                                }
+                                className={`shrink-0 text-xs px-2 py-2 rounded-md border
+                                  ${
+                                    reservasIds.includes(atleta.atletaId)
+                                      ? "border-gray-300 text-gray-400 cursor-not-allowed"
+                                      : "border-yellow-300 text-yellow-900 hover:bg-yellow-50"
+                                  }`}
+                              onClick={() => {
+                              if (reservasIds.length >= MAX_RESERVAS) {
+                                alert("Você pode selecionar no máximo 11 reservas.");
+                                return;
+                              }
+                              setReservasIds(prev =>
+                                prev.includes(atleta.atletaId) ? prev : [...prev, atleta.atletaId]
+                              );
+                            }}
+                                title="Adicionar como reserva"
+                              >
+                                Reserva
+                              </button>
+                            )}
+                          </div>
+
                         </div>
                       )}
                     </Draggable>
@@ -1325,7 +1547,27 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
               </button>
 
               <div className="px-3 pb-2 flex items-center gap-2">
-                <h2 className="text-base font-bold">Atletas Vinculados</h2>
+                <h2 className="text-base font-bold">Membros da Turma</h2>
+                {permitirReservas && reservas.length > 0 && (
+                  <div className="px-3 pb-2">
+                    <h3 className="text-sm font-bold text-yellow-900 mb-1">
+                      Reservas ({reservas.length})
+                    </h3>
+                    <div className="flex gap-2 overflow-x-auto">
+                      {reservas.map(a => (
+                        <div key={a.atletaId} className="min-w-[120px] text-xs bg-yellow-100 border border-yellow-300 rounded p-2">
+                          <div className="font-semibold truncate">{a.nome}</div>
+                          <button
+                            className="mt-1 text-[10px] text-red-600"
+                            onClick={() => setReservasIds(prev => prev.filter(id => id !== a.atletaId))}
+                          >
+                            remover
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <span className="text-xs text-green-700/80">({atletasLivresAtivo.length})</span>
               </div>
 
@@ -1363,7 +1605,37 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
                               snapshot.isDragging ? "shadow-2xl z-50" : ""
                             } will-change-transform`}
                           >
+                          <div className="flex items-center gap-2">
                             <CardAtleta atleta={atleta} />
+
+                            {permitirReservas && (
+                              <button
+                                type="button"
+                                disabled={
+                                  reservasIds.includes(atleta.atletaId) ||
+                                  reservasIds.length >= MAX_RESERVAS
+                                }
+                               className={`shrink-0 text-xs px-2 py-2 rounded-md border
+                                  ${
+                                    reservasIds.includes(atleta.atletaId)
+                                      ? "border-gray-300 text-gray-400 cursor-not-allowed"
+                                      : "border-yellow-300 text-yellow-900 hover:bg-yellow-50"
+                                  }`}
+                                onClick={() => {
+                                if (reservasIds.length >= MAX_RESERVAS) {
+                                  alert("Você pode selecionar no máximo 11 reservas.");
+                                  return;
+                                }
+                                setReservasIds(prev =>
+                                  prev.includes(atleta.atletaId) ? prev : [...prev, atleta.atletaId]
+                                );
+                              }}
+                                title="Adicionar como reserva"
+                              >
+                                Reserva
+                              </button>
+                            )}
+                          </div>
                           </div>
                         )}
                       </Draggable>
