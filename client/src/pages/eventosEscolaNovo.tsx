@@ -3,12 +3,13 @@ import axios from "axios";
 import { useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
+import { EVENTO_TIPOS, EventoTipo } from "@/utils/eventos.js";
 
 type Props = { escolaId: string };
 
 type EventoForm = {
   titulo: string;
-  tipo: "PENEIRA" | "EVENTO";
+  tipo: EventoTipo;
   descricao: string;
   inicio: string;
   fim: string;
@@ -123,12 +124,11 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
               <select
                 className="w-full border rounded px-3 py-2"
                 value={form.tipo}
-                onChange={(e) =>
-                  set("tipo", e.target.value as EventoForm["tipo"])
-                }
+                onChange={(e)=>set("tipo", e.target.value as EventoTipo)}
               >
-                <option value="PENEIRA">Peneira</option>
-                <option value="EVENTO">Evento</option>
+                {EVENTO_TIPOS.map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
               </select>
             </div>
             <div>
