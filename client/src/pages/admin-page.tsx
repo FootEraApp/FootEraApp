@@ -1,3 +1,4 @@
+// client/src/pages/admin-page
 import React, { useEffect, useState } from "react";
 import { API } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
@@ -1793,21 +1794,45 @@ async function confirmarExcluirProfessor() {
                     <p className="font-medium">{item.label} ✅</p>
                     <p className="text-sm text-gray-600">{item.desc}</p>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={configuracoes[item.key]}
-                    onChange={async (e) => {
-                      const res = await fetch(`${API.BASE_URL}/api/configuracoes`, {
-                        method: "PATCH",
-                        headers: authHeaders({ "Content-Type": "application/json" }),
-                        body: JSON.stringify({ [item.key]: e.target.checked }),
-                      });
-                      if (res.ok) {
-                        setConfiguracoes({ ...configuracoes, [item.key]: e.target.checked });
-                      }
-                    }}
-                    className="scale-125"
-                  />
+<input
+  type="checkbox"
+  checked={!!configuracoes?.[item.key]}
+  onChange={async (e) => {
+    const next = e.target.checked;
+
+    // 1) atualiza UI na hora (desmarca/marca instantâneo)
+    setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: next }));
+
+    try {
+      const res = await fetch(`${API.BASE_URL}/api/configuracoes`, {
+        method: "PATCH",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ [item.key]: next }),
+      });
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        // 2) se falhar, reverte
+        setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: !next }));
+        alert(txt || "Erro ao salvar configuração.");
+        return;
+      }
+
+      // 3) opcional: se o backend devolver o objeto atualizado, sincroniza
+      // (se ele não devolver, pode remover esse bloco)
+      const txt = await res.text().catch(() => "");
+      if (txt) {
+        const server = JSON.parse(txt);
+        setConfiguracoes(server);
+      }
+    } catch (err: any) {
+      setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: !next }));
+      alert(err?.message || "Falha de rede ao salvar configuração.");
+    }
+  }}
+  className="scale-125"
+/>
+
                 </div>
               ))}
             </div>

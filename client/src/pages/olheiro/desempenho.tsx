@@ -1,3 +1,4 @@
+// client/src/pages/olheiro/desempenho
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { API } from "../../config.js";
@@ -51,8 +52,11 @@ export default function DesempenhoAtleta() {
 
   return (
     <div className="max-w-3xl mx-auto p-4">
-      <button onClick={()=>nav(`/perfil/${data.atleta.id}`)} className="mb-2 inline-flex items-center gap-2 text-green-800">
-        <ArrowLeft className="w-4 h-4"/> Voltar ao perfil
+      <button
+        onClick={() => nav("/olheiros")}
+        className="mb-2 inline-flex items-center gap-2 text-green-800"
+      >
+        <ArrowLeft className="w-4 h-4" /> Voltar
       </button>
 
       <h1 className="text-xl font-bold mb-2">Desempenho — {data.atleta.nome}</h1>
