@@ -96,6 +96,8 @@ import consentimentoRoutes from "./routes/consentimento.js";
 import metricsRoutes from "./routes/metrics.js";
 import treinarJuntosRoute from "./routes/treinarJuntos.js";
 import sessoesTurmaRoutes from "./routes/sessoesTurma.js";
+import feedbackRoutes from "./routes/feedback.js";
+import statusRoutes from "./routes/status.js";
 
 import { handlePaymentWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
@@ -309,6 +311,8 @@ app.use("/api/treinar-juntos", treinarJuntosRoute);
 app.use("/api/sessoes-turma", sessoesTurmaRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
+app.use("/api/feedback", authenticateToken, feedbackRoutes);
+app.use("/api/status", statusRoutes);
 
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
