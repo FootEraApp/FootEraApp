@@ -1,3 +1,4 @@
+// client/src/pages/treino/treinos-instrutores
 import React, { useEffect, useState, useRef, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -1643,6 +1644,14 @@ async function salvarProgressoSessao(sessaoId: string) {
                 Treinos
               </div>
             )}
+
+              <Link
+                href="/perfil/GerenciarAtletas"
+                className="flex-shrink-0 inline-flex items-center justify-center px-3 py-2 rounded-full bg-white text-green-800 border border-green-200 shadow hover:bg-green-50"
+                title="Gerenciador de Carreira"
+              >
+                Gerenciar Atletas
+              </Link>
 
             <Link
               href="/treinos/elenco"
