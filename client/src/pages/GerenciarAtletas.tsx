@@ -1,9 +1,10 @@
+// client/src/pages/GerenciarAtletas
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, House } from "lucide-react";
 import axios from "axios";
 import {
-  Users, Search, Filter, ChevronRight, ChevronDown, ArrowUpAZ, ArrowDownZA,
+  Users, Search, Filter, ChevronRight, ChevronLeft, CheckCircle2, XCircle, ClipboardList, ChevronDown, ArrowUpAZ, ArrowDownZA,
   Shield, Activity, Trophy, Loader2, X, CalendarClock, ListChecks, Send,
 } from "lucide-react";
 import {
@@ -80,6 +81,68 @@ type SubmissaoItem = {
   aprovado: boolean | null;
   pontos?: number | null;
 };
+
+type TreinoAgendadoItem = {
+  id: string;
+  titulo: string | null;
+  dataTreino: string | Date | null;
+  dataExpiracao?: string | Date | null;
+  treinoProgramadoId?: string | null;
+  treinoProgramado?: { id: string; nome?: string | null } | null;
+  meuStatus?: string | null; // COMPLETED | IN_PROGRESS | PENDING | EXPIRED ...
+  status?: string | null;
+  execucaoStatus?: string | null;
+};
+
+type TreinoProgramadoItem = {
+  id: string;
+  nome: string;
+  codigo?: string | null;
+  nivel?: string | null;
+  descricao?: string | null;
+};
+
+function pad2(n: number) {
+  return n < 10 ? `0${n}` : `${n}`;
+}
+
+function toISODateOnly(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+}
+
+function addMonths(d: Date, delta: number) {
+  return new Date(d.getFullYear(), d.getMonth() + delta, 1, 0, 0, 0, 0);
+}
+
+function parseAsDate(x: any): Date | null {
+  if (!x) return null;
+  if (x instanceof Date) return x;
+  const d = new Date(x);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function dayKeyFromAny(x: any) {
+  const d = parseAsDate(x);
+  if (!d) return "";
+  return toISODateOnly(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+}
+
+function statusLabel(s?: string | null) {
+  const v = String(s || "").toUpperCase();
+  if (v === "COMPLETED" || v === "CONCLUIDO" || v === "CONCLUÍDO") return "Concluído";
+  if (v === "IN_PROGRESS" || v === "EM_ANDAMENTO") return "Em andamento";
+  if (v === "EXPIRED" || v === "EXPIRADO") return "Expirado";
+  return "Pendente";
+}
+
+function isCompleted(s?: string | null) {
+  const v = String(s || "").toUpperCase();
+  return v === "COMPLETED" || v === "CONCLUIDO" || v === "CONCLUÍDO";
+}
 
 const getFoto = (f?: string | null) => {
   if (!f || f === "" || f === "null") return "/assets/usuarios/default-user.png";
@@ -195,6 +258,16 @@ const GerenciarAtletas: React.FC = () => {
   const [professores, setProfessores] = useState<ProfessorMin[]>([]);
   const [profLoading, setProfLoading] = useState(false);
   const [profError, setProfError] = useState<string | null>(null);
+
+  const [carreiraOpen, setCarreiraOpen] = useState(false);
+  const [cursorMonth, setCursorMonth] = useState<Date>(() => startOfMonth(new Date()));
+  const [loadingCalendar, setLoadingCalendar] = useState(false);
+  const [agendados, setAgendados] = useState<TreinoAgendadoItem[]>([]);
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [loadingProgramados, setLoadingProgramados] = useState(false);
+  const [treinosProgramados, setTreinosProgramados] = useState<TreinoProgramadoItem[]>([]);
+  const [treinoProgramadoId, setTreinoProgramadoId] = useState<string>("");
 
   const tipoParaVinculo = (t: "Escola" | "Clube" | "Professor") =>
     t === "Escola" ? "escolinha" : t.toLowerCase();
@@ -452,6 +525,64 @@ const carregarProfessores = async () => {
     };
   }, [focado?.usuarioId, focado?.id]);
 
+  useEffect(() => {
+    if (!carreiraOpen || !focado) return;
+
+    // resetzinho ao abrir
+    setSelectedDays([]);
+    setDrawerOpen(true);
+    setTreinoProgramadoId("");
+
+    const atletaId = focado.id; // no seu /api/treinos/agendados você usa atletaId (id do Atleta)
+
+    (async () => {
+      try {
+        setLoadingCalendar(true);
+        const r = await axios.get(`${API.BASE_URL}/api/treinos/agendados`, {
+          headers,
+          params: { atletaId },
+        });
+        setAgendados(Array.isArray(r.data) ? r.data : (r.data?.items ?? []));
+      } catch (e) {
+        console.error("Erro ao carregar agendados:", e);
+        setAgendados([]);
+      } finally {
+        setLoadingCalendar(false);
+      }
+    })();
+
+    (async () => {
+      try {
+        setLoadingProgramados(true);
+
+        // tenta seu endpoint já existente de treinos do gerenciador
+        // se você preferir, pode trocar por /api/treinos/programados se existir
+        const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados`, {
+          headers,
+          params: tipoUsuarioIdEntidade
+            ? { criador: tipo ? tipoParaVinculo(tipo) : undefined, id: usuarioIdEntidade, tipoUsuarioId: tipoUsuarioIdEntidade }
+            : { criador: tipo ? tipoParaVinculo(tipo) : undefined, id: usuarioIdEntidade },
+        });
+
+        const items = (res.data?.items ?? res.data ?? []) as any[];
+        setTreinosProgramados(
+          items.map((t) => ({
+            id: String(t.id),
+            nome: String(t.nome ?? t.titulo ?? "Treino"),
+            codigo: t.codigo ?? null,
+            nivel: t.nivel ?? null,
+            descricao: t.descricao ?? null,
+          }))
+        );
+      } catch (e) {
+        console.error("Erro ao carregar treinos programados:", e);
+        setTreinosProgramados([]);
+      } finally {
+        setLoadingProgramados(false);
+      }
+    })();
+  }, [carreiraOpen, focado?.id]);
+
   const chartData = useMemo(() => {
     const bins = [
       { semana: "Semana 1", treinos: 0, desafios: 0 },
@@ -483,6 +614,78 @@ const carregarProfessores = async () => {
       return filtrados.filter((a) => a.categoria === categoriaFiltroDesignacao).map((a) => a.usuarioId || a.id);
     return Object.keys(selecionados).filter((k) => selecionados[k]);
   }, [alcance, filtrados, selecionados, categoriaFiltroDesignacao]);
+
+const monthLabel = useMemo(() => {
+  const d = cursorMonth;
+  const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  return `${meses[d.getMonth()]} ${d.getFullYear()}`;
+}, [cursorMonth]);
+
+const daysGrid = useMemo(() => {
+  const first = startOfMonth(cursorMonth);
+  const firstWeekday = (first.getDay() + 6) % 7; // segunda=0
+  const start = new Date(first);
+  start.setDate(first.getDate() - firstWeekday);
+
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const inMonth = d.getMonth() === cursorMonth.getMonth();
+    return { date: d, key: toISODateOnly(d), inMonth };
+  });
+}, [cursorMonth]);
+
+const agendadosPorDia = useMemo(() => {
+  const map = new Map<string, TreinoAgendadoItem[]>();
+  for (const t of agendados) {
+    const k = dayKeyFromAny(t.dataTreino);
+    if (!k) continue;
+    const arr = map.get(k) ?? [];
+    arr.push(t);
+    map.set(k, arr);
+  }
+  return map;
+}, [agendados]);
+
+const selectedDayItems = useMemo(() => {
+  const out: { day: string; items: TreinoAgendadoItem[] }[] = [];
+  for (const day of selectedDays) out.push({ day, items: agendadosPorDia.get(day) ?? [] });
+  out.sort((a, b) => a.day.localeCompare(b.day));
+  return out;
+}, [selectedDays, agendadosPorDia]);
+
+function toggleDay(dayISO: string) {
+  setDrawerOpen(true);
+  setSelectedDays((prev) => (prev.includes(dayISO) ? prev.filter((d) => d !== dayISO) : [...prev, dayISO]));
+}
+
+async function agendarParaDiasSelecionados() {
+  if (!focado?.id) return;
+  if (!treinoProgramadoId) return alert("Selecione um treino programado para agendar.");
+  if (!selectedDays.length) return alert("Selecione ao menos 1 dia no calendário.");
+
+  try {
+    for (const day of selectedDays) {
+      await axios.post(
+        `${API.BASE_URL}/api/treinos/agendados`,
+        {
+          atletaId: focado.id,
+          treinoProgramadoId,
+          dataTreino: day, // YYYY-MM-DD
+        },
+        { headers }
+      );
+    }
+
+    const r = await axios.get(`${API.BASE_URL}/api/treinos/agendados`, { headers, params: { atletaId: focado.id } });
+    setAgendados(Array.isArray(r.data) ? r.data : (r.data?.items ?? []));
+    alert("Treino(s) agendado(s) com sucesso!");
+  } catch (e) {
+    console.error(e);
+    alert("Erro ao agendar treinos.");
+  }
+}
+
 
   const irCriarTreinoComPreselecionados = () => {
     try {
@@ -526,7 +729,7 @@ const carregarProfessores = async () => {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-6">
       <div className="mb-3">
         <Link
           href="/perfil"
@@ -567,7 +770,7 @@ const carregarProfessores = async () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {tipo && tipo !== "Professor" && (
             <>
               <button
@@ -584,6 +787,17 @@ const carregarProfessores = async () => {
               </button>
             </>
           )}
+
+          <button
+            onClick={() => setCarreiraOpen(true)}
+            disabled={!focado}
+            title={!focado ? "Selecione um atleta para gerenciar a carreira" : "Gerenciar carreira do atleta selecionado"}
+            className="ml-auto inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-white hover:bg-emerald-700 disabled:opacity-60 disabled:hover:bg-emerald-600"
+          >
+            <CalendarClock className="h-4 w-4" />
+            Gerenciar carreira
+          </button>
+
           <button
             onClick={() => setAbrirDesignar(true)}
             className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-white shadow hover:bg-emerald-700"
@@ -737,7 +951,7 @@ const carregarProfessores = async () => {
               <div className="flex items-center gap-2 text-sm text-zinc-600">
                 <Filter className="h-4 w-4" /> {filtrados.length} resultado(s)
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
                   onClick={() => setOrdenacao((o) => (o === "pontuacao_desc" ? "pontuacao_asc" : "pontuacao_desc"))}
                   className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
@@ -758,7 +972,9 @@ const carregarProfessores = async () => {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+            <div className="rounded-2xl border border-zinc-200 bg-white">
+              <div className="overflow-x-auto">
+
               {loading ? (
                 <div className="p-6 text-center text-zinc-600">
                   <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
@@ -769,7 +985,7 @@ const carregarProfessores = async () => {
               ) : filtrados.length === 0 ? (
                 <div className="p-8 text-center text-zinc-500">Nenhum atleta encontrado.</div>
               ) : (
-                <table className="min-w-full table-fixed">
+                <table className="w-full min-w-[1100px] table-auto">
                   <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-500">
                     <tr>
                       <th className="w-10 p-3">
@@ -798,7 +1014,7 @@ const carregarProfessores = async () => {
                       <th className="w-40 p-3">Professor</th>  
                       <th className="w-28 p-3">Pontuação</th>
                       <th className="w-28 p-3">Status</th>
-                      <th className="w-32 p-3">Ações</th>
+                      <th className="w-40 p-3">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -843,26 +1059,14 @@ const carregarProfessores = async () => {
                           </td>
 
                           <td className="p-3">
-                            <StatusBadge ativo={a.ativoRecentemente} />
-                          </td>
-                          <td className="p-3">
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
                               <button
                                 onClick={() => abrirDetalhe(a)}
-                                className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100"
+                                className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100"
                               >
                                 Ver detalhes <ChevronRight className="h-4 w-4" />
                               </button>
-                              <button
-                                onClick={() => toggleSelecionado(key)}
-                                className={`rounded-lg px-3 py-1.5 text-sm ${
-                                  checked
-                                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                                    : "border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100"
-                                }`}
-                              >
-                                {checked ? "Selecionado" : "Selecionar"}
-                              </button>
+
                             </div>
                           </td>
                         </tr>
@@ -871,14 +1075,16 @@ const carregarProfessores = async () => {
                   </tbody>
                 </table>
               )}
+              </div>
             </div>
+
 
             <div className="mt-3 flex flex-col items-start justify-between gap-2 text-sm sm:flex-row sm:items-center">
               <div className="text-zinc-600">
                 Selecionados manualmente: <strong>{Object.values(selecionados).filter(Boolean).length}</strong>
                 {" · "}Destinatários atuais (respeitando “Alcance”): <strong>{idsDestino.length}</strong>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
                   onClick={limparSelecao}
                   className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-zinc-700 hover:bg-zinc-50"
@@ -1115,6 +1321,219 @@ const carregarProfessores = async () => {
         } : undefined}
         professorId={turmasProfessorId || undefined}
       />
+
+{carreiraOpen && focado && (
+  <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center">
+    <div className="w-full max-w-6xl overflow-hidden rounded-2xl bg-[#0f1b2e] text-white shadow-2xl">
+      {/* topo */}
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <div className="min-w-0">
+          <div className="text-sm opacity-80">Gerenciador de Carreira</div>
+          <div className="font-extrabold truncate">{focado.nome}</div>
+        </div>
+
+        <button
+          onClick={() => setCarreiraOpen(false)}
+          className="rounded-xl bg-white/5 px-3 py-2 text-sm hover:bg-white/10 border border-white/10"
+        >
+          Fechar
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px]">
+        {/* Calendário */}
+        <div className="p-4 border-b xl:border-b-0 xl:border-r border-white/10">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                onClick={() => setCursorMonth((d) => addMonths(d, -1))}
+                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10"
+                title="Mês anterior"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => setCursorMonth((d) => addMonths(d, 1))}
+                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10"
+                title="Próximo mês"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+              <div className="font-extrabold text-lg">{monthLabel}</div>
+            </div>
+
+            <div className="text-xs opacity-80 flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-3 w-3 rounded bg-green-500" /> Concluído
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-3 w-3 rounded bg-red-500" /> Pendente
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-3 w-3 rounded bg-white/20" /> Sem treino
+              </span>
+            </div>
+          </div>
+
+          {loadingCalendar ? (
+            <div className="p-4 text-sm opacity-80">Carregando calendário...</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-7 gap-2 text-xs opacity-80 mb-2 px-1">
+                {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((w) => (
+                  <div key={w} className="text-center">{w}</div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-2">
+                {daysGrid.map(({ date, key, inMonth }) => {
+                  const items = agendadosPorDia.get(key) ?? [];
+                  const hasTreino = items.length > 0;
+                  const done = hasTreino && items.some((t) => isCompleted(t.meuStatus || t.execucaoStatus));
+                  const pend = hasTreino && !done;
+                  const selected = selectedDays.includes(key);
+
+                  const bg =
+                    done ? "bg-green-500/25 border-green-400/30"
+                    : pend ? "bg-red-500/20 border-red-400/30"
+                    : "bg-white/5 border-white/10";
+
+                  const opacity = inMonth ? "opacity-100" : "opacity-40";
+
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => toggleDay(key)}
+                      className={[
+                        "h-16 rounded-xl border text-left p-2 transition relative",
+                        bg,
+                        opacity,
+                        selected ? "ring-2 ring-white/40" : "hover:bg-white/10",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-bold">{date.getDate()}</div>
+                        {done ? <CheckCircle2 className="h-4 w-4 text-green-300" /> : null}
+                        {pend ? <XCircle className="h-4 w-4 text-red-300" /> : null}
+                      </div>
+                      {hasTreino ? (
+                        <div className="mt-1 text-[11px] opacity-90 truncate">
+                          {items[0]?.treinoProgramado?.nome || items[0]?.titulo || "Treino"}
+                          {items.length > 1 ? ` +${items.length - 1}` : ""}
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-[11px] opacity-60 truncate">Sem treino</div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Drawer */}
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <ClipboardList className="h-5 w-5 opacity-80" />
+              <h3 className="font-extrabold">Detalhes</h3>
+            </div>
+            <button
+              onClick={() => setDrawerOpen((v) => !v)}
+              className="text-xs px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10"
+            >
+              {drawerOpen ? "Recolher" : "Abrir"}
+            </button>
+          </div>
+
+          {!drawerOpen ? null : selectedDays.length === 0 ? (
+            <div className="text-sm opacity-80">
+              Clique em um ou mais dias do calendário para ver/agendar treinos.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Agendamento rápido (multi-dia) */}
+              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                <div className="text-sm font-bold mb-2">
+                  Agendar para {selectedDays.length === 1 ? "1 dia selecionado" : `${selectedDays.length} dias selecionados`}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs opacity-80">Treino programado</label>
+                  <select
+                    value={treinoProgramadoId}
+                    onChange={(e) => setTreinoProgramadoId(e.target.value)}
+                    className="w-full bg-[#0b1220] border border-white/10 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="">Selecionar...</option>
+                    {treinosProgramados.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nome}{t.codigo ? ` (${t.codigo})` : ""}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={agendarParaDiasSelecionados}
+                    disabled={loadingProgramados}
+                    className="w-full mt-2 bg-green-700 hover:bg-green-600 disabled:opacity-60 disabled:hover:bg-green-700 transition text-sm font-bold rounded-lg px-3 py-2"
+                  >
+                    {loadingProgramados ? "Carregando..." : "Agendar treino nos dias selecionados"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Itens por dia */}
+              {selectedDayItems.map(({ day, items }) => (
+                <div key={day} className="bg-white/5 border border-white/10 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-bold">{day}</div>
+                    <div className="text-xs opacity-80">
+                      {items.length ? `${items.length} treino(s)` : "Sem treino"}
+                    </div>
+                  </div>
+
+                  {!items.length ? (
+                    <div className="text-sm opacity-80">Nenhum treino agendado neste dia.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {items.map((t) => {
+                        const nome = t.treinoProgramado?.nome || t.titulo || "Treino";
+                        const done = isCompleted(t.meuStatus || t.execucaoStatus);
+                        return (
+                          <div key={t.id} className="rounded-lg border border-white/10 bg-[#0b1220] p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="font-bold truncate">{nome}</div>
+                                <div className="text-xs opacity-80 mt-1">
+                                  Status:{" "}
+                                  <span className={done ? "text-green-300" : "text-red-300"}>
+                                    {statusLabel(t.meuStatus || t.execucaoStatus)}
+                                  </span>
+                                </div>
+                              </div>
+                              {done ? (
+                                <CheckCircle2 className="h-5 w-5 text-green-300" />
+                              ) : (
+                                <XCircle className="h-5 w-5 text-red-300" />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
         <Link href="/feed"><House /></Link>

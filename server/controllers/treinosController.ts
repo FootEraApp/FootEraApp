@@ -1,3 +1,4 @@
+// server/controller/treinosController
 import {
   PrismaClient,
   PosicaoCampo,
