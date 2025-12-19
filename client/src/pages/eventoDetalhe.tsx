@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
+import { Link } from "wouter";
+import { EventoTipo, labelEventoTipo } from "@/utils/eventos.js";
 
 type Evento = {
   id: string;
   titulo: string;
-  tipo: "PENEIRA" | "EVENTO";
+  tipo: EventoTipo;
   descricao?: string | null;
   inicio: string;
   fim?: string | null;
@@ -60,13 +62,24 @@ export default function PaginaEventoDetalhe({ eventoId }: { eventoId: string }) 
       <h1 className="text-3xl font-extrabold">{ev.titulo}</h1>
 
       <p className="mt-1 text-sm opacity-80">
-      {fmtDataHora(ev.inicio)} • {ev.tipo} 
+        {fmtDataHora(ev.inicio)} • {labelEventoTipo(ev.tipo)}
       </p>
 
     <div className="mt-6 grid gap-3 bg-white rounded-lg border p-4">
 
-    <h2 className="font-semibold text-lg">Informações</h2>
-  
+    <div className="flex items-center justify-between">
+      <h2 className="font-semibold text-lg font-green">Informações</h2>
+
+      {String(Storage.tipoSalvo || "").toLowerCase() !== "atleta" && (
+        <Link
+          href={`/eventos/convocar?eventoId=${ev.id}`}
+          className="px-3 py-2 rounded bg-green-700 text-white text-sm hover:bg-green-800"
+        >
+          Convocar atletas
+        </Link>
+      )}
+    </div>
+
       {ev.status && (
         <p className="text-sm">
           <b>Status: </b>

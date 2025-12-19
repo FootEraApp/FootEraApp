@@ -3,11 +3,12 @@ import axios from "axios";
 import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
+import { EventoTipo, labelEventoTipo } from "@/utils/eventos.js";
 
 type EventoListItem = {
   id: string;
   titulo: string;
-  tipo: "PENEIRA" | "EVENTO";
+  tipo: EventoTipo;
   descricao?: string | null;
   inicio: string;
   cidade?: string | null;
@@ -57,7 +58,7 @@ export default function PaginaEventosEscola({ escolaId }: { escolaId: string }) 
                   <div>
                     <div className="font-semibold">{e.titulo}</div>
                     <div className="text-sm text-green-900/70">
-                      {e.tipo} • {new Date(e.inicio).toLocaleString()}
+                      {labelEventoTipo(e.tipo)} • {new Date(e.inicio).toLocaleString()}
                       {e.cidade
                         ? ` • ${e.cidade}${
                             e.estado ? " - " + e.estado : ""
