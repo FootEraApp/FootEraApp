@@ -78,6 +78,7 @@ model Usuario {
   convitesEvento         InscricaoEvento[]         @relation("ConvitesEvento")
   feedbacks              Feedback[]
   SessaoTreinoTurma      SessaoTreinoTurma[]
+  Notificacao            Notificacao[]
 }
 
 model EmailVerification {
@@ -1042,9 +1043,11 @@ model Evento {
   criadoEm       DateTime     @default(now())
   atualizadoEm   DateTime     @updatedAt
 
-  clube      Clube?            @relation(fields: [clubeId], references: [id], onDelete: Cascade)
-  escolinha  Escolinha?        @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
-  inscricoes InscricaoEvento[]
+  clube            Clube?             @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  escolinha        Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
+  inscricoes       InscricaoEvento[]
+  EventoConvocacao EventoConvocacao[]
+  EventoConvocado  EventoConvocado[]
 }
 
 model InscricaoEvento {
@@ -1305,6 +1308,8 @@ model Turma {
   updatedAt         DateTime            @updatedAt
   Elenco            Elenco[]
   SessaoTreinoTurma SessaoTreinoTurma[]
+  EventoConvocacao  EventoConvocacao[]
+  EventoConvocado   EventoConvocado[]
 }
 
 model TurmaUsuario {
@@ -1738,27 +1743,82 @@ model SessaoTreinoTurmaExercicio {
 }
 
 model AvaliacaoTreino {
-  id                String @id @default(uuid())
+  id                String   @id @default(uuid())
   atletaId          String
   treinoAgendadoId  String
   submissaoTreinoId String?
-  nota              Int     @default(0)
+  nota              Int      @default(0)
   comentario        String?
-  concluiu          Boolean @default(true)
-  teveDificuldade   Boolean @default(false)
+  concluiu          Boolean  @default(true)
+  teveDificuldade   Boolean  @default(false)
   dificuldadeMotivo String?
   motivoNaoConcluiu String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  atleta            Atleta           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  treinoAgendado    TreinoAgendado   @relation(fields: [treinoAgendadoId], references: [id], onDelete: Cascade)
-  submissaoTreino   SubmissaoTreino? @relation(fields: [submissaoTreinoId], references: [id], onDelete: SetNull)
+  atleta          Atleta           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  treinoAgendado  TreinoAgendado   @relation(fields: [treinoAgendadoId], references: [id], onDelete: Cascade)
+  submissaoTreino SubmissaoTreino? @relation(fields: [submissaoTreinoId], references: [id], onDelete: SetNull)
 
   @@unique([atletaId, treinoAgendadoId])
   @@index([treinoAgendadoId])
   @@index([atletaId])
   @@index([createdAt])
+}
+
+model EventoConvocacao {
+  id          String   @id @default(uuid())
+  eventoId    String
+  turmaId     String
+  nome        String   @default("Convocação")
+  formacao    String?
+  escala      Json?
+  reservasIds String[] @default([])
+  criadoEm    DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  professorId String?
+  clubeId     String?
+  escolinhaId String?
+
+  evento Evento @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  turma  Turma  @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+
+  @@unique([eventoId, turmaId])
+}
+
+model EventoConvocado {
+  id        String           @id @default(uuid())
+  eventoId  String
+  turmaId   String
+  atletaId  String
+  posicao   String?
+  tipo      String
+  status    ConvocacaoStatus @default(PENDENTE)
+  createdAt DateTime         @default(now())
+
+  evento Evento @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  turma  Turma  @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+
+  @@unique([eventoId, turmaId, atletaId])
+}
+
+model Notificacao {
+  id        String   @id @default(uuid())
+  usuarioId String
+  titulo    String
+  mensagem  String
+  link      String?
+  lida      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+enum ConvocacaoStatus {
+  PENDENTE
+  CONFIRMADO
+  RECUSADO
 }
 
 enum StatusSessaoTreinoTurma {

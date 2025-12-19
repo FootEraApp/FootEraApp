@@ -76,20 +76,30 @@ export async function getAlunosTurma(req: Request, res: Response) {
     const atletas = usuarioIds.length
       ? await prisma.atleta.findMany({
           where: { usuarioId: { in: usuarioIds } },
-          select: { id: true, usuarioId: true },
+          select: {
+            id: true,
+            usuarioId: true,
+            posicao: true,
+          },
         })
       : [];
 
-    const atletaIdByUsuarioId = new Map(atletas.map((a) => [a.usuarioId, a.id]));
+    const atletaByUsuarioId = new Map(
+      atletas.map((a) => [
+        a.usuarioId,
+        { atletaId: a.id, posicao: a.posicao },
+      ])
+    );
 
     const alunos = turma.membros.map((m) => {
       const usuarioId = m.usuarioId;
-      const atletaId = atletaIdByUsuarioId.get(usuarioId) ?? null;
+      const atletaInfo = atletaByUsuarioId.get(usuarioId) ?? null;
 
       return {
-        atletaId,           
-        usuarioId,          
-        id: atletaId ?? usuarioId, 
+        atletaId: atletaInfo?.atletaId ?? null,
+        usuarioId,
+        id: atletaInfo?.atletaId ?? usuarioId,
+        posicao: atletaInfo?.posicao ?? null, 
         usuario: {
           id: m.usuario?.id ?? usuarioId,
           nome: m.usuario?.nome ?? "Atleta da turma",
