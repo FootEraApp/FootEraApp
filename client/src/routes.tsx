@@ -55,6 +55,7 @@ import PaginaCreateAdmin from "./pages/createAdmin.js";
 import PaginaPagamentos from "./pages/pagamentos/index.js";
 import PaginaJogosElenco from "./pages/jogos-elenco.js";
 import PaginaGerenciarProfessores from "./pages/GerenciarProfessores.js"
+
 export function AppRoutes() {
   return (
     <Switch>
