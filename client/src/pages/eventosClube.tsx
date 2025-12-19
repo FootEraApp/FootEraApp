@@ -3,11 +3,13 @@ import axios from "axios";
 import { Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
+import { EventoTipo, labelEventoTipo } from "@/utils/eventos.js";
+import { ArrowLeft } from "lucide-react";
 
 type EventoListItem = {
   id: string;
   titulo: string;
-  tipo: "PENEIRA" | "EVENTO";
+  tipo: EventoTipo;
   descricao?: string | null;
   inicio: string;
   cidade?: string | null;
@@ -30,8 +32,20 @@ export default function PaginaEventosClube({ clubeId }: { clubeId: string }) {
 
   return (
     <div className="min-h-screen bg-cream text-green-900">
-      <div className="bg-green-900 p-4 text-white text-center text-xl font-bold">
-        Eventos & Peneiras
+      <div className="bg-green-900 p-4 text-white text-xl font-bold relative flex items-center justify-center">
+        <Link
+          href="/perfil"
+          aria-label="Voltar para perfil"
+          className="absolute left-4 top-1/2 -translate-y-1/2
+            inline-flex h-10 w-10 items-center justify-center
+            rounded-full border border-green-800 bg-white text-green-900
+            shadow-sm hover:bg-green-50 focus:outline-none
+            focus:ring-2 focus:ring-green-700/30"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+
+        <span className="text-center">Eventos & Peneiras</span>
       </div>
 
       <div className="p-4">
@@ -55,7 +69,7 @@ export default function PaginaEventosClube({ clubeId }: { clubeId: string }) {
                   <div>
                     <div className="font-semibold">{e.titulo}</div>
                     <div className="text-sm text-green-900/70">
-                      {e.tipo} • {new Date(e.inicio).toLocaleString()}
+                      {labelEventoTipo(e.tipo)} • {new Date(e.inicio).toLocaleString()}
                       {e.cidade ? ` • ${e.cidade}${e.estado ? " - " + e.estado : ""}` : ""}
                     </div>
                   </div>
