@@ -1,4 +1,3 @@
-// client/src/pages/treino/treinos-instrutores
 import React, { useEffect, useState, useRef, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -48,6 +47,7 @@ interface Exercicio {
   nome: string;
   repeticoes?: string;
 }
+
 interface TreinoProgramado {
   id: string;
   nome: string;
@@ -62,7 +62,11 @@ interface TreinoProgramado {
   escolinhaId?: string;
   clubeId?: string;
   pontuacao?: number | null;
+  professoresIds?: string[];
+  criadoresNomes?: string[];
+  criadorTipo?: "professor" | "clube" | "escolinha" | "escola" | "admin" | "desconhecido";
 }
+
 interface UsuarioLogado {
   tipo:
     | "admin"
@@ -203,7 +207,7 @@ export default function TreinosInstrutores({
 
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [abaProfessor, setAbaProfessor] = useState<"avaliar" | "criar" | "sessoes">("avaliar");
-
+  const [meuNome, setMeuNome] = useState<string>("");
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
   const [submissoesPendentes, setSubmissoesPendentes] = useState<
     SubmissaoParaValidacao[]
@@ -847,66 +851,178 @@ async function salvarProgressoSessao(sessaoId: string) {
       usuarioId
     ) {
       setUsuario({ tipo: t, usuarioId, tipoUsuarioId });
+      (async () => {
+        const token = getToken();
+        if (!token) return;
+
+        try {
+          const r = await fetch(`${API.BASE_URL}/api/perfil/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!r.ok) return;
+
+          const me = await r.json().catch(() => ({}));
+
+          const nome =
+            me?.usuario?.nome ||
+            me?.nome ||
+            me?.professor?.usuario?.nome ||
+            me?.professor?.nome ||
+            me?.clube?.nome ||
+            me?.escolinha?.nome ||
+            "";
+
+          setMeuNome(String(nome || "").trim());
+        } catch {}
+      })();
+
     } else {
       console.warn("Tipo/IDs inválidos", { tipoSalvo, usuarioId, tipoUsuarioId });
     }
   }, []);
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) return;
+  const token = getToken();
+  if (!token) return;
 
-    const t = (usuario?.tipo ?? tipo ?? "").toLowerCase();
+  const t = String(usuario?.tipo ?? tipo ?? "").toLowerCase();
 
-    (async () => {
-      try {
-        const resTreinos = await fetch(
-          `${API.BASE_URL}/api/treinos/programados`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        if (!resTreinos.ok)
-          throw new Error(`/treinos/programados: ${resTreinos.status}`);
-        const jsonTreinos = await resTreinos.json();
-        const normTreinos = (Array.isArray(jsonTreinos) ? jsonTreinos : []).map(
-          (tr: any) => ({
-            id: tr.id,
-            nome: tr.nome,
-            descricao: tr.descricao ?? undefined,
-            nivel: tr.nivel,
-            dataAgendada: tr.dataAgendada ?? undefined,
-            duracao: tr.duracao ?? undefined,
-            objetivo: tr.objetivo ?? undefined,
-            dicas: Array.isArray(tr.dicas) ? tr.dicas : [],
-            professorId: tr.professorId ?? undefined,
-            escolinhaId: tr.escolinhaId ?? undefined,
-            clubeId: tr.clubeId ?? undefined,
-            pontuacao: tr.pontuacao ?? undefined,
-            exercicios: (tr.exercicios ?? []).map((ex: any) => ({
-              id: ex.exercicio?.id ?? ex.id ?? "",
-              nome: ex.exercicio?.nome ?? ex.nome ?? "",
-              repeticoes: ex.repeticoes ?? undefined,
-            })),
-          }),
-        ) as TreinoProgramado[];
-        setTreinos(normTreinos);
-      } catch (e) {
-        console.error(e);
-        setTreinos([]);
+  const run = async () => {
+    try {
+      const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/programados`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!resTreinos.ok) {
+        throw new Error(`/treinos/programados: ${resTreinos.status}`);
       }
 
-      if (
-        ["professor", "admin", "escola", "escolinha", "clube"].includes(t) &&
-        (usuario?.tipoUsuarioId ||
-          (Storage as any).tipoUsuarioId ||
-          (Storage as any).professorId)
-      ) {
-        carregarSubmissoes();
-        carregarAtletasVinculados();
-        carregarTurmas();
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usuario?.tipoUsuarioId, tipo]);
+      const jsonTreinos = await resTreinos.json();
+
+      const arr = Array.isArray(jsonTreinos)
+        ? jsonTreinos
+        : (jsonTreinos?.items ?? jsonTreinos?.data ?? []);
+
+      const normTreinos: TreinoProgramado[] = (Array.isArray(arr) ? arr : []).map((tr: any) => {
+      const criadorNomePrincipal =
+        tr?.professor?.usuario?.nome ||
+        tr?.professor?.nome ||
+        tr?.criador?.nome ||
+        tr?.criadorNome ||
+        tr?.clube?.nome ||
+        tr?.escolinha?.nome ||
+        tr?.escola?.nome ||
+        undefined;
+
+      const criadorTipo: TreinoProgramado["criadorTipo"] =
+        tr?.professorId ? "professor"
+        : tr?.clubeId ? "clube"
+        : tr?.escolinhaId ? "escolinha"
+        : tr?.escolaId ? "escola"
+        : tr?.adminId ? "admin"
+        : "desconhecido";
+
+      const colaboradoresRaw =
+        tr?.professores ||
+        tr?.colaboradores ||
+        tr?.professoresTreino ||
+        tr?.professoresIds ||
+        [];
+
+      const professoresIds: string[] = Array.from(
+        new Set(
+          (Array.isArray(colaboradoresRaw) ? colaboradoresRaw : [])
+            .map((p: any) =>
+              String(
+                p?.professorId ??
+                p?.professor?.id ??
+                p?.id ??            
+                p ??
+                "",
+              ),
+            )
+            .filter(Boolean),
+        ),
+      );
+
+      const colaboradoresNomes: string[] = Array.from(
+        new Set(
+          (Array.isArray(colaboradoresRaw) ? colaboradoresRaw : [])
+            .map((p: any) => p?.usuario?.nome ?? p?.nome ?? p?.professor?.usuario?.nome ?? p?.professor?.nome ?? "")
+            .map((x: any) => String(x || "").trim())
+            .filter(Boolean)
+        )
+      );
+
+      const meuTipoUsuarioId = String(usuario?.tipoUsuarioId ?? "");
+      const souDono =
+        String(tr?.professorId ?? "") === meuTipoUsuarioId ||
+        String(tr?.escolinhaId ?? "") === meuTipoUsuarioId ||
+        String(tr?.clubeId ?? "") === meuTipoUsuarioId;
+
+      const souColaborador = professoresIds.includes(meuTipoUsuarioId);
+
+      const incluirMeuNome = Boolean(meuNome) && (souDono || souColaborador);
+
+      const normalizarNome = (s: any) => String(s || "").trim().toLowerCase();
+
+      const listaBruta = [
+        criadorNomePrincipal,
+        ...(incluirMeuNome ? [meuNome] : []),
+        ...colaboradoresNomes,
+      ]
+        .map((x) => String(x || "").trim())
+        .filter(Boolean);
+
+      const criadoresNomes = Array.from(
+        new Map(listaBruta.map((n) => [normalizarNome(n), n])).values(),
+      );
+
+      return {
+        id: String(tr.id),
+        nome: String(tr.nome ?? ""),
+        descricao: tr.descricao ?? undefined,
+        nivel: String(tr.nivel ?? ""),
+        dataAgendada: tr.dataAgendada ?? undefined,
+        duracao: typeof tr.duracao === "number" ? tr.duracao : undefined,
+        objetivo: tr.objetivo ?? undefined,
+        dicas: Array.isArray(tr.dicas) ? tr.dicas : [],
+        professorId: tr.professorId ?? undefined,
+        escolinhaId: tr.escolinhaId ?? undefined,
+        clubeId: tr.clubeId ?? undefined,
+        pontuacao: typeof tr.pontuacao === "number" ? tr.pontuacao : undefined,
+        professoresIds,
+        criadoresNomes,
+        criadorTipo,
+        exercicios: (Array.isArray(tr.exercicios) ? tr.exercicios : []).map((ex: any) => ({
+          id: String(ex?.exercicio?.id ?? ex?.id ?? ""),
+          nome: String(ex?.exercicio?.nome ?? ex?.nome ?? ""),
+          repeticoes: ex?.repeticoes ?? undefined,
+        })),
+      };
+    });
+
+      setTreinos(normTreinos);
+    } catch (e) {
+      console.error(e);
+      setTreinos([]);
+    }
+
+    if (
+      ["professor", "admin", "escola", "escolinha", "clube"].includes(t) &&
+      (usuario?.tipoUsuarioId ||
+        (Storage as any).tipoUsuarioId ||
+        (Storage as any).professorId)
+    ) {
+      carregarSubmissoes();
+      carregarAtletasVinculados();
+      carregarTurmas();
+    }
+  };
+
+  run();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [usuario?.tipoUsuarioId, tipo, meuNome]);
 
   useEffect(() => {
     if (abaProfessor === "sessoes") {
@@ -961,7 +1077,7 @@ async function salvarProgressoSessao(sessaoId: string) {
     }
   }
 
-    async function carregarTurmas() {
+  async function carregarTurmas() {
     const token = getToken();
     if (!token) return;
 
@@ -1415,6 +1531,14 @@ async function salvarProgressoSessao(sessaoId: string) {
           <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>
         )}
 
+        {Array.isArray(treino.criadoresNomes) && treino.criadoresNomes.length > 0 && (
+          <div className="mt-2 text-xs text-gray-600">
+            <strong>Criado por:</strong>{" "}
+            {treino.criadoresNomes.join(", ")}
+          </div>
+        )}
+
+
         <div className="mt-3 flex flex-col gap-2">
          {mostrarBlocoAgendar && (
             <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 max-w-full sm:max-w-[680px]">
@@ -1586,6 +1710,21 @@ async function salvarProgressoSessao(sessaoId: string) {
     );
   };
 
+  const meuTipoUsuarioId = String(usuario?.tipoUsuarioId ?? "");
+
+  const meusTreinos = treinos.filter((t) => {
+    const euSouDono =
+      String(t.professorId ?? "") === meuTipoUsuarioId ||
+      String(t.escolinhaId ?? "") === meuTipoUsuarioId ||
+      String(t.clubeId ?? "") === meuTipoUsuarioId;
+
+    const euSouColaborador =
+      Array.isArray(t.professoresIds) &&
+      t.professoresIds.map(String).includes(meuTipoUsuarioId);
+
+    return euSouDono || euSouColaborador;
+  });
+
   const isGestor =
     usuario?.tipo &&
     ["professor", "admin", "escola", "escolinha", "clube"].includes(
@@ -1696,16 +1835,15 @@ async function salvarProgressoSessao(sessaoId: string) {
                         >
                           <div className="flex items-start gap-3 sm:gap-4">
                             <img
-                              src={foto}
+                              src={resolveUploadUrl(foto) ?? PLACEHOLDER_USER}
                               alt={s.atleta?.nome ?? "Atleta"}
-                              className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border"
+                              className="w-12 h-12 rounded-full object-cover"
                               onError={(e) => {
                                 const el = e.currentTarget as HTMLImageElement;
-                                (el as any).onerror = null;
+                                el.onerror = null;
                                 el.src = PLACEHOLDER_USER;
                               }}
                             />
-
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 <div className="font-semibold text-green-900 truncate">
@@ -1827,35 +1965,17 @@ async function salvarProgressoSessao(sessaoId: string) {
                 </button>
               </div>
 
-              {(
-                usuario?.tipo === "admin"
-                  ? treinos
-                  : treinos.filter(
-                      (t) =>
-                        t.professorId === usuario?.tipoUsuarioId ||
-                        t.escolinhaId === usuario?.tipoUsuarioId ||
-                        t.clubeId === usuario?.tipoUsuarioId,
-                    )
-              ).length > 0 ? (
+              {(usuario?.tipo === "admin" ? treinos : meusTreinos).length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(
-                    usuario?.tipo === "admin"
-                      ? treinos
-                      : treinos.filter(
-                          (t) =>
-                            t.professorId === usuario?.tipoUsuarioId ||
-                            t.escolinhaId === usuario?.tipoUsuarioId ||
-                            t.clubeId === usuario?.tipoUsuarioId,
-                        )
-                  ).map(renderTreinoCard)}
+                  {(usuario?.tipo === "admin" ? treinos : meusTreinos).map(renderTreinoCard)}
                 </div>
               ) : (
                 <p className="text-gray-500">
                   {usuario?.tipo === "admin"
                     ? "Nenhum treino cadastrado."
-                    : "Você ainda não criou nenhum treino."}
+                    : "Você ainda não tem treinos (criador ou colaborador)."}
                 </p>
-              )}
+               )}
             </div>
           )}
           {abaProfessor === "sessoes" && (

@@ -1264,7 +1264,7 @@ async function main() {
         duracao: 45,
         categoria: [Categoria.Livre],
         imagemUrl: "/assets/treinos/resistencia.jpg",
-        professor: { connect: { id: professorArthur.id } },
+        professores: { connect: { id: professorArthur.id } },
         tipoTreino: TipoTreino.Fisico,
         dataAgendada: prazo25Out,
         exercicios: {
