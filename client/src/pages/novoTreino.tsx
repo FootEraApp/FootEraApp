@@ -184,15 +184,14 @@ interface TreinoProgramado {
   pontuacao?: number | null;
   treinoProgramadoId?: string | null;
   origemId?: string | null;
-
   criador?: {
     tipo: "Professor" | "Clube" | "Escolinha";
     id: string;
     nome: string;
   } | null;
-
   criadorNome?: string | null;
   criadorTipo?: string | null;
+  criadores?: { id: string; nome: string }[];
 }
 
 interface Elenco {
@@ -523,6 +522,7 @@ export default function NovoTreino() {
   const [filtroEx, setFiltroEx] = useState("");
   const [filtroCategorias, setFiltroCategorias] = useState<string[]>([]);
   const [filtroNiveis, setFiltroNiveis] = useState<string[]>([]);
+  const [filtroProf, setFiltroProf] = useState("");
   const restoredRef = useRef(false);
   const [idsProgramadosBloqueados, setIdsProgramadosBloqueados] = useState<
     Set<string>
@@ -537,6 +537,10 @@ export default function NovoTreino() {
   } | null>(null);
 
   const jaSincronizouCalendarioComDatas = useRef(false);
+  type ProfessorItem = { id: string; nome: string; codigo?: string; cref?: string };
+
+  const [professores, setProfessores] = useState<ProfessorItem[]>([]);
+  const [professoresSelecionados, setProfessoresSelecionados] = useState<string[]>([]);
 
   const [mesCalendario, setMesCalendario] = useState<{
     ano: number;
@@ -590,6 +594,59 @@ export default function NovoTreino() {
       return false;
     }
   }
+
+  const professorLogadoId = useMemo(() => {
+    const tipo = String(
+      (Storage as any).tipoSalvo ??
+        localStorage.getItem("tipoUsuario") ??
+        sessionStorage.getItem("tipoUsuario") ??
+        ""
+    ).trim().toLowerCase();
+
+    if (tipo !== "professor") return "";
+
+    return String(
+      (Storage as any).tipoUsuarioId ||
+        localStorage.getItem("tipoUsuarioId") ||
+        sessionStorage.getItem("tipoUsuarioId") ||
+        ""
+    ).trim();
+  }, []);
+
+  useEffect(() => {
+  let cancel = false;
+
+  (async () => {
+    try {
+      const token = getToken();
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+      const r = await fetch(`${API.BASE_URL}/api/professores`, { headers });
+      if (!r.ok) throw new Error(await r.text());
+
+      const j = await r.json();
+      const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? []);
+
+      const norm: ProfessorItem[] = (arr || []).map((p: any) => ({
+        id: String(p.id),
+        nome: String(p.nome ?? p.usuario?.nome ?? "Professor"),
+        codigo: p.codigo ? String(p.codigo) : undefined,
+        cref: p.cref ? String(p.cref) : undefined,
+      }));
+
+      const filtrados = professorLogadoId
+        ? norm.filter((p) => String(p.id) !== String(professorLogadoId))
+        : norm;
+
+      if (!cancel) setProfessores(filtrados);
+    } catch (e) {
+      console.error("Erro ao carregar professores:", e);
+      if (!cancel) setProfessores([]);
+    }
+  })();
+
+  return () => { cancel = true; };
+}, [professorLogadoId]);
 
   useEffect(() => {
   let cancel = false;
@@ -747,6 +804,13 @@ export default function NovoTreino() {
 
       let criador: TreinoProgramado["criador"] = t.criador ?? null;
 
+      const criadoresArr =
+        Array.isArray(t.criadores) ? t.criadores :
+        Array.isArray(t.colaboradores) ? t.colaboradores.map((c:any) => ({
+          id: String(c.professor?.id ?? c.professorId),
+          nome: String(c.professor?.nome ?? "Professor"),
+        })) : [];
+
       if (!criador) {
         if (t.professor) {
           criador = {
@@ -818,7 +882,7 @@ export default function NovoTreino() {
           t.treinoProgramadoId ?? t.programadoId ?? t.programado?.id ?? null,
         // @ts-ignore
         origemId: t.id ?? null,
-
+        criadores: criadoresArr,
         criador,
         criadorNome,
         criadorTipo,
@@ -934,126 +998,122 @@ export default function NovoTreino() {
     };
   }, []);
 
-    useEffect(() => {
-    (async () => {
-      try {
-        const token =
-          (Storage as any).token ||
-          localStorage.getItem("token") ||
-          sessionStorage.getItem("token") ||
-          "";
-        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+  useEffect(() => {
+  (async () => {
+    try {
+      const token =
+        (Storage as any).token ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token") ||
+        "";
 
-        const baseTipoUsuarioId =
-          (Storage as any).tipoUsuarioId ||
-          localStorage.getItem("tipoUsuarioId") ||
-          sessionStorage.getItem("tipoUsuarioId") ||
-          "";
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-        const orgId =
-          orgSelecionada && orgSelecionada !== MOSTRAR_TODOS
-            ? orgSelecionada
-            : null;
+      const baseTipoUsuarioId =
+        (Storage as any).tipoUsuarioId ||
+        localStorage.getItem("tipoUsuarioId") ||
+        sessionStorage.getItem("tipoUsuarioId") ||
+        localStorage.getItem("perfilId") ||
+        sessionStorage.getItem("perfilId") ||
+        "";
 
-        if (!baseTipoUsuarioId) {
-          console.warn(
-            "[NovoTreino] sem tipoUsuarioId do dono; não há como carregar turmas",
-          );
-          setElencos([]);
-          setElencoSelecionado("");
-          return;
-        }
-
-        if (!orgId) {
-          try {
-            const urlMinhas = `${API.BASE_URL}/api/turmas/minhas?tipoUsuarioId=${encodeURIComponent(
-              baseTipoUsuarioId,
-            )}`;
-            const r = await fetch(urlMinhas, { headers });
-
-            if (r.ok) {
-              const data = await r.json();
-              const arr = Array.isArray(data)
-                ? data
-                : data.items ?? data.data ?? data.rows ?? data.result ?? [];
-
-              const norm = (arr || []).map((t: any) => ({
-                id: String(t.id),
-                nome: t.nome ?? t.titulo ?? "Turma",
-                atletasIds:
-                  t.atletasIds ??
-                  t.membros?.map((m: any) => m.atletaId ?? m.id) ??
-                  [],
-              }));
-
-              setElencos(norm);
-              return;
-            } else {
-              console.warn(
-                "[NovoTreino] falha em /api/turmas/minhas",
-                r.status,
-              );
-            }
-          } catch (e) {
-            console.error("[NovoTreino] erro em /api/turmas/minhas", e);
-          }
-        }
-
-        const ownerId = orgId || baseTipoUsuarioId;
-
-        const urls = [
-          `${API.BASE_URL}/api/treinos/elencos?tipoUsuarioId=${encodeURIComponent(
-            ownerId,
-          )}`,
-          `${API.BASE_URL}/api/elencos?organizacaoId=${encodeURIComponent(
-            ownerId,
-          )}`,
-          `${API.BASE_URL}/api/turmas?organizacaoId=${encodeURIComponent(
-            ownerId,
-          )}`,
-          `${API.BASE_URL}/api/turmas?escolinhaId=${encodeURIComponent(
-            ownerId,
-          )}`,
-        ];
-
-        for (const url of urls) {
-          try {
-            const r = await fetch(url, { headers });
-            if (!r.ok) continue;
-
-            const j = await r.json();
-            const arr = Array.isArray(j)
-              ? j
-              : j.items ?? j.data ?? j.rows ?? j.result ?? [];
-
-            if (Array.isArray(arr) && arr.length) {
-              const norm = arr.map((e: any) => ({
-                id: String(e.id),
-                nome: e.nome ?? e.titulo ?? "Turma",
-                atletasIds:
-                  e.atletasIds ??
-                  e.atletas?.map((a: any) => a.id) ??
-                  e.membros?.map((m: any) => m.atletaId ?? m.id) ??
-                  [],
-              }));
-
-              setElencos(norm);
-              return;
-            }
-          } catch (e) {
-            console.error("[NovoTreino] erro ao buscar turmas em", url, e);
-          }
-        }
-
+      if (!baseTipoUsuarioId) {
+        console.warn("[NovoTreino] sem tipoUsuarioId; não dá para carregar turmas/elencos");
         setElencos([]);
         setElencoSelecionado("");
-      } catch (e) {
-        console.error("[NovoTreino] erro inesperado ao carregar turmas", e);
-        setElencos([]);
-        setElencoSelecionado("");
+        return;
       }
-    })();
-  }, [orgSelecionada]);
+
+      const orgId =
+        orgSelecionada && orgSelecionada !== MOSTRAR_TODOS
+          ? orgSelecionada
+          : null;
+
+      const orgObj = orgId
+        ? orgsVinculadas.find((o) => String(o.id) === String(orgId))
+        : null;
+
+      const ownerTipo =
+        orgObj?.tipo === "Clube"
+          ? "Clube"
+          : orgObj?.tipo === "Escolinha"
+          ? "Escolinha"
+          : "Professor";
+
+      const ownerId = orgObj?.id ? String(orgObj.id) : String(baseTipoUsuarioId);
+      const professorId = String(baseTipoUsuarioId);
+
+      {
+        const urlMinhas = `${API.BASE_URL}/api/turmas/minhas?tipoUsuarioId=${encodeURIComponent(
+          baseTipoUsuarioId
+        )}`;
+
+        const r = await fetch(urlMinhas, { headers });
+
+        if (r.ok) {
+          const data = await r.json();
+          const arr = Array.isArray(data)
+            ? data
+            : data.items ?? data.data ?? data.rows ?? data.result ?? [];
+
+          const norm = (arr || []).map((t: any) => ({
+            id: String(t.id),
+            nome: t.nome ?? t.titulo ?? "Turma",
+            atletasIds:
+              t.atletasIds ??
+              t.membros?.map((m: any) => m.atletaId ?? m.id) ??
+              [],
+          }));
+
+          setElencos(norm);
+          return;
+        } else {
+          const txt = await r.text().catch(() => "");
+          console.warn("[NovoTreino] falha em /api/turmas/minhas:", r.status, txt);
+        }
+      }
+
+      {
+        const query =
+          ownerTipo === "Professor"
+            ? `professorId=${encodeURIComponent(professorId)}`
+            : `ownerTipo=${encodeURIComponent(ownerTipo)}&ownerId=${encodeURIComponent(ownerId)}`;
+
+        const url = `${API.BASE_URL}/api/turmas?${query}`;
+        const r = await fetch(url, { headers });
+
+        if (r.ok) {
+          const j = await r.json();
+          const arr = Array.isArray(j)
+            ? j
+            : j.items ?? j.data ?? j.rows ?? j.result ?? [];
+
+          const norm = (arr || []).map((t: any) => ({
+            id: String(t.id),
+            nome: t.nome ?? t.titulo ?? "Turma",
+            atletasIds:
+              t.atletasIds ??
+              t.membros?.map((m: any) => m.atletaId ?? m.id) ??
+              [],
+          }));
+
+          setElencos(norm);
+          return;
+        } else {
+          const txt = await r.text().catch(() => "");
+          console.warn("[NovoTreino] falha em /api/turmas:", r.status, txt);
+        }
+      }
+
+      setElencos([]);
+      setElencoSelecionado("");
+    } catch (e) {
+      console.error("[NovoTreino] erro inesperado ao carregar turmas", e);
+      setElencos([]);
+      setElencoSelecionado("");
+    }
+  })();
+}, [orgSelecionada, orgsVinculadas]);
 
   useEffect(() => {
     const tipoPersistido =
@@ -1126,6 +1186,11 @@ export default function NovoTreino() {
           setDicas(saved.dicas ?? []);
           setAtletasSelecionados(saved.atletasSelecionados ?? []);
           setDatasAgendamento(saved.datasAgendamento ?? []);
+          setProfessoresSelecionados(
+            Array.isArray(saved.professoresSelecionados)
+              ? saved.professoresSelecionados.map(String)
+              : []
+          );
         }
       }
 
@@ -1317,6 +1382,7 @@ export default function NovoTreino() {
       dicas,
       atletasSelecionados,
       datasAgendamento,
+      professoresSelecionados
     });
   }, [
     etapa,
@@ -1332,6 +1398,7 @@ export default function NovoTreino() {
     dicas,
     atletasSelecionados,
     datasAgendamento,
+    professoresSelecionados,
   ]);
 
   async function criarTurmaComSelecionados() {
@@ -1401,9 +1468,11 @@ export default function NovoTreino() {
       .filter((id): id is string => Boolean(id));
 
     const ownerTipoCapital =
-      ownerTipo === "clube"
+      ownerTipo === "professor"
+        ? "Professor"
+        : ownerTipo === "clube"
         ? "Clube"
-        : ownerTipo === "escolinha" 
+        : ownerTipo === "escolinha"
         ? "Escolinha"
         : undefined;
 
@@ -1411,10 +1480,10 @@ export default function NovoTreino() {
       ownerTipo === "professor" ? tipoUsuarioIdRaw : undefined;
 
     const payload = {
-      ownerTipo: ownerTipoCapital,
-      ownerId: tipoUsuarioIdRaw,
+      ownerTipo: ownerTipoCapital,    
+      ownerId: tipoUsuarioIdRaw,    
       nome: novaTurmaNome.trim(),
-      professorId,
+      professorId: ownerTipo === "professor" ? tipoUsuarioIdRaw : undefined,
       atletaIds,
       usuarioIds,
     };
@@ -1473,6 +1542,13 @@ export default function NovoTreino() {
       return Array.from(set);
     });
   };
+
+  useEffect(() => {
+      if (!professorLogadoId) return;
+      setProfessoresSelecionados((prev) =>
+        prev.filter((id) => String(id) !== String(professorLogadoId))
+      );
+  }, [professorLogadoId]);
 
   const [completedUntil, setCompletedUntil] = useState<number>(1);
   const goTo = (n: number) => {
@@ -1548,18 +1624,21 @@ export default function NovoTreino() {
   };
 
   const atualizarExercicio = (
-    index: number,
-    campo: keyof ExItemUI | "series",
-    valor: string,
-  ) => {
-    const copia = [...exerciciosSelecionados];
-    (copia[index][campo] as string | undefined) = valor;
+  index: number,
+  campo: keyof ExItemUILocal,
+  valor: any
+) => {
+  setExerciciosSelecionados((prev) => {
+    const copia = [...prev];
+    (copia[index] as any)[campo] = valor;
+
     if (campo === "ordem") {
-      const n = parseInt(valor, 10);
+      const n = parseInt(String(valor), 10);
       if (!isNaN(n)) copia[index].ordem = n;
     }
-    setExerciciosSelecionados(copia);
-  };
+    return copia;
+  });
+};
 
   const removerExercicio = (index: number) => {
     const novaLista = [...exerciciosSelecionados];
@@ -1705,7 +1784,7 @@ export default function NovoTreino() {
       const body = {
         treinoProgramadoId,
         datas: datasLocal,
-        atletaIds: atletasSelecionados.map(extrairIdAtleta),
+        atletaIds: atletasSelecionados.map(String).filter(Boolean),
         elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
         incluirObservados: false,
         tituloPadrao: nome || "Treino",
@@ -1740,6 +1819,14 @@ export default function NovoTreino() {
     try {
       const { tipoUsuario, tipoUsuarioId } = getDono();
       const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
+
+      const professoresIdsFinal = Array.from(
+        new Set((professoresSelecionados || []).map((x) => String(x)).filter(Boolean))
+      );
+
+      const professoresIdsFinalSemEu = professorLogadoId
+        ? professoresIdsFinal.filter((id) => String(id) !== String(professorLogadoId))
+        : professoresIdsFinal;
 
       if (!tipoUsuario || !tipoUsuarioId) {
         alert(
@@ -1798,6 +1885,9 @@ export default function NovoTreino() {
             Date.now().toString(36)
           : "TP-" + Date.now().toString(36);
 
+      const professorIdDoTreino =
+        tipoUsuarioNorm === "professor" ? String(professorLogadoId || tipoUsuarioId) : null;
+
       const payload: TreinoCreatePayload = {
         codigo,
         nome,
@@ -1806,10 +1896,8 @@ export default function NovoTreino() {
         usuarioId,
         tipoUsuario: tipoUsuarioNorm,
         tipoUsuarioId,
-        categoria:
-        categorias.length > 0
-          ? categorias.map(mapCategoria).filter(Boolean)
-          : [],
+        professoresIds: professoresIdsFinalSemEu,
+        categoria: categorias.length > 0 ? categorias.map(mapCategoria).filter(Boolean) : [],
         tipoTreino: mapTipoTreino(tipoTreino),
         objetivo: objetivo || null,
         duracao: duracao ? Number(duracao) : null,
@@ -1821,6 +1909,8 @@ export default function NovoTreino() {
         exercicios,
         pontuacao: Math.max(0, Math.floor(score.total)),
       };
+
+      (payload as any).colaboradoresProfessorIds = professoresIdsFinalSemEu;
 
       const vistosId = new Set<string>();
       const vistosNome = new Set<string>();
@@ -1859,17 +1949,63 @@ export default function NovoTreino() {
 
       const criado: any = await TreinosApi.criar(payload);
 
+      console.groupCollapsed("[NovoTreino] DEBUG retorno treino criado");
+      console.log("criado (raw):", criado);
+      console.log("criado.id:", criado?.id ?? criado?.treinoProgramadoId ?? criado?.data?.id);
+      console.log("criado.professoresIds:", criado?.professoresIds);
+      console.log("criado.professores:", criado?.professores);
+      console.log("criado.criadores / colaboradores:", criado?.criadores ?? criado?.colaboradores);
+      console.groupEnd();
+
+      const profsSelecionadosDetalhe = professoresIdsFinal.map((id) => {
+        const p = professores.find((x) => String(x.id) === String(id));
+        return {
+          id,
+          nome: p?.nome ?? "(não encontrado na lista carregada)",
+          codigo: p?.codigo ?? null,
+          cref: p?.cref ?? null,
+        };
+      });
+
+      console.groupCollapsed("[NovoTreino] DEBUG salvar treino");
+      console.log("professorLogadoId:", professorLogadoId);
+      console.log("professoresSelecionados (state):", professoresSelecionados);
+      console.log("professoresIdsFinal (enviado):", professoresIdsFinal);
+      console.table(profsSelecionadosDetalhe);
+      console.log("payload.professoresIds:", payload.professoresIds);
+      console.log("payload.professorId (singular):", (payload as any).professorId);
+      console.groupEnd();
+
       let qtdAgendados = 0;
       const treinoProgramadoId =
         criado?.id ?? criado?.treinoProgramadoId ?? criado?.data?.id ?? null;
 
       if (treinoProgramadoId) {
-        qtdAgendados = await agendarTreinoEmLote(
-          String(treinoProgramadoId),
-        );
+        try {
+          const token = getToken();
+          const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+          const rr = await fetch(
+            `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(
+              String(treinoProgramadoId)
+            )}`,
+            { headers }
+          );
+          const jj = await rr.json().catch(() => null);
+
+          console.groupCollapsed("[NovoTreino] DEBUG confirmacao no banco");
+          console.log("GET treino:", jj);
+          console.log("professoresIds:", jj?.professoresIds);
+          console.log("professores:", jj?.professores);
+          console.groupEnd();
+        } catch (e) {
+          console.warn("[NovoTreino] DEBUG confirmacao falhou:", e);
+        }
+
+        qtdAgendados = await agendarTreinoEmLote(String(treinoProgramadoId));
       } else {
         console.warn(
-          "TreinosApi.criar não retornou id do treino programado. Agendamento em lote foi pulado.",
+          "TreinosApi.criar não retornou id do treino programado. Agendamento em lote foi pulado."
         );
       }
 
@@ -1961,6 +2097,7 @@ export default function NovoTreino() {
       setDicaAtual("");
       setAtletasSelecionados([]);
       setDatasAgendamento([]);
+      setProfessoresSelecionados([]);
 
       setTimeout(() => {
         navigate("/treinos");
@@ -2130,14 +2267,19 @@ export default function NovoTreino() {
                 <strong>Nível:</strong> {t.nivel}
               </p>
 
-              {t.criador && (
+              {t.criadores?.length ? (
+                <p className="text-sm mt-1">
+                  <strong>Criado por:</strong>{" "}
+                  {t.criadores.map((c) => `Prof. ${c.nome}`).join(", ")}
+                </p>
+              ) : t.criador ? (
                 <p className="text-sm mt-1">
                   <strong>Criado por:</strong>{" "}
                   {t.criador.tipo === "Professor"
                     ? `Prof. ${t.criador.nome}`
                     : `${t.criador.nome} (${t.criador.tipo})`}
                 </p>
-              )}
+              ) : null}
 
               <p className="text-sm">
                 <strong>Exercícios:</strong>
@@ -2217,7 +2359,6 @@ export default function NovoTreino() {
           <button
             onClick={() => {
               if (confirm("Deseja limpar o progresso deste treino?")) {
-                sessionStorage.removeItem(SAVE_KEY);
                 setEtapa(1);
                 setCompletedUntil(1);
                 setNome("");
@@ -2232,6 +2373,7 @@ export default function NovoTreino() {
                 setDicas([]);
                 setDicaAtual("");
                 setAtletasSelecionados([]);
+                setProfessoresSelecionados([]);
                 sessionStorage.removeItem(SAVE_KEY);
                 sessionStorage.removeItem(RESTORE_FLAG_KEY);
               }
@@ -2326,6 +2468,7 @@ export default function NovoTreino() {
                   <option value="Tecnico">Técnico</option>
                   <option value="Fisico">Físico</option>
                   <option value="Tatico">Tático</option>
+                  <option value="Mental">Mental</option>
                 </select>
               </div>
 
@@ -2343,12 +2486,74 @@ export default function NovoTreino() {
                   }
                 />
               </div>
+
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">
+                  Professores realizadores (colaboradores)
+                </label>
+
+                <div className="border rounded p-2">
+                  <input
+                    className="border w-full p-2 rounded text-sm mb-2"
+                    placeholder="Buscar professor..."
+                    value={filtroProf}
+                    onChange={(e) => setFiltroProf(e.target.value)}
+                  />
+
+                  <div className="max-h-40 overflow-y-auto space-y-2">
+                    {professores
+                      .filter((p) => {
+                        const q = (filtroProf || "").toLowerCase();
+                        if (!q) return true;
+                        const txt = `${p.nome} ${p.codigo ?? ""} ${p.cref ?? ""}`.toLowerCase();
+                        return txt.includes(q);
+                      })
+                      .map((p) => {
+                        const pid = String(p.id);
+                        const checked = professoresSelecionados.map(String).includes(pid);
+                        return (
+                          <label
+                            key={p.id}
+                            className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                setProfessoresSelecionados((prev) => {
+                                  const pid = String(p.id);
+                                  const prevStr = prev.map(String);
+                                   if (prevStr.includes(pid)) return prevStr.filter((x) => x !== pid);
+                                  return [...prevStr, pid];
+                                });
+                              }}
+                            />
+                            <span className="text-sm">
+                              {p.nome}
+                              {p.codigo ? ` (${p.codigo})` : ""}{p.cref ? ` - ${p.cref}` : ""}
+                            </span>
+                          </label>
+                        );
+                      })}
+                  </div>
+
+                  {professoresSelecionados.length > 0 && (
+                    <div className="mt-2 text-xs text-gray-700">
+                      <span className="font-semibold">Selecionados:</span>{" "}
+                      {professoresSelecionados
+                        .map((id) => professores.find((p) => p.id === id)?.nome ?? id)
+                        .join(", ")}
+                    </div>
+                  )}
+                </div>
+              </div>
+
             </div>
 
             <div className="flex justify-end">
               <button
                 onClick={() => goTo(2)}
-                className="bg-green-800 text-white px-4 py-2 rounded"
+                className="bg-green-800 text-white px-4 py-2 rounded mt-3"
               >
                 Próximo
               </button>
@@ -2869,11 +3074,7 @@ export default function NovoTreino() {
                       }`}
                     >
                       <img
-                        src={
-                          atleta.foto
-                            ? `${atleta.foto}`
-                            : "https://via.placeholder.com/80"
-                        }
+                        src={atleta.foto ? resolveVideoUrl(atleta.foto) : "https://via.placeholder.com/80"}
                         alt={atleta.nome}
                         className="w-20 h-20 mx-auto rounded-full object-cover mb-2"
                       />

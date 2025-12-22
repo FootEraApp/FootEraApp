@@ -161,11 +161,11 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         exercicios: { create: itens },
       },
       include: {
-        professor: { include: { usuario: true } },
+        criadorProfessor: { include: { usuario: true } }, // ✅
         clube: true,
         escolinha: true,
-        exercicios: { select: { id: true, exercicioId: true, ordem: true, repeticoes: true } },
-      },
+        exercicios: { include: { exercicio: true } },
+      }
     });
 
     let agendadosCriados = 0;
@@ -265,11 +265,11 @@ export const getTreinoById = async (req: Request, res: Response) => {
     const treino = await prisma.treinoProgramado.findUnique({
       where: { id },
       include: {
-        professor: { include: { usuario: true } },
+        criadorProfessor: { include: { usuario: true } }, // ✅
         clube: true,
         escolinha: true,
         exercicios: { include: { exercicio: true } },
-      },
+      }
     });
     if (!treino) return res.status(404).json({ message: "Treino não encontrado." });
     return res.json(treino);
@@ -407,12 +407,13 @@ export const getAllTreinos = async (_req: Request, res: Response) => {
     const treinos = await prisma.treinoProgramado.findMany({
       orderBy: { createdAt: "desc" },
       include: {
-        professor: { include: { usuario: true } },
+        criadorProfessor: { include: { usuario: true } }, // ✅ TROCA AQUI
         clube: true,
         escolinha: true,
         exercicios: { include: { exercicio: true } },
       },
     });
+
     return res.json(treinos);
   } catch (error: any) {
     console.error(error);
