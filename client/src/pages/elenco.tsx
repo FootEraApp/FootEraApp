@@ -382,7 +382,7 @@ function normalizeAtletas(raw: any): Atleta[] {
       a?.posicao ??
       a?.atleta?.posicao ??
       a?.Atleta?.posicao ??
-      a?.usuario?.posicao ??                 // se algum dia vier no Usuario
+      a?.usuario?.posicao ??          
       a?.usuario?.atleta?.posicao ??
       a?.usuario?.Atleta?.posicao ??
       a?.aluno?.posicao ??
@@ -413,7 +413,9 @@ type ModoTela = "elenco" | "convocacao";
 type PaginaElencoProps = {
   modo?: ModoTela;
   titulo?: string;
+  backHref?: string;
   permitirReservas?: boolean;
+  eventoId?: string;
   onSalvar?: (payload: {
     turmaId: string;
     nome: string;
@@ -423,10 +425,30 @@ type PaginaElencoProps = {
   }) => Promise<void> | void;
 };
 
+type ConvocacaoDraft = {
+  nome: string;
+  formacao: string;
+  escala: Record<PosicaoCampo, string | null>;
+  reservasIds: string[];
+};
+
+const convKey = (eventoId: string, turmaId: string) =>
+  `footera:convocacao:${eventoId}:${turmaId}`;
+
+const parseFormacaoStr = (s: string) => {
+  const [defesa, meio, atacantes] = String(s || "").split("-").map(n => Number(n));
+  if ([defesa, meio, atacantes].some(n => !Number.isFinite(n))) {
+    return { defesa: 4, meio: 3, atacantes: 3 };
+  }
+  return { defesa, meio, atacantes };
+};
+
 export default function PaginaElenco({
   modo = "elenco",
   titulo,
+  backHref,
   permitirReservas = false,
+  eventoId,
   onSalvar,
 }: PaginaElencoProps) {
   const isMobile = useIsMobile();
@@ -667,6 +689,35 @@ export default function PaginaElenco({
       if (cancelled) return;
 
       const baseAtletas = normalizeAtletas(res.data);
+
+      if (modo === "convocacao" && eventoId) {
+        try {
+          const raw = localStorage.getItem(convKey(eventoId, turmaId));
+          if (raw) {
+            const draft = JSON.parse(raw) as ConvocacaoDraft;
+
+            setTodosAtletas(baseAtletas);
+            setFormacao(parseFormacaoStr(draft.formacao));
+            setReservasIds(Array.isArray(draft.reservasIds) ? draft.reservasIds : []);
+
+            const elencoRestaurado = buildElencoUI(
+              {
+                id: null,
+                nome: draft.nome || "Elenco 1",
+                maxJogadores: 11,
+                escala: draft.escala,
+              } as any,
+              baseAtletas
+            );
+
+            setElencos([elencoRestaurado]);
+            setActiveIndex(0);
+            return;
+          }
+        } catch (e) {
+          console.error("Falha ao restaurar convocacao do localStorage:", e);
+        }
+      }
 
       setTodosAtletas(baseAtletas);
       setElencos((prev) => {
@@ -922,6 +973,16 @@ const salvarElencoAtivo = async () => {
       return;
     }
     try {
+      if (eventoId && turmaId) {
+        const draft: ConvocacaoDraft = {
+          nome: payloadBase.nome,
+          formacao: payloadBase.formacao,
+          escala: payloadBase.escala,
+          reservasIds: payloadBase.reservasIds,
+        };
+        localStorage.setItem(convKey(eventoId, turmaId), JSON.stringify(draft));
+      }
+
       await onSalvar({ ...payloadBase, turmaId });
     } catch (e) {
       console.error(e);
@@ -1228,24 +1289,33 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
     <div className="min-h-[100dvh] bg-green-100 flex flex-col">
       <div className="sticky top-0 z-20 bg-green-100/95 backdrop-blur supports-[backdrop-filter]:bg-green-100/80 border-b border-green-300">
         <div className="p-3 flex items-center justify-between">
-          <Link
-            href="/treinos"
-            aria-label="Voltar para treinos"
-            title="Voltar para explorar"
+          <button
+            type="button"
+            onClick={() => {
+              if (backHref) {
+                window.location.href = backHref;
+                return;
+              }
+              window.history.back();
+            }}
+            aria-label="Voltar"
+            title="Voltar"
             className="inline-flex h-10 w-10 items-center justify-center
               rounded-full border border-green-800 bg-white text-green-900
               shadow-sm hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-700/30"
           >
             <ArrowLeft className="h-5 w-5" />
-          </Link>
+          </button>
 
-          {titulo && (
-            <h1 className="text-lg font-bold text-green-900 text-center">
-              {titulo}
-            </h1>
-          )}
+          <div className="flex items-center">
+            {titulo && (
+              <h1 className="ml-3 text-lg font-bold text-green-900">
+                {titulo}
+              </h1>
+            )}
+          </div>
 
-          <div className="flex-1 flex items-center justify-center px-3 gap-2">
+          <div className="ml-4 flex-1 flex items-center justify-center px-3 gap-2">
             {turmas.length > 0 && (
               <select
                 value={turmaId}

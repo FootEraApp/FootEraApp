@@ -11,8 +11,11 @@ type EventoForm = {
   titulo: string;
   tipo: EventoTipo;
   descricao: string;
-  inicio: string;
-  fim: string;
+
+  dataEvento: string;        // ✅ obrigatório (data real do evento)
+  inscricaoInicio: string;   // ➕ opcional
+  inscricaoFim: string;      // ➕ opcional
+
   local: string;
   cidade: string;
   estado: string;
@@ -32,8 +35,11 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
     titulo: "",
     tipo: "PENEIRA",
     descricao: "",
-    inicio: "",
-    fim: "",
+
+    dataEvento: "",
+    inscricaoInicio: "",
+    inscricaoFim: "",
+
     local: "",
     cidade: "",
     estado: "",
@@ -45,6 +51,7 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
     requisitos: "",
     status: "ABERTO",
   });
+
   const [salvando, setSalvando] = useState<boolean>(false);
   const [erro, setErro] = useState<string>("");
 
@@ -54,8 +61,10 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
 
   async function submit() {
     setErro("");
-    if (!form.titulo || !form.inicio) {
-      setErro("Título e início são obrigatórios.");
+
+    // ✅ agora é título + dataEvento obrigatório
+    if (!form.titulo || !form.dataEvento) {
+      setErro("Título e data do evento são obrigatórios.");
       return;
     }
 
@@ -64,10 +73,13 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
 
       const body = {
         ...form,
+
+        // manda null se não preencher
+        inscricaoInicio: form.inscricaoInicio ? form.inscricaoInicio : null,
+        inscricaoFim: form.inscricaoFim ? form.inscricaoFim : null,
+
         vagas: form.vagas ? Number(form.vagas) : null,
-        valorInscricao: form.valorInscricao
-          ? Number(form.valorInscricao)
-          : null,
+        valorInscricao: form.valorInscricao ? Number(form.valorInscricao) : null,
         requisitos: form.requisitos
           ? form.requisitos
               .split(",")
@@ -78,17 +90,13 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
 
       const token =
         Storage?.token ||
-        (typeof window !== "undefined"
-          ? localStorage.getItem("token")
-          : null);
+        (typeof window !== "undefined" ? localStorage.getItem("token") : null);
 
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      await axios.post(
-        `${API.BASE_URL}/api/eventos/escolas/${escolaId}`,
-        body,
-        { headers }
-      );
+      await axios.post(`${API.BASE_URL}/api/eventos/escolas/${escolaId}`, body, {
+        headers,
+      });
 
       window.alert("Evento criado com sucesso!");
       setLocation(`/eventos/escolas/${escolaId}`);
@@ -104,7 +112,7 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
   return (
     <div className="min-h-screen bg-cream text-green-900">
       <div className="bg-green-900 p-4 text-white text-center text-xl font-bold">
-        Novo Evento / Peneira da Escolinha
+        Novo Evento
       </div>
 
       <div className="p-4 max-w-xl mx-auto">
@@ -124,13 +132,16 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
               <select
                 className="w-full border rounded px-3 py-2"
                 value={form.tipo}
-                onChange={(e)=>set("tipo", e.target.value as EventoTipo)}
+                onChange={(e) => set("tipo", e.target.value as EventoTipo)}
               >
-                {EVENTO_TIPOS.map(t => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
+                {EVENTO_TIPOS.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
                 ))}
               </select>
             </div>
+
             <div>
               <label className="block text-sm">Status</label>
               <select
@@ -147,25 +158,37 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm">Início*</label>
+          {/* ➕ Período de inscrição (opcional) */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm">Início das inscrições</label>
+              <input
+                type="datetime-local"
+                className="w-full border rounded px-3 py-2"
+                value={form.inscricaoInicio}
+                onChange={(e) => set("inscricaoInicio", e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm">Fim das inscrições</label>
+              <input
+                type="datetime-local"
+                className="w-full border rounded px-3 py-2"
+                value={form.inscricaoFim}
+                onChange={(e) => set("inscricaoFim", e.target.value)}
+              />
+            </div>
+          </div>
+<div>
+            <label className="block text-sm">Data do evento*</label>
             <input
               type="datetime-local"
               className="w-full border rounded px-3 py-2"
-              value={form.inicio}
-              onChange={(e) => set("inicio", e.target.value)}
+              value={form.dataEvento}
+              onChange={(e) => set("dataEvento", e.target.value)}
             />
           </div>
-          <div>
-            <label className="block text-sm">Fim</label>
-            <input
-              type="datetime-local"
-              className="w-full border rounded px-3 py-2"
-              value={form.fim}
-              onChange={(e) => set("fim", e.target.value)}
-            />
-          </div>
-
+          
           <div>
             <label className="block text-sm">Descrição</label>
             <textarea
