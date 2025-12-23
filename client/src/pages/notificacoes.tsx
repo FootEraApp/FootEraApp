@@ -35,6 +35,25 @@ type NotificacaoItem = {
   lida?: boolean | null;
 };
 
+function formatarDataCurta(iso?: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function limparMensagem(mensagem: string) {
+  return (mensagem || "")
+    .replace(/\s*Acesse:\s*\/eventos\/[a-f0-9-]+\.?/gi, "")
+    .replace(/\s*Acesse:\s*\/\S+/gi, "")
+    .trim();
+}
+
+function isConvocacao(n: { titulo: string; mensagem: string }) {
+  const t = `${n.titulo} ${n.mensagem}`.toLowerCase();
+  return t.includes("convoc") || t.includes("você foi convoc") || t.includes("voce foi convoc");
+}
+
 export default function PaginaNotificacoes() {
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [, setLocation] = useLocation();
@@ -66,32 +85,71 @@ export default function PaginaNotificacoes() {
     })();
   }, []);
 
+  const marcarComoLida = async (notifId: string) => {
+              const token = Storage.token;
+              if (!token) return;
+
+              setNotificacoes((prev) =>
+                prev.map((n) => (n.id === notifId ? { ...n, lida: true } : n))
+              );
+
+              try {
+                const r = await fetch(`${API.BASE_URL}/api/notificacoes/${encodeURIComponent(notifId)}/lida`, {
+                  method: "PATCH",
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+
+                if (!r.ok) {
+                  setNotificacoes((prev) =>
+                    prev.map((n) => (n.id === notifId ? { ...n, lida: false } : n))
+                  );
+                  console.warn("Falha ao marcar como lida:", r.status, await r.text());
+                }
+              } catch (e) {
+                setNotificacoes((prev) =>
+                  prev.map((n) => (n.id === notifId ? { ...n, lida: false } : n))
+                );
+                console.error("Erro ao marcar como lida:", e);
+              }
+            };
+
   const NOTIFS_BASE = `${API.BASE_URL}/api/notificacoes/me`;
 
-useEffect(() => {
-  const token = Storage.token;
-  if (!token) return;
+  useEffect(() => {
+    const token = Storage.token;
+    if (!token) return;
 
-  (async () => {
-    try {
-      const r = await fetch(NOTIFS_BASE, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    (async () => {
+      try {
+        const r = await fetch(NOTIFS_BASE, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-      if (!r.ok) {
-        console.warn("GET /notificacoes/me falhou:", r.status, await r.text());
-        return;
+        if (!r.ok) {
+          console.warn("GET /notificacoes/me falhou:", r.status, await r.text());
+          return;
+        }
+
+        const json = await r.json();
+        console.log("NOTIFS:", json?.items);
+
+        setNotificacoes(Array.isArray(json?.items) ? json.items : []);
+      } catch (e) {
+        console.error("Erro ao buscar notificações", e);
       }
+    })();
+  }, []);
 
-      const json = await r.json();
-      console.log("NOTIFS:", json?.items); // <- confirma que chegou
+  useEffect(() => {
+    const temFlagLida = notificacoes.some((n) => typeof n?.lida === "boolean");
+    const naoLidas = notificacoes.filter((n) => n?.lida === false).length;
+    const qtdNotifs = temFlagLida ? naoLidas : notificacoes.length;
+    const totalNotificacoes = qtdNotifs + solicitacoes.length;
 
-      setNotificacoes(Array.isArray(json?.items) ? json.items : []);
-    } catch (e) {
-      console.error("Erro ao buscar notificações", e);
-    }
-  })();
-}, []);
+    window.dispatchEvent(
+      new CustomEvent("badge:update", { detail: totalNotificacoes })
+    );
+  }, [notificacoes, solicitacoes]);
 
   const responderSolicitacao = async (id: string, aceitar: boolean) => {
     const token = Storage.token;
@@ -146,18 +204,78 @@ useEffect(() => {
 
       {notificacoes.length > 0 && (
         <div className="mb-6 space-y-3">
-          {notificacoes.map((n) => (
-            <div key={n.id} className="bg-white shadow-md rounded-xl p-4">
-              <p className="font-semibold">{n.titulo}</p>
-              <p className="text-sm text-gray-700 mt-1">{n.mensagem}</p>
+          {notificacoes.map((n) => {
+            const data = formatarDataCurta(n.criadaEm || null);
+            const msgLimpa = limparMensagem(n.mensagem || "");
+            const ehConv = isConvocacao({ titulo: n.titulo || "", mensagem: n.mensagem || "" });
 
-              {n.link && (
-                <Link href={n.link} className="inline-block mt-2 text-sm text-green-800 underline">
-                  Abrir
-                </Link>
-              )}
-            </div>
-          ))}
+            return (
+              <div
+                key={n.id}
+                className={`bg-white shadow-md rounded-2xl p-4 border ${
+                  ehConv ? "border-green-200" : "border-transparent"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-green-900 flex items-center gap-2">
+                      {n.titulo}
+                      {ehConv && (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                          Convocação
+                        </span>
+                      )}
+                      {n.lida === false && (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                          Novo
+                        </span>
+                      )}
+                    </p>
+
+                    {!!data && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {data}
+                      </p>
+                    )}
+
+                    {!!msgLimpa && (() => {
+                      const parts = msgLimpa.split(/Data\/Hora:\s*/i);
+                      const texto = (parts[0] || "").trim();
+                      const dataHora = (parts[1] || "").trim();
+
+                      return (
+                        <div className="text-sm text-gray-700 mt-2 leading-relaxed space-y-2">
+                          {!!texto && <p>{texto}</p>}
+
+                          {!!dataHora && (
+                            <p>
+                              <strong>Data/Hora:</strong> {dataHora}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {n.link && (
+                      <div className="mt-3">
+                        <p className="text-sm text-gray-700">
+                            Visualizar o evento:{" "}
+                        </p>
+                        <Link
+                          href={n.link}
+                          onClick={() => marcarComoLida(n.id)}
+                          className="inline-flex mt-2 items-center justify-center rounded-lg bg-green-800
+                            text-white text-sm px-4 py-2 hover:bg-green-900"
+                        >
+                          Abrir evento
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
