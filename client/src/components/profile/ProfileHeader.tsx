@@ -1,4 +1,3 @@
-// client/src/components/profile/ProfileHeader
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
@@ -114,7 +113,8 @@ export default function ProfileHeader({
   const obsKey =
     Storage.usuarioId && alvoAtletaId ? `obs_${Storage.usuarioId}_${alvoAtletaId}` : null;
   const storageKey = `tj_${Storage.usuarioId}_${perfilId}`;
-
+  const isMe = String(Storage.usuarioId || "").trim() === String(perfilId || "").trim();
+  
   const [confirmBox, setConfirmBox] = useState<{
     open: boolean;
     text: string;
@@ -157,8 +157,6 @@ export default function ProfileHeader({
         tipoStr === "atleta" ? String(perfilTipoIdProp || "") : "";
 
       setAlvoAtletaId(atletaIdGuess ? atletaIdGuess : null);
-
-      // ✅ regra correta: viewer pode observar + alvo é atleta + tem atletaId
       setPodeObservar(viewerCanObserve && tipoStr === "atleta");
 
       return;
@@ -205,13 +203,18 @@ export default function ProfileHeader({
   }, [perfilId, isOwnProfile, perfilTipoIdProp, perfilTipoProp]);
 
   useEffect(() => {
-    if (isOwnProfile || !perfilId) return;
+    if (!perfilTipo && !perfilTipoProp) return;
 
     const token =
       Storage.token ||
       localStorage.getItem("token") ||
       sessionStorage.getItem("token");
     if (!token) return;
+
+    if (isOwnProfile || isMe) {
+      setTemVinculoTreino(false);
+      return;
+    }
 
     const meuTipoId =
       Storage.tipoUsuarioId ||
@@ -445,7 +448,7 @@ export default function ProfileHeader({
         setTemVinculoTreino(false);
       }
     })();
-  }, [perfilId, isOwnProfile, perfilTipo, perfilTipoId, perfilTipoIdProp, perfilTipoProp]);
+  }, [perfilId, isOwnProfile, isMe, perfilTipo, perfilTipoId, perfilTipoIdProp, perfilTipoProp]);
 
   useEffect(() => {
     if (!isOwnProfile) return;
@@ -481,6 +484,7 @@ export default function ProfileHeader({
   }, [isOwnProfile]);
 
   useEffect(() => {
+    if (!perfilTipo && !perfilTipoProp) return;
     if (isOwnProfile || !perfilId) return;
 
     const token = Storage.token;
@@ -550,7 +554,7 @@ export default function ProfileHeader({
         localStorage.removeItem(storageKey);
       }
     })();
-  }, [perfilId, isOwnProfile, storageKey]);
+  }, [perfilId, isOwnProfile, storageKey, perfilTipo, perfilTipoProp]);
 
   useEffect(() => {
     if (isOwnProfile) return;
@@ -716,7 +720,6 @@ export default function ProfileHeader({
   return arr
     .map((x: any) => {
       if (!x) return "";
-      // aceita vários formatos comuns do backend
       return String(
         x.id ??
         x.usuarioId ??
@@ -892,30 +895,7 @@ export default function ProfileHeader({
     : perfilId;
 
   useEffect(() => {
-    const token =
-      Storage.token ||
-      localStorage.getItem("token") ||
-      sessionStorage.getItem("token") ||
-      "";
-    if (!token) return;
-
-    const load = () => {
-      fetch(`${API.BASE_URL}/api/notificacoes/badge`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((r) => r.json())
-        .then((d) => setBadgeCount(d?.solicitacoes ?? 0))
-        .catch(() => setBadgeCount(0));
-    };
-
-    load();
-    const onFocus = () =>
-      document.visibilityState === "visible" && load();
-    document.addEventListener("visibilitychange", onFocus);
-    return () => document.removeEventListener("visibilitychange", onFocus);
-  }, []);
-
-  useEffect(() => {
+  if (!perfilTipo && !perfilTipoProp) return;
   if (isOwnProfile || !perfilId) return;
 
   const token =
@@ -929,7 +909,6 @@ export default function ProfileHeader({
   const me = String(Storage.usuarioId || localStorage.getItem("usuarioId") || "");
   const cacheKey = me ? `follow_${me}_${perfilId}` : null;
 
-  // 1) aplica cache pra não “voltar pra Seguir” no refresh enquanto carrega
   if (cacheKey) {
     const cached = localStorage.getItem(cacheKey);
     if (cached === "1") setSeguindo(true);
@@ -946,7 +925,6 @@ export default function ProfileHeader({
 
       if (!r.ok) {
         if (alive) {
-          // se falhar, mantém o que já estava (não força false)
           setSeguindo((v) => v ?? false);
         }
         return;
@@ -962,7 +940,6 @@ export default function ProfileHeader({
 
       if (cacheKey) localStorage.setItem(cacheKey, isSeguindo ? "1" : "0");
     } catch {
-      // não derruba pra false se já tinha estado anterior
       if (alive) setSeguindo((v) => v ?? false);
     }
   })();
@@ -970,7 +947,7 @@ export default function ProfileHeader({
   return () => {
     alive = false;
   };
-}, [perfilId, isOwnProfile]);
+}, [perfilId, isOwnProfile, perfilTipo, perfilTipoProp]);
 
   useEffect(() => {
     if (!alvoUsuarioId) return;
