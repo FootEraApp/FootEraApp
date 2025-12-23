@@ -79,6 +79,7 @@ model Usuario {
   feedbacks              Feedback[]
   SessaoTreinoTurma      SessaoTreinoTurma[]
   Notificacao            Notificacao[]
+  AvaliacaoTreino        AvaliacaoTreino[]
 }
 
 model EmailVerification {
@@ -646,6 +647,62 @@ model SubmissaoTreino {
   avaliacaoTreino      AvaliacaoTreino[]
 
   @@unique([atletaId, treinoAgendadoId])
+}
+
+model AvaliacaoTreino {
+  id String @id @default(uuid())
+
+  atletaId         String
+  treinoAgendadoId String
+
+  submissaoTreinoId String
+
+  autorTipo AvaliacaoAutorTipo
+  autorId   String
+
+  autorUsuarioId String?
+
+  nota              Int     @default(0)
+  concluiu          Boolean @default(true)
+  teveDificuldade   Boolean @default(false)
+  dificuldadeMotivo String?
+  motivoNaoConcluiu String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  atleta         Atleta         @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  treinoAgendado TreinoAgendado @relation(fields: [treinoAgendadoId], references: [id], onDelete: Cascade)
+
+  submissaoTreino SubmissaoTreino @relation(fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
+
+  autorUsuario Usuario? @relation(fields: [autorUsuarioId], references: [id], onDelete: SetNull)
+
+  comentarios AvaliacaoTreinoComentario[]
+
+  @@unique([submissaoTreinoId, autorTipo, autorId])
+  @@index([submissaoTreinoId])
+  @@index([treinoAgendadoId])
+  @@index([atletaId])
+  @@index([autorTipo, autorId])
+  @@index([createdAt])
+}
+
+model AvaliacaoTreinoComentario {
+  id String @id @default(uuid())
+
+  avaliacaoTreinoId String
+  avaliacaoTreino   AvaliacaoTreino @relation(fields: [avaliacaoTreinoId], references: [id], onDelete: Cascade)
+
+  texto String
+  ordem Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([avaliacaoTreinoId, ordem])
+  @@index([avaliacaoTreinoId])
+  @@index([createdAt])
 }
 
 model Grupo {
@@ -1742,30 +1799,6 @@ model SessaoTreinoTurmaExercicio {
   @@index([sessaoId])
 }
 
-model AvaliacaoTreino {
-  id                String   @id @default(uuid())
-  atletaId          String
-  treinoAgendadoId  String
-  submissaoTreinoId String?
-  nota              Int      @default(0)
-  comentario        String?
-  concluiu          Boolean  @default(true)
-  teveDificuldade   Boolean  @default(false)
-  dificuldadeMotivo String?
-  motivoNaoConcluiu String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  atleta          Atleta           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  treinoAgendado  TreinoAgendado   @relation(fields: [treinoAgendadoId], references: [id], onDelete: Cascade)
-  submissaoTreino SubmissaoTreino? @relation(fields: [submissaoTreinoId], references: [id], onDelete: SetNull)
-
-  @@unique([atletaId, treinoAgendadoId])
-  @@index([treinoAgendadoId])
-  @@index([atletaId])
-  @@index([createdAt])
-}
-
 model EventoConvocacao {
   id          String   @id @default(uuid())
   eventoId    String
@@ -2032,4 +2065,10 @@ enum JogoStatus {
   PENDENTE
   EM_ANDAMENTO
   ENCERRADO
+}
+
+enum AvaliacaoAutorTipo {
+  Professor
+  Clube
+  Escolinha
 }

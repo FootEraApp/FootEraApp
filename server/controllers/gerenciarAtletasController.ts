@@ -1,4 +1,5 @@
-import { PrismaClient, Categoria } from "@prisma/client";
+// server/controllers/gerenciarAtletasController
+import { PrismaClient, Categoria, AvaliacaoAutorTipo } from "@prisma/client";
 import { Request, Response } from "express";
 
 const prisma = new PrismaClient();
@@ -757,4 +758,284 @@ export const gerenciarAtletasController = {
       return res.status(500).json({ message: e?.message || "Erro ao listar submissões" });
     }
   },
+
+  // ============================
+  // Avaliação + Comentários (SubmissaoTreino)
+  // ============================
+
+  getAvaliacaoSubmissaoTreino: async (req: Request, res: Response) => {
+    try {
+      const submissaoTreinoId = String(req.params.submissaoTreinoId || "").trim();
+      if (!submissaoTreinoId) return res.status(400).json({ message: "submissaoTreinoId obrigatório" });
+
+      const submissao = await prisma.submissaoTreino.findUnique({
+        where: { id: submissaoTreinoId },
+        select: { id: true, atletaId: true, treinoAgendadoId: true },
+      });
+      if (!submissao) return res.status(404).json({ message: "Submissão de treino não encontrada" });
+
+      const avaliacao = await prisma.avaliacaoTreino.findFirst({
+        where: { submissaoTreinoId },
+        include: {
+          comentarios: { orderBy: { ordem: "asc" } },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      return res.json({
+        submissaoTreinoId,
+        avaliacao: avaliacao
+          ? {
+              id: avaliacao.id,
+              atletaId: avaliacao.atletaId,
+              treinoAgendadoId: avaliacao.treinoAgendadoId,
+              autorTipo: avaliacao.autorTipo,
+              autorId: avaliacao.autorId,
+              autorUsuarioId: avaliacao.autorUsuarioId ?? null,
+              nota: avaliacao.nota,
+              concluiu: avaliacao.concluiu,
+              teveDificuldade: avaliacao.teveDificuldade,
+              dificuldadeMotivo: avaliacao.dificuldadeMotivo ?? null,
+              motivoNaoConcluiu: avaliacao.motivoNaoConcluiu ?? null,
+              createdAt: avaliacao.createdAt,
+              updatedAt: avaliacao.updatedAt,
+              comentarios: avaliacao.comentarios.map((c) => ({
+                id: c.id,
+                texto: c.texto,
+                ordem: c.ordem,
+                createdAt: c.createdAt,
+                updatedAt: c.updatedAt,
+              })),
+            }
+          : null,
+      });
+    } catch (e: any) {
+      console.error("[gerenciarAtletas.getAvaliacaoSubmissaoTreino]", e);
+      return res.status(500).json({ message: e?.message || "Erro ao buscar avaliação" });
+    }
+  },
+
+  upsertAvaliacaoSubmissaoTreino: async (req: Request, res: Response) => {
+    try {
+      const submissaoTreinoId = String(req.params.submissaoTreinoId || "").trim();
+      if (!submissaoTreinoId) return res.status(400).json({ message: "submissaoTreinoId obrigatório" });
+
+      const {
+        autorTipo,
+        autorId,
+        nota,
+        concluiu,
+        teveDificuldade,
+        dificuldadeMotivo,
+        motivoNaoConcluiu,
+        comentarios,
+      } = (req.body || {}) as {
+        autorTipo: AvaliacaoAutorTipo;
+        autorId: string;
+        nota?: number;
+        concluiu?: boolean;
+        teveDificuldade?: boolean;
+        dificuldadeMotivo?: string | null;
+        motivoNaoConcluiu?: string | null;
+        comentarios?: { texto: string; ordem?: number }[];
+      };
+
+      if (!autorTipo || !["Professor", "Clube", "Escolinha"].includes(String(autorTipo))) {
+        return res.status(400).json({ message: "autorTipo inválido" });
+      }
+      if (!autorId) return res.status(400).json({ message: "autorId obrigatório" });
+
+      const submissao = await prisma.submissaoTreino.findUnique({
+        where: { id: submissaoTreinoId },
+        select: { id: true, atletaId: true, treinoAgendadoId: true },
+      });
+      if (!submissao) return res.status(404).json({ message: "Submissão de treino não encontrada" });
+
+      // opcional: tenta gravar autorUsuarioId (quem está logado)
+      const autorUsuarioId = (req as any).userId ? String((req as any).userId) : null;
+
+      const result = await prisma.$transaction(async (tx) => {
+        // upsert via unique composto
+        const avaliacao = await tx.avaliacaoTreino.upsert({
+          where: {
+            submissaoTreinoId_autorTipo_autorId: {
+              submissaoTreinoId,
+              autorTipo,
+              autorId,
+            },
+          },
+          create: {
+            submissaoTreinoId,
+            atletaId: submissao.atletaId,
+            treinoAgendadoId: submissao.treinoAgendadoId,
+            autorTipo,
+            autorId,
+            autorUsuarioId: autorUsuarioId || undefined,
+            nota: typeof nota === "number" ? Math.max(0, Math.min(5, Math.floor(nota))) : 0,
+            concluiu: typeof concluiu === "boolean" ? concluiu : true,
+            teveDificuldade: typeof teveDificuldade === "boolean" ? teveDificuldade : false,
+            dificuldadeMotivo: dificuldadeMotivo ?? undefined,
+            motivoNaoConcluiu: motivoNaoConcluiu ?? undefined,
+          },
+          update: {
+            autorUsuarioId: autorUsuarioId || undefined,
+            nota: typeof nota === "number" ? Math.max(0, Math.min(5, Math.floor(nota))) : undefined,
+            concluiu: typeof concluiu === "boolean" ? concluiu : undefined,
+            teveDificuldade: typeof teveDificuldade === "boolean" ? teveDificuldade : undefined,
+            dificuldadeMotivo: dificuldadeMotivo ?? undefined,
+            motivoNaoConcluiu: motivoNaoConcluiu ?? undefined,
+          },
+        });
+
+        // se mandou lista completa de comentários, sincroniza (opcional)
+        if (Array.isArray(comentarios)) {
+          // remove todos e recria na ordem (simples e evita dor)
+          await tx.avaliacaoTreinoComentario.deleteMany({ where: { avaliacaoTreinoId: avaliacao.id } });
+
+          const rows = comentarios
+            .map((c, idx) => ({
+              texto: String(c?.texto || "").trim(),
+              ordem: typeof c?.ordem === "number" ? c.ordem : idx,
+            }))
+            .filter((c) => c.texto.length > 0);
+
+          if (rows.length) {
+            await tx.avaliacaoTreinoComentario.createMany({
+              data: rows.map((r) => ({ avaliacaoTreinoId: avaliacao.id, texto: r.texto, ordem: r.ordem })),
+            });
+          }
+        }
+
+        const full = await tx.avaliacaoTreino.findUnique({
+          where: { id: avaliacao.id },
+          include: { comentarios: { orderBy: { ordem: "asc" } } },
+        });
+
+        return full!;
+      });
+
+      return res.json({
+        ok: true,
+        avaliacao: {
+          id: result.id,
+          submissaoTreinoId: result.submissaoTreinoId,
+          atletaId: result.atletaId,
+          treinoAgendadoId: result.treinoAgendadoId,
+          autorTipo: result.autorTipo,
+          autorId: result.autorId,
+          nota: result.nota,
+          concluiu: result.concluiu,
+          teveDificuldade: result.teveDificuldade,
+          dificuldadeMotivo: result.dificuldadeMotivo ?? null,
+          motivoNaoConcluiu: result.motivoNaoConcluiu ?? null,
+          comentarios: result.comentarios.map((c) => ({ id: c.id, texto: c.texto, ordem: c.ordem })),
+        },
+      });
+    } catch (e: any) {
+      console.error("[gerenciarAtletas.upsertAvaliacaoSubmissaoTreino]", e);
+      return res.status(500).json({ message: e?.message || "Erro ao salvar avaliação" });
+    }
+  },
+
+  addComentarioAvaliacaoSubmissaoTreino: async (req: Request, res: Response) => {
+    try {
+      const submissaoTreinoId = String(req.params.submissaoTreinoId || "").trim();
+      const texto = String(req.body?.texto || "").trim();
+      const ordemBody = req.body?.ordem;
+
+      if (!submissaoTreinoId) return res.status(400).json({ message: "submissaoTreinoId obrigatório" });
+      if (!texto) return res.status(400).json({ message: "texto obrigatório" });
+
+      // precisa existir avaliação pra anexar comentário
+      const avaliacao = await prisma.avaliacaoTreino.findFirst({
+        where: { submissaoTreinoId },
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!avaliacao) return res.status(404).json({ message: "Ainda não existe avaliação para esta submissão" });
+
+      const ordem =
+        typeof ordemBody === "number"
+          ? ordemBody
+          : await prisma.avaliacaoTreinoComentario.count({ where: { avaliacaoTreinoId: avaliacao.id } });
+
+      const c = await prisma.avaliacaoTreinoComentario.create({
+        data: { avaliacaoTreinoId: avaliacao.id, texto, ordem },
+      });
+
+      return res.json({ ok: true, comentario: { id: c.id, texto: c.texto, ordem: c.ordem, createdAt: c.createdAt } });
+    } catch (e: any) {
+      console.error("[gerenciarAtletas.addComentarioAvaliacaoSubmissaoTreino]", e);
+      return res.status(500).json({ message: e?.message || "Erro ao adicionar comentário" });
+    }
+  },
+
+  updateComentarioAvaliacaoSubmissaoTreino: async (req: Request, res: Response) => {
+    try {
+      const submissaoTreinoId = String(req.params.submissaoTreinoId || "").trim();
+      const comentarioId = String(req.params.comentarioId || "").trim();
+      const texto = String(req.body?.texto || "").trim();
+
+      if (!submissaoTreinoId) return res.status(400).json({ message: "submissaoTreinoId obrigatório" });
+      if (!comentarioId) return res.status(400).json({ message: "comentarioId obrigatório" });
+      if (!texto) return res.status(400).json({ message: "texto obrigatório" });
+
+      // garante que o comentário pertence a uma avaliação dessa submissão
+      const avaliacao = await prisma.avaliacaoTreino.findFirst({
+        where: { submissaoTreinoId },
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!avaliacao) return res.status(404).json({ message: "Avaliação não encontrada" });
+
+      const existente = await prisma.avaliacaoTreinoComentario.findFirst({
+        where: { id: comentarioId, avaliacaoTreinoId: avaliacao.id },
+        select: { id: true },
+      });
+      if (!existente) return res.status(404).json({ message: "Comentário não encontrado" });
+
+      const c = await prisma.avaliacaoTreinoComentario.update({
+        where: { id: comentarioId },
+        data: { texto },
+      });
+
+      return res.json({ ok: true, comentario: { id: c.id, texto: c.texto, ordem: c.ordem, updatedAt: c.updatedAt } });
+    } catch (e: any) {
+      console.error("[gerenciarAtletas.updateComentarioAvaliacaoSubmissaoTreino]", e);
+      return res.status(500).json({ message: e?.message || "Erro ao editar comentário" });
+    }
+  },
+
+  deleteComentarioAvaliacaoSubmissaoTreino: async (req: Request, res: Response) => {
+    try {
+      const submissaoTreinoId = String(req.params.submissaoTreinoId || "").trim();
+      const comentarioId = String(req.params.comentarioId || "").trim();
+
+      if (!submissaoTreinoId) return res.status(400).json({ message: "submissaoTreinoId obrigatório" });
+      if (!comentarioId) return res.status(400).json({ message: "comentarioId obrigatório" });
+
+      const avaliacao = await prisma.avaliacaoTreino.findFirst({
+        where: { submissaoTreinoId },
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!avaliacao) return res.status(404).json({ message: "Avaliação não encontrada" });
+
+      const existente = await prisma.avaliacaoTreinoComentario.findFirst({
+        where: { id: comentarioId, avaliacaoTreinoId: avaliacao.id },
+        select: { id: true },
+      });
+      if (!existente) return res.status(404).json({ message: "Comentário não encontrado" });
+
+      await prisma.avaliacaoTreinoComentario.delete({ where: { id: comentarioId } });
+
+      return res.json({ ok: true });
+    } catch (e: any) {
+      console.error("[gerenciarAtletas.deleteComentarioAvaliacaoSubmissaoTreino]", e);
+      return res.status(500).json({ message: e?.message || "Erro ao remover comentário" });
+    }
+  },
+
+
+
 };
