@@ -1099,27 +1099,27 @@ model AtletaElenco {
 }
 
 model Evento {
-  id          String  @id @default(uuid())
-  clubeId     String?
-  escolinhaId String?
-
-  titulo         String
-  tipo           EventoTipo   @default(PENEIRA)
-  descricao      String?
-  inicio         DateTime
-  fim            DateTime?
-  local          String?
-  cidade         String?
-  estado         String?
-  pais           String?
-  endereco       String?
-  vagas          Int?
-  valorInscricao Decimal?     @db.Decimal(10, 2)
-  linkInscricao  String?
-  requisitos     String[]
-  status         EventoStatus @default(ABERTO)
-  criadoEm       DateTime     @default(now())
-  atualizadoEm   DateTime     @updatedAt
+  id              String       @id @default(uuid())
+  clubeId         String?
+  escolinhaId     String?
+  titulo          String
+  tipo            EventoTipo   @default(PENEIRA)
+  descricao       String?
+  dataEvento      DateTime
+  inscricaoInicio DateTime?
+  inscricaoFim    DateTime?
+  local           String?
+  cidade          String?
+  estado          String?
+  pais            String?
+  endereco        String?
+  vagas           Int?
+  valorInscricao  Decimal?     @db.Decimal(10, 2)
+  linkInscricao   String?
+  requisitos      String[]
+  status          EventoStatus @default(ABERTO)
+  criadoEm        DateTime     @default(now())
+  atualizadoEm    DateTime     @updatedAt
 
   clube            Clube?             @relation(fields: [clubeId], references: [id], onDelete: Cascade)
   escolinha        Escolinha?         @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)

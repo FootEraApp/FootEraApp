@@ -15,6 +15,7 @@ import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
+import { eventNames } from "process";
 
 type Props = { idDaUrl?: string };
 type UsuarioMin = {
@@ -105,6 +106,17 @@ type Turma = {
   alunosCount?: number | null;
 };
 
+type EventoItem = {
+  id: string;
+  titulo: string;
+  tipo?: string | null;
+  dataEvento?: string | null;
+  inicio?: string | null; // fallback se algum endpoint retornar "inicio"
+  cidade?: string | null;
+  estado?: string | null;
+  endereco?: string | null;
+};
+
 function SectionCard({
   title,
   children,
@@ -167,6 +179,9 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     string | undefined
   >();
 
+  const [eventos, setEventos] = useState<EventoItem[] | null>(null);
+  const [eventosLoading, setEventosLoading] = useState(false);
+
   const escolinhaId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
 
   useEffect(() => {
@@ -174,6 +189,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     setObservados(null);
     setSolicitacoes(null);
     setAtividades(null);
+    setEventos(null);
   }, [isOwn, data?.escolinha?.id, data?.usuario?.id]);
 
   useEffect(() => {
@@ -268,6 +284,10 @@ export default function PerfilEscola({ idDaUrl }: Props) {
 
     if (aba === "visao") loadAtividadesIfNeeded();
 
+    if (aba === "eventos" && eventos == null && !eventosLoading) {
+      loadEventosEscolinha();
+    }
+
     if (aba === "atletas") {
       if (subAba === "vinculados" && vinculados == null) fetchVinculados();
       if (subAba === "observados" && observados == null) fetchObservados();
@@ -287,6 +307,8 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     data?.escolinha?.id,
     escolinhaId,
     atividades,
+    eventos,
+    eventosLoading
   ]);
 
   async function loadProfessores() {
@@ -312,6 +334,57 @@ export default function PerfilEscola({ idDaUrl }: Props) {
       setProfessores([]);
     } finally {
       setProfessoresLoading(false);
+    }
+  }
+
+    async function loadEventosEscolinha() {
+    if (!token) return;
+
+    const escolaId =
+      (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
+
+    if (!escolaId) {
+      setEventos([]);
+      return;
+    }
+
+    setEventosLoading(true);
+    try {
+      // ✅ igual ao PerfilClubes: lista por "dono"
+      const { data: resp } = await axios.get(
+        `${API.BASE_URL}/api/eventos/escolas/${escolaId}`,
+        {
+          headers,
+          params: {
+            ownerTipo: "Escolinha",
+            ownerId: escolaId,
+          },
+        }
+      );
+
+      const arr =
+        Array.isArray(resp) ? resp :
+        Array.isArray(resp?.items) ? resp.items :
+        Array.isArray(resp?.eventos) ? resp.eventos :
+        [];
+
+      setEventos(
+        (arr ?? []).map((e: any) => ({
+          id: String(e.id),
+          titulo: String(e.titulo ?? e.nome ?? "Evento"),
+          tipo: e.tipo ?? null,
+          dataEvento: e.dataEvento ?? e.data ?? null,
+          inicio: e.inicio ?? null,
+          cidade: e.cidade ?? null,
+          estado: e.estado ?? null,
+          endereco: e.endereco ?? null,
+        }))
+      );
+    } catch (err) {
+      console.error("Erro ao carregar eventos da escolinha:", err);
+      setEventos([]);
+    } finally {
+      setEventosLoading(false);
     }
   }
 
@@ -580,31 +653,88 @@ export default function PerfilEscola({ idDaUrl }: Props) {
       {aba === "eventos" && (
         <div className="mt-4 px-3 sm:px-4 grid gap-4">
           <SectionCard
-            title="Eventos e Peneiras"
-right={
-  <Link
-    href={`/eventos/escolas/${escolinhaIdStr}`}
-    className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
-  >
-    Ver eventos
-  </Link>
-}
+            title="Eventos"
+            right={
+              <Link
+                href={`/eventos/escolas/${escolinhaIdStr}`}
+                className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
+              >
+                Ver todos
+              </Link>
+            }
           >
             <p className="text-sm text-green-900/80 mt-1">
-              Crie e gerencie seus eventos, peneiras, amistosos e avaliações
-              para atletas.
+              Crie e gerencie seus eventos, peneiras, amistosos e avaliações.
             </p>
 
-{isOwn && (
-  <div className="mt-4">
-    <Link
-      href={`/eventos/escolas/${escolinhaIdStr}/novo`}
-      className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-3 sm:px-4 py-2"
-    >
-      <span>+</span> Criar novo evento
-    </Link>
-  </div>
-)}
+            {isOwn && (
+              <div className="mt-4">
+                <Link
+                  href={`/eventos/escolas/${escolinhaIdStr}/novo`}
+                  className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 text-green-900 font-semibold px-3 sm:px-4 py-2"
+                >
+                  <span>+</span> Criar novo evento
+                </Link>
+              </div>
+            )}
+
+            <div className="mt-5">
+              {eventosLoading ? (
+                <div className="text-sm text-green-900/70">Carregando eventos…</div>
+              ) : eventos && eventos.length > 0 ? (
+                <ul className="grid grid-cols-1 gap-3">
+                  {eventos
+                    .slice()
+                    .sort((a, b) => {
+                      const da = new Date(a.dataEvento || a.inicio || 0).getTime();
+                      const db = new Date(b.dataEvento || b.inicio || 0).getTime();
+                      return db - da;
+                    })
+                    .slice(0, 8)
+                    .map((e) => {
+                      const dt = e.dataEvento || e.inicio || "";
+                      const when = dt ? new Date(dt).toLocaleString() : "Data não informada";
+                      const where = [e.endereco, e.cidade, e.estado].filter(Boolean).join(" • ");
+
+                      return (
+                        <li
+                          key={e.id}
+                          className="flex items-center gap-3 rounded-xl border border-green-100 p-3 hover:bg-green-50"
+                        >
+                          <CalendarClock className="w-5 h-5 text-green-700" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-green-900 truncate">
+                              {e.titulo}
+                            </div>
+                            <div className="text-xs text-green-900/70">
+                              {when}
+                              {where ? ` • ${where}` : ""}
+                            </div>
+                          </div>
+
+                          <Link
+                            href={`/eventos/${e.id}`}
+                            className="text-sm text-green-800 inline-flex items-center gap-1"
+                          >
+                            Abrir <ChevronRight className="w-4 h-4" />
+                          </Link>
+
+                          {isOwn && (
+                            <Link
+                              href={`/eventos/convocar?eventoId=${e.id}&returnTo=/perfil/escola`}
+                              className="ml-2 text-xs px-2 py-1 rounded-md border border-green-200 text-green-900"
+                            >
+                              Convocar
+                            </Link>
+                          )}
+                        </li>
+                      );
+                    })}
+                </ul>
+              ) : (
+                <EmptyState text="Nenhum evento cadastrado ainda." />
+              )}
+            </div>
           </SectionCard>
         </div>
       )}
