@@ -209,6 +209,7 @@ export default function TreinosInstrutores({
   const [abaProfessor, setAbaProfessor] = useState<"avaliar" | "criar" | "sessoes">("avaliar");
   const [meuNome, setMeuNome] = useState<string>("");
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
+  const [profNomeById, setProfNomeById] = useState<Record<string, string>>({});
   const [submissoesPendentes, setSubmissoesPendentes] = useState<
     SubmissaoParaValidacao[]
   >([]);
@@ -282,6 +283,41 @@ export default function TreinosInstrutores({
       if (e.id && v) map[String(e.id)] = String(v);
     }
     setVideoByExId(map);
+  })();
+}, []);
+
+useEffect(() => {
+  const token = getToken();
+  if (!token) return;
+
+  (async () => {
+    try {
+      const res = await fetch(`${API.BASE_URL}/api/professores`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+
+      const data = await res.json().catch(() => ({}));
+      const list = Array.isArray(data) ? data : data.items ?? data.data ?? [];
+
+      const map: Record<string, string> = {};
+      for (const p of list) {
+        const id = String(p?.id ?? "");
+        if (!id) continue;
+
+        const nome =
+          p?.usuario?.nome ||
+          p?.nome ||
+          p?.usuario?.nomeCompleto ||
+          "";
+
+        if (nome) map[id] = String(nome).trim();
+      }
+
+      setProfNomeById(map);
+    } catch (e) {
+      console.warn("[treinos] falha ao carregar /api/professores", e);
+    }
   })();
 }, []);
 
@@ -907,6 +943,7 @@ async function salvarProgressoSessao(sessaoId: string) {
       const criadorNomePrincipal =
         tr?.professor?.usuario?.nome ||
         tr?.professor?.nome ||
+        (tr?.professorId ? profNomeById[String(tr.professorId)] : undefined) ||
         tr?.criador?.nome ||
         tr?.criadorNome ||
         tr?.clube?.nome ||
@@ -945,13 +982,31 @@ async function salvarProgressoSessao(sessaoId: string) {
         ),
       );
 
+      const nomesFromIds = professoresIds
+        .map((id) => profNomeById[String(id)])
+        .map((x) => String(x || "").trim())
+        .filter(Boolean);
+
       const colaboradoresNomes: string[] = Array.from(
         new Set(
-          (Array.isArray(colaboradoresRaw) ? colaboradoresRaw : [])
-            .map((p: any) => p?.usuario?.nome ?? p?.nome ?? p?.professor?.usuario?.nome ?? p?.professor?.nome ?? "")
-            .map((x: any) => String(x || "").trim())
-            .filter(Boolean)
-        )
+          [
+            ...(Array.isArray(colaboradoresRaw) ? colaboradoresRaw : [])
+              .map((p: any) =>
+                p?.usuario?.nome ??
+                p?.nome ??
+                p?.professor?.usuario?.nome ??
+                p?.professor?.nome ??
+                "",
+              )
+              .map((x: any) => String(x || "").trim())
+              .filter(Boolean),
+
+            // ✅ fallback quando só vem ID
+            ...nomesFromIds,
+          ]
+            .map((x) => String(x || "").trim())
+            .filter(Boolean),
+        ),
       );
 
       const meuTipoUsuarioId = String(usuario?.tipoUsuarioId ?? "");
@@ -1022,7 +1077,7 @@ async function salvarProgressoSessao(sessaoId: string) {
 
   run();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [usuario?.tipoUsuarioId, tipo, meuNome]);
+}, [usuario?.tipoUsuarioId, tipo, meuNome, profNomeById]);
 
   useEffect(() => {
     if (abaProfessor === "sessoes") {
