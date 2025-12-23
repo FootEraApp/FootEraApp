@@ -57,25 +57,25 @@ export default function PaginaConvocarEvento() {
         if (!token) throw new Error("Sem token.");
         if (!tipoUsuarioId || !tipoUsuario) throw new Error("Sem tipoUsuarioId/tipoUsuario.");
 
-        await axios.post(
-          `${API.BASE_URL}/api/eventos/${ev.id}/convocacoes`,
-          {
-            turmaId,
-            nome: nome || `Convocação - ${ev.titulo}`,
-            formacao,
-            escala,
-            reservasIds,
-            tipoUsuario,
-            tipoUsuarioId,
-            metaEvento: {
-              titulo: ev.titulo,
-              tipo: ev.tipo,
-              inicio: ev.inicio,
-              local: where,
-            },
+        await axios.put(
+        `${API.BASE_URL}/api/eventos/${eventoId}/convocacao`,
+        {
+          turmaId,
+          nome: nome || `Convocação - ${ev.titulo}`,
+          formacao,
+          escala,
+          reservasIds,
+          tipoUsuario,
+          tipoUsuarioId,
+          metaEvento: {
+            titulo: ev.titulo,
+            tipo: ev.tipo,
+            inicio: ev.inicio,
+            local: where,
           },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
         alert(
           `Convocação enviada!\n\n` +
