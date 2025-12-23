@@ -1,3 +1,4 @@
+// client/src/components/perfil/PerfilProfessor
 import { useEffect, useMemo, useState, useCallback, ReactNode} from "react";
 import axios from "axios";
 import { CalendarClock, Activity, PlusCircle, ChevronRight, Trophy } from "lucide-react";
@@ -182,6 +183,14 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   const isOwn = !idDaUrl || idDaUrl === usuarioIdStorage;
   const targetId = isOwn ? (tipoUsuarioIdStorage || "me") : (idDaUrl as string);
 
+  useEffect(() => {
+    setVinculados(null);
+    setObservados(null);
+    setSolicitacoes(null);
+    setTreinosCriados(null);
+    setAtividades(null);
+  }, [targetId]);
+
   const canEdit = useMemo(() => {
     const tipoLocal = (localStorage.getItem("tipoUsuario") ?? sessionStorage.getItem("tipoUsuario") ?? "").toLowerCase();
     return isOwn || tipoLocal === "admin";
@@ -359,8 +368,8 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
       if (vinculados == null)     fetchVinculados();
     }
     if (aba === "atletas") {
-      if (subAba === "vinculados") fetchVinculados();
-      if (subAba === "observados") fetchObservados();
+      if (subAba === "vinculados" && vinculados == null) fetchVinculados();
+      if (subAba === "observados" && observados == null) fetchObservados();
     }
 
     return () => { cancel.v = true; };
