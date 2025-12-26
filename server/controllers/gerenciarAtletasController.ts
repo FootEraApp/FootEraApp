@@ -1038,4 +1038,72 @@ export const gerenciarAtletasController = {
 
 
 
+agendadosAtleta: async (req: Request, res: Response) => {
+  try {
+    const atletaId = String(req.params.atletaId || "").trim();
+    if (!atletaId) return res.status(400).json({ message: "atletaId obrigatório" });
+
+    // filtros opcionais
+    const apenasFuturos = String(req.query.apenasFuturos || "") === "1";
+    const monthISO = String(req.query.month || "").trim(); // ex: "2025-12" (opcional)
+
+    let dateFilter: any = undefined;
+
+    // Se vier month=YYYY-MM, filtra o mês inteiro (bom pro calendário)
+    if (monthISO && /^\d{4}-\d{2}$/.test(monthISO)) {
+      const [y, m] = monthISO.split("-").map(Number);
+      const start = new Date(y, (m - 1), 1, 0, 0, 0, 0);
+      const end = new Date(y, (m), 1, 0, 0, 0, 0);
+      dateFilter = { gte: start, lt: end };
+    }
+
+    // Se apenasFuturos=1, filtra a partir de hoje (meia noite)
+    if (apenasFuturos) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      dateFilter = dateFilter
+        ? { ...dateFilter, gte: today }
+        : { gte: today };
+    }
+
+    const agendados = await prisma.treinoAgendado.findMany({
+      where: {
+        atletaId,
+        ...(dateFilter ? { dataTreino: dateFilter } : {}),
+      },
+      include: {
+        treinoProgramado: { select: { id: true, nome: true } },
+      },
+      orderBy: { dataTreino: "asc" },
+    });
+
+    // Formato “estável” pro frontend (seu normalizeAgendadosPayload aceita isso de boa)
+    const items = agendados.map((t: any) => ({
+      id: t.id,
+      titulo: t.titulo ?? null,
+      dataTreino: t.dataTreino ?? null,
+      dataExpiracao: t.dataExpiracao ?? null,
+      treinoProgramadoId: t.treinoProgramadoId ?? null,
+      treinoProgramado: t.treinoProgramado
+        ? { id: t.treinoProgramado.id, nome: t.treinoProgramado.nome }
+        : null,
+
+      // campos opcionais (se existirem no teu schema)
+      meuStatus: t.meuStatus ?? t.statusExecucao ?? t.execucaoStatus ?? t.status ?? null,
+      status: t.status ?? null,
+      execucaoStatus: t.execucaoStatus ?? t.statusExecucao ?? null,
+
+      submissaoTreinoId: t.submissaoTreinoId ?? null,
+      submissaoFeita: !!t.submissaoTreinoId,
+    }));
+
+    return res.json({ items });
+  } catch (e: any) {
+    console.error("[gerenciarAtletas.agendadosAtleta]", e);
+    return res.status(500).json({ message: e?.message || "Erro ao listar agendados do atleta" });
+  }
+},
+
+
+
 };
