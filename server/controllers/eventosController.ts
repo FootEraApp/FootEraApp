@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, EventoStatus } from "@prisma/client";
 import dayjs from "dayjs";
 import jwt from "jsonwebtoken";
 
@@ -152,7 +152,7 @@ export async function listarPublicos(req: Request & { user?: any }, res: Respons
         escolinha: true,
         inscricoes: true,
       },
-      orderBy: { inicio: "asc" },
+      orderBy: { dataEvento: "asc" },
     });
 
     const userId = req.user?.id;
@@ -181,7 +181,7 @@ export async function listarDoClube(req: Request, res: Response) {
 
   const eventos = await prisma.evento.findMany({
     where,
-    orderBy: { inicio: "asc" }, 
+    orderBy: { dataEvento: "asc" }, 
   });
 
   const items = eventos.map((ev) => ({
@@ -204,7 +204,7 @@ export async function listarDaEscolinha(req: Request, res: Response) {
 
     const eventos = await prisma.evento.findMany({
       where: { escolinhaId },
-      orderBy: { inicio: "asc" }, 
+      orderBy: { dataEvento: "asc" }, 
     });
 
     return res.json(eventos);
@@ -233,10 +233,9 @@ export async function criar(req: any, res: Response) {
       titulo,
       tipo,
       status,
-      inicio,
-      fim,
-      dataInicio,
-      dataFim,
+      dataEvento,
+      inscricaoInicio,
+      inscricaoFim,
       descricao,
       cidade,
       estado,
@@ -249,26 +248,19 @@ export async function criar(req: any, res: Response) {
       requisitos,
     } = req.body;
 
-    const rawInicio = inicio || dataInicio;
-    const rawFim = fim || dataFim;
-
-    const inicioDate = parseDate(rawInicio);
-    const fimDate = parseDate(rawFim);
-
-    if (!inicioDate) {
-      return res
-        .status(400)
-        .json({ error: "Data de início (inicio/dataInicio) é obrigatória" });
+    const dataEventoDia = parseDate(dataEvento);
+    if (!dataEventoDia) {
+      return res.status(400).json({ error: "Data de evento é obrigatória" });
     }
+
+    const inscricaoInicioDate = parseDate(inscricaoInicio);
+    const inscricaoFimDate = parseDate(inscricaoFim);
 
     let requisitosArr: string[] = [];
     if (Array.isArray(requisitos)) {
       requisitosArr = requisitos.map((r: any) => String(r).trim()).filter(Boolean);
     } else if (typeof requisitos === "string" && requisitos.trim()) {
-      requisitosArr = requisitos
-        .split(",")
-        .map((r: string) => r.trim())
-        .filter(Boolean);
+      requisitosArr = requisitos.split(",").map((r: string) => r.trim()).filter(Boolean);
     }
 
     const evento = await prisma.evento.create({
@@ -278,18 +270,19 @@ export async function criar(req: any, res: Response) {
         titulo: String(titulo),
         tipo: (tipo as any) || "EVENTO",
         status: (status as any) || "ABERTO",
-        inicio: inicioDate,
-        fim: fimDate || undefined,
+        dataEvento: dataEventoDia,
+        inscricaoInicio: inscricaoInicioDate || null,
+        inscricaoFim: inscricaoFimDate || null,
         descricao: descricao || null,
         cidade: cidade || null,
         estado: estado || null,
         pais: pais || null,
         endereco: endereco || local || null,
         local: local || null,
-        vagas: vagas != null ? Number(vagas) : null,
+        vagas: vagas != null && vagas !== "" ? Number(vagas) : null,
         valorInscricao:
           valorInscricao != null && valorInscricao !== ""
-            ? (valorInscricao as any)
+            ? String(valorInscricao)
             : null,
         linkInscricao: linkInscricao || null,
         requisitos: requisitosArr,
@@ -320,8 +313,8 @@ function mapEventoToAgendaItem(ev: any) {
     tipo: (ev.tipo as any) || "EVENTO",
     tipoLabel: mapEventoTipoLabel(ev.tipo),
     titulo: ev.titulo,
-    inicio: ev.inicio,
-    fim: ev.fim,
+    inicio: ev.dataEvento,
+    fim: null,
     origem: "EVENTO" as const,
   };
 }
@@ -339,14 +332,14 @@ export async function minhaAgenda(req: any, res: Response) {
     const toDate = parseDate(to) || null;
 
     const where: any = {
-      inicio: {
+      dataEvento: {
         gte: fromDate,
       },
-      status: "ABERTO",
+      status: EventoStatus.ABERTO,
     };
 
     if (toDate) {
-      where.inicio.lte = toDate;
+      where.dataEvento.lte = toDate;
     }
 
     if (alvoId) {
@@ -363,7 +356,7 @@ export async function minhaAgenda(req: any, res: Response) {
 
     const eventos = await prisma.evento.findMany({
       where,
-      orderBy: { inicio: "asc" },
+      orderBy: { dataEvento: "asc" },
       take: 100,
     });
 
@@ -386,10 +379,10 @@ export async function eventosDoAtleta(req: any, res: Response) {
 
     const eventos = await prisma.evento.findMany({
       where: {
-        inicio: { gte: agora },
+        dataEvento: { gte: agora },
         status: "ABERTO",
       },
-      orderBy: { inicio: "asc" },
+      orderBy: { dataEvento: "asc" },
       take: 100,
     });
 
