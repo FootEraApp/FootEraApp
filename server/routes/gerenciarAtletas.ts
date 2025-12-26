@@ -11,6 +11,8 @@ router.get("/atletas/:usuarioId/pontuacao", ctrl.statsAtleta);
 router.get("/atletas/:usuarioId/detalhes", ctrl.detalhesAtleta);
 router.get("/atletas/:usuarioId/submissoes", ctrl.submissoesAtleta);
 
+router.get("/atletas/:atletaId/agendados", ctrl.agendadosAtleta);
+
 // avaliações + comentários de uma submissão de treino
 router.get("/submissoes/treino/:submissaoTreinoId/avaliacao", ctrl.getAvaliacaoSubmissaoTreino);
 router.put("/submissoes/treino/:submissaoTreinoId/avaliacao", ctrl.upsertAvaliacaoSubmissaoTreino);

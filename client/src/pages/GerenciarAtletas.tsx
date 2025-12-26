@@ -655,6 +655,16 @@ const carregarProfessores = async () => {
     };
   }, [focado?.usuarioId, focado?.id]);
 
+  async function carregarAgendadosDoAtleta(atletaId: string, mes: Date) {
+    const month = `${mes.getFullYear()}-${pad2(mes.getMonth() + 1)}`;
+    const r = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas/${atletaId}/agendados`, {
+      headers,
+      params: { month },
+    });
+    setAgendados(normalizeAgendadosPayload(r.data));
+  }
+
+
   useEffect(() => {
     if (!carreiraOpen || !focado) return;
 
@@ -665,21 +675,18 @@ const carregarProfessores = async () => {
 
     const atletaId = focado.id; // no seu /api/treinos/agendados você usa atletaId (id do Atleta)
 
-    (async () => {
-      try {
-        setLoadingCalendar(true);
-        const r = await axios.get(`${API.BASE_URL}/api/treinos/agendados`, {
-          headers,
-          params: { atletaId },
-        });
-        setAgendados(normalizeAgendadosPayload(r.data));
-      } catch (e) {
-        console.error("Erro ao carregar agendados:", e);
-        setAgendados([]);
-      } finally {
-        setLoadingCalendar(false);
-      }
-    })();
+  (async () => {
+    try {
+      setLoadingCalendar(true);
+      await carregarAgendadosDoAtleta(atletaId, cursorMonth);
+    } catch (e) {
+      console.error("Erro ao carregar agendados:", e);
+      setAgendados([]);
+    } finally {
+      setLoadingCalendar(false);
+    }
+  })();
+
 
     (async () => {
       try {
@@ -712,6 +719,23 @@ const carregarProfessores = async () => {
       }
     })();
   }, [carreiraOpen, focado?.id]);
+
+  useEffect(() => {
+    if (!carreiraOpen || !focado?.id) return;
+
+    (async () => {
+      try {
+        setLoadingCalendar(true);
+        await carregarAgendadosDoAtleta(focado.id, cursorMonth);
+      } catch (e) {
+        console.error("Erro ao recarregar agendados (troca de mês):", e);
+        setAgendados([]);
+      } finally {
+        setLoadingCalendar(false);
+      }
+    })();
+  }, [carreiraOpen, focado?.id, cursorMonth]);
+
 
   const chartData = useMemo(() => {
     const bins = [
