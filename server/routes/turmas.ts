@@ -3,7 +3,7 @@ import {
   listarTurmas,
   criarTurma,
   substituirAlunosTurma,
-  vincularProfessor,
+  setProfessoresTurma,
   listarMinhasTurmas,
   getAlunosTurma
 } from "../controllers/turmasController.js";
@@ -14,7 +14,8 @@ const router = Router();
 router.get("/:id/alunos", authenticateToken, getAlunosTurma);
 router.get("/minhas", authenticateToken, listarMinhasTurmas);
 router.post("/:id/alunos", authenticateToken, substituirAlunosTurma);
-router.put("/:id/vincular-professor", authenticateToken, vincularProfessor);
+router.put("/:id/atribuir-professor", authenticateToken, setProfessoresTurma);
+router.put("/:id/vincular-professor", authenticateToken, setProfessoresTurma);
 router.get("/", authenticateToken, listarTurmas);
 router.post("/", authenticateToken, criarTurma);
 

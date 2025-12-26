@@ -119,81 +119,6 @@ export async function getAlunosTurma(req: Request, res: Response) {
   }
 }
 
-export const setAlunosTurma = async (req: Request, res: Response) => {
-  const id = String(req.params.id);
-  try {
-    const usuarioIds: string[] = Array.isArray(req.body?.usuarioIds)
-      ? req.body.usuarioIds.map(String)
-      : [];
-
-    const turma = await prisma.turma.findUnique({ where: { id }, select: { id: true } });
-    if (!turma) return res.status(404).json({ message: "Turma não encontrada" });
-
-    for (const rel of REL_USUARIO) {
-      try {
-        await prisma.turma.update({
-          where: { id },
-          data: { [rel]: { set: usuarioIds.map((uid) => ({ id: uid })) } } as any,
-        });
-        return res.json({ ok: true, turmaId: id, total: usuarioIds.length });
-      } catch {}
-    }
-
-    const atletas = usuarioIds.length
-      ? await prisma.atleta.findMany({
-          where: { usuarioId: { in: usuarioIds } },
-          select: { id: true },
-        })
-      : [];
-    const atletaIds = atletas.map((a) => a.id);
-
-    for (const rel of REL_ATLETA) {
-      try {
-        await prisma.turma.update({
-          where: { id },
-          data: { [rel]: { set: atletaIds.map((aid) => ({ id: aid })) } } as any,
-        });
-        return res.json({ ok: true, turmaId: id, total: atletaIds.length });
-      } catch {}
-    }
-
-    const pivot = getTurmaPivot();
-    if (!pivot) {
-      return res.status(500).json({
-        message:
-          "Não foi possível salvar: nem relação direta nem pivô encontrado. Verifique o schema da Turma.",
-      });
-    }
-
-    try {
-      await prisma.$transaction([
-        pivot.deleteMany({
-          where: { turmaId: id, NOT: { usuarioId: { in: usuarioIds } } },
-        }),
-        pivot.createMany({
-          data: usuarioIds.map((uid) => ({ turmaId: id, usuarioId: uid })),
-          skipDuplicates: true,
-        }),
-      ]);
-      return res.json({ ok: true, turmaId: id, total: usuarioIds.length });
-    } catch {}
-
-    await prisma.$transaction([
-      pivot.deleteMany({
-        where: { turmaId: id, NOT: { atletaId: { in: atletaIds } } },
-      }),
-      pivot.createMany({
-        data: atletaIds.map((aid) => ({ turmaId: id, atletaId: aid })),
-        skipDuplicates: true,
-      }),
-    ]);
-    return res.json({ ok: true, turmaId: id, total: atletaIds.length });
-  } catch (e) {
-    console.error("[setAlunosTurma]", e);
-    return res.status(500).json({ message: "Erro ao salvar alunos da turma" });
-  }
-};
-
 export async function obterAlunosTurma(req: Request, res: Response) {
   const { id } = req.params;
 
@@ -223,7 +148,11 @@ export async function listarMinhasTurmas(req: AuthenticatedRequest, res: Respons
 
     const turmas = await prisma.turma.findMany({
       where: {
-        OR: [{ clubeId: tipoUsuarioId }, { escolinhaId: tipoUsuarioId }, { professorId: tipoUsuarioId }],
+        OR: [
+          { clubeId: tipoUsuarioId },
+          { escolinhaId: tipoUsuarioId },
+          { professores: { some: { professor: { usuarioId: tipoUsuarioId } } } },
+        ],
       },
       select: { id: true, nome: true },
       orderBy: { nome: "asc" },
@@ -256,29 +185,35 @@ export async function listarTurmas(req: Request, res: Response) {
     }
 
     if (professorId) {
-      where.professorId = professorId;
+      where.professores = { some: { professorId } };
     }
 
     const rows = await prisma.turma.findMany({
       where,
       include: {
-        professor: { select: { id: true, nome: true } },
+        professores: { include: { professor: { select: { id: true, nome: true } } } }, 
         _count: { select: { membros: true } },
       },
       orderBy: { createdAt: "desc" },
     });
 
-    const items = rows.map((t) => ({
+    const items = rows.map((t) => {
+    const profs = (t.professores ?? [])
+      .map((tp) => tp?.professor ?? null)
+      .filter((p): p is { id: string; nome: string } => Boolean(p?.id));
+
+    return {
       id: t.id,
       nome: t.nome,
       categoria: t.categoria,
-      professorId: t.professorId,
-      professorNome: t.professor?.nome ?? null,
+      professorIds: profs.map((p) => p.id),
+      professorNomes: profs.map((p) => p.nome),
+      professorNome: profs.map((p) => p.nome).join(", ") || null,
       alunosCount: t._count.membros,
       ownerTipo: ownerTipoRaw || null,
       ownerId: ownerIdRaw || null,
-    }));
-
+    };
+  });
     return res.json(items);
   } catch (e: any) {
     console.error("[listarTurmas] erro:", e);
@@ -307,8 +242,6 @@ export async function criarTurma(req: Request, res: Response) {
     const data: any = { nome: String(nome).trim() };
 
     if (categoria)   data.categoria = String(categoria);
-    if (professorId) data.professorId = String(professorId);
-
     if (ownerTipo === "Clube") {
       data.clubeId = String(ownerId);
     }
@@ -317,6 +250,17 @@ export async function criarTurma(req: Request, res: Response) {
     }
 
     const turma = await prisma.turma.create({ data });
+
+    const professorIds: string[] = Array.isArray(req.body?.professorIds)
+      ? req.body.professorIds.map(String).filter(Boolean)
+      : professorId ? [String(professorId)] : [];
+
+    if (professorIds.length) {
+      await prisma.turmaProfessor.createMany({
+        data: professorIds.map((pid) => ({ turmaId: turma.id, professorId: pid })),
+        skipDuplicates: true,
+      });
+    }
 
     let usuarioIdsFinal: string[] = [];
 
@@ -386,17 +330,26 @@ export async function updateTurma(req: Request, res: Response) {
   }
 }
 
-export async function setProfessorTurma(req: Request, res: Response) {
+export async function setProfessoresTurma(req: Request, res: Response) {
   try {
-    const { id } = req.params;
-    const { professorId } = req.body as { professorId: string | null };
-    const up = await prisma.turma.update({
-      where: { id },
-      data: { professorId: professorId || null },
-    });
-    res.json(up);
+    const turmaId = String(req.params.id);
+    const professorIds: string[] = Array.isArray(req.body?.professorIds)
+      ? req.body.professorIds.map(String).filter(Boolean)
+      : [];
+
+    await prisma.$transaction([
+      prisma.turmaProfessor.deleteMany({ where: { turmaId } }),
+      ...(professorIds.length
+        ? [prisma.turmaProfessor.createMany({
+            data: professorIds.map((professorId) => ({ turmaId, professorId })),
+            skipDuplicates: true,
+          })]
+        : []),
+    ]);
+
+    return res.json({ ok: true, turmaId, total: professorIds.length });
   } catch (e: any) {
-    res.status(500).json({ message: e.message || "Falha ao atribuir professor" });
+    return res.status(500).json({ message: e.message || "Falha ao atribuir professores" });
   }
 }
 
@@ -475,15 +428,4 @@ export async function substituirAlunosTurma(req: Request, res: Response) {
     removed: paraRemover.length,
     total,
   });
-}
-
-export async function vincularProfessor(req: Request, res: Response) {
-  const { id } = req.params;
-  const { professorId } = req.body || {};
-  const turma = await prisma.turma.update({
-    where: { id },
-    data: { professorId: professorId || null },
-    select: { id: true },
-  });
-  return res.json({ id: turma.id, ok: true });
 }

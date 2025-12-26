@@ -209,9 +209,8 @@ export const excluirProfessor = async (req: Request, res: Response) => {
         },
       });
 
-      await tx.turma.updateMany({
+      await tx.turmaProfessor.deleteMany({
         where: { professorId },
-        data: { professorId: null },
       });
 
       await tx.treinoAgendado.updateMany({
