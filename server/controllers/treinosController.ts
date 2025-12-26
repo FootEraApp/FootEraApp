@@ -784,18 +784,31 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
               select: { id: true },
             });
 
+            const turmaOwnerOr: Prisma.TurmaWhereInput[] = [];
+
+            if (resolved.tipo === "professor") {
+              turmaOwnerOr.push({
+                professores: {
+                  some: { professorId: resolved.id },
+                },
+              });
+            }
+
+            if (resolved.tipo === "clube") {
+              turmaOwnerOr.push({ clubeId: resolved.id });
+            }
+
+            if (resolved.tipo === "escolinha") {
+              turmaOwnerOr.push({ escolinhaId: resolved.id });
+            }
+
             const turmaOk = await prisma.turma.findFirst({
               where: {
                 id: turmaId,
-                OR: [
-                  ...(resolved.tipo === "professor" ? [{ professorId: resolved.id }] : []),
-                  ...(resolved.tipo === "clube" ? [{ clubeId: resolved.id }] : []),
-                  ...(resolved.tipo === "escolinha" ? [{ escolinhaId: resolved.id }] : []),
-                ],
+                ...(turmaOwnerOr.length ? { OR: turmaOwnerOr } : {}),
               },
               select: { id: true },
             });
-
             if (!membro || !turmaOk) {
               return res.status(403).json({
                 message: "Você não tem permissão para agendar para esta turma/atleta.",
@@ -807,14 +820,16 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
               select: { id: true },
             });
 
+            const elencoOwnerOr: Prisma.ElencoWhereInput[] = [];
+
+            if (resolved.tipo === "professor") elencoOwnerOr.push({ professorId: resolved.id });
+            if (resolved.tipo === "clube") elencoOwnerOr.push({ clubeId: resolved.id });
+            if (resolved.tipo === "escolinha") elencoOwnerOr.push({ escolinhaId: resolved.id });
+
             const elencoOk = await prisma.elenco.findFirst({
               where: {
                 id: elencoId,
-                OR: [
-                  ...(resolved.tipo === "professor" ? [{ professorId: resolved.id }] : []),
-                  ...(resolved.tipo === "clube" ? [{ clubeId: resolved.id }] : []),
-                  ...(resolved.tipo === "escolinha" ? [{ escolinhaId: resolved.id }] : []),
-                ],
+                ...(elencoOwnerOr.length ? { OR: elencoOwnerOr } : {}),
               },
               select: { id: true },
             });
