@@ -15,7 +15,6 @@ import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
-import { eventNames } from "process";
 
 type Props = { idDaUrl?: string };
 type UsuarioMin = {
@@ -101,8 +100,11 @@ type Turma = {
   nome: string;
   ownerTipo?: "Clube" | "Escolinha" | null;
   ownerId?: string | null;
-  professorId?: string | null;
-  professorNome?: string | null;
+
+  professorIds?: string[];        // ✅ vários
+  professorNomes?: string[];      // ✅ vários
+  professorNome?: string | null;  // opcional: join pra exibir
+
   alunosCount?: number | null;
 };
 
@@ -403,8 +405,12 @@ export default function PerfilEscola({ idDaUrl }: Props) {
           nome: String(t.nome ?? t.titulo ?? "Turma"),
           ownerTipo: t.ownerTipo ?? "Escolinha",
           ownerId: t.ownerId ?? escolinhaId,
-          professorId: t.professorId ?? t.responsavelId ?? null,
-          professorNome: t.professor?.nome ?? t.professorNome ?? null,
+          professorIds: Array.isArray(t.professorIds) ? t.professorIds.map(String) : [],
+          professorNomes: Array.isArray(t.professorNomes) ? t.professorNomes : [],
+          professorNome:
+            t.professorNome ??
+            (Array.isArray(t.professorNomes) ? t.professorNomes.join(", ") : null) ??
+            null,
           alunosCount: t.alunosCount ?? t.qtdAlunos ?? null,
         }))
       );
@@ -1003,7 +1009,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                 className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
               >
                 <PlusCircle className="w-4 h-4" />
-                Adicionar turma
+                Gerenciar professores
               </button>
             }
           >
@@ -1109,9 +1115,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                       </div>
                       <button
                         onClick={() => {
-                          setProfessorSelecionado(
-                            t.professorId ?? undefined
-                          );
+                          setProfessorSelecionado(t.professorIds?.[0]);
                           setTurmasOpen(true);
                         }}
                         className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
@@ -1123,27 +1127,28 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                     {professores.length > 0 && (
                       <div className="flex items-center gap-2">
                         <select
+                          multiple
                           className="border rounded px-3 py-2 text-sm"
-                          value={t.professorId ?? ""}
+                          value={t.professorIds ?? []}
                           onChange={async (e) => {
-                            const newProfId = e.target.value || null;
+                            const selectedIds = Array.from(e.target.selectedOptions)
+                              .map((o) => o.value)
+                              .filter(Boolean);
+
                             try {
                               await axios.put(
-                                `${API.BASE_URL}/api/turmas/${t.id}/vincular-professor`,
-                                { professorId: newProfId },
+                                `${API.BASE_URL}/api/turmas/${t.id}/atribuir-professores`,
+                                { professorIds: selectedIds },  // ✅ array
                                 { headers }
                               );
                               await loadTurmas();
-                              alert("Professor atualizado na turma!");
+                              alert("Professores atualizados na turma!");
                             } catch (err) {
                               console.error(err);
-                              alert(
-                                "Não foi possível atualizar o professor."
-                              );
+                              alert("Não foi possível atualizar os professores.");
                             }
                           }}
                         >
-                          <option value="">— Sem professor —</option>
                           {professores.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.nome}

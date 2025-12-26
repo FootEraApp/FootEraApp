@@ -63,9 +63,13 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
     if (!turma) return res.status(404).json({ error: "Turma não encontrada." });
 
     const turmaPertenceAoDono =
-      (donoProfessorId && turma.professorId === donoProfessorId) ||
       (donoClubeId && turma.clubeId === donoClubeId) ||
-      (donoEscolinhaId && turma.escolinhaId === donoEscolinhaId);
+      (donoEscolinhaId && turma.escolinhaId === donoEscolinhaId) ||
+      (donoProfessorId &&
+        (await prisma.turmaProfessor.findFirst({
+          where: { turmaId: turma.id, professorId: donoProfessorId },
+          select: { id: true },
+        })) != null);
 
     if (!turmaPertenceAoDono) {
       return res.status(403).json({
@@ -412,7 +416,6 @@ export async function iniciarSessao(
         .filter((a): a is NonNullable<typeof a> => !!a) || [];
 
     const presentesSet = new Set(presentes);
-
     const presencasData = atletasTurma.map((at) => ({
       atletaId: at.id,
       presente: presentesSet.has(at.id),
@@ -742,7 +745,7 @@ export async function obterSessao(req: AuthenticatedRequest, res: Response) {
       where: { id },
       include: {
         treino: { select: { id: true, nome: true, pontuacao: true, duracao: true } },
-        turma: { select: { id: true, nome: true, professorId: true, clubeId: true, escolinhaId: true } },
+        turma: { select: { id: true, nome: true, clubeId: true, escolinhaId: true } },
         presencas: {
           include: {
             atleta: {
