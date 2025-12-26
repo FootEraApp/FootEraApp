@@ -90,6 +90,17 @@ type Turma = {
   alunosCount?: number | null;
 };
 
+type EventoPreview = {
+  id: string;
+  titulo: string;
+  tipo?: string | null;
+  status?: string | null;
+  dataEvento: string; // vem como ISO
+  cidade?: string | null;
+  estado?: string | null;
+  descricao?: string | null;
+};
+
 function EmptyState({ text }: { text: string }) {
   return (
     <div className="text-center text-green-900/70 py-8">
@@ -152,6 +163,9 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
   const [professorSelecionado, setProfessorSelecionado] = useState<
     string | undefined
   >();
+  const [eventosPreview, setEventosPreview] = useState<EventoPreview[]>([]);
+  const [eventosLoading, setEventosLoading] = useState(false);
+  const [eventosErro, setEventosErro] = useState<string>("");
 
   const clubeId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
   const entidadeUsuarioId = isOwn
@@ -346,6 +360,44 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     }
   }
 
+  async function loadEventosPreview() {
+    const id = clubeId; // já existe no seu componente
+    if (!token || !id) return;
+
+    setEventosErro("");
+    setEventosLoading(true);
+    try {
+      const { data } = await axios.get(
+        `${API.BASE_URL}/api/eventos/clubes/${id}`,
+        { headers }
+      );
+
+      const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+      const mapped: EventoPreview[] = (arr ?? []).map((ev: any) => ({
+        id: String(ev.id),
+        titulo: String(ev.titulo ?? "Evento"),
+        tipo: ev.tipo ?? null,
+        status: ev.status ?? null,
+        dataEvento: String(ev.dataEvento ?? ""),
+        cidade: ev.cidade ?? null,
+        estado: ev.estado ?? null,
+        descricao: ev.descricao ?? null,
+      }));
+
+      // mostra só um "pouco" no perfil (3 primeiros)
+      setEventosPreview(mapped.slice(0, 3));
+    } catch (e: any) {
+      setEventosPreview([]);
+      setEventosErro(
+        e?.response?.data?.error ||
+          e?.response?.data?.message ||
+          "Não foi possível carregar os eventos agora."
+      );
+    } finally {
+      setEventosLoading(false);
+    }
+  }
+
   async function loadTurmas() {
     if (!token || !clubeId) return;
     setTurmasLoading(true);
@@ -380,6 +432,13 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, canEdit, clubeId, token]);
+
+  useEffect(() => {
+    if (aba === "eventos") {
+      loadEventosPreview();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, token, clubeId]);
 
   async function salvarObservado(atletaId: string) {
     if (!token || !clubeId) return;
@@ -658,9 +717,8 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
         <section className="mt-4 grid gap-4">
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-green-900">
-                Eventos e Peneiras
-              </h3>
+              <h3 className="font-semibold text-green-900">Eventos</h3>
+
               <Link
                 href={`/eventos/clubes/${clubeIdStr}`}
                 className="text-sm px-3 py-1 rounded-lg bg-green-100 text-green-900"
@@ -669,9 +727,72 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
               </Link>
             </div>
 
+            {/* ✅ agora é preview, não texto fixo */}
             <p className="text-sm text-green-900/80 mt-1">
-              Crie e gerencie seus eventos, peneiras e amistosos.
+              Toque em um evento para ver todos os detalhes e gerenciar inscrições.
             </p>
+
+            <div className="mt-3">
+              {eventosLoading ? (
+                <div className="text-sm text-green-900/70">Carregando eventos…</div>
+              ) : eventosErro ? (
+                <div className="text-sm text-red-600">{eventosErro}</div>
+              ) : eventosPreview.length ? (
+                <div className="grid gap-2">
+                  {eventosPreview.map((ev) => {
+                    const when = ev.dataEvento
+                      ? new Date(ev.dataEvento).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "";
+
+                    const where = [ev.cidade, ev.estado].filter(Boolean).join(" - ");
+
+                    return (
+                      <Link
+                        key={ev.id}
+                        href={`/eventos/clubes/${clubeIdStr}`}
+                        className="block rounded-xl border border-green-100 bg-white/70 p-3 hover:bg-white"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-green-900 truncate">
+                              {ev.titulo}
+                            </div>
+                            <div className="text-xs text-green-900/70">
+                              {[ev.tipo, when, where].filter(Boolean).join(" • ")}
+                            </div>
+
+                            {ev.descricao?.trim() ? (
+                              <div className="text-xs text-green-900/80 mt-2 line-clamp-2">
+                                {ev.descricao}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {ev.status ? (
+                              <span className="text-[11px] px-2 py-1 rounded-full bg-green-50 text-green-900 border border-green-100">
+                                {String(ev.status).toUpperCase()}
+                              </span>
+                            ) : null}
+                            <ChevronRight className="w-4 h-4 text-green-800" />
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-sm text-green-900/70">
+                  Nenhum evento criado ainda.
+                </div>
+              )}
+            </div>
 
             {isOwn && (
               <div className="mt-4">

@@ -11,8 +11,9 @@ type EventoForm = {
   titulo: string;
   tipo: EventoTipo;
   descricao: string;
-  inicio: string;         
-  fim: string;            
+  dataEvento: string;          // ✅ obrigatório
+  inscricaoInicio: string;     // ➕ opcional
+  inscricaoFim: string;             
   local: string;
   cidade: string;
   estado: string;
@@ -28,12 +29,13 @@ type EventoForm = {
 export default function PaginaNovoEventoClube({ clubeId }: Props) {
   const [, setLocation] = useLocation();
 
-  const [form, setForm] = useState<EventoForm>({
+    const [form, setForm] = useState<EventoForm>({
     titulo: "",
     tipo: "PENEIRA",
     descricao: "",
-    inicio: "",
-    fim: "",
+    dataEvento: "",
+    inscricaoInicio: "",
+    inscricaoFim: "",
     local: "",
     cidade: "",
     estado: "",
@@ -45,6 +47,7 @@ export default function PaginaNovoEventoClube({ clubeId }: Props) {
     requisitos: "",
     status: "ABERTO",
   });
+
   const [salvando, setSalvando] = useState<boolean>(false);
   const [erro, setErro] = useState<string>("");
 
@@ -54,8 +57,8 @@ export default function PaginaNovoEventoClube({ clubeId }: Props) {
 
   async function submit() {
     setErro("");
-    if (!form.titulo || !form.inicio) {
-      setErro("Título e início são obrigatórios.");
+    if (!form.titulo || !form.dataEvento) {
+      setErro("Título e data do evento são obrigatórios.");
       return;
     }
 
@@ -63,13 +66,17 @@ export default function PaginaNovoEventoClube({ clubeId }: Props) {
       setSalvando(true);
 
       const body = {
-        ...form,
-        vagas: form.vagas ? Number(form.vagas) : null,
-        valorInscricao: form.valorInscricao ? Number(form.valorInscricao) : null,
-        requisitos: form.requisitos
-          ? form.requisitos.split(",").map((s) => s.trim()).filter(Boolean)
-          : [],
-      };
+      ...form,
+      // manda null se vazio (pra combinar com DateTime?)
+      inscricaoInicio: form.inscricaoInicio ? form.inscricaoInicio : null,
+      inscricaoFim: form.inscricaoFim ? form.inscricaoFim : null,
+
+      vagas: form.vagas ? Number(form.vagas) : null,
+      valorInscricao: form.valorInscricao ? Number(form.valorInscricao) : null,
+      requisitos: form.requisitos
+        ? form.requisitos.split(",").map((s) => s.trim()).filter(Boolean)
+        : [],
+    };
 
       const token =
         Storage?.token ||
@@ -95,7 +102,7 @@ export default function PaginaNovoEventoClube({ clubeId }: Props) {
   return (
     <div className="min-h-screen bg-cream text-green-900">
       <div className="bg-green-900 p-4 text-white text-center text-xl font-bold">
-        Novo Evento / Peneira
+        Novo Evento 
       </div>
 
       <div className="p-4 max-w-xl mx-auto">
@@ -128,15 +135,37 @@ export default function PaginaNovoEventoClube({ clubeId }: Props) {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm">Início*</label>
-            <input type="datetime-local" className="w-full border rounded px-3 py-2" value={form.inicio} onChange={(e)=>set("inicio", e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm">Fim</label>
-            <input type="datetime-local" className="w-full border rounded px-3 py-2" value={form.fim} onChange={(e)=>set("fim", e.target.value)} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm">Início das inscrições</label>
+              <input
+                type="datetime-local"
+                className="w-full border rounded px-3 py-2"
+                value={form.inscricaoInicio}
+                onChange={(e) => set("inscricaoInicio", e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm">Fim das inscrições</label>
+              <input
+                type="datetime-local"
+                className="w-full border rounded px-3 py-2"
+                value={form.inscricaoFim}
+                onChange={(e) => set("inscricaoFim", e.target.value)}
+              />
+            </div>
           </div>
 
+<div>
+            <label className="block text-sm">Data do evento*</label>
+            <input
+              type="datetime-local"
+              className="w-full border rounded px-3 py-2"
+              value={form.dataEvento}
+              onChange={(e) => set("dataEvento", e.target.value)}
+            />
+          </div>
           <div>
             <label className="block text-sm">Descrição</label>
             <textarea className="w-full border rounded px-3 py-2" rows={4} value={form.descricao} onChange={(e)=>set("descricao", e.target.value)} />
