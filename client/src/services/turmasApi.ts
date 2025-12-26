@@ -8,7 +8,9 @@ export type TurmaDTO = {
   categoria?: string | null;
   descricao?: string | null;
   ativo: boolean;
-  professor?: { id: string; nome: string; usuarioId?: string | null; codigo?: string | null; cref?: string | null } | null;
+  professorIds?: string[];
+  professorNomes?: string[];
+  professorNome?: string | null;
   escolinha?: { id: string; nome: string } | null;
   clube?: { id: string; nome: string } | null;
 };
@@ -21,13 +23,27 @@ const headers = () => {
 };
 
 export async function getTurmasByOwner(ownerTipo: "Escolinha" | "Clube", ownerId: string) {
-  const { data } = await axios.get(`${API.BASE_URL}/api/turmas`, { params: { ownerTipo, ownerId }, headers: headers() });
-  return (data?.items ?? []) as TurmaDTO[];
+  const { data } = await axios.get(`${API.BASE_URL}/api/turmas`, {
+    params: { ownerTipo, ownerId },
+    headers: headers(),
+  });
+
+  const arr = Array.isArray(data) ? data : (data?.items ?? data?.data ?? []);
+  return (arr ?? []) as TurmaDTO[];
 }
 
-export async function getTurmasByProfessor(professorId: string) {
-  const { data } = await axios.get(`${API.BASE_URL}/api/turmas`, { params: { professorId }, headers: headers() });
-  return (data?.items ?? []) as TurmaDTO[];
+export async function getTurmasByProfessor(params: {
+  professorId: string;
+  ownerTipo: "Escolinha" | "Clube";
+  ownerId: string;
+}) {
+  const { data } = await axios.get(`${API.BASE_URL}/api/turmas`, {
+    params: { ownerTipo: params.ownerTipo, ownerId: params.ownerId },
+    headers: headers(),
+  });
+
+  const items = (data?.items ?? data ?? []) as TurmaDTO[];
+  return items.filter((t) => (t.professorIds ?? []).includes(String(params.professorId)));
 }
 
 export async function getProfessoresDisponiveis(ownerTipo: "Escolinha" | "Clube", ownerId: string) {
@@ -35,8 +51,17 @@ export async function getProfessoresDisponiveis(ownerTipo: "Escolinha" | "Clube"
   return (data?.items ?? []) as ProfessorMin[];
 }
 
-export async function createTurma(payload: { nome: string; categoria?: string; descricao?: string; ownerTipo: "Escolinha"|"Clube"; ownerId: string; professorId?: string }) {
-  const { data } = await axios.post(`${API.BASE_URL}/api/turmas`, payload, { headers: headers() });
+export async function createTurma(payload: {
+  nome: string;
+  categoria?: string;
+  descricao?: string;
+  ownerTipo: "Escolinha" | "Clube";
+  ownerId: string;
+  professorIds?: string[];
+}) {
+  const { data } = await axios.post(`${API.BASE_URL}/api/turmas`, payload, {
+    headers: headers(),
+  });
   return data as TurmaDTO;
 }
 
@@ -45,8 +70,12 @@ export async function updateTurma(id: string, payload: Partial<{ nome: string; c
   return data as TurmaDTO;
 }
 
-export async function setProfessor(id: string, professorId: string | null) {
-  const { data } = await axios.put(`${API.BASE_URL}/api/turmas/${id}/atribuir-professor`, { professorId }, { headers: headers() });
+export async function setProfessores(id: string, professorIds: string[]) {
+  const { data } = await axios.put(
+    `${API.BASE_URL}/api/turmas/${id}/professores`,
+    { professorIds },
+    { headers: headers() }
+  );
   return data as TurmaDTO;
 }
 

@@ -851,38 +851,6 @@ async function main() {
   });
 
   await prisma.usuario.upsert({
-    where: { nomeDeUsuario: 'prof_free' },
-    update: {
-      senhaHash: H['prof_free'],
-      tipo: TipoUsuario.Professor,
-      verified: true,
-    },
-    create: {
-      nome: 'Professor Free',
-      nomeDeUsuario: 'prof_free',
-      email: 'prof_free@example.com',
-      senhaHash: H['prof_free'],
-      tipo: TipoUsuario.Professor,
-      cidade: 'Vitória',
-      estado: 'ES',
-      pais: 'Brasil',
-      foto: '/assets/usuarios/teste-prof-free.png',
-      professor: {
-        create: {
-          codigo: 'PROF_FREE',
-          cref: 'ES000001',
-          areaFormacao: 'Educação Física',
-          escola: 'Escola Estrelas',
-          qualificacoes: ['Professor de teste (FREE)'],
-          certificacoes: ['Licença C'],
-          fotoUrl: '/assets/usuarios/teste-prof-free.png',
-          nome: 'Professor Free',
-        },
-      },
-    },
-  });
-
-  await prisma.usuario.upsert({
     where: { nomeDeUsuario: 'prof_pro' },
     update: {
       senhaHash: H['prof_pro'],
@@ -914,6 +882,19 @@ async function main() {
     },
   });
 
+  if (clube1Db) {
+    await prisma.professor.updateMany({
+      where: {
+        codigo: { in: ["PROF_FOOTERA", "PROF_FREE", "PROF002", "PROF_PRO"] },
+      },
+      data: {
+        clubeId: clube1Db.id,
+        // se você quiser que eles fiquem SÓ do clube (recomendado):
+        escolinhaId: null,
+      },
+    });
+  }
+  
   await prisma.usuario.upsert({
     where: { nomeDeUsuario: 'scout_free' },
     update: {

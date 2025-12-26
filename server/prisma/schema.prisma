@@ -132,7 +132,7 @@ model Professor {
 
   escolinha           Escolinha?                  @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   clube               Clube?                      @relation(fields: [clubeId], references: [id], onDelete: SetNull)
-  Turma               Turma[]
+  turmasParticipando  TurmaProfessor[]
   atletas             Atleta[]
   TreinoSalvo         TreinoSalvo[]
   TreinoSalvoReuso    TreinoSalvoReuso[]
@@ -1377,10 +1377,8 @@ model Turma {
   clubeId String?
   clube   Clube?  @relation(fields: [clubeId], references: [id], onDelete: SetNull)
 
-  professorId String?
-  professor   Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
-
-  membros TurmaUsuario[]
+  professores TurmaProfessor[]
+  membros     TurmaUsuario[]
 
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
@@ -1388,6 +1386,22 @@ model Turma {
   SessaoTreinoTurma SessaoTreinoTurma[]
   EventoConvocacao  EventoConvocacao[]
   EventoConvocado   EventoConvocado[]
+}
+
+model TurmaProfessor {
+  id          String @id @default(uuid())
+  turmaId     String
+  professorId String
+
+  papel     String?
+  createdAt DateTime @default(now())
+
+  turma     Turma     @relation(fields: [turmaId], references: [id], onDelete: Cascade)
+  professor Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+
+  @@unique([turmaId, professorId])
+  @@index([turmaId])
+  @@index([professorId])
 }
 
 model TurmaUsuario {

@@ -83,11 +83,11 @@ type ProfessorItem = {
 type Turma = {
   id: string;
   nome: string;
-  ownerTipo?: "Clube" | "Escolinha" | null;
-  ownerId?: string | null;
-  professorId?: string | null;
-  professorNome?: string | null;
-  alunosCount?: number | null;
+  categoria?: string | null;
+  professorIds?: string[];
+  professorNomes?: string[];
+  professorNome?: string | null; // pode manter pra exibir join
+  alunosCount?: number;
 };
 
 type EventoPreview = {
@@ -413,8 +413,12 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
           nome: String(t.nome ?? t.titulo ?? "Turma"),
           ownerTipo: t.ownerTipo ?? "Clube",
           ownerId: t.ownerId ?? clubeId,
-          professorId: t.professorId ?? t.responsavelId ?? null,
-          professorNome: t.professor?.nome ?? t.professorNome ?? null,
+          professorIds: Array.isArray(t.professorIds) ? t.professorIds.map(String) : [],
+          professorNomes: Array.isArray(t.professorNomes) ? t.professorNomes : [],
+          professorNome:
+            t.professorNome ??
+            (Array.isArray(t.professorNomes) ? t.professorNomes.join(", ") : null) ??
+            null,
           alunosCount: t.alunosCount ?? t.qtdAlunos ?? null,
         }))
       );
@@ -1186,9 +1190,8 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                       </div>
                       <button
                         onClick={() => {
-                          setProfessorSelecionado(
-                            t.professorId ?? undefined
-                          );
+                          // se quiser manter um "prefiltro" (apenas 1), pega o primeiro:
+                          setProfessorSelecionado(t.professorIds?.[0]); // ✅ string | undefined
                           setTurmasOpen(true);
                         }}
                         className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
@@ -1200,27 +1203,28 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                     {professores.length > 0 && (
                       <div className="flex items-center gap-2">
                         <select
+                          multiple
                           className="border rounded px-3 py-2 text-sm"
-                          value={t.professorId ?? ""}
+                          value={t.professorIds ?? []}
                           onChange={async (e) => {
-                            const newProfId = e.target.value || null;
+                            const selectedIds = Array.from(e.target.selectedOptions)
+                              .map((o) => o.value)
+                              .filter(Boolean);
+
                             try {
                               await axios.put(
-                                `${API.BASE_URL}/api/turmas/${t.id}/vincular-professor`,
-                                { professorId: newProfId },
+                                `${API.BASE_URL}/api/turmas/${t.id}/atribuir-professores`,
+                                { professorIds: selectedIds }, // ✅ array
                                 { headers }
                               );
                               await loadTurmas();
-                              alert("Professor atualizado na turma!");
+                              alert("Professores atualizados na turma!");
                             } catch (err) {
                               console.error(err);
-                              alert(
-                                "Não foi possível atualizar o professor."
-                              );
+                              alert("Não foi possível atualizar os professores.");
                             }
                           }}
                         >
-                          <option value="">— Sem professor —</option>
                           {professores.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.nome}
