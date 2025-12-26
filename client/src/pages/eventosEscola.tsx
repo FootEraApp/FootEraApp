@@ -10,7 +10,9 @@ type EventoListItem = {
   titulo: string;
   tipo: EventoTipo;
   descricao?: string | null;
-  inicio: string;
+
+  dataEvento: string; // ✅ obrigatório (data principal do evento)
+
   cidade?: string | null;
   estado?: string | null;
   status: "ABERTO" | "ENCERRADO" | "CANCELADO";
@@ -58,14 +60,14 @@ export default function PaginaEventosEscola({ escolaId }: { escolaId: string }) 
                   <div>
                     <div className="font-semibold">{e.titulo}</div>
                     <div className="text-sm text-green-900/70">
-                      {labelEventoTipo(e.tipo)} • {new Date(e.inicio).toLocaleString()}
+                      {labelEventoTipo(e.tipo)} •{" "}
+                      {new Date(e.dataEvento).toLocaleString()}
                       {e.cidade
-                        ? ` • ${e.cidade}${
-                            e.estado ? " - " + e.estado : ""
-                          }`
+                        ? ` • ${e.cidade}${e.estado ? " - " + e.estado : ""}`
                         : ""}
                     </div>
                   </div>
+
                   <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-900">
                     {e.status}
                   </span>

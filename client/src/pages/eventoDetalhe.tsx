@@ -10,8 +10,9 @@ type Evento = {
   titulo: string;
   tipo: EventoTipo;
   descricao?: string | null;
-  inicio: string;
-  fim?: string | null;
+  dataEvento: string; // obrigatório
+  inscricaoInicio?: string | null;
+  inscricaoFim?: string | null;
   cidade?: string | null;
   estado?: string | null;
   endereco?: string | null;
@@ -62,7 +63,7 @@ export default function PaginaEventoDetalhe({ eventoId }: { eventoId: string }) 
       <h1 className="text-3xl font-extrabold">{ev.titulo}</h1>
 
       <p className="mt-1 text-sm opacity-80">
-        {fmtDataHora(ev.inicio)} • {labelEventoTipo(ev.tipo)}
+        {fmtDataHora(ev.dataEvento)} • {labelEventoTipo(ev.tipo)}
       </p>
 
     <div className="mt-6 grid gap-3 bg-white rounded-lg border p-4">
@@ -108,9 +109,12 @@ export default function PaginaEventoDetalhe({ eventoId }: { eventoId: string }) 
           </div>
         )}
 
-        {ev.fim && (
+        {(ev.inscricaoInicio || ev.inscricaoFim) && (
           <div className="text-sm">
-            <b>Término:</b> {fmtDataHora(ev.fim)}
+            <b>Inscrições:</b>{" "}
+            {ev.inscricaoInicio ? fmtDataHora(ev.inscricaoInicio) : "—"}{" "}
+            até{" "}
+            {ev.inscricaoFim ? fmtDataHora(ev.inscricaoFim) : "—"}
           </div>
         )}
 
