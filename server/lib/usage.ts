@@ -1,4 +1,3 @@
-// server/lib/usage.ts
 import { PrismaClient } from "@prisma/client";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
@@ -23,7 +22,8 @@ export type UsageKey =
   | "assentos_coach_total"
   | "turmas_total"
   | "agendamentos_mes"
-  | "treinos_programados_mes";
+  | "treinos_programados_mes"
+  | "agendamento_rotina_mensal";
 
 type Window = "day" | "week" | "month" | "total";
 
@@ -40,6 +40,7 @@ const WINDOW_BY_KEY: Record<UsageKey, Window> = {
   turmas_total: "total",
   agendamentos_mes: "month",
   treinos_programados_mes: "month",
+  agendamento_rotina_mensal: "month",
 };
 
 const LIMITS = {
@@ -100,6 +101,7 @@ const CAPABILITY_BY_KEY: Record<UsageKey, string> = {
   turmas_total: "TURMAS",
   agendamentos_mes: "AGENDAMENTOS",
   treinos_programados_mes: "TREINOS_PROGRAMADOS_MES",
+  agendamento_rotina_mensal: "AGENDAMENTO_ROTINA_MENSAL",
 };
 
 const WINDOW_LABEL: Record<Window, string> = {
@@ -214,8 +216,6 @@ export async function incAndCheck(
 ) {
   const { windowStart, windowEnd, periodRef, windowKind } = boundsFor(win, new Date());
 
-  // ✅ precisa existir este unique compound no Prisma Client:
-  // userId_key_windowKind_windowStart
   const row = await prisma.usageCounter.upsert({
     where: {
       userId_key_windowKind_windowStart: { userId, key, windowKind, windowStart },
