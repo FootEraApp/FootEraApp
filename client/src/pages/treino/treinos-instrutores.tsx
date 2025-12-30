@@ -105,6 +105,7 @@ interface Turma {
   atletaIds: string[];
   professorIds?: string[];
   professorNomes?: string[];
+  professorNome?: string | null;
 }
 
 type SessaoDeHoje = {
@@ -122,6 +123,36 @@ type SessaoDeHoje = {
 
 function normTxt(s: any) {
   return String(s || "").trim().toLowerCase();
+}
+
+function explodeNomes(input: any): string[] {
+  const arr = Array.isArray(input) ? input : [input];
+
+  return arr
+    .flatMap((v) =>
+      String(v || "")
+        .split(",")              
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
+}
+
+function splitProfessorNome(raw?: string | null): string[] {
+  return String(raw || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function uniqNames(arr: string[]): string[] {
+  const map = new Map<string, string>();
+  for (const n of arr) {
+    const clean = String(n || "").trim();
+    if (!clean) continue;
+    const key = clean.toLowerCase();
+    if (!map.has(key)) map.set(key, clean);
+  }
+  return Array.from(map.values());
 }
 
 function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
@@ -369,9 +400,10 @@ useEffect(() => {
       const list = Array.isArray(data) ? data : data.items ?? data.data ?? [];
 
       const map: Record<string, string> = {};
+
       for (const p of list) {
-        const id = String(p?.id ?? "");
-        if (!id) continue;
+        const professorId = String(p?.id ?? "").trim();
+        const usuarioId = String(p?.usuarioId ?? p?.usuario?.id ?? "").trim();
 
         const nome =
           p?.usuario?.nome ||
@@ -379,7 +411,11 @@ useEffect(() => {
           p?.usuario?.nomeCompleto ||
           "";
 
-        if (nome) map[id] = String(nome).trim();
+        const nomeLimpo = String(nome || "").trim();
+        if (!nomeLimpo) continue;
+
+        if (professorId) map[professorId] = nomeLimpo;
+        if (usuarioId) map[usuarioId] = nomeLimpo;
       }
 
       setProfNomeById(map);
@@ -412,9 +448,7 @@ useEffect(() => {
       );
 
       const txt = await res.text().catch(() => "");
-      console.log("[debug] /api/professores/vinculados status", res.status);
-      console.log("[debug] /api/professores/vinculados body", txt);
-
+      
       if (!res.ok) {
         setProfessoresVinculadosIds([]);
         setProfessoresVinculadosNomeById({});
@@ -1076,10 +1110,6 @@ async function salvarProgressoSessao(sessaoId: string) {
   }, [usuario?.tipo, usuario?.tipoUsuarioId, tipo]);
 
   useEffect(() => {
-    console.log("[debug] professoresVinculadosIds ATUALIZADO", professoresVinculadosIds);
-  }, [professoresVinculadosIds]);
-
-  useEffect(() => {
   const token = getToken();
   if (!token) return;
 
@@ -1245,28 +1275,6 @@ async function salvarProgressoSessao(sessaoId: string) {
       return souDono || souColab || profVinc || fallbackPorNome;
     }).length;
 
-
-    if (!debugOnceRef.current) {
-      debugOnceRef.current = true;
-
-      console.log("[debug] usuario", usuario);
-      console.log("[debug] treinos norm count", normTreinos.length, normTreinos.slice(0, 3));
-      console.log("[debug] professoresVinculadosIds", professoresVinculadosIds);
-      console.log("[debug] matchCount meusTreinos", matchCount);
-    }
-
-    console.table(
-      normTreinos.slice(0, 10).map(t => ({
-        nome: t.nome,
-        clubeId: t.clubeId,
-        escolinhaId: t.escolinhaId,
-        professorId: t.professorId,
-        professoresIds: (t.professoresIds ?? []).join(", "),
-      }))
-    );
-
-    console.log("[debug] meuTipoUsuarioId", String(usuario?.tipoUsuarioId ?? ""));
-
     setTreinos(normTreinos);
     } catch (e) {
       console.error(e);
@@ -1332,7 +1340,6 @@ async function salvarProgressoSessao(sessaoId: string) {
 
       const data = await res.json();
       const items = Array.isArray(data) ? data : data.items ?? [];
-
       const norm: AtletaVinculado[] = items.map((a: any) => ({
         id: a.id,
         usuario: {
@@ -1396,29 +1403,42 @@ async function salvarProgressoSessao(sessaoId: string) {
         const norm: Turma[] = items.map((t: any) => {
         const nome = t.nome || t.titulo || "Turma";
 
+        const professorNomeSingular = String(t.professorNome ?? t.professor ?? "").trim();
+
         const idsRaw =
           t.professorIds ??
           t.professoresIds ??
           t.professoresIdsDaTurma ??
           (Array.isArray(t.professores) ? t.professores.map((p: any) => p?.id ?? p?.professorId) : null) ??
           (Array.isArray(t.professoresTurma)
-          ? t.professoresTurma.map((p: any) =>
-              p?.professorId ??
-              p?.professor?.id ??
-              p?.Professor?.id ??
-              ""
-            )
-          : null) ??
+            ? t.professoresTurma.map((p: any) =>
+                p?.professorId ??
+                p?.professor?.id ??
+                p?.Professor?.id ??
+                ""
+              )
+            : null) ??
           [];
 
         const professorIds = Array.from(
-          new Set((Array.isArray(idsRaw) ? idsRaw : []).map((x: any) => String(x || "")).filter(Boolean)),
+          new Set((Array.isArray(idsRaw) ? idsRaw : []).map((x: any) => String(x || "")).filter(Boolean))
         );
 
         const nomesRaw =
           t.professorNomes ??
           t.professoresNomes ??
-          (Array.isArray(t.professores) ? t.professores.map((p: any) => p?.nome ?? p?.usuario?.nome) : null) ??
+          (Array.isArray(t.professores)
+            ? t.professores.map((p: any) => p?.nome ?? p?.usuario?.nome)
+            : null) ??
+          (Array.isArray(t.professoresTurma)
+            ? t.professoresTurma.map((p: any) =>
+                p?.professor?.usuario?.nome ??
+                p?.professor?.nome ??
+                p?.usuario?.nome ??
+                p?.nome ??
+                ""
+              )
+            : null) ??
           [];
 
         const professorNomesDireto = (Array.isArray(nomesRaw) ? nomesRaw : [])
@@ -1430,7 +1450,9 @@ async function salvarProgressoSessao(sessaoId: string) {
           .map((x) => String(x || "").trim())
           .filter(Boolean);
 
-        const professorNomes = Array.from(new Set([...professorNomesDireto, ...nomesFromIds]));
+        const professorNomes = Array.from(
+          new Set([professorNomeSingular, ...professorNomesDireto, ...nomesFromIds].filter(Boolean))
+        );
 
         return {
           id: String(t.id),
@@ -1438,6 +1460,7 @@ async function salvarProgressoSessao(sessaoId: string) {
           atletaIds: [],
           professorIds,
           professorNomes,
+          professorNome: professorNomes.join(", ") || professorNomeSingular || null,
         };
       });
 
@@ -1783,14 +1806,6 @@ async function salvarProgressoSessao(sessaoId: string) {
     }
   }
 
-  const formatarDataHora = (iso?: string | null) =>
-    iso
-      ? new Date(iso).toLocaleString("pt-BR", {
-          dateStyle: "short",
-          timeStyle: "short",
-        })
-      : "";
-
   const renderTreinoCard = (treino: TreinoProgramado) => {
     const tipoBruto = String(
       usuario?.tipo ?? (Storage as any).tipoSalvo ?? "",
@@ -1889,11 +1904,28 @@ async function salvarProgressoSessao(sessaoId: string) {
                         Enviar para atletas selecionados
                       </option>
                       {turmas.map((t) => {
-                        const profs =
-                          (t.professorNomes?.length ? t.professorNomes : [])
-                            .filter(Boolean)
-                            .join(", ");
+                        const nomesDiretos = explodeNomes(t.professorNomes);
+                        const nomesDoCampoProfessorNome = explodeNomes(t.professorNome);
+                        const nomesViaIds = Array.isArray(t.professorIds)
+                          ? explodeNomes(
+                              t.professorIds.map((id) => {
+                                const key = String(id);
+                                return (
+                                  profNomeById[key] ||
+                                  professoresVinculadosNomeById[key] ||
+                                  ""
+                                );
+                              }),
+                            )
+                          : [];
 
+                        const profsList = uniqNames([
+                          ...nomesDiretos,
+                          ...nomesDoCampoProfessorNome,
+                          ...nomesViaIds,
+                        ]);
+
+                        const profs = profsList.join(", ");
                         const sufixo = profs ? ` — Prof(s): ${profs}` : " — Sem professor";
 
                         return (
@@ -1902,7 +1934,6 @@ async function salvarProgressoSessao(sessaoId: string) {
                           </option>
                         );
                       })}
-
                     </select>
                   )}
 
@@ -2365,10 +2396,14 @@ async function salvarProgressoSessao(sessaoId: string) {
                           const turmaLocal = turmaId ? turmaById[turmaId] : null;
 
                           const nomeTurma = turmaLocal?.nome ?? s.turma?.nome ?? "Turma";
-                          const profs = (turmaLocal?.professorNomes ?? [])
-                            .map((x) => String(x || "").trim())
-                            .filter(Boolean)
-                            .join(", ");
+                          const profs = Array.from(
+                            new Set(
+                              [
+                                String(turmaLocal?.professorNome ?? "").trim(),
+                                ...(turmaLocal?.professorNomes ?? []).map((x) => String(x || "").trim()),
+                              ].filter(Boolean)
+                            )
+                          ).join(", ");
 
                           return (
                             <div className="text-sm text-gray-600">
