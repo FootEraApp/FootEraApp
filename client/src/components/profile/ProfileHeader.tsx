@@ -89,7 +89,7 @@ export default function ProfileHeader({
   const [ehFavorito, setEhFavorito] = useState(false);
   const [seguindo, setSeguindo] = useState<boolean | null>(null);
 
-  const [treinoJunto, setTreinoJunto] = useState<boolean | null>(null);
+  const [treinoJunto, setTreinoJunto] = useState<boolean>(false);
   const [souSolicitanteTreino, setSouSolicitanteTreino] = useState<boolean | null>(null);
   const [temVinculoTreino, setTemVinculoTreino] = useState(false);
 
@@ -101,6 +101,7 @@ export default function ProfileHeader({
   const [podeObservar, setPodeObservar] = useState(false);
   const [perfilTipo, setPerfilTipo] = useState<string | null>(perfilTipoProp ?? null);
   const [perfilTipoId, setPerfilTipoId] = useState<string | null>(perfilTipoIdProp ?? null);
+  const [checouVinculo, setChecouVinculo] = useState(false);
 
   const viewerTipo =
   (Storage as any).tipoSalvo ??
@@ -203,252 +204,81 @@ export default function ProfileHeader({
   }, [perfilId, isOwnProfile, perfilTipoIdProp, perfilTipoProp]);
 
   useEffect(() => {
-    if (!perfilTipo && !perfilTipoProp) return;
+    setChecouVinculo(false);
+  }, [perfilId]);
+
+  useEffect(() => {
+    // só faz sentido checar vínculo quando:
+    // - não é meu perfil
+    // - tenho token
+    // - tenho perfilId válido
+    if (isOwnProfile || isMe) return;
 
     const token =
       Storage.token ||
       localStorage.getItem("token") ||
-      sessionStorage.getItem("token");
-    if (!token) return;
-
-    if (isOwnProfile || isMe) {
-      setTemVinculoTreino(false);
-      return;
-    }
-
-    const meuTipoId =
-      Storage.tipoUsuarioId ||
-      localStorage.getItem("tipoUsuarioId") ||
-      sessionStorage.getItem("tipoUsuarioId") ||
+      sessionStorage.getItem("token") ||
       "";
 
-    const meuTipo =
-      (Storage as any).tipoSalvo ||
-      localStorage.getItem("tipoUsuario") ||
-      sessionStorage.getItem("tipoUsuario") ||
-      "";
+    const usuarioAlvoId = String(perfilId || "").trim();
+
+    // 🔒 se ainda não tenho alvo, não checo (evita 400)
+    if (!token || !usuarioAlvoId) return;
+
+    // 🔒 evita chamada duplicada (StrictMode / re-render)
+    const usuarioId = String(
+      Storage.usuarioId ||
+      localStorage.getItem("usuarioId") ||
+      sessionStorage.getItem("usuarioId") ||
+      ""
+    ).trim();
+
+    // se não sei quem está vendo, não tem como checar vínculo
+    if (!usuarioId) return;
+
+    // 🔒 evita chamada duplicada (StrictMode / re-render)
+    if (checouVinculo) return;
+    setChecouVinculo(true);
+
+    let alive = true;
 
     (async () => {
       try {
-        let temVinculo = false;
+        const qs = new URLSearchParams({
+          usuarioAlvoId,
+          usuarioId,
+          remetenteId: usuarioId,
+          solicitanteId: usuarioId,
+        }).toString();
 
-        const tipoPerfilLower = String(perfilTipo || perfilTipoProp || "").toLowerCase();
-        const tipoViewerLower = String(meuTipo || "").toLowerCase();
+        const url = `${API.BASE_URL}/api/solicitacoes-treino/vinculo?${qs}`;
 
-        const souAtleta = /atleta/i.test(tipoViewerLower);
-        const souProfessor = /professor/i.test(tipoViewerLower);
-        const souClube = /clube/i.test(tipoViewerLower);
-        const souEscolinha = /escolinha/i.test(tipoViewerLower);
+        const resp = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-        const perfilEhAtleta = tipoPerfilLower === "atleta";
-        const perfilEhProfessor = tipoPerfilLower === "professor";
-        const perfilEhClube = tipoPerfilLower === "clube";
-        const perfilEhEscolinha = tipoPerfilLower === "escolinha";
+        if (!alive) return;
 
-        const entidadeId = perfilTipoIdProp || perfilTipoId || null;
-
-        try {
-          const usuarioAlvoId = perfilId;
-
-          const resp = await fetch(
-            `${API.BASE_URL}/api/solicitacoes-treino/vinculo?usuarioAlvoId=${encodeURIComponent(
-              usuarioAlvoId
-            )}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-
-          if (resp.ok) {
-            const body = await resp.json().catch(() => null as any);
-            const vinculo = !!(body && (body.vinculo || body.relacaoId));
-            if (vinculo) temVinculo = true;
-          }
-        } catch (e) {
-          console.warn(
-            "[ProfileHeader] erro ao checar /solicitacoes-treino/vinculo",
-            e
-          );
+        if (!resp.ok) {
+          // se der 400/404/etc, não explode UI
+          setTemVinculoTreino(false);
+          return;
         }
 
-        if (!temVinculo && souAtleta && perfilEhProfessor && entidadeId && meuTipoId) {
-          try {
-            const url = `${API.BASE_URL}/api/treinos/atletas-vinculados?professorId=${encodeURIComponent(
-              entidadeId
-            )}&incluirPontuacao=1`;
+        const body = await resp.json().catch(() => null as any);
 
-            const resp2 = await fetch(url, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-
-            if (resp2.ok) {
-              const lista = (await resp2.json().catch(() => [])) as any[];
-
-              const achou = Array.isArray(lista)
-                ? lista.some((item: any) => {
-                    const atletaId = String(
-                      item?.atletaId || item?.id || ""
-                    ).trim();
-                    return atletaId && atletaId === String(meuTipoId).trim();
-                  })
-                : false;
-
-              if (achou) {
-                temVinculo = true;
-              }
-            }
-          } catch (e) {
-            console.warn(
-              "[ProfileHeader] erro ao checar /treinos/atletas-vinculados (visão atleta)",
-              e
-            );
-          }
-        }
-
-        if (
-          !temVinculo &&
-          souAtleta &&
-          (perfilEhClube || perfilEhEscolinha) &&
-          entidadeId &&
-          meuTipoId
-        ) {
-          try {
-            const vinculoTipo = perfilEhClube ? "clube" : "escolinha";
-
-            const url = `${API.BASE_URL}/api/gerenciar/atletas?vinculo=${encodeURIComponent(
-              vinculoTipo
-            )}&id=${encodeURIComponent(entidadeId)}&order=pontuacao_desc`;
-
-            const resp3 = await fetch(url, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-
-            if (resp3.ok) {
-              const json = await resp3.json().catch(() => null as any);
-
-              const lista: any[] = Array.isArray(json)
-                ? json
-                : Array.isArray(json?.atletas)
-                ? json.atletas
-                : [];
-
-              const achou = lista.some((item: any) => {
-                const atletaId = String(item?.atletaId || item?.id || "").trim();
-                return atletaId && atletaId === String(meuTipoId).trim();
-              });
-
-              if (achou) {
-                temVinculo = true;
-              }
-            }
-          } catch (e) {
-            console.warn(
-              "[ProfileHeader] erro ao checar /gerenciar/atletas (visão atleta)",
-              e
-            );
-          }
-        }
-
-        if (!temVinculo && souProfessor && perfilEhAtleta && meuTipoId) {
-          try {
-            const url = `${API.BASE_URL}/api/treinos/atletas-vinculados?professorId=${encodeURIComponent(
-              meuTipoId
-            )}&incluirPontuacao=1`;
-
-            const resp4 = await fetch(url, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-
-            if (resp4.ok) {
-              const lista = (await resp4.json().catch(() => [])) as any[];
-
-              const alvoAtletaIdStr = String(perfilTipoId || "").trim();
-              const alvoUsuarioIdStr = String(perfilId || "").trim();
-
-              const achou = Array.isArray(lista)
-                ? lista.some((item: any) => {
-                    const atletaIdItem = String(
-                      item?.atletaId || item?.id || ""
-                    ).trim();
-                    const usuarioIdItem = String(item?.usuarioId || "").trim();
-                    return (
-                      (alvoAtletaIdStr && atletaIdItem === alvoAtletaIdStr) ||
-                      (alvoUsuarioIdStr && usuarioIdItem === alvoUsuarioIdStr)
-                    );
-                  })
-                : false;
-
-              if (achou) {
-                temVinculo = true;
-              }
-            }
-          } catch (e) {
-            console.warn(
-              "[ProfileHeader] erro ao checar /treinos/atletas-vinculados (visão professor)",
-              e
-            );
-          }
-        }
-
-        if (
-          !temVinculo &&
-          (souClube || souEscolinha) &&
-          perfilEhAtleta &&
-          meuTipoId
-        ) {
-          try {
-            const vinculoTipo = souClube ? "clube" : "escolinha";
-
-            const url = `${API.BASE_URL}/api/gerenciar/atletas?vinculo=${encodeURIComponent(
-              vinculoTipo
-            )}&id=${encodeURIComponent(meuTipoId)}&order=pontuacao_desc`;
-
-            const resp5 = await fetch(url, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-
-            if (resp5.ok) {
-              const json = await resp5.json().catch(() => null as any);
-
-              const lista: any[] = Array.isArray(json)
-                ? json
-                : Array.isArray(json?.atletas)
-                ? json.atletas
-                : [];
-
-              const alvoAtletaIdStr = String(perfilTipoId || "").trim();
-              const alvoUsuarioIdStr = String(perfilId || "").trim();
-
-              const achou = lista.some((item: any) => {
-                const atletaIdItem = String(item?.atletaId || item?.id || "").trim();
-                const usuarioIdItem = String(item?.usuarioId || "").trim();
-                return (
-                  (alvoAtletaIdStr && atletaIdItem === alvoAtletaIdStr) ||
-                  (alvoUsuarioIdStr && usuarioIdItem === alvoUsuarioIdStr)
-                );
-              });
-
-              if (achou) {
-                temVinculo = true;
-              }
-            }
-          } catch (e) {
-            console.warn(
-              "[ProfileHeader] erro ao checar /gerenciar/atletas (visão clube/escolinha)",
-              e
-            );
-          }
-        }
-
-        setTemVinculoTreino(temVinculo);
-      } catch (e) {
-        console.error("[ProfileHeader] erro geral ao checar vínculo REAL", e);
+        const vinculo = !!(body && (body.vinculo || body.relacaoId));
+        setTemVinculoTreino(vinculo);
+      } catch {
+        if (!alive) return;
         setTemVinculoTreino(false);
       }
     })();
-  }, [perfilId, isOwnProfile, isMe, perfilTipo, perfilTipoId, perfilTipoIdProp, perfilTipoProp]);
+
+    return () => {
+      alive = false;
+    };
+  }, [perfilId, isOwnProfile, isMe, checouVinculo]);
 
   useEffect(() => {
     if (!isOwnProfile) return;
@@ -886,9 +716,9 @@ export default function ProfileHeader({
   };
 
   const imageSrc =
-    foto ?? avatar
-      ? formatarUrlFoto(foto ?? avatar, "usuarios")
-      : "/assets/usuarios/default-user.png";
+  (foto ?? avatar)
+    ? formatarUrlFoto((foto ?? avatar) as string, "usuarios")
+    : "/assets/usuarios/default-user.png";
 
   const alvoUsuarioId = isOwnProfile
     ? String(Storage.usuarioId ?? "")
@@ -919,7 +749,7 @@ export default function ProfileHeader({
 
   (async () => {
     try {
-      const r = await fetch(`${API.BASE_URL}/api/seguidores`, {
+      const r = await fetch(`${API.BASE_URL}/api/seguidores/seguindo`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -1159,7 +989,7 @@ export default function ProfileHeader({
     "rounded-full font-semibold focus:outline-none focus:ring-2 focus:ring-white/40 transition " +
     "inline-flex items-center justify-center gap-2";
 
-  const treinoLoading = treinoJunto === null && !temVinculoTreino;
+  const treinoLoading = !checouVinculo && !isOwnProfile && !isMe;
   const treinoDisabled = treinoLoading;
 
   let treinoLabel = "Treinar juntos";
