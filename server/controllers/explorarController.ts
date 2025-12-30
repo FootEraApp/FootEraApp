@@ -121,7 +121,7 @@ export async function explorar(req: Request, res: Response) {
         escolinha: { select: { id: true, nome: true, logo: true } },
         inscricoes: { select: { usuarioId: true } },
       },
-      orderBy: { inicio: "asc" },
+      orderBy: { inscricaoInicio: "asc" },
       take: 50,
     });
 

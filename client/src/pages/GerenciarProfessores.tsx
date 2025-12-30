@@ -36,19 +36,11 @@ type TurmaItem = {
   id: string;
   nome: string;
   categoria?: string | null;
-  professorId?: string | null;
+  professorIds?: string[];
+  professorNomes?: string[];
   professorNome?: string | null;
   alunosCount?: number | null;
 };
-
-const getFoto = (f?: string | null) => {
-  if (!f || f === "" || f === "null") return "/assets/usuarios/default-user.png";
-  if (f.startsWith("http")) return f;
-  return `${API.BASE_URL}/${f.replace(/^\/+/, "")}`;
-};
-
-const tipoParaVinculo = (t: Exclude<TipoEntidade, null>) =>
-  t === "Escola" ? "escolinha" : t.toLowerCase();
 
 const GerenciarProfessores: React.FC = () => {
   const token = Storage.token;
@@ -198,8 +190,12 @@ const GerenciarProfessores: React.FC = () => {
           id: String(t.id),
           nome: String(t.nome ?? t.titulo ?? "Turma"),
           categoria: t.categoria ?? null,
-          professorId: t.professorId ?? t.responsavelId ?? null,
-          professorNome: t.professor?.nome ?? t.professorNome ?? null,
+          professorIds: Array.isArray(t.professorIds) ? t.professorIds.map(String) : [],
+          professorNomes: Array.isArray(t.professorNomes) ? t.professorNomes : [],
+          professorNome:
+            t.professorNome ??
+            (Array.isArray(t.professorNomes) ? t.professorNomes.join(", ") : null) ??
+            null,
           alunosCount: t.alunosCount ?? t._count?.membros ?? t.qtdAlunos ?? null,
         }))
       );
@@ -496,7 +492,7 @@ const GerenciarProfessores: React.FC = () => {
                     </div>
                     <button
                       onClick={() => {
-                        setProfessorSelecionado(t.professorId ?? undefined);
+                        setProfessorSelecionado(t.professorIds?.[0]); // ✅ pega só 1 string
                         setTurmasOpen(true);
                       }}
                       className="mt-2 inline-flex items-center gap-1 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 sm:mt-0"
@@ -512,25 +508,28 @@ const GerenciarProfessores: React.FC = () => {
                         Professor responsável
                       </label>
                       <select
+                        multiple
                         className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm sm:mt-0 sm:w-64"
-                        value={t.professorId ?? ""}
+                        value={t.professorIds ?? []}
                         onChange={async (e) => {
-                          const newProfId = e.target.value || null;
+                          const selectedIds = Array.from(e.target.selectedOptions)
+                            .map((o) => o.value)
+                            .filter(Boolean);
+
                           try {
                             await axios.put(
-                              `${API.BASE_URL}/api/turmas/${t.id}/vincular-professor`,
-                              { professorId: newProfId },
+                              `${API.BASE_URL}/api/turmas/${t.id}/atribuir-professores`,
+                              { professorIds: selectedIds },
                               { headers }
                             );
                             await carregarTurmas();
-                            alert("Professor atualizado na turma!");
+                            alert("Professores atualizados na turma!");
                           } catch (err) {
                             console.error(err);
-                            alert("Não foi possível atualizar o professor.");
+                            alert("Não foi possível atualizar os professores.");
                           }
                         }}
                       >
-                        <option value="">— Sem professor —</option>
                         {professores.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.nome}
