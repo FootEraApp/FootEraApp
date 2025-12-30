@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, type SVGProps } from "react";
+import React, { useMemo, useEffect, useState, useRef, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Volleyball,
@@ -104,6 +104,8 @@ interface Turma {
   id: string;
   nome: string;
   atletaIds: string[];
+  professorIds?: string[];
+  professorNomes?: string[];
 }
 
 type SessaoDeHoje = {
@@ -118,6 +120,10 @@ type SessaoDeHoje = {
   penalidadeAtraso?: boolean;
   exercicios: ExercicioSessaoDetalhe[];
 };
+
+function normTxt(s: any) {
+  return String(s || "").trim().toLowerCase();
+}
 
 function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -165,6 +171,59 @@ function isVideoUrl(url: string) {
   const clean = url.split("?")[0].toLowerCase();
   return /\.(mp4|webm|ogg|mov|m4v)$/i.test(clean);
 }
+
+function pickFirstId(obj: any, keys: string[]): string {
+  for (const k of keys) {
+    const val = obj?.[k];
+    const id = pickId(val);
+    if (id) return id;
+  }
+  return "";
+}
+
+function pickId(v: any): string {
+  const s = String(v ?? "").trim();
+  return s && s !== "null" && s !== "undefined" ? s : "";
+}
+
+function getOwnerIdsFromTreino(tr: any) {
+  const clubeObj =
+    tr?.clube ?? tr?.Clube ?? tr?.criador?.clube ?? tr?.criador?.Clube ?? null;
+
+  const escolinhaObj =
+    tr?.escolinha ?? tr?.Escolinha ?? tr?.criador?.escolinha ?? tr?.criador?.Escolinha ?? null;
+
+  const professorObj =
+    tr?.professor ?? tr?.Professor ?? tr?.criador?.professor ?? tr?.criador?.Professor ?? null;
+
+  const clubeId =
+    pickFirstId(tr, ["clubeId", "clube_id", "ClubeId"]) ||
+    pickFirstId(clubeObj, ["id", "clubeId", "clube_id"]) ||
+    pickFirstId(tr?.criador, ["clubeId", "clube_id"]);
+
+  const escolinhaId =
+    pickFirstId(tr, ["escolinhaId", "escolinha_id", "EscolinhaId"]) ||
+    pickFirstId(escolinhaObj, ["id", "escolinhaId", "escolinha_id"]) ||
+    pickFirstId(tr?.criador, ["escolinhaId", "escolinha_id"]);
+
+  const professorId =
+    pickFirstId(tr, ["professorId", "professor_id", "ProfessorId"]) ||
+    pickFirstId(professorObj, ["id", "professorId", "professor_id", "usuarioId"]) ||
+    pickFirstId(tr?.criador, ["professorId", "professor_id", "usuarioId"]);
+
+  return { clubeId, escolinhaId, professorId };
+}
+
+function getTipoUsuarioIdFromMe(tipo: string, me: any): string {
+  const t = String(tipo || "").toLowerCase();
+  if (t === "clube") return pickId(me?.clube?.id) || pickId(me?.clubeId) || pickId(me?.tipoUsuarioId);
+  if (t === "escolinha") return pickId(me?.escolinha?.id) || pickId(me?.escolinhaId) || pickId(me?.tipoUsuarioId);
+  if (t === "professor") return pickId(me?.professor?.id) || pickId(me?.professorId) || pickId(me?.tipoUsuarioId);
+  if (t === "atleta") return pickId(me?.atleta?.id) || pickId(me?.atletaId) || pickId(me?.tipoUsuarioId);
+  if (t === "admin") return pickId(me?.admin?.id) || pickId(me?.adminId) || pickId(me?.tipoUsuarioId);
+  return pickId(me?.tipoUsuarioId);
+}
+
 const getToken = () =>
   (Storage as any).token ??
   localStorage.getItem("token") ??
@@ -261,9 +320,18 @@ export default function TreinosInstrutores({
   const [modalSessaoId, setModalSessaoId] = useState<string | null>(null);
   const [presentesSelecionados, setPresentesSelecionados] = useState<string[]>([]);
   const [clockNow, setClockNow] = useState<number>(Date.now());
+  const [professoresVinculadosIds, setProfessoresVinculadosIds] = useState<string[]>([]);
+  const [professoresVinculadosNomeById, setProfessoresVinculadosNomeById] = useState<Record<string, string>>({});
 
   const [videoByExId, setVideoByExId] = useState<Record<string, string>>({});
   const startedAtRef = useRef<string | null>(null);
+  const debugOnceRef = useRef(false);
+
+  const turmaById = useMemo(() => {
+    const map: Record<string, Turma> = {};
+     for (const t of turmas) map[String(t.id)] = t;
+      return map;
+  }, [turmas]);
 
   useEffect(() => {
   const token = getToken();
@@ -321,6 +389,79 @@ useEffect(() => {
     }
   })();
 }, []);
+
+useEffect(() => {
+  const token = getToken();
+  if (!token) return;
+
+  const tipoUser = String(usuario?.tipo ?? "").toLowerCase();
+  const tipoUsuarioId = String(usuario?.tipoUsuarioId ?? "").trim();
+
+  if (!tipoUsuarioId) return;
+
+  if (tipoUser !== "clube" && tipoUser !== "escolinha") {
+    setProfessoresVinculadosIds([]);
+    setProfessoresVinculadosNomeById({});
+    return;
+  }
+
+  (async () => {
+    try {
+      const res = await fetch(
+        `${API.BASE_URL}/api/professores/vinculados?tipo=${encodeURIComponent(tipoUser)}&tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const txt = await res.text().catch(() => "");
+      console.log("[debug] /api/professores/vinculados status", res.status);
+      console.log("[debug] /api/professores/vinculados body", txt);
+
+      if (!res.ok) {
+        setProfessoresVinculadosIds([]);
+        setProfessoresVinculadosNomeById({});
+        return;
+      }
+
+      const data = txt ? JSON.parse(txt) : [];
+
+      const list = Array.isArray(data) ? data : data.items ?? data.data ?? [];
+
+      const ids: string[] = [];
+      const nomeById: Record<string, string> = {};
+
+      for (const p of list) {
+        const id =
+          String(
+            p?.professorId ??
+            p?.professor?.id ??
+            p?.id ??
+            ""
+          ).trim();
+
+        if (!id) continue;
+
+        const nome =
+          String(
+            p?.professor?.usuario?.nome ??
+            p?.professor?.nome ??
+            p?.usuario?.nome ??
+            p?.nome ??
+            ""
+          ).trim();
+
+        ids.push(id);
+        if (nome) nomeById[id] = nome;
+      }
+
+      setProfessoresVinculadosIds(Array.from(new Set(ids)));
+      setProfessoresVinculadosNomeById(nomeById);
+    } catch (e) {
+      console.warn("[treinos] erro ao carregar professores vinculados", e);
+      setProfessoresVinculadosIds([]);
+      setProfessoresVinculadosNomeById({});
+    }
+  })();
+}, [usuario?.tipo, usuario?.tipoUsuarioId]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -910,6 +1051,17 @@ async function salvarProgressoSessao(sessaoId: string) {
             "";
 
           setMeuNome(String(nome || "").trim());
+
+          const tipoIdReal = getTipoUsuarioIdFromMe(t, me);
+
+          if (tipoIdReal) {
+            setUsuario((prev) =>
+              prev ? { ...prev, tipoUsuarioId: tipoIdReal } : { tipo: t, usuarioId, tipoUsuarioId: tipoIdReal },
+            );
+
+            localStorage.setItem("tipoUsuarioId", tipoIdReal);
+            sessionStorage.setItem("tipoUsuarioId", tipoIdReal);
+          }
         } catch {}
       })();
 
@@ -918,17 +1070,30 @@ async function salvarProgressoSessao(sessaoId: string) {
     }
   }, []);
 
+  const usuarioReady = useMemo(() => {
+    const tipoOk = String(usuario?.tipo ?? tipo ?? "").trim().toLowerCase();
+    const idOk = String(usuario?.tipoUsuarioId ?? "").trim();
+    return { tipoOk, idOk, ready: !!tipoOk && !!idOk };
+  }, [usuario?.tipo, usuario?.tipoUsuarioId, tipo]);
+
+  useEffect(() => {
+    console.log("[debug] professoresVinculadosIds ATUALIZADO", professoresVinculadosIds);
+  }, [professoresVinculadosIds]);
+
   useEffect(() => {
   const token = getToken();
   if (!token) return;
 
-  const t = String(usuario?.tipo ?? tipo ?? "").toLowerCase();
+  if (!usuarioReady.ready) return;
+
+  const t = usuarioReady.tipoOk;
 
   const run = async () => {
     try {
       const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/programados`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
 
       if (!resTreinos.ok) {
         throw new Error(`/treinos/programados: ${resTreinos.status}`);
@@ -941,7 +1106,9 @@ async function salvarProgressoSessao(sessaoId: string) {
         : (jsonTreinos?.items ?? jsonTreinos?.data ?? []);
 
       const normTreinos: TreinoProgramado[] = (Array.isArray(arr) ? arr : []).map((tr: any) => {
-      const criadorNomePrincipal =
+        const ids = getOwnerIdsFromTreino(tr);
+
+        const criadorNomePrincipal =
         tr?.professor?.usuario?.nome ||
         tr?.professor?.nome ||
         (tr?.professorId ? profNomeById[String(tr.professorId)] : undefined) ||
@@ -952,18 +1119,25 @@ async function salvarProgressoSessao(sessaoId: string) {
         tr?.escola?.nome ||
         undefined;
 
+      const criadorTipoRaw = String(tr?.criadorTipo ?? tr?.creatorType ?? tr?.criador?.tipo ?? "").toLowerCase();
+
       const criadorTipo: TreinoProgramado["criadorTipo"] =
-        tr?.professorId ? "professor"
-        : tr?.clubeId ? "clube"
-        : tr?.escolinhaId ? "escolinha"
-        : tr?.escolaId ? "escola"
-        : tr?.adminId ? "admin"
+        ids.professorId ? "professor"
+        : ids.clubeId ? "clube"
+        : ids.escolinhaId ? "escolinha"
+        : criadorTipoRaw === "professor" ? "professor"
+        : criadorTipoRaw === "clube" ? "clube"
+        : criadorTipoRaw === "escolinha" ? "escolinha"
+        : criadorTipoRaw === "escola" ? "escola"
+        : criadorTipoRaw === "admin" ? "admin"
         : "desconhecido";
 
       const colaboradoresRaw =
         tr?.professores ||
         tr?.colaboradores ||
         tr?.professoresTreino ||
+        tr?.treinosParticipando ||        
+        tr?.treinosParticipandoProfessor ||
         tr?.professoresIds ||
         [];
 
@@ -974,10 +1148,12 @@ async function salvarProgressoSessao(sessaoId: string) {
               String(
                 p?.professorId ??
                 p?.professor?.id ??
-                p?.id ??            
+                p?.participanteId ??      
+                p?.userId ??
+                p?.id ??
                 p ??
                 "",
-              ),
+              ).trim(),
             )
             .filter(Boolean),
         ),
@@ -1001,8 +1177,6 @@ async function salvarProgressoSessao(sessaoId: string) {
               )
               .map((x: any) => String(x || "").trim())
               .filter(Boolean),
-
-            // ✅ fallback quando só vem ID
             ...nomesFromIds,
           ]
             .map((x) => String(x || "").trim())
@@ -1010,16 +1184,14 @@ async function salvarProgressoSessao(sessaoId: string) {
         ),
       );
 
-      const meuTipoUsuarioId = String(usuario?.tipoUsuarioId ?? "");
+      const meuTipoUsuarioId = usuarioReady.idOk;
       const souDono =
-        String(tr?.professorId ?? "") === meuTipoUsuarioId ||
-        String(tr?.escolinhaId ?? "") === meuTipoUsuarioId ||
-        String(tr?.clubeId ?? "") === meuTipoUsuarioId;
+        String(ids.professorId ?? "") === meuTipoUsuarioId ||
+        String(ids.escolinhaId ?? "") === meuTipoUsuarioId ||
+        String(ids.clubeId ?? "") === meuTipoUsuarioId;
 
       const souColaborador = professoresIds.includes(meuTipoUsuarioId);
-
       const incluirMeuNome = Boolean(meuNome) && (souDono || souColaborador);
-
       const normalizarNome = (s: any) => String(s || "").trim().toLowerCase();
 
       const listaBruta = [
@@ -1043,9 +1215,9 @@ async function salvarProgressoSessao(sessaoId: string) {
         duracao: typeof tr.duracao === "number" ? tr.duracao : undefined,
         objetivo: tr.objetivo ?? undefined,
         dicas: Array.isArray(tr.dicas) ? tr.dicas : [],
-        professorId: tr.professorId ?? undefined,
-        escolinhaId: tr.escolinhaId ?? undefined,
-        clubeId: tr.clubeId ?? undefined,
+        professorId: ids.professorId || pickId(tr?.criadorProfessorId) || undefined,
+        escolinhaId: ids.escolinhaId || undefined,
+        clubeId: ids.clubeId || undefined,
         pontuacao: typeof tr.pontuacao === "number" ? tr.pontuacao : undefined,
         professoresIds,
         criadoresNomes,
@@ -1058,7 +1230,45 @@ async function salvarProgressoSessao(sessaoId: string) {
       };
     });
 
-      setTreinos(normTreinos);
+    const meuId = usuarioReady.idOk;
+    const meuTipo = usuarioReady.tipoOk;
+    const matchCount = normTreinos.filter((t) => {
+      const dono = [t.clubeId, t.escolinhaId, t.professorId].map((x) => String(x ?? "").trim());
+      const souDono = meuId && dono.includes(meuId);
+      const souColab = Array.isArray(t.professoresIds) && meuId && t.professoresIds.map(String).includes(meuId);
+      const profVinc = (meuTipo === "clube" || meuTipo === "escolinha") && t.professorId && professoresVinculadosIds.map(String).includes(String(t.professorId));
+
+      const fallbackPorNome =
+        !!meuNome &&
+        Array.isArray(t.criadoresNomes) &&
+        t.criadoresNomes.some((n) => normTxt(n) === normTxt(meuNome));
+
+      return souDono || souColab || profVinc || fallbackPorNome;
+    }).length;
+
+
+    if (!debugOnceRef.current) {
+      debugOnceRef.current = true;
+
+      console.log("[debug] usuario", usuario);
+      console.log("[debug] treinos norm count", normTreinos.length, normTreinos.slice(0, 3));
+      console.log("[debug] professoresVinculadosIds", professoresVinculadosIds);
+      console.log("[debug] matchCount meusTreinos", matchCount);
+    }
+
+    console.table(
+      normTreinos.slice(0, 10).map(t => ({
+        nome: t.nome,
+        clubeId: t.clubeId,
+        escolinhaId: t.escolinhaId,
+        professorId: t.professorId,
+        professoresIds: (t.professoresIds ?? []).join(", "),
+      }))
+    );
+
+    console.log("[debug] meuTipoUsuarioId", String(usuario?.tipoUsuarioId ?? ""));
+
+    setTreinos(normTreinos);
     } catch (e) {
       console.error(e);
       setTreinos([]);
@@ -1078,7 +1288,14 @@ async function salvarProgressoSessao(sessaoId: string) {
 
   run();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [usuario?.tipoUsuarioId, tipo, meuNome, profNomeById]);
+}, [
+  usuarioReady.ready,
+  usuarioReady.idOk,
+  usuarioReady.tipoOk,
+  meuNome,
+  profNomeById,
+  professoresVinculadosIds,
+] );
 
   useEffect(() => {
     if (abaProfessor === "sessoes") {
@@ -1177,14 +1394,57 @@ async function salvarProgressoSessao(sessaoId: string) {
         const data = await res.json();
         const items = Array.isArray(data) ? data : data.items ?? [];
 
-        const norm: Turma[] = items.map((t: any) => ({
-          id: t.id,
-          nome: t.nome || t.titulo || "Turma",
-          atletaIds: [],
-        }));
+        const norm: Turma[] = items.map((t: any) => {
+        const nome = t.nome || t.titulo || "Turma";
 
-        setTurmas(norm);
-        return;
+        const idsRaw =
+          t.professorIds ??
+          t.professoresIds ??
+          t.professoresIdsDaTurma ??
+          (Array.isArray(t.professores) ? t.professores.map((p: any) => p?.id ?? p?.professorId) : null) ??
+          (Array.isArray(t.professoresTurma)
+          ? t.professoresTurma.map((p: any) =>
+              p?.professorId ??
+              p?.professor?.id ??
+              p?.Professor?.id ??
+              ""
+            )
+          : null) ??
+          [];
+
+        const professorIds = Array.from(
+          new Set((Array.isArray(idsRaw) ? idsRaw : []).map((x: any) => String(x || "")).filter(Boolean)),
+        );
+
+        const nomesRaw =
+          t.professorNomes ??
+          t.professoresNomes ??
+          (Array.isArray(t.professores) ? t.professores.map((p: any) => p?.nome ?? p?.usuario?.nome) : null) ??
+          [];
+
+        const professorNomesDireto = (Array.isArray(nomesRaw) ? nomesRaw : [])
+          .map((x: any) => String(x || "").trim())
+          .filter(Boolean);
+
+        const nomesFromIds = professorIds
+          .map((id) => profNomeById[String(id)])
+          .map((x) => String(x || "").trim())
+          .filter(Boolean);
+
+        const professorNomes = Array.from(new Set([...professorNomesDireto, ...nomesFromIds]));
+
+        return {
+          id: String(t.id),
+          nome: String(nome),
+          atletaIds: [],
+          professorIds,
+          professorNomes,
+        };
+      });
+
+      setTurmas(norm);
+      return;
+
       } catch (e) {
         console.error("[treinos] erro ao carregar turmas de", url, e);
       }
@@ -1556,9 +1816,8 @@ async function salvarProgressoSessao(sessaoId: string) {
       );
 
     const podeAgendarComoGestor =
-      ["professor", "admin", "escola", "escolinha", "clube"].includes(
-        tipoUser,
-      ) && atletasVinculados.length > 0;
+    ["professor", "admin", "escola", "escolinha", "clube"].includes(tipoUser) &&
+    (atletasVinculados.length > 0 || turmas.length > 0);
 
     const mostrarBlocoAgendar = podeAgendarComoAtleta || podeAgendarComoGestor;
 
@@ -1594,6 +1853,14 @@ async function salvarProgressoSessao(sessaoId: string) {
           </div>
         )}
 
+        {treino.professorId && (
+          <div className="mt-1 text-xs text-gray-500">
+            <strong>Professor responsável:</strong>{" "}
+            {profNomeById[String(treino.professorId)] ||
+              professoresVinculadosNomeById[String(treino.professorId)] ||
+              "Professor"}
+          </div>
+        )}
 
         <div className="mt-3 flex flex-col gap-2">
          {mostrarBlocoAgendar && (
@@ -1622,11 +1889,21 @@ async function salvarProgressoSessao(sessaoId: string) {
                       <option value="">
                         Enviar para atletas selecionados
                       </option>
-                      {turmas.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          Turma: {t.nome}
-                        </option>
-                      ))}
+                      {turmas.map((t) => {
+                        const profs =
+                          (t.professorNomes?.length ? t.professorNomes : [])
+                            .filter(Boolean)
+                            .join(", ");
+
+                        const sufixo = profs ? ` — Prof(s): ${profs}` : " — Sem professor";
+
+                        return (
+                          <option key={t.id} value={t.id}>
+                            Turma: {t.nome}{sufixo}
+                          </option>
+                        );
+                      })}
+
                     </select>
                   )}
 
@@ -1769,17 +2046,40 @@ async function salvarProgressoSessao(sessaoId: string) {
   const meuTipoUsuarioId = String(usuario?.tipoUsuarioId ?? "");
 
   const meusTreinos = treinos.filter((t) => {
+    const meuId = String(usuario?.tipoUsuarioId ?? "").trim();
+    const meuTipo = String(usuario?.tipo ?? "").toLowerCase();
+
+    const donoId = {
+      clubeId: String(t.clubeId ?? "").trim(),
+      escolinhaId: String(t.escolinhaId ?? "").trim(),
+      professorId: String(t.professorId ?? "").trim(),
+    };
+
     const euSouDono =
-      String(t.professorId ?? "") === meuTipoUsuarioId ||
-      String(t.escolinhaId ?? "") === meuTipoUsuarioId ||
-      String(t.clubeId ?? "") === meuTipoUsuarioId;
+      (!!meuId && (donoId.clubeId === meuId || donoId.escolinhaId === meuId || donoId.professorId === meuId));
 
     const euSouColaborador =
       Array.isArray(t.professoresIds) &&
-      t.professoresIds.map(String).includes(meuTipoUsuarioId);
+      !!meuId &&
+      t.professoresIds.map(String).includes(meuId);
 
-    return euSouDono || euSouColaborador;
+    const treinoDoMeuProfessorVinculado =
+      (meuTipo === "clube" || meuTipo === "escolinha") &&
+      !!donoId.professorId &&
+      professoresVinculadosIds.map(String).includes(donoId.professorId);
+
+    const fallbackPorNome =
+      !!meuNome &&
+      Array.isArray(t.criadoresNomes) &&
+      t.criadoresNomes.some((n) => normTxt(n) === normTxt(meuNome));
+
+    return euSouDono || euSouColaborador || treinoDoMeuProfessorVinculado || fallbackPorNome;
   });
+
+  const listaParaExibir =
+    usuario?.tipo === "admin"
+      ? treinos
+      : (meusTreinos.length ? meusTreinos : treinos); 
 
   const isGestor =
     usuario?.tipo &&
@@ -2021,9 +2321,9 @@ async function salvarProgressoSessao(sessaoId: string) {
                 </button>
               </div>
 
-              {(usuario?.tipo === "admin" ? treinos : meusTreinos).length > 0 ? (
+              {listaParaExibir.map(renderTreinoCard).length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(usuario?.tipo === "admin" ? treinos : meusTreinos).map(renderTreinoCard)}
+                  {listaParaExibir.map(renderTreinoCard)}
                 </div>
               ) : (
                 <p className="text-gray-500">
@@ -2061,9 +2361,28 @@ async function salvarProgressoSessao(sessaoId: string) {
                         <div className="font-semibold text-green-900">
                           {s.treino?.nome ?? "Treino"}
                         </div>
-                        <div className="text-sm text-gray-600">
-                          Turma: {s.turma?.nome ?? "Turma"}
-                        </div>
+                        {(() => {
+                          const turmaId = String(s.turma?.id ?? "");
+                          const turmaLocal = turmaId ? turmaById[turmaId] : null;
+
+                          const nomeTurma = turmaLocal?.nome ?? s.turma?.nome ?? "Turma";
+                          const profs = (turmaLocal?.professorNomes ?? [])
+                            .map((x) => String(x || "").trim())
+                            .filter(Boolean)
+                            .join(", ");
+
+                          return (
+                            <div className="text-sm text-gray-600">
+                              Turma: {nomeTurma}
+                              {profs ? (
+                                <span className="text-xs text-gray-500"> • Prof(s): {profs}</span>
+                              ) : (
+                                <span className="text-xs text-gray-400"> • Sem professor</span>
+                              )}
+                            </div>
+                          );
+                        })()}
+
                         {typeof s.treino?.duracao === "number" && (
                           <div className="text-xs text-gray-500 mt-1">
                             Duração programada: {s.treino.duracao} min

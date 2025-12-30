@@ -154,7 +154,7 @@ export async function upsertConvocacaoEvento(req: AuthenticatedRequest, res: Res
       select: { id: true, usuarioId: true },
     });
 
-    const inicioStr = evento.inicio ? new Date(evento.inicio as any).toLocaleString("pt-BR") : "";
+    const inicioStr = evento.dataEvento ? new Date(evento.dataEvento as any).toLocaleString("pt-BR") : "";
     const linkEvento = `/eventos/${eventoId}`;
 
     const deId = String(req.userId || "");
