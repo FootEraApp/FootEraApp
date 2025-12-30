@@ -99,9 +99,10 @@ export async function explorar(req: Request, res: Response) {
     });
 
     const agora = new Date();
+    
     const whereEvento: any = {
       status: "ABERTO",
-      inicio: { gte: agora },
+      dataEvento: { gte: agora },
     };
 
     if (termo) {
@@ -121,14 +122,15 @@ export async function explorar(req: Request, res: Response) {
         escolinha: { select: { id: true, nome: true, logo: true } },
         inscricoes: { select: { usuarioId: true } },
       },
-      orderBy: { inscricaoInicio: "asc" },
+      orderBy: { dataEvento: "asc" },
       take: 50,
     });
 
     const eventos = eventosRaw.map((e: any) => ({
       ...e,
-      inicio: e.inicio?.toISOString(),
-      fim: e.fim?.toISOString(),
+      dataEvento: e.dataEvento?.toISOString?.() ?? e.dataEvento,
+      inscricaoInicio: e.inscricaoInicio?.toISOString?.() ?? e.inscricaoInicio,
+      inscricaoFim: e.inscricaoFim?.toISOString?.() ?? e.inscricaoFim,
       inscrito: e.inscricoes.some((i: any) => String(i.usuarioId) === String(userIdLogado)),
     }));
 
