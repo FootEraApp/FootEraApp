@@ -11,6 +11,7 @@ import CardAtletaShield from "../components/cards/CardAtletaShield.js";
 import * as htmlToImage from "html-to-image";
 import { publicImgUrl } from "../utils/publicUrl.js";
 import { FLAGS } from "../config.js";
+import BottomNav from "@/components/layout/BottomNav.js";
 
 interface Usuario {
   id: string;
@@ -1531,23 +1532,7 @@ function stripConvocacaoTag(text: string) {
         </div>
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed" className="hover:underline">
-          <House />
-        </Link>
-        <Link href="/explorar" className="hover:underline">
-          <Search />
-        </Link>
-        <Link href="/post" className="hover:underline">
-          <CirclePlus />
-        </Link>
-        <Link href="/treinos" className="hover:underline">
-          <Volleyball />
-        </Link>
-        <Link href="/perfil" className="hover:underline">
-          <User />
-        </Link>
-      </nav>
+      <BottomNav />
 
       <ModalGrupos aberto={modalAberto} onFechar={fecharModal} usuarioId={usuarioId ?? ""} token={token} />
       {FLAGS.DESAFIOS_ENABLED && alvo?.tipo === "grupo" && (
