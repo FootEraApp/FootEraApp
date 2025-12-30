@@ -1,4 +1,3 @@
-// server/controllers/professoresController
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
@@ -172,7 +171,6 @@ export const excluirProfessor = async (req: Request, res: Response) => {
     const usuarioId = professor.usuarioId as string;
 
     await prisma.$transaction(async (tx) => {
-      // 1️⃣ Apaga observações do professor (EVITA violar CHECK one_owner)
       const observacoes = await tx.atletaObservado.findMany({
         where: { professorId },
         select: { id: true },
@@ -181,7 +179,6 @@ export const excluirProfessor = async (req: Request, res: Response) => {
       const obsIds = observacoes.map((o) => o.id);
 
       if (obsIds.length) {
-        // Limpa dependências
         await tx.treinoRotinaAtribuicao.deleteMany({
           where: { atletaObservadoId: { in: obsIds } },
         });
@@ -191,7 +188,6 @@ export const excluirProfessor = async (req: Request, res: Response) => {
         });
       }
 
-      // 2️⃣ Encerra vínculos ativos
       await tx.relacaoTreinamento.updateMany({
         where: { professorId },
         data: {
@@ -209,9 +205,8 @@ export const excluirProfessor = async (req: Request, res: Response) => {
         },
       });
 
-      await tx.turma.updateMany({
+      await tx.turmaProfessor.deleteMany({
         where: { professorId },
-        data: { professorId: null },
       });
 
       await tx.treinoAgendado.updateMany({
@@ -219,7 +214,6 @@ export const excluirProfessor = async (req: Request, res: Response) => {
         data: { criadoPorProfessorId: null },
       });
 
-      // 3️⃣ 🔥 AGORA sim: apaga o USUÁRIO (cascade apaga o professor)
       await tx.usuario.delete({
         where: { id: usuarioId },
       });
@@ -449,5 +443,43 @@ export const desvincularAtletaDoProfessor = async (req: Request, res: Response) 
     return res
       .status(500)
       .json({ message: "Erro ao desvincular atleta do professor." });
+  }
+};
+
+export const listarProfessoresVinculados = async (req: Request, res: Response) => {
+  try {
+    const tipo = String(req.query.tipo || "").toLowerCase();
+    const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim();
+
+    if (!tipoUsuarioId || (tipo !== "clube" && tipo !== "escolinha")) {
+      return res.status(400).json({
+        message: "Informe tipo=clube|escolinha e tipoUsuarioId",
+      });
+    }
+
+    const where =
+      tipo === "clube"
+        ? { OR: [{ clubeId: tipoUsuarioId }, { organizacaoId: tipoUsuarioId }] }
+        : { OR: [{ escolinhaId: tipoUsuarioId }, { organizacaoId: tipoUsuarioId }] };
+
+    const professores = await prisma.professor.findMany({
+      where,
+      select: {
+        id: true,
+        nome: true,
+        usuario: { select: { nome: true } },
+      },
+      orderBy: [{ usuario: { nome: "asc" } }, { nome: "asc" }],
+    });
+
+    const items = professores.map((p) => ({
+      id: String(p.id),
+      nome: String(p.usuario?.nome || p.nome || "").trim() || "Professor",
+    }));
+
+    return res.json({ items });
+  } catch (error) {
+    console.error("Erro ao listar professores vinculados:", error);
+    return res.status(500).json({ message: "Erro ao listar professores vinculados." });
   }
 };

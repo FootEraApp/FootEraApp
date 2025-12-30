@@ -8,12 +8,13 @@ type TurmaMin = {
   id: string;
   nome: string;
   categoria?: string | null;
-  professorId?: string | null;
-  professorNome?: string | null;
+  professorIds?: string[];
+  professorNomes?: string[];
+  professorNome?: string | null;  
   alunosCount?: number;
 };
 
-type ProfessorMin = { id: string; nome: string };
+type ProfessorMin = { id: string; nome: string; checked?: boolean };
 type AtletaMin = { usuarioId: string; nome: string; sobrenome?: string; checked?: boolean };
 
 type Owner = { tipo: "Clube" | "Escolinha"; id: string; usuarioId?: string };
@@ -29,7 +30,13 @@ export default function TurmasManager({
   owner?: Owner;
   professorId?: string;
 }) {
-  const token = Storage.token;
+  const getToken = () =>
+    (Storage as any).token ??
+    localStorage.getItem("token") ??
+    sessionStorage.getItem("token") ??
+    "";
+
+  const token = getToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   const [loading, setLoading] = useState(false);
@@ -47,7 +54,9 @@ export default function TurmasManager({
   const [novoCategoria, setNovoCategoria] = useState<
     "" | "Sub-9" | "Sub-11" | "Sub-13" | "Sub-15" | "Sub-17" | "Sub-20" | "Livre"
   >("");
-  const [novoProfessor, setNovoProfessor] = useState<string>(professorId || "");
+  const [novoProfessores, setNovoProfessores] = useState<string[]>(
+    professorId ? [professorId] : []
+  );
 
   useEffect(() => {
     if (open) setFiltroProf(professorId || "");
@@ -127,7 +136,7 @@ export default function TurmasManager({
           })
         );
 
-        await carregarTurmas(owner, professorId || "");
+        await carregarTurmas(owner);
       } finally {
         setLoading(false);
       }
@@ -136,35 +145,67 @@ export default function TurmasManager({
   }, [open, owner?.id]);
 
   useEffect(() => {
-    if (open && owner) void carregarTurmas(owner, professorId || "");
+    if (!open || !owner) return;
+    void carregarTurmas(owner, filtroProf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [professorId]);
+  }, [open, owner?.id, filtroProf]);
 
-  const carregarTurmas = async (o: Owner, prof?: string) => {
+  const carregarTurmas = async (o: Owner, professorFiltro?: string) => {
     const resT = await axios.get(`${API.BASE_URL}/api/turmas`, {
       headers,
-      params: { ownerTipo: o.tipo, ownerId: o.id, professorId: prof || undefined },
+      params: { ownerTipo: o.tipo, ownerId: o.id },
     });
+
     const lt = (resT.data?.items || resT.data || []) as any[];
-    setTurmas(
-      lt.map((t) => ({
-        id: t.id,
-        nome: t.nome,
+
+    const parsed: TurmaMin[] = lt.map((t) => {
+      const professorIds = Array.isArray(t.professorIds) ? t.professorIds.map(String) : [];
+      const professorNomes = Array.isArray(t.professorNomes)
+        ? t.professorNomes
+        : Array.isArray(t.professores)
+          ? t.professores.map((p: any) => p?.nome ?? p?.usuario?.nome).filter(Boolean)
+          : [];
+
+      return {
+        id: String(t.id),
+        nome: String(t.nome ?? "Turma"),
         categoria: t.categoria ?? null,
-        professorId: t.professorId ?? null,
-        professorNome: t.professor?.nome ?? null,
+        professorIds,
+        professorNomes,
+        professorNome:
+          t.professorNome ??
+          (professorNomes.length ? professorNomes.join(", ") : null),
         alunosCount: t._count?.membros ?? t.alunosCount ?? 0,
-      }))
-    );
+      };
+    });
+
+    const profFiltro = (professorFiltro ?? filtroProf)?.trim();
+
+    const filtradas =
+      profFiltro
+        ? parsed.filter((t) => (t.professorIds ?? []).includes(String(profFiltro)))
+        : parsed;
+
+    setTurmas(filtradas);
   };
 
   const onFiltrarProf = async (prof: string) => {
     setFiltroProf(prof);
-    if (owner) await carregarTurmas(owner, prof);
+    if (owner) await carregarTurmas(owner, prof); // ✅ usa o valor novo
+  };
+
+  const marcarProfessoresDaTurma = (turmaId: string) => {
+    const turma = turmas.find((t) => t.id === turmaId);
+    const ids = (turma?.professorIds || []).map(String);
+
+    setProfs((prev) =>
+      prev.map((p) => ({ ...p, checked: ids.includes(String(p.id)) }))
+    );
   };
 
   const abrirTurma = async (id: string) => {
     setSelecionada(id);
+    marcarProfessoresDaTurma(id);
 
     const res = await axios.get(`${API.BASE_URL}/api/turmas/${id}/alunos`, { headers });
 
@@ -182,15 +223,21 @@ export default function TurmasManager({
   const salvarMembros = async () => {
     if (!selecionada) return;
     setSalvando(true);
+
     try {
-      const usuarioIds = alunos.filter(a => a.checked).map(a => a.usuarioId);
+      // 1) salva PROFESSORES primeiro
+      await salvarProfessores();
+
+      // 2) salva ALUNOS depois
+      const usuarioIds = alunos.filter((a) => a.checked).map((a) => a.usuarioId);
+
       const r = await axios.post(
         `${API.BASE_URL}/api/turmas/${selecionada}/alunos`,
         { usuarioIds },
         { headers }
       );
 
-      if (owner) await carregarTurmas(owner, filtroProf);
+      if (owner) await carregarTurmas(owner);
       await abrirTurma(selecionada);
 
       alert(`Turma atualizada! (${r.data?.total ?? usuarioIds.length} aluno(s))`);
@@ -199,6 +246,18 @@ export default function TurmasManager({
     } finally {
       setSalvando(false);
     }
+  };
+
+  const salvarProfessores = async () => {
+    if (!selecionada) return;
+
+    const professorIds = profs.filter((p) => p.checked).map((p) => String(p.id));
+
+    await axios.put(
+      `${API.BASE_URL}/api/turmas/${selecionada}/vincular-professor`,
+      { professorIds },
+      { headers }
+    );
   };
 
   const criarTurma = async () => {
@@ -211,13 +270,25 @@ export default function TurmasManager({
         ownerId: owner.id,
         nome: novoNome.trim(),
         categoria: novoCategoria || undefined,
-        professorId: novoProfessor || undefined,
+        professorIds: novoProfessores,
       };
       const res = await axios.post(`${API.BASE_URL}/api/turmas`, payload, { headers });
+      const novaId = String(res.data?.id || "");
+
+      // 🔥 garante que salva professores da turma nova
+      if (novaId && novoProfessores.length) {
+        await axios.put(
+          `${API.BASE_URL}/api/turmas/${novaId}/vincular-professor`,
+          { professorIds: novoProfessores },
+          { headers }
+        );
+      }
+
       setNovoNome("");
       setNovoCategoria("");
-      await carregarTurmas(owner, filtroProf);
-      setSelecionada(res.data?.id);
+      await carregarTurmas(owner);
+      setSelecionada(novaId);
+      if (novaId) await abrirTurma(novaId);
       alert("Turma criada!");
     } catch (e: any) {
       alert(e?.response?.data?.message || e?.message || "Falha ao criar turma");
@@ -326,17 +397,24 @@ export default function TurmasManager({
                   ))}
                 </select>
                 <select
-                  value={novoProfessor}
-                  onChange={(e) => setNovoProfessor(e.target.value)}
+                  multiple
+                  value={novoProfessores}
+                  onChange={(e) =>
+                    setNovoProfessores(Array.from(e.target.selectedOptions).map((o) => o.value))
+                  }
                   className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                  style={{ minHeight: 120 }}
                 >
-                  <option value="">Professor (opcional)</option>
                   {profs.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.nome}
                     </option>
                   ))}
                 </select>
+
+                <div className="mt-1 text-xs text-zinc-500">
+                  Dica: segure Ctrl (Windows) / Cmd (Mac) para selecionar vários.
+                </div>
                 <button
                   onClick={criarTurma}
                   disabled={salvando}
@@ -353,55 +431,101 @@ export default function TurmasManager({
                   Selecione uma turma para gerenciar seus alunos.
                 </div>
               ) : (
-                <div className="rounded-xl border border-zinc-200 bg-white flex flex-col max-h-[70dvh]">
-                  <div className="flex items-center justify-between border-b border-zinc-100 p-3 flex-none">
-                    <div className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
-                      <Users className="h-4 w-4" /> Alunos da turma
+                <div className="flex flex-col gap-4">
+                  {/* ✅ Card: Professores da turma */}
+                  <div className="rounded-xl border border-zinc-200 bg-white">
+                    <div className="border-b border-zinc-100 p-3 text-sm font-semibold text-zinc-900 flex items-center gap-2">
+                      <User className="h-4 w-4" /> Professores da turma
                     </div>
-                    <button
-                      onClick={salvarMembros}
-                      disabled={salvando}
-                      className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-white hover:bg-emerald-700 disabled:opacity-70"
-                    >
-                      {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                      Salvar alterações
-                    </button>
-                  </div>
-                  <div className="border-b border-zinc-100 p-3 flex-none">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-                      <input
-                        value={filtroAluno}
-                        onChange={(e) => setFiltroAluno(e.target.value)}
-                        placeholder="Procurar aluno..."
-                        className="w-full rounded-lg border border-zinc-200 pl-9 pr-3 py-2 text-sm outline-none focus:border-emerald-400"
-                      />
+
+                    <div className="p-3 max-h-[26dvh] overflow-auto overscroll-contain">
+                      {profs.length === 0 ? (
+                        <div className="text-sm text-zinc-500">Nenhum professor encontrado.</div>
+                      ) : (
+                        <ul className="divide-y divide-green-100">
+                          {profs.map((p) => (
+                            <li key={p.id} className="py-2 flex items-center gap-3">
+                              <div className="flex-1">
+                                <div className="text-sm font-medium text-green-900">{p.nome}</div>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={!!p.checked}
+                                onChange={() =>
+                                  setProfs((prev) =>
+                                    prev.map((x) =>
+                                      x.id === p.id ? { ...x, checked: !x.checked } : x
+                                    )
+                                  )
+                                }
+                                className="h-4 w-4 rounded border-green-300 accent-emerald-600 focus:ring-emerald-500"
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   </div>
 
-                  <div
-                    className="flex-1 min-h-0 overflow-auto p-3 overscroll-contain"
-                    style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" as any }}
-                  >
-                    <ul className="divide-y divide-green-100">
-                      {alunosFiltrados.map((a) => (
-                        <li key={a.usuarioId} className="py-2 flex items-center gap-3">
-                          <div className="flex-1">
-                            <div className="text-sm font-medium text-green-900">{a.nome}</div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={!!a.checked}
-                            onChange={() =>
-                              setAlunos((prev) =>
-                                prev.map((x) => (x.usuarioId === a.usuarioId ? { ...x, checked: !x.checked } : x))
-                              )
-                            }
-                            className="h-4 w-4 rounded border-green-300 accent-emerald-600 focus:ring-emerald-500"
-                          />
-                        </li>
-                      ))}
-                    </ul>
+                  {/* ✅ Card: Alunos da turma */}
+                  <div className="rounded-xl border border-zinc-200 bg-white flex flex-col max-h-[70dvh]">
+                    <div className="flex items-center justify-between border-b border-zinc-100 p-3 flex-none">
+                      <div className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
+                        <Users className="h-4 w-4" /> Alunos da turma
+                      </div>
+
+                      <button
+                        onClick={salvarMembros}
+                        disabled={salvando}
+                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-white hover:bg-emerald-700 disabled:opacity-70"
+                      >
+                        {salvando ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4" />
+                        )}
+                        Salvar alterações
+                      </button>
+                    </div>
+
+                    <div className="border-b border-zinc-100 p-3 flex-none">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                        <input
+                          value={filtroAluno}
+                          onChange={(e) => setFiltroAluno(e.target.value)}
+                          placeholder="Procurar aluno..."
+                          className="w-full rounded-lg border border-zinc-200 pl-9 pr-3 py-2 text-sm outline-none focus:border-emerald-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div
+                      className="flex-1 min-h-0 overflow-auto p-3 overscroll-contain"
+                      style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" as any }}
+                    >
+                      <ul className="divide-y divide-green-100">
+                        {alunosFiltrados.map((a) => (
+                          <li key={a.usuarioId} className="py-2 flex items-center gap-3">
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-green-900">{a.nome}</div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={!!a.checked}
+                              onChange={() =>
+                                setAlunos((prev) =>
+                                  prev.map((x) =>
+                                    x.usuarioId === a.usuarioId ? { ...x, checked: !x.checked } : x
+                                  )
+                                )
+                              }
+                              className="h-4 w-4 rounded border-green-300 accent-emerald-600 focus:ring-emerald-500"
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 </div>
               )}

@@ -54,48 +54,64 @@ export async function listarElencosMinha(req: AuthenticatedRequest, res: Respons
     if (turmaId) {
       const turma = await prisma.turma.findUnique({
         where: { id: turmaId },
-        select: { id: true, clubeId: true, escolinhaId: true, professorId: true },
+        select: {
+          id: true,
+          clubeId: true,
+          escolinhaId: true,
+          professores: { select: { professorId: true } }, // <- existe no schema
+        },
       });
       if (!turma) return res.status(404).json({ error: "Turma não encontrada" });
 
+      // donoId pode ser clubeId/escolinhaId/professorId (id da entidade)
       const ligado =
-        turma.clubeId === donoId || turma.escolinhaId === donoId || turma.professorId === donoId;
+        turma.clubeId === donoId ||
+        turma.escolinhaId === donoId ||
+        turma.professores.some((p) => p.professorId === donoId);
+
       if (!ligado) return res.status(403).json({ error: "Sem permissão nesta turma" });
+      }
+        const data = await montarRespostaElencos(donoId, turmaId);
+        return res.json(data);
+      } catch (e) {
+        console.error("[listarElencosMinha] erro:", e);
+        return res.status(500).json({ error: "Erro ao buscar elencos." });
+      }
     }
 
-    const data = await montarRespostaElencos(donoId, turmaId);
-    return res.json(data);
-  } catch (e) {
-    console.error("[listarElencosMinha] erro:", e);
-    return res.status(500).json({ error: "Erro ao buscar elencos." });
-  }
-}
+    export async function escalaPorTurma(req: AuthenticatedRequest, res: Response) {
+      try {
+        const userId = req.userId;
+        const turmaId = String(req.query.turmaId || "");
+        if (!userId) return res.status(401).json({ error: "Não autenticado" });
+        if (!turmaId) return res.status(400).json({ error: "turmaId obrigatório" });
 
-export async function escalaPorTurma(req: AuthenticatedRequest, res: Response) {
-  try {
-    const userId = req.userId;
-    const turmaId = String(req.query.turmaId || "");
-    if (!userId) return res.status(401).json({ error: "Não autenticado" });
-    if (!turmaId) return res.status(400).json({ error: "turmaId obrigatório" });
+        const [clube, escolinha, professor] = await Promise.all([
+          prisma.clube.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
+          prisma.escolinha.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
+          prisma.professor.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
+        ]);
+        const donoId = clube?.id || escolinha?.id || professor?.id || null;
 
-    const [clube, escolinha, professor] = await Promise.all([
-      prisma.clube.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
-      prisma.escolinha.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
-      prisma.professor.findFirst({ where: { usuarioId: userId }, select: { id: true } }),
-    ]);
-    const donoId = clube?.id || escolinha?.id || professor?.id || null;
-
-    const turma = await prisma.turma.findUnique({
+        const turma = await prisma.turma.findUnique({
       where: { id: turmaId },
-      select: { id: true, clubeId: true, escolinhaId: true, professorId: true, nome: true },
+      select: {
+        id: true,
+        nome: true,
+        clubeId: true,
+        escolinhaId: true,
+        professores: { select: { professorId: true } },
+      },
     });
     if (!turma) return res.status(404).json({ error: "Turma não encontrada" });
-    if (
-      !donoId ||
-      (turma.clubeId !== donoId &&
-        turma.escolinhaId !== donoId &&
-        turma.professorId !== donoId)
-    ) {
+
+    const ligado =
+      !!donoId &&
+      (turma.clubeId === donoId ||
+        turma.escolinhaId === donoId ||
+        turma.professores.some((p) => p.professorId === donoId));
+
+    if (!ligado) {
       return res.status(403).json({ error: "Sem permissão nesta turma" });
     }
 
