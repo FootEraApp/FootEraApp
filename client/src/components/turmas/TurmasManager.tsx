@@ -145,11 +145,12 @@ export default function TurmasManager({
   }, [open, owner?.id]);
 
   useEffect(() => {
-    if (open && owner) void carregarTurmas(owner);
+    if (!open || !owner) return;
+    void carregarTurmas(owner, filtroProf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [professorId]);
+  }, [open, owner?.id, filtroProf]);
 
-  const carregarTurmas = async (o: Owner) => {
+  const carregarTurmas = async (o: Owner, professorFiltro?: string) => {
     const resT = await axios.get(`${API.BASE_URL}/api/turmas`, {
       headers,
       params: { ownerTipo: o.tipo, ownerId: o.id },
@@ -178,9 +179,11 @@ export default function TurmasManager({
       };
     });
 
+    const profFiltro = (professorFiltro ?? filtroProf)?.trim();
+
     const filtradas =
-      filtroProf
-        ? parsed.filter((t) => (t.professorIds ?? []).includes(String(filtroProf)))
+      profFiltro
+        ? parsed.filter((t) => (t.professorIds ?? []).includes(String(profFiltro)))
         : parsed;
 
     setTurmas(filtradas);
@@ -188,7 +191,7 @@ export default function TurmasManager({
 
   const onFiltrarProf = async (prof: string) => {
     setFiltroProf(prof);
-    if (owner) await carregarTurmas(owner);
+    if (owner) await carregarTurmas(owner, prof); // ✅ usa o valor novo
   };
 
   const marcarProfessoresDaTurma = (turmaId: string) => {

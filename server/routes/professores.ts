@@ -1,4 +1,3 @@
-// server/routes/professores
 import express from "express";
 import multer from "multer";
 import {
@@ -11,13 +10,15 @@ import {
   salvarVinculoProfessor,
   listarHistoricoAtletasProfessor,
   desvincularAtletaDoProfessor,
-  listarAtletasDoProfessor
+  listarAtletasDoProfessor,
+  listarProfessoresVinculados
 } from "../controllers/professoresController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 
 const router = express.Router();
 const upload = multer({ dest: "upload/" });
 
+router.get("/vinculados", authenticateToken, listarProfessoresVinculados);
 router.get("/:professorId/atletas", listarAtletasDoProfessor);
 router.get("/:professorId/historico-atletas", listarHistoricoAtletasProfessor);
 router.post("/:professorId/desvincular-atleta", desvincularAtletaDoProfessor);
