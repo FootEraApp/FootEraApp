@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from "react";
+// client/src/pages/editarPerfil
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { Link } from "wouter";
+import BottomNav from "@/components/layout/BottomNav.js";
 
 type ResultadoBuscaClube = {
   id: string;
@@ -559,7 +561,9 @@ const EditarPerfil = () => {
     }
   };
 
-  return (
+const FALLBACK_AVATAR = "/assets/usuarios/default-user.png"; // arquivo no client/public/assets/usuarios
+  
+return (
     <div
       className="p-6 max-w-3xl mx-auto pb-24"
       style={{ paddingBottom: "calc(72px + env(safe-area-inset-bottom))" }}
@@ -574,21 +578,28 @@ const EditarPerfil = () => {
         </Link>
       </div>
 
-      <h1 className="text-2xl font-bold mb-4">Editar Perfil</h1>
 
-      {typeof dadosUsuario.foto === "string" && dadosUsuario.foto && (
-        <div className="mb-6">
-          <label className="block text-sm font-medium">Foto Atual</label>
-          <img
-            src={formatarUrlFoto(dadosUsuario.foto, "usuarios")}
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).src = `${API.BASE_URL}/assets/usuarios/default-user.png`;
-            }}
-            className="w-24 h-24 rounded-full object-cover mt-2"
-            alt="Foto atual"
-          />
-        </div>
-      )}
+      <h1 className="text-2xl font-bold mb-4">Editar Perfil</h1>
+        {typeof dadosUsuario.foto === "string" && dadosUsuario.foto && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium">Foto Atual</label>
+            <img
+              src={formatarUrlFoto(dadosUsuario.foto, "usuarios")}
+              onError={(e) => {
+                const img = e.currentTarget as HTMLImageElement;
+
+                // trava pra não ficar em loop infinito
+                img.onerror = null;
+
+                // fallback LOCAL (5173), não no backend (3001)
+                img.src = FALLBACK_AVATAR;
+              }}
+              className="w-24 h-24 rounded-full object-cover mt-2"
+              alt="Foto atual"
+            />
+          </div>
+        )}
+
 
       <div className="mb-6">
         <label className="block text-sm font-medium">Foto de Perfil</label>
@@ -808,23 +819,7 @@ const EditarPerfil = () => {
         Salvar Alterações
       </button>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed" className="hover:underline">
-          <House />
-        </Link>
-        <Link href="/explorar" className="hover:underline">
-          <Search />
-        </Link>
-        <Link href="/post" className="hover:underline">
-          <CirclePlus />
-        </Link>
-        <Link href="/treinos" className="hover:underline">
-          <Volleyball />
-        </Link>
-        <Link href="/perfil" className="hover:underline">
-          <User />
-        </Link>
-      </nav>
+      <BottomNav />
     </div>
   );
 };
