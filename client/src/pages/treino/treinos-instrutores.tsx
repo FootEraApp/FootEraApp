@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { API } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
+import BottomNav from "@/components/layout/BottomNav.js";
 
 const Storage = {
   get token() {
@@ -2449,31 +2450,8 @@ async function salvarProgressoSessao(sessaoId: string) {
         );
       })()}
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-[0_-4px_12px_-6px_rgba(0,0,0,0.3)]">
-        <Link href="/feed" className="hover:opacity-90" aria-label="Feed">
-          <House />
-        </Link>
-        <Link
-          href="/explorar"
-          className="hover:opacity-90"
-          aria-label="Explorar"
-        >
-          <Search />
-        </Link>
-        <Link href="/post" className="hover:opacity-90" aria-label="Novo post">
-          <CirclePlus />
-        </Link>
-        <Link
-          href={isOlheiro ? "/olheiros" : "/treinos"}
-          className="hover:opacity-90"
-          aria-label="Treinos"
-        >
-          <Volleyball />
-        </Link>
-        <Link href="/perfil" className="hover:opacity-90" aria-label="Perfil">
-          <User />
-        </Link>
-      </nav>
+      <BottomNav active="treinos" />
+
     </div>
   );
 }

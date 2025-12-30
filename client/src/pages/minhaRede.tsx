@@ -4,6 +4,7 @@ import Storage from "../../../server/utils/storage.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import { Link } from 'wouter';
+import BottomNav from "@/components/layout/BottomNav.js";
 
 type Usuario = { id: string; nome: string; foto?: string | null };
 type Seguidor = Usuario & { isSeguindo?: boolean };
@@ -175,13 +176,7 @@ export default function MinhaRede() {
       )}
 
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed" className="hover:underline"><House /></Link>
-        <Link href="/explorar" className="hover:underline"><Search /></Link>
-        <Link href="/post" className="hover:underline"><CirclePlus /></Link>
-        <Link href="/treinos" className="hover:underline"><Volleyball /></Link>
-        <Link href="/perfil" className="hover:underline"><User /></Link>
-      </nav>
+      <BottomNav />
 
     </div>
   );
