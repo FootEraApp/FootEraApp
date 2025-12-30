@@ -36,6 +36,7 @@ import {
   salvarTreinoNaBiblioteca,
   getCalendarioTreinos,
   relacaoStatus,
+  getTreinosProgramadosStats
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
@@ -67,6 +68,11 @@ router.post(
   agendarTreino
 );
 
+router.get(
+  "/programados/stats",
+  authenticateToken,
+  getTreinosProgramadosStats
+);
 router.get("/programados/:id", obterTreinoProgramadoPorId);
 router.put(
   "/programados/:id",

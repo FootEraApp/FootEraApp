@@ -353,6 +353,8 @@ export default function TreinosInstrutores({
   const [clockNow, setClockNow] = useState<number>(Date.now());
   const [professoresVinculadosIds, setProfessoresVinculadosIds] = useState<string[]>([]);
   const [professoresVinculadosNomeById, setProfessoresVinculadosNomeById] = useState<Record<string, string>>({});
+  const [realizadoCountByTreinoId, setRealizadoCountByTreinoId] = useState<Record<string, number>>({});
+  const [exerciciosCountByTreinoId, setExerciciosCountByTreinoId] = useState<Record<string, number>>({});
 
   const [videoByExId, setVideoByExId] = useState<Record<string, string>>({});
   const startedAtRef = useRef<string | null>(null);
@@ -1104,6 +1106,51 @@ async function salvarProgressoSessao(sessaoId: string) {
     }
   }, []);
 
+  const meusTreinos = treinos.filter((t) => {
+    const meuId = String(usuario?.tipoUsuarioId ?? "").trim();
+    const meuTipo = String(usuario?.tipo ?? "").toLowerCase();
+
+    const donoId = {
+      clubeId: String(t.clubeId ?? "").trim(),
+      escolinhaId: String(t.escolinhaId ?? "").trim(),
+      professorId: String(t.professorId ?? "").trim(),
+    };
+
+    const euSouDono =
+      (!!meuId && (donoId.clubeId === meuId || donoId.escolinhaId === meuId || donoId.professorId === meuId));
+
+    const euSouColaborador =
+      Array.isArray(t.professoresIds) &&
+      !!meuId &&
+      t.professoresIds.map(String).includes(meuId);
+
+    const treinoDoMeuProfessorVinculado =
+      (meuTipo === "clube" || meuTipo === "escolinha") &&
+      !!donoId.professorId &&
+      professoresVinculadosIds.map(String).includes(donoId.professorId);
+
+    const fallbackPorNome =
+      !!meuNome &&
+      Array.isArray(t.criadoresNomes) &&
+      t.criadoresNomes.some((n) => normTxt(n) === normTxt(meuNome));
+
+    return euSouDono || euSouColaborador || treinoDoMeuProfessorVinculado || fallbackPorNome;
+  });
+
+  const listaParaExibir =
+    usuario?.tipo === "admin"
+      ? treinos
+      : (meusTreinos.length ? meusTreinos : treinos); 
+
+  const totalTreinosExibidos = useMemo(() => listaParaExibir.length, [listaParaExibir]);
+
+  const totalExerciciosExibidos = useMemo(() => {
+    return (listaParaExibir || []).reduce((acc, t) => {
+      const n = Number(exerciciosCountByTreinoId[t.id] ?? t.exercicios?.length ?? 0);
+      return acc + (Number.isFinite(n) ? n : 0);
+    }, 0);
+  }, [listaParaExibir, exerciciosCountByTreinoId]);
+
   const usuarioReady = useMemo(() => {
     const tipoOk = String(usuario?.tipo ?? tipo ?? "").trim().toLowerCase();
     const idOk = String(usuario?.tipoUsuarioId ?? "").trim();
@@ -1277,6 +1324,33 @@ async function salvarProgressoSessao(sessaoId: string) {
     }).length;
 
     setTreinos(normTreinos);
+    // ✅ buscar stats (realizado X vezes + count exercicios) em lote
+    try {
+      const ids = normTreinos.map((t) => t.id).filter(Boolean);
+      if (ids.length) {
+        const statsRes = await fetch(
+          `${API.BASE_URL}/api/treinos/programados/stats?ids=${encodeURIComponent(ids.join(","))}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        if (statsRes.ok) {
+          const statsJson = await statsRes.json().catch(() => ({}));
+          setRealizadoCountByTreinoId(statsJson?.realizadoCountByTreinoId ?? {});
+          setExerciciosCountByTreinoId(statsJson?.exerciciosCountByTreinoId ?? {});
+        } else {
+          setRealizadoCountByTreinoId({});
+          setExerciciosCountByTreinoId({});
+        }
+      } else {
+        setRealizadoCountByTreinoId({});
+        setExerciciosCountByTreinoId({});
+      }
+    } catch (e) {
+      console.warn("[treinos] falha ao carregar stats", e);
+      setRealizadoCountByTreinoId({});
+      setExerciciosCountByTreinoId({});
+    }
+
     } catch (e) {
       console.error(e);
       setTreinos([]);
@@ -1455,14 +1529,23 @@ async function salvarProgressoSessao(sessaoId: string) {
           new Set([professorNomeSingular, ...professorNomesDireto, ...nomesFromIds].filter(Boolean))
         );
 
+        const atletaIds = Array.from(
+          new Set(
+            (Array.isArray(t.atletaIds) ? t.atletaIds : [])
+              .map((x: any) => String(x || "").trim())
+              .filter(Boolean)
+          )
+        );
+
         return {
           id: String(t.id),
           nome: String(nome),
-          atletaIds: [],
+          atletaIds,
           professorIds,
           professorNomes,
           professorNome: professorNomes.join(", ") || professorNomeSingular || null,
         };
+
       });
 
       setTurmas(norm);
@@ -1861,6 +1944,12 @@ async function salvarProgressoSessao(sessaoId: string) {
           <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>
         )}
 
+        {/* ✅ Realizado X vezes (abaixo da descrição) */}
+        <div className="text-xs text-gray-600 mt-1">
+          <strong>Realizado:</strong>{" "}
+          {Number(realizadoCountByTreinoId[treino.id] ?? 0)} vez(es)
+        </div>
+
         {Array.isArray(treino.criadoresNomes) && treino.criadoresNomes.length > 0 && (
           <div className="mt-2 text-xs text-gray-600">
             <strong>Criado por:</strong>{" "}
@@ -2033,6 +2122,10 @@ async function salvarProgressoSessao(sessaoId: string) {
           <p>
             <strong>Nível:</strong> {treino.nivel}
           </p>
+          <p>
+            <strong>Exercícios:</strong>{" "}
+            {Number(exerciciosCountByTreinoId[treino.id] ?? treino.exercicios?.length ?? 0)}
+          </p>
           {treino.dataAgendada && (
             <p>
               <strong>Data:</strong> {formatarData(treino.dataAgendada)}
@@ -2075,42 +2168,6 @@ async function salvarProgressoSessao(sessaoId: string) {
   };
 
   const meuTipoUsuarioId = String(usuario?.tipoUsuarioId ?? "");
-
-  const meusTreinos = treinos.filter((t) => {
-    const meuId = String(usuario?.tipoUsuarioId ?? "").trim();
-    const meuTipo = String(usuario?.tipo ?? "").toLowerCase();
-
-    const donoId = {
-      clubeId: String(t.clubeId ?? "").trim(),
-      escolinhaId: String(t.escolinhaId ?? "").trim(),
-      professorId: String(t.professorId ?? "").trim(),
-    };
-
-    const euSouDono =
-      (!!meuId && (donoId.clubeId === meuId || donoId.escolinhaId === meuId || donoId.professorId === meuId));
-
-    const euSouColaborador =
-      Array.isArray(t.professoresIds) &&
-      !!meuId &&
-      t.professoresIds.map(String).includes(meuId);
-
-    const treinoDoMeuProfessorVinculado =
-      (meuTipo === "clube" || meuTipo === "escolinha") &&
-      !!donoId.professorId &&
-      professoresVinculadosIds.map(String).includes(donoId.professorId);
-
-    const fallbackPorNome =
-      !!meuNome &&
-      Array.isArray(t.criadoresNomes) &&
-      t.criadoresNomes.some((n) => normTxt(n) === normTxt(meuNome));
-
-    return euSouDono || euSouColaborador || treinoDoMeuProfessorVinculado || fallbackPorNome;
-  });
-
-  const listaParaExibir =
-    usuario?.tipo === "admin"
-      ? treinos
-      : (meusTreinos.length ? meusTreinos : treinos); 
 
   const isGestor =
     usuario?.tipo &&
@@ -2344,6 +2401,10 @@ async function salvarProgressoSessao(sessaoId: string) {
                     ? "Todos os Treinos"
                     : "Treinos que você criou"}
                 </h3>
+                <div className="text-xs text-gray-600">
+                  <strong>Treinos:</strong> {totalTreinosExibidos} •{" "}
+                  <strong>Exercícios:</strong> {totalExerciciosExibidos}
+                </div>
                 <button
                   className="bg-green-800 text-white px-4 py-2 rounded-lg"
                   onClick={() => navigate("/treinos/novo")}
