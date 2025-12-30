@@ -31,7 +31,8 @@ export const BLOCK_MESSAGES: Record<BlockReason, string> = {
     "Fair-use: alto volume de agendamentos este mês.",
   treinos_programados_mes:
     "Você atingiu o limite mensal de treinos programados no plano Free. Remova alguns treinos ou faça upgrade para continuar criando.",
-
+  agendamento_rotina_mensal:
+    "Você atingiu o limite mensal de agendamentos de rotinas no plano Free. Remova alguns agendamentos ou faça upgrade para continuar criando.",
   TREINO_SALVO_FREE:
     "Você atingiu o limite de treinos salvos no plano Free. Exclua um ou faça upgrade.",
   DM_MENOR_SEM_CONSENTIMENTO:

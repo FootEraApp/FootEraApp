@@ -110,28 +110,28 @@ model Assinatura {
 }
 
 model Professor {
-  id                  String               @id @default(uuid())
-  codigo              String               @unique
-  cref                String?
-  areaFormacao        String
-  escola              String?
-  fotoUrl             String?
-  nome                String               @unique
-  usuarioId           String?              @unique
-  statusCref          StatusCref?
-  qualificacoes       String[]
-  certificacoes       String[]
+  id            String      @id @default(uuid())
+  codigo        String      @unique
+  cref          String?
+  areaFormacao  String
+  escola        String?
+  fotoUrl       String?
+  nome          String      @unique
+  usuarioId     String?     @unique
+  statusCref    StatusCref?
+  qualificacoes String[]
+  certificacoes String[]
+  email         String?     @db.VarChar(191)
   observacoes         AtletaObservado[]    @relation("ObservacaoProfessor")
   usuario             Usuario?             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoProfessor")
   treinosProgramados  TreinoProgramado[]
-  escolinhaId         String?
-  clubeId             String?
-  organizacaoId       String?
-  email               String?              @db.VarChar(191)
 
-  escolinha           Escolinha?                  @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
-  clube               Clube?                      @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  organizacaoId String?
+
+  clubes     ProfessorClube[]
+  escolinhas ProfessorEscolinha[]
+
   turmasParticipando  TurmaProfessor[]
   atletas             Atleta[]
   TreinoSalvo         TreinoSalvo[]
@@ -145,10 +145,40 @@ model Professor {
   TreinoProfessorUso          TreinoProfessorUso[]
   TreinoRotina                TreinoRotina[]
   AtletaHistoricoVinculo      AtletaHistoricoVinculo[]
+  Escolinha                   Escolinha?               @relation(fields: [escolinhaId], references: [id])
+  escolinhaId                 String?
+  Clube                       Clube?                   @relation(fields: [clubeId], references: [id])
+  clubeId                     String?
 
-  @@index([escolinhaId])
-  @@index([clubeId])
   @@index([organizacaoId])
+}
+
+model ProfessorClube {
+  id          String   @id @default(uuid())
+  professorId String
+  clubeId     String
+  papel       String?
+  createdAt   DateTime @default(now())
+
+  professor Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  clube     Clube     @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+
+  @@unique([professorId, clubeId])
+  @@index([clubeId])
+}
+
+model ProfessorEscolinha {
+  id          String   @id @default(uuid())
+  professorId String
+  escolinhaId String
+  papel       String?
+  createdAt   DateTime @default(now())
+
+  professor Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  escolinha Escolinha @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
+
+  @@unique([professorId, escolinhaId])
+  @@index([escolinhaId])
 }
 
 model Amigo {
@@ -538,6 +568,7 @@ model Escolinha {
   TreinoRotina           TreinoRotina[]
   eventos                Evento[]
   AtletaHistoricoVinculo AtletaHistoricoVinculo[]
+  ProfessorEscolinha     ProfessorEscolinha[]
 }
 
 model Comentario {
@@ -597,6 +628,7 @@ model Clube {
   TreinoSalvo            TreinoSalvo[]
   TreinoRotina           TreinoRotina[]
   AtletaHistoricoVinculo AtletaHistoricoVinculo[]
+  ProfessorClube         ProfessorClube[]
 }
 
 model SolicitacaoVinculo {
