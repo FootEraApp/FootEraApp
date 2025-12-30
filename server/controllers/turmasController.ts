@@ -5,26 +5,12 @@ import type { TurmaUsuario, Usuario as UsuarioModel, Atleta as AtletaModel } fro
 
 const prisma = new PrismaClient();
 
-function getTurmaPivot(): any {
-  const p: any = prisma as any;
-
-  const preferred = [
-    "turmaAluno","turmaAlunos","alunoTurma","alunosTurma",
-    "turmaUsuario","turmaUsuarios",
-    "turmaAtleta","turmaAtletas","atletaTurma","atletasTurma",
-    "turmaMembro","turmaIntegrante","membroTurma","membrosTurma",
-    "participanteTurma","turmaParticipante"
-  ];
-  for (const k of preferred) if (p[k]) return p[k];
-
-  const keys = Object.keys(p).filter((k) => typeof p[k]?.findMany === "function");
-  const candidates = keys.filter((k) =>
-    /turm/i.test(k) && /(alun|usuari|atlet|memb|particip|integr)/i.test(k)
-  );
-
-  for (const k of candidates) return p[k];
-
-  return null;
+function uniqById<T extends { id: string }>(arr: T[]) {
+  const map = new Map<string, T>();
+  for (const item of arr) {
+    if (item?.id && !map.has(item.id)) map.set(item.id, item);
+  }
+  return Array.from(map.values());
 }
 
 const REL_USUARIO = [
@@ -143,7 +129,7 @@ export async function obterAlunosTurma(req: Request, res: Response) {
 
 export async function listarMinhasTurmas(req: AuthenticatedRequest, res: Response) {
   try {
-    const tipoUsuarioId = String(req.query.tipoUsuarioId || "");
+    const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim();
     if (!tipoUsuarioId) return res.status(400).json({ error: "tipoUsuarioId obrigatório" });
 
     const turmas = await prisma.turma.findMany({
@@ -154,11 +140,45 @@ export async function listarMinhasTurmas(req: AuthenticatedRequest, res: Respons
           { professores: { some: { professor: { usuarioId: tipoUsuarioId } } } },
         ],
       },
-      select: { id: true, nome: true },
+      select: {
+        id: true,
+        nome: true,
+        categoria: true,
+        professores: {
+          select: {
+            professor: {
+              select: {
+                id: true,
+                nome: true,
+                usuario: { select: { nome: true } },
+              },
+            },
+          },
+        },
+        _count: { select: { membros: true } },
+      },
       orderBy: { nome: "asc" },
     });
 
-    return res.json({ items: turmas });
+    const items = turmas.map((t) => {
+    const profsRaw = (t.professores ?? [])
+      .map((tp) => tp?.professor ?? null)
+      .filter((p): p is { id: string; nome: string; usuario: { nome: string } } => Boolean(p?.id));
+
+    const profs = uniqById(profsRaw);
+
+    return {
+      id: t.id,
+      nome: t.nome,
+      categoria: t.categoria ?? null,
+      professorIds: profs.map((p) => p.id),
+      professorNomes: profs.map((p) => p.nome),
+      professorNome: profs.map((p) => p.nome).join(", ") || null,
+      alunosCount: t._count.membros,
+    };
+    });
+
+    return res.json({ items });
   } catch (e) {
     console.error("[listarMinhasTurmas] erro:", e);
     return res.status(500).json({ error: "Erro ao listar turmas" });
@@ -198,9 +218,11 @@ export async function listarTurmas(req: Request, res: Response) {
     });
 
     const items = rows.map((t) => {
-    const profs = (t.professores ?? [])
+    const profsRaw = (t.professores ?? [])
       .map((tp) => tp?.professor ?? null)
       .filter((p): p is { id: string; nome: string } => Boolean(p?.id));
+
+    const profs = uniqById(profsRaw);
 
     return {
       id: t.id,
