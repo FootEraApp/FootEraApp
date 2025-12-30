@@ -5,6 +5,7 @@ import axios from "axios";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
 import { House, Search, CirclePlus, Eye, User } from "lucide-react";
+import BottomNav from "@/components/layout/BottomNav.js";
 
 type Atleta = {
   id: string;     
@@ -181,14 +182,8 @@ export default function PainelOlheiro() {
         </ul>
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md z-50">
-        <Link href="/feed"><House /></Link>
-        <Link href="/explorar"><Search /></Link>
-        <Link href="/post"><CirclePlus /></Link>
-        <Link href="/olheiros"><Eye /></Link>
-        <Link href="/perfil"><User /></Link>
-      </nav>
-
+      
+      <BottomNav active="olheiros" />
 
     </div>
   );

@@ -1,3 +1,4 @@
+// client/src/pages/perfil
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";
@@ -31,6 +32,7 @@ import {
   type Tier,
 } from "../lib/achievementsCatalog.js";
 import { FaHeart, FaRegCommentDots } from "react-icons/fa";
+import BottomNav from "@/components/layout/BottomNav.js";
 
 type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha" | "Admin" | "Olheiro";
 
@@ -221,29 +223,8 @@ export default function ProfilePage() {
       {tipo === "Escolinha" && <PerfilEscola idDaUrl={idDaUrl} />}
       {tipo === "Olheiro" && <PerfilOlheiro idDaUrl={idDaUrl} />}
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed">
-          <House />
-        </Link>
-        <Link href="/explorar">
-          <Search />
-        </Link>
-        <Link href="/post">
-          <CirclePlus />
-        </Link>
-        {tipo === "Olheiro" ? (
-          <Link href="/olheiros">
-            <Eye />
-          </Link>
-        ) : (
-          <Link href="/treinos">
-            <Volleyball />
-          </Link>
-        )}
-        <Link href="/perfil">
-          <User />
-        </Link>
-      </nav>
+      <BottomNav active="perfil" />
+
     </div>
   );
 }

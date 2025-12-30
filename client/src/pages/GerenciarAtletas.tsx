@@ -265,8 +265,21 @@ function submissaoToAgendadoLike(s: SubmissaoItem): TreinoAgendadoItem {
 
 const getFoto = (f?: string | null) => {
   if (!f || f === "" || f === "null") return "/assets/usuarios/default-user.png";
-  if (f.startsWith("http")) return f;
-  return `${API.BASE_URL}/${f.replace(/^\/+/, "")}`;
+
+  const v = String(f).trim();
+
+  if (/^https?:\/\//i.test(v)) return v;
+
+  if (v.startsWith("/assets/") || v.startsWith("assets/")) {
+    return v.startsWith("/") ? v : `/${v}`;
+  }
+
+  if (v.startsWith("/uploads/") || v.startsWith("uploads/")) {
+    const path = v.startsWith("/") ? v.slice(1) : v;
+    return `${API.BASE_URL}/${path}`;
+  }
+
+  return `${API.BASE_URL}/${v.replace(/^\/+/, "")}`;
 };
 
 const numberOrDash = (n?: number | null) => (typeof n === "number" ? n : "–");
@@ -408,6 +421,7 @@ const GerenciarAtletas: React.FC = () => {
   const [comentariosMarcados, setComentariosMarcados] = useState<Record<string, boolean>>({});
   const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
 
+  const [detalheAtivo, setDetalheAtivo] = useState(false);
 
   const tipoParaVinculo = (t: "Escola" | "Clube" | "Professor") =>
     t === "Escola" ? "escolinha" : t.toLowerCase();
@@ -594,10 +608,12 @@ const carregarProfessores = async () => {
 
   useEffect(() => {
     if (!tipo || !usuarioIdEntidade) return;
+
     carregarAtletas();
     if (tipo !== "Professor") carregarProfessores();
 
     if (pollingRef.current) clearInterval(pollingRef.current);
+
     pollingRef.current = setInterval(() => {
       carregarAtletas();
       if (tipo !== "Professor") carregarProfessores();
@@ -609,10 +625,23 @@ const carregarProfessores = async () => {
   }, [tipo, usuarioIdEntidade]);
 
 
+
+  const filtrosRef = useRef<any>(null);
+
   useEffect(() => {
     if (!tipo || !usuarioIdEntidade) return;
-    carregarAtletas();
-  }, [q, categoria, posicaoCodigo, status, ordenacao]);
+
+    if (filtrosRef.current) clearTimeout(filtrosRef.current);
+
+    filtrosRef.current = setTimeout(() => {
+      carregarAtletas();
+    }, 400);
+
+    return () => {
+      if (filtrosRef.current) clearTimeout(filtrosRef.current);
+    };
+  }, [q, categoria, posicaoCodigo, status, ordenacao, tipo, usuarioIdEntidade]);
+
 
   const filtrados = useMemo(() => atletas, [atletas]);
 
@@ -629,31 +658,37 @@ const carregarProfessores = async () => {
 
   const abrirDetalhe = (a: AtletaMin) => {
     setFocado(a);
+    setDetalheAtivo(true);
   };
 
-  useEffect(() => {
-    if (!focado) {
-      setStats(null);
-      setSubmissoes([]);
-      if (pollingStatsRef.current) clearInterval(pollingStatsRef.current);
-      if (pollingSubsRef.current) clearInterval(pollingSubsRef.current);
-      return;
-    }
-    const uid = focado.usuarioId || focado.id;
-    carregarStatsAtleta(uid);
-    carregarSubmissoesAtleta(uid);
-
+  function limparDetalhe() {
     if (pollingStatsRef.current) clearInterval(pollingStatsRef.current);
     if (pollingSubsRef.current) clearInterval(pollingSubsRef.current);
 
-    pollingStatsRef.current = setInterval(() => carregarStatsAtleta(uid), 15000);
-    pollingSubsRef.current = setInterval(() => carregarSubmissoesAtleta(uid), 15000);
+    setDetalheAtivo(false);
+    setFocado(null);
+    setStats(null);
+    setSubmissoes([]);
+  }
 
+  const focadoUid = focado?.usuarioId ?? focado?.id ?? null;
+
+  useEffect(() => {
+    // ✅ só carrega quando o usuário abriu os detalhes
+    if (!detalheAtivo || !focadoUid) return;
+
+    // ✅ 1 fetch (sem polling infinito)
+    carregarStatsAtleta(focadoUid);
+    carregarSubmissoesAtleta(focadoUid);
+
+    // ✅ garantia: se sobrar interval antigo por algum motivo, mata
     return () => {
       if (pollingStatsRef.current) clearInterval(pollingStatsRef.current);
       if (pollingSubsRef.current) clearInterval(pollingSubsRef.current);
     };
-  }, [focado?.usuarioId, focado?.id]);
+  }, [detalheAtivo, focadoUid]);
+
+
 
   async function carregarAgendadosDoAtleta(atletaId: string, mes: Date) {
     const month = `${mes.getFullYear()}-${pad2(mes.getMonth() + 1)}`;
@@ -1430,6 +1465,12 @@ async function salvarAvaliacao() {
                     </ul>
                   )}
                 </div>
+                <button
+                  onClick={limparDetalhe}
+                  className="mt-3 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+                >
+                  Fechar detalhes
+                </button>
               </div>
             ) : (
               <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600">
@@ -1453,45 +1494,46 @@ async function salvarAvaliacao() {
 
 {carreiraOpen && focado && (
   <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center">
-    <div className="w-full max-w-6xl overflow-hidden rounded-2xl bg-[#0f1b2e] text-white shadow-2xl">
+    <div className="w-full max-w-6xl overflow-hidden rounded-2xl border border-zinc-200 bg-white text-zinc-900 shadow-2xl">
       {/* topo */}
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-        <div className="min-w-0">
-          <div className="text-sm opacity-80">Agenda de Treinos</div>
-          <div className="font-extrabold truncate">{focado.nome}</div>
-        </div>
+<div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+  <div className="min-w-0">
+    <div className="text-xs text-zinc-500">Agenda de Treinos</div>
+    <div className="font-extrabold truncate text-zinc-900">{focado.nome}</div>
+  </div>
 
-        <button
-          onClick={() => setCarreiraOpen(false)}
-          className="rounded-xl bg-white/5 px-3 py-2 text-sm hover:bg-white/10 border border-white/10"
-        >
-          Fechar
-        </button>
-      </div>
+  <button
+    onClick={() => setCarreiraOpen(false)}
+    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+  >
+    Fechar
+  </button>
+</div>
+
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px]">
         {/* Calendário */}
-        <div className="p-4 border-b xl:border-b-0 xl:border-r border-white/10">
+        <div className="p-4 border-b xl:border-b-0 xl:border-r border-zinc-200">
           <div className="flex items-center justify-between mb-3">
             <div className="flex flex-wrap items-center justify-end gap-2">
               <button
                 onClick={() => setCursorMonth((d) => addMonths(d, -1))}
-                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10"
+                className="p-2 rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
                 title="Mês anterior"
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
               <button
                 onClick={() => setCursorMonth((d) => addMonths(d, 1))}
-                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10"
+                className="p-2 rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
                 title="Próximo mês"
               >
                 <ChevronRight className="h-5 w-5" />
               </button>
-              <div className="font-extrabold text-lg">{monthLabel}</div>
+              <div className="font-extrabold text-lg text-zinc-900">{monthLabel}</div>
             </div>
 
-            <div className="text-xs opacity-80 flex items-center gap-3">
+            <div className="text-xs text-zinc-600 flex items-center gap-3">
               <span className="flex items-center gap-1">
                 <span className="inline-block h-3 w-3 rounded bg-green-500" /> Concluído
               </span>
@@ -1499,7 +1541,7 @@ async function salvarAvaliacao() {
                 <span className="inline-block h-3 w-3 rounded bg-red-500" /> Perdido
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block h-3 w-3 rounded bg-white/20" /> Normal / Pendente
+                <span className="inline-block h-3 w-3 rounded bg-zinc-300" /> Normal / Pendente
               </span>
             </div>
           </div>
@@ -1523,9 +1565,9 @@ async function salvarAvaliacao() {
                   const pending = hasTreino && !done && !lost;
 
                   const bg =
-                    done ? "bg-green-500/25 border-green-400/30"
-                    : lost ? "bg-red-500/20 border-red-400/30"
-                    : "bg-white/5 border-white/10";
+                    done ? "bg-emerald-50 border-emerald-200"
+                    : lost ? "bg-red-50 border-red-200"
+                    : "bg-white border-zinc-200";
 
                   const opacity = inMonth ? "opacity-100" : "opacity-40";
 
@@ -1541,14 +1583,14 @@ async function salvarAvaliacao() {
                         "h-16 rounded-xl border text-left p-2 transition relative",
                         bg,
                         opacity,
-                        selected ? "ring-2 ring-white/40" : "hover:bg-white/10",
+                        selected ? "ring-2 ring-emerald-400" : "hover:bg-zinc-50",
                         past ? "opacity-70" : "",
                       ].join(" ")}
                     >
                       <div className="flex items-center justify-between">
                         <div className="text-sm font-bold">{date.getDate()}</div>
-                        {done ? <CheckCircle2 className="h-4 w-4 text-green-300" /> : null}
-                        {lost ? <XCircle className="h-4 w-4 text-red-300" /> : null}
+                        {done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : null}
+                        {lost ? <XCircle className="h-4 w-4 text-red-600" /> : null}
 
                       </div>
                       {hasTreino ? (
@@ -1571,12 +1613,12 @@ async function salvarAvaliacao() {
         <div className="p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <ClipboardList className="h-5 w-5 opacity-80" />
-              <h3 className="font-extrabold">Detalhes</h3>
+              <ClipboardList className="h-5 w-5 text-zinc-500" />
+              <h3 className="font-extrabold text-zinc-900">Detalhes</h3>
             </div>
             <button
               onClick={() => setDrawerOpen((v) => !v)}
-              className="text-xs px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10"
+              className="text-xs px-3 py-1 rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
             >
               {drawerOpen ? "Recolher" : "Abrir"}
             </button>
@@ -1591,7 +1633,7 @@ async function salvarAvaliacao() {
 
               {/* Agendamento rápido (multi-dia) */}
               {!hasPastSelectedDay ? (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                <div className="rounded-xl border border-zinc-200 bg-white p-3">
                   <div className="text-sm font-bold mb-2">
                     Agendar para {selectedDays.length === 1 ? "1 dia selecionado" : `${selectedDays.length} dias selecionados`}
                   </div>
@@ -1601,7 +1643,7 @@ async function salvarAvaliacao() {
                     <select
                       value={treinoProgramadoId}
                       onChange={(e) => setTreinoProgramadoId(e.target.value)}
-                      className="w-full bg-[#0b1220] border border-white/10 rounded-lg px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800"
                     >
                       <option value="">Selecionar...</option>
                       {treinosProgramados.map((t) => (
@@ -1614,7 +1656,7 @@ async function salvarAvaliacao() {
                     <button
                       onClick={agendarParaDiasSelecionados}
                       disabled={loadingProgramados || salvandoAgenda}
-                      className="w-full mt-2 bg-green-700 hover:bg-green-600 disabled:opacity-60 disabled:hover:bg-green-700 transition text-sm font-bold rounded-lg px-3 py-2"
+                      className="w-full mt-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 disabled:hover:bg-emerald-600 transition"
                     >
                       {salvandoAgenda ? "Agendando..." : loadingProgramados ? "Carregando..." : "Agendar treino nos dias selecionados"}
                     </button>
@@ -1663,10 +1705,10 @@ async function salvarAvaliacao() {
                         const lost = !done && isLost(t);
 
                         const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
-                        const statusClass = done ? "text-green-300" : lost ? "text-red-300" : "text-white/80";
+                        const statusClass = done ? "text-emerald-600" : lost ? "text-red-600" : "text-zinc-600";
 
                         return (
-                          <div key={t.id} className="rounded-lg border border-white/10 bg-[#0b1220] p-3">
+                          <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-3">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <div className="font-bold truncate">{nome}</div>
