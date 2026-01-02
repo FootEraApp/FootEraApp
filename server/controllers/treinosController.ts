@@ -28,6 +28,7 @@ import {
 } from "server/utils/featureLimit.js";
 import jwt from "jsonwebtoken";
 import { startOfMonth, addMonths, startOfDay } from "date-fns";
+import { recalcularEstatisticaExercicios } from "server/services/estatisticasExercicio.service.js";
 
 const prisma = new PrismaClient();
 type Request = ExpressRequest;
@@ -59,13 +60,6 @@ async function recomputeFeitosTreino(treinoProgramadoId: string) {
   return total;
 }
 
-function pickId(v: any): string | null {
-  if (!v) return null;
-  if (typeof v === "string") return v.trim() || null;
-  if (typeof v === "object" && typeof v.id === "string") return v.id.trim() || null;
-  return null;
-}
-
 async function recomputeInclusoesExercicio(exercicioId: string) {
   const total = await prisma.treinoProgramadoExercicio.count({
     where: { exercicioId },
@@ -78,74 +72,6 @@ async function recomputeInclusoesExercicio(exercicioId: string) {
   });
 
   return total;
-}
-
-async function getOwnerContextByUserId(usuarioId: string) {
-  const u = await prisma.usuario.findUnique({
-    where: { id: usuarioId },
-    select: {
-      tipo: true,
-      professor: { select: { id: true, clubeId: true, escolinhaId: true } },
-      clube: { select: { id: true } },
-      escolinha: { select: { id: true } },
-    },
-  });
-
-  if (!u) return { professorId: null, clubeId: null, escolinhaId: null };
-
-  const professorId = pickId(u.professor?.id);
-  const clubeId = pickId(u.clube?.id) || pickId(u.professor?.clubeId);
-  const escolinhaId = pickId(u.escolinha?.id) || pickId(u.professor?.escolinhaId);
-
-  return { professorId, clubeId, escolinhaId, tipo: u.tipo };
-}
-
-async function listarAtletasVinculadosPorOwner(ctx: {
-  professorId?: string | null;
-  clubeId?: string | null;
-  escolinhaId?: string | null;
-}) {
-  const whereOr: any[] = [];
-  if (ctx.professorId) whereOr.push({ professorId: ctx.professorId });
-  if (ctx.clubeId) whereOr.push({ clubeId: ctx.clubeId });
-  if (ctx.escolinhaId) whereOr.push({ escolinhaId: ctx.escolinhaId });
-
-  if (!whereOr.length) return [];
-
-  const rels = await prisma.relacaoTreinamento.findMany({
-    where: {
-      OR: whereOr,
-    },
-    select: {
-      id: true,
-      ativo: true,
-      professorId: true,
-      clubeId: true,
-      escolinhaId: true,
-      atleta: {
-        select: {
-          id: true,
-          usuarioId: true,
-          foto: true,
-          nome: true,
-          sobrenome: true,
-          categoria: true,
-          usuario: { select: { id: true, nome: true, email: true, foto: true, tipo: true } },
-        },
-      },
-    },
-  });
-
-  return rels
-    .filter((r) => r.ativo !== false)
-    .map((r) => ({
-      relacaoId: r.id,
-      professorId: r.professorId ?? null,
-      clubeId: r.clubeId ?? null,
-      escolinhaId: r.escolinhaId ?? null,
-      atleta: r.atleta,
-    }))
-    .filter((x) => !!x.atleta);
 }
 
 function parseDateInput(raw: any): Date {
@@ -987,6 +913,61 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
       orderBy: { createdAt: "desc" },
     });
 
+    const treinoIds = rows.map((t) => t.id);
+    const subsAll = await prisma.submissaoTreino.groupBy({
+      by: ["treinoAgendadoId"],
+      where: {
+        treinoAgendado: {
+          treinoProgramadoId: { in: treinoIds },
+        },
+      },
+      _count: { _all: true },
+    });
+
+    const subsApproved = await prisma.submissaoTreino.groupBy({
+      by: ["treinoAgendadoId"],
+      where: {
+        aprovado: true,
+        treinoAgendado: {
+          treinoProgramadoId: { in: treinoIds },
+        },
+      },
+      _count: { _all: true },
+    });
+
+    const agIdsAll = subsAll.map((x) => x.treinoAgendadoId);
+    const agIdsAp = subsApproved.map((x) => x.treinoAgendadoId);
+
+    const agMap = await prisma.treinoAgendado.findMany({
+      where: { id: { in: Array.from(new Set([...agIdsAll, ...agIdsAp])) } },
+      select: { id: true, treinoProgramadoId: true },
+    });
+
+    const treinoByAg: Record<string, string> = {};
+    for (const a of agMap) treinoByAg[String(a.id)] = String(a.treinoProgramadoId);
+
+    const enviadosMap: Record<string, number> = {};
+    for (const row of subsAll) {
+      const treinoId = treinoByAg[String(row.treinoAgendadoId)];
+      if (!treinoId) continue;
+      enviadosMap[treinoId] = (enviadosMap[treinoId] || 0) + (row._count?._all || 0);
+    }
+
+    const aprovadosMap: Record<string, number> = {};
+    for (const row of subsApproved) {
+      const treinoId = treinoByAg[String(row.treinoAgendadoId)];
+      if (!treinoId) continue;
+      aprovadosMap[treinoId] = (aprovadosMap[treinoId] || 0) + (row._count?._all || 0);
+    }
+
+    const statsRows = await prisma.estatisticaTreino.findMany({
+      where: { treinoId: { in: treinoIds } },
+      select: { treinoId: true, feitosAlunos: true },
+    });
+
+    const feitosMap: Record<string, number> = {};
+    for (const s of statsRows) feitosMap[String(s.treinoId)] = Number(s.feitosAlunos ?? 0);
+
     const out = rows.map((t) => {
       const criadores: Array<{ tipo: "Professor" | "Clube" | "Escolinha"; id: string; nome: string }> = [];
 
@@ -1018,6 +999,9 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
         createdAt: t.createdAt.toISOString(),
         categoria: t.categoria ?? [],
         criadores,
+        realizados: feitosMap[t.id] ?? 0,
+        submissoes: enviadosMap[t.id] ?? 0,
+        submissoesAprovadas: aprovadosMap[t.id] ?? 0,
         exercicios: t.exercicios.map((x) => ({
           repeticoes: x.repeticoes ?? "",
           exercicio: { nome: x.exercicio?.nome ?? x.exercicioTemporario?.nome ?? "" },
@@ -1388,9 +1372,6 @@ export async function getTreinosProgramadosStats(req: any, res: any) {
       return res.json({ realizadoCountByTreinoId: {}, exerciciosCountByTreinoId: {} });
     }
 
-    // 1) Conta "realizações" pela SUBMISSAO aprovada (melhor definição de "realizado")
-    //   - Se no seu schema SubmissaoTreino tem relacao com TreinoAgendado -> treinoAgendado -> treinoProgramadoId
-    //   - Ajuste nomes caso estejam diferentes
     const aprovadas = await prisma.submissaoTreino.groupBy({
       by: ["treinoAgendadoId"],
       where: {
@@ -1402,8 +1383,6 @@ export async function getTreinosProgramadosStats(req: any, res: any) {
       _count: { _all: true },
     });
 
-    // Precisamos transformar por treinoProgramadoId:
-    // Buscar os treinoAgendadoId -> treinoProgramadoId em lote
     const agIds = aprovadas.map((x) => x.treinoAgendadoId);
     const agMap = await prisma.treinoAgendado.findMany({
       where: { id: { in: agIds } },
@@ -1422,20 +1401,17 @@ export async function getTreinosProgramadosStats(req: any, res: any) {
         (realizadoCountByTreinoId[treinoId] || 0) + (row._count?._all || 0);
     }
 
-    // 2) Conta exercícios por treinoProgramadoId (puxa da relação do treino programado)
-    // Ajuste o include/relations se seu schema usa outra tabela (ex: treinoProgramadoExercicios)
     const treinos = await prisma.treinoProgramado.findMany({
       where: { id: { in: ids } },
       select: {
         id: true,
-        exercicios: { select: { id: true } }, // se for outra relation, troque aqui
+        exercicios: { select: { id: true } },
       },
     });
 
     const exerciciosCountByTreinoId: Record<string, number> = {};
     for (const t of treinos) {
       exerciciosCountByTreinoId[String(t.id)] = Array.isArray(t.exercicios) ? t.exercicios.length : 0;
-      // garante pelo menos 0 no realizado também
       if (realizadoCountByTreinoId[String(t.id)] == null) realizadoCountByTreinoId[String(t.id)] = 0;
     }
 
@@ -1758,6 +1734,14 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
         await onTreinoFeitoPorAlunoFromSubmissao(submissao.id);
       } catch (e) {
         console.warn("stats (feito por aluno) falhou no concluirTreino:", e);
+      }
+    }
+
+    if (aprovadoAgora && !jaAprovadaAntes && agendado.treinoProgramadoId) {
+      try {
+        await recomputeFeitosTreino(String(agendado.treinoProgramadoId));
+      } catch (e) {
+        console.warn("recomputeFeitosTreino falhou em concluirTreino:", e);
       }
     }
 
@@ -2673,30 +2657,6 @@ export async function criarTreinoProgramado(
       },
     });
 
-    // ✅ stats: contar inclusões de exercícios (1 vez por exercício no treino)
-    const exercicioIds = Array.from(
-      new Set(
-        (Array.isArray(exercicios) ? exercicios : [])
-          .map((e: any) => String(e?.exercicioId ?? "").trim())
-          .filter(Boolean)
-      )
-    );
-
-    if (exercicioIds.length) {
-      const professorIdForStats =
-        tipoNorm === "professor" ? String(tipoUsuarioId).trim() : null;
-
-      await Promise.all(
-        exercicioIds.map((exercicioId) =>
-          onExercicioIncluidoNoTreino({
-            treinoId: treino.id,
-            exercicioId,
-            professorId: professorIdForStats,
-          })
-        )
-      );
-    }
-
     const exsBanco = (exercicios as any[]).filter((e) => e.exercicioId);
     const exsTemp = (exercicios as any[]).filter(
       (e) => !e.exercicioId && e.nome
@@ -2714,48 +2674,68 @@ export async function criarTreinoProgramado(
     }
 
   for (const [i, e] of exsTemp.entries()) {
-  const nomeTemp = String(e.nome ?? "").trim();
-  if (!nomeTemp) continue;
+    const nomeTemp = String(e.nome ?? "").trim();
+    if (!nomeTemp) continue;
 
-  const videoHerdado = await herdarVideoParaTemporario(nomeTemp);
+    const videoHerdado = await herdarVideoParaTemporario(nomeTemp);
 
-  let temp = await prisma.exercicioTemporario.findFirst({
-    where: {
-      treinoProgramadoId: treino.id,
-      nome: { equals: nomeTemp, mode: "insensitive" },
-    },
-    select: { id: true, videoDemonstrativoUrl: true },
-  });
-
-  if (!temp) {
-    temp = await prisma.exercicioTemporario.create({
-      data: {
+    let temp = await prisma.exercicioTemporario.findFirst({
+      where: {
         treinoProgramadoId: treino.id,
-        codigo: null,
-        nome: nomeTemp,
-        descricao: e.descricao ?? null,
-        nivel: nivelEnum,
-        categorias,
-        videoDemonstrativoUrl: videoHerdado ?? null,
+        nome: { equals: nomeTemp, mode: "insensitive" },
       },
       select: { id: true, videoDemonstrativoUrl: true },
     });
-  } else if ((!temp.videoDemonstrativoUrl || temp.videoDemonstrativoUrl === "") && videoHerdado) {
-    await prisma.exercicioTemporario.update({
-      where: { id: temp.id },
-      data: { videoDemonstrativoUrl: videoHerdado },
+
+    if (!temp) {
+      temp = await prisma.exercicioTemporario.create({
+        data: {
+          treinoProgramadoId: treino.id,
+          codigo: null,
+          nome: nomeTemp,
+          descricao: e.descricao ?? null,
+          nivel: nivelEnum,
+          categorias,
+          videoDemonstrativoUrl: videoHerdado ?? null,
+        },
+        select: { id: true, videoDemonstrativoUrl: true },
+      });
+    } else if ((!temp.videoDemonstrativoUrl || temp.videoDemonstrativoUrl === "") && videoHerdado) {
+      await prisma.exercicioTemporario.update({
+        where: { id: temp.id },
+        data: { videoDemonstrativoUrl: videoHerdado },
+      });
+    }
+
+    await prisma.treinoProgramadoExercicio.create({
+      data: {
+        treinoProgramadoId: treino.id,
+        exercicioTemporarioId: temp.id,
+        repeticoes: String(e.repeticoes ?? ""),
+        ordem: e.ordem ?? exsBanco.length + i + 1,
+      },
     });
   }
 
-  await prisma.treinoProgramadoExercicio.create({
-    data: {
-      treinoProgramadoId: treino.id,
-      exercicioTemporarioId: temp.id,
-      repeticoes: String(e.repeticoes ?? ""),
-      ordem: e.ordem ?? exsBanco.length + i + 1,
-    },
-  });
-}
+  try {
+    const rowsIncluidos = await prisma.treinoProgramadoExercicio.findMany({
+      where: {
+        treinoProgramadoId: treino.id,
+        exercicioId: { not: null },
+      },
+      select: { exercicioId: true },
+    });
+
+    const exercicioIdsIncluidos = Array.from(
+      new Set(rowsIncluidos.map((r) => r.exercicioId!).filter(Boolean))
+    );
+
+    if (exercicioIdsIncluidos.length) {
+      await recalcularEstatisticaExercicios(exercicioIdsIncluidos);
+    }
+  } catch (e) {
+    console.warn("[criarTreinoProgramado] Falha ao recalcular estatísticas de exercícios:", e);
+  }
 
     const atletasFromElencos = elencosIds.length
       ? await prisma.atletaElenco.findMany({
@@ -3091,11 +3071,17 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
       }
     });
 
-    const novosIds = exsBanco.map((e) => e.exercicioId).filter(Boolean) as string[];
-    const afetados = new Set<string>([...antigosSet, ...novosIds]);
+    const novosIds = exsBanco
+      .map((e) => String(e.exercicioId ?? "").trim())
+      .filter(Boolean);
 
-    for (const exId of afetados) {
-      await recomputeInclusoesExercicio(exId);
+    const exercicioIds = Array.from(new Set([
+      ...Array.from(antigosSet),
+      ...novosIds,
+    ])).filter(Boolean);
+
+    if (exercicioIds.length) {
+      await recalcularEstatisticaExercicios(exercicioIds);
     }
 
     const updated = await prisma.treinoProgramado.findUnique({
@@ -3210,6 +3196,14 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
 
     const tp = sub.treinoAgendado?.treinoProgramado;
 
+    if (aprovado === true && !wasApprovedBefore && tp?.id) {
+      try {
+        await recomputeFeitosTreino(String(tp.id));
+      } catch (e) {
+        console.warn("recomputeFeitosTreino falhou em validarSubmissaoTreino:", e);
+      }
+    }
+
     const donoTreino =
     !!tp &&
     (resolved.tipo === "professor"
@@ -3317,21 +3311,12 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
       },
     });
 
-    if (aprovado === true && !wasApprovedBefore) {
-      try {
-        await onTreinoFeitoPorAlunoFromSubmissao(atualizado.id);
-      } catch (e) {
-        console.warn("stats (feito por aluno) falhou no validarSubmissaoTreino:", e);
-      }
-    }
-
     try {
       await recomputePontuacaoAtleta(sub.atletaId);
     } catch (e) {
       console.warn("recomputePontuacaoAtleta falhou (não é crítico para a aprovação):", e);
     }
 
-    // ✅ stats: contar "feito por aluno" quando aprovou agora (e não era aprovado antes)
     if (aprovado === true && !wasApprovedBefore) {
       try {
         await onTreinoFeitoPorAlunoFromSubmissao(sub.id);
@@ -4055,5 +4040,31 @@ export async function relacaoStatus(req: Request, res: Response) {
   } catch (err) {
     console.error("Erro relacaoStatus:", err);
     return res.status(500).json({ error: "Erro ao consultar status" });
+  }
+}
+
+export async function getTreinosRealizadosCount(req: Request, res: Response) {
+  try {
+    const rows = await prisma.submissaoTreino.findMany({
+      where: {
+        aprovado: true,
+        treinoAgendado: { treinoProgramadoId: { not: null } },
+      },
+      select: {
+        treinoAgendado: { select: { treinoProgramadoId: true } },
+      },
+    });
+
+    const map: Record<string, number> = {};
+    for (const r of rows) {
+      const id = r.treinoAgendado?.treinoProgramadoId;
+      if (!id) continue;
+      const k = String(id);
+      map[k] = (map[k] ?? 0) + 1;
+    }
+    return res.json({ realizadoCountByTreinoId: map });
+  } catch (e) {
+    console.error("getTreinosRealizadosCount error:", e);
+    return res.status(500).json({ error: "Falha ao calcular realizados-count" });
   }
 }
