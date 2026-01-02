@@ -24,6 +24,127 @@ function assertInstrutor(req: AuthenticatedRequest) {
   }
 }
 
+async function getDonoIdsPorUsuario(usuarioId: string) {
+  const [professor, clube, escolinha] = await Promise.all([
+    prisma.professor.findUnique({ where: { usuarioId }, select: { id: true } }),
+    prisma.clube.findUnique({ where: { usuarioId }, select: { id: true } }),
+    prisma.escolinha.findUnique({ where: { usuarioId }, select: { id: true } }),
+  ]);
+
+  return {
+    donoProfessorId: professor?.id ?? null,
+    donoClubeId: clube?.id ?? null,
+    donoEscolinhaId: escolinha?.id ?? null,
+  };
+}
+
+async function getOrgsDoProfessor(professorId: string) {
+  const [clubeRows, escolaRows] = await Promise.all([
+    prisma.professorClube.findMany({
+      where: { professorId },
+      select: { clubeId: true },
+    }),
+    prisma.professorEscolinha.findMany({
+      where: { professorId },
+      select: { escolinhaId: true },
+    }),
+  ]);
+
+  return {
+    clubeIds: Array.from(new Set(clubeRows.map((r) => String(r.clubeId)))),
+    escolinhaIds: Array.from(new Set(escolaRows.map((r) => String(r.escolinhaId)))),
+  };
+}
+
+async function podeGerenciarSessao(params: {
+  usuarioId: string;
+  tipoRaw: string;
+  isAdmin: boolean;
+  sessaoId: string;
+}) {
+  const { usuarioId, tipoRaw, isAdmin, sessaoId } = params;
+  if (isAdmin) return true;
+
+  const { donoProfessorId, donoClubeId, donoEscolinhaId } =
+    await getDonoIdsPorUsuario(usuarioId);
+
+  const sessao = await prisma.sessaoTreinoTurma.findUnique({
+    where: { id: sessaoId },
+    select: {
+      id: true,
+      criadorId: true,
+      turma: { select: { id: true, clubeId: true, escolinhaId: true } },
+      treino: { select: { id: true, professorId: true, clubeId: true, escolinhaId: true } },
+    },
+  });
+
+  if (!sessao) return false;
+  if (sessao.criadorId === usuarioId) return true;
+  if (tipoRaw === "professor" && donoProfessorId) {
+    const { clubeIds, escolinhaIds } = await getOrgsDoProfessor(donoProfessorId);
+
+    const turmaOk =
+      (sessao.turma?.clubeId && clubeIds.includes(String(sessao.turma.clubeId))) ||
+      (sessao.turma?.escolinhaId && escolinhaIds.includes(String(sessao.turma.escolinhaId)));
+
+    const treinoOk =
+      (sessao.treino?.clubeId && clubeIds.includes(String(sessao.treino.clubeId))) ||
+      (sessao.treino?.escolinhaId && escolinhaIds.includes(String(sessao.treino.escolinhaId)));
+
+    return Boolean(turmaOk || treinoOk);
+  }
+
+  if (tipoRaw === "clube" || tipoRaw === "escolinha") {
+    const professoresVinculadosIds = await getProfessoresVinculadosIds({
+      donoClubeId,
+      donoEscolinhaId,
+    });
+
+    const turmaDireta =
+      (donoClubeId && sessao.turma?.clubeId === donoClubeId) ||
+      (donoEscolinhaId && sessao.turma?.escolinhaId === donoEscolinhaId);
+
+    if (turmaDireta) return true;
+    if (professoresVinculadosIds.length && sessao.turma?.id) {
+      const tem = await prisma.turmaProfessor.findFirst({
+        where: { turmaId: sessao.turma.id, professorId: { in: professoresVinculadosIds } },
+        select: { id: true },
+      });
+      return !!tem;
+    }
+  }
+
+  return false;
+}
+
+async function getProfessoresVinculadosIds(params: {
+  donoClubeId?: string | null;
+  donoEscolinhaId?: string | null;
+}): Promise<string[]> {
+  const { donoClubeId, donoEscolinhaId } = params;
+
+  if (!donoClubeId && !donoEscolinhaId) return [];
+
+  const [rowsClube, rowsEscolinha] = await Promise.all([
+    donoClubeId
+      ? prisma.professorClube.findMany({
+          where: { clubeId: donoClubeId },
+          select: { professorId: true },
+        })
+      : Promise.resolve([] as { professorId: string }[]),
+
+    donoEscolinhaId
+      ? prisma.professorEscolinha.findMany({
+          where: { escolinhaId: donoEscolinhaId },
+          select: { professorId: true },
+        })
+      : Promise.resolve([] as { professorId: string }[]),
+  ]);
+
+  const ids = [...rowsClube.map((r) => r.professorId), ...rowsEscolinha.map((r) => r.professorId)];
+  return Array.from(new Set(ids.map(String)));
+}
+
 export async function criarSessao(req: AuthenticatedRequest, res: Response) {
   try {
     assertInstrutor(req);
@@ -59,17 +180,46 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
     const donoClubeId = clube?.id ?? null;
     const donoEscolinhaId = escolinha?.id ?? null;
 
+    const tipoRaw = String(u.tipo || "").toLowerCase();
+
+    let professoresVinculadosIds: string[] = [];
+
+    if (tipoRaw === "clube" || tipoRaw === "escolinha") {
+      professoresVinculadosIds = await getProfessoresVinculadosIds({ donoClubeId, donoEscolinhaId });
+    }
+
+    const orgsDoProfessor =
+      tipoRaw === "professor" && donoProfessorId
+        ? await getOrgsDoProfessor(donoProfessorId)
+        : { clubeIds: [] as string[], escolinhaIds: [] as string[] };
+
     const turma = await prisma.turma.findUnique({ where: { id: turmaId } });
     if (!turma) return res.status(404).json({ error: "Turma não encontrada." });
 
-    const turmaPertenceAoDono =
+    const turmaPertenceAoDonoDireto =
       (donoClubeId && turma.clubeId === donoClubeId) ||
       (donoEscolinhaId && turma.escolinhaId === donoEscolinhaId) ||
       (donoProfessorId &&
         (await prisma.turmaProfessor.findFirst({
           where: { turmaId: turma.id, professorId: donoProfessorId },
           select: { id: true },
-        })) != null);
+        })) != null) ||
+      (tipoRaw === "professor" &&
+      ((turma.clubeId && orgsDoProfessor.clubeIds.includes(String(turma.clubeId))) ||
+        (turma.escolinhaId && orgsDoProfessor.escolinhaIds.includes(String(turma.escolinhaId)))));
+
+    const turmaTemProfessorVinculado =
+      (tipoRaw === "clube" || tipoRaw === "escolinha") &&
+      professoresVinculadosIds.length > 0 &&
+      (await prisma.turmaProfessor.findFirst({
+        where: {
+          turmaId: turma.id,
+          professorId: { in: professoresVinculadosIds },
+        },
+        select: { id: true },
+      })) != null;
+
+    const turmaPertenceAoDono = turmaPertenceAoDonoDireto || turmaTemProfessorVinculado;
 
     if (!turmaPertenceAoDono) {
       return res.status(403).json({
@@ -91,10 +241,20 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
       return res.status(404).json({ error: "Treino programado não encontrado." });
     }
 
-    const treinoPertenceAoDono =
+    const treinoPertenceAoDonoDireto =
       (donoProfessorId && treino.professorId === donoProfessorId) ||
       (donoClubeId && treino.clubeId === donoClubeId) ||
-      (donoEscolinhaId && treino.escolinhaId === donoEscolinhaId);
+      (donoEscolinhaId && treino.escolinhaId === donoEscolinhaId) ||
+      (tipoRaw === "professor" &&
+        ((treino.clubeId && orgsDoProfessor.clubeIds.includes(String(treino.clubeId))) ||
+          (treino.escolinhaId && orgsDoProfessor.escolinhaIds.includes(String(treino.escolinhaId)))));
+
+    const treinoDoProfessorVinculado =
+      (tipoRaw === "clube" || tipoRaw === "escolinha") &&
+      !!treino.professorId &&
+      professoresVinculadosIds.includes(String(treino.professorId));
+
+    const treinoPertenceAoDono = treinoPertenceAoDonoDireto || treinoDoProfessorVinculado;
 
     if (!treinoPertenceAoDono) {
       return res.status(403).json({
@@ -201,19 +361,65 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
     const inicio = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 0, 0, 0, 0);
     const fim = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 23, 59, 59, 999);
 
+    const tipoRaw = String(u.tipo || "").toLowerCase();
+
+    const { donoProfessorId, donoClubeId, donoEscolinhaId } =
+      await getDonoIdsPorUsuario(usuarioId);
+
+    let whereBase: any = {
+      data: { gte: inicio, lte: fim },
+    };
+
+    if (u.isAdmin) {
+    } else if (tipoRaw === "professor" && donoProfessorId) {
+      const orgs = await getOrgsDoProfessor(donoProfessorId);
+
+      whereBase.OR = [
+        { criadorId: usuarioId },
+        { turma: { clubeId: { in: orgs.clubeIds.length ? orgs.clubeIds : ["__none__"] } } },
+        { turma: { escolinhaId: { in: orgs.escolinhaIds.length ? orgs.escolinhaIds : ["__none__"] } } },
+        { treino: { clubeId: { in: orgs.clubeIds.length ? orgs.clubeIds : ["__none__"] } } },
+        { treino: { escolinhaId: { in: orgs.escolinhaIds.length ? orgs.escolinhaIds : ["__none__"] } } },
+      ];
+    } else if (tipoRaw === "clube" || tipoRaw === "escolinha") {
+      const professoresVinculadosIds = await getProfessoresVinculadosIds({
+        donoClubeId,
+        donoEscolinhaId,
+      });
+
+      whereBase.OR = [
+        { criadorId: usuarioId },
+        ...(donoClubeId ? [{ turma: { clubeId: donoClubeId } }, { treino: { clubeId: donoClubeId } }] : []),
+        ...(donoEscolinhaId ? [{ turma: { escolinhaId: donoEscolinhaId } }, { treino: { escolinhaId: donoEscolinhaId } }] : []),
+        ...(professoresVinculadosIds.length
+          ? [{ turma: { professores: { some: { professorId: { in: professoresVinculadosIds } } } } }]
+          : []),
+      ];
+    } else {
+      whereBase.criadorId = usuarioId;
+    }
+
     const sessoes = await prisma.sessaoTreinoTurma.findMany({
-      where: {
-        criadorId: usuarioId,
-        data: { gte: inicio, lte: fim },
-      },
+      where: whereBase,
       include: {
-        turma: true,
+        turma: {
+          select: {
+            id: true,
+            nome: true,
+            categoria: true,
+            clubeId: true,
+            escolinhaId: true,
+          },
+        },
         treino: {
           select: {
             id: true,
             nome: true,
             pontuacao: true,
             duracao: true,
+            clubeId: true,
+            escolinhaId: true,
+            professorId: true,
             exercicios: {
               select: {
                 id: true,
@@ -221,17 +427,6 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
                 exercicioTemporarioId: true,
                 ordem: true,
                 repeticoes: true,
-                exercicio: {
-                  select: {
-                    id: true,
-                    nome: true,
-                    descricao: true,
-                    videoDemonstrativoUrl: true,
-                  },
-                },
-                exercicioTemporario: {
-                  select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
-                },
               },
               orderBy: { ordem: "asc" },
             },
@@ -240,6 +435,7 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
         exercicios: {
           select: {
             id: true,
+            sessaoId: true,
             exercicioId: true,
             exercicioTemporarioId: true,
             ordem: true,
@@ -254,10 +450,22 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
               },
             },
             exercicioTemporario: {
-              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+              select: {
+                id: true,
+                nome: true,
+                descricao: true,
+                videoDemonstrativoUrl: true,
+              },
             },
           },
           orderBy: { ordem: "asc" },
+        },
+        presencas: {
+          select: {
+            id: true,
+            atletaId: true,
+            presente: true,
+          },
         },
       },
       orderBy: { data: "asc" },
@@ -370,12 +578,14 @@ export async function iniciarSessao(
   try {
     assertInstrutor(req);
     const { id } = req.params;
-    const { presentes } = req.body as { presentes: string[] };
+    const presentesRaw = (req.body as any)?.presentes;
+    const presentes: string[] = Array.isArray(presentesRaw)
+      ? presentesRaw.map((x: any) => String(x))
+      : [];
 
-    if (!Array.isArray(presentes)) {
+    if (!Array.isArray(presentesRaw)) {
       return res.status(400).json({
-        error:
-          "Campo 'presentes' é obrigatório e deve ser um array de atletaId.",
+        error: "Campo 'presentes' é obrigatório e deve ser um array de atletaId.",
       });
     }
 
@@ -404,9 +614,17 @@ export async function iniciarSessao(
     const u: any = req.authUser || req.user;
     const usuarioId = u.id as string;
 
-    if (sessao.criadorId !== usuarioId && !u.isAdmin) {
+    const tipoRaw = String(u.tipo || "").toLowerCase();
+    const ok = await podeGerenciarSessao({
+      usuarioId: String(usuarioId),
+      tipoRaw,
+      isAdmin: Boolean(u.isAdmin),
+      sessaoId: String(id),
+    });
+
+    if (!ok) {
       return res.status(403).json({
-        error: "Você não pode alterar uma sessão criada por outro usuário.",
+        error: "Você não pode alterar uma sessão fora do seu escopo.",
       });
     }
 

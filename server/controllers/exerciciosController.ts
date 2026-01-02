@@ -1,4 +1,3 @@
-// server/controllers/exerciciosController
 import { Request, Response } from "express";
 import multer from "multer";
 import path, { dirname } from "path";
@@ -28,6 +27,45 @@ export const uploadVideo = multer({ storage }).single("video");
 
 const publicJoin = (p: string) =>
   path.join(__dirname, "..", "..", "public", p.replace(/^\/+/, ""));
+
+async function mapUsoEmTreinos(exercicioIds: string[]) {
+  const map: Record<string, number> = {};
+  if (!exercicioIds.length) return map;
+
+  const candidateModels = [
+    "treinoProgramadoExercicio",
+    "treinoExercicio",
+    "treinoProgramadoExercicios",
+    "treinosProgramadosExercicios",
+    "treino_programado_exercicio",
+  ];
+
+  const candidateTreinoKeys = ["treinoProgramadoId", "treinoId"];
+
+  for (const modelName of candidateModels) {
+    const model = (prisma as any)[modelName];
+    if (!model?.groupBy) continue;
+
+    for (const treinoKey of candidateTreinoKeys) {
+      try {
+        const rows = await model.groupBy({
+          by: ["exercicioId", treinoKey],
+          where: { exercicioId: { in: exercicioIds } },
+        });
+
+        for (const r of rows) {
+          const exId = r.exercicioId as string;
+          map[exId] = (map[exId] || 0) + 1;
+        }
+
+        return map; 
+      } catch {
+      }
+    }
+  }
+
+  return map;
+}
 
 export const criarExercicio = async (req: Request, res: Response) => {
   try {
@@ -112,8 +150,19 @@ export const editarExercicio = async (req: Request, res: Response) => {
 
 export const listarExercicios = async (req: Request, res: Response) => {
   try {
-    const exercicios = await prisma.exercicio.findMany();
-    res.json(exercicios);
+    const exercicios = await prisma.exercicio.findMany({
+      orderBy: { nome: "asc" },
+    });
+
+    const ids = exercicios.map((e) => e.id);
+    const usoMap = await mapUsoEmTreinos(ids);
+
+    const out = exercicios.map((e) => ({
+      ...e,
+      usadoEmTreinos: usoMap[e.id] || 0,
+    }));
+
+    res.json(out);
   } catch (error) {
     console.error("Erro ao listar exercícios:", error);
     res.status(500).json({ message: "Erro ao listar exercícios." });
@@ -125,7 +174,13 @@ export const buscarExercicioPorId = async (req: Request, res: Response) => {
   try {
     const exercicio = await prisma.exercicio.findUnique({ where: { id } });
     if (!exercicio) return res.status(404).json({ message: "Exercício não encontrado." });
-    res.json(exercicio);
+
+    const usoMap = await mapUsoEmTreinos([id]);
+
+    res.json({
+      ...exercicio,
+      usadoEmTreinos: usoMap[id] || 0,
+    });
   } catch (error) {
     console.error("Erro ao buscar exercício:", error);
     res.status(500).json({ message: "Erro ao buscar exercício." });
