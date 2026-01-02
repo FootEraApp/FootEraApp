@@ -1324,7 +1324,6 @@ async function salvarProgressoSessao(sessaoId: string) {
     }).length;
 
     setTreinos(normTreinos);
-    // ✅ buscar stats (realizado X vezes + count exercicios) em lote
     try {
       const ids = normTreinos.map((t) => t.id).filter(Boolean);
       if (ids.length) {
@@ -1944,7 +1943,6 @@ async function salvarProgressoSessao(sessaoId: string) {
           <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>
         )}
 
-        {/* ✅ Realizado X vezes (abaixo da descrição) */}
         <div className="text-xs text-gray-600 mt-1">
           <strong>Realizado:</strong>{" "}
           {Number(realizadoCountByTreinoId[treino.id] ?? 0)} vez(es)
@@ -2399,7 +2397,7 @@ async function salvarProgressoSessao(sessaoId: string) {
                 <h3 className="text-lg font-semibold">
                   {usuario?.tipo === "admin"
                     ? "Todos os Treinos"
-                    : "Treinos que você criou"}
+                    : "Treinos vinculados a mim"}
                 </h3>
                 <div className="text-xs text-gray-600">
                   <strong>Treinos:</strong> {totalTreinosExibidos} •{" "}
