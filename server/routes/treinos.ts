@@ -36,7 +36,8 @@ import {
   salvarTreinoNaBiblioteca,
   getCalendarioTreinos,
   relacaoStatus,
-  getTreinosProgramadosStats
+  getTreinosProgramadosStats,
+  getTreinosRealizadosCount
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
@@ -49,6 +50,8 @@ router.get("/relacao-treino/status", relacaoStatus);
 router.get("/elencos/:id/escala", requireElencoOwner, getEscalaPorElencoId);
 router.get("/elencos/escala-por-dono", getEscalaPorDono);
 router.get("/elencos", listarElencos);
+router.get("/realizados-count", getTreinosRealizadosCount);
+
 router.post(
   "/elencos",
   requireOrgSeat(req => (req.body?.escolinhaId as string) || (req.body?.clubeId as string)),

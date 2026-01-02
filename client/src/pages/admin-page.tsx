@@ -1,10 +1,8 @@
-// client/src/pages/admin-page
 import React, { useEffect, useState } from "react";
 import { API } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import ValidacaoVideo from "./validacaovideo.js";
 import { FLAGS } from "../config.js";
-import { Link } from "wouter";
 
 type Tab =
   | "dashboard"
@@ -26,6 +24,10 @@ interface Treinos {
   codigo: string;
   nivel: string;
   descricao: string;
+  realizadoCount?: number;
+  realizados?: number;
+  submissoes?: number;
+  submissoesaprovados?: number;
 }
 
 type UsuarioTipo = "" | "atleta" | "escola" | "clube" | "professor" | "admin" | "olheiro";
@@ -296,6 +298,7 @@ const [fbError, setFbError] = useState<string | null>(null);
 const [fbTipo, setFbTipo] = useState<string>("");
 const [fbFrom, setFbFrom] = useState<string>("");
 const [fbOnlyUnread, setFbOnlyUnread] = useState(false);
+const [realizadoCountByTreinoId, setRealizadoCountByTreinoId] = useState<Record<string, number>>({});
 
 useEffect(() => {
   const h = setTimeout(() => setAssDebQ(assQ.trim()), 400);
@@ -313,6 +316,41 @@ useEffect(() => {
   void carregarFeedback();
 }, [aba, fbTipo, fbFrom, fbOnlyUnread]);
 
+useEffect(() => {
+  if (aba !== "exercicios") return;
+
+  const id = window.setInterval(() => {
+    void carregarExercicios();
+  }, 8000); 
+
+  return () => window.clearInterval(id);
+}, [aba]);
+
+function normalizeRealizadosCountResponse(j: any): Record<string, number> {
+  if (!j || typeof j !== "object") return {};
+
+  if (j.realizadoCountByTreinoId && typeof j.realizadoCountByTreinoId === "object") {
+    const map: Record<string, number> = {};
+    for (const [k, v] of Object.entries(j.realizadoCountByTreinoId)) {
+      map[String(k)] = Number(v ?? 0);
+    }
+    return map;
+  }
+
+  if (Array.isArray(j.items)) {
+    const map: Record<string, number> = {};
+    for (const it of j.items) {
+      if (it?.treinoId) map[String(it.treinoId)] = Number(it.count ?? 0);
+    }
+    return map;
+  }
+
+  const map: Record<string, number> = {};
+  for (const [k, v] of Object.entries(j)) {
+    map[String(k)] = Number(v ?? 0);
+  }
+  return map;
+}
 
 async function carregarAssinantes(page: number) {
   setAssLoading(true);
@@ -352,6 +390,21 @@ async function carregarAssOverview() {
     else setAssOverview(null);
   } catch {
     setAssOverview(null);
+  }
+}
+
+async function carregarExercicios() {
+  try {
+    const r = await fetch(`${API.BASE_URL}/api/exercicios`, { headers: authHeaders() });
+    const j = await r.json();
+
+    const arr = Array.isArray(j)
+      ? j
+      : j.items ?? j.data ?? j.exercicios ?? j.rows ?? j.result ?? [];
+
+    setExercicios(Array.isArray(arr) ? arr : []);
+  } catch {
+    setExercicios([]);
   }
 }
 
@@ -452,11 +505,9 @@ async function marcarFeedbackComoLido(id: string) {
   }, [q]);
 
   useEffect(() => {
-    fetch(`${API.BASE_URL}/api/exercicios`, { headers: authHeaders() })
-      .then((r) => r.json())
-      .then(setExercicios)
-      .catch(() => setExercicios([]));
-  }, []);
+    if (aba !== "exercicios") return;
+    void carregarExercicios();
+  }, [aba]);
 
   useEffect(() => {
     fetch(`${API.BASE_URL}/api/professores`, { headers: authHeaders() })
@@ -509,28 +560,59 @@ async function marcarFeedbackComoLido(id: string) {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${API.BASE_URL}/api/treinos`, { headers: authHeaders() });
-        const json = await res.json();
+  if (aba !== "treinos") return;
 
-        const arr = Array.isArray(json)
-          ? json
-          : json.items ??
-            json.data ??
-            json.treinos ??
-            json.treinosProgramados ??
-            json.rows ??
-            json.result ??
-            [];
+  const token = getToken();
+  if (!token) return;
 
-        setTreinos(Array.isArray(arr) ? arr : []);
-      } catch (e) {
-        console.error("Falha ao carregar treinos:", e);
-        setTreinos([]);
+  (async () => {
+    try {
+      const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/programados`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!resTreinos.ok) throw new Error(`/treinos/programados: ${resTreinos.status}`);
+
+      const jsonTreinos = await resTreinos.json();
+      const arr = Array.isArray(jsonTreinos)
+        ? jsonTreinos
+        : (jsonTreinos?.items ?? jsonTreinos?.data ?? []);
+
+      const normTreinos = (Array.isArray(arr) ? arr : []).map((tr: any) => ({
+        id: String(tr.id),
+        nome: String(tr.nome ?? ""),
+        codigo: String(tr.codigo ?? ""),
+        nivel: String(tr.nivel ?? ""),
+        descricao: tr.descricao ?? "",
+      }));
+
+      setTreinos(normTreinos);
+
+      const ids = normTreinos.map((t) => t.id).filter(Boolean);
+      if (!ids.length) {
+        setRealizadoCountByTreinoId({});
+        return;
       }
-    })();
-  }, []);
+
+      const r = await fetch(
+        `${API.BASE_URL}/api/treinos/realizados-count?ids=${encodeURIComponent(ids.join(","))}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!r.ok) {
+        setRealizadoCountByTreinoId({});
+        return;
+      }
+
+      const j = await r.json();
+      setRealizadoCountByTreinoId(normalizeRealizadosCountResponse(j));
+    } catch (e) {
+      console.error("[admin-page] erro ao carregar treinos:", e);
+      setTreinos([]);
+      setRealizadoCountByTreinoId({});
+    }
+  })();
+}, [aba]);
 
   useEffect(() => {
     if (!FLAGS.DESAFIOS_ENABLED) return;
@@ -721,9 +803,7 @@ async function confirmarExcluirProfessor() {
       return;
     }
 
-    // remove da lista
     setProfessores((prev) => prev.filter((x) => x.id !== profToDelete.id));
-
     fecharModalExcluirProfessor();
     alert("Professor e conta vinculada foram excluídos!");
   } catch (e: any) {
@@ -874,6 +954,21 @@ async function confirmarExcluirProfessor() {
   const rotulo = { pendente: "pendentes", aprovado: "aprovados", invalido: "inválidos", todos: "registros" }[modStatus];
   const ver = Number(dados.totalVerificados || 0);
   const nver = Number(dados.totalNaoVerificados || 0);
+  
+  const exerciciosOrdenados = [...exercicios].sort((a: any, b: any) => {
+    const ca = Number(a.usadoEmTreinos ?? 0);
+    const cb = Number(b.usadoEmTreinos ?? 0);
+
+    if (cb !== ca) return cb - ca;
+
+    const na = String(a.nome ?? "").toLowerCase();
+    const nb = String(b.nome ?? "").toLowerCase();
+    if (na !== nb) return na.localeCompare(nb);
+
+    const ka = String(a.codigo ?? "").toLowerCase();
+    const kb = String(b.codigo ?? "").toLowerCase();
+    return ka.localeCompare(kb);
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -1131,7 +1226,7 @@ async function confirmarExcluirProfessor() {
               </button>
             </div>
             <ul className="space-y-2">
-              {exercicios.map((ex: any) => {
+              {exerciciosOrdenados.map((ex: any) => {
                 const videoUrl = resolveVideoUrl(ex);
 
                 return (
@@ -1139,6 +1234,10 @@ async function confirmarExcluirProfessor() {
                     <div>
                       <strong>{ex.nome}</strong> — {ex.codigo} [{ex.nivel}]
                       <p className="text-sm text-gray-500">{ex.descricao}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Esse exercício foi utilizado{" "}
+                        <strong>{Number(ex.usadoEmTreinos || 0)}</strong> treinos diferentes
+                      </p>
                     </div>
 
                     <div className="flex gap-2">
@@ -1170,7 +1269,12 @@ async function confirmarExcluirProfessor() {
                             method: "DELETE",
                             headers: authHeaders(),
                           });
-                          response.ok ? alert("Exercício excluído!") : alert("Erro ao excluir.");
+                          if (response.ok) {
+                            alert("Exercício excluído!");
+                            await carregarExercicios();
+                          } else {
+                            alert("Erro ao excluir.");
+                          }
                         }}
                         className="text-red-600"
                         title="Excluir exercício"
@@ -1204,6 +1308,7 @@ async function confirmarExcluirProfessor() {
                 {treinos.map((t: any) => {
                   const nome = t.nome ?? t.titulo ?? "(sem nome)";
                   const codigo = t.codigo ?? "-";
+                  const realizado = Number(realizadoCountByTreinoId[t.id] ?? t.realizadoCount ?? 0);
                   const nivel = t.nivel ?? t.dificuldade ?? "-";
                   const descricao = t.descricao ?? t.resumo ?? "";
                   return (
@@ -1211,6 +1316,10 @@ async function confirmarExcluirProfessor() {
                       <div>
                         <strong>{nome}</strong> — {codigo} [{nivel}]
                         <p className="text-sm text-gray-500">{descricao}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Esse treino foi realizado{" "}
+                          <strong>{realizado}</strong> vezes
+                        </p>
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => (window.location.href = `/admin/treinos/create?id=${t.id}`)} className="text-blue-600">
@@ -1233,6 +1342,7 @@ async function confirmarExcluirProfessor() {
                             if (resp.ok) {
                               alert("Treino excluído com sucesso!");
                               setTreinos((prev) => prev.filter((x) => x.id !== t.id));
+                              void carregarExercicios();
                             } else {
                               alert("Erro ao excluir treino.");
                             }
@@ -1800,7 +1910,6 @@ async function confirmarExcluirProfessor() {
   onChange={async (e) => {
     const next = e.target.checked;
 
-    // 1) atualiza UI na hora (desmarca/marca instantâneo)
     setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: next }));
 
     try {
@@ -1812,15 +1921,13 @@ async function confirmarExcluirProfessor() {
 
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
-        // 2) se falhar, reverte
         setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: !next }));
         alert(txt || "Erro ao salvar configuração.");
         return;
       }
 
-      // 3) opcional: se o backend devolver o objeto atualizado, sincroniza
-      // (se ele não devolver, pode remover esse bloco)
       const txt = await res.text().catch(() => "");
+      
       if (txt) {
         const server = JSON.parse(txt);
         setConfiguracoes(server);
