@@ -999,8 +999,15 @@ model TreinoRealizado {
   treinoId      String
   local         String?
   dataExpiracao DateTime?
-  treino        TreinoProgramado @relation(fields: [treinoId], references: [id])
+
+  createdAt     DateTime         @default(now()) 
+
+  treino        TreinoProgramado @relation(fields: [treinoId], references: [id], onDelete: Cascade)
   usuario       Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([treinoId])
+  @@index([usuarioId])
+  @@index([createdAt])
 }
 
 model TreinoProgramadoRecebido {
@@ -1510,11 +1517,9 @@ model TreinoSalvoReuso {
 }
 
 model EstatisticaTreino {
-  treinoId        String    @id
-  usosProfessores Int       @default(0)
-  feitosAlunos    Int       @default(0)
-  ultimoUsoEm     DateTime?
-  ultimoFeitoEm   DateTime?
+  treinoId          String    @id
+  realizacoes       Int       @default(0)
+  ultimoRealizadoEm DateTime?
 
   treino TreinoProgramado @relation(fields: [treinoId], references: [id], onDelete: Cascade)
 }
@@ -2138,4 +2143,5 @@ enum AvaliacaoAutorTipo {
   Professor
   Clube
   Escolinha
+  Atleta
 }
