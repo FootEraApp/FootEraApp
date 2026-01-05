@@ -46,6 +46,22 @@ export async function aplicarEstatisticasPosSubmissao(
       },
     });
 
+   const treinoProgramadoId = tp?.id;
+    if (treinoProgramadoId) {
+      await tx.estatisticaTreino.upsert({
+        where: { treinoId: treinoProgramadoId },
+        update: {
+          realizacoes: { increment: 1 },
+          ultimoRealizadoEm: new Date(),
+        },
+        create: {
+          treinoId: treinoProgramadoId,
+          realizacoes: 1,
+          ultimoRealizadoEm: new Date(),
+        },
+      });
+    }
+
     await tx.estatisticaAtleta.upsert({
       where: { atletaId },
       update: {
