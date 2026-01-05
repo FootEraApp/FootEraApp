@@ -1,3 +1,4 @@
+// client/src/pages/TreinoUnico
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
@@ -11,7 +12,7 @@ import {
   User,
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
-import { API } from "../config.js";
+import { API, APP } from "../config.js";
 import AcoesTreino from "../components/treinos/acoestreino.js";
 
 type ExercicioItem = {
@@ -52,8 +53,19 @@ function useQuery() {
   return { get, go };
 }
 
-const mediaUrl = (u?: string | null) =>
-  u ? (u.startsWith("http") ? u : `${API.BASE_URL}${u}`) : "";
+const mediaUrl = (u?: string | null) => {
+  if (!u) return "";
+  if (u.startsWith("http")) return u;
+
+  // ✅ Assets do client (client/public/assets/...) devem vir do FRONTEND
+  if (u.startsWith("/assets/")) return `${APP.FRONTEND_BASE_URL}${u}`;
+
+  // ✅ Uploads (se você usa /uploads no backend)
+  if (u.startsWith("/uploads/")) return `${API.BASE_URL}${u}`;
+
+  // fallback
+  return `${API.BASE_URL}${u}`;
+};
 
 export default function TreinoUnico() {
   const { get } = useQuery();
@@ -73,7 +85,7 @@ export default function TreinoUnico() {
 
         const qs = agendadoId
           ? `agendadoId=${encodeURIComponent(agendadoId)}`
-          : `programadoId=${encodeURIComponent(String(programadoId))}`;
+          : `programadoId=${encodeURIComponent(programadoId || "")}`;
 
         const res = await fetch(`${API.BASE_URL}/api/treino-unico?${qs}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
