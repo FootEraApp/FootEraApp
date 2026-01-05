@@ -136,8 +136,25 @@ export async function criarSubmissaoTreinoUpload(
     const repeticoesNum =
       repeticoes != null ? Number(repeticoes) : undefined;
 
-    const created = await prisma.submissaoTreino.create({
-      data: {
+    const existing = await prisma.submissaoTreino.findUnique({
+      where: { atletaId_treinoAgendadoId: { atletaId, treinoAgendadoId } },
+      select: { id: true },
+    });
+
+    const created = await prisma.submissaoTreino.upsert({
+      where: { atletaId_treinoAgendadoId: { atletaId, treinoAgendadoId } },
+      update: {
+        observacao,
+        usuarioId: usuarioIdForActivity ?? req.user?.id,
+        duracaoMinutos: duracaoMinutosFinal,
+        duracaoSegundos: tempoSegNum,
+        aprovado: true,
+        pontosCreditados: pontosConsiderados,
+        pontuacaoSnapshot: pontosConsiderados,
+        repeticoes: repeticoesNum,
+        midias: { create: [midia] },
+      },
+      create: {
         treinoAgendadoId,
         atletaId,
         observacao,
@@ -150,8 +167,14 @@ export async function criarSubmissaoTreinoUpload(
         repeticoes: repeticoesNum,
         midias: { create: [midia] },
       },
-      select: { id: true, aprovado: true, criadoEm: true },
+      select: { id: true, criadoEm: true },
     });
+
+    // só incrementa estatística se foi a primeira submissão desse treinoAgendado
+    const isFirst = !existing;
+    if (isFirst) {
+      await aplicarEstatisticasPosSubmissao(created.id, atletaId, treinoAgendadoId, minutosConsiderados).catch(() => {});
+    }
 
     if (usuarioIdForActivity) {
       await prisma.atividadeRecente
@@ -164,13 +187,6 @@ export async function criarSubmissaoTreinoUpload(
         })
         .catch(() => {});
     }
-
-    await aplicarEstatisticasPosSubmissao(
-      created.id,
-      atletaId,
-      treinoAgendadoId,
-      minutosConsiderados
-    ).catch(() => {});
 
     await recomputePontuacaoAtleta(atletaId).catch(() => {});
 
@@ -548,6 +564,13 @@ export async function criarSubmissaoTreinoSessaoUpload(
     const assetUrl = `/uploads/${file.filename}`;
     const isVideo = !!file.mimetype?.startsWith("video");
 
+    const existentes = await prisma.submissaoTreino.findMany({
+      where: { treinoAgendadoId: { in: Array.from(agendadoByAtleta.values()) } },
+      select: { atletaId: true, treinoAgendadoId: true },
+    });
+
+    const existedSet = new Set(existentes.map(e => `${e.atletaId}:${e.treinoAgendadoId}`));
+
     const criadas = await prisma.$transaction(
       presentesIds.map((atletaId) => {
         const treinoAgendadoId = agendadoByAtleta.get(atletaId)!;
@@ -606,23 +629,11 @@ export async function criarSubmissaoTreinoSessaoUpload(
     );
 
     await Promise.allSettled(
-      presentesIds.map(async (atletaId) => {
-        const usuarioIdForActivity = await resolveUsuarioIdForActivity(req.user?.id, atletaId);
-
-        if (!usuarioIdForActivity) return;
-
-        await prisma.atividadeRecente.create({
-          data: {
-            usuarioId: usuarioIdForActivity ?? req.user?.id,
-            tipo: "treino",
-            imagemUrl: assetUrl,
-          },
-        });
-      })
-    );
-
-    await Promise.allSettled(
       criadas.map(async (c) => {
+        const key = `${c.atletaId}:${c.treinoAgendadoId}`;
+        const isFirst = !existedSet.has(key);
+        if (!isFirst) return;
+
         await aplicarEstatisticasPosSubmissao(
           c.id,
           c.atletaId,

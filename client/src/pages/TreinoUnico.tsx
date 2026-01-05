@@ -1,5 +1,4 @@
-// client/src/pages/TreinoUnico
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
   CalendarClock,
@@ -10,6 +9,7 @@ import {
   NotebookText,
   Timer,
   User,
+  CheckCircle2
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
@@ -43,6 +43,7 @@ type TreinoUnicoPayload = {
   dataExpiracao?: string | null;
   exercicios: ExercicioItem[];
   origem?: OrigemInfo | null;
+  realizacoes?: number | null;
 };
 
 function useQuery() {
@@ -56,14 +57,9 @@ function useQuery() {
 const mediaUrl = (u?: string | null) => {
   if (!u) return "";
   if (u.startsWith("http")) return u;
-
-  // ✅ Assets do client (client/public/assets/...) devem vir do FRONTEND
   if (u.startsWith("/assets/")) return `${APP.FRONTEND_BASE_URL}${u}`;
-
-  // ✅ Uploads (se você usa /uploads no backend)
   if (u.startsWith("/uploads/")) return `${API.BASE_URL}${u}`;
-
-  // fallback
+  
   return `${API.BASE_URL}${u}`;
 };
 
@@ -184,6 +180,14 @@ export default function TreinoUnico() {
                 </span>
               </div>
             )}
+
+            <div className="flex items-center gap-2 md:col-span-2">
+              <CheckCircle2 className="w-4 h-4 text-green-700" />
+              <span className="text-gray-800">
+                <strong>Realização:</strong>{" "}
+                Esse treino já foi realizado {Number(treino.realizacoes ?? 0)} vezes
+              </span>
+            </div>
 
             {treino.objetivo && (
               <div className="flex items-center gap-2 md:col-span-2">

@@ -23,12 +23,12 @@ export async function onTreinoUsadoPorProfessor(input: TreinoUsoInput) {
       where: { treinoId },
       create: {
         treinoId,
-        usosProfessores: 1,
-        ultimoUsoEm: now,
+        realizacoes: 1,
+        ultimoRealizadoEm: now,
       },
       update: {
-        usosProfessores: { increment: 1 },
-        ultimoUsoEm: now,
+        realizacoes: { increment: 1 },
+        ultimoRealizadoEm: now,
       },
     }),
     ...(professorId
@@ -101,12 +101,12 @@ async function incrementFeitoPorAluno(treinoId: string) {
     where: { treinoId },
     create: {
       treinoId,
-      feitosAlunos: 1,
-      ultimoFeitoEm: now,
+      realizacoes: 1,
+      ultimoRealizadoEm: now,
     },
     update: {
-      feitosAlunos: { increment: 1 },
-      ultimoFeitoEm: now,
+      realizacoes: { increment: 1 },
+      ultimoRealizadoEm: now,
     },
   });
 }

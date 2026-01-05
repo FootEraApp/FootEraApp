@@ -1,4 +1,3 @@
-// server/controllers/treinosController
 import {
   PrismaClient,
   PosicaoCampo,
@@ -8,6 +7,7 @@ import {
   TipoMidia,
   TreinoAgendadoStatus,
   Nivel,
+  Prisma
 } from "@prisma/client";
 import { getIO } from "../socket.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
@@ -16,7 +16,6 @@ import {
   onExercicioIncluidoNoTreino,
   onTreinoFeitoPorAlunoFromSubmissao,
 } from "../services/statsService.js";
-import type { Prisma } from "@prisma/client";
 import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
 import { can } from "server/services/entitlements.js";
 import { requireUsage, planLimitFor } from "server/lib/usage.js";
@@ -28,7 +27,7 @@ import {
   type FeatureLimitError,
 } from "server/utils/featureLimit.js";
 import jwt from "jsonwebtoken";
-import { startOfMonth, addMonths, startOfDay } from "date-fns";
+import { startOfMonth, addMonths } from "date-fns";
 import { recalcularEstatisticaExercicios } from "server/services/estatisticasExercicio.service.js";
 
 const prisma = new PrismaClient();
@@ -45,17 +44,43 @@ type AuthenticatedRequest = ExpressRequest & {
 };
 
 async function recomputeFeitosTreino(treinoProgramadoId: string) {
-  const total = await prisma.submissaoTreino.count({
+  const rows = await prisma.submissaoTreino.findMany({
     where: {
       aprovado: true,
-      treinoAgendado: { is: { treinoProgramadoId } },
+      treinoAgendado: {
+        is: { treinoProgramadoId },
+      },
+    },
+    select: {
+      treinoAgendadoId: true,
+      criadoEm: true,
     },
   });
 
+  const uniq = new Set<string>();
+  let ultimo: Date | null = null;
+
+  for (const r of rows) {
+    if (!r.treinoAgendadoId) continue;
+    uniq.add(r.treinoAgendadoId);
+    if (r.criadoEm && (!ultimo || r.criadoEm > ultimo)) {
+      ultimo = r.criadoEm;
+    }
+  }
+
+  const total = uniq.size;
+
   await prisma.estatisticaTreino.upsert({
     where: { treinoId: treinoProgramadoId },
-    create: { treinoId: treinoProgramadoId, feitosAlunos: total, usosProfessores: 0, ultimoUsoEm: new Date() },
-    update: { feitosAlunos: total, ultimoUsoEm: new Date() },
+    create: {
+      treinoId: treinoProgramadoId,
+      realizacoes: total,
+      ultimoRealizadoEm: ultimo,
+    },
+    update: {
+      realizacoes: total,
+      ultimoRealizadoEm: ultimo,
+    },
   });
 
   return total;
@@ -149,6 +174,30 @@ async function herdarVideoParaTemporario(nome: string): Promise<string | null> {
   });
 
   return ex?.videoDemonstrativoUrl ? String(ex.videoDemonstrativoUrl) : null;
+}
+
+export async function realizadosCount(req: AuthenticatedRequest, res: Response) {
+  try {
+    const treinoId = String(
+      req.query.treinoId || req.query.treinoProgramadoId || ""
+    ).trim();
+
+    if (!treinoId) {
+      return res.json({ realizadoCount: 0 });
+    }
+
+    const realizadoCount = await prisma.treinoAgendado.count({
+      where: {
+        treinoProgramadoId: treinoId,
+        status: "CONCLUIDO",
+      },
+    });
+
+    return res.json({ realizadoCount });
+  } catch (e) {
+    console.error("[realizados-count]", e);
+    return res.json({ realizadoCount: 0 });
+  }
 }
 
 export async function agendarTreinoPessoal(req: AuthenticatedRequest, res: Response) {
@@ -375,16 +424,8 @@ export async function agendarTreinoLote(req: AuthenticatedRequest, res: Response
 
   await prisma.estatisticaTreino.upsert({
     where: { treinoId: treinoProgramadoId },
-    create: {
-      treinoId: treinoProgramadoId,
-      usosProfessores: atletasIds.length,
-      feitosAlunos: 0,
-      ultimoUsoEm: new Date(),
-    },
-    update: {
-      usosProfessores: { increment: atletasIds.length },
-      ultimoUsoEm: new Date(),
-    },
+    create: { treinoId: treinoProgramadoId, realizacoes: 0, ultimoRealizadoEm: null },
+    update: {},
   });
   return res.status(201).json({ ok: true });
 }
@@ -970,11 +1011,11 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
 
     const statsRows = await prisma.estatisticaTreino.findMany({
       where: { treinoId: { in: treinoIds } },
-      select: { treinoId: true, feitosAlunos: true },
+      select: { treinoId: true, realizacoes: true },
     });
 
     const feitosMap: Record<string, number> = {};
-    for (const s of statsRows) feitosMap[String(s.treinoId)] = Number(s.feitosAlunos ?? 0);
+    for (const s of statsRows) feitosMap[String(s.treinoId)] = Number(s.realizacoes ?? 0);
 
     const out = rows.map((t) => {
       const criadores: Array<{ tipo: "Professor" | "Clube" | "Escolinha"; id: string; nome: string }> = [];
@@ -994,6 +1035,10 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
       if (t.clube) pushCriadoresUniq(criadores, { tipo: "Clube", id: t.clube.id, nome: t.clube.nome });
       if (t.escolinha) pushCriadoresUniq(criadores, { tipo: "Escolinha", id: t.escolinha.id, nome: t.escolinha.nome });
 
+      const realizados = feitosMap[t.id] ?? 0;
+      const submissoes = enviadosMap[t.id] ?? 0;
+      const submissoesAprovadas = aprovadosMap[t.id] ?? 0;
+
       return {
         id: t.id,
         nome: t.nome,
@@ -1007,9 +1052,11 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
         createdAt: t.createdAt.toISOString(),
         categoria: t.categoria ?? [],
         criadores,
-        realizados: feitosMap[t.id] ?? 0,
-        submissoes: enviadosMap[t.id] ?? 0,
-        submissoesAprovadas: aprovadosMap[t.id] ?? 0,
+        realizados,
+        submissoes,
+        submissoesAprovadas,
+        realizadoCount: realizados,
+        submissoesaprovados: submissoesAprovadas,
         exercicios: t.exercicios.map((x) => ({
           repeticoes: x.repeticoes ?? "",
           exercicio: { nome: x.exercicio?.nome ?? x.exercicioTemporario?.nome ?? "" },
@@ -1269,8 +1316,8 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
     if (treinoProgramadoId) {
       await prisma.estatisticaTreino.upsert({
         where: { treinoId: treinoProgramadoId },
-        create: { treinoId: treinoProgramadoId, usosProfessores: 1, feitosAlunos: 0, ultimoUsoEm: new Date() },
-        update: { usosProfessores: { increment: 1 }, ultimoUsoEm: new Date() },
+        create: { treinoId: treinoProgramadoId, realizacoes: 0, ultimoRealizadoEm: null },
+        update: { ultimoRealizadoEm: new Date() },
       });
     }
 
@@ -1392,8 +1439,9 @@ export async function getTreinosProgramadosStats(req: any, res: any) {
       const agId = String(row.treinoAgendadoId);
       const treinoId = treinoByAg[agId];
       if (!treinoId) continue;
+
       realizadoCountByTreinoId[treinoId] =
-        (realizadoCountByTreinoId[treinoId] || 0) + (row._count?._all || 0);
+        (realizadoCountByTreinoId[treinoId] || 0) + 1;
     }
 
     const treinos = await prisma.treinoProgramado.findMany({
@@ -2631,7 +2679,7 @@ export async function criarTreinoProgramado(
         ...(tipoNorm === "professor" ? { professorId: String(tipoUsuarioId) } : {}),
         ...(tipoNorm === "clube" ? { clubeId: String(tipoUsuarioId) } : {}),
         ...(tipoNorm === "escolinha" ? { escolinhaId: String(tipoUsuarioId) } : {}),
-        ...(professorCriadorId ? { criadorProfessorId: professorCriadorId } : {}),
+        ...(professorCriadorId ? { criadoPorProfessorId: professorCriadorId } : {}),
 
         professores: colaboradoresProfessorIds.length
           ? {
@@ -2866,14 +2914,13 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
     const donoUpdate: any = {};
     if (tipoUsuario || tipoUsuarioId) {
       const s = String(tipoUsuario || "").toLowerCase();
-      donoUpdate.professor = { disconnect: true };
-      donoUpdate.clube = { disconnect: true };
-      donoUpdate.escolinha = { disconnect: true };
-      if (s === "professor") donoUpdate.professor = { connect: { id: tipoUsuarioId } };
-      if (s === "clube") donoUpdate.clube = { connect: { id: tipoUsuarioId } };
-      if (s === "escolinha" || s === "escola") {
-        donoUpdate.escolinha = { connect: { id: tipoUsuarioId } };
-      }
+      donoUpdate.professorId = null;
+      donoUpdate.clubeId = null;
+      donoUpdate.escolinhaId = null;
+
+      if (s === "professor") donoUpdate.professorId = String(tipoUsuarioId);
+      if (s === "clube") donoUpdate.clubeId = String(tipoUsuarioId);
+      if (s === "escolinha" || s === "escola") donoUpdate.escolinhaId = String(tipoUsuarioId);
     }
 
     const exs: any[] = Array.isArray(exercicios) ? exercicios : [];
@@ -2886,8 +2933,8 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
     });
     const antigosSet = new Set(antigos.map((a) => a.exercicioId).filter(Boolean) as string[]);
 
-    await prisma.$transaction(async (tx) => {
-      async function herdarVideoParaTemporarioTx(tx: PrismaClient, nome: string) {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      async function herdarVideoParaTemporarioTx(tx: Prisma.TransactionClient, nome: string) {
         const clean = String(nome || "").trim();
         if (!clean) return null;
 
@@ -2907,10 +2954,10 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
 
       const atualTp = await (tx as any).treinoProgramado.findUnique({
         where: { id },
-        select: { professorId: true, criadorProfessorId: true },
+        select: { professorId: true, criadoPorProfessorId: true },
       });
 
-      const criadorId: string | null = atualTp?.criadorProfessorId ?? atualTp?.professorId ?? null;
+      const criadorId: string | null = atualTp?.criadoPorProfessorId ?? atualTp?.professorId ?? null;
 
       const colaboradoresEntrada: string[] = Array.isArray((req.body as any)?.colaboradoresProfessorIds)
         ? ((req.body as any).colaboradoresProfessorIds as unknown[])
@@ -3320,22 +3367,32 @@ export async function validarSubmissaoTreino(req: AuthenticatedRequest, res: Res
       }
     }
 
-    await audit(req, {
-      acao: 'VALIDAR_SUBMISSAO_TREINO',
-      entidade: 'SubmissaoTreino',
+        await audit(req, {
+      acao: "VALIDAR_SUBMISSAO_TREINO",
+      entidade: "SubmissaoTreino",
       entidadeId: atualizado.id,
-      descricao: aprovado ? 'Submissão aprovada' : 'Submissão reprovada',
+      descricao: aprovado ? "Submissão aprovada" : "Submissão reprovada",
       meta: {
         atletaId: sub.atletaId,
         treinoAgendadoId: sub.treinoAgendadoId,
-        pontos: pontosFinais,
+        treinoProgramadoId: tp?.id ?? null,
         aprovado,
+        pontosBase,
+        pontosChecklist: pontosDoChecklist,
+        pontosInformados: Number.isFinite(Number(pontos)) ? Number(pontos) : null,
+        pontosFinais,
+        validadorEntidade: resolved,
       },
     });
 
-    return res.json({ ok: true, aprovado, pontos: pontosFinais, id: atualizado.id });
-  } catch (err) {
-    console.error("Erro em validarSubmissaoTreino:", err);
+    return res.json({
+      ok: true,
+      aprovado,
+      pontosFinais,
+      submissao: atualizado,
+    });
+  } catch (e) {
+    console.error("validarSubmissaoTreino", e);
     return res.status(500).json({ message: "Erro ao validar submissão" });
   }
 }
@@ -3701,8 +3758,8 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
 
     await prisma.estatisticaTreino.upsert({
       where: { treinoId: tp.id },
-      create: { treinoId: tp.id, usosProfessores: created.count, feitosAlunos: 0, ultimoUsoEm: new Date() },
-      update: { usosProfessores: { increment: created.count }, ultimoUsoEm: new Date() },
+      create: { treinoId: tp.id,  realizacoes: 0, ultimoRealizadoEm: new Date() },
+      update: { realizacoes: { increment: created.count }, ultimoRealizadoEm: new Date() },
     });
 
     await audit(req as any, {
@@ -4038,28 +4095,40 @@ export async function relacaoStatus(req: Request, res: Response) {
   }
 }
 
-export async function getTreinosRealizadosCount(req: Request, res: Response) {
+export async function getTreinosRealizadosCount(req: AuthenticatedRequest, res: Response) {
   try {
-    const rows = await prisma.submissaoTreino.findMany({
-      where: {
-        aprovado: true,
-        treinoAgendado: { treinoProgramadoId: { not: null } },
-      },
-      select: {
-        treinoAgendado: { select: { treinoProgramadoId: true } },
-      },
+    const idsParam = req.query.ids;
+
+    let ids: string[] = [];
+    if (Array.isArray(idsParam)) {
+      ids = idsParam.map(String).flatMap(s => s.split(",")).map(s => s.trim()).filter(Boolean);
+    } else {
+      ids = String(idsParam ?? "")
+        .split(",")
+        .map(s => s.trim())
+        .filter(Boolean);
+    }
+
+    if (!ids.length) return res.json({});
+
+    const rows = await prisma.treinoRealizado.groupBy({
+      by: ["treinoId"],
+      where: { treinoId: { in: ids } },
+      _count: { _all: true },
     });
 
     const map: Record<string, number> = {};
     for (const r of rows) {
-      const id = r.treinoAgendado?.treinoProgramadoId;
-      if (!id) continue;
-      const k = String(id);
-      map[k] = (map[k] ?? 0) + 1;
+      map[r.treinoId] = r._count._all;
     }
-    return res.json({ realizadoCountByTreinoId: map });
+
+    for (const id of ids) {
+      if (map[id] == null) map[id] = 0;
+    }
+
+    return res.json(map);
   } catch (e) {
     console.error("getTreinosRealizadosCount error:", e);
-    return res.status(500).json({ error: "Falha ao calcular realizados-count" });
+    return res.status(500).json({ error: "Erro ao contar treinos realizados" });
   }
 }
