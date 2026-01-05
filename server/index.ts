@@ -1,4 +1,3 @@
-// server/index
 import express from "express";
 import cors from "cors";
 import path, { dirname } from "path";
@@ -98,6 +97,7 @@ import treinarJuntosRoute from "./routes/treinarJuntos.js";
 import sessoesTurmaRoutes from "./routes/sessoesTurma.js";
 import feedbackRoutes from "./routes/feedback.js";
 import statusRoutes from "./routes/status.js";
+import estatisticasRoutes from "./routes/estatisticas.js";
 
 import { handlePaymentWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
@@ -289,6 +289,7 @@ app.use("/api/gerenciar", authenticateToken, gerenciarAtletasRoutes);
 app.use("/api/indicacoes", authenticateToken, indicacoesRouter);
 app.use("/api/relacoes", authenticateToken, relacoesRoutes);
 app.use("/api/elencos", authenticateToken, elencosRoutes);
+app.use("/api/estatisticas", authenticateToken, estatisticasRoutes);
 app.use("/api/formadores", authenticateToken, formadoresRoutes);
 app.use("/api/checklists", authenticateToken, checklistRoutes);
 app.use("/api/organizacoes", authenticateToken, organizacoesRoutes);
