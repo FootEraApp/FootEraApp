@@ -1,3 +1,4 @@
+// client/src/pages/treino/treinos-intrutores
 import React, { useMemo, useEffect, useState, useRef, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -276,17 +277,11 @@ export default function TreinosInstrutores({
   const [carregandoSubmissoes, setCarregandoSubmissoes] = useState(false);
   const [page, setPage] = useState({ total: 0, limit: 20, offset: 0 });
 
-  const [dataAgendarById, setDataAgendarById] = useState<Record<string, string>>(
-    {},
-  );
+  const [dataAgendarById, setDataAgendarById] = useState<Record<string, string>>({});
   const [obsById, setObsById] = useState<Record<string, string>>({});
-  const [horaAgendarById, setHoraAgendarById] = useState<
-    Record<string, string>
-  >({});
-
-  const [atletasVinculados, setAtletasVinculados] = useState<
-    AtletaVinculado[]
-  >([]);
+  const [horaAgendarById, setHoraAgendarById] = useState<Record<string, string>>({});
+  
+  const [atletasVinculados, setAtletasVinculados] = useState<AtletaVinculado[]>([]);
 
   const [atletasSelecionadosByTreinoId, setAtletasSelecionadosByTreinoId] =
     useState<Record<string, string[]>>({});
@@ -1793,48 +1788,17 @@ async function salvarProgressoSessao(sessaoId: string) {
       : "";
 
   const renderTreinoCard = (treino: TreinoProgramado) => {
-    const tipoBruto = String(
-      usuario?.tipo ?? (Storage as any).tipoSalvo ?? "",
-    ).toLowerCase();
-
-    const tipoUser =
-      tipoBruto.startsWith("professor") ? "professor"
-      : tipoBruto.startsWith("atleta") ? "atleta"
-      : tipoBruto.startsWith("clube") ? "clube"
-      : tipoBruto.startsWith("escolinha") ? "escolinha"
-      : tipoBruto.startsWith("escola") ? "escola"
-      : tipoBruto.startsWith("admin") ? "admin"
-      : tipoBruto.startsWith("olheiro") ? "olheiro"
-      : tipoBruto;
-
-    const podeAgendarComoAtleta =
-      tipoUser === "atleta" &&
-      Boolean(
-        (Storage as any).tipoUsuarioId ||
-          (Storage as any).atletaId ||
-          usuario?.tipoUsuarioId,
-      );
-
-    const podeAgendarComoGestor =
-    ["professor", "admin", "escola", "escolinha", "clube"].includes(tipoUser) &&
-    (atletasVinculados.length > 0 || turmas.length > 0);
-
-    const mostrarBlocoAgendar = podeAgendarComoAtleta || podeAgendarComoGestor;
-
     return (
-      <div
-        key={treino.id}
-        className="bg-white p-4 rounded-xl shadow-sm border mb-4"
-      >
+      <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border">
         <div className="flex items-start justify-between gap-3">
           <h4
             className="font-bold text-lg text-green-800 cursor-pointer hover:underline"
-            onClick={() =>
-              navigate(`/treinos/unico?programadoId=${treino.id}`)
-            }
+            onClick={() => navigate(`/treinos/unico?programadoId=${treino.id}`)}
+            title="Abrir detalhes do treino"
           >
             {treino.nome}
           </h4>
+
           {typeof treino.pontuacao === "number" && (
             <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
               +{treino.pontuacao} pts
@@ -1842,206 +1806,18 @@ async function salvarProgressoSessao(sessaoId: string) {
           )}
         </div>
 
-        {treino.descricao && (
-          <p className="text-sm text-gray-700 mt-1">{treino.descricao}</p>
-        )}
-
-        {Array.isArray(treino.criadoresNomes) && treino.criadoresNomes.length > 0 && (
-          <div className="mt-2 text-xs text-gray-600">
-            <strong>Criado por:</strong>{" "}
-            {treino.criadoresNomes.join(", ")}
-          </div>
-        )}
-
-        {treino.professorId && (
-          <div className="mt-1 text-xs text-gray-500">
-            <strong>Professor responsável:</strong>{" "}
-            {profNomeById[String(treino.professorId)] ||
-              professoresVinculadosNomeById[String(treino.professorId)] ||
-              "Professor"}
-          </div>
-        )}
-
-        <div className="mt-3 flex flex-col gap-2">
-         {mostrarBlocoAgendar && (
-            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 max-w-full sm:max-w-[680px]">
-              {podeAgendarComoGestor && (
-                <div className="flex flex-col gap-2 w-full sm:w-auto">
-                  {turmas.length > 0 && (
-                    <select
-                      className="px-3 py-2 border rounded-lg w-full sm:w-[220px]"
-                      value={turmaSelecionadaByTreinoId[treino.id] ?? ""}
-                      onChange={(e) => {
-                        const turmaId = e.target.value;
-                        setTurmaSelecionadaByTreinoId((prev) => ({
-                          ...prev,
-                          [treino.id]: turmaId,
-                        }));
-
-                        if (turmaId) {
-                          setAtletasSelecionadosByTreinoId((prev) => ({
-                            ...prev,
-                            [treino.id]: [],
-                          }));
-                        }
-                      }}
-                    >
-                      <option value="">
-                        Enviar para atletas selecionados
-                      </option>
-                      {turmas.map((t) => {
-                        const profs =
-                          (t.professorNomes?.length ? t.professorNomes : [])
-                            .filter(Boolean)
-                            .join(", ");
-
-                        const sufixo = profs ? ` — Prof(s): ${profs}` : " — Sem professor";
-
-                        return (
-                          <option key={t.id} value={t.id}>
-                            Turma: {t.nome}{sufixo}
-                          </option>
-                        );
-                      })}
-
-                    </select>
-                  )}
-
-                  <select
-                    multiple
-                    className="px-3 py-2 border rounded-lg w-full sm:w-[220px] max-h-32"
-                    disabled={Boolean(turmaSelecionadaByTreinoId[treino.id])}
-                    value={atletasSelecionadosByTreinoId[treino.id] ?? []}
-                    onChange={(e) => {
-                      const values = Array.from(
-                        e.target.selectedOptions,
-                      ).map((opt) => opt.value);
-                      setAtletasSelecionadosByTreinoId((prev) => ({
-                        ...prev,
-                        [treino.id]: values,
-                      }));
-                    }}
-                  >
-                    {atletasVinculados.length === 0 ? (
-                      <option value="" disabled>
-                        Nenhum atleta vinculado
-                      </option>
-                    ) : (
-                      <>
-                        <option value="" disabled>
-                          Selecione um ou mais atletas
-                        </option>
-                        {atletasVinculados.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.usuario.nome}
-                          </option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                </div>
-              )}
-
-              <input
-                type="date"
-                className="px-3 py-2 border rounded-lg w-full sm:w-[140px]"
-                value={dataAgendarById[treino.id] ?? ""}
-                onChange={(e) =>
-                  setDataAgendarById((p) => ({
-                    ...p,
-                    [treino.id]: e.target.value,
-                  }))
-                }
-              />
-
-              <input
-                type="time"
-                className="px-3 py-2 border rounded-lg w-full sm:w-[110px]"
-                value={horaAgendarById[treino.id] ?? ""}
-                onChange={(e) =>
-                  setHoraAgendarById((p) => ({
-                    ...p,
-                    [treino.id]: e.target.value,
-                  }))
-                }
-              />
-
-              <input
-                type="text"
-                placeholder="Observação (opcional)"
-                className="px-3 py-2 border rounded-lg flex-1"
-                value={obsById[treino.id] ?? ""}
-                onChange={(e) =>
-                  setObsById((p) => ({ ...p, [treino.id]: e.target.value }))
-                }
-              />
-
-              <button
-                onClick={() => {
-                  const diaISO =
-                    dataAgendarById[treino.id] ||
-                    new Date().toISOString().slice(0, 10);
-                  const hora = horaAgendarById[treino.id] || "";
-
-                  agendarTreinoProgramado(
-                    treino,
-                    diaISO,
-                    hora,
-                    obsById[treino.id],
-                  );
-                }}
-                className="bg-green-800 text-white px-3 py-2 rounded-lg w-full sm:w-auto"
-              >
-                Agendar treino
-              </button>
-            </div>
-          )}
+        <div className="mt-2 text-sm text-gray-700">
+          <strong>Nível:</strong> {treino.nivel || "—"}
         </div>
 
-        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-700">
-          <p>
-            <strong>Nível:</strong> {treino.nivel}
-          </p>
-          {treino.dataAgendada && (
-            <p>
-              <strong>Data:</strong> {formatarData(treino.dataAgendada)}
-            </p>
-          )}
-          {typeof treino.duracao === "number" && (
-            <p>
-              <strong>Duração:</strong> {treino.duracao} min
-            </p>
-          )}
-          {treino.objetivo && (
-            <p className="sm:col-span-2">
-              <strong>Objetivo:</strong> {treino.objetivo}
-            </p>
-          )}
+        <div className="mt-2 text-xs text-gray-500">
+          Clique no nome do treino para ver os detalhes completos.
         </div>
-
-        {treino.exercicios?.length > 0 && (
-          <div className="mt-3">
-            <strong className="text-sm text-gray-800">Exercícios:</strong>
-            <div className="max-h-40 overflow-y-auto mt-1 bg-gray-50 border rounded p-2 text-sm space-y-1">
-              {treino.exercicios.map((ex, i) => (
-                <div
-                  key={ex.id || `${i}-${ex.nome || "ex"}`}
-                  className="border-b pb-1 last:border-b-0"
-                >
-                  <strong>{i + 1}.</strong> {ex.nome}{" "}
-                  {ex.repeticoes && (
-                    <span className="text-gray-500">
-                      ({ex.repeticoes})
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     );
   };
+
+
 
   const meuTipoUsuarioId = String(usuario?.tipoUsuarioId ?? "");
 
@@ -2321,7 +2097,7 @@ async function salvarProgressoSessao(sessaoId: string) {
                 </button>
               </div>
 
-              {listaParaExibir.map(renderTreinoCard).length > 0 ? (
+              {listaParaExibir.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {listaParaExibir.map(renderTreinoCard)}
                 </div>
