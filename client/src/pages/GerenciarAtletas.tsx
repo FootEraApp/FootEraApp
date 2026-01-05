@@ -895,6 +895,8 @@ const hasPastSelectedDay = useMemo(() => {
   return selectedDays.some(isPastDayISO);
 }, [selectedDays]);
 
+const forceScrollDetails = useMemo(() => selectedDays.length >= 2, [selectedDays.length]);
+
 function toggleDay(dayISO: string) {
   setDrawerOpen(true);
 
@@ -915,23 +917,38 @@ async function agendarParaDiasSelecionados() {
 
   setSalvandoAgenda(true);
   try {
-    for (const day of selectedDays) {
-      await axios.post(
-        `${API.BASE_URL}/api/treinos/agendados`,
-        { atletaId: focado.id, treinoProgramadoId, dataTreino: day },
-        { headers }
-      );
-    }
+    // ✅ agenda todos os dias (em paralelo)
+    await Promise.all(
+      selectedDays.map((day) =>
+        axios.post(
+          `${API.BASE_URL}/api/treinos/agendados`,
+          { atletaId: focado.id, treinoProgramadoId, dataTreino: day },
+          { headers }
+        )
+      )
+    );
 
+    // ✅ recarrega agenda do atleta (para refletir no calendário)
     const r = await axios.get(`${API.BASE_URL}/api/treinos/agendados`, {
       headers,
       params: { atletaId: focado.id },
     });
     setAgendados(normalizeAgendadosPayload(r.data));
+
+    // ✅ AQUI: limpa os dias selecionados (remove o "ring" do calendário)
+    setSelectedDays([]);
+
     alert("Treino(s) agendado(s) com sucesso!");
-  } catch (e) {
+  } catch (e: any) {
     console.error(e);
-    alert("Erro ao agendar treinos.");
+
+    // opcional: se o backend devolver 409 (já existe no dia), mostra msg melhor
+    const msg =
+      e?.response?.data?.message ||
+      (e?.response?.status === 409 ? "Já existe treino agendado em um dos dias selecionados." : null) ||
+      "Erro ao agendar treinos.";
+
+    alert(msg);
   } finally {
     setSalvandoAgenda(false);
   }
@@ -1494,7 +1511,15 @@ async function salvarAvaliacao() {
 
 {carreiraOpen && focado && (
   <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center">
-    <div className="w-full max-w-6xl overflow-hidden rounded-2xl border border-zinc-200 bg-white text-zinc-900 shadow-2xl">
+    <div
+      className="
+        w-full max-w-6xl overflow-hidden rounded-2xl border border-zinc-200 bg-white text-zinc-900 shadow-2xl
+        flex flex-col
+        h-[calc(100dvh-1.5rem)] max-h-[calc(100dvh-1.5rem)]
+        sm:h-[70vh] sm:max-h-[70vh]
+      "
+    >
+
       {/* topo */}
 <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
   <div className="min-w-0">
@@ -1511,9 +1536,9 @@ async function salvarAvaliacao() {
 </div>
 
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px]">
+      <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr_380px] overflow-hidden">
         {/* Calendário */}
-        <div className="p-4 border-b xl:border-b-0 xl:border-r border-zinc-200">
+        <div className="p-4 border-b xl:border-b-0 xl:border-r border-zinc-200 min-h-0 overflow-y-auto">
           <div className="flex items-center justify-between mb-3">
             <div className="flex flex-wrap items-center justify-end gap-2">
               <button
@@ -1610,7 +1635,7 @@ async function salvarAvaliacao() {
         </div>
 
         {/* Drawer */}
-        <div className="p-4">
+        <div className="p-4 min-h-0 overflow-hidden flex flex-col">
           <div className="flex items-center justify-between mb-2">
             <div className="flex flex-wrap items-center justify-end gap-2">
               <ClipboardList className="h-5 w-5 text-zinc-500" />
@@ -1624,127 +1649,116 @@ async function salvarAvaliacao() {
             </button>
           </div>
 
-          {!drawerOpen ? null : selectedDays.length === 0 ? (
-            <div className="text-sm opacity-80">
-              Clique em um ou mais dias do calendário para ver/agendar treinos.
+{!drawerOpen ? null : selectedDays.length === 0 ? (
+  <div className="text-sm opacity-80">
+    Clique em um ou mais dias do calendário para ver/agendar treinos.
+  </div>
+) : (
+  <div className="flex flex-col gap-4 min-h-0 flex-1">
+    {/* Agendamento rápido (fixo no topo) */}
+    {!hasPastSelectedDay ? (
+      <div className={["rounded-xl border border-zinc-200 bg-white flex-none", forceScrollDetails ? "p-2" : "p-3"].join(" ")}>
+        <div className={["font-bold", forceScrollDetails ? "text-xs mb-1" : "text-sm mb-2"].join(" ")}>
+          Agendar para {selectedDays.length === 1 ? "1 dia selecionado" : `${selectedDays.length} dias selecionados`}
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs opacity-80">Treino programado</label>
+          <select
+            value={treinoProgramadoId}
+            onChange={(e) => setTreinoProgramadoId(e.target.value)}
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800"
+          >
+            <option value="">Selecionar...</option>
+            {treinosProgramados.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.nome}{t.codigo ? ` (${t.codigo})` : ""}
+              </option>
+            ))}
+          </select>
+
+          <button
+            onClick={agendarParaDiasSelecionados}
+            disabled={loadingProgramados || salvandoAgenda}
+            className="w-full mt-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 disabled:hover:bg-emerald-600 transition"
+          >
+            {salvandoAgenda ? "Agendando..." : loadingProgramados ? "Carregando..." : "Agendar treino nos dias selecionados"}
+          </button>
+        </div>
+      </div>
+    ) : (
+      <div className="rounded-xl border border-zinc-200 bg-white p-3 flex-none">
+        <div className="text-sm font-bold mb-1">Agendamento indisponível</div>
+        <div className="text-sm opacity-80">
+          Você selecionou pelo menos um dia no passado. Selecione apenas hoje ou datas futuras.
+        </div>
+      </div>
+    )}
+
+    {/* Lista rolável (não estoura o modal) */}
+    <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
+
+
+      {selectedDayItems.map(({ day, items }) => (
+        <div key={day} className="rounded-xl border border-zinc-200 bg-white p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-bold">{formatDayPtBR(day)}</div>
+            <div className="text-xs opacity-80">
+              {items.length ? `${items.length} treino(s)` : "Sem treino"}
             </div>
+          </div>
+
+          {!items.length ? (
+            <div className="text-sm opacity-80">Nenhum treino agendado neste dia.</div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-2">
+              {items.map((t) => {
+                const nome = t.treinoProgramado?.nome || t.titulo || "Treino";
+                const done = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
+                const lost = !done && isLost(t);
 
-              {/* Agendamento rápido (multi-dia) */}
-              {!hasPastSelectedDay ? (
-                <div className="rounded-xl border border-zinc-200 bg-white p-3">
-                  <div className="text-sm font-bold mb-2">
-                    Agendar para {selectedDays.length === 1 ? "1 dia selecionado" : `${selectedDays.length} dias selecionados`}
-                  </div>
+                const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
+                const statusClass = done ? "text-emerald-600" : lost ? "text-red-600" : "text-zinc-600";
 
-                  <div className="space-y-2">
-                    <label className="text-xs opacity-80">Treino programado</label>
-                    <select
-                      value={treinoProgramadoId}
-                      onChange={(e) => setTreinoProgramadoId(e.target.value)}
-                      className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800"
-                    >
-                      <option value="">Selecionar...</option>
-                      {treinosProgramados.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.nome}{t.codigo ? ` (${t.codigo})` : ""}
-                        </option>
-                      ))}
-                    </select>
+                return (
+                  <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-bold truncate">{nome}</div>
 
-                    <button
-                      onClick={agendarParaDiasSelecionados}
-                      disabled={loadingProgramados || salvandoAgenda}
-                      className="w-full mt-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 disabled:hover:bg-emerald-600 transition"
-                    >
-                      {salvandoAgenda ? "Agendando..." : loadingProgramados ? "Carregando..." : "Agendar treino nos dias selecionados"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                  <div className="text-sm font-bold mb-1">Agendamento indisponível</div>
-                  <div className="text-sm opacity-80">
-                    Você selecionou pelo menos um dia no passado. Selecione apenas hoje ou datas futuras.
-                  </div>
-                </div>
-              )}
+                        <div className="text-xs opacity-80 mt-1">
+                          Status: <span className={statusClass}>{statusText}</span>
+                        </div>
 
+                        {done && !!t.submissaoTreinoId ? (
+                          <button
+                            onClick={() => abrirModalAvaliacao(String(t.submissaoTreinoId || ""))}
+                            className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
+                          >
+                            💬 Avaliar treino
+                          </button>
+                        ) : null}
+                      </div>
 
-              {/* Itens por dia */}
-              {selectedDayItems.map(({ day, items }) => (
-                <div key={day} className="bg-white/5 border border-white/10 rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-bold">{formatDayPtBR(day)}</div>
-                    <div className="text-xs opacity-80">
-                      {items.length ? `${items.length} treino(s)` : "Sem treino"}
+                      {done ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-300" />
+                      ) : lost ? (
+                        <XCircle className="h-5 w-5 text-red-300" />
+                      ) : null}
                     </div>
                   </div>
-
-                  {!items.length ? (
-                    <div className="text-sm opacity-80">Nenhum treino agendado neste dia.</div>
-                  ) : (
-                    <div className="space-y-2">
-
-                      {items.map((t) => {
-
-                        if (day === "2025-12-19") {
-                          console.log("DIA 19 item:", {
-                            id: t.id,
-                            nome: t.treinoProgramado?.nome || t.titulo,
-                            status: t.meuStatus || t.execucaoStatus || t.status,
-                            submissaoTreinoId: t.submissaoTreinoId,
-                            submissaoFeita: t.submissaoFeita,
-                          });
-                        }
-
-                        const nome = t.treinoProgramado?.nome || t.titulo || "Treino";
-
-                        const done = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
-                        const lost = !done && isLost(t);
-
-                        const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
-                        const statusClass = done ? "text-emerald-600" : lost ? "text-red-600" : "text-zinc-600";
-
-                        return (
-                          <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="font-bold truncate">{nome}</div>
-
-                                <div className="text-xs opacity-80 mt-1">
-                                  Status: <span className={statusClass}>{statusText}</span>
-                                </div>
-
-                                  {done && !!t.submissaoTreinoId ? (
-                                    <button
-                                      onClick={() => abrirModalAvaliacao(String(t.submissaoTreinoId || ""))}
-                                      className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
-                                    >
-                                      💬 Avaliar treino
-                                    </button>
-                                  ) : null}
-
-                                
-                              </div>
-
-                              {done ? (
-                                <CheckCircle2 className="h-5 w-5 text-green-300" />
-                              ) : lost ? (
-                                <XCircle className="h-5 w-5 text-red-300" />
-                              ) : null}
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
+
+  
         </div>
       </div>
     </div>
