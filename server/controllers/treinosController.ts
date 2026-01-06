@@ -78,7 +78,6 @@ async function recomputeFeitosTreino(treinoProgramadoId: string) {
       ultimoRealizadoEm: ultimo,
     },
     update: {
-      realizacoes: total,
       ultimoRealizadoEm: ultimo,
     },
   });
@@ -755,11 +754,8 @@ async function buildTreinosWhereByLogin(req: AuthenticatedRequest) {
     if (ctx.escolinhas.length) or.push({ escolinhaId: { in: ctx.escolinhas } });
     if (ctx.professores.length) {
       or.push({ professorId: { in: ctx.professores } });
-      or.push({
-        professores: { some: { professorId: { in: ctx.professores } } },
-      });
+      or.push({ professores: { some: { professorId: { in: ctx.professores } } } });
     }
-
     return { OR: or };
   }
 
@@ -1182,19 +1178,26 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
       resolvedMe?.tipo ??
       String(req.user?.tipo ?? req.user?.tipoUsuario ?? "").toLowerCase();
 
-    /* ==========================
-       🔐 PERMISSÕES (mantidas)
-       ========================== */
     if (["professor", "clube", "escolinha"].includes(tipoUser)) {
       const resolved = await resolveEntidade(req.userId!);
 
       if (resolved) {
         const whereVinc =
           resolved.tipo === "professor"
-            ? { professorId: resolved.id }
+            ? { professorId: resolved.id, ativo: true }
             : resolved.tipo === "clube"
-            ? { clubeId: resolved.id }
-            : { escolinhaId: resolved.id };
+            ? { clubeId: resolved.id, ativo: true }
+            : { escolinhaId: resolved.id, ativo: true };
+
+        const vinculoDireto =
+          (resolved.tipo === "clube" && (await prisma.atleta.findUnique({
+            where: { id: atletaId },
+            select: { clubeId: true },
+          }))?.clubeId === resolved.id) ||
+          (resolved.tipo === "escolinha" && (await prisma.atleta.findUnique({
+            where: { id: atletaId },
+            select: { escolinhaId: true },
+          }))?.escolinhaId === resolved.id);
 
         const [temVinc, ehObservado] = await Promise.all([
           prisma.relacaoTreinamento.findFirst({
@@ -1207,7 +1210,7 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
           }),
         ]);
 
-        if (!temVinc && !ehObservado) {
+        if (!temVinc && !ehObservado && !vinculoDireto) {
           if (turmaId) {
             const membro = await prisma.turmaUsuario.findFirst({
               where: { turmaId, usuarioId: atleta.usuarioId ?? "__none__" },
@@ -1273,9 +1276,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
       }
     }
 
-    /* ==========================
-       📅 BLOQUEIO POR DIA
-       ========================== */
     const dayStart = startOfDay(quandoBase);
     const dayEnd = endOfDay(quandoBase);
 
@@ -1296,9 +1296,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    /* ==========================
-       ✅ CRIAÇÃO
-       ========================== */
     const criado = await prisma.treinoAgendado.create({
       data: {
         titulo: tituloFinal,
@@ -1376,23 +1373,80 @@ async function idsInstituicoesAtuais(client: PrismaClient, atletaUsuarioId: stri
     select: { id: true, clubeId: true, escolinhaId: true },
   });
 
-  if (!atleta) return { atletaId: null, clubes: [], escolinhas: [], professores: [] as string[] };
+  if (!atleta) {
+    return {
+      atletaId: null,
+      clubes: [],
+      escolinhas: [],
+      professores: [] as string[],
+    };
+  }
 
   const rels = await client.relacaoTreinamento.findMany({
-    where: { atletaId: atleta.id },
+    where: {
+      atletaId: atleta.id,
+      NOT: { ativo: false }, // pega ativo=true e também ativo=null (se existir no banco)
+    },
     select: { clubeId: true, escolinhaId: true, professorId: true },
   });
 
-  const clubes = new Set<string>();
-  const escolinhas = new Set<string>();
-  const professores = new Set<string>();
-  if (atleta.clubeId) clubes.add(atleta.clubeId);
-  if (atleta.escolinhaId) escolinhas.add(atleta.escolinhaId);
+  const clubesDiretos = new Set<string>();
+  const escolinhasDiretas = new Set<string>();
+  const professoresDiretos = new Set<string>();
+
+  if (atleta.clubeId) clubesDiretos.add(atleta.clubeId);
+  if (atleta.escolinhaId) escolinhasDiretas.add(atleta.escolinhaId);
+
   for (const r of rels) {
-    if (r.clubeId) clubes.add(r.clubeId);
-    if (r.escolinhaId) escolinhas.add(r.escolinhaId);
-    if (r.professorId) professores.add(r.professorId);
+    if (r.clubeId) clubesDiretos.add(r.clubeId);
+    if (r.escolinhaId) escolinhasDiretas.add(r.escolinhaId);
+    if (r.professorId) professoresDiretos.add(r.professorId);
   }
+
+  const clubesViaProfessor = new Set<string>();
+  const escolinhasViaProfessor = new Set<string>();
+  const profArr = [...professoresDiretos];
+
+  if (profArr.length) {
+    const [pRows, linksClube, linksEscola] = await Promise.all([
+      client.professor.findMany({
+        where: { id: { in: profArr } },
+        select: { id: true, clubeId: true, escolinhaId: true },
+      }),
+      client.professorClube.findMany({
+        where: { professorId: { in: profArr } },
+        select: { clubeId: true },
+      }),
+      client.professorEscolinha.findMany({
+        where: { professorId: { in: profArr } },
+        select: { escolinhaId: true },
+      }),
+    ]);
+
+    for (const p of pRows) {
+      if (p.clubeId) clubesViaProfessor.add(p.clubeId);
+      if (p.escolinhaId) escolinhasViaProfessor.add(p.escolinhaId);
+    }
+    for (const l of linksClube) if (l.clubeId) clubesViaProfessor.add(l.clubeId);
+    for (const l of linksEscola) if (l.escolinhaId) escolinhasViaProfessor.add(l.escolinhaId);
+  }
+
+  const professores = new Set<string>(professoresDiretos);
+  const clubesDiretosArr = [...clubesDiretos];
+  const escolasDiretasArr = [...escolinhasDiretas];
+
+  if (clubesDiretosArr.length) {
+    const profsDoClube = await Promise.all(clubesDiretosArr.map((cid) => getProfessorIdsDoClube(cid)));
+    for (const pid of profsDoClube.flat()) professores.add(pid);
+  }
+
+  if (escolasDiretasArr.length) {
+    const profsDaEscolinha = await Promise.all(escolasDiretasArr.map((eid) => getProfessorIdsDaEscolinha(eid)));
+    for (const pid of profsDaEscolinha.flat()) professores.add(pid);
+  }
+
+  const clubes = new Set<string>([...clubesDiretos, ...clubesViaProfessor]);
+  const escolinhas = new Set<string>([...escolinhasDiretas, ...escolinhasViaProfessor]);
 
   return {
     atletaId: atleta.id,
@@ -1514,6 +1568,7 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
       vinc.clubes.length ? { clubeId: { in: vinc.clubes } } : undefined,
       vinc.escolinhas.length ? { escolinhaId: { in: vinc.escolinhas } } : undefined,
       vinc.professores.length ? { professorId: { in: vinc.professores } } : undefined,
+      vinc.professores.length ? { professores: { some: { professorId: { in: vinc.professores } } } } : undefined,
     ].filter(Boolean) as any[];
 
     const whereBase: any = { atletaId };
@@ -2336,7 +2391,15 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
 
     const whereBase: Prisma.AtletaWhereInput = {
       OR: [
-        { relacoesTreinamento: { some: { professorId: tipoUsuarioId } } },
+       { relacoesTreinamento: {
+            some: {
+              professorId: tipoUsuarioId,
+              NOT: { ativo: false },
+            }
+          }
+        },
+        { relacoesTreinamento: { some: { clubeId: tipoUsuarioId, NOT: { ativo: false } } } },
+        { relacoesTreinamento: { some: { escolinhaId: tipoUsuarioId, NOT: { ativo: false } } } },
         { clubeId: tipoUsuarioId },
         { escolinhaId: tipoUsuarioId },
       ],
@@ -3759,7 +3822,7 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
     await prisma.estatisticaTreino.upsert({
       where: { treinoId: tp.id },
       create: { treinoId: tp.id,  realizacoes: 0, ultimoRealizadoEm: new Date() },
-      update: { realizacoes: { increment: created.count }, ultimoRealizadoEm: new Date() },
+      update: { ultimoRealizadoEm: new Date() },
     });
 
     await audit(req as any, {

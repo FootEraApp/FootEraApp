@@ -986,7 +986,7 @@ function abrirMidiaExercicioDireto(
       if (!token) return;
 
       const r = await fetch(
-        `${API.BASE_URL}/api/treinos/agendados/${treino.id}/finalizar`,
+        `${API.BASE_URL}/api/treinos/agendados/${treino.id}/complete`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
@@ -1026,17 +1026,16 @@ function abrirMidiaExercicioDireto(
 
     try {
       const token = getToken();
-      const r = await fetch(
-        `${API.BASE_URL}/api/treinos/agendados/${t.id}/remarcar`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ novaData: nova }),
-        }
-      );
+      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${t.id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          dataTreino: nova,
+        }),
+      });
 
       if (!r.ok) throw new Error("Erro ao remarcar");
 
@@ -1157,48 +1156,37 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
               </div>
             </div>
 
-<button
-  disabled={isMissedTreino}
-  className={`text-green-700 underline text-sm ${
-    isMissedTreino ? "text-gray-400 no-underline cursor-not-allowed" : ""
-  }`}
-  onClick={() => {
-    if (isMissedTreino) return;
+            <button
+              disabled={isMissedTreino}
+              className={`text-green-700 underline text-sm ${
+                isMissedTreino ? "text-gray-400 no-underline cursor-not-allowed" : ""
+              }`}
+              onClick={() => {
+                if (isMissedTreino) return;
 
-    const midiaDireta =
-      ex.exercicio.videoDemonstrativoUrl ||
-      (ex.exercicio as any).imgDemonstrativaUrl ||
-      null;
+                const midiaDireta =
+                  ex.exercicio.videoDemonstrativoUrl ||
+                  (ex.exercicio as any).imgDemonstrativaUrl ||
+                  null;
 
-    const midiaFallback = (() => {
-      const m = midiaDoCatalogo(ex.exercicio.nome);
-      return m?.video || m?.img || null;
-    })();
+                const midiaFallback = (() => {
+                  const m = midiaDoCatalogo(ex.exercicio.nome);
+                  return m?.video || m?.img || null;
+                })();
 
-    const midia = midiaDireta || midiaFallback;
+                const midia = midiaDireta || midiaFallback;
 
-    console.log(
-      "[MIDIA]",
-      "exercicio:", ex.exercicio.id,
-      ex.exercicio.nome,
-      "direta:", midiaDireta,
-      "fallback:", midiaFallback,
-      "final:", midia
-    );
+                if (!midia) {
+                  alert("Esse exercício está sem vídeo cadastrado no banco (videoDemonstrativoUrl = null).");
+                  return;
+                }
 
-    if (!midia) {
-      alert("Esse exercício está sem vídeo cadastrado no banco (videoDemonstrativoUrl = null).");
-      return;
-    }
+                abrirMidiaExercicioDireto(ex.exercicio.id, ex.exercicio.nome, midia);
+              }}
 
-    abrirMidiaExercicioDireto(ex.exercicio.id, ex.exercicio.nome, midia);
-  }}
-
->
-  Ver vídeo
-</button>
-
-
+            >
+              Ver vídeo
+            </button>
           </div>
         );
       })}
