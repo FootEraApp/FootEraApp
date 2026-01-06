@@ -170,7 +170,6 @@ export async function criarSubmissaoTreinoUpload(
       select: { id: true, criadoEm: true },
     });
 
-    // só incrementa estatística se foi a primeira submissão desse treinoAgendado
     const isFirst = !existing;
     if (isFirst) {
       await aplicarEstatisticasPosSubmissao(created.id, atletaId, treinoAgendadoId, minutosConsiderados).catch(() => {});

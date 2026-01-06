@@ -1,4 +1,3 @@
-//client/src/components/perfil/PerfilClube
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
@@ -12,9 +11,7 @@ import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
 
 type Props = { idDaUrl?: string; usuarioId?: string | null };
-
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
-
 type PayloadClube = {
   tipo: "Clube";
   usuario: UsuarioMin | null;
@@ -47,7 +44,6 @@ type PayloadClube = {
 
 type AbaTopo = "perfil" | "eventos" | "atletas" | "professores" | "postagens";
 type SubAbaAtletas = "vinculados" | "observados" | "solicitacoes";
-
 type AtletaItem = {
   id: string;
   atletaId: string;
@@ -86,7 +82,7 @@ type Turma = {
   categoria?: string | null;
   professorIds?: string[];
   professorNomes?: string[];
-  professorNome?: string | null; // pode manter pra exibir join
+  professorNome?: string | null;
   alunosCount?: number;
 };
 
@@ -95,7 +91,7 @@ type EventoPreview = {
   titulo: string;
   tipo?: string | null;
   status?: string | null;
-  dataEvento: string; // vem como ISO
+  dataEvento: string;
   cidade?: string | null;
   estado?: string | null;
   descricao?: string | null;
@@ -208,9 +204,9 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
         setAtletasHeaderCount(rows.length);
         setVinculadosPreview(
           rows.slice(0, 5).map((r) => ({
-            id: r.id || r.atletaId,                 // pode ser atletaId, ok
+            id: r.id || r.atletaId,               
             atletaId: r.atletaId || r.id,
-            usuarioId: r.usuarioId ?? r.usuario?.id ?? null,  // 👈 O QUE IMPORTA PRO PERFIL
+            usuarioId: r.usuarioId ?? r.usuario?.id ?? null, 
             nome: r.nome,
             foto: r.foto ?? null,
             posicao: r.posicao ?? null,
@@ -361,7 +357,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
   }
 
   async function loadEventosPreview() {
-    const id = clubeId; // já existe no seu componente
+    const id = clubeId; 
     if (!token || !id) return;
 
     setEventosErro("");
@@ -383,8 +379,6 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
         estado: ev.estado ?? null,
         descricao: ev.descricao ?? null,
       }));
-
-      // mostra só um "pouco" no perfil (3 primeiros)
       setEventosPreview(mapped.slice(0, 3));
     } catch (e: any) {
       setEventosPreview([]);
@@ -731,7 +725,6 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
               </Link>
             </div>
 
-            {/* ✅ agora é preview, não texto fixo */}
             <p className="text-sm text-green-900/80 mt-1">
               Toque em um evento para ver todos os detalhes e gerenciar inscrições.
             </p>
@@ -1190,8 +1183,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                       </div>
                       <button
                         onClick={() => {
-                          // se quiser manter um "prefiltro" (apenas 1), pega o primeiro:
-                          setProfessorSelecionado(t.professorIds?.[0]); // ✅ string | undefined
+                          setProfessorSelecionado(t.professorIds?.[0]);
                           setTurmasOpen(true);
                         }}
                         className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
@@ -1214,7 +1206,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                             try {
                               await axios.put(
                                 `${API.BASE_URL}/api/turmas/${t.id}/atribuir-professores`,
-                                { professorIds: selectedIds }, // ✅ array
+                                { professorIds: selectedIds },
                                 { headers }
                               );
                               await loadTurmas();

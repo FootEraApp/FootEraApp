@@ -1,12 +1,6 @@
-// client/src/pages/treino/treinos-intrutores
-import React, { useMemo, useEffect, useState, useRef, type SVGProps } from "react";
+import { useMemo, useEffect, useState, useRef, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  Volleyball,
-  User,
-  CirclePlus,
-  Search,
-  House,
   Check,
   X,
 } from "lucide-react";

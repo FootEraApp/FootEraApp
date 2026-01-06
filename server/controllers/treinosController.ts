@@ -1385,7 +1385,7 @@ async function idsInstituicoesAtuais(client: PrismaClient, atletaUsuarioId: stri
   const rels = await client.relacaoTreinamento.findMany({
     where: {
       atletaId: atleta.id,
-      NOT: { ativo: false }, // pega ativo=true e também ativo=null (se existir no banco)
+      NOT: { ativo: false },
     },
     select: { clubeId: true, escolinhaId: true, professorId: true },
   });

@@ -52,6 +52,8 @@ type TreinoUnicoPayload = {
     treinoAgendadoId: string;
     media: number; 
     count: number;
+    avaliadorNome?: string | null;
+    avaliadoEm?: string | null;
   }[]; 
 };
 
@@ -279,7 +281,7 @@ export default function TreinoUnico() {
 
                 <div className="flex items-center gap-2 text-gray-800">
                   <StarIcon className="w-4 h-4 text-green-700 fill-white" />
-                  <strong>Avaliações treino:</strong>
+                  <strong>Avaliações por atletas:</strong>
 
                   {(treino.avaliacoesPorAgendado ?? []).length === 0 ? (
                     <span className="text-sm text-gray-700">Sem avaliações ainda</span>
@@ -288,23 +290,41 @@ export default function TreinoUnico() {
 
                 {(treino.avaliacoesPorAgendado ?? []).length ? (
                   <div className="space-y-2">
-                    {treino.avaliacoesPorAgendado!.map((a) => (
-                      <div
-                        key={a.treinoAgendadoId}
-                        className="flex items-center justify-between rounded-lg border bg-gray-50 px-3 py-2"
-                      >
-                        <div className="text-sm text-gray-700">
-                          <span className="font-medium">Agendado:</span>{" "}
-                          <span className="font-mono text-xs">{a.treinoAgendadoId.slice(0, 8)}…</span>
-                          <span className="text-gray-500"> ({a.count})</span>
-                        </div>
+                    {treino.avaliacoesPorAgendado!.map((a, idx) => {
+                      const nome = (a.avaliadorNome || "Atleta").trim();
 
-                        <div className="flex items-center gap-2">
-                          <Stars value={a.media} />
-                          <span className="text-sm text-gray-700">{Number(a.media).toFixed(2)}</span>
+                      const dataAvaliacao =
+                        a.avaliadoEm
+                          ? new Date(a.avaliadoEm).toLocaleString("pt-BR", {
+                              dateStyle: "short",
+                              timeStyle: "short",
+                            })
+                          : null;
+
+                      return (
+                        <div
+                          key={a.treinoAgendadoId || String(idx)}
+                          className="flex items-center justify-between rounded-lg border bg-gray-50 px-3 py-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="text-sm text-gray-800 font-medium truncate">
+                              {nome}
+                            </div>
+
+                            {dataAvaliacao ? (
+                              <div className="text-xs text-gray-500 whitespace-nowrap">
+                                • {dataAvaliacao}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <Stars value={a.media} />
+                            <span className="text-sm text-gray-700">{Number(a.media).toFixed(2)}</span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>

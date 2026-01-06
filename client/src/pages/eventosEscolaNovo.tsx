@@ -11,11 +11,9 @@ type EventoForm = {
   titulo: string;
   tipo: EventoTipo;
   descricao: string;
-
-  dataEvento: string;        // ✅ obrigatório (data real do evento)
-  inscricaoInicio: string;   // ➕ opcional
-  inscricaoFim: string;      // ➕ opcional
-
+  dataEvento: string;       
+  inscricaoInicio: string; 
+  inscricaoFim: string;    
   local: string;
   cidade: string;
   estado: string;
@@ -62,7 +60,6 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
   async function submit() {
     setErro("");
 
-    // ✅ agora é título + dataEvento obrigatório
     if (!form.titulo || !form.dataEvento) {
       setErro("Título e data do evento são obrigatórios.");
       return;
@@ -73,11 +70,8 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
 
       const body = {
         ...form,
-
-        // manda null se não preencher
         inscricaoInicio: form.inscricaoInicio ? form.inscricaoInicio : null,
         inscricaoFim: form.inscricaoFim ? form.inscricaoFim : null,
-
         vagas: form.vagas ? Number(form.vagas) : null,
         valorInscricao: form.valorInscricao ? Number(form.valorInscricao) : null,
         requisitos: form.requisitos
@@ -158,7 +152,6 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
             </div>
           </div>
 
-          {/* ➕ Período de inscrição (opcional) */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm">Início das inscrições</label>
