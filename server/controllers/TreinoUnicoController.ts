@@ -137,7 +137,20 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
 
       const realizacoes = Number(est?.realizacoes ?? 0);
 
-      return res.json(montarPayloadFromAgendado(ag, realizacoes));
+      const agg = await prisma.avaliacaoTreino.aggregate({
+        where: { treinoAgendadoId: agendadoId },
+        _avg: { nota: true },
+        _count: { nota: true },
+      });
+
+      const avaliacaoMedia = agg._avg.nota ?? null;
+      const avaliacaoCount = agg._count.nota ?? 0;
+
+      return res.json({
+        ...montarPayloadFromAgendado(ag, realizacoes),
+        avaliacaoMedia,
+        avaliacaoCount,
+      });
     }
 
     const tp = await prisma.treinoProgramado.findUnique({
@@ -153,7 +166,7 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
             },
           },
         },
-        Professor: { select: { nome: true } }, 
+        Professor: { select: { nome: true } },
         escolinha: { select: { nome: true } },
         clube: { select: { nome: true } },
       },
@@ -168,7 +181,32 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
 
     const realizacoes = Number(est?.realizacoes ?? 0);
 
-    return res.json(montarPayloadFromProgramado(tp, realizacoes));
+    const ags = await prisma.treinoAgendado.findMany({
+      where: { treinoProgramadoId: tp.id },
+      select: { id: true },
+    });
+
+    const ids = ags.map((a) => a.id);
+
+    const grupos = ids.length
+      ? await prisma.avaliacaoTreino.groupBy({
+          by: ["treinoAgendadoId"],
+          where: { treinoAgendadoId: { in: ids } },
+          _avg: { nota: true },
+          _count: { nota: true },
+        })
+      : [];
+
+    const avaliacoesPorAgendado = grupos.map((g) => ({
+      treinoAgendadoId: g.treinoAgendadoId,
+      media: Number(g._avg.nota ?? 0),
+      count: Number(g._count.nota ?? 0),
+    }));
+
+    return res.json({
+      ...montarPayloadFromProgramado(tp, realizacoes),
+      avaliacoesPorAgendado,
+    });
   } catch (e) {
     console.error("Erro em getTreinoUnico:", e);
     return res.status(500).json({ message: "Erro ao buscar treino." });
