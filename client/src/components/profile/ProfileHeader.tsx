@@ -208,10 +208,6 @@ export default function ProfileHeader({
   }, [perfilId]);
 
   useEffect(() => {
-    // só faz sentido checar vínculo quando:
-    // - não é meu perfil
-    // - tenho token
-    // - tenho perfilId válido
     if (isOwnProfile || isMe) return;
 
     const token =
@@ -222,10 +218,8 @@ export default function ProfileHeader({
 
     const usuarioAlvoId = String(perfilId || "").trim();
 
-    // 🔒 se ainda não tenho alvo, não checo (evita 400)
     if (!token || !usuarioAlvoId) return;
 
-    // 🔒 evita chamada duplicada (StrictMode / re-render)
     const usuarioId = String(
       Storage.usuarioId ||
       localStorage.getItem("usuarioId") ||
@@ -233,10 +227,7 @@ export default function ProfileHeader({
       ""
     ).trim();
 
-    // se não sei quem está vendo, não tem como checar vínculo
     if (!usuarioId) return;
-
-    // 🔒 evita chamada duplicada (StrictMode / re-render)
     if (checouVinculo) return;
     setChecouVinculo(true);
 
@@ -260,7 +251,6 @@ export default function ProfileHeader({
         if (!alive) return;
 
         if (!resp.ok) {
-          // se der 400/404/etc, não explode UI
           setTemVinculoTreino(false);
           return;
         }

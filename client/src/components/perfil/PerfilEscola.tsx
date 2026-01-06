@@ -100,11 +100,9 @@ type Turma = {
   nome: string;
   ownerTipo?: "Clube" | "Escolinha" | null;
   ownerId?: string | null;
-
-  professorIds?: string[];        // ✅ vários
-  professorNomes?: string[];      // ✅ vários
-  professorNome?: string | null;  // opcional: join pra exibir
-
+  professorIds?: string[];      
+  professorNomes?: string[];    
+  professorNome?: string | null;
   alunosCount?: number | null;
 };
 
@@ -113,7 +111,7 @@ type EventoItem = {
   titulo: string;
   tipo?: string | null;
   dataEvento?: string | null;
-  inicio?: string | null; // fallback se algum endpoint retornar "inicio"
+  inicio?: string | null;
   cidade?: string | null;
   estado?: string | null;
   endereco?: string | null;
@@ -352,7 +350,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
 
     setEventosLoading(true);
     try {
-      // ✅ igual ao PerfilClubes: lista por "dono"
       const { data: resp } = await axios.get(
         `${API.BASE_URL}/api/eventos/escolas/${escolaId}`,
         {
@@ -1138,7 +1135,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                             try {
                               await axios.put(
                                 `${API.BASE_URL}/api/turmas/${t.id}/atribuir-professores`,
-                                { professorIds: selectedIds },  // ✅ array
+                                { professorIds: selectedIds },
                                 { headers }
                               );
                               await loadTurmas();

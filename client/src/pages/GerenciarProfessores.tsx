@@ -492,7 +492,7 @@ const GerenciarProfessores: React.FC = () => {
                     </div>
                     <button
                       onClick={() => {
-                        setProfessorSelecionado(t.professorIds?.[0]); // ✅ pega só 1 string
+                        setProfessorSelecionado(t.professorIds?.[0]); 
                         setTurmasOpen(true);
                       }}
                       className="mt-2 inline-flex items-center gap-1 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 sm:mt-0"
