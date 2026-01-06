@@ -1,4 +1,3 @@
-// client/src/pages/GerenciarAtletas
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, House } from "lucide-react";
@@ -121,7 +120,6 @@ function startOfToday() {
 }
 
 function isPastDayISO(dayISO: string) {
-  // dayISO = "YYYY-MM-DD"
   const [y, m, d] = dayISO.split("-").map((n) => Number(n));
   const dt = new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
   return dt.getTime() < startOfToday().getTime();
@@ -173,7 +171,6 @@ function normalizeAgendadosPayload(payload: any): TreinoAgendadoItem[] {
       treinoProgramadoObj?.id ??
       null;
 
-    // backend às vezes manda dataTreino, dataHora, data...
     const dataTreino =
       t?.dataTreino ??
       t?.dataHora ??
@@ -212,7 +209,7 @@ function statusLabel(s?: string | null) {
 function autorTipoFromTela(t: "Escola" | "Clube" | "Professor"): AutorTipoApi {
   if (t === "Professor") return "Professor";
   if (t === "Clube") return "Clube";
-  return "Escolinha"; // "Escola" na tela vira "Escolinha" na API
+  return "Escolinha"; 
 }
 
 function isCompleted(s?: string | null) {
@@ -226,17 +223,14 @@ function isExpiredStatus(s?: string | null) {
 }
 
 function isLost(t: TreinoAgendadoItem) {
-  // 1) se backend já marcou como expired/perdido
   if (isExpiredStatus(t.meuStatus) || isExpiredStatus(t.execucaoStatus) || isExpiredStatus(t.status)) return true;
 
-  // 2) se a data do treino já passou e não foi concluído => perdido
   const dt = parseAsDate(t.dataTreino);
   if (!dt) return false;
 
   const today = new Date();
   const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const treinoOnly = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
-
   const passouDoDia = treinoOnly.getTime() < todayOnly.getTime();
   const concluido = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
 
@@ -250,14 +244,9 @@ function submissaoToAgendadoLike(s: SubmissaoItem): TreinoAgendadoItem {
     dataTreino: s.data,
     treinoProgramadoId: null,
     treinoProgramado: { id: "", nome: s.titulo ?? "Treino" },
-
-    // aprovado=true => concluído no calendário
     meuStatus: s.aprovado === true ? "COMPLETED" : "PENDENTE",
     status: null,
     execucaoStatus: null,
-
-    // se quiser habilitar o botão “Avaliar treino” aqui,
-    // você pode mapear submissaoTreinoId = s.id
     submissaoTreinoId: s.tipo === "treino" ? s.id : null,
   };
 }
@@ -427,7 +416,6 @@ const GerenciarAtletas: React.FC = () => {
     t === "Escola" ? "escolinha" : t.toLowerCase();
 
   function getAutorId() {
-    // seu backend quer o ID da entidade (Professor.id / Clube.id / Escolinha.id)
     return String(tipoUsuarioIdEntidade || "");
   }
 
@@ -674,14 +662,11 @@ const carregarProfessores = async () => {
   const focadoUid = focado?.usuarioId ?? focado?.id ?? null;
 
   useEffect(() => {
-    // ✅ só carrega quando o usuário abriu os detalhes
     if (!detalheAtivo || !focadoUid) return;
 
-    // ✅ 1 fetch (sem polling infinito)
     carregarStatsAtleta(focadoUid);
     carregarSubmissoesAtleta(focadoUid);
 
-    // ✅ garantia: se sobrar interval antigo por algum motivo, mata
     return () => {
       if (pollingStatsRef.current) clearInterval(pollingStatsRef.current);
       if (pollingSubsRef.current) clearInterval(pollingSubsRef.current);
@@ -703,12 +688,11 @@ const carregarProfessores = async () => {
   useEffect(() => {
     if (!carreiraOpen || !focado) return;
 
-    // resetzinho ao abrir
     setSelectedDays([]);
     setDrawerOpen(true);
     setTreinoProgramadoId("");
 
-    const atletaId = focado.id; // no seu /api/treinos/agendados você usa atletaId (id do Atleta)
+    const atletaId = focado.id; 
 
   (async () => {
     try {
@@ -726,9 +710,6 @@ const carregarProfessores = async () => {
     (async () => {
       try {
         setLoadingProgramados(true);
-
-        // tenta seu endpoint já existente de treinos do gerenciador
-        // se você preferir, pode trocar por /api/treinos/programados se existir
         const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados`, {
           headers,
           params: tipoUsuarioIdEntidade
@@ -806,7 +787,6 @@ const monthLabel = useMemo(() => {
 }, [cursorMonth]);
 
 function formatDayPtBR(dayISO: string) {
-  // dayISO = "YYYY-MM-DD"
   const [y, m, d] = dayISO.split("-").map((n) => Number(n));
   const dt = new Date(y, (m || 1) - 1, d || 1);
   return dt.toLocaleDateString("pt-BR", {
@@ -819,7 +799,7 @@ function formatDayPtBR(dayISO: string) {
 
 const daysGrid = useMemo(() => {
   const first = startOfMonth(cursorMonth);
-  const firstWeekday = (first.getDay() + 6) % 7; // segunda=0
+  const firstWeekday = (first.getDay() + 6) % 7;
   const start = new Date(first);
   start.setDate(first.getDate() - firstWeekday);
 
@@ -834,7 +814,6 @@ const daysGrid = useMemo(() => {
 const agendadosPorDia = useMemo(() => {
   const map = new Map<string, TreinoAgendadoItem[]>();
 
-  // 1) Treinos agendados (fonte principal)
   for (const t of agendados) {
     const k = dayKeyFromAny(t.dataTreino);
     if (!k) continue;
@@ -843,43 +822,32 @@ const agendadosPorDia = useMemo(() => {
     map.set(k, arr);
   }
 
-// 2) Submissões (merge/fallback)
-for (const s of submissoes) {
-  const k = dayKeyFromAny(s.data);
-  if (!k) continue;
+  for (const s of submissoes) {
+    const k = dayKeyFromAny(s.data);
+    if (!k) continue;
 
-  const arr = map.get(k) ?? [];
-  const like = submissaoToAgendadoLike(s);
-
-  const nomeLike = (like.treinoProgramado?.nome || like.titulo || "").trim();
-
-  // tenta achar um agendado do mesmo "nome" naquele dia
-  const idx = arr.findIndex((x) => {
-    const nomeX = (x.treinoProgramado?.nome || x.titulo || "").trim();
-    return nomeX && nomeX === nomeLike;
-  });
+    const arr = map.get(k) ?? [];
+    const like = submissaoToAgendadoLike(s);
+    const nomeLike = (like.treinoProgramado?.nome || like.titulo || "").trim();
+    const idx = arr.findIndex((x) => {
+      const nomeX = (x.treinoProgramado?.nome || x.titulo || "").trim();
+      return nomeX && nomeX === nomeLike;
+    });
 
   if (idx >= 0) {
-    // ✅ mescla a submissão no item existente (sem duplicar)
     const atual = arr[idx];
 
     arr[idx] = {
       ...atual,
-      // se já tiver id, mantém; se não tiver, usa o da submissão
       submissaoTreinoId: atual.submissaoTreinoId ?? like.submissaoTreinoId ?? null,
-      // marca como feita se veio da submissão
       submissaoFeita: atual.submissaoFeita ?? true,
-      // se quiser, garante concluído quando a submissão foi aprovada
       meuStatus: atual.meuStatus ?? like.meuStatus,
     };
   } else {
-    // não tinha agendado no dia → adiciona como fallback visual
     arr.push(like);
   }
-
   map.set(k, arr);
 }
-
 
   return map;
 }, [agendados, submissoes]);
@@ -917,7 +885,6 @@ async function agendarParaDiasSelecionados() {
 
   setSalvandoAgenda(true);
   try {
-    // ✅ agenda todos os dias (em paralelo)
     await Promise.all(
       selectedDays.map((day) =>
         axios.post(
@@ -928,21 +895,16 @@ async function agendarParaDiasSelecionados() {
       )
     );
 
-    // ✅ recarrega agenda do atleta (para refletir no calendário)
     const r = await axios.get(`${API.BASE_URL}/api/treinos/agendados`, {
       headers,
       params: { atletaId: focado.id },
     });
     setAgendados(normalizeAgendadosPayload(r.data));
-
-    // ✅ AQUI: limpa os dias selecionados (remove o "ring" do calendário)
     setSelectedDays([]);
-
     alert("Treino(s) agendado(s) com sucesso!");
   } catch (e: any) {
     console.error(e);
 
-    // opcional: se o backend devolver 409 (já existe no dia), mostra msg melhor
     const msg =
       e?.response?.data?.message ||
       (e?.response?.status === 409 ? "Já existe treino agendado em um dos dias selecionados." : null) ||
@@ -1509,35 +1471,32 @@ async function salvarAvaliacao() {
         professorId={turmasProfessorId || undefined}
       />
 
-{carreiraOpen && focado && (
-  <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center">
-    <div
-      className="
-        w-full max-w-6xl overflow-hidden rounded-2xl border border-zinc-200 bg-white text-zinc-900 shadow-2xl
-        flex flex-col
-        h-[calc(100dvh-1.5rem)] max-h-[calc(100dvh-1.5rem)]
-        sm:h-[70vh] sm:max-h-[70vh]
-      "
-    >
+      {carreiraOpen && focado && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center">
+          <div
+            className="
+              w-full max-w-6xl overflow-hidden rounded-2xl border border-zinc-200 bg-white text-zinc-900 shadow-2xl
+              flex flex-col
+              h-[calc(100dvh-1.5rem)] max-h-[calc(100dvh-1.5rem)]
+              sm:h-[70vh] sm:max-h-[70vh]
+            "
+          >
 
-      {/* topo */}
-<div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
-  <div className="min-w-0">
-    <div className="text-xs text-zinc-500">Agenda de Treinos</div>
-    <div className="font-extrabold truncate text-zinc-900">{focado.nome}</div>
-  </div>
+      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+        <div className="min-w-0">
+          <div className="text-xs text-zinc-500">Agenda de Treinos</div>
+          <div className="font-extrabold truncate text-zinc-900">{focado.nome}</div>
+        </div>
 
-  <button
-    onClick={() => setCarreiraOpen(false)}
-    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
-  >
-    Fechar
-  </button>
-</div>
-
+        <button
+          onClick={() => setCarreiraOpen(false)}
+          className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+        >
+          Fechar
+        </button>
+      </div>
 
       <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr_380px] overflow-hidden">
-        {/* Calendário */}
         <div className="p-4 border-b xl:border-b-0 xl:border-r border-zinc-200 min-h-0 overflow-y-auto">
           <div className="flex items-center justify-between mb-3">
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1634,7 +1593,6 @@ async function salvarAvaliacao() {
           )}
         </div>
 
-        {/* Drawer */}
         <div className="p-4 min-h-0 overflow-hidden flex flex-col">
           <div className="flex items-center justify-between mb-2">
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1655,7 +1613,6 @@ async function salvarAvaliacao() {
   </div>
 ) : (
   <div className="flex flex-col gap-4 min-h-0 flex-1">
-    {/* Agendamento rápido (fixo no topo) */}
     {!hasPastSelectedDay ? (
       <div className={["rounded-xl border border-zinc-200 bg-white flex-none", forceScrollDetails ? "p-2" : "p-3"].join(" ")}>
         <div className={["font-bold", forceScrollDetails ? "text-xs mb-1" : "text-sm mb-2"].join(" ")}>
@@ -1695,10 +1652,7 @@ async function salvarAvaliacao() {
       </div>
     )}
 
-    {/* Lista rolável (não estoura o modal) */}
     <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
-
-
       {selectedDayItems.map(({ day, items }) => (
         <div key={day} className="rounded-xl border border-zinc-200 bg-white p-3">
           <div className="flex items-center justify-between mb-2">

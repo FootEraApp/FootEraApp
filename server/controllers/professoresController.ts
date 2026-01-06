@@ -8,20 +8,34 @@ export const listarAtletasDoProfessor = async (req: Request, res: Response) => {
   const { professorId } = req.params;
 
   try {
-    const atletas = await prisma.atleta.findMany({
-      where: { professorId },
-      include: {
-        usuario: true,
-        clube: true,
-        escolinha: true,
+    const rels = await prisma.relacaoTreinamento.findMany({
+      where: {
+        professorId,
+        ativo: true,
+        encerradoEm: null,
+        atletaId: { not: null },
       },
-      orderBy: { nome: "asc" },
+      include: {
+        atleta: {
+          include: {
+            usuario: true,
+            clube: true,
+            escolinha: true,
+          },
+        },
+      },
+      orderBy: { criadoEm: "desc" },
     });
 
-    res.json(atletas);
+    const atletas = rels
+      .map((r) => r.atleta)
+      .filter((a): a is NonNullable<typeof a> => Boolean(a))
+      .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+
+    return res.json(atletas);
   } catch (error) {
     console.error("Erro ao listar atletas do professor:", error);
-    res.status(500).json({ message: "Erro ao listar atletas do professor." });
+    return res.status(500).json({ message: "Erro ao listar atletas do professor." });
   }
 };
 
@@ -98,7 +112,7 @@ export const listarProfessores = async (req: Request, res: Response) => {
 
 export const criarProfessor = async (req: Request, res: Response) => {
   try {
-    const { codigo, cref, nome, areaFormacao, usuario, statusCref } = req.body;
+    const { codigo, cref, nome, areaFormacao, usuarioId, statusCref } = req.body;
 
     let qualificacoes = req.body.qualificacoes;
     let certificacoes = req.body.certificacoes;
@@ -111,13 +125,20 @@ export const criarProfessor = async (req: Request, res: Response) => {
       nome,
       areaFormacao,
       statusCref,
-      qualificacoes,
-      certificacoes,
-      fotoUrl: req.file?.filename || "",
+      qualificacoes: qualificacoes ?? [],
+      certificacoes: certificacoes ?? [],
+      fotoUrl: req.file?.filename || null,
     };
-    if (usuario) data.usuario = usuario;
 
-    const novoProfessor = await prisma.professor.create({ data });
+    if (usuarioId) {
+      data.usuario = { connect: { id: String(usuarioId) } };
+    }
+
+    const novoProfessor = await prisma.professor.create({
+      data,
+      include: { usuario: true },
+    });
+
     res.status(201).json(novoProfessor);
   } catch (error) {
     console.error("Erro ao criar professor:", error);
@@ -128,16 +149,28 @@ export const criarProfessor = async (req: Request, res: Response) => {
 export const editarProfessor = async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
-    const { codigo, cref, nome, areaFormacao, statusCref } = req.body;
+    const { codigo, cref, nome, areaFormacao, statusCref, usuarioId } = req.body;
 
     let qualificacoes = req.body["qualificacoes[]"] || req.body.qualificacoes;
     let certificacoes = req.body["certificacoes[]"] || req.body.certificacoes;
     if (typeof qualificacoes === "string") qualificacoes = [qualificacoes];
     if (typeof certificacoes === "string") certificacoes = [certificacoes];
 
-    const data: any = { codigo, cref, nome, areaFormacao, statusCref, qualificacoes, certificacoes };
+    const data: any = {
+      codigo,
+      cref,
+      nome,
+      areaFormacao,
+      statusCref,
+      qualificacoes: qualificacoes ?? [],
+      certificacoes: certificacoes ?? [],
+    };
+
     if (req.file) data.fotoUrl = req.file.filename;
 
+    if (usuarioId) {
+      data.usuario = { connect: { id: String(usuarioId) } };
+    }
     const professorAtualizado = await prisma.professor.update({ where: { id }, data });
     res.json(professorAtualizado);
   } catch (error) {
@@ -189,19 +222,10 @@ export const excluirProfessor = async (req: Request, res: Response) => {
       }
 
       await tx.relacaoTreinamento.updateMany({
-        where: { professorId },
+        where: { professorId, atletaId: { not: null } },
         data: {
-          professorId: null,
           ativo: false,
           encerradoEm: new Date(),
-        },
-      });
-
-      await tx.atleta.updateMany({
-        where: { professorId },
-        data: {
-          professorId: null,
-          statusConexao: "Pendente",
         },
       });
 
@@ -366,11 +390,6 @@ export const vincularAtletaAoProfessor = async (req: Request, res: Response) => 
 
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.atleta.update({
-        where: { id: atletaId },
-        data: { professorId: professorId },
-      });
-
       const relacaoExistente = await tx.relacaoTreinamento.findFirst({
         where: { professorId, atletaId },
       });
@@ -378,18 +397,23 @@ export const vincularAtletaAoProfessor = async (req: Request, res: Response) => 
       if (relacaoExistente) {
         await tx.relacaoTreinamento.update({
           where: { id: relacaoExistente.id },
-          data: { encerradoEm: null },
+          data: { encerradoEm: null, ativo: true },
         });
       } else {
         await tx.relacaoTreinamento.create({
           data: {
             professorId,
             atletaId,
+            ativo: true,
           },
         });
       }
+      
+      await tx.atleta.update({
+        where: { id: atletaId },
+        data: { statusConexao: "Aprovado" },
+      });
     });
-
     return res.json({ ok: true });
   } catch (err) {
     console.error("Erro ao vincular atleta ao professor:", err);
@@ -419,16 +443,16 @@ export const desvincularAtletaDoProfessor = async (req: Request, res: Response) 
     const agora = new Date();
 
     await prisma.$transaction(async (tx) => {
-      await tx.relacaoTreinamento.update({
-        where: { id: relacao.id },
-        data: { encerradoEm: agora },
-      });
-
-      await tx.atleta.update({
-        where: { id: atletaId },
-        data: { professorId: null },
-      });
+    await tx.relacaoTreinamento.update({
+      where: { id: relacao.id },
+      data: { encerradoEm: agora, ativo: false },
     });
+
+    await tx.atleta.update({
+      where: { id: atletaId },
+      data: { statusConexao: "Pendente" },
+    });
+  });
 
     await salvarHistoricoAtletaVinculo({
       atletaId,

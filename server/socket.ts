@@ -1,4 +1,3 @@
-// server/socket
 import { Server } from "socket.io";
 import http from "http";
 import jwt from "jsonwebtoken";

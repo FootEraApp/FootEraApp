@@ -22,7 +22,6 @@ export default function BottomNav({
 
   const isOlheiro = String(tipoUsuario).toLowerCase() === "olheiro";
 
-  // 🔽 DIMINUÍDO
   const baseItem =
     "inline-flex items-center justify-center w-8 h-8 rounded-md transition-colors";
   const activeItem = "bg-white/15";

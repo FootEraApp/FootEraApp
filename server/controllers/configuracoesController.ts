@@ -1,4 +1,3 @@
-// server/contollers/configuracoesController
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import jwt from "jsonwebtoken";

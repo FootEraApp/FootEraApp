@@ -11,8 +11,8 @@ type EventoForm = {
   titulo: string;
   tipo: EventoTipo;
   descricao: string;
-  dataEvento: string;          // ✅ obrigatório
-  inscricaoInicio: string;     // ➕ opcional
+  dataEvento: string;       
+  inscricaoInicio: string;   
   inscricaoFim: string;             
   local: string;
   cidade: string;
@@ -67,7 +67,6 @@ export default function PaginaNovoEventoClube({ clubeId }: Props) {
 
       const body = {
       ...form,
-      // manda null se vazio (pra combinar com DateTime?)
       inscricaoInicio: form.inscricaoInicio ? form.inscricaoInicio : null,
       inscricaoFim: form.inscricaoFim ? form.inscricaoFim : null,
 

@@ -1,4 +1,3 @@
-// server/middlewares/auth
 import { RequestHandler, Request } from "express";
 import jwt from "jsonwebtoken";
 import { TipoUsuario } from "@prisma/client";

@@ -183,10 +183,33 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
 
     const ags = await prisma.treinoAgendado.findMany({
       where: { treinoProgramadoId: tp.id },
-      select: { id: true },
+      select: {
+        id: true,
+        atleta: {
+          select: {
+            nome: true,
+            usuario: {
+              select: {
+                nome: true,
+                nomeDeUsuario: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     const ids = ags.map((a) => a.id);
+
+    const nomePorAgendadoId = new Map<string, string>();
+    for (const a of ags) {
+      const nome =
+        a.atleta?.usuario?.nome ||
+        a.atleta?.usuario?.nomeDeUsuario ||
+        a.atleta?.nome ||
+        "Atleta";
+      nomePorAgendadoId.set(a.id, nome);
+    }
 
     const grupos = ids.length
       ? await prisma.avaliacaoTreino.groupBy({
@@ -197,10 +220,26 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
         })
       : [];
 
+    const ultimas = ids.length
+      ? await prisma.avaliacaoTreino.findMany({
+          where: { treinoAgendadoId: { in: ids } },
+          select: { treinoAgendadoId: true, createdAt: true }, 
+        })
+      : [];
+
+    const ultimaDataPorAgendadoId = new Map<string, Date>();
+    for (const u of ultimas) {
+      if (!ultimaDataPorAgendadoId.has(u.treinoAgendadoId)) {
+        ultimaDataPorAgendadoId.set(u.treinoAgendadoId, u.createdAt);
+      }
+    }
+
     const avaliacoesPorAgendado = grupos.map((g) => ({
       treinoAgendadoId: g.treinoAgendadoId,
       media: Number(g._avg.nota ?? 0),
       count: Number(g._count.nota ?? 0),
+      avaliadorNome: nomePorAgendadoId.get(g.treinoAgendadoId) ?? "Atleta",
+      avaliadoEm: (ultimaDataPorAgendadoId.get(g.treinoAgendadoId) ?? null)?.toISOString?.() ?? null,
     }));
 
     return res.json({

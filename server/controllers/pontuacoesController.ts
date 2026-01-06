@@ -2,12 +2,6 @@ import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { inferirTipoTreino } from "server/utils/inferirTipoTreino.js";
 
-/* 
-PERFORMANCE = soma dos pontuacao que você vê no Histórico, treinos + desafios realizados,
-DISCIPLINA = nº de treinos × 2,
-RESPONSABILIDADE = nº de desafios × 2.
-*/
-
 const prisma = new PrismaClient();
 
 type AuthedReq = Request & { user?: { id?: string } };
