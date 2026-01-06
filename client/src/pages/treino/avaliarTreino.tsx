@@ -230,7 +230,6 @@ export default function AvaliarTreino() {
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-24">
-      {/* Header no tema */}
       <div className="h-20 bg-green-900 text-white">
         <div className="max-w-3xl mx-auto h-full px-4 flex items-center justify-between">
           <Link

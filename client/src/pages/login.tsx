@@ -1,4 +1,3 @@
-// login/src/pages/login
 import { useState, useEffect, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import axios from "axios";
@@ -242,13 +241,11 @@ export default function PaginaLogin() {
 
     (async () => {
       try {
-        // rota que vamos criar no backend: GET /api/status/maintenance
         const r = await axios.get(`${API.BASE_URL}/api/status/maintenance`, {
           timeout: 8000,
         });
         setMaintenanceMode(!!r.data?.maintenanceMode);
       } catch {
-        // se der erro, não trava login
         setMaintenanceMode(false);
       } finally {
         setMaintenanceChecked(true);

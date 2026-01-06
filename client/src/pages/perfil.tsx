@@ -1,15 +1,6 @@
-// client/src/pages/perfil
 import { useEffect, useState } from "react";
 import { useParams, Link } from "wouter";
 import axios from "axios";
-import {
-  Volleyball,
-  User,
-  CirclePlus,
-  Search,
-  House,
-  Eye,
-} from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
 import PerfilProfessor from "../components/perfil/PerfilProfessor.js";
@@ -19,19 +10,11 @@ import PerfilOlheiro from "../components/perfil/PerfilOlheiro.js";
 import HealthBanner from "../components/legal/HealthBanner.js";
 import SubscriptionBanner from "../components/billing/SubscriptionBanner.js";
 import { http } from "../services/http.js";
-import { format } from "date-fns";
-import {
-  getFeedPosts,
-  type PostagemComUsuario,
-} from "../services/feedService.js";
-import { publicImgUrl } from "../utils/publicUrl.js";
-import { APP } from "../config.js";
 import {
   ALL_ACHIEVEMENTS,
   type AchievementLite,
   type Tier,
 } from "../lib/achievementsCatalog.js";
-import { FaHeart, FaRegCommentDots } from "react-icons/fa";
 import BottomNav from "@/components/layout/BottomNav.js";
 
 type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha" | "Admin" | "Olheiro";
