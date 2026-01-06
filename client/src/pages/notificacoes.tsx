@@ -132,7 +132,6 @@ export default function PaginaNotificacoes() {
         }
 
         const json = await r.json();
-        console.log("NOTIFS:", json?.items);
 
         setNotificacoes(Array.isArray(json?.items) ? json.items : []);
       } catch (e) {

@@ -136,13 +136,6 @@ export async function listarObservados(req: Request, res: Response) {
     orderBy: { criadoEm: "desc" },
   });
 
-  if (rows.length > 0) {
-    console.log(
-      "[OBSERVADOS] Exemplo de row[0]:",
-      JSON.stringify(rows[0], null, 2)
-    );
-  }
-
   const incluirPontuacao = String(q.incluirPontuacao ?? "").trim() !== "";
   const incluirNotas = String(q.incluirNotas ?? "").trim() !== "";
 
