@@ -27,9 +27,6 @@ const HAS_MERCADO_PAGO =
   mercadopago &&
   typeof mercadopago.configure === "function";
 
-console.log("[billing] HAS_MERCADO_PAGO =", HAS_MERCADO_PAGO);
-console.log("[billing] MP_ACCESS_TOKEN set?", !!MP_ACCESS_TOKEN);
-
 if (HAS_MERCADO_PAGO) {
   mercadopago.configure({ access_token: MP_ACCESS_TOKEN });
 } else if (!MP_ACCESS_TOKEN) {
