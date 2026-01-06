@@ -1,4 +1,3 @@
-// server/controllers/perfilController
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
@@ -36,6 +35,30 @@ function pickId(raw: any): string | undefined {
   if (raw?.value) return String(raw.value);
   if (Array.isArray(raw) && raw[0]?.id) return String(raw[0].id);
   return undefined;
+}
+
+function pickIds(raw: any): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw) && raw.length && typeof raw[0] === "string") {
+    return raw.map((x) => String(x).trim()).filter(Boolean);
+  }
+
+  if (Array.isArray(raw) && raw.length && (raw[0]?.id || raw[0]?.value)) {
+    return raw
+      .map((x) => (x?.id ? String(x.id) : x?.value ? String(x.value) : ""))
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  if (typeof raw === "string") {
+    return raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  const one = pickId(raw);
+  return one ? [one] : [];
 }
 
 function pontosDesafioInd(s: any) {
@@ -794,77 +817,79 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       },
     });
 
-if (atleta) {
-  const vinculosRows = await prisma.relacaoTreinamento.findMany({
-    where: { atletaId: atleta.id, encerradoEm: null },
-    include: {
-      professor: { select: { id: true, nome: true } },
-      escolinha: { select: { id: true, nome: true } },
-      clube:     { select: { id: true, nome: true } },
-    },
-  });
+    if (atleta) {
+      const vinculosRows = await prisma.relacaoTreinamento.findMany({
+        where: { atletaId: atleta.id, encerradoEm: null },
+        include: {
+          professor: { select: { id: true, nome: true } },
+          escolinha: { select: { id: true, nome: true } },
+          clube: { select: { id: true, nome: true } },
+        },
+      });
 
-  let professorMin: { id: string; nome: string } | null = null;
-  let escolaMin: { id: string; nome: string } | null = null;
-  let clubeMin: { id: string; nome: string } | null = null;
+      let escolaMin: { id: string; nome: string } | null = null;
+      let clubeMin: { id: string; nome: string } | null = null;
 
-  // ✅ aqui era "for (const v of vinculos)" (ERRADO)
-  for (const v of vinculosRows) {
-    if (v.professor) professorMin = v.professor;
-    if (v.escolinha) escolaMin = v.escolinha;
-    if (v.clube) clubeMin = v.clube;
-  }
+      const profsMap = new Map<string, { id: string; nome: string }>();
+      for (const v of vinculosRows) {
+        if (v.professor?.id) profsMap.set(v.professor.id, v.professor);
+        if (v.escolinha) escolaMin = v.escolinha;
+        if (v.clube) clubeMin = v.clube;
+      }
 
-  if (!escolaMin && atleta.escolinhaId) {
-    escolaMin = await prisma.escolinha.findUnique({
-      where: { id: atleta.escolinhaId },
-      select: { id: true, nome: true },
-    });
-  }
+      const professores = Array.from(profsMap.values());
+      const professorPrincipal = professores[0] ?? null;
 
-  if (!clubeMin && atleta.clubeId) {
-    clubeMin = await prisma.clube.findUnique({
-      where: { id: atleta.clubeId },
-      select: { id: true, nome: true },
-    });
-  }
+      if (!escolaMin && atleta.escolinhaId) {
+        escolaMin = await prisma.escolinha.findUnique({
+          where: { id: atleta.escolinhaId },
+          select: { id: true, nome: true },
+        });
+      }
 
-  dadosEspecificos = {
-    atletaId: atleta.id,
-    nome: atleta.nome,
-    sobrenome: atleta.sobrenome,
-    idade: atleta.idade,
-    telefone1: atleta.telefone1,
-    telefone2: atleta.telefone2,
-    nacionalidade: atleta.nacionalidade,
-    naturalidade: atleta.naturalidade,
-    posicao: atleta.posicao,
-    altura: atleta.altura,
-    peso: atleta.peso,
-    seloQualidade: atleta.seloQualidade,
-    foto: atleta.foto,
+      if (!clubeMin && atleta.clubeId) {
+        clubeMin = await prisma.clube.findUnique({
+          where: { id: atleta.clubeId },
+          select: { id: true, nome: true },
+        });
+      }
 
-    escola: escolaMin?.nome ?? null,
-    clube: clubeMin?.nome ?? null,
-    professor: professorMin?.nome ?? null,
+      dadosEspecificos = {
+        atletaId: atleta.id,
+        nome: atleta.nome,
+        sobrenome: atleta.sobrenome,
+        idade: atleta.idade,
+        telefone1: atleta.telefone1,
+        telefone2: atleta.telefone2,
+        nacionalidade: atleta.nacionalidade,
+        naturalidade: atleta.naturalidade,
+        posicao: atleta.posicao,
+        altura: atleta.altura,
+        peso: atleta.peso,
+        seloQualidade: atleta.seloQualidade,
+        foto: atleta.foto,
+        escola: escolaMin?.nome ?? null,
+        clube: clubeMin?.nome ?? null,
+        professor: professorPrincipal?.nome ?? null,
+        professores: professores,
+        professorIds: professores.map((p) => p.id),
+        escolinhaId: escolaMin?.id ?? null,
+        clubeId: clubeMin?.id ?? null,
+      };
 
-    escolinhaId: escolaMin?.id ?? null,
-    clubeId: clubeMin?.id ?? null,
-  };
+      tipoPerfil = "Atleta";
 
-  tipoPerfil = "Atleta";
-
-  // (se você quiser manter esse retorno "vinculos" como objeto resumo)
-  vinculos = {
-    escolinhaId: atleta.escolinhaId ?? null,
-    clubeId: atleta.clubeId ?? null,
-    professorId: professorMin?.id ?? null,
-    professor: professorMin,
-    escola: escolaMin,
-    clube: clubeMin,
-  };
-}
-
+      vinculos = {
+        escolinhaId: atleta.escolinhaId ?? null,
+        clubeId: atleta.clubeId ?? null,
+        professorId: professorPrincipal?.id ?? null,
+        professor: professorPrincipal,
+        professores,
+        professoresIds: professores.map((p) => p.id),
+        escola: escolaMin,
+        clube: clubeMin,
+      };
+    }
 
     const professor = await prisma.professor.findUnique({ where: { usuarioId: id } });
     if (professor) {
@@ -1033,11 +1058,9 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
           null;
 
         const rawClube = tipo.clubeId ?? tipo.clube ?? null;
-        const rawProfessor = tipo.professorId ?? tipo.professor ?? null;
-
+        
         const escolinhaId = pickId(rawEscolinha);
         const clubeId = pickId(rawClube);
-        const professorId = pickId(rawProfessor);
 
         const limparEscolinha =
           rawEscolinha === "" ||
@@ -1049,12 +1072,31 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
           rawClube === null ||
           String(rawClube).toLowerCase() === "nenhum";
 
-        const limparProfessor =
-          rawProfessor === "" ||
-          rawProfessor === null ||
-          String(rawProfessor).toLowerCase() === "nenhum";
+        const rawProfessorMulti =
+          tipo.professorIds ??
+          tipo.professoresIds ??
+          tipo.professorIdsSelecionados ??
+          null;
 
-       const data: any = {
+        const rawProfessorSingle = tipo.professorId ?? tipo.professor ?? null;
+
+        const professorIds = Array.from(
+          new Set([
+            ...pickIds(rawProfessorMulti),
+            ...(pickId(rawProfessorSingle) ? [pickId(rawProfessorSingle)!] : []),
+          ])
+        ).filter(Boolean);
+
+        const limparProfessor =
+          (rawProfessorMulti === "" ||
+            rawProfessorMulti === null ||
+            String(rawProfessorMulti).toLowerCase() === "nenhum") &&
+          (rawProfessorSingle === "" ||
+            rawProfessorSingle === null ||
+            String(rawProfessorSingle).toLowerCase() === "nenhum" ||
+            professorIds.length === 0);
+
+        const data: any = {
           nome: tipo.nome,
           sobrenome: tipo.sobrenome,
           idade: isNaN(parseInt(tipo.idade)) ? undefined : parseInt(tipo.idade),
@@ -1163,28 +1205,30 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             await tx.relacaoTreinamento.deleteMany({
               where: { atletaId, professorId: { not: null } },
             });
-          } else if (professorId) {
+          } else {
             await tx.relacaoTreinamento.deleteMany({
               where: {
                 atletaId,
-                professorId: { not: professorId },
+                professorId: { not: null, notIn: professorIds },
               },
             });
 
-            const existe = await tx.relacaoTreinamento.findFirst({
-              where: { atletaId, professorId },
-            });
-
-            if (!existe) {
-              await tx.relacaoTreinamento.create({
-                data: { atletaId, professorId },
+            for (const pid of professorIds) {
+              const existe = await tx.relacaoTreinamento.findFirst({
+                where: { atletaId, professorId: pid },
               });
 
-              await ensureSolicitacaoVinculo(tx, {
-                atletaId,
-                entidadeId: professorId,
-                tipoEntidade: "professor",
-              });
+              if (!existe) {
+                await tx.relacaoTreinamento.create({
+                  data: { atletaId, professorId: pid },
+                });
+
+                await ensureSolicitacaoVinculo(tx, {
+                  atletaId,
+                  entidadeId: pid,
+                  tipoEntidade: "professor",
+                });
+              }
             }
           }
         });
@@ -1802,7 +1846,6 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
   try {
     const { id } = req.params;
 
-    // resolve o olheiro alvo primeiro
     const olheiro: any = await resolveByUsuarioOrEntity({
       entity: "olheiro",
       usuarioOrEntityId: id,
@@ -1828,7 +1871,6 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
 
     if (!olheiro) return res.status(404).json({ error: "Olheiro não encontrado" });
 
-    // ✅ só conta “perfil visto” quando o viewer é olheiro e está vendo OUTRO usuário
     const viewerIsOlheiro = req.user?.tipo === "Olheiro";
     const isOwnProfile = !!req.userId && (req.userId === olheiro.usuarioId);
 
@@ -1836,12 +1878,6 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
       const ok = await requireUsage(req, res, "perfis_vistos_dia");
       if (!ok) return;
     }
-
-    // ❌ REMOVA COMPLETAMENTE isso daqui:
-    // if (req.user?.tipo === "Olheiro" && req.user?.plano !== "PRO") {
-    //   const ok = await requireUsage(req, res, "listas_salvas_total");
-    //   if (!ok) return;
-    // }
 
     const usuarioMin = olheiro.usuario ?? null;
 
