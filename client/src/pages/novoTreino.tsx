@@ -112,6 +112,15 @@ function parseDateOnlyToLocalMidnight(dateOnly: string): Date {
   return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
 }
 
+function resolveMediaUrl(raw?: string) {
+  if (!raw) return "";
+  const p = raw.replace(/\\/g, "/");
+  if (p.startsWith("blob:") || p.startsWith("data:")) return p;
+  if (p.startsWith("http")) return p;
+  if (p.startsWith("/assets/")) return p;
+  return `${API.BASE_URL}${p.startsWith("/") ? p : `/${p}`}`;
+}
+
 function resolveVideoUrl(raw?: string) {
   if (!raw) return "";
   const p = raw.replace(/\\/g, "/");
@@ -939,6 +948,24 @@ export default function NovoTreino() {
       .filter((x) => x.id && x.id !== "undefined" && x.id !== "null")
   }
 
+  const atletaIdLogado = useMemo(() => {
+    const tipo = String(
+      (Storage as any).tipoSalvo ??
+        localStorage.getItem("tipoUsuario") ??
+        sessionStorage.getItem("tipoUsuario") ??
+        ""
+    ).trim().toLowerCase();
+
+    if (tipo !== "atleta") return "";
+
+    return String(
+      (Storage as any).tipoUsuarioId ??
+        localStorage.getItem("tipoUsuarioId") ??
+        sessionStorage.getItem("tipoUsuarioId") ??
+        ""
+    ).trim();
+  }, []);
+
   useEffect(() => {
     const tipo =
       (Storage as any).tipoSalvo ??
@@ -959,17 +986,15 @@ export default function NovoTreino() {
         if (!token) return;
 
         const headers = { Authorization: `Bearer ${token}` };
-        const atletaId =
-          (Storage as any).tipoUsuarioId ||
-          localStorage.getItem("tipoUsuarioId") ||
-          sessionStorage.getItem("tipoUsuarioId") ||
-          "";
+        const atletaId = String(atletaIdLogado || "").trim();
+
+        if (!atletaId) {
+          console.warn("[NovoTreino] atletaIdLogado vazio (Atleta.id).");
+          return;
+        }
 
         const tries = [
-          `${API.BASE_URL}/api/treinos/disponiveis${
-            atletaId ? `?atletaId=${encodeURIComponent(atletaId)}` : ""
-          }`,
-          `${API.BASE_URL}/api/treinos/programados`,
+          `${API.BASE_URL}/api/treinos/disponiveis?atletaId=${encodeURIComponent(atletaId)}`,
         ];
 
         let lista: any[] = [];
@@ -987,6 +1012,28 @@ export default function NovoTreino() {
         }
 
         if (!cancel) setTreinosDisponiveis(normalizaTreinos(lista || []));
+        try {
+          const urlAg = `${API.BASE_URL}/api/treinos/agendados?atletaId=${encodeURIComponent(
+            atletaIdLogado
+          )}&apenasFuturos=1`;
+
+          const ra = await fetch(urlAg, { headers });
+          if (ra.ok) {
+            const ja = await ra.json().catch(() => null);
+            const arrAg = Array.isArray(ja) ? ja : (ja?.items ?? ja?.data ?? ja?.rows ?? []);
+            const ids = new Set<string>(
+              (arrAg || [])
+                .map((x: any) => String(x.treinoProgramadoId ?? x.programadoId ?? x.treinoId ?? ""))
+                .filter((s: string) => s && s !== "undefined" && s !== "null")
+            );
+            if (!cancel) setIdsProgramadosBloqueados(ids);
+          } else {
+            const txt = await ra.text().catch(() => "");
+            console.warn("[NovoTreino] falha ao listar agendados p/ bloquear:", ra.status, txt);
+          }
+        } catch (e) {
+          console.warn("[NovoTreino] erro ao listar agendados p/ bloquear:", e);
+        }
       } catch (e) {
         console.error("Falha ao carregar treinos disponíveis:", e);
         if (!cancel) setTreinosDisponiveis([]);
@@ -996,7 +1043,7 @@ export default function NovoTreino() {
     return () => {
       cancel = true;
     };
-  }, []);
+  }, [atletaIdLogado]);
 
   useEffect(() => {
   (async () => {
@@ -1201,6 +1248,17 @@ export default function NovoTreino() {
   }, []);
 
   useEffect(() => {
+    const tipo = String(
+    (Storage as any).tipoSalvo ??
+      localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario") ??
+      ""
+  ).trim().toLowerCase();
+
+  if (tipo !== "professor") {
+    setOrgsVinculadas([]);
+    return;
+  }
     (async () => {
       try {
         const token =
@@ -1422,40 +1480,6 @@ export default function NovoTreino() {
       return;
     }
 
-    const tipoUsuarioIdRaw =
-      (Storage as any).tipoUsuarioId ||
-      (Storage as any).professorId ||
-      localStorage.getItem("tipoUsuarioId") ||
-      sessionStorage.getItem("tipoUsuarioId") ||
-      "";
-
-    if (!tipoUsuarioIdRaw) {
-      console.warn("[NovoTreino] sem tipoUsuarioId para criar turma", {
-        tipoUsuario: usuario?.tipo,
-      });
-      alert(
-        "Não foi possível identificar seu perfil (professor/escolinha/clube). Tente sair e entrar de novo.",
-      );
-      return;
-    }
-
-    const tipoBruto =
-      String(
-        usuario?.tipo ??
-          (Storage as any).tipoSalvo ??
-          (Storage as any).tipo ??
-          "",
-      ).toLowerCase();
-
-    const ownerTipo = tipoBruto.startsWith("professor")
-      ? "professor"
-      : tipoBruto.startsWith("clube")
-      ? "clube"
-      : tipoBruto.startsWith("escolinha") || tipoBruto.startsWith("escola")
-      ? "escolinha"
-      : tipoBruto.startsWith("admin")
-      ? "admin"
-      : "outro";
 
     const atletasSelecionadosObjs = atletasVinculados.filter((a) =>
       atletasSelecionados.includes(a.id),
@@ -1467,23 +1491,59 @@ export default function NovoTreino() {
       .map((a) => a.usuarioId)
       .filter((id): id is string => Boolean(id));
 
-    const ownerTipoCapital =
-      ownerTipo === "professor"
-        ? "Professor"
-        : ownerTipo === "clube"
-        ? "Clube"
-        : ownerTipo === "escolinha"
-        ? "Escolinha"
-        : undefined;
+    const orgId = orgSelecionada && orgSelecionada !== MOSTRAR_TODOS ? String(orgSelecionada) : "";
 
-    const professorId =
-      ownerTipo === "professor" ? tipoUsuarioIdRaw : undefined;
+    const orgObj = orgId
+      ? orgsVinculadas.find((o) => String(o.id) === String(orgId))
+      : null;
+
+    const ownerTipoCapital =
+      orgObj?.tipo === "Clube"
+        ? "Clube"
+        : orgObj?.tipo === "Escolinha"
+        ? "Escolinha"
+        : String(
+            usuario?.tipo ??
+              (Storage as any).tipoSalvo ??
+              (Storage as any).tipo ??
+              ""
+          ).toLowerCase().startsWith("clube")
+        ? "Clube"
+        : String(
+            usuario?.tipo ??
+              (Storage as any).tipoSalvo ??
+              (Storage as any).tipo ??
+              ""
+          ).toLowerCase().startsWith("escolinha") ||
+          String(
+            usuario?.tipo ??
+              (Storage as any).tipoSalvo ??
+              (Storage as any).tipo ??
+              ""
+          ).toLowerCase().startsWith("escola")
+        ? "Escolinha"
+        : "Professor";
+
+    const ownerIdFinal = orgObj?.id
+      ? String(orgObj.id)
+      : String(
+          (Storage as any).tipoUsuarioId ||
+            (Storage as any).professorId ||
+            localStorage.getItem("tipoUsuarioId") ||
+            sessionStorage.getItem("tipoUsuarioId") ||
+            ""
+        );
+
+    if (!ownerIdFinal) {
+      alert("Não foi possível identificar o dono da turma. Faça login novamente.");
+      return;
+    }
 
     const payload = {
-      ownerTipo: ownerTipoCapital,    
-      ownerId: tipoUsuarioIdRaw,    
+      ownerTipo: ownerTipoCapital,
+      ownerId: ownerIdFinal,
       nome: novaTurmaNome.trim(),
-      professorId: ownerTipo === "professor" ? tipoUsuarioIdRaw : undefined,
+      professorId: ownerTipoCapital === "Professor" ? ownerIdFinal : undefined,
       atletaIds,
       usuarioIds,
     };
@@ -1685,6 +1745,28 @@ export default function NovoTreino() {
       sessionStorage.getItem("tipoUsuario") ??
       "";
 
+    const tipoUsuarioIdLogged =
+      (Storage as any).tipoUsuarioId ||
+      localStorage.getItem("tipoUsuarioId") ||
+      sessionStorage.getItem("tipoUsuarioId") ||
+      null;
+
+    const orgId =
+      orgSelecionada && orgSelecionada !== MOSTRAR_TODOS ? String(orgSelecionada) : "";
+
+    if (orgId) {
+      const org = orgsVinculadas.find((o) => String(o.id) === orgId);
+
+      if (org?.tipo === "Clube") {
+        return { tipoUsuario: "Clube" as const, tipoUsuarioId: orgId };
+      }
+      if (org?.tipo === "Escolinha") {
+        return { tipoUsuario: "Escolinha" as const, tipoUsuarioId: orgId };
+      }
+
+      return { tipoUsuario: "Clube" as const, tipoUsuarioId: orgId };
+    }
+
     const normalized =
       String(tipoRaw).trim().toLowerCase() === "escola" ||
       String(tipoRaw).trim().toLowerCase() === "escolinha"
@@ -1695,15 +1777,9 @@ export default function NovoTreino() {
         ? "Clube"
         : null;
 
-    const tipoUsuarioId =
-      (Storage as any).tipoUsuarioId ||
-      localStorage.getItem("tipoUsuarioId") ||
-      sessionStorage.getItem("tipoUsuarioId") ||
-      null;
-
     return {
       tipoUsuario: normalized as "Professor" | "Clube" | "Escolinha" | null,
-      tipoUsuarioId,
+      tipoUsuarioId: tipoUsuarioIdLogged,
     };
   }
 
@@ -2127,7 +2203,7 @@ export default function NovoTreino() {
 
   const agendarTreino = async (t: TreinoProgramado) => {
     try {
-      const atletaId = (Storage as any).tipoUsuarioId;
+      const atletaId = String(atletaIdLogado || "").trim();
       const token = (Storage as any).token;
       if (!atletaId || !token) {
         alert("Sessão expirada. Faça login novamente.");
@@ -2632,7 +2708,6 @@ export default function NovoTreino() {
                             </div>
                           )}
 
-                          {/* ✅ upload só para exercício personalizado */}
                           {!ehDoBanco && (
                             <div className="mt-2 flex items-center gap-2">
                               <label className="text-xs px-3 py-1.5 rounded bg-gray-100 border cursor-pointer">
@@ -3074,7 +3149,7 @@ export default function NovoTreino() {
                       }`}
                     >
                       <img
-                        src={atleta.foto ? resolveVideoUrl(atleta.foto) : "https://via.placeholder.com/80"}
+                        src={atleta.foto ? resolveMediaUrl(atleta.foto) : "https://via.placeholder.com/80"}
                         alt={atleta.nome}
                         className="w-20 h-20 mx-auto rounded-full object-cover mb-2"
                       />
