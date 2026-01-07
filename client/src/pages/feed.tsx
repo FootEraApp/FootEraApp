@@ -340,6 +340,12 @@ function BottomSheet({
   );
 }
 
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+
+function avatarSrc(foto?: string | null) {
+  return publicImgUrl(foto) || AVATAR_FALLBACK;
+}
+
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
@@ -643,12 +649,8 @@ function PaginaFeed(): JSX.Element {
       {posts.map((post) => {
         const curtidas = post.curtidas || [];
         const jaCurtiu = curtidas.some((c) => c.usuarioId === Storage.usuarioId);
-        const mostrarInput = mostrarInputPorPost[post.id] || false;
-        const comentarioTexto = comentarioTextoPorPost[post.id] || "";
-
         const imgSrc = publicImgUrl(post.imagemUrl) ?? undefined;
         const videoSrc = publicImgUrl(post.videoUrl) ?? undefined;
-
         const parsed = parseAchievement(post.conteudo);
         const isAchievement = !!parsed;
 
@@ -665,10 +667,8 @@ function PaginaFeed(): JSX.Element {
                   className="shrink-0"
                 >
                   <img
-                    src={
-                      publicImgUrl(post.usuario.foto) ||
-                      `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
-                    }
+                    src={avatarSrc(post.usuario.foto)}
+                    onError={(e) => ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)}
                     alt={post.usuario.nome}
                     className="w-10 h-10 rounded-full object-cover cursor-pointer"
                   />
@@ -719,10 +719,8 @@ function PaginaFeed(): JSX.Element {
                         className="shrink-0"
                       >
                         <img
-                          src={
-                            publicImgUrl(post.repostOf.usuario?.foto) ||
-                            `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
-                          }
+                          src={avatarSrc(post.repostOf.usuario?.foto)}
+                          onError={(e) => ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)}
                           alt={post.repostOf.usuario?.nome || "avatar original"}
                           className="w-7 h-7 rounded-full object-cover cursor-pointer"
                         />
@@ -867,10 +865,8 @@ function PaginaFeed(): JSX.Element {
                           className="shrink-0"
                         >
                           <img
-                            src={
-                              publicImgUrl(comentario.usuario?.foto) ||
-                              `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
-                            }
+                            src={avatarSrc(comentario.usuario?.foto)}
+                            onError={(e) => ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)}
                             alt={comentario.usuario?.nome || "avatar"}
                             className="w-8 h-8 rounded-full object-cover cursor-pointer"
                           />
@@ -929,7 +925,7 @@ function PaginaFeed(): JSX.Element {
             )}
             {usuariosMutuos.map((u) => {
               const selecionado = selecionados.has(u.id);
-              const fotoSrc = formatarUrlFoto(u.foto);
+              const fotoSrc = avatarSrc(u.foto);
               return (
                 <button
                   key={u.id}
@@ -941,6 +937,7 @@ function PaginaFeed(): JSX.Element {
                 >
                   <img
                     src={fotoSrc}
+                    onError={(e) => ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)}
                     alt={u.nome}
                     className="w-14 h-14 rounded-full object-cover"
                   />
@@ -1057,7 +1054,8 @@ function PaginaFeed(): JSX.Element {
                       className="shrink-0"
                     >
                       <img
-                        src={formatarUrlFoto(comentario.usuario?.foto)}
+                        src={avatarSrc(comentario.usuario?.foto)}
+                        onError={(e) => ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)}
                         alt={comentario.usuario?.nome || "avatar"}
                         className="w-9 h-9 rounded-full object-cover flex-shrink-0 cursor-pointer"
                       />
