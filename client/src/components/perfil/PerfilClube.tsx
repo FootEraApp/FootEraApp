@@ -97,6 +97,15 @@ type EventoPreview = {
   descricao?: string | null;
 };
 
+type AtividadeRecente = {
+  id: string;
+  tipo: "Treino" | "Desafio" | "Vídeo" | "Postagem" | "Evento";
+  titulo: string;
+  criadoEm: string;
+  imagemUrl?: string | null;
+  link?: string | null;
+};
+
 function EmptyState({ text }: { text: string }) {
   return (
     <div className="text-center text-green-900/70 py-8">
@@ -162,6 +171,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
   const [eventosPreview, setEventosPreview] = useState<EventoPreview[]>([]);
   const [eventosLoading, setEventosLoading] = useState(false);
   const [eventosErro, setEventosErro] = useState<string>("");
+  const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
 
   const clubeId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
   const entidadeUsuarioId = isOwn
@@ -228,6 +238,26 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
   }, [token, clubeId]);
 
   useEffect(() => {
+    setAtividades(null);
+  }, [targetId, isOwn, data?.usuario?.id, data?.clube?.usuarioId]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    function onFocus() {
+      if (aba === "perfil") setAtividades(null);
+    }
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [token, aba]);
+
+  useEffect(() => {
     if (!token) return;
     let cancel = false;
     (async () => {
@@ -248,6 +278,37 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
       cancel = true;
     };
   }, [targetId, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    const cancel = { v: false };
+
+    const targetUserForActivities = isOwn
+      ? "me"
+      : (data?.usuario?.id ?? data?.clube?.usuarioId ?? "");
+
+    async function loadAtividadesIfNeeded() {
+      if (aba !== "perfil") return;
+      if (atividades != null) return; 
+      if (!targetUserForActivities) return;
+
+      try {
+        const { data: itens } = await axios.get<AtividadeRecente[]>(
+          `${API.BASE_URL}/api/perfil/${targetUserForActivities}/atividades`,
+          { headers }
+        );
+        if (!cancel.v) setAtividades(Array.isArray(itens) ? itens : []);
+      } catch (e) {
+        if (!cancel.v) setAtividades([]);
+      }
+    }
+
+    loadAtividadesIfNeeded();
+
+    return () => {
+      cancel.v = true;
+    };
+  }, [aba, token, isOwn, data?.usuario?.id, data?.clube?.usuarioId, atividades]);
 
   useEffect(() => {
     if (!token) return;
@@ -311,11 +372,12 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     async function fetchSolicitacoes() {
       try {
         const { data } = await axios.get<Solicitacao[]>(
-          `${API.BASE_URL}/api/solicitacoes-treino`,
+          `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
           { headers }
         );
         if (!cancel.v) setSolicitacoes(Array.isArray(data) ? data : []);
-      } catch {
+      } catch (e) {
+        console.error("Erro ao carregar solicitações recebidas:", e);
         if (!cancel.v) setSolicitacoes([]);
       }
     }
@@ -390,6 +452,10 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     } finally {
       setEventosLoading(false);
     }
+  }
+
+  function invalidateAtividades() {
+    setAtividades(null);
   }
 
   async function loadTurmas() {
@@ -523,18 +589,16 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
-<ProfileHeader
-  nome={nome}
-  time={time}
-  isOwnProfile={isOwn}
-  foto={headerFoto}
-  kpis={kpis}
-
-  perfilId={data.usuario?.id || data.clube.usuarioId}
-  perfilTipoProp="clube"
-  perfilTipoIdProp={data.clube.id}
-/>
-
+      <ProfileHeader
+        nome={nome}
+        time={time}
+        isOwnProfile={isOwn}
+        foto={headerFoto}
+        kpis={kpis}
+        perfilId={data.usuario?.id || data.clube.usuarioId}
+        perfilTipoProp="clube"
+        perfilTipoIdProp={data.clube.id}
+      />
 
       <div className="mt-4 grid grid-cols-4 gap-2">
         {(canEdit
@@ -553,7 +617,14 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
         ).map((t) => (
           <button
             key={t.key}
-            onClick={() => setAba(t.key as AbaTopo)}
+            onClick={() => {
+              const next = t.key as AbaTopo;
+              setAba(next);
+
+              if (next === "perfil") {
+                invalidateAtividades();
+              }
+            }}
             className={`py-2 rounded-lg text-sm font-medium ${
               aba === t.key
                 ? "bg-green-100 text-green-900"
@@ -708,6 +779,61 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
               </p>
             )}
           </div>
+
+          <div className="bg-white/70 rounded-xl p-4 shadow-sm">
+            <h3 className="font-semibold text-green-900 mb-2">Atividade Recente</h3>
+
+            {atividades && atividades.length > 0 ? (
+              <ul className="space-y-3">
+                {atividades.slice(0, 6).map((a) => {
+                  const content = (
+                    <div className="flex items-center gap-3">
+                      <Activity className="w-5 h-5 text-green-700" />
+
+                      {a.imagemUrl ? (
+                        <img
+                          src={a.imagemUrl}
+                          alt={a.titulo}
+                          className="w-10 h-10 rounded-lg object-cover border border-green-100"
+                        />
+                      ) : null}
+
+                      <div className="text-sm">
+                        <div className="font-medium text-green-900">{a.titulo}</div>
+                        <div className="text-xs text-green-900/70">
+                          {new Date(a.criadoEm).toLocaleString()}
+                        </div>
+                      </div>
+
+                      {a.link ? (
+                        <ChevronRight className="ml-auto w-4 h-4 text-green-800" />
+                      ) : null}
+                    </div>
+                  );
+
+                  return (
+                    <li key={a.id}>
+                      {a.link ? (
+                        <Link
+                          href={a.link}
+                          className="block rounded-xl border border-green-100 p-3 hover:bg-green-50"
+                        >
+                          {content}
+                        </Link>
+                      ) : (
+                        <div className="rounded-xl border border-green-100 p-3">
+                          {content}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <EmptyState text="Nenhuma atividade recente" />
+            )}
+          </div>
+
         </section>
       )}
 
