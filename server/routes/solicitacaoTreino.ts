@@ -9,11 +9,8 @@ import {
   aceitarSolicitacao,
   verificarVinculoTreino,
 } from "../controllers/solicitacaoTreinoController.js";
-import { authenticateToken } from "server/middlewares/auth.js";
 
 const router = Router();
-
-router.use(authenticateToken);
 
 router.get("/minhas", listarSolicitacoesMinhas);
 router.get("/recebidas", listarSolicitacoesRecebidas);

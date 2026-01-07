@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import {
   ChevronRight,
@@ -80,10 +80,11 @@ type SolicitacaoItem = {
 };
 type AtividadeRecente = {
   id: string;
-  tipo: "Treino" | "Desafio" | "Vídeo" | "Postagem";
+  tipo: "Treino" | "Desafio" | "Vídeo" | "Postagem" | "Evento";
   titulo: string;
   criadoEm: string;
   imagemUrl?: string | null;
+  link?: string | null;
 };
 
 type ProfessorItem = {
@@ -150,9 +151,11 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-  const isOwn = !idDaUrl || idDaUrl === Storage.usuarioId;
+  const isOwn =
+    !idDaUrl ||
+    idDaUrl === Storage.usuarioId ||
+    idDaUrl === Storage.tipoUsuarioId;
   const canEdit = isOwn;
-
   const targetId = isOwn ? (Storage.tipoUsuarioId || "me") : (idDaUrl as string);
 
   const [data, setData] = useState<PayloadEscola | null>(null);
@@ -194,6 +197,22 @@ export default function PerfilEscola({ idDaUrl }: Props) {
 
   useEffect(() => {
     if (!token) return;
+
+    function onFocus() {
+      if (aba === "visao") setAtividades(null);
+    }
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [token, aba]);
+
+  useEffect(() => {
+    if (!token) return;
     let cancel = false;
     (async () => {
       setLoading(true);
@@ -218,8 +237,8 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   useEffect(() => {
     if (!token) return;
     const cancel = { v: false };
-
-    const targetUserForActivities = isOwn ? "me" : data?.usuario?.id ?? "";
+    const targetUserForActivities =
+      isOwn ? "me" : (data?.usuario?.id ?? data?.escolinha?.usuarioId ?? "");
 
     async function loadAtividadesIfNeeded() {
       if (aba !== "visao" || atividades != null || !targetUserForActivities)
@@ -236,8 +255,9 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     }
 
     async function fetchVinculados() {
-      const entidadeUsuarioId = isOwn ? Storage.usuarioId : data?.usuario?.id;
-      if (!entidadeUsuarioId) return;
+      const entidadeId = isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id;
+      if (!entidadeId) return;
+
       try {
         const { data: resp } = await axios.get<{ atletas: AtletaItem[] }>(
           `${API.BASE_URL}/api/gerenciar/atletas`,
@@ -245,7 +265,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             headers,
             params: {
               vinculo: "escolinha",
-              id: entidadeUsuarioId,
+              id: entidadeId,
               order: "pontuacao_desc",
             },
           }
@@ -273,11 +293,12 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     async function fetchSolicitacoes() {
       try {
         const { data } = await axios.get<SolicitacaoItem[]>(
-          `${API.BASE_URL}/api/solicitacoes-treino`,
+          `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
           { headers }
         );
         if (!cancel.v) setSolicitacoes(Array.isArray(data) ? data : []);
-      } catch {
+      } catch (e) {
+        console.error("Erro ao carregar solicitações recebidas:", e);
         if (!cancel.v) setSolicitacoes([]);
       }
     }
@@ -338,17 +359,18 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   }
 
     async function loadEventosEscolinha() {
-    if (!token) return;
+      if (!token) return;
+      if (eventosLoading) return;
 
-    const escolaId =
-      (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
+      const escolaId =
+        (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
 
-    if (!escolaId) {
-      setEventos([]);
-      return;
-    }
+      if (!escolaId) {
+        setEventos([]); 
+        return;
+      }
 
-    setEventosLoading(true);
+      setEventosLoading(true);
     try {
       const { data: resp } = await axios.get(
         `${API.BASE_URL}/api/eventos/escolas/${escolaId}`,
@@ -385,6 +407,10 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     } finally {
       setEventosLoading(false);
     }
+  }
+
+  function invalidateAtividades() {
+    setAtividades(null);
   }
 
   async function loadTurmas() {
@@ -496,7 +522,14 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             ).map((t) => (
               <button
                 key={t.id}
-                onClick={() => setAba(t.id as Aba)}
+                onClick={() => {
+                  const next = t.id as Aba;
+                  setAba(next);
+
+                  if (next === "visao") {
+                    invalidateAtividades();
+                  }
+                }}
                 className={`shrink-0 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${
                   aba === t.id ? "bg-green-600 text-white" : "text-green-900"
                 }`}
@@ -585,35 +618,35 @@ export default function PerfilEscola({ idDaUrl }: Props) {
           <SectionCard
             title="Treinos"
             right={
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
                 <Link
                   href="/treinos"
-                  className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
+                  className="min-w-[92px] text-center text-sm font-semibold px-4 py-2 rounded-xl
+                            border border-green-300 bg-white text-green-900
+                            hover:bg-green-50 active:scale-[0.99] transition"
                 >
                   Ver todos
                 </Link>
+
                 {canEdit && (
                   <>
                     <Link
                       href="/perfil/GerenciarProfessores"
-                      className="text-sm px-3 py-1.5 rounded-md bg-green-100 text-green-900 inline-flex items-center gap-1"
+                      className="min-w-[160px] text-center text-sm font-semibold px-4 py-2 rounded-xl
+                                border border-green-300 bg-white text-green-900
+                                hover:bg-green-50 active:scale-[0.99] transition
+                                inline-flex items-center justify-center gap-2"
                     >
                       <PlusCircle className="w-4 h-4" />
                       Gerenciar Professores
                     </Link>
 
-                    <button
-                      onClick={() => {
-                        setAba("professores");
-                      }}
-                      className="text-sm px-3 py-1.5 rounded-md border border-green-200 text-green-900"
-                    >
-                      Administrar turmas
-                    </button>
-
                     <Link
                       href="/treinos/novo"
-                      className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
+                      className="min-w-[150px] text-center text-sm font-semibold px-4 py-2 rounded-xl
+                                bg-green-600 text-white
+                                hover:bg-green-700 active:scale-[0.99] transition
+                                inline-flex items-center justify-center gap-2"
                     >
                       <PlusCircle className="w-4 h-4" />
                       Criar novo treino
@@ -632,19 +665,55 @@ export default function PerfilEscola({ idDaUrl }: Props) {
           <SectionCard title="Atividade Recente">
             {atividades && atividades.length > 0 ? (
               <ul className="space-y-3">
-                {atividades.slice(0, 6).map((a) => (
-                  <li key={a.id} className="flex items-center gap-3">
-                    <CalendarClock className="w-5 h-5 text-green-700" />
-                    <div className="text-sm">
-                      <div className="font-medium text-green-900">
-                        {a.titulo}
+                {atividades.slice(0, 6).map((a) => {
+                  const content = (
+                    <div className="flex items-center gap-3">
+                        {a.tipo === "Evento" ? (
+                          <CalendarClock className="w-5 h-5 text-green-700" />
+                        ) : a.tipo === "Treino" ? (
+                          <Activity className="w-5 h-5 text-green-700" />
+                        ) : a.tipo === "Desafio" ? (
+                          <Trophy className="w-5 h-5 text-green-700" />
+                        ) : (
+                          <Activity className="w-5 h-5 text-green-700" />
+                        )}
+
+                        {a.imagemUrl ? (
+                          <img
+                            src={a.imagemUrl}
+                            alt={a.titulo}
+                            className="w-10 h-10 rounded-lg object-cover border border-green-100"
+                          />
+                        ) : null}
+
+                        <div className="text-sm">
+                        <div className="font-medium text-green-900">{a.titulo}</div>
+                        <div className="text-xs text-green-900/70">
+                          {new Date(a.criadoEm).toLocaleString()}
+                        </div>
                       </div>
-                      <div className="text-xs text-green-900/70">
-                        {new Date(a.criadoEm).toLocaleString()}
-                      </div>
+                      {a.link ? (
+                        <ChevronRight className="ml-auto w-4 h-4 text-green-800" />
+                      ) : null}
                     </div>
-                  </li>
-                ))}
+                  );
+                  return (
+                    <li key={a.id}>
+                      {a.link ? (
+                        <Link
+                          href={a.link}
+                          className="block rounded-xl border border-green-100 p-3 hover:bg-green-50"
+                        >
+                          {content}
+                        </Link>
+                      ) : (
+                        <div className="rounded-xl border border-green-100 p-3">
+                          {content}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <EmptyState text="Nenhuma atividade recente" />

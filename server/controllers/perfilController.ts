@@ -6,6 +6,15 @@ import { validarJanelaAtleta, getRangeFromQuery, PlanoAtleta } from "../utils/an
 
 const prisma = new PrismaClient();
 
+type AtividadeUI = {
+  id: string;
+  tipo: string;         
+  titulo: string;      
+  criadoEm: string;    
+  imagemUrl?: string | null;
+  link?: string | null; 
+};
+
 async function ensureSolicitacaoVinculo(
   tx: any,
   params: { atletaId: string; entidadeId: string; tipoEntidade: "clube" | "escolinha" | "professor" }
@@ -460,17 +469,76 @@ export const getTreinosPorUsuario = async (req: Request, res: Response) => {
 
 export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.params.id;
+    const userId = String(req.params.id || "").trim();
+    if (!userId) return res.json([]);
 
     const atleta = await prisma.atleta.findFirst({
       where: { usuarioId: userId },
       select: { id: true },
     });
 
-    if (!atleta) {
-      return res.json([]);
+    const escolinha = await prisma.escolinha.findFirst({
+      where: { OR: [{ usuarioId: userId }, { id: userId }] },
+      select: { id: true, logo: true },
+    });
+
+    const clube = await prisma.clube.findFirst({
+      where: { OR: [{ usuarioId: userId }, { id: userId }] },
+      select: { id: true, logo: true },
+    });
+
+    if (!atleta && (escolinha || clube)) {
+      const entidadeTipo = escolinha ? "escolinha" : "clube";
+      const entidadeId = escolinha ? escolinha.id : clube!.id;
+      const logo = escolinha ? escolinha.logo : clube!.logo;
+
+      const [eventos, treinos] = await Promise.all([
+        prisma.evento.findMany({
+          where: entidadeTipo === "escolinha" ? { escolinhaId: entidadeId } : { clubeId: entidadeId },
+          orderBy: { criadoEm: "desc" },
+          take: 10,
+          select: { id: true, titulo: true, criadoEm: true },
+        }),
+        prisma.treinoProgramado.findMany({
+          where: entidadeTipo === "escolinha" ? { escolinhaId: entidadeId } : { clubeId: entidadeId },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+          select: { id: true, nome: true, createdAt: true, imagemUrl: true },
+        }),
+      ]);
+
+      type AtividadeComTs = AtividadeUI & { ts: number };
+
+      const itensComTs: AtividadeComTs[] = [
+        ...eventos.map((e): AtividadeComTs => ({
+          id: `ev-${e.id}`,
+          tipo: "Evento",
+          titulo: `Novo evento: ${e.titulo ?? "Evento"}`,
+          criadoEm: e.criadoEm.toISOString(),
+          imagemUrl: logo ?? null,
+          link: `/eventos/${e.id}`,
+          ts: +e.criadoEm,
+        })),
+        ...treinos.map((t): AtividadeComTs => ({
+          id: `tp-${t.id}`,
+          tipo: "Treino",
+          titulo: `Novo treino: ${t.nome ?? "Treino"}`,
+          criadoEm: t.createdAt.toISOString(),
+          imagemUrl: t.imagemUrl ?? logo ?? null,
+          link: `/treinos`,
+          ts: +t.createdAt,
+        })),
+      ];
+
+      const itens: AtividadeUI[] = itensComTs
+        .sort((a, b) => b.ts - a.ts)
+        .slice(0, 10)
+        .map(({ ts, ...rest }) => rest);
+
+      return res.json(itens);
     }
 
+    if (!atleta) return res.json([]);
 
     const treinosLivres = await prisma.treinoLivre.findMany({
       where: { atletaId: atleta.id },
@@ -482,14 +550,12 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
       where: {
         atletaId: atleta.id,
         OR: [
-
           {
             treinoTituloSnapshot: {
               contains: "livre",
               mode: "insensitive",
             },
           },
-
           {
             AND: [
               { aprovado: true as any },
@@ -523,33 +589,20 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
     const parts = await getParticipacoesGrupo(userId, atleta.id);
     const itensGrupo = parts.map(mapGrupoToAtividade);
 
-    const itens = [
-      ...treinosLivres.map((t: any) => ({
+    type AtividadeComTs = AtividadeUI & { ts: number };
+
+    const itensRaw: AtividadeComTs[] = [
+      ...treinosLivres.map((t: any): AtividadeComTs => ({
         id: `tl-${t.id}`,
         tipo: "Treino Livre",
+        titulo: t.descricao || "Treino Livre",
+        criadoEm: new Date(t.data).toISOString(),
         imagemUrl: t.urlEvidencia ?? null,
-        nome: t.descricao || "Treino Livre",
-        data: t.data,
-        duracao:
-          typeof t.duracaoMin === "number" && t.duracaoMin > 0
-            ? `${t.duracaoMin} min`
-            : undefined,
-        pontuacao: 0,
+        link: "/treinos",
+        ts: +new Date(t.data),
       })),
 
-      ...subsTreino.map((s: any) => {
-        const dur =
-          s.duracaoMinutos ??
-          s.treinoAgendado?.treinoProgramado?.duracao ??
-          null;
-
-        const pts =
-          s.pontosCreditados ??
-          s.pontuacaoSnapshot ??
-          s.treinoAgendado?.treinoProgramado?.pontuacao ??
-          s.treinoAgendado?.treinoProgramado?.exercicios?.length ??
-          0;
-
+      ...subsTreino.map((s: any): AtividadeComTs => {
         const titulo =
           s.treinoAgendado?.treinoProgramado?.nome ??
           s.treinoAgendado?.titulo ??
@@ -558,43 +611,55 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
         const snapshot = String(s.treinoTituloSnapshot || "").toLowerCase();
         const isLivre = snapshot.includes("livre");
 
+        const dt = s.criadoEm ?? new Date();
+
         return {
           id: `t-${s.id}`,
           tipo: isLivre ? "Treino Livre" : "Treino",
+          titulo,
+          criadoEm: new Date(dt).toISOString(),
           imagemUrl: s.treinoAgendado?.treinoProgramado?.imagemUrl ?? null,
-          nome: titulo,
-          data: s.criadoEm,
-          duracao:
-            typeof dur === "number" && dur > 0 ? `${dur} min` : undefined,
-          pontuacao: Number(pts) || 0,
-          categoria:
-            s.tipoTreinoSnapshot ??
-            s.treinoAgendado?.treinoProgramado?.tipoTreino ??
-            null,
+          link: "/treinos",
+          ts: +new Date(dt),
         };
       }),
 
-      ...subsDesafio.map((s: any) => ({
-        id: `d-${s.id}`,
-        tipo: "Desafio" as const,
-        imagemUrl: s.desafio?.imagemUrl ?? s.videoUrl ?? null,
-        nome: s.desafio?.titulo ?? "Desafio",
-        data: s.createdAt,
-        duracao: undefined,
-        pontuacao: Number(s.desafio?.pontuacao ?? 0),
-      })),
+      ...subsDesafio.map((s: any): AtividadeComTs => {
+        const dt = s.createdAt ?? new Date();
+        return {
+          id: `d-${s.id}`,
+          tipo: "Desafio",
+          titulo: s.desafio?.titulo ?? "Desafio",
+          criadoEm: new Date(dt).toISOString(),
+          imagemUrl: s.desafio?.imagemUrl ?? s.videoUrl ?? null,
+          link: "/explorar",
+          ts: +new Date(dt),
+        };
+      }),
 
-      ...itensGrupo,
-    ]
-      .sort((a, b) => +new Date(b.data as any) - +new Date(a.data as any))
-      .slice(0, 10);
+      ...itensGrupo.map((g: any): AtividadeComTs => {
+        const dt = g.data ?? new Date();
+        return {
+          id: String(g.id),
+          tipo: g.tipo ?? "Desafio",
+          titulo: g.nome ?? "Atividade",
+          criadoEm: new Date(dt).toISOString(),
+          imagemUrl: g.imagemUrl ?? null,
+          link: "/explorar",
+          ts: +new Date(dt),
+        };
+      }),
+    ];
+
+    const itens: AtividadeUI[] = itensRaw
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 10)
+      .map(({ ts, ...rest }) => rest);
 
     return res.json(itens);
   } catch (e) {
     console.error("[AtividadesRecentes] erro:", e);
-    return res
-      .status(500)
-      .json({ message: "Erro ao buscar atividades recentes." });
+    return res.status(500).json({ message: "Erro ao buscar atividades recentes." });
   }
 };
 

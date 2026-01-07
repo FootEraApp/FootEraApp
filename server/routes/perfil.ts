@@ -36,24 +36,19 @@ router.get("/escola/me", authenticateToken, (req, res) => {
   getPerfilEscola(req as any, res);
 });
 router.get("/escola/:id", authenticateToken, getPerfilEscola);
-
 router.get("/olheiro/me", authenticateToken, (req, res) => {
   (req as any).params = { id: req.userId };
   getPerfilOlheiro(req as any, res);
 });
 router.get("/olheiro/:id", authenticateToken, getPerfilOlheiro);
-
 router.get("/me/pontuacao", authenticateToken, getPontuacaoMe);
 router.get("/me/atividades", authenticateToken, getAtividadesRecentesMe);
 router.get("/me/badges", authenticateToken, getBadgesMe);
 router.get("/me/posicao-atual", authenticateToken, getPosicaoAtualAtleta);
-router.get("/me", authenticateToken, getPerfilUsuarioMe);
-
-router.get("/:usuarioId/pontuacao", authenticateToken, getPontuacaoPerfil);
-
 router.get("/me/desafios-videos", authenticateToken, getUltimasSubmissoesDesafioVideosMe);
+router.get("/me", authenticateToken, getPerfilUsuarioMe);
+router.get("/:usuarioId/pontuacao", authenticateToken, getPontuacaoPerfil);
 router.get("/:id/desafios-videos", authenticateToken, getUltimasSubmissoesDesafioVideos);
-
 router.get("/:id/atividades", authenticateToken, getAtividadesRecentes);
 router.get("/:id/badges", authenticateToken, getBadges);
 router.get("/:id/treinos", authenticateToken, getTreinosResumo);
