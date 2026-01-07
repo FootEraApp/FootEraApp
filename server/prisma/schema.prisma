@@ -93,20 +93,30 @@ model EmailVerification {
 }
 
 model Assinatura {
-  id                     String    @id @default(uuid())
-  usuarioId              String    @unique
+  id                     String           @id @default(uuid())
+  usuarioId              String           @unique
   plano                  String
-  periodicidade          String
+  periodicidade          Periodicidade
   startsAt               DateTime
   renovaEm               DateTime
   canceledAt             DateTime?
-  ativo                  Boolean   @default(true)
-  lembreteEnviado        Boolean   @default(false)
-  usuario                Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  providerSubscriptionId String?   @unique
+  ativo                  Boolean          @default(true)
+  lembreteEnviado        Boolean          @default(false)
+  usuario                Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  providerSubscriptionId String?          @unique
+  status                 AssinaturaStatus @default(TRIAL)
+  trialStartsAt          DateTime?
+  trialEndsAt            DateTime?
+
+  metodoPreferido           MetodoPagamento?
+  metodoPreferidoDefinidoEm DateTime?
+
+  bloqueadoEm DateTime?
 
   @@index([startsAt])
   @@index([canceledAt])
+  @@index([status])
+  @@index([trialEndsAt])
 }
 
 model Professor {
@@ -1957,6 +1967,13 @@ enum MetodoPagamento {
   CREDITO
   DEBITO
   BOLETO
+}
+
+enum AssinaturaStatus {
+  TRIAL
+  ATIVA
+  BLOQUEADA
+  CANCELADA
 }
 
 enum TipoCupom {
