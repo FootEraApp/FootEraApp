@@ -8,8 +8,8 @@ import {
 } from "@prisma/client";
 import QRCode from "qrcode";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
-
 import * as mercadopagoModule from "mercadopago";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mercadopago: any =
   (mercadopagoModule as any).default ?? (mercadopagoModule as any);
@@ -65,6 +65,7 @@ type StartCheckoutBody = {
 function onlyDigits(s: string) {
   return (s || "").replace(/\D+/g, "");
 }
+
 function luhnOk(num: string) {
   let sum = 0,
     alt = false;
@@ -78,6 +79,59 @@ function luhnOk(num: string) {
     alt = !alt;
   }
   return sum % 10 === 0;
+}
+
+function addMonths(d: Date, months: number) {
+  const dt = new Date(d.getTime());
+  dt.setMonth(dt.getMonth() + months);
+  return dt;
+}
+
+function diffDays(a: Date, b: Date) {
+  const ms = a.getTime() - b.getTime();
+  return Math.ceil(ms / (24 * 60 * 60 * 1000));
+}
+
+async function ensureTrialSubscription(usuarioId: string) {
+  const now = new Date();
+  let a = await prisma.assinatura.findUnique({ where: { usuarioId } });
+
+  if (!a) {
+    const trialEndsAt = addMonths(now, 1);
+
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: { tipo: true },
+    });
+
+    const planoTrial =
+      (usuario?.tipo && roleToDefaultPlan[String(usuario.tipo)]) || "ATLETA_PRO";
+
+    a = await prisma.assinatura.create({
+      data: {
+        usuarioId,
+        plano: planoTrial,
+        periodicidade: "Mensal",
+        ativo: true,
+        startsAt: now,
+        status: "TRIAL",
+        trialStartsAt: now,
+        trialEndsAt,
+        renovaEm: trialEndsAt,
+      } as any,
+    });
+
+    return a;
+  }
+
+  if (a.status === "TRIAL" && a.trialEndsAt && now > a.trialEndsAt) {
+    a = await prisma.assinatura.update({
+      where: { usuarioId },
+      data: { status: "BLOQUEADA", ativo: false, canceledAt: now, bloqueadoEm: now } as any,
+    });
+  }
+
+  return a;
 }
 
 const PLANS = [
@@ -139,6 +193,15 @@ const PLANS = [
   },
 ] as const;
 
+const roleToDefaultPlan: Record<string, string> = {
+  Atleta: "ATLETA_PRO",
+  Olheiro: "OLHEIRO_PRO",
+  Professor: "PROFESSOR_PRO",
+  Escolinha: "ESCOLINHA_PRO",
+  Clube: "ESCOLINHA_PRO",
+  Admin: "ATLETA_PRO",
+};
+
 function getUserId(req: Request) {
   const r = req as AuthenticatedRequest as any;
   return r.userId ?? r.authUser?.id ?? r.user?.id;
@@ -167,29 +230,7 @@ async function approvePaymentAndProvisionSubscription(pagamentoId: string) {
       },
     });
 
-    const months = pg.periodicidade === "Mensal" ? 1 : 12;
-    const renovaEm = addMonths(now, months);
-
-    await tx.assinatura.upsert({
-      where: { usuarioId: pg.usuarioId },
-      update: {
-        plano: pg.plano,
-        ativo: true,
-        startsAt: now,
-        canceledAt: null,
-        periodicidade: pg.periodicidade,
-        renovaEm,
-      },
-      create: {
-        usuarioId: pg.usuarioId,
-        plano: pg.plano,
-        ativo: true,
-        startsAt: now,
-        periodicidade: pg.periodicidade,
-        renovaEm,
-      },
-    });
-
+    await upsertSubscriptionTx(tx, pg.usuarioId, pg.plano, pg.periodicidade);
     return pg;
   });
 
@@ -208,7 +249,12 @@ async function deactivateSubscriptionForPayment(pagamentoId: string) {
 
   await prisma.assinatura.updateMany({
     where: { usuarioId: pagamento.usuarioId, ativo: true },
-    data: { ativo: false, canceledAt: now },
+    data: {
+      ativo: false,
+      canceledAt: now,
+      status: "BLOQUEADA",
+      bloqueadoEm: now,
+    } as any,
   });
 
   return pagamento;
@@ -221,10 +267,9 @@ export async function getPlans(req: Request, res: Response) {
 export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
   try {
     const usuarioId = getUserId(req);
-
-    const assinatura = await prisma.assinatura.findUnique({
-      where: { usuarioId },
-    });
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado" });
+    }
 
     const pagamentos = await prisma.pagamento.findMany({
       where: { usuarioId },
@@ -237,7 +282,28 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
       orderBy: { resgatadoEm: "desc" },
     });
 
-    res.json({ assinatura, pagamentos, cupons });
+    const assinaturaSafe = await ensureTrialSubscription(usuarioId);
+
+    const now = new Date();
+    const trialEndsAt = (assinaturaSafe as any).trialEndsAt as Date | null;
+    const status = (assinaturaSafe as any).status as string;
+    const trialAtivo = status === "TRIAL" && trialEndsAt && now <= trialEndsAt;
+    const diasRestantes = trialEndsAt ? diffDays(trialEndsAt, now) : null;
+    const precisaEscolherPagamento = trialAtivo && diasRestantes != null && diasRestantes <= 7;
+    const bloqueado = status === "BLOQUEADA";
+    const metodoPreferido = (assinaturaSafe as any).metodoPreferido ?? null;
+
+    const billingState = {
+      status,
+      trialAtivo,
+      trialEndsAt,
+      diasRestantes,
+      precisaEscolherPagamento,
+      metodoPreferido,
+      bloqueado,
+    };
+
+    res.json({ assinatura: assinaturaSafe, pagamentos, cupons, billingState });
   } catch (err) {
     res.status(500).json({ message: "Erro ao carregar billing", err });
   }
@@ -295,6 +361,10 @@ async function computeCouponDiscount(
 export async function applyCoupon(req: Request, res: Response) {
   try {
     const usuarioId = getUserId(req);
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado" });
+    }
+
     const { codigo, planoId, periodicidade } = req.body as {
       codigo: string;
       planoId: string;
@@ -372,16 +442,40 @@ async function resgatarCupom(
 export async function startCheckout(req: Request, res: Response) {
   try {
     const usuarioId = getUserId(req);
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado" });
+    }
+
     const { planoId, periodicidade, metodo, cupom, pagador, cartao } =
       req.body as StartCheckoutBody;
 
-    const METODOS_VALIDOS: MetodoPagamento[] = [
-      "PIX",
-      "CREDITO",
-      "DEBITO",
-      "BOLETO",
-    ];
-    if (!METODOS_VALIDOS.includes(metodo)) {
+    const a = await ensureTrialSubscription(usuarioId);
+    const now = new Date();
+
+    const status = (a as any).status as string;
+    const trialEndsAt = (a as any).trialEndsAt as Date | null;
+
+    const trialAtivo = status === "TRIAL" && trialEndsAt && now <= trialEndsAt;
+    const diasRestantes = trialEndsAt ? diffDays(trialEndsAt, now) : null;
+    let metodoFinal = metodo;
+    if (!metodoFinal) {
+      metodoFinal = (a as any).metodoPreferido;
+    }
+    if (!metodoFinal) {
+      return res.status(400).json({ message: "Escolha um método de pagamento" });
+    }
+
+    if (trialAtivo && (diasRestantes == null || diasRestantes > 7)) {
+      return res.status(403).json({
+        code: "TRIAL_ACTIVE",
+        message: "Trial ativo. Você poderá escolher a forma de pagamento quando faltarem 7 dias para terminar.",
+        trialEndsAt,
+        diasRestantes,
+      });
+    }
+
+    const METODOS_VALIDOS: MetodoPagamento[] = ["PIX", "CREDITO", "DEBITO", "BOLETO"];
+    if (!METODOS_VALIDOS.includes(metodoFinal)) {
       return res.status(400).json({ message: "Método de pagamento inválido" });
     }
 
@@ -398,7 +492,7 @@ export async function startCheckout(req: Request, res: Response) {
     const plan = findPlan(planoId);
     if (!plan) return res.status(400).json({ message: "Plano inválido" });
 
-    if (metodo === "PIX") {
+    if (metodoFinal === "PIX") {
       if (!pagador?.nome || !pagador?.email) {
         return res
           .status(400)
@@ -406,7 +500,7 @@ export async function startCheckout(req: Request, res: Response) {
       }
     }
 
-    if (metodo === "BOLETO") {
+    if (metodoFinal === "BOLETO") {
       if (!pagador?.nome || !pagador?.email || !pagador?.cpf) {
         return res.status(400).json({
           message: "Informe nome, e-mail e CPF para boleto",
@@ -414,7 +508,7 @@ export async function startCheckout(req: Request, res: Response) {
       }
     }
 
-    if (metodo === "CREDITO" || metodo === "DEBITO") {
+    if (metodoFinal === "CREDITO" || metodoFinal === "DEBITO") {
       const num = onlyDigits(cartao?.numero || "");
       const cvv = onlyDigits(cartao?.cvv || "");
       const validadeOk = /^(0[1-9]|1[0-2])\/\d{2}$/.test(cartao?.validade || "");
@@ -468,16 +562,7 @@ export async function startCheckout(req: Request, res: Response) {
 
     const total = Math.max(0, base - desconto);
 
-    const jaTeveAlgumPagamentoAprovado = await prisma.pagamento.findFirst({
-      where: {
-        usuarioId,
-        status: PagamentoStatus.APROVADO,
-      },
-      select: { id: true },
-    });
-
-    const isFreeTrial = !jaTeveAlgumPagamentoAprovado;
-    const totalToCharge = isFreeTrial ? 0 : total;
+    const totalToCharge = total;
 
     const totalDecimal = new Prisma.Decimal(totalToCharge.toFixed(2));
     const provider = HAS_MERCADO_PAGO ? "MERCADOPAGO" : "INTERNAL_FAKE";
@@ -487,7 +572,7 @@ export async function startCheckout(req: Request, res: Response) {
         usuarioId,
         plano: planoId,
         periodicidade,
-        metodo,
+        metodo: metodoFinal,
         status:
           totalToCharge === 0
             ? PagamentoStatus.APROVADO
@@ -501,24 +586,14 @@ export async function startCheckout(req: Request, res: Response) {
       },
     });
 
-    if (totalToCharge === 0) {
+   if (totalToCharge === 0)  {
       await upsertSubscription(usuarioId, planoId, periodicidade);
       if (cupomRow) await resgatarCupom(cupomRow.id, usuarioId, pagamento.id);
 
       return res.json({
         status: "APROVADO",
         pagamento,
-        freeTrial: isFreeTrial,
-        message: isFreeTrial
-          ? "Seu primeiro mês é gratuito! A cobrança começará no próximo ciclo."
-          : "Assinatura ativada sem cobrança (cupom/presente).",
-      });
-    }
-
-    if (metodo === "PIX" && !HAS_MERCADO_PAGO) {
-      return res.status(500).json({
-        message:
-          "PIX real indisponível: configure MP_ACCESS_TOKEN e o Mercado Pago no servidor.",
+        message: "Assinatura ativada sem cobrança (cupom/presente).",
       });
     }
 
@@ -532,7 +607,7 @@ export async function startCheckout(req: Request, res: Response) {
         },
       });
 
-      if (metodo === "PIX") {
+      if (metodoFinal === "PIX") {
         const payload = `pix:plano=${planoId};user=${usuarioId};pg=${pagamento.id};valor=${totalToCharge.toFixed(
           2
         )}`;
@@ -554,7 +629,7 @@ export async function startCheckout(req: Request, res: Response) {
         });
       }
 
-      if (metodo === "BOLETO") {
+      if (metodoFinal === "BOLETO") {
         const linhaDigitavel =
           "23790.00000 00000.000000 00000.000000 0 00000000000000";
         return res.json({
@@ -573,7 +648,7 @@ export async function startCheckout(req: Request, res: Response) {
       });
     }
 
-     if (metodo === "PIX") {
+    if (metodoFinal === "PIX") {
       try {
         const mpResp: any = await mercadopago.payment.create({
           transaction_amount: Number(totalToCharge.toFixed(2)),
@@ -602,7 +677,7 @@ export async function startCheckout(req: Request, res: Response) {
         const qr_code_base64 =
           mpBody.point_of_interaction?.transaction_data?.qr_code_base64 ?? null;
 
-        const qrCodeDataUrl =
+        const qrCodeUrl =
           typeof qr_code_base64 === "string"
             ? `data:image/png;base64,${qr_code_base64}`
             : null;
@@ -621,8 +696,9 @@ export async function startCheckout(req: Request, res: Response) {
           pagamento,
           pix: {
             copiaECola: qr_code,
-            qrCodeUrl: qrCodeDataUrl,
+            qrCodeUrl,
           },
+          message: "Pagamento PIX criado. A assinatura será liberada após confirmação do pagamento.",
         });
       } catch (err: any) {
         console.error(
@@ -700,6 +776,24 @@ type PaymentWebhookBody = {
   provider: string;
   providerRef: string;
 };
+
+export async function requireActiveSubscription(req: AuthenticatedRequest, res: Response, next: any) {
+  const usuarioId = req.userId;
+  if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
+
+  const a = await ensureTrialSubscription(usuarioId);
+
+  const now = new Date();
+  const status = (a as any).status as string;
+  const trialEndsAt = (a as any).trialEndsAt as Date | null;
+  const trialAtivo = status === "TRIAL" && trialEndsAt && now <= trialEndsAt;
+  const bloqueado = status === "BLOQUEADA" || (!trialAtivo && status !== "ATIVA");
+  if (bloqueado) {
+    return res.status(402).json({ code: "SUBSCRIPTION_BLOCKED" });
+  }
+
+  next();
+}
 
 export async function providerWebhook(req: Request, res: Response) {
   try {
@@ -823,21 +917,97 @@ async function upsertSubscription(
     where: { usuarioId },
     update: {
       plano,
-      startsAt: now,
-      canceledAt: null,
-      ativo: true,
       periodicidade,
+      startsAt: now,
       renovaEm,
-    },
+      ativo: true,
+      canceledAt: null,
+      status: "ATIVA",
+      bloqueadoEm: null,
+      trialStartsAt: null,
+      trialEndsAt: null,
+      lembreteEnviado: false,
+    } as any,
     create: {
       usuarioId,
       plano,
-      startsAt: now,
-      ativo: true,
       periodicidade,
+      startsAt: now,
       renovaEm,
-    },
+      ativo: true,
+
+      status: "ATIVA",
+      lembreteEnviado: false,
+    } as any,
   });
+}
+
+async function upsertSubscriptionTx(
+  tx: PrismaClient | Prisma.TransactionClient,
+  usuarioId: string,
+  plano: string,
+  periodicidade: Periodicidade
+) {
+  const now = new Date();
+  const months = periodicidade === "Mensal" ? 1 : 12;
+  const renovaEm = addMonths(now, months);
+
+  await tx.assinatura.upsert({
+    where: { usuarioId },
+    update: {
+      plano,
+      periodicidade,
+      startsAt: now,
+      renovaEm,
+      ativo: true,
+      canceledAt: null,
+      status: "ATIVA",
+      bloqueadoEm: null,
+      trialStartsAt: null,
+      trialEndsAt: null,
+      lembreteEnviado: false,
+    } as any,
+    create: {
+      usuarioId,
+      plano,
+      periodicidade,
+      startsAt: now,
+      renovaEm,
+      ativo: true,
+      status: "ATIVA",
+      lembreteEnviado: false,
+    } as any,
+  });
+}
+
+export async function setPreferredPaymentMethod(req: AuthenticatedRequest, res: Response) {
+  try {
+    const usuarioId = getUserId(req);
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado" });
+    }
+
+    const { metodoFinal } = req.body as { metodoFinal: MetodoPagamento };
+
+    const METODOS_VALIDOS: MetodoPagamento[] = ["PIX", "CREDITO", "DEBITO", "BOLETO"];
+    if (!METODOS_VALIDOS.includes(metodoFinal)) {
+      return res.status(400).json({ message: "Método inválido" });
+    }
+
+    const a = await ensureTrialSubscription(usuarioId);
+
+    await prisma.assinatura.update({
+      where: { usuarioId },
+      data: {
+        metodoPreferido: metodoFinal,
+        metodoPreferidoDefinidoEm: new Date(),
+      } as any,
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ message: "Erro ao salvar método preferido", err });
+  }
 }
 
 export async function handlePaymentWebhook(req: Request, res: Response) {
@@ -1006,6 +1176,10 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
 export async function redeemGift(req: Request, res: Response) {
   try {
     const usuarioId = getUserId(req);
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado" });
+    }
+
     const { codigo, planoId, periodicidade } = req.body as {
       codigo: string;
       planoId: string;
@@ -1076,6 +1250,10 @@ export async function redeemGift(req: Request, res: Response) {
 export async function cancelSubscription(req: Request, res: Response) {
   try {
     const usuarioId = getUserId(req);
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado" });
+    }
+
     const now = new Date();
 
     const a = await prisma.assinatura.findUnique({ where: { usuarioId } });
@@ -1096,28 +1274,19 @@ export async function cancelSubscription(req: Request, res: Response) {
 }
 
 export async function renewSubscription(req: Request, res: Response) {
-  try {
-    const usuarioId = getUserId(req);
-    const now = new Date();
-
-    const a = await prisma.assinatura.findUnique({ where: { usuarioId } });
-    if (!a)
-      return res.status(400).json({ message: "Sem assinatura para renovar" });
-
-    await prisma.assinatura.update({
-      where: { usuarioId },
-      data: { ativo: true, canceledAt: null, startsAt: now },
-    });
-
-    res.json({ ok: true, message: "Assinatura reativada" });
-  } catch (err) {
-    res.status(500).json({ message: "Erro ao reativar assinatura", err });
-  }
+  return res.status(400).json({
+    message:
+      "Reativação manual desativada. Para reativar, finalize um pagamento (PIX/cartão/boleto) e aguarde aprovação.",
+  });
 }
 
 export async function switchPlan(req: Request, res: Response) {
   try {
     const usuarioId = getUserId(req);
+    if (!usuarioId) {
+      return res.status(401).json({ message: "Não autenticado" });
+    }
+
     const { novoPlano } = req.body as { novoPlano: string };
 
     const plan = findPlan(novoPlano);
@@ -1130,18 +1299,14 @@ export async function switchPlan(req: Request, res: Response) {
     const periodicidade =
       (atual?.periodicidade as Periodicidade | null) ?? Periodicidade.Mensal;
 
-    await upsertSubscription(usuarioId, novoPlano, periodicidade);
+    return res.status(400).json({
+      message:
+        "Troca de plano exige um novo checkout e aprovação de pagamento. Inicie o checkout do novo plano.",
+    });
 
-    res.json({ ok: true, message: "Plano alterado", plano: novoPlano });
   } catch (err) {
     res.status(500).json({ message: "Erro ao alterar plano", err });
   }
-}
-
-function addMonths(d: Date, months: number) {
-  const dt = new Date(d.getTime());
-  dt.setMonth(dt.getMonth() + months);
-  return dt;
 }
 
 function addDays(d: Date, days: number) {
@@ -1150,18 +1315,18 @@ function addDays(d: Date, days: number) {
 
 export async function checkExpiringSubscriptions(req: Request, res: Response) {
   try {
-    const daysBefore =
-      Number(process.env.BILLING_DAYS_BEFORE_REMINDER || "5") || 5;
-    const graceDays =
-      Number(process.env.BILLING_GRACE_DAYS || "7") || 7;
-
+    const daysBefore = Number(process.env.BILLING_DAYS_BEFORE_REMINDER || "7") || 7;
+    const graceDaysPaid = Number(process.env.BILLING_GRACE_DAYS || "7") || 7;
     const now = new Date();
-    const limitReminder = new Date(
-      now.getTime() + daysBefore * 24 * 60 * 60 * 1000
-    );
+    const limitReminder = new Date(now.getTime() + daysBefore * 24 * 60 * 60 * 1000);
 
     const assinaturas = await prisma.assinatura.findMany({
-      where: { ativo: true },
+      where: {
+        OR: [
+          { status: "TRIAL" as any },
+          { status: "ATIVA" as any },
+        ],
+      },
       include: {
         usuario: {
           select: { id: true, email: true, nome: true, nomeDeUsuario: true },
@@ -1169,55 +1334,115 @@ export async function checkExpiringSubscriptions(req: Request, res: Response) {
       },
     });
 
-    const expiring: Array<{
+    const trialExpiring: Array<{
       usuarioId: string;
       email: string | null;
       nome: string | null;
       plano: string;
-      venceEm: Date;
+      trialEndsAt: Date;
+      diasRestantes: number;
     }> = [];
 
+    const paidExpiring: Array<{
+      usuarioId: string;
+      email: string | null;
+      nome: string | null;
+      plano: string;
+      renovaEm: Date;
+      diasRestantes: number;
+    }> = [];
+
+    let blockedCount = 0;
+    let remindersCount = 0;
+
     for (const a of assinaturas as any[]) {
-      const last = await prisma.pagamento.findFirst({
-        where: {
-          usuarioId: a.usuarioId,
-          plano: a.plano,
-          status: PagamentoStatus.APROVADO,
-        },
-        orderBy: { pagoEm: "desc" },
-      });
-      if (!last || !last.pagoEm) continue;
+      const email = a.usuario?.email ?? null;
+      const nome = a.usuario?.nome ?? a.usuario?.nomeDeUsuario ?? null;
 
-      const meses = last.periodicidade === "Mensal" ? 1 : 12;
-      const due = addMonths(last.pagoEm, meses);
+      if (a.status === "TRIAL") {
+        if (!a.trialEndsAt) continue;
 
-      const limiteGrace = addDays(due, graceDays);
-      if (now > limiteGrace) {
-        await prisma.assinatura.updateMany({
-          where: { usuarioId: a.usuarioId, plano: a.plano, ativo: true },
-          data: { ativo: false, canceledAt: now },
-        });
+        if (now > a.trialEndsAt) {
+          await prisma.assinatura.update({
+            where: { usuarioId: a.usuarioId },
+            data: {
+              status: "BLOQUEADA",
+              ativo: false,
+              canceledAt: now,
+              bloqueadoEm: now,
+            } as any,
+          });
+          blockedCount++;
+          continue;
+        }
+
+        const diasRestantes = diffDays(a.trialEndsAt, now);
+        if (a.trialEndsAt >= now && a.trialEndsAt <= limitReminder) {
+          trialExpiring.push({
+            usuarioId: a.usuarioId,
+            email,
+            nome,
+            plano: a.plano,
+            trialEndsAt: a.trialEndsAt,
+            diasRestantes,
+          });
+
+          if (!a.lembreteEnviado) {
+            await prisma.assinatura.update({
+              where: { usuarioId: a.usuarioId },
+              data: { lembreteEnviado: true } as any,
+            });
+            remindersCount++;
+          }
+        }
+
         continue;
       }
 
-      if (due >= now && due <= limitReminder) {
-        expiring.push({
-          usuarioId: a.usuarioId,
-          email: a.usuario?.email ?? null,
-          nome: a.usuario?.nome ?? a.usuario?.nomeDeUsuario ?? null,
-          plano: a.plano,
-          venceEm: due,
-        });
+      if (a.status === "ATIVA") {
+        const due = a.renovaEm as Date | null;
+        if (!due) continue;
 
+        const diasRestantes = diffDays(due, now);
+
+        const limiteGrace = addDays(due, graceDaysPaid);
+        if (now > limiteGrace) {
+          await prisma.assinatura.updateMany({
+            where: { usuarioId: a.usuarioId, status: "ATIVA" as any },
+            data: {
+              status: "BLOQUEADA",
+              ativo: false,
+              canceledAt: now,
+              bloqueadoEm: now,
+            } as any,
+          });
+          blockedCount++;
+          continue;
+        }
+
+        if (due >= now && due <= limitReminder) {
+          paidExpiring.push({
+            usuarioId: a.usuarioId,
+            email,
+            nome,
+            plano: a.plano,
+            renovaEm: due,
+            diasRestantes,
+          });
+        }
       }
     }
 
     return res.json({
       ok: true,
       daysBefore,
-      graceDays,
-      expiringCount: expiring.length,
-      expiring,
+      graceDaysPaid,
+      blockedCount,
+      remindersCount,
+      trialExpiringCount: trialExpiring.length,
+      paidExpiringCount: paidExpiring.length,
+      trialExpiring,
+      paidExpiring,
     });
   } catch (err) {
     console.error("Erro ao checar assinaturas próximas do vencimento:", err);
