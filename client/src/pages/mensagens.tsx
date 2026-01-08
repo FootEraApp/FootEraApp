@@ -1,3 +1,4 @@
+// client/src/pages/mensagens
 import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { Send, Share2, Volleyball, User, UserPlus, CirclePlus, Search, House, Users, Trash, ArrowLeft } from "lucide-react";
@@ -1379,37 +1380,43 @@ function stripConvocacaoTag(text: string) {
     };
 
     return (
-      <div className="min-h-screen flex flex-col bg-transparent">
-        <Link
-                      href="/perfil"
-                      aria-label="Voltar para perfil"
-                      className="inline-flex h-10 w-10 items-center justify-center
-                        rounded-full border border-green-800 bg-white text-green-900
-                        shadow-sm hover:bg-green-50 focus:outline-none
-                        focus:ring-2 focus:ring-green-700/30 mt-2 ml-2 mb-2"
-                      >
-                      <ArrowLeft className="h-5 w-5" />
-                    </Link>
-      <header className="sticky top-0 z-10 bg-green-900 text-white">
-        <div className="relative h-14 flex items-center justify-center px-4">
-          
-          <button
-            onClick={() => setShowSidebar(true)}
-            className="md:hidden absolute left-3 p-2 rounded-full hover:bg-white/10"
-            title="Conversas"
-          >
-            <Users size={18} />
-          </button>
-          <h1 className="text-base font-semibold truncate">
-            {alvo?.tipo === "usuario" ? alvo.usuario.nome : 
-             alvo?.tipo === "grupo"   ? alvo.grupo.nome   : "Conversas"}
-          </h1>
+      <div className="h-screen flex flex-col bg-transparent">
 
-          
-        </div>
-      </header>
+<header className="sticky top-0 z-10 bg-green-900 text-white">
+  <div className="relative h-14 flex items-center justify-center px-4">
+    {/* Voltar */}
+    <Link
+      href="/perfil"
+      aria-label="Voltar para perfil"
+      className="absolute left-3 inline-flex h-10 w-10 items-center justify-center
+        rounded-full bg-white/10 text-white hover:bg-white/20
+        focus:outline-none focus:ring-2 focus:ring-white/30"
+    >
+      <ArrowLeft className="h-5 w-5" />
+    </Link>
 
-      <div className="flex flex-1">
+    {/* Botão de conversas (mobile) */}
+    <button
+      onClick={() => setShowSidebar(true)}
+      className="md:hidden absolute right-3 p-2 rounded-full hover:bg-white/10"
+      title="Conversas"
+    >
+      <Users size={18} />
+    </button>
+
+    {/* Título */}
+    <h1 className="text-base font-semibold truncate">
+      {alvo?.tipo === "usuario"
+        ? alvo.usuario.nome
+        : alvo?.tipo === "grupo"
+        ? alvo.grupo.nome
+        : "Conversas"}
+    </h1>
+  </div>
+</header>
+
+
+      <div className="flex flex-1 min-h-0">
         <aside className="hidden md:block w-80 border-r bg-white">
           <SidebarContent />
         </aside>
@@ -1428,7 +1435,7 @@ function stripConvocacaoTag(text: string) {
           </aside>
         </div>
 
-        <main className="flex-1 flex flex-col">
+        <main className="flex-1 flex flex-col min-h-0">
           <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b bg-transparent">
             <div className="text-sm text-green-900 font-medium">
               {alvo ? (alvo.tipo === "usuario" ? "Mensagem direta" : "Grupo") : "Selecione uma conversa"}
@@ -1457,7 +1464,7 @@ function stripConvocacaoTag(text: string) {
           </div>
 
           <div
-            className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 pb-15"
+            className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-4 pb-24 md:pb-6"
             onScroll={handleScroll}
           >
             <div
