@@ -1,3 +1,4 @@
+// server/controllers/treinosController
 import {
   PrismaClient,
   PosicaoCampo,
@@ -1193,7 +1194,7 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
             where: {
               atletaId,
               professorId: resolved.id,
-              OR: [{ ativo: true }, { ativo: null }],
+              NOT: { ativo: false },
             },
             select: { id: true },
           }));
@@ -1209,7 +1210,7 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
                   relacoesTreinamento: {
                     some: {
                       clubeId: resolved.id,
-                      OR: [{ ativo: true }, { ativo: null }],
+                      NOT: { ativo: false },
                     },
                   },
                 },
@@ -1229,7 +1230,7 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
                   relacoesTreinamento: {
                     some: {
                       escolinhaId: resolved.id,
-                      OR: [{ ativo: true }, { ativo: null }],
+                      NOT: { ativo: false },
                     },
                   },
                 },
@@ -2474,7 +2475,7 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
                 relacoesTreinamento: {
                   some: {
                     professorId: professorIdResolved,
-                    OR: [{ ativo: true }, { ativo: null }],
+                    NOT: { ativo: false },
                   },
                 },
               },
@@ -2484,7 +2485,7 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
                 relacoesTreinamento: {
                   some: {
                     professorId: anyId,
-                    OR: [{ ativo: true }, { ativo: null }],
+                    NOT: { ativo: false },
                   },
                 },
               },
@@ -2497,7 +2498,7 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
                 relacoesTreinamento: {
                   some: {
                     clubeId: clubeIdResolved,
-                    OR: [{ ativo: true }, { ativo: null }],
+                    NOT: { ativo: false },
                   },
                 },
               },
@@ -2508,7 +2509,7 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
                 relacoesTreinamento: {
                   some: {
                     clubeId: anyId,
-                    OR: [{ ativo: true }, { ativo: null }],
+                    NOT: { ativo: false },
                   },
                 },
               },
@@ -2522,7 +2523,7 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
                 relacoesTreinamento: {
                   some: {
                     escolinhaId: escolinhaIdResolved,
-                    OR: [{ ativo: true }, { ativo: null }],
+                    NOT: { ativo: false },
                   },
                 },
               },
@@ -2533,7 +2534,7 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
                 relacoesTreinamento: {
                   some: {
                     escolinhaId: anyId,
-                    OR: [{ ativo: true }, { ativo: null }],
+                    NOT: { ativo: false },
                   },
                 },
               },
