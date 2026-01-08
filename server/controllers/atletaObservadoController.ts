@@ -1,4 +1,3 @@
-// server/controllers/atletaObservadoController
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
@@ -137,13 +136,6 @@ export async function listarObservados(req: Request, res: Response) {
     orderBy: { criadoEm: "desc" },
   });
 
-  if (rows.length > 0) {
-    console.log(
-      "[OBSERVADOS] Exemplo de row[0]:",
-      JSON.stringify(rows[0], null, 2)
-    );
-  }
-
   const incluirPontuacao = String(q.incluirPontuacao ?? "").trim() !== "";
   const incluirNotas = String(q.incluirNotas ?? "").trim() !== "";
 
@@ -185,7 +177,6 @@ export async function observarAtleta(req: Request, res: Response) {
 
   const t = String(tipo || "").toLowerCase();
 
-  // monta o "único owner" diretamente nos campos *_Id (garante o CHECK do Postgres)
   const ownerData: any = {};
   if (t === "professor") ownerData.professorId = ownerId;
   else if (t === "clube") ownerData.clubeId = ownerId;
@@ -205,7 +196,6 @@ export async function observarAtleta(req: Request, res: Response) {
 
     return res.status(201).json({ ok: true, observando: true, id: row.id });
   } catch (e: any) {
-    // duplicado (unique)
     if (e?.code === "P2002") {
       const ownerWhere = buildOwnerWhere(tipo, ownerId);
       const ja = await prisma.atletaObservado.findFirst({

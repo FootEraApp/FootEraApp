@@ -1,5 +1,4 @@
-// client/src/pages/TreinoUnico
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
   CalendarClock,
@@ -10,6 +9,9 @@ import {
   NotebookText,
   Timer,
   User,
+  CheckCircle2,
+  BarChart3,
+  Star as StarIcon,
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
@@ -43,6 +45,16 @@ type TreinoUnicoPayload = {
   dataExpiracao?: string | null;
   exercicios: ExercicioItem[];
   origem?: OrigemInfo | null;
+  realizacoes?: number | null;
+  avaliacaoMedia?: number | null;     
+  avaliacaoCount?: number | null;    
+  avaliacoesPorAgendado?: {
+    treinoAgendadoId: string;
+    media: number; 
+    count: number;
+    avaliadorNome?: string | null;
+    avaliadoEm?: string | null;
+  }[]; 
 };
 
 function useQuery() {
@@ -56,16 +68,38 @@ function useQuery() {
 const mediaUrl = (u?: string | null) => {
   if (!u) return "";
   if (u.startsWith("http")) return u;
-
-  // ✅ Assets do client (client/public/assets/...) devem vir do FRONTEND
   if (u.startsWith("/assets/")) return `${APP.FRONTEND_BASE_URL}${u}`;
-
-  // ✅ Uploads (se você usa /uploads no backend)
   if (u.startsWith("/uploads/")) return `${API.BASE_URL}${u}`;
-
-  // fallback
+  
   return `${API.BASE_URL}${u}`;
 };
+
+function Stars({ value }: { value: number }) {
+  const v = Math.max(0, Math.min(5, Number(value) || 0));
+
+  return (
+    <div className="flex items-center gap-1">
+      {Array.from({ length: 5 }).map((_, i) => {
+        const start = i;
+        const frac = Math.max(0, Math.min(1, v - start));
+
+        return (
+          <span key={i} className="relative inline-block w-5 h-5">
+            <StarIcon className="w-5 h-5 text-zinc-300" />
+            {frac > 0 ? (
+              <span
+                className="absolute inset-0 overflow-hidden"
+                style={{ width: `${frac * 100}%` }}
+              >
+                <StarIcon className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+              </span>
+            ) : null}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function TreinoUnico() {
   const { get } = useQuery();
@@ -115,6 +149,23 @@ export default function TreinoUnico() {
   const formatarDataHora = (iso?: string | null) =>
     iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
 
+  const resumoAvaliacoesProgramado = useMemo(() => {
+    const rows = treino?.avaliacoesPorAgendado ?? [];
+    if (!rows.length) return null;
+
+    const totalCount = rows.reduce((acc, r) => acc + (Number(r.count) || 0), 0);
+    if (!totalCount) return null;
+
+    const somaPonderada = rows.reduce((acc, r) => {
+      const c = Number(r.count) || 0;
+      const m = Number(r.media) || 0;
+      return acc + m * c;
+    }, 0);
+
+    const mediaGeral = somaPonderada / totalCount;
+    return { mediaGeral, totalCount };
+  }, [treino?.avaliacoesPorAgendado]);
+
   if (loading) return <div className="p-4 text-center">Carregando treino...</div>;
   if (erro)
     return (
@@ -127,7 +178,7 @@ export default function TreinoUnico() {
         </button>
         <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded">{erro}</div>
       </div>
-    );
+  );
   if (!treino) return null;
 
   const isAgendado = treino.tipo === "agendado";
@@ -182,6 +233,100 @@ export default function TreinoUnico() {
                   <strong>Origem:</strong> {treino.origem.nome}
                   {treino.origem.tipo ? ` (${treino.origem.tipo})` : ""}
                 </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 md:col-span-2">
+              <CheckCircle2 className="w-4 h-4 text-green-700" />
+              <span className="text-gray-800">
+                <strong>Realização:</strong>{" "}
+                Esse treino já foi realizado {Number(treino.realizacoes ?? 0)} vezes
+              </span>
+            </div>
+
+            {isAgendado ? (
+              <div className="flex items-center gap-2 md:col-span-2">
+                <StarIcon className="w-4 h-4 text-green-700 fill-white" />
+                <span className="text-gray-800">
+                  <strong>Avaliação:</strong>
+                </span>
+
+                {typeof treino.avaliacaoMedia === "number" && (treino.avaliacaoCount ?? 0) > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <Stars value={treino.avaliacaoMedia} />
+                    <span className="text-sm text-gray-700">
+                      {treino.avaliacaoMedia.toFixed(2)} / 5 ({treino.avaliacaoCount} avaliações)
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-sm text-gray-700">Sem avaliações ainda</span>
+                )}
+              </div>
+            ) : (
+              <div className="md:col-span-2 space-y-2">
+                <div className="flex items-center gap-2 text-gray-800">
+                  <BarChart3 className="w-4 h-4 text-green-700 fill-white" />
+                  <span className="text-gray-800">
+                    <strong>Avaliação média:</strong>
+                  </span>
+
+                  {resumoAvaliacoesProgramado ? (
+                    <span className="text-sm text-gray-700">
+                      {resumoAvaliacoesProgramado.mediaGeral.toFixed(2)} / 5
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-700">-</span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 text-gray-800">
+                  <StarIcon className="w-4 h-4 text-green-700 fill-white" />
+                  <strong>Avaliações por atletas:</strong>
+
+                  {(treino.avaliacoesPorAgendado ?? []).length === 0 ? (
+                    <span className="text-sm text-gray-700">Sem avaliações ainda</span>
+                  ) : null}
+                </div>
+
+                {(treino.avaliacoesPorAgendado ?? []).length ? (
+                  <div className="space-y-2">
+                    {treino.avaliacoesPorAgendado!.map((a, idx) => {
+                      const nome = (a.avaliadorNome || "Atleta").trim();
+
+                      const dataAvaliacao =
+                        a.avaliadoEm
+                          ? new Date(a.avaliadoEm).toLocaleString("pt-BR", {
+                              dateStyle: "short",
+                              timeStyle: "short",
+                            })
+                          : null;
+
+                      return (
+                        <div
+                          key={a.treinoAgendadoId || String(idx)}
+                          className="flex items-center justify-between rounded-lg border bg-gray-50 px-3 py-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="text-sm text-gray-800 font-medium truncate">
+                              {nome}
+                            </div>
+
+                            {dataAvaliacao ? (
+                              <div className="text-xs text-gray-500 whitespace-nowrap">
+                                • {dataAvaliacao}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <Stars value={a.media} />
+                            <span className="text-sm text-gray-700">{Number(a.media).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
             )}
 

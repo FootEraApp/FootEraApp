@@ -110,7 +110,7 @@ export default function FormadoresPage() {
     try {
       const [d, a, t, b] = await Promise.all([
         axios.get<DashboardDTO>(`${API.BASE_URL}/api/formadores/dashboard`, { headers }),
-        axios.get<VinculoFormacaoDTO[]>(`${API.BASE_URL}/api/formadores/atletas`, { headers }),
+        axios.get<VinculoFormacaoDTO[]>(`${API.BASE_URL}/api/formadores/vinculos`, { headers }),
         axios.get<TransferenciaDTO[]>(`${API.BASE_URL}/api/formadores/transferencias`, { headers }),
         axios.get<BadgeDTO[]>(`${API.BASE_URL}/api/formadores/badges`, { headers }),
       ]);
@@ -123,7 +123,7 @@ export default function FormadoresPage() {
       setDocs(docsRes.data);
     } catch (e: any) {
       console.error(e);
-      alert(e?.response?.data?.message ?? "Falha no upload.");
+      alert(e?.response?.data?.message ?? "Falha ao carregar dados de Formadores.");
     } finally {
       setLoading(false);
     }
@@ -147,7 +147,7 @@ export default function FormadoresPage() {
         inicio: novoVinculo.inicio || undefined,
         observacoes: novoVinculo.observacoes || undefined,
       };
-      await axios.post(`${API.BASE_URL}/api/formadores/atletas`, body, { headers });
+      await axios.post(`${API.BASE_URL}/api/formadores/vinculos`, body, { headers });
       setOpenNovoVinculo(false);
       setNovoVinculo({ atletaId: "", origem: "", origemId: "", inicio: "", observacoes: "" });
       fetchAll();
@@ -208,7 +208,15 @@ export default function FormadoresPage() {
     <div className="min-h-screen bg-[#FFF8E6]">
       <div className="bg-emerald-900 text-white">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={() => setLocation("/")} className="text-white opacity-90 hover:opacity-100">← Voltar</button>
+          <button
+            onClick={() => {
+              if (window.history.length > 1) window.history.back();
+              else setLocation("/perfil");
+            }}
+            className="text-white opacity-90 hover:opacity-100"
+          >
+            ← Voltar
+          </button>
           <span className="text-2xl font-semibold flex items-center gap-2">
             <span className="inline-block rounded-full border border-white/40 p-1">🛡️</span>
             FootEra Formadores

@@ -112,7 +112,13 @@ export async function comentarPost(postId: string, texto: string) {
     headers: { ...auth(), "Content-Type": "application/json" },
     body: JSON.stringify({ postagemId: postId, conteudo: texto }),
   });
-  if (!res.ok) throw new Error("Erro ao comentar");
+
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || "Erro ao comentar");
+  }
+
+  return res.json(); 
 }
 
 export async function deletarPost(postId: string) {
@@ -217,4 +223,15 @@ export async function criarPost({
   throw new Error(
     "Escreva algo, selecione uma conquista ou anexe uma mídia (URL/arquivo)."
   );
+}
+
+export async function deletarComentario(comentarioId: string) {
+  const r = await fetch(`${API.BASE_URL}/api/comentarios/${comentarioId}`, {
+    method: "DELETE",
+    headers: auth(),
+  });
+  if (!r.ok) {
+    const msg = await r.text().catch(() => "");
+    throw new Error(msg || "Erro ao apagar comentário");
+  }
 }

@@ -1,4 +1,3 @@
-// server/controllers/TreinoUnicoController
 import { Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
@@ -29,7 +28,6 @@ function montarExercicios(rows: RowEx[]) {
     .map((x) => {
       const base = x.exercicio ?? x.exercicioTemporario;
       return {
-        // id do item (pra key da UI) - se não tiver exercicioId, usa o id do temporário
         id: base?.id ?? x.id ?? "",
         nome: base?.nome ?? "",
         repeticoes: x.repeticoes ?? null,
@@ -37,7 +35,7 @@ function montarExercicios(rows: RowEx[]) {
         videoUrl: base?.videoDemonstrativoUrl ?? null,
       };
     })
-    .filter((e) => e.nome); // evita itens totalmente vazios
+    .filter((e) => e.nome);
 }
 
 function montarOrigem(tp: any) {
@@ -49,8 +47,7 @@ function montarOrigem(tp: any) {
   return null;
 }
 
-
-function montarPayloadFromProgramado(tp: any) {
+function montarPayloadFromProgramado(tp: any, realizacoes: number) {
   return {
     tipo: "programado" as const,
     id: tp.id,
@@ -66,10 +63,11 @@ function montarPayloadFromProgramado(tp: any) {
     dataExpiracao: tp.expiraEm ? tp.expiraEm.toISOString() : null,
     exercicios: montarExercicios(tp.exercicios ?? []),
     origem: montarOrigem(tp),
+    realizacoes,
   };
 }
 
-function montarPayloadFromAgendado(ag: any) {
+function montarPayloadFromAgendado(ag: any, realizacoes: number) {
   const tp = ag.treinoProgramado;
 
   return {
@@ -82,7 +80,6 @@ function montarPayloadFromAgendado(ag: any) {
     objetivo: tp?.objetivo ?? null,
     duracao: tp?.duracao ?? null,
     dicas: tp?.dicas ?? [],
-    // "Prazo/Agendamento" na UI
     prazoEnvio:
       (ag.dataExpiracao ?? ag.dataTreino ?? tp?.dataAgendada ?? tp?.expiraEm)?.toISOString?.() ??
       null,
@@ -90,6 +87,7 @@ function montarPayloadFromAgendado(ag: any) {
     dataExpiracao: ag.dataExpiracao ? ag.dataExpiracao.toISOString() : null,
     exercicios: montarExercicios(tp?.exercicios ?? []),
     origem: montarOrigem(tp),
+    realizacoes,
   };
 }
 
@@ -118,7 +116,7 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
                   },
                 },
               },
-              Professor: { select: { nome: true } }, // ✅ correto no schema
+              Professor: { select: { nome: true } },
               escolinha: { select: { nome: true } },
               clube: { select: { nome: true } },
             },
@@ -127,7 +125,32 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
       });
 
       if (!ag) return res.status(404).json({ message: "Treino agendado não encontrado." });
-      return res.json(montarPayloadFromAgendado(ag));
+
+      const tpId = ag.treinoProgramado?.id ?? null;
+
+      const est = tpId
+        ? await prisma.estatisticaTreino.findUnique({
+            where: { treinoId: tpId },
+            select: { realizacoes: true },
+          })
+        : null;
+
+      const realizacoes = Number(est?.realizacoes ?? 0);
+
+      const agg = await prisma.avaliacaoTreino.aggregate({
+        where: { treinoAgendadoId: agendadoId },
+        _avg: { nota: true },
+        _count: { nota: true },
+      });
+
+      const avaliacaoMedia = agg._avg.nota ?? null;
+      const avaliacaoCount = agg._count.nota ?? 0;
+
+      return res.json({
+        ...montarPayloadFromAgendado(ag, realizacoes),
+        avaliacaoMedia,
+        avaliacaoCount,
+      });
     }
 
     const tp = await prisma.treinoProgramado.findUnique({
@@ -143,14 +166,86 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
             },
           },
         },
-        Professor: { select: { nome: true } }, // ✅ correto no schema
+        Professor: { select: { nome: true } },
         escolinha: { select: { nome: true } },
         clube: { select: { nome: true } },
       },
     });
 
     if (!tp) return res.status(404).json({ message: "Treino programado não encontrado." });
-    return res.json(montarPayloadFromProgramado(tp));
+
+    const est = await prisma.estatisticaTreino.findUnique({
+      where: { treinoId: tp.id },
+      select: { realizacoes: true },
+    });
+
+    const realizacoes = Number(est?.realizacoes ?? 0);
+
+    const ags = await prisma.treinoAgendado.findMany({
+      where: { treinoProgramadoId: tp.id },
+      select: {
+        id: true,
+        atleta: {
+          select: {
+            nome: true,
+            usuario: {
+              select: {
+                nome: true,
+                nomeDeUsuario: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const ids = ags.map((a) => a.id);
+
+    const nomePorAgendadoId = new Map<string, string>();
+    for (const a of ags) {
+      const nome =
+        a.atleta?.usuario?.nome ||
+        a.atleta?.usuario?.nomeDeUsuario ||
+        a.atleta?.nome ||
+        "Atleta";
+      nomePorAgendadoId.set(a.id, nome);
+    }
+
+    const grupos = ids.length
+      ? await prisma.avaliacaoTreino.groupBy({
+          by: ["treinoAgendadoId"],
+          where: { treinoAgendadoId: { in: ids } },
+          _avg: { nota: true },
+          _count: { nota: true },
+        })
+      : [];
+
+    const ultimas = ids.length
+      ? await prisma.avaliacaoTreino.findMany({
+          where: { treinoAgendadoId: { in: ids } },
+          select: { treinoAgendadoId: true, createdAt: true }, 
+        })
+      : [];
+
+    const ultimaDataPorAgendadoId = new Map<string, Date>();
+    for (const u of ultimas) {
+      if (!ultimaDataPorAgendadoId.has(u.treinoAgendadoId)) {
+        ultimaDataPorAgendadoId.set(u.treinoAgendadoId, u.createdAt);
+      }
+    }
+
+    const avaliacoesPorAgendado = grupos.map((g) => ({
+      treinoAgendadoId: g.treinoAgendadoId,
+      media: Number(g._avg.nota ?? 0),
+      count: Number(g._count.nota ?? 0),
+      avaliadorNome: nomePorAgendadoId.get(g.treinoAgendadoId) ?? "Atleta",
+      avaliadoEm: (ultimaDataPorAgendadoId.get(g.treinoAgendadoId) ?? null)?.toISOString?.() ?? null,
+    }));
+
+    return res.json({
+      ...montarPayloadFromProgramado(tp, realizacoes),
+      avaliacoesPorAgendado,
+    });
   } catch (e) {
     console.error("Erro em getTreinoUnico:", e);
     return res.status(500).json({ message: "Erro ao buscar treino." });

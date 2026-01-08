@@ -1,10 +1,8 @@
-// client/src/pages/olheiro/index.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import axios from "axios";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
-import { House, Search, CirclePlus, Eye, User } from "lucide-react";
 import BottomNav from "@/components/layout/BottomNav.js";
 
 type Atleta = {

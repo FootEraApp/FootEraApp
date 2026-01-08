@@ -1,12 +1,6 @@
-// client/src/pages/treino/treinos-intrutores
-import React, { useMemo, useEffect, useState, useRef, type SVGProps } from "react";
+import { useMemo, useEffect, useState, useRef, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  Volleyball,
-  User,
-  CirclePlus,
-  Search,
-  House,
   Check,
   X,
 } from "lucide-react";
@@ -298,7 +292,7 @@ export default function TreinosInstrutores({
   const [, navigate] = useLocation();
 
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
-  const [abaProfessor, setAbaProfessor] = useState<"avaliar" | "criar" | "sessoes">("avaliar");
+  const [abaProfessor, setAbaProfessor] = useState<"avaliar" | "criar" | "sessoes">("criar");
   const [meuNome, setMeuNome] = useState<string>("");
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
   const [profNomeById, setProfNomeById] = useState<Record<string, string>>({});
@@ -1137,14 +1131,50 @@ async function salvarProgressoSessao(sessaoId: string) {
       ? treinos
       : (meusTreinos.length ? meusTreinos : treinos); 
 
-  const totalTreinosExibidos = useMemo(() => listaParaExibir.length, [listaParaExibir]);
+  const listaOrdenadaParaExibir = useMemo(() => {
+    const meuId = String(usuario?.tipoUsuarioId ?? "").trim();
+
+    const getNomeCriador = (t: TreinoProgramado) => {
+      const n1 = (Array.isArray(t.criadoresNomes) && t.criadoresNomes[0]) ? t.criadoresNomes[0] : "";
+      const n2 = (t as any).criadorNome ?? "";
+      const n3 =
+        (t.professorId && profNomeById[String(t.professorId)]) ||
+        (t.professorId && professoresVinculadosNomeById[String(t.professorId)]) ||
+        "";
+      return String(n1 || n2 || n3 || "—").trim();
+    };
+
+    const isMeuTreino = (t: TreinoProgramado) => {
+      if (!meuId) return false;
+      const donoIds = [t.professorId, t.clubeId, t.escolinhaId].map((x) => String(x ?? "").trim());
+      return donoIds.includes(meuId);
+    };
+
+    const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
+
+    return [...(listaParaExibir ?? [])].sort((a, b) => {
+      const aMine = isMeuTreino(a);
+      const bMine = isMeuTreino(b);
+
+      if (aMine !== bMine) return aMine ? -1 : 1;
+
+      const na = getNomeCriador(a);
+      const nb = getNomeCriador(b);
+      const byOwner = collator.compare(na, nb);
+      if (byOwner !== 0) return byOwner;
+
+      return collator.compare(String(a.nome ?? ""), String(b.nome ?? ""));
+    });
+  }, [listaParaExibir, usuario?.tipoUsuarioId, profNomeById, professoresVinculadosNomeById]);
+
+  const totalTreinosExibidos = useMemo(() => listaOrdenadaParaExibir.length, [listaOrdenadaParaExibir]);
 
   const totalExerciciosExibidos = useMemo(() => {
-    return (listaParaExibir || []).reduce((acc, t) => {
+    return (listaOrdenadaParaExibir || []).reduce((acc, t) => {
       const n = Number(exerciciosCountByTreinoId[t.id] ?? t.exercicios?.length ?? 0);
       return acc + (Number.isFinite(n) ? n : 0);
     }, 0);
-  }, [listaParaExibir, exerciciosCountByTreinoId]);
+  }, [listaOrdenadaParaExibir, exerciciosCountByTreinoId]);
 
   const usuarioReady = useMemo(() => {
     const tipoOk = String(usuario?.tipo ?? tipo ?? "").trim().toLowerCase();
@@ -1939,17 +1969,6 @@ async function salvarProgressoSessao(sessaoId: string) {
             {isGestor ? (
                 <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full max-w-[620px]">
                   <button
-                    onClick={() => setAbaProfessor("avaliar")}
-                    className={`px-4 py-2 rounded-lg border text-sm ${
-                      abaProfessor === "avaliar"
-                        ? "bg-green-800 text-white border-green-900"
-                        : "bg-white text-gray-800 border-gray-200"
-                    }`}
-                  >
-                    Avaliar Treinos
-                  </button>
-
-                  <button
                     onClick={() => setAbaProfessor("criar")}
                     className={`px-4 py-2 rounded-lg border text-sm ${
                       abaProfessor === "criar"
@@ -1958,6 +1977,17 @@ async function salvarProgressoSessao(sessaoId: string) {
                     }`}
                   >
                     Meus Treinos
+                  </button>
+
+                  <button
+                    onClick={() => setAbaProfessor("avaliar")}
+                    className={`px-4 py-2 rounded-lg border text-sm ${
+                      abaProfessor === "avaliar"
+                        ? "bg-green-800 text-white border-green-900"
+                        : "bg-white text-gray-800 border-gray-200"
+                    }`}
+                  >
+                    Avaliar Treinos
                   </button>
 
                   <button
@@ -2164,7 +2194,7 @@ async function salvarProgressoSessao(sessaoId: string) {
 
               {listaParaExibir.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {listaParaExibir.map(renderTreinoCard)}
+                  {listaOrdenadaParaExibir.map(renderTreinoCard)}
                 </div>
               ) : (
                 <p className="text-gray-500">

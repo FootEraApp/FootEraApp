@@ -10,7 +10,8 @@ import {
   switchPlan,
   providerWebhook,
   mercadoPagoWebhook,
-  checkExpiringSubscriptions
+  checkExpiringSubscriptions,
+  setPreferredPaymentMethod
 } from "../controllers/billingController.js";
 
 const router = Router();
@@ -26,5 +27,6 @@ router.post("/switch-plan", switchPlan);
 router.post("/mercadopago/webhook", mercadoPagoWebhook);
 router.get("/check-expiring", checkExpiringSubscriptions);
 router.post("/webhook/provider", providerWebhook);
+router.post("/preferred-method", setPreferredPaymentMethod);
 
 export default router;
