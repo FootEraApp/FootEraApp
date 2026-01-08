@@ -1,3 +1,4 @@
+// client/src/pages/notificacoes
 import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
@@ -187,21 +188,24 @@ export default function PaginaNotificacoes() {
   const irParaPerfil = (id: string) => setLocation(`/perfil/${id}`);
 
   return (
-    <div className="p-4 max-w-xl mx-auto">
-      <div className="mb-3">
+    <div className="max-w-xl mx-auto p-4 pb-24">
+      <header className="bg-green-900 text-white rounded mb-4 px-3 py-3 flex items-center relative">
         <Link
           href="/perfil"
           aria-label="Voltar para perfil"
           className="inline-flex h-10 w-10 items-center justify-center
-            rounded-full border border-green-800 bg-white text-green-900
-            shadow-sm hover:bg-green-50 focus:outline-none
-            focus:ring-2 focus:ring-green-700/30 mt-2 ml-2 mb-2"
+            rounded-full bg-white/10 text-white
+            hover:bg-white/20 focus:outline-none
+            focus:ring-2 focus:ring-white/30 z-10"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-      </div>
 
-      <h2 className="text-2xl font-bold mb-4">Notificações</h2>
+        <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold pointer-events-none">
+          Notificações
+        </h1>
+      </header>
+
 
       {notificacoes.length > 0 && (
         <div className="mb-6 space-y-3">
