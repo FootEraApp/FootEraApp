@@ -8,10 +8,6 @@ import {
   FaTrash,
 } from "react-icons/fa";
 import {
-  Volleyball,
-  User,
-  CirclePlus,
-  Search,
   House,
   Send,
   CircleCheck,
@@ -24,12 +20,12 @@ import {
   PostagemComUsuario,
   deletarPost,
   repostPost,
+  deletarComentario
 } from "../services/feedService.js";
 import { format } from "date-fns";
 import { Link, useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
-import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import { publicImgUrl } from "../utils/publicUrl.js";
 import socket from "../services/socket.js";
 import {
@@ -40,7 +36,6 @@ import {
 import { FaRetweet } from "react-icons/fa";
 import { http } from "../services/http.js";
 import { TreinosApi } from "../utils/treinosApi.js";
-import { CalendarClock } from "lucide-react";
 import BottomNav from "@/components/layout/BottomNav.js";
 
 interface Usuario {
@@ -470,6 +465,30 @@ function PaginaFeed(): JSX.Element {
     };
   }, []);
 
+  const handleApagarComentario = async (comentarioId: string, postId: string) => {
+    try {
+      await deletarComentario(comentarioId);
+
+      setPostSelecionado((prev) => {
+        if (!prev || prev.id !== postId) return prev;
+        return {
+          ...prev,
+          comentarios: (prev.comentarios || []).filter((c) => c.id !== comentarioId),
+        };
+      });
+
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id !== postId
+            ? p
+            : { ...p, comentarios: (p.comentarios || []).filter((c) => c.id !== comentarioId) }
+        )
+      );
+    } catch (e: any) {
+      alert(e?.message || "Não foi possível apagar o comentário.");
+    }
+  };
+
   const handleLike = async (postId: string) => {
     if (!userId) {
       alert("Sessão expirada. Faça login novamente.");
@@ -495,15 +514,29 @@ function PaginaFeed(): JSX.Element {
   };
 
   const handleComentario = async (postId: string, texto: string) => {
-    if (texto.trim()) {
-      await comentarPost(postId, texto);
-      const usuarioLogadoId = Storage.usuarioId as string | null;
-      let dados = await getFeedPosts(filtro);
-      if (usuarioLogadoId) {
-        dados = dados.filter((p) => p.usuario?.id !== usuarioLogadoId);
-      }
-      setPosts(dados);
+    const conteudo = String(texto || "").trim();
+    if (!conteudo) return;
+
+    try {
+      const novoComentario = await comentarPost(postId, conteudo);
+
       setComentarioTextoPorPost((prev) => ({ ...prev, [postId]: "" }));
+
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId
+            ? { ...p, comentarios: [...(p.comentarios || []), novoComentario] }
+            : p
+        )
+      );
+
+      setPostSelecionado((prev) => {
+        if (!prev || prev.id !== postId) return prev;
+        return { ...prev, comentarios: [...(prev.comentarios || []), novoComentario] };
+      });
+    } catch (e) {
+      console.error("Erro ao comentar:", e);
+      alert("Não foi possível comentar.");
     }
   };
 
@@ -1071,6 +1104,16 @@ function PaginaFeed(): JSX.Element {
                             "dd/MM, HH:mm"
                           )}
                         </span>
+                        {String(comentario.usuarioId) === String(Storage.usuarioId) && (
+                          <button
+                            onClick={() => handleApagarComentario(comentario.id, postSelecionado.id)}
+                            className="text-gray-400 hover:text-red-600"
+                            title="Apagar comentário"
+                            aria-label="Apagar comentário"
+                          >
+                            ✕
+                          </button>
+                        )}
                       </div>
                       <p className="text-sm text-gray-800 mt-1">
                         {comentario.conteudo}
@@ -1091,9 +1134,19 @@ function PaginaFeed(): JSX.Element {
                         [postSelecionado.id]: e.target.value,
                       }))
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleComentario(
+                          postSelecionado.id,
+                          comentarioTextoPorPost[postSelecionado.id] || ""
+                        );
+                      }
+                    }}
                     placeholder="Adicione um comentário..."
                     className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-600"
                   />
+
                   <button
                     onClick={() =>
                       handleComentario(
