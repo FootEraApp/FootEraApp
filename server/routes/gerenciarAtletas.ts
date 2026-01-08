@@ -18,5 +18,6 @@ router.get("/professores", ctrl.listProfessores);
 router.get("/treinosprogramados", ctrl.listTreinos);
 router.post("/treinosprogramados/convocar", ctrl.convocarTreino);
 router.get("/ranking", ctrl.ranking);
+router.get("/treinosprogramados/visiveis", ctrl.listTreinosVisiveis);
 
 export default router;

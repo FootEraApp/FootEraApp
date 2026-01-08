@@ -28,7 +28,7 @@ import {
   type FeatureLimitError,
 } from "server/utils/featureLimit.js";
 import jwt from "jsonwebtoken";
-import { startOfMonth, addMonths, startOfDay } from "date-fns";
+import { startOfMonth, addMonths } from "date-fns";
 import { recalcularEstatisticaExercicios } from "server/services/estatisticasExercicio.service.js";
 
 const prisma = new PrismaClient();
@@ -1142,23 +1142,77 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
       const resolved = await resolveEntidade(req.userId!);
 
       if (resolved) {
-        const whereVinc =
-          resolved.tipo === "professor"
-            ? { professorId: resolved.id }
-            : resolved.tipo === "clube"
-            ? { clubeId: resolved.id }
-            : { escolinhaId: resolved.id };
+let temVinc = false;
 
-        const [temVinc, ehObservado] = await Promise.all([
-          prisma.relacaoTreinamento.findFirst({
-            where: { atletaId, ...whereVinc },
-            select: { id: true },
-          }),
-          prisma.atletaObservado.findFirst({
-            where: { atletaId, ...whereVinc },
-            select: { id: true },
-          }),
-        ]);
+if (resolved.tipo === "professor") {
+  temVinc = !!(await prisma.relacaoTreinamento.findFirst({
+    where: {
+      atletaId,
+      professorId: resolved.id,
+      OR: [{ ativo: true }, { ativo: null }],
+    },
+    select: { id: true },
+  }));
+}
+
+if (resolved.tipo === "clube") {
+  temVinc = !!(await prisma.atleta.findFirst({
+    where: {
+      id: atletaId,
+      OR: [
+        { clubeId: resolved.id },
+        {
+          relacoesTreinamento: {
+            some: {
+              clubeId: resolved.id,
+              OR: [{ ativo: true }, { ativo: null }],
+            },
+          },
+        },
+      ],
+    },
+    select: { id: true },
+  }));
+}
+
+if (resolved.tipo === "escolinha") {
+  temVinc = !!(await prisma.atleta.findFirst({
+    where: {
+      id: atletaId,
+      OR: [
+        { escolinhaId: resolved.id },
+        {
+          relacoesTreinamento: {
+            some: {
+              escolinhaId: resolved.id,
+              OR: [{ ativo: true }, { ativo: null }],
+            },
+          },
+        },
+      ],
+    },
+    select: { id: true },
+  }));
+}
+
+const ehObservado = await prisma.atletaObservado.findFirst({
+  where: {
+    atletaId,
+    ...(resolved.tipo === "professor"
+      ? { professorId: resolved.id }
+      : resolved.tipo === "clube"
+      ? { clubeId: resolved.id }
+      : { escolinhaId: resolved.id }),
+  },
+  select: { id: true },
+});
+
+if (!temVinc && !ehObservado) {
+  return res
+    .status(403)
+    .json({ message: "Você não possui vínculo nem observação com este atleta." });
+}
+
 
         if (!temVinc && !ehObservado) {
           if (turmaId) {
@@ -2286,13 +2340,108 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
       return res.json([]);
     }
 
+    // 🔎 tipoUsuarioId pode ser: Usuario.id OU Perfil.id (Professor/Clube/Escolinha)
+    const [prof, clube, escola] = await Promise.all([
+      prisma.professor.findFirst({
+        where: { OR: [{ id: tipoUsuarioId }, { usuarioId: tipoUsuarioId }] },
+        select: { id: true },
+      }),
+      prisma.clube.findFirst({
+        where: { OR: [{ id: tipoUsuarioId }, { usuarioId: tipoUsuarioId }] },
+        select: { id: true },
+      }),
+      prisma.escolinha.findFirst({
+        where: { OR: [{ id: tipoUsuarioId }, { usuarioId: tipoUsuarioId }] },
+        select: { id: true },
+      }),
+    ]);
+
+    const professorIdResolved = prof?.id ?? null;
+    const clubeIdResolved = clube?.id ?? null;
+    const escolinhaIdResolved = escola?.id ?? null;
+
+    // fallback: se não achou nenhum perfil, usa o próprio valor (compat)
+    const anyId = tipoUsuarioId;
+
+    // ✅ Considera vínculos na tabela RelacaoTreinamento (principal)
+    // ✅ Mantém compat com campos diretos clubeId/escolinhaId (legado)
     const whereBase: Prisma.AtletaWhereInput = {
       OR: [
-        { relacoesTreinamento: { some: { professorId: tipoUsuarioId } } },
-        { clubeId: tipoUsuarioId },
-        { escolinhaId: tipoUsuarioId },
+        // vínculos por professor
+        ...(professorIdResolved
+          ? [
+              {
+                relacoesTreinamento: {
+                  some: {
+                    professorId: professorIdResolved,
+                    OR: [{ ativo: true }, { ativo: null }],
+                  },
+                },
+              },
+            ]
+          : [
+              {
+                relacoesTreinamento: {
+                  some: {
+                    professorId: anyId,
+                    OR: [{ ativo: true }, { ativo: null }],
+                  },
+                },
+              },
+            ]),
+
+        // vínculos por clube (isso é o que estava faltando pra clube/escola)
+        ...(clubeIdResolved
+          ? [
+              {
+                relacoesTreinamento: {
+                  some: {
+                    clubeId: clubeIdResolved,
+                    OR: [{ ativo: true }, { ativo: null }],
+                  },
+                },
+              },
+              { clubeId: clubeIdResolved }, // legado (se existir no seu model)
+            ]
+          : [
+              {
+                relacoesTreinamento: {
+                  some: {
+                    clubeId: anyId,
+                    OR: [{ ativo: true }, { ativo: null }],
+                  },
+                },
+              },
+              { clubeId: anyId },
+            ]),
+
+        // vínculos por escolinha/escola ✅ (essa é a correção principal)
+        ...(escolinhaIdResolved
+          ? [
+              {
+                relacoesTreinamento: {
+                  some: {
+                    escolinhaId: escolinhaIdResolved,
+                    OR: [{ ativo: true }, { ativo: null }],
+                  },
+                },
+              },
+              { escolinhaId: escolinhaIdResolved }, // legado
+            ]
+          : [
+              {
+                relacoesTreinamento: {
+                  some: {
+                    escolinhaId: anyId,
+                    OR: [{ ativo: true }, { ativo: null }],
+                  },
+                },
+              },
+              { escolinhaId: anyId },
+            ]),
       ],
     };
+
 
     if (turmaId) {
       const membros = await prisma.turmaUsuario.findMany({
