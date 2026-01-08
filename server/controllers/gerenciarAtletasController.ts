@@ -1,3 +1,4 @@
+// server/controllers/gerenciarAtletasController
 import { Prisma, PrismaClient, Categoria, AvaliacaoAutorTipo } from "@prisma/client";
 import { Request, Response } from "express";
 
@@ -156,10 +157,11 @@ else if (vinculo === "escolinha") {
   const rels = await prisma.relacaoTreinamento.findMany({
     where: {
       escolinhaId: entidade.id,
-      OR: [{ ativo: true }, { ativo: null }],
+      ativo: true,
     },
     select: { atletaId: true },
   });
+
 
   const idsRelacao = rels
     .map((r) => r.atletaId)
@@ -180,13 +182,14 @@ else if (vinculo === "escolinha") {
         if (!prof) return res.status(404).json({ message: "Professor não encontrado" });
         entidadeId = prof.id;
         whereByVinculo = {
-        relacoesTreinamento: {
-          some: {
-            professorId: prof.id,
-            OR: [{ ativo: true }, { ativo: null }],
+          relacoesTreinamento: {
+            some: {
+              professorId: prof.id,
+              ativo: true,
+            },
           },
-        },
-      };
+        };
+
 
       }
       
@@ -505,7 +508,7 @@ listTreinosVisiveis: async (req: Request, res: Response) => {
     let escolinhaIds: string[] = [];
 
 // ativo pode ser TRUE ou NULL (legado). Só exclui se for FALSE.
-const ativoOuNull = { OR: [{ ativo: true }, { ativo: null }] };
+const ativoOuNull = { ativo: true };
 
     // ---------- (A) TURMAS ----------
     if (vinculo === "clube") {
@@ -928,7 +931,7 @@ return res.json({ items });
           ],
         };
       } else {
-        whereByVinculo = { relacoesTreinamento: { some: { professorId: entidadeId } } };
+        whereByVinculo = { relacoesTreinamento: { some: { professorId: entidadeId, ativo: true } } };
       }
 
       const atletas = await prisma.atleta.findMany({
