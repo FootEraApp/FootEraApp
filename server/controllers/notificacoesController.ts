@@ -12,7 +12,7 @@ export async function listarMinhasNotificacoes(req: AuthenticatedRequest, res: R
 
     const rows = await prisma.notificacao.findMany({
       where: { usuarioId: userId },
-      orderBy: { createdAt: "desc" }, // se seu model tiver createdAt
+      orderBy: { createdAt: "desc" }, 
       take: 50,
     });
 

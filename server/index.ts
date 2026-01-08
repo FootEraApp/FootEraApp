@@ -9,6 +9,7 @@ import qrcode from "qrcode-terminal";
 import * as fs from "fs";
 import helmet from "helmet";
 
+import { requireAdmin } from "./middlewares/guards.js";
 import { processarRenovacoesDiarias } from "./services/billingscheduler.js";
 import { runColdStorageJob } from "./jobs/coldStorageJob.js";
 import { setupSocket } from "./socket.js";
@@ -97,6 +98,7 @@ import treinarJuntosRoute from "./routes/treinarJuntos.js";
 import sessoesTurmaRoutes from "./routes/sessoesTurma.js";
 import feedbackRoutes from "./routes/feedback.js";
 import statusRoutes from "./routes/status.js";
+import comentariosRoutes from "./routes/comentarios.js";
 import estatisticasRoutes from "./routes/estatisticas.js";
 
 import { handlePaymentWebhook } from "./controllers/billingController.js";
@@ -244,9 +246,7 @@ app.use("/api/analises", analisesRoutes);
 app.use("/api/admin/usuarios", adminUsuariosRoutes);
 app.use("/api/admin/assinantes", adminAssinantesRoutes);
 app.use("/api/assinaturas", assinaturasRoutes);
-
-import { requireAdmin } from "./middlewares/guards.js";
-
+app.use("/api/comentarios", comentariosRoutes);
 app.use("/api/admin/moderacao", authenticateToken, requireAdmin, adminModeracaoRoutes);
 app.use("/api/olheiros", authenticateToken, olheirosRouter);
 app.use("/api/atletas", authenticateToken, atletaRoutes);

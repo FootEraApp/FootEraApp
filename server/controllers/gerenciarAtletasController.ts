@@ -1,4 +1,3 @@
-// server/controllers/gerenciarAtletasController
 import { Prisma, PrismaClient, Categoria, AvaliacaoAutorTipo } from "@prisma/client";
 import { Request, Response } from "express";
 
@@ -47,12 +46,6 @@ async function resolveUsuarioId(input: string): Promise<string | null> {
   return byUser?.id ?? null;
 }
 
-/**
- * Retorna o ID da entidade (clube/escolinha/professor) aceitando:
- * - usuarioId
- * - id da entidade
- * - nomeDeUsuario/email
- */
 async function resolveEntidadeId(vinculo: "clube" | "escolinha" | "professor", idOrUser: string) {
   const usuarioId = await resolveUsuarioId(idOrUser);
 

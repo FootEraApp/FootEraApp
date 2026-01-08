@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient, TipoMidia, StorageClass } from "@prisma/client";
+import { PrismaClient, TipoMidia, StorageClass, TipoUsuario } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -12,6 +12,7 @@ export const getAllAtletas = async (_req: Request, res: Response) => {
 
 export const getAtletaById = async (req: Request, res: Response) => {
   const { id } = req.params;
+
   const atleta = await prisma.atleta.findUnique({
     where: { id },
     include: {
@@ -25,15 +26,22 @@ export const getAtletaById = async (req: Request, res: Response) => {
       },
       clube: true,
       escolinha: true,
-      professor: {
+      relacoesTreinamento: {
+        where: {
+          ativo: true,
+          encerradoEm: null,
+        },
         include: {
-          usuario: true,
+          professor: { include: { usuario: true } },
+          clube: true,
+          escolinha: true,
         },
       },
     },
   });
 
   if (!atleta) return res.status(404).json({ error: "Atleta não encontrado" });
+
   res.json(atleta);
 };
 
@@ -50,7 +58,7 @@ export const createAtleta = async (req: Request, res: Response) => {
         senhaHash,
         nome,
         email,
-        tipo: "Atleta",
+        tipo: TipoUsuario.Atleta,
       },
     });
 
@@ -142,20 +150,20 @@ export async function getProfessorDoAtleta(req: Request, res: Response) {
   try {
     const { atletaId } = req.params;
 
-    const atleta = await prisma.atleta.findUnique({
-      where: { id: atletaId },
-      include: {
-        professor: {
-          include: { usuario: true },
-        },
+    const rel = await prisma.relacaoTreinamento.findFirst({
+      where: {
+        atletaId,
+        ativo: true,
+        encerradoEm: null,
+        professorId: { not: null },
       },
+      include: {
+        professor: { include: { usuario: true } },
+      },
+      orderBy: { criadoEm: "desc" },
     });
 
-    if (!atleta) {
-      return res.status(404).json({ error: "Atleta não encontrado" });
-    }
-
-    const prof = atleta.professor;
+    const prof = rel?.professor ?? null;
 
     const payload = prof
       ? {
@@ -164,10 +172,10 @@ export async function getProfessorDoAtleta(req: Request, res: Response) {
         }
       : null;
 
-    res.json(payload);
+    return res.json(payload);
   } catch (e) {
     console.error("getProfessorDoAtleta erro:", e);
-    res.status(500).json({ error: "Erro ao buscar professor do atleta" });
+    return res.status(500).json({ error: "Erro ao buscar professor do atleta" });
   }
 }
 

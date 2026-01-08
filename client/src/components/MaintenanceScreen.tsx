@@ -1,5 +1,3 @@
-// client/src/components/MaintenanceScreen.tsx
-import React from "react";
 import { Dumbbell, Flame, Timer, ChevronRight } from "lucide-react";
 
 type Props = {
@@ -19,14 +17,12 @@ export default function MaintenanceScreen({
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-lg border p-6 md:p-8">
         <div className="flex flex-col items-center text-center gap-4">
-          {/* “Mascote” em ícones */}
           <div className="relative">
             <div className="absolute -inset-6 rounded-full bg-green-100 blur-2xl opacity-70" />
             <div className="relative flex items-center justify-center w-24 h-24 rounded-2xl bg-green-900 text-white shadow">
               <Dumbbell className="w-10 h-10 animate-bounce" />
             </div>
 
-            {/* Bolinhas “carregando” */}
             <div className="mt-4 flex justify-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-green-700 animate-pulse" />
               <span className="w-2.5 h-2.5 rounded-full bg-green-700 animate-pulse [animation-delay:150ms]" />

@@ -1,4 +1,3 @@
-// client/src/pages/olheiro/desempenho
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { API } from "../../config.js";

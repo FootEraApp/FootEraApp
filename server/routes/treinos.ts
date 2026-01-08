@@ -1,4 +1,3 @@
-// server/routes/treinos
 import { Router } from "express";
 import { authenticateToken } from "server/middlewares/auth.js";
 import {
@@ -38,7 +37,7 @@ import {
   getCalendarioTreinos,
   relacaoStatus,
   getTreinosProgramadosStats,
-  getTreinosRealizadosCount
+  realizadosCount
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
@@ -51,7 +50,7 @@ router.get("/relacao-treino/status", relacaoStatus);
 router.get("/elencos/:id/escala", requireElencoOwner, getEscalaPorElencoId);
 router.get("/elencos/escala-por-dono", getEscalaPorDono);
 router.get("/elencos", listarElencos);
-router.get("/realizados-count", getTreinosRealizadosCount);
+router.get("/realizados-count", realizadosCount);
 
 router.post(
   "/elencos",

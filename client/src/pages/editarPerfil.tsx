@@ -1,4 +1,3 @@
-// client/src/pages/editarPerfil
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
@@ -78,7 +77,7 @@ const EditarPerfil = () => {
   const [listaProfessores, setListaProfessores] = useState<OptionMin[]>([]);
   const [clubeSelId, setClubeSelId] = useState<string | null>(null);
   const [escolinhaSelId, setEscolinhaSelId] = useState<string | null>(null);
-  const [professorSelId, setProfessorSelId] = useState<string | null>(null);
+  const [professorSelIds, setProfessorSelIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!usuarioId || !token) {
@@ -108,12 +107,38 @@ const EditarPerfil = () => {
 
         const vinculos = res.data.vinculos || res.data.vinculo || {};
 
-        const professorVinculoId =
+        const professoresIdsFromApi: string[] =
+          (Array.isArray(vinculos?.professoresIds) ? vinculos.professoresIds : []) ||
+          (Array.isArray(vinculos?.professorIds) ? vinculos.professorIds : []) ||
+          [];
+
+        const professoresFromObj: string[] =
+          (Array.isArray(vinculos?.professores) ? vinculos.professores : [])
+            .map((p: any) => String(p?.id || ""))
+            .filter(Boolean) || [];
+
+        const professorUnicoId =
           dadosEsp.professorId ??
           vinculos.professorId ??
           vinculos.professor?.id ??
           vinculos.professorAtual?.id ??
           null;
+
+        const idsFinal = [
+          ...professoresIdsFromApi.map(String),
+          ...professoresFromObj,
+          ...(professorUnicoId ? [String(professorUnicoId)] : []),
+        ].filter(Boolean);
+
+        const uniq = Array.from(new Set(idsFinal));
+
+        setProfessorSelIds(uniq);
+
+        if (uniq.length > 0) {
+          dadosEsp.professorId = uniq[0];
+        } else {
+          dadosEsp.professorId = null;
+        }
 
         const clubeVinculoId =
           dadosEsp.clubeId ??
@@ -128,11 +153,6 @@ const EditarPerfil = () => {
           vinculos.escolinha?.id ??
           vinculos.escola?.id ??
           null;
-
-        if (professorVinculoId) {
-          dadosEsp.professorId = professorVinculoId;
-          setProfessorSelId(String(professorVinculoId));
-        }
 
         if (clubeVinculoId) {
           dadosEsp.clubeId = clubeVinculoId;
@@ -381,22 +401,60 @@ const EditarPerfil = () => {
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium">Professor</label>
-              <select
-                className="w-full border px-3 py-2 rounded"
-                value={professorSelId ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setProfessorSelId(v === "" ? null : v);
-                }}
-              >
-                <option value="">Nenhum</option>
-                {listaProfessores.map((op) => (
-                  <option key={op.id} value={op.id}>
-                    {op.nome}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-sm font-medium">Professores</label>
+
+              {professorSelIds.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2 mb-2">
+                  {professorSelIds.map((id) => {
+                    const nome = listaProfessores.find((p) => p.id === id)?.nome ?? id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() =>
+                          setProfessorSelIds((prev) => prev.filter((x) => x !== id))
+                        }
+                        className="text-xs rounded-full border px-2 py-1 bg-white hover:bg-gray-50"
+                        title="Remover"
+                      >
+                        {nome} <span className="ml-1 text-gray-500">×</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="border rounded p-2 bg-white max-h-56 overflow-auto">
+                {listaProfessores.length === 0 ? (
+                  <div className="text-sm text-gray-500">Nenhum professor disponível.</div>
+                ) : (
+                  listaProfessores.map((op) => {
+                    const checked = professorSelIds.includes(op.id);
+                    return (
+                      <label
+                        key={op.id}
+                        className="flex items-center gap-2 py-1 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            setProfessorSelIds((prev) => {
+                              if (prev.includes(op.id)) return prev.filter((x) => x !== op.id);
+                              return [...prev, op.id];
+                            });
+                          }}
+                        />
+                        <span className="text-sm">{op.nome}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+
+              <p className="text-xs text-gray-500 mt-1">
+                Você pode selecionar mais de um professor.
+              </p>
             </div>
           </>
         );
@@ -561,7 +619,7 @@ const EditarPerfil = () => {
     }
   };
 
-const FALLBACK_AVATAR = "/assets/usuarios/default-user.png"; // arquivo no client/public/assets/usuarios
+const FALLBACK_AVATAR = "/assets/usuarios/default-user.png";
   
 return (
     <div
@@ -596,11 +654,7 @@ return (
               src={formatarUrlFoto(dadosUsuario.foto, "usuarios")}
               onError={(e) => {
                 const img = e.currentTarget as HTMLImageElement;
-
-                // trava pra não ficar em loop infinito
                 img.onerror = null;
-
-                // fallback LOCAL (5173), não no backend (3001)
                 img.src = FALLBACK_AVATAR;
               }}
               className="w-24 h-24 rounded-full object-cover mt-2"
@@ -718,9 +772,8 @@ return (
             if (clubeSelId === null) tipo.clubeId = null;
             else if (typeof clubeSelId === "string") tipo.clubeId = clubeSelId;
 
-            if (professorSelId === null) tipo.professorId = null;
-            else if (typeof professorSelId === "string")
-              tipo.professorId = professorSelId;
+            tipo.professorIds = professorSelIds;
+            tipo.professorId = professorSelIds.length > 0 ? professorSelIds[0] : null;
 
             if (typeof tipo.categorias === "string") {
               tipo.categorias = tipo.categorias

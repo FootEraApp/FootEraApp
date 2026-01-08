@@ -10,7 +10,7 @@ type Evento = {
   titulo: string;
   tipo: EventoTipo;
   descricao?: string | null;
-  dataEvento: string; // obrigatório
+  dataEvento: string;
   inscricaoInicio?: string | null;
   inscricaoFim?: string | null;
   cidade?: string | null;
