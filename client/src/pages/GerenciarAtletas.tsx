@@ -13,6 +13,7 @@ import {
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import TurmasManager from "../components/turmas/TurmasManager.js";
+import BottomNav from "@/components/layout/BottomNav.js";
 
 export type CategoriaBase =
   | "Sub-9"
@@ -1722,118 +1723,116 @@ async function salvarAvaliacao() {
             </button>
           </div>
 
-{!drawerOpen ? null : selectedDays.length === 0 ? (
-  <div className="text-sm opacity-80">
-    Clique em um ou mais dias do calendário para ver/agendar treinos.
-  </div>
-) : (
-  <div className="flex flex-col gap-4 min-h-0 flex-1">
-    {/* Agendamento rápido (fixo no topo) */}
-    {!hasPastSelectedDay ? (
-      <div className={["rounded-xl border border-zinc-200 bg-white flex-none", forceScrollDetails ? "p-2" : "p-3"].join(" ")}>
-        <div className={["font-bold", forceScrollDetails ? "text-xs mb-1" : "text-sm mb-2"].join(" ")}>
-          Agendar para {selectedDays.length === 1 ? "1 dia selecionado" : `${selectedDays.length} dias selecionados`}
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-xs opacity-80">Treino programado</label>
-          <select
-            value={treinoProgramadoId}
-            onChange={(e) => setTreinoProgramadoId(e.target.value)}
-            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800"
-          >
-            <option value="">Selecionar...</option>
-            {treinosProgramados.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.nome}
-              {t.codigo ? ` (${t.codigo})` : ""}
-              {t.autor?.nome ? ` — ${t.autor.tipo}: ${t.autor.nome}` : t.autor?.tipo ? ` — ${t.autor.tipo}` : ""}
-            </option>
-            ))}
-          </select>
-
-          <button
-            onClick={agendarParaDiasSelecionados}
-            disabled={loadingProgramados || salvandoAgenda}
-            className="w-full mt-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 disabled:hover:bg-emerald-600 transition"
-          >
-            {salvandoAgenda ? "Agendando..." : loadingProgramados ? "Carregando..." : "Agendar treino nos dias selecionados"}
-          </button>
-        </div>
-      </div>
-    ) : (
-      <div className="rounded-xl border border-zinc-200 bg-white p-3 flex-none">
-        <div className="text-sm font-bold mb-1">Agendamento indisponível</div>
-        <div className="text-sm opacity-80">
-          Você selecionou pelo menos um dia no passado. Selecione apenas hoje ou datas futuras.
-        </div>
-      </div>
-    )}
-
-    {/* Lista rolável (não estoura o modal) */}
-    <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
-
-
-      {selectedDayItems.map(({ day, items }) => (
-        <div key={day} className="rounded-xl border border-zinc-200 bg-white p-3">
-          <div className="flex items-center justify-between mb-2">
-            <div className="font-bold">{formatDayPtBR(day)}</div>
-            <div className="text-xs opacity-80">
-              {items.length ? `${items.length} treino(s)` : "Sem treino"}
-            </div>
+        {!drawerOpen ? null : selectedDays.length === 0 ? (
+          <div className="text-sm opacity-80">
+            Clique em um ou mais dias do calendário para ver/agendar treinos.
           </div>
+        ) : (
+          <div className="flex flex-col gap-4 min-h-0 flex-1">
+            {/* Agendamento rápido (fixo no topo) */}
+            {!hasPastSelectedDay ? (
+              <div className={["rounded-xl border border-zinc-200 bg-white flex-none", forceScrollDetails ? "p-2" : "p-3"].join(" ")}>
+                <div className={["font-bold", forceScrollDetails ? "text-xs mb-1" : "text-sm mb-2"].join(" ")}>
+                  Agendar para {selectedDays.length === 1 ? "1 dia selecionado" : `${selectedDays.length} dias selecionados`}
+                </div>
 
-          {!items.length ? (
-            <div className="text-sm opacity-80">Nenhum treino agendado neste dia.</div>
-          ) : (
-            <div className="space-y-2">
-              {items.map((t) => {
-                const nome = t.treinoProgramado?.nome || t.titulo || "Treino";
-                const done = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
-                const lost = !done && isLost(t);
+                <div className="space-y-2">
+                  <label className="text-xs opacity-80">Treino programado</label>
+                  <select
+                    value={treinoProgramadoId}
+                    onChange={(e) => setTreinoProgramadoId(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800"
+                  >
+                    <option value="">Selecionar...</option>
+                    {treinosProgramados.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.nome}
+                      {t.codigo ? ` (${t.codigo})` : ""}
+                      {t.autor?.nome ? ` — ${t.autor.tipo}: ${t.autor.nome}` : t.autor?.tipo ? ` — ${t.autor.tipo}` : ""}
+                    </option>
+                    ))}
+                  </select>
 
-                const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
-                const statusClass = done ? "text-emerald-600" : lost ? "text-red-600" : "text-zinc-600";
+                  <button
+                    onClick={agendarParaDiasSelecionados}
+                    disabled={loadingProgramados || salvandoAgenda}
+                    className="w-full mt-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 disabled:hover:bg-emerald-600 transition"
+                  >
+                    {salvandoAgenda ? "Agendando..." : loadingProgramados ? "Carregando..." : "Agendar treino nos dias selecionados"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-zinc-200 bg-white p-3 flex-none">
+                <div className="text-sm font-bold mb-1">Agendamento indisponível</div>
+                <div className="text-sm opacity-80">
+                  Você selecionou pelo menos um dia no passado. Selecione apenas hoje ou datas futuras.
+                </div>
+              </div>
+            )}
 
-                return (
-                  <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-bold truncate">{nome}</div>
+            {/* Lista rolável (não estoura o modal) */}
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
 
-                        <div className="text-xs opacity-80 mt-1">
-                          Status: <span className={statusClass}>{statusText}</span>
-                        </div>
 
-                        {done && !!t.submissaoTreinoId ? (
-                          <button
-                            onClick={() => abrirModalAvaliacao(String(t.submissaoTreinoId || ""))}
-                            className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
-                          >
-                            💬 Avaliar treino
-                          </button>
-                        ) : null}
-                      </div>
-
-                      {done ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-300" />
-                      ) : lost ? (
-                        <XCircle className="h-5 w-5 text-red-300" />
-                      ) : null}
+              {selectedDayItems.map(({ day, items }) => (
+                <div key={day} className="rounded-xl border border-zinc-200 bg-white p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-bold">{formatDayPtBR(day)}</div>
+                    <div className="text-xs opacity-80">
+                      {items.length ? `${items.length} treino(s)` : "Sem treino"}
                     </div>
                   </div>
-                );
-              })}
+
+                  {!items.length ? (
+                    <div className="text-sm opacity-80">Nenhum treino agendado neste dia.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {items.map((t) => {
+                        const nome = t.treinoProgramado?.nome || t.titulo || "Treino";
+                        const done = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
+                        const lost = !done && isLost(t);
+
+                        const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
+                        const statusClass = done ? "text-emerald-600" : lost ? "text-red-600" : "text-zinc-600";
+
+                        return (
+                          <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="font-bold truncate">{nome}</div>
+
+                                <div className="text-xs opacity-80 mt-1">
+                                  Status: <span className={statusClass}>{statusText}</span>
+                                </div>
+
+                                {done && !!t.submissaoTreinoId ? (
+                                  <button
+                                    onClick={() => abrirModalAvaliacao(String(t.submissaoTreinoId || ""))}
+                                    className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
+                                  >
+                                    💬 Avaliar treino
+                                  </button>
+                                ) : null}
+                              </div>
+
+                              {done ? (
+                                <CheckCircle2 className="h-5 w-5 text-green-300" />
+                              ) : lost ? (
+                                <XCircle className="h-5 w-5 text-red-300" />
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
-        </div>
-      ))}
-    </div>
-  </div>
-)}
+          </div>
+        )}
 
-
-  
         </div>
       </div>
     </div>
@@ -1980,13 +1979,7 @@ async function salvarAvaliacao() {
 )}
 
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed"><House /></Link>
-        <Link href="/explorar"><Search /></Link>
-        <Link href="/post"><CirclePlus /></Link>
-        <Link href="/treinos"><Volleyball /></Link>
-        <Link href="/perfil"><User /></Link>
-      </nav>
+      <BottomNav />
     </div>
   );
 };

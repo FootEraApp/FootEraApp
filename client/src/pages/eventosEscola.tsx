@@ -10,9 +10,7 @@ type EventoListItem = {
   titulo: string;
   tipo: EventoTipo;
   descricao?: string | null;
-
-  dataEvento: string; // ✅ obrigatório (data principal do evento)
-
+  dataEvento: string;
   cidade?: string | null;
   estado?: string | null;
   status: "ABERTO" | "ENCERRADO" | "CANCELADO";

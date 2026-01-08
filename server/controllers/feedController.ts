@@ -353,21 +353,35 @@ export const deletarPostagem: RequestHandler = async (req, res) => {
   }
 
   try {
-    const post = await prisma.postagem.findUnique({ where: { id } });
+    const post = await prisma.postagem.findUnique({
+      where: { id },
+      select: { id: true, usuarioId: true, repostOfId: true },
+    });
 
     if (!post) {
       return res.status(404).json({ mensagem: "Postagem não encontrada." });
     }
 
     if (post.usuarioId !== usuarioId) {
-      return res.status(403).json({ mensagem: "Não autorizado a excluir esta postagem." });
+      return res
+        .status(403)
+        .json({ mensagem: "Não autorizado a excluir esta postagem." });
+    }
+
+    // ✅ se for repost, decrementa contador no original
+    if (post.repostOfId) {
+      await prisma.postagem.update({
+        where: { id: post.repostOfId },
+        data: { reposts: { decrement: 1 } },
+      }).catch(() => {});
     }
 
     await prisma.postagem.delete({ where: { id } });
-    res.json({ mensagem: "Postagem excluída com sucesso." });
+
+    return res.json({ mensagem: "Postagem excluída com sucesso." });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ mensagem: "Erro ao excluir postagem." });
+    return res.status(500).json({ mensagem: "Erro ao excluir postagem." });
   }
 };
 

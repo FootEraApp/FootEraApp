@@ -2453,12 +2453,6 @@ async function main() {
   for (const ex of exercicios) {
     count++;
 
-    if (count === 1 || count % 50 === 0 || count === exercicios.length) {
-      console.log(
-        `[seed_exercicios] (${count}/${exercicios.length}) upsert do exercício codigo=${ex.codigo}, nome=${ex.nome}`
-      );
-    }
-
     await prisma.exercicio.upsert({
       where: { codigo: ex.codigo },
       update: {},

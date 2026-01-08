@@ -80,12 +80,10 @@ export default function AvaliarTreino() {
   const [teveDificuldade, setTeveDificuldade] = useState<boolean>(false);
   const [dificuldadeMotivo, setDificuldadeMotivo] = useState<string>("");
   const [motivoNaoConcluiu, setMotivoNaoConcluiu] = useState<
-    "TEMPO" | "LESAO" | "OBSERVACAO" | ""
+    "TEMPO" | "LESAO" | "OUTRO" | ""
   >("");
   const [enviando, setEnviando] = useState(false);
-
-  console.log("[AvaliarTreino] location:", location);
-  console.log("[AvaliarTreino] treinoAgendadoId:", treinoAgendadoId, "tituloParam:", tituloParam);
+  const [motivoOutroTexto, setMotivoOutroTexto] = useState<string>("");
 
   useEffect(() => {
     if (tituloParam) setTitulo(tituloParam);
@@ -186,11 +184,24 @@ export default function AvaliarTreino() {
         treinoAgendadoId,
         submissaoTreinoId: submissaoTreinoId || null,
         nota, 
-        comentario: comentario.trim() || null,
+        comentario: (
+        [
+            comentario.trim(),
+            !concluiu && motivoNaoConcluiu === "OUTRO" && motivoOutroTexto.trim()
+              ? `Motivo (Outro): ${motivoOutroTexto.trim()}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join("\n")
+            .trim() || null
+        ),
         concluiu,
         teveDificuldade,
         dificuldadeMotivo: teveDificuldade ? (dificuldadeMotivo.trim() || null) : null,
         motivoNaoConcluiu: concluiu ? null : (motivoNaoConcluiu || null),
+        motivoNaoConcluiuOutro: !concluiu && motivoNaoConcluiu === "OUTRO"
+          ? (motivoOutroTexto.trim() || null)
+          : null,
       };
 
       const r = await fetch(`${API.BASE_URL}/api/treinos/avaliacoes`, {
@@ -219,7 +230,6 @@ export default function AvaliarTreino() {
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-24">
-      {/* Header no tema */}
       <div className="h-20 bg-green-900 text-white">
         <div className="max-w-3xl mx-auto h-full px-4 flex items-center justify-between">
           <Link
@@ -270,7 +280,11 @@ export default function AvaliarTreino() {
                 <input
                   type="radio"
                   checked={concluiu === true}
-                  onChange={() => setConcluiu(true)}
+                  onChange={() => {
+                    setConcluiu(true);
+                    setMotivoNaoConcluiu("");
+                    setMotivoOutroTexto("");
+                  }}
                 />
                 <span>Concluí o treino</span>
               </label>
@@ -294,7 +308,7 @@ export default function AvaliarTreino() {
                     <input
                       type="radio"
                       checked={motivoNaoConcluiu === "TEMPO"}
-                      onChange={() => setMotivoNaoConcluiu("TEMPO")}
+                      onChange={() => { setMotivoNaoConcluiu("TEMPO"); setMotivoOutroTexto(""); }}
                     />
                     <span>Tempo</span>
                   </label>
@@ -303,7 +317,7 @@ export default function AvaliarTreino() {
                     <input
                       type="radio"
                       checked={motivoNaoConcluiu === "LESAO"}
-                      onChange={() => setMotivoNaoConcluiu("LESAO")}
+                      onChange={() => { setMotivoNaoConcluiu("LESAO"); setMotivoOutroTexto(""); }}
                     />
                     <span>Lesão</span>
                   </label>
@@ -311,11 +325,20 @@ export default function AvaliarTreino() {
                   <label className="flex items-center gap-2">
                     <input
                       type="radio"
-                      checked={motivoNaoConcluiu === "OBSERVACAO"}
-                      onChange={() => setMotivoNaoConcluiu("OBSERVACAO")}
+                      checked={motivoNaoConcluiu === "OUTRO"}
+                      onChange={() => setMotivoNaoConcluiu("OUTRO")}
                     />
-                    <span>Observação</span>
+                    <span>Outro</span>
                   </label>
+
+                  {motivoNaoConcluiu === "OUTRO" && (
+                    <textarea
+                      value={motivoOutroTexto}
+                      onChange={(e) => setMotivoOutroTexto(e.target.value)}
+                      placeholder="Escreva o motivo..."
+                      className="mt-3 w-full min-h-[90px] rounded-xl border px-3 py-2 outline-none focus:ring-2 focus:ring-green-200"
+                    />
+                  )}
                 </div>
               )}
             </div>

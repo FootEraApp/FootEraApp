@@ -161,7 +161,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         exercicios: { create: itens },
       },
       include: {
-        criadorProfessor: { include: { usuario: true } }, // ✅
+        criadorProfessor: { include: { usuario: true } }, 
         clube: true,
         escolinha: true,
         exercicios: { include: { exercicio: true } },
@@ -265,7 +265,7 @@ export const getTreinoById = async (req: Request, res: Response) => {
     const treino = await prisma.treinoProgramado.findUnique({
       where: { id },
       include: {
-        criadorProfessor: { include: { usuario: true } }, // ✅
+        criadorProfessor: { include: { usuario: true } }, 
         clube: true,
         escolinha: true,
         exercicios: { include: { exercicio: true } },
@@ -407,7 +407,7 @@ export const getAllTreinos = async (_req: Request, res: Response) => {
     const treinos = await prisma.treinoProgramado.findMany({
       orderBy: { createdAt: "desc" },
       include: {
-        criadorProfessor: { include: { usuario: true } }, // ✅ TROCA AQUI
+        criadorProfessor: { include: { usuario: true } }, 
         clube: true,
         escolinha: true,
         exercicios: { include: { exercicio: true } },
