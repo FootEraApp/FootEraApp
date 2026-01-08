@@ -933,13 +933,19 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
 
       {aba === "postagens" && (
         <section className="mt-4">
-          {usuarioId ? (
-            <ProfilePostsSection usuarioId={usuarioId} />
-          ) : (
-            <div className="bg-white/70 rounded-xl p-4 shadow-sm text-sm text-green-900/70">
-              Não foi possível carregar o usuário das postagens.
-            </div>
-          )}
+          {(() => {
+            const postsUserId = isOwn
+              ? String(Storage.usuarioId || "")
+              : String(data?.usuario?.id ?? data?.clube?.usuarioId ?? "");
+
+            return postsUserId ? (
+              <ProfilePostsSection usuarioId={postsUserId} />
+            ) : (
+              <div className="bg-white/70 rounded-xl p-4 shadow-sm text-sm text-green-900/70">
+                Não foi possível carregar o usuário das postagens.
+              </div>
+            );
+          })()}
         </section>
       )}
 

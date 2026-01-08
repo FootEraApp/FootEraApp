@@ -9,13 +9,12 @@ import {
 import axios from "axios";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
-import { Link } from "wouter";
 import { ArrowLeft, Plus, X, ListFilter, Trash2 } from "lucide-react";
 
 const ELENCOS_BASE = `${API.BASE_URL}/api/elencos`;
 const PONTOS_BASE  = `${API.BASE_URL}/api/treinos/pontuacoes`;
 const TURMAS_BASE  = `${API.BASE_URL}/api/turmas/minhas`;
-const TURMA_MEMBROS_BASE = `${API.BASE_URL}/api/turmas`; 
+const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
 
 type PontuacaoDTO = {
   atletaId: string;
@@ -166,7 +165,6 @@ function getAttPositions(qtd: number): PosicaoCampo[] {
   }
 }
 
-
 type EscalaItem = {
   atletaId: string;
   usuarioId: string;
@@ -192,6 +190,17 @@ type ElencoUI = {
   posicoes: Record<PosicaoCampo, Atleta | null>;
   livres: Atleta[];
 };
+
+const isLikelyValidFoto = (v?: string | null) => {
+  const s = String(v ?? "").trim();
+  if (!s) return false;
+  if (s.startsWith("http://") || s.startsWith("https://")) return true;
+  if (s.startsWith("data:image/")) return true;
+  if (s.startsWith("/")) return true;
+  return false;
+};
+
+const resolveFoto = (v?: string | null) => (isLikelyValidFoto(v) ? String(v).trim() : FALLBACK_AVATAR);
 
 function useIsMobile(breakpointPx = 768) {
   const [isMobile, setIsMobile] = useState<boolean>(
@@ -253,7 +262,7 @@ const CardAtletaShield: React.FC<{
   const W = size?.w ?? SHIELD_W_DESK;
   const H = size?.h ?? SHIELD_H_DESK;
   const clipId = `shieldClip-${atleta.atletaId || atleta.id}-${W}x${H}`;
-  const fotoUrl = atleta.foto ? `${atleta.foto}` : "/default-avatar.png";
+  const fotoUrl = resolveFoto(atleta.foto);
   const posShow = slotPos ? posSlotCurta(slotPos) : posicaoParaSigla(atleta.posicao);
   const ovrShow  = Number.isFinite(ovr)  ? Math.round(Number(ovr))  : 0;
   const perfShow = Number.isFinite(perf) ? Math.round(Number(perf)) : 0;
@@ -282,7 +291,20 @@ const CardAtletaShield: React.FC<{
       </defs>
 
       <g clipPath={`url(#${clipId})`}>
-        <image href={fotoUrl} x="0" y="-10" width="184" height="280" preserveAspectRatio="xMidYMid slice" />
+        <image
+          href={fotoUrl}
+          x="0"
+          y="-10"
+          width="184"
+          height="280"
+          preserveAspectRatio="xMidYMid slice"
+          onError={(e) => {
+            const el = e.currentTarget as any;
+            if (el?.dataset?.fallbackApplied) return;
+            if (el?.dataset) el.dataset.fallbackApplied = "1";
+            el.setAttribute("href", FALLBACK_AVATAR);
+          }}
+        />
         <rect x="0" y="0" width="184" height="260" fill="url(#cardGrad)" />
         {golden && <rect x="0" y="0" width="184" height="260" fill="url(#goldOverlay)" />}
       </g>
@@ -331,9 +353,15 @@ const CardAtleta: React.FC<{ atleta: Atleta }> = ({ atleta }) => {
   return (
     <div className="p-2 bg-white rounded-md shadow w-[180px] sm:w-[200px] flex items-center gap-3 will-change-transform">
       <img
-        src={atleta.foto ? `${atleta.foto}` : "/default-avatar.png"}
+        src={resolveFoto(atleta.foto)}
         alt={atleta.nome}
         className="w-10 h-10 rounded-full object-cover"
+        onError={(e) => {
+          const img = e.currentTarget;
+          if (img.dataset.fallbackApplied) return;
+          img.dataset.fallbackApplied = "1";
+          img.src = FALLBACK_AVATAR;
+        }}
       />
 
       <div className="min-w-0 flex-1">
@@ -1498,8 +1526,15 @@ const handleChangeLinha = (linha: LinhaFormacao, delta: 1 | -1) => {
                     <div key={a.atletaId} className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <img
-                          src={a.foto ? `${a.foto}` : "/default-avatar.png"}
-                          className="w-8 h-8 rounded-full object-cover"
+                          src={a.foto ? `${a.foto}` : FALLBACK_AVATAR}
+                          alt={a.nome}
+                          className="w-10 h-10 rounded-full object-cover"
+                          onError={(e) => {
+                            const img = e.currentTarget;
+                            if (img.dataset.fallbackApplied) return;
+                            img.dataset.fallbackApplied = "1";
+                            img.src = FALLBACK_AVATAR;
+                          }}
                         />
                         <div className="min-w-0">
                           <div className="text-xs font-semibold truncate">{a.nome}</div>
