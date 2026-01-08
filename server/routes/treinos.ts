@@ -66,8 +66,7 @@ router.delete("/agendados/:id", excluirTreinoAgendado);
 router.post("/agendados/:id/complete", concluirTreino);
 router.get("/agendados", getTreinosAgendados);
 router.put("/agendados/:id", atualizarAgendamento);
-router.post(
-  "/agendados",
+router.post("/agendados",
   requireCapability("agendamento:pessoal"),
   agendarTreino
 );

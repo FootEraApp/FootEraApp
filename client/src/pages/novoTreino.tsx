@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
+// client/src/pages/novoTreino
+import { useEffect, useMemo, useRef, useState, ReactNode, memo } from "react";
 import { Link, useLocation } from "wouter";
 import {
   ArrowLeft,
@@ -486,6 +487,52 @@ function StepCard({
   );
 }
 
+function useInView<T extends Element>(options?: IntersectionObserverInit) {
+  const ref = useRef<T | null>(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setInView(true);
+        obs.disconnect(); // carrega uma vez e pronto
+      }
+    }, options);
+
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [options]);
+
+  return { ref, inView };
+}
+
+const VideoThumb = memo(function VideoThumb({
+  src,
+  onClick,
+}: {
+  src: string;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative w-full h-44 sm:h-28 rounded overflow-hidden bg-black"
+      title="Ver vídeo"
+    >
+      {/* thumbnail fake */}
+      <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+        <Play className="w-10 h-10 text-white opacity-90" />
+      </div>
+    </button>
+  );
+});
+
+
+
 export default function NovoTreino() {
   const [, navigate] = useLocation();
 
@@ -554,6 +601,12 @@ export default function NovoTreino() {
     const d = base ? new Date(base) : hoje;
     return { ano: d.getFullYear(), mes: d.getMonth() };
   });
+
+  const PAGE_SIZE_EX = 25;
+  const [pageEx, setPageEx] = useState(1);
+  const listRef = useRef<HTMLUListElement | null>(null);
+
+  const [salvando, setSalvando] = useState(false);
 
   function setVideoNoEx(index: number, videoUrl: string | null) {
     setExerciciosSelecionados((prev: ExItemUILocal[]) => {
@@ -754,11 +807,12 @@ export default function NovoTreino() {
     setIsFreePlan(ehFree);
   }, []);
 
-  useEffect(() => {
-    if (!toast) return;
-    const id = setTimeout(() => setToast(null), 4000);
-    return () => clearTimeout(id);
-  }, [toast]);
+useEffect(() => {
+  if (!toast) return;
+  const ms = toast.type === "error" ? 9000 : 4000; // erro fica mais tempo
+  const id = setTimeout(() => setToast(null), ms);
+  return () => clearTimeout(id);
+}, [toast]);
 
   useEffect(() => {
     if (dataTreino) {
@@ -1608,6 +1662,30 @@ export default function NovoTreino() {
     return lista;
   }, [exerciciosDisponiveis, filtroEx, filtroCategorias, filtroNiveis]);
 
+  useEffect(() => {
+    setPageEx(1);
+    // opcional: volta o scroll pro topo ao mudar filtro
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }, [filtroEx, filtroCategorias, filtroNiveis]);
+
+  const exerciciosVisiveis = useMemo(() => {
+    const total = pageEx * PAGE_SIZE_EX;
+    return exerciciosFiltrados.slice(0, total);
+  }, [exerciciosFiltrados, pageEx]);
+
+  const temMaisExercicios = exerciciosVisiveis.length < exerciciosFiltrados.length;
+
+  function onScrollListaExercicios(e: React.UIEvent<HTMLElement>) {
+    const el = e.currentTarget;
+    const faltando = el.scrollHeight - el.scrollTop - el.clientHeight;
+
+    // quando faltar ~250px pra chegar no fim, carrega mais 25
+    if (faltando < 250 && temMaisExercicios) {
+      setPageEx((p) => p + 1);
+    }
+  }
+
+
   const adicionarExercicio = () => {
     setExerciciosSelecionados((prev) => [
       ...prev,
@@ -1815,315 +1893,324 @@ export default function NovoTreino() {
     }
   }
 
-  const criarTreino = async () => {
-    try {
-      const { tipoUsuario, tipoUsuarioId } = getDono();
-      const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
+const criarTreino = async () => {
+  if (salvando) return;
+  setSalvando(true);
 
-      const professoresIdsFinal = Array.from(
-        new Set((professoresSelecionados || []).map((x) => String(x)).filter(Boolean))
+  try {
+    // ✅ limpa erro antigo (se você quiser manter, pode remover)
+    // setToast(null);
+
+    const { tipoUsuario, tipoUsuarioId } = getDono();
+    const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
+
+    const professoresIdsFinal = Array.from(
+      new Set(
+        (professoresSelecionados || [])
+          .map((x) => String(x))
+          .filter(Boolean),
+      ),
+    );
+
+    const professoresIdsFinalSemEu = professorLogadoId
+      ? professoresIdsFinal.filter(
+          (id) => String(id) !== String(professorLogadoId),
+        )
+      : professoresIdsFinal;
+
+    if (!tipoUsuario || !tipoUsuarioId) {
+      showToast(
+        "Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).",
+        "error",
       );
+      return; // ✅ fica na página
+    }
 
-      const professoresIdsFinalSemEu = professorLogadoId
-        ? professoresIdsFinal.filter((id) => String(id) !== String(professorLogadoId))
-        : professoresIdsFinal;
+    if (!isDono(tipoUsuarioNormRaw)) {
+      showToast("Erro: tipo de usuário inválido.", "error");
+      return; // ✅ fica na página
+    }
+    const tipoUsuarioNorm: DonoLiteral = tipoUsuarioNormRaw;
 
-      if (!tipoUsuario || !tipoUsuarioId) {
-        alert(
-          "Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).",
-        );
-        return;
-      }
+    if (!usuarioId) {
+      showToast("Erro: usuário não autenticado.", "error");
+      return; // ✅ fica na página
+    }
 
-      if (!isDono(tipoUsuarioNormRaw)) {
-        alert("Erro: tipo de usuário inválido.");
-        return;
-      }
-      const tipoUsuarioNorm: DonoLiteral = tipoUsuarioNormRaw;
+    const exercicios = montarExerciciosParaPayload(
+      exerciciosSelecionados.map((e) => {
+        const v = e.videoUrl ?? null;
+        const videoFinal = v && String(v).startsWith("blob:") ? null : v;
 
-      if (!usuarioId) {
-        alert("Erro: usuário não autenticado.");
-        return;
-      }
-
-      const exercicios = montarExerciciosParaPayload(
-        exerciciosSelecionados.map((e) => {
-          const v = e.videoUrl ?? null;
-          const videoFinal = v && String(v).startsWith("blob:") ? null : v;
-
-          return {
-            ...e,
-            videoDemonstrativoUrl: videoFinal,
-          };
-        }) as any,
-      );
-
-      const mapNivel = (s: string) =>
-        ({
-          Base: "Base",
-          Avancado: "Avancado",
-          Performance: "Performance",
-        } as const)[s] ?? "Base";
-      const mapTipoTreino = (s: string) =>
-        ({
-          Tecnico: "Tecnico",
-          Fisico: "Fisico",
-          Tatico: "Tatico",
-          Mental: "Mental",
-        } as const)[s] ?? null;
-      const mapCategoria = (s: string) => {
-        const m = String(s || "").match(/sub[\s\-]?(\d{1,2})/i);
-        if (m) return `Sub${m[1]}`;
-        if (/^livre$/i.test(String(s))) return "Livre";
-        return s;
-      };
-
-      const codigo =
-        `${nome}`.trim()
-          ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) +
-            "-" +
-            Date.now().toString(36)
-          : "TP-" + Date.now().toString(36);
-
-      const professorIdDoTreino =
-        tipoUsuarioNorm === "professor" ? String(professorLogadoId || tipoUsuarioId) : null;
-
-      const payload: TreinoCreatePayload = {
-        codigo,
-        nome,
-        descricao: descricao || null,
-        nivel: mapNivel(nivel),
-        usuarioId,
-        tipoUsuario: tipoUsuarioNorm,
-        tipoUsuarioId,
-        professoresIds: professoresIdsFinalSemEu,
-        categoria: categorias.length > 0 ? categorias.map(mapCategoria).filter(Boolean) : [],
-        tipoTreino: mapTipoTreino(tipoTreino),
-        objetivo: objetivo || null,
-        duracao: duracao ? Number(duracao) : null,
-        dataTreino: dataTreino || null,
-        dataAgendada: dataTreino || null,
-        dicas,
-        atletasIds: atletasSelecionados,
-        elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
-        exercicios,
-        pontuacao: Math.max(0, Math.floor(score.total)),
-      };
-
-      (payload as any).colaboradoresProfessorIds = professoresIdsFinalSemEu;
-
-      const vistosId = new Set<string>();
-      const vistosNome = new Set<string>();
-      const duplicados: string[] = [];
-
-      for (const ex of exerciciosSelecionados) {
-        const idK = ex.idCatalogo ? String(ex.idCatalogo) : null;
-        const nomeK = normalizaNome(ex.nome);
-
-        if (idK) {
-          if (vistosId.has(idK)) duplicados.push(`ID ${idK}`);
-          vistosId.add(idK);
-        }
-        if (nomeK) {
-          if (vistosNome.has(nomeK)) duplicados.push(ex.nome || nomeK);
-          vistosNome.add(nomeK);
-        }
-      }
-
-      if (duplicados.length) {
-        alert(
-          `Remova os exercícios repetidos antes de salvar: ${duplicados.join(
-            ", ",
-          )}`,
-        );
-        return;
-      }
-
-      const exValidos = exerciciosSelecionados.filter(
-        (x) => x.idCatalogo || (x.nome && x.nome.trim()),
-      );
-      if (exValidos.length === 0) {
-        alert("Adicione pelo menos 1 exercício válido antes de salvar.");
-        return;
-      }
-
-      const criado: any = await TreinosApi.criar(payload);
-
-      console.groupCollapsed("[NovoTreino] DEBUG retorno treino criado");
-      console.log("criado (raw):", criado);
-      console.log("criado.id:", criado?.id ?? criado?.treinoProgramadoId ?? criado?.data?.id);
-      console.log("criado.professoresIds:", criado?.professoresIds);
-      console.log("criado.professores:", criado?.professores);
-      console.log("criado.criadores / colaboradores:", criado?.criadores ?? criado?.colaboradores);
-      console.groupEnd();
-
-      const profsSelecionadosDetalhe = professoresIdsFinal.map((id) => {
-        const p = professores.find((x) => String(x.id) === String(id));
         return {
-          id,
-          nome: p?.nome ?? "(não encontrado na lista carregada)",
-          codigo: p?.codigo ?? null,
-          cref: p?.cref ?? null,
+          ...e,
+          videoDemonstrativoUrl: videoFinal,
         };
-      });
+      }) as any,
+    );
 
-      console.groupCollapsed("[NovoTreino] DEBUG salvar treino");
-      console.log("professorLogadoId:", professorLogadoId);
-      console.log("professoresSelecionados (state):", professoresSelecionados);
-      console.log("professoresIdsFinal (enviado):", professoresIdsFinal);
-      console.table(profsSelecionadosDetalhe);
-      console.log("payload.professoresIds:", payload.professoresIds);
-      console.log("payload.professorId (singular):", (payload as any).professorId);
-      console.groupEnd();
+    const mapNivel = (s: string) =>
+      ({ Base: "Base", Avancado: "Avancado", Performance: "Performance" } as const)[
+        s
+      ] ?? "Base";
 
-      let qtdAgendados = 0;
-      const treinoProgramadoId =
-        criado?.id ?? criado?.treinoProgramadoId ?? criado?.data?.id ?? null;
+    const mapTipoTreino = (s: string) =>
+      ({ Tecnico: "Tecnico", Fisico: "Fisico", Tatico: "Tatico", Mental: "Mental" } as const)[
+        s
+      ] ?? null;
 
-      if (treinoProgramadoId) {
-        try {
-          const token = getToken();
-          const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+    const mapCategoria = (s: string) => {
+      const m = String(s || "").match(/sub[\s\-]?(\d{1,2})/i);
+      if (m) return `Sub${m[1]}`;
+      if (/^livre$/i.test(String(s))) return "Livre";
+      return s;
+    };
 
-          const rr = await fetch(
-            `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(
-              String(treinoProgramadoId)
-            )}`,
-            { headers }
-          );
-          const jj = await rr.json().catch(() => null);
+    const codigo =
+      `${nome}`.trim()
+        ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) +
+          "-" +
+          Date.now().toString(36)
+        : "TP-" + Date.now().toString(36);
 
-          console.groupCollapsed("[NovoTreino] DEBUG confirmacao no banco");
-          console.log("GET treino:", jj);
-          console.log("professoresIds:", jj?.professoresIds);
-          console.log("professores:", jj?.professores);
-          console.groupEnd();
-        } catch (e) {
-          console.warn("[NovoTreino] DEBUG confirmacao falhou:", e);
-        }
-
-        qtdAgendados = await agendarTreinoEmLote(String(treinoProgramadoId));
-      } else {
-        console.warn(
-          "TreinosApi.criar não retornou id do treino programado. Agendamento em lote foi pulado."
-        );
-      }
-
-      const resultadoSalvar = await tentarSalvarComoTreinoSalvo(
-        payload,
-        score.total,
-      );
-
-      const atletasDoTreino = atletasVinculados.filter((a) =>
-        atletasSelecionados.includes(a.id),
-      );
-      const nomesAtletas = atletasDoTreino.map((a) => a.nome);
-
-      const datasBase =
-        datasAgendamento.length > 0
-          ? datasAgendamento
-          : dataTreino
-          ? [dataTreino]
-          : [];
-
-      const datasLabel = datasBase.length
-        ? datasBase
-            .slice()
-            .sort()
-            .map((str) => {
-              const iso = str.includes("T") ? str : `${str}T00:00:00`;
-              const d = new Date(iso);
-              if (isNaN(d.getTime())) return str;
-              return d.toLocaleDateString("pt-BR", {
-                day: "2-digit",
-                month: "2-digit",
-              });
-            })
-            .join(", ")
+    // (mantive como estava, mesmo que não seja usado)
+    const professorIdDoTreino =
+      tipoUsuarioNorm === "professor"
+        ? String(professorLogadoId || tipoUsuarioId)
         : null;
 
-      let msgPrincipal = `Treino "${nome || codigo}" criado com sucesso.`;
+    const payload: TreinoCreatePayload = {
+      codigo,
+      nome,
+      descricao: descricao || null,
+      nivel: mapNivel(nivel),
+      usuarioId,
+      tipoUsuario: tipoUsuarioNorm,
+      tipoUsuarioId,
+      professoresIds: professoresIdsFinalSemEu,
+      categoria:
+        categorias.length > 0 ? categorias.map(mapCategoria).filter(Boolean) : [],
+      tipoTreino: mapTipoTreino(tipoTreino),
+      objetivo: objetivo || null,
+      duracao: duracao ? Number(duracao) : null,
+      dataTreino: dataTreino || null,
+      dataAgendada: dataTreino || null,
+      dicas,
+      atletasIds: atletasSelecionados,
+      elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
+      exercicios,
+      pontuacao: Math.max(0, Math.floor(score.total)),
+    };
 
-      if (qtdAgendados > 0 && nomesAtletas.length && datasLabel) {
-        const nomesPreview =
-          nomesAtletas.length <= 3
-            ? nomesAtletas.join(", ")
-            : `${nomesAtletas.slice(0, 3).join(", ")} + ${
-                nomesAtletas.length - 3
-              } atleta(s)`;
+    (payload as any).colaboradoresProfessorIds = professoresIdsFinalSemEu;
 
-        msgPrincipal += ` Foi agendado automaticamente para ${nomesAtletas.length} atleta(s) (${nomesPreview}) nos dias ${datasLabel}.`;
-      } else if (qtdAgendados > 0) {
-        msgPrincipal += ` Foram gerados ${qtdAgendados} agendamentos para seus atletas.`;
-      } else {
-        msgPrincipal +=
-          " Nenhum agendamento automático foi criado (você pode agendar depois na tela de treinos).";
+    // ✅ valida duplicados
+    const vistosId = new Set<string>();
+    const vistosNome = new Set<string>();
+    const duplicados: string[] = [];
+
+    for (const ex of exerciciosSelecionados) {
+      const idK = ex.idCatalogo ? String(ex.idCatalogo) : null;
+      const nomeK = normalizaNome(ex.nome);
+
+      if (idK) {
+        if (vistosId.has(idK)) duplicados.push(`ID ${idK}`);
+        vistosId.add(idK);
       }
-
-      let extra = "";
-
-      if (resultadoSalvar.saved) {
-        extra = " O treino também foi salvo na sua Gaveta.";
-      } else if (resultadoSalvar.reason === "usuario-pulou") {
-        extra =
-          " Você optou por não salvar este treino na Gaveta (limite de 5).";
-      } else if (resultadoSalvar.reason === "falha-apagar") {
-        extra =
-          " Não foi possível liberar espaço na Gaveta, então o treino não foi salvo lá.";
-      } else if (resultadoSalvar.reason === "erro") {
-        extra =
-          " O treino foi criado, mas houve um erro ao salvar na Gaveta.";
-      } else if (resultadoSalvar.reason === "sem-dono") {
-        console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
+      if (nomeK) {
+        if (vistosNome.has(nomeK)) duplicados.push(ex.nome || nomeK);
+        vistosNome.add(nomeK);
       }
+    }
 
-      showToast(msgPrincipal + extra, "success");
+    if (duplicados.length) {
+      showToast(
+        `Remova os exercícios repetidos antes de salvar: ${duplicados.join(", ")}`,
+        "error",
+      );
+      return; // ✅ fica na página
+    }
 
-      sessionStorage.removeItem(SAVE_KEY);
-      sessionStorage.removeItem(RESTORE_FLAG_KEY);
+    const exValidos = exerciciosSelecionados.filter(
+      (x) => x.idCatalogo || (x.nome && x.nome.trim()),
+    );
+    if (exValidos.length === 0) {
+      showToast("Adicione pelo menos 1 exercício válido antes de salvar.", "error");
+      return; // ✅ fica na página
+    }
 
-      setEtapa(1);
-      setCompletedUntil(1);
-      setNome("");
-      setDescricao("");
-      setNivel("Base");
-      setDuracao(60);
-      setDataTreino("");
-      setCategorias(["Sub13"]);
-      setTipoTreino("Tecnico");
-      setObjetivo("");
-      setExerciciosSelecionados([]);
-      setDicas([]);
-      setDicaAtual("");
-      setAtletasSelecionados([]);
-      setDatasAgendamento([]);
-      setProfessoresSelecionados([]);
+    // ✅ cria
+    const criado: any = await TreinosApi.criar(payload);
 
-      setTimeout(() => {
-        navigate("/treinos");
-      }, 500);
+    console.groupCollapsed("[NovoTreino] DEBUG retorno treino criado");
+    console.log("criado (raw):", criado);
+    console.log(
+      "criado.id:",
+      criado?.id ?? criado?.treinoProgramadoId ?? criado?.data?.id,
+    );
+    console.log("criado.professoresIds:", criado?.professoresIds);
+    console.log("criado.professores:", criado?.professores);
+    console.log(
+      "criado.criadores / colaboradores:",
+      criado?.criadores ?? criado?.colaboradores,
+    );
+    console.groupEnd();
 
-      } catch (e: any) {
-        console.error(
-          "Falha inesperada ao criar treino:",
-          e?.response?.data || e,
+    const profsSelecionadosDetalhe = professoresIdsFinal.map((id) => {
+      const p = professores.find((x) => String(x.id) === String(id));
+      return {
+        id,
+        nome: p?.nome ?? "(não encontrado na lista carregada)",
+        codigo: p?.codigo ?? null,
+        cref: p?.cref ?? null,
+      };
+    });
+
+    console.groupCollapsed("[NovoTreino] DEBUG salvar treino");
+    console.log("professorLogadoId:", professorLogadoId);
+    console.log("professoresSelecionados (state):", professoresSelecionados);
+    console.log("professoresIdsFinal (enviado):", professoresIdsFinal);
+    console.table(profsSelecionadosDetalhe);
+    console.log("payload.professoresIds:", payload.professoresIds);
+    console.log("payload.professorId (singular):", (payload as any).professorId);
+    console.groupEnd();
+
+    // ✅ agendar em lote (se tiver id)
+    let qtdAgendados = 0;
+    const treinoProgramadoId =
+      criado?.id ?? criado?.treinoProgramadoId ?? criado?.data?.id ?? null;
+
+    if (treinoProgramadoId) {
+      try {
+        const token = getToken();
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+        const rr = await fetch(
+          `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(
+            String(treinoProgramadoId),
+          )}`,
+          { headers },
         );
+        const jj = await rr.json().catch(() => null);
 
-        const msgErro =
-          e?.response?.data?.error ||
-          e?.response?.data?.message ||
-          "Erro inesperado ao criar treino.";
-
-        showToast(msgErro, "error");
-
-        sessionStorage.removeItem(SAVE_KEY);
-        sessionStorage.removeItem(RESTORE_FLAG_KEY);
-
-        setTimeout(() => {
-          navigate("/treinos");
-        }, 800);
+        console.groupCollapsed("[NovoTreino] DEBUG confirmacao no banco");
+        console.log("GET treino:", jj);
+        console.log("professoresIds:", jj?.professoresIds);
+        console.log("professores:", jj?.professores);
+        console.groupEnd();
+      } catch (e) {
+        console.warn("[NovoTreino] DEBUG confirmacao falhou:", e);
       }
-  };
+
+      qtdAgendados = await agendarTreinoEmLote(String(treinoProgramadoId));
+    } else {
+      console.warn(
+        "TreinosApi.criar não retornou id do treino programado. Agendamento em lote foi pulado.",
+      );
+    }
+
+    // ✅ tenta salvar na gaveta (não bloqueia sucesso)
+    const resultadoSalvar = await tentarSalvarComoTreinoSalvo(payload, score.total);
+
+    const atletasDoTreino = atletasVinculados.filter((a) =>
+      atletasSelecionados.includes(a.id),
+    );
+    const nomesAtletas = atletasDoTreino.map((a) => a.nome);
+
+    const datasBase =
+      datasAgendamento.length > 0 ? datasAgendamento : dataTreino ? [dataTreino] : [];
+
+    const datasLabel = datasBase.length
+      ? datasBase
+          .slice()
+          .sort()
+          .map((str) => {
+            const iso = str.includes("T") ? str : `${str}T00:00:00`;
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return str;
+            return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+          })
+          .join(", ")
+      : null;
+
+    let msgPrincipal = `Treino "${nome || codigo}" criado com sucesso.`;
+
+    if (qtdAgendados > 0 && nomesAtletas.length && datasLabel) {
+      const nomesPreview =
+        nomesAtletas.length <= 3
+          ? nomesAtletas.join(", ")
+          : `${nomesAtletas.slice(0, 3).join(", ")} + ${
+              nomesAtletas.length - 3
+            } atleta(s)`;
+
+      msgPrincipal += ` Foi agendado automaticamente para ${nomesAtletas.length} atleta(s) (${nomesPreview}) nos dias ${datasLabel}.`;
+    } else if (qtdAgendados > 0) {
+      msgPrincipal += ` Foram gerados ${qtdAgendados} agendamentos para seus atletas.`;
+    } else {
+      msgPrincipal +=
+        " Nenhum agendamento automático foi criado (você pode agendar depois na tela de treinos).";
+    }
+
+    let extra = "";
+    if (resultadoSalvar.saved) {
+      extra = " O treino também foi salvo na sua Gaveta.";
+    } else if (resultadoSalvar.reason === "usuario-pulou") {
+      extra = " Você optou por não salvar este treino na Gaveta (limite de 5).";
+    } else if (resultadoSalvar.reason === "falha-apagar") {
+      extra = " Não foi possível liberar espaço na Gaveta, então o treino não foi salvo lá.";
+    } else if (resultadoSalvar.reason === "erro") {
+      extra = " O treino foi criado, mas houve um erro ao salvar na Gaveta.";
+    } else if (resultadoSalvar.reason === "sem-dono") {
+      console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
+    }
+
+    showToast(msgPrincipal + extra, "success");
+
+    // ✅ aqui pode limpar e voltar pra /treinos (SUCESSO)
+    sessionStorage.removeItem(SAVE_KEY);
+    sessionStorage.removeItem(RESTORE_FLAG_KEY);
+
+    setEtapa(1);
+    setCompletedUntil(1);
+    setNome("");
+    setDescricao("");
+    setNivel("Base");
+    setDuracao(60);
+    setDataTreino("");
+    setCategorias(["Sub13"]);
+    setTipoTreino("Tecnico");
+    setObjetivo("");
+    setExerciciosSelecionados([]);
+    setDicas([]);
+    setDicaAtual("");
+    setAtletasSelecionados([]);
+    setDatasAgendamento([]);
+    setProfessoresSelecionados([]);
+
+    setTimeout(() => {
+      navigate("/treinos");
+    }, 500);
+  } catch (e: any) {
+    console.error("Falha inesperada ao criar treino:", e?.response?.data || e);
+
+    // ✅ pega mensagem em vários formatos (axios/fetch/string)
+    const msgErro =
+      e?.response?.data?.error ||
+      e?.response?.data?.message ||
+      e?.message ||
+      (typeof e === "string" ? e : "") ||
+      "Erro inesperado ao criar treino.";
+
+    // ✅ mostra o erro e NÃO navega
+    showToast(msgErro, "error");
+
+    // ✅ mantém o state + sessionStorage para usuário corrigir e tentar de novo
+    // (não remove SAVE_KEY / RESTORE_FLAG_KEY)
+  } finally {
+    setSalvando(false);
+  }
+};
+
 
   const agendarTreino = async (t: TreinoProgramado) => {
     try {
@@ -2862,11 +2949,13 @@ export default function NovoTreino() {
                 </div>
               </div>
 
-              <ul className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1">
-                {exerciciosFiltrados.map((exercicio) => {
-                  const videoSrc = resolveVideoUrl(
-                    exercicio.videoDemonstrativoUrl,
-                  );
+              <ul
+                ref={listRef}
+                onScroll={onScrollListaExercicios}
+                className="divide-y divide-gray-200 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto pr-1"
+              >
+                {exerciciosVisiveis.map((exercicio) => {
+                  const videoSrc = resolveVideoUrl(exercicio.videoDemonstrativoUrl);
                   const jaAdicionado = jaEstaNoTreinoPorIdOuNome(
                     exerciciosSelecionados,
                     exercicio.id,
@@ -2878,30 +2967,28 @@ export default function NovoTreino() {
                       <div className="flex flex-col sm:flex-row gap-3 items-start">
                         <div className="w-full sm:w-44 shrink-0">
                           {videoSrc ? (
-                            <video
-                              className="w-full h-44 sm:h-28 rounded bg-black object-cover"
+                            <VideoThumb
                               src={videoSrc}
-                              controls
-                              preload="metadata"
+                              onClick={() => setVideoModalSrc(videoSrc)}
                             />
                           ) : (
                             <div className="w-full h-44 sm:h-28 rounded bg-gray-200 flex items-center justify-center text-xs text-gray-600">
                               sem vídeo
                             </div>
                           )}
+
                         </div>
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <div className="font-semibold truncate">
-                              {exercicio.nome}
-                            </div>
+                            <div className="font-semibold truncate">{exercicio.nome}</div>
                             {exercicio.nivel ? (
                               <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300">
                                 {exercicio.nivel}
                               </span>
                             ) : null}
                           </div>
+
                           {exercicio.descricao ? (
                             <p className="text-sm text-gray-700 mt-1 line-clamp-2">
                               {exercicio.descricao}
@@ -2936,21 +3023,11 @@ export default function NovoTreino() {
                         </div>
 
                         <button
-                          onClick={() =>
-                            !jaAdicionado &&
-                            adicionarExercicioExistente(exercicio)
-                          }
+                          onClick={() => !jaAdicionado && adicionarExercicioExistente(exercicio)}
                           disabled={jaAdicionado}
                           className={`bg-blue-600 text-white text-sm px-3 py-1.5 rounded w-full sm:w-auto ${
-                            jaAdicionado
-                              ? "opacity-50 cursor-not-allowed"
-                              : ""
+                            jaAdicionado ? "opacity-50 cursor-not-allowed" : ""
                           }`}
-                          title={
-                            jaAdicionado
-                              ? "Já adicionado ao treino"
-                              : "Adicionar ao treino"
-                          }
                         >
                           {jaAdicionado ? "Adicionado" : "Adicionar"}
                         </button>
@@ -2958,6 +3035,18 @@ export default function NovoTreino() {
                     </li>
                   );
                 })}
+
+                {temMaisExercicios && (
+                  <li className="py-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setPageEx((p) => p + 1)}
+                      className="text-sm px-3 py-2 rounded border bg-white hover:bg-gray-50"
+                    >
+                      Carregar mais ({exerciciosVisiveis.length}/{exerciciosFiltrados.length})
+                    </button>
+                  </li>
+                )}
               </ul>
 
               <div className="flex flex-col sm:flex-row justify-between gap-2 mt-6">
@@ -3339,9 +3428,13 @@ export default function NovoTreino() {
               </button>
               <button
                 onClick={criarTreino}
-                className="bg-green-800 text-white px-4 py-2 rounded w-full sm:w-auto"
+                disabled={salvando}
+                className={[
+                  "bg-green-800 text-white px-4 py-2 rounded w-full sm:w-auto",
+                  salvando ? "opacity-60 cursor-not-allowed" : "",
+                ].join(" ")}
               >
-                Salvar Treino
+                {salvando ? "Salvando..." : "Salvar Treino"}
               </button>
             </div>
           </StepCard>

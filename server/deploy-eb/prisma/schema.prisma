@@ -270,38 +270,46 @@ model Atleta {
 }
 
 model TreinoProgramado {
-  id                       String                      @id @default(uuid())
-  codigo                   String                      @unique
-  nome                     String                      @unique
-  descricao                String?
-  nivel                    Nivel
-  dataAgendada             DateTime?
-  professorId              String?
-  createdAt                DateTime                    @default(now())
-  categoria                Categoria[]
-  dicas                    String[]
-  duracao                  Int?
-  escolinhaId              String?
-  objetivo                 String?
-  clubeId                  String?
-  expiraEm                 DateTime?
-  imagemUrl                String?
-  metas                    String?
-  naoExpira                Boolean                     @default(false)
-  pontuacao                Int?
-  tipoTreino               TipoTreino?
-  temporarios              ExercicioTemporario[]
-  treinoAgendado           TreinoAgendado[]
+  id           String                @id @default(uuid())
+  codigo       String                @unique
+  nome         String                @unique
+  descricao    String?
+  nivel        Nivel
+  createdAt    DateTime              @default(now())
+  dataAgendada DateTime?
+  categoria    Categoria[]
+  dicas        String[]
+  duracao      Int?
+  escolinhaId  String?
+  clubeId      String?
+  expiraEm     DateTime?
+  imagemUrl    String?
+  metas        String?
+  naoExpira    Boolean               @default(false)
+  pontuacao    Int?
+  tipoTreino   TipoTreino?
+  objetivo     String?
+  temporarios  ExercicioTemporario[]
+
+  criadorProfessorId String?
+  criadorProfessor   Professor? @relation("TreinoProgramadoCriador", fields: [criadorProfessorId], references: [id], onDelete: SetNull)
+
+  professores TreinoProgramadoProfessor[]
+
   clube                    Clube?                      @relation(fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha                Escolinha?                  @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
-  professor                Professor?                  @relation(fields: [professorId], references: [id], onDelete: SetNull)
   exercicios               TreinoProgramadoExercicio[]
+  treinoAgendado           TreinoAgendado[]
   TreinoProgramadoRecebido TreinoProgramadoRecebido[]
   realizados               TreinoRealizado[]
   EstatisticaTreino        EstatisticaTreino[]
   TreinoProfessorUso       TreinoProfessorUso[]
   TreinoRotinaItem         TreinoRotinaItem[]
   SessaoTreinoTurma        SessaoTreinoTurma[]
+  Professor                Professor?                  @relation(fields: [professorId], references: [id])
+  professorId              String?
+
+  @@index([criadorProfessorId])
 }
 
 model TreinoProgramadoExercicio {
