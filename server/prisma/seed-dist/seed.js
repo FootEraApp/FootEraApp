@@ -1221,7 +1221,6 @@ async function main() {
                 seguidoUsuarioId: atletaPro.id,
             },
         });
-        // POST 1
         let post1 = await prisma.postagem.findFirst({
             where: { conteudo: "Primeiro treino do dia!", usuarioId: atletaFree.id },
         });
@@ -1234,7 +1233,6 @@ async function main() {
                 },
             });
         }
-        // POST 2
         let post2 = await prisma.postagem.findFirst({
             where: { conteudo: "Treino intenso hoje 💪" },
         });
@@ -1247,7 +1245,6 @@ async function main() {
                 },
             });
         }
-        // POST 3
         let post3 = await prisma.postagem.findFirst({
             where: { conteudo: "Alongamento pós-treino" },
         });
@@ -1340,7 +1337,6 @@ async function main() {
     await prisma.usuario.updateMany({
         data: { verified: true },
     });
-    // --- Professor vinculado a atleta_free para teste E2E "Já treino junto" ---
     const profFreeDb = await prisma.professor.findFirst({
         where: { usuario: { nomeDeUsuario: "prof_free" } },
     });
@@ -1348,7 +1344,6 @@ async function main() {
         where: { usuario: { nomeDeUsuario: "atleta_free" } },
     });
     if (profFreeDb && atletaFreeDb) {
-        // Procura se já existe relação professor-atleta
         const relacaoExistente = await prisma.relacaoTreinamento.findFirst({
             where: {
                 professorId: profFreeDb.id,
@@ -1356,7 +1351,6 @@ async function main() {
             },
         });
         if (relacaoExistente) {
-            // Atualiza para garantir que está ativa (sem encerradoEm)
             await prisma.relacaoTreinamento.update({
                 where: { id: relacaoExistente.id },
                 data: {
@@ -1365,7 +1359,6 @@ async function main() {
             });
         }
         else {
-            // Cria o vínculo novo
             await prisma.relacaoTreinamento.create({
                 data: {
                     professorId: profFreeDb.id,

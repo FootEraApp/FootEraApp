@@ -1,4 +1,3 @@
-// server/controllers/perfilController
 import { Request, Response } from "express";
 import { PrismaClient, PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
@@ -6,6 +5,22 @@ import { requireUsage } from "server/lib/usage.js";
 import { validarJanelaAtleta, getRangeFromQuery, PlanoAtleta } from "../utils/analyticsWindow.js";
 
 const prisma = new PrismaClient();
+
+type AtividadeUI = {
+  id: string;
+  tipo: string;         
+  titulo: string;      
+  criadoEm: string;    
+  imagemUrl?: string | null;
+  link?: string | null; 
+};
+
+const DEFAULT_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
+
+function withDefaultImg(v: any) {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s ? s : DEFAULT_AVATAR;
+}
 
 async function ensureSolicitacaoVinculo(
   tx: any,
@@ -36,6 +51,30 @@ function pickId(raw: any): string | undefined {
   if (raw?.value) return String(raw.value);
   if (Array.isArray(raw) && raw[0]?.id) return String(raw[0].id);
   return undefined;
+}
+
+function pickIds(raw: any): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw) && raw.length && typeof raw[0] === "string") {
+    return raw.map((x) => String(x).trim()).filter(Boolean);
+  }
+
+  if (Array.isArray(raw) && raw.length && (raw[0]?.id || raw[0]?.value)) {
+    return raw
+      .map((x) => (x?.id ? String(x.id) : x?.value ? String(x.value) : ""))
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  if (typeof raw === "string") {
+    return raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  const one = pickId(raw);
+  return one ? [one] : [];
 }
 
 function pontosDesafioInd(s: any) {
@@ -437,17 +476,76 @@ export const getTreinosPorUsuario = async (req: Request, res: Response) => {
 
 export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.params.id;
+    const userId = String(req.params.id || "").trim();
+    if (!userId) return res.json([]);
 
     const atleta = await prisma.atleta.findFirst({
       where: { usuarioId: userId },
       select: { id: true },
     });
 
-    if (!atleta) {
-      return res.json([]);
+    const escolinha = await prisma.escolinha.findFirst({
+      where: { OR: [{ usuarioId: userId }, { id: userId }] },
+      select: { id: true, logo: true },
+    });
+
+    const clube = await prisma.clube.findFirst({
+      where: { OR: [{ usuarioId: userId }, { id: userId }] },
+      select: { id: true, logo: true },
+    });
+
+    if (!atleta && (escolinha || clube)) {
+      const entidadeTipo = escolinha ? "escolinha" : "clube";
+      const entidadeId = escolinha ? escolinha.id : clube!.id;
+      const logo = escolinha ? escolinha.logo : clube!.logo;
+
+      const [eventos, treinos] = await Promise.all([
+        prisma.evento.findMany({
+          where: entidadeTipo === "escolinha" ? { escolinhaId: entidadeId } : { clubeId: entidadeId },
+          orderBy: { criadoEm: "desc" },
+          take: 10,
+          select: { id: true, titulo: true, criadoEm: true },
+        }),
+        prisma.treinoProgramado.findMany({
+          where: entidadeTipo === "escolinha" ? { escolinhaId: entidadeId } : { clubeId: entidadeId },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+          select: { id: true, nome: true, createdAt: true, imagemUrl: true },
+        }),
+      ]);
+
+      type AtividadeComTs = AtividadeUI & { ts: number };
+
+      const itensComTs: AtividadeComTs[] = [
+        ...eventos.map((e): AtividadeComTs => ({
+          id: `ev-${e.id}`,
+          tipo: "Evento",
+          titulo: `Novo evento: ${e.titulo ?? "Evento"}`,
+          criadoEm: e.criadoEm.toISOString(),
+          imagemUrl: logo ?? null,
+          link: `/eventos/${e.id}`,
+          ts: +e.criadoEm,
+        })),
+        ...treinos.map((t): AtividadeComTs => ({
+          id: `tp-${t.id}`,
+          tipo: "Treino",
+          titulo: `Novo treino: ${t.nome ?? "Treino"}`,
+          criadoEm: t.createdAt.toISOString(),
+          imagemUrl: t.imagemUrl ?? logo ?? null,
+          link: `/treinos`,
+          ts: +t.createdAt,
+        })),
+      ];
+
+      const itens: AtividadeUI[] = itensComTs
+        .sort((a, b) => b.ts - a.ts)
+        .slice(0, 10)
+        .map(({ ts, ...rest }) => rest);
+
+      return res.json(itens);
     }
 
+    if (!atleta) return res.json([]);
 
     const treinosLivres = await prisma.treinoLivre.findMany({
       where: { atletaId: atleta.id },
@@ -459,14 +557,12 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
       where: {
         atletaId: atleta.id,
         OR: [
-
           {
             treinoTituloSnapshot: {
               contains: "livre",
               mode: "insensitive",
             },
           },
-
           {
             AND: [
               { aprovado: true as any },
@@ -500,33 +596,20 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
     const parts = await getParticipacoesGrupo(userId, atleta.id);
     const itensGrupo = parts.map(mapGrupoToAtividade);
 
-    const itens = [
-      ...treinosLivres.map((t: any) => ({
+    type AtividadeComTs = AtividadeUI & { ts: number };
+
+    const itensRaw: AtividadeComTs[] = [
+      ...treinosLivres.map((t: any): AtividadeComTs => ({
         id: `tl-${t.id}`,
         tipo: "Treino Livre",
+        titulo: t.descricao || "Treino Livre",
+        criadoEm: new Date(t.data).toISOString(),
         imagemUrl: t.urlEvidencia ?? null,
-        nome: t.descricao || "Treino Livre",
-        data: t.data,
-        duracao:
-          typeof t.duracaoMin === "number" && t.duracaoMin > 0
-            ? `${t.duracaoMin} min`
-            : undefined,
-        pontuacao: 0,
+        link: "/treinos",
+        ts: +new Date(t.data),
       })),
 
-      ...subsTreino.map((s: any) => {
-        const dur =
-          s.duracaoMinutos ??
-          s.treinoAgendado?.treinoProgramado?.duracao ??
-          null;
-
-        const pts =
-          s.pontosCreditados ??
-          s.pontuacaoSnapshot ??
-          s.treinoAgendado?.treinoProgramado?.pontuacao ??
-          s.treinoAgendado?.treinoProgramado?.exercicios?.length ??
-          0;
-
+      ...subsTreino.map((s: any): AtividadeComTs => {
         const titulo =
           s.treinoAgendado?.treinoProgramado?.nome ??
           s.treinoAgendado?.titulo ??
@@ -535,43 +618,55 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
         const snapshot = String(s.treinoTituloSnapshot || "").toLowerCase();
         const isLivre = snapshot.includes("livre");
 
+        const dt = s.criadoEm ?? new Date();
+
         return {
           id: `t-${s.id}`,
           tipo: isLivre ? "Treino Livre" : "Treino",
+          titulo,
+          criadoEm: new Date(dt).toISOString(),
           imagemUrl: s.treinoAgendado?.treinoProgramado?.imagemUrl ?? null,
-          nome: titulo,
-          data: s.criadoEm,
-          duracao:
-            typeof dur === "number" && dur > 0 ? `${dur} min` : undefined,
-          pontuacao: Number(pts) || 0,
-          categoria:
-            s.tipoTreinoSnapshot ??
-            s.treinoAgendado?.treinoProgramado?.tipoTreino ??
-            null,
+          link: "/treinos",
+          ts: +new Date(dt),
         };
       }),
 
-      ...subsDesafio.map((s: any) => ({
-        id: `d-${s.id}`,
-        tipo: "Desafio" as const,
-        imagemUrl: s.desafio?.imagemUrl ?? s.videoUrl ?? null,
-        nome: s.desafio?.titulo ?? "Desafio",
-        data: s.createdAt,
-        duracao: undefined,
-        pontuacao: Number(s.desafio?.pontuacao ?? 0),
-      })),
+      ...subsDesafio.map((s: any): AtividadeComTs => {
+        const dt = s.createdAt ?? new Date();
+        return {
+          id: `d-${s.id}`,
+          tipo: "Desafio",
+          titulo: s.desafio?.titulo ?? "Desafio",
+          criadoEm: new Date(dt).toISOString(),
+          imagemUrl: s.desafio?.imagemUrl ?? s.videoUrl ?? null,
+          link: "/explorar",
+          ts: +new Date(dt),
+        };
+      }),
 
-      ...itensGrupo,
-    ]
-      .sort((a, b) => +new Date(b.data as any) - +new Date(a.data as any))
-      .slice(0, 10);
+      ...itensGrupo.map((g: any): AtividadeComTs => {
+        const dt = g.data ?? new Date();
+        return {
+          id: String(g.id),
+          tipo: g.tipo ?? "Desafio",
+          titulo: g.nome ?? "Atividade",
+          criadoEm: new Date(dt).toISOString(),
+          imagemUrl: g.imagemUrl ?? null,
+          link: "/explorar",
+          ts: +new Date(dt),
+        };
+      }),
+    ];
+
+    const itens: AtividadeUI[] = itensRaw
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 10)
+      .map(({ ts, ...rest }) => rest);
 
     return res.json(itens);
   } catch (e) {
     console.error("[AtividadesRecentes] erro:", e);
-    return res
-      .status(500)
-      .json({ message: "Erro ao buscar atividades recentes." });
+    return res.status(500).json({ message: "Erro ao buscar atividades recentes." });
   }
 };
 
@@ -794,77 +889,79 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       },
     });
 
-if (atleta) {
-  const vinculosRows = await prisma.relacaoTreinamento.findMany({
-    where: { atletaId: atleta.id, encerradoEm: null },
-    include: {
-      professor: { select: { id: true, nome: true } },
-      escolinha: { select: { id: true, nome: true } },
-      clube:     { select: { id: true, nome: true } },
-    },
-  });
+    if (atleta) {
+      const vinculosRows = await prisma.relacaoTreinamento.findMany({
+        where: { atletaId: atleta.id, encerradoEm: null },
+        include: {
+          professor: { select: { id: true, nome: true } },
+          escolinha: { select: { id: true, nome: true } },
+          clube: { select: { id: true, nome: true } },
+        },
+      });
 
-  let professorMin: { id: string; nome: string } | null = null;
-  let escolaMin: { id: string; nome: string } | null = null;
-  let clubeMin: { id: string; nome: string } | null = null;
+      let escolaMin: { id: string; nome: string } | null = null;
+      let clubeMin: { id: string; nome: string } | null = null;
 
-  // ✅ aqui era "for (const v of vinculos)" (ERRADO)
-  for (const v of vinculosRows) {
-    if (v.professor) professorMin = v.professor;
-    if (v.escolinha) escolaMin = v.escolinha;
-    if (v.clube) clubeMin = v.clube;
-  }
+      const profsMap = new Map<string, { id: string; nome: string }>();
+      for (const v of vinculosRows) {
+        if (v.professor?.id) profsMap.set(v.professor.id, v.professor);
+        if (v.escolinha) escolaMin = v.escolinha;
+        if (v.clube) clubeMin = v.clube;
+      }
 
-  if (!escolaMin && atleta.escolinhaId) {
-    escolaMin = await prisma.escolinha.findUnique({
-      where: { id: atleta.escolinhaId },
-      select: { id: true, nome: true },
-    });
-  }
+      const professores = Array.from(profsMap.values());
+      const professorPrincipal = professores[0] ?? null;
 
-  if (!clubeMin && atleta.clubeId) {
-    clubeMin = await prisma.clube.findUnique({
-      where: { id: atleta.clubeId },
-      select: { id: true, nome: true },
-    });
-  }
+      if (!escolaMin && atleta.escolinhaId) {
+        escolaMin = await prisma.escolinha.findUnique({
+          where: { id: atleta.escolinhaId },
+          select: { id: true, nome: true },
+        });
+      }
 
-  dadosEspecificos = {
-    atletaId: atleta.id,
-    nome: atleta.nome,
-    sobrenome: atleta.sobrenome,
-    idade: atleta.idade,
-    telefone1: atleta.telefone1,
-    telefone2: atleta.telefone2,
-    nacionalidade: atleta.nacionalidade,
-    naturalidade: atleta.naturalidade,
-    posicao: atleta.posicao,
-    altura: atleta.altura,
-    peso: atleta.peso,
-    seloQualidade: atleta.seloQualidade,
-    foto: atleta.foto,
+      if (!clubeMin && atleta.clubeId) {
+        clubeMin = await prisma.clube.findUnique({
+          where: { id: atleta.clubeId },
+          select: { id: true, nome: true },
+        });
+      }
 
-    escola: escolaMin?.nome ?? null,
-    clube: clubeMin?.nome ?? null,
-    professor: professorMin?.nome ?? null,
+      dadosEspecificos = {
+        atletaId: atleta.id,
+        nome: atleta.nome,
+        sobrenome: atleta.sobrenome,
+        idade: atleta.idade,
+        telefone1: atleta.telefone1,
+        telefone2: atleta.telefone2,
+        nacionalidade: atleta.nacionalidade,
+        naturalidade: atleta.naturalidade,
+        posicao: atleta.posicao,
+        altura: atleta.altura,
+        peso: atleta.peso,
+        seloQualidade: atleta.seloQualidade,
+        foto: atleta.foto,
+        escola: escolaMin?.nome ?? null,
+        clube: clubeMin?.nome ?? null,
+        professor: professorPrincipal?.nome ?? null,
+        professores: professores,
+        professorIds: professores.map((p) => p.id),
+        escolinhaId: escolaMin?.id ?? null,
+        clubeId: clubeMin?.id ?? null,
+      };
 
-    escolinhaId: escolaMin?.id ?? null,
-    clubeId: clubeMin?.id ?? null,
-  };
+      tipoPerfil = "Atleta";
 
-  tipoPerfil = "Atleta";
-
-  // (se você quiser manter esse retorno "vinculos" como objeto resumo)
-  vinculos = {
-    escolinhaId: atleta.escolinhaId ?? null,
-    clubeId: atleta.clubeId ?? null,
-    professorId: professorMin?.id ?? null,
-    professor: professorMin,
-    escola: escolaMin,
-    clube: clubeMin,
-  };
-}
-
+      vinculos = {
+        escolinhaId: atleta.escolinhaId ?? null,
+        clubeId: atleta.clubeId ?? null,
+        professorId: professorPrincipal?.id ?? null,
+        professor: professorPrincipal,
+        professores,
+        professoresIds: professores.map((p) => p.id),
+        escola: escolaMin,
+        clube: clubeMin,
+      };
+    }
 
     const professor = await prisma.professor.findUnique({ where: { usuarioId: id } });
     if (professor) {
@@ -979,7 +1076,7 @@ if (atleta) {
         id: usuario.id,
         nome: usuario.nome,
         email: usuario.email,
-        foto: usuario.foto,
+        foto: withDefaultImg(usuario.foto),
       },
       dadosEspecificos,
       vinculos,
@@ -1033,11 +1130,9 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
           null;
 
         const rawClube = tipo.clubeId ?? tipo.clube ?? null;
-        const rawProfessor = tipo.professorId ?? tipo.professor ?? null;
-
+        
         const escolinhaId = pickId(rawEscolinha);
         const clubeId = pickId(rawClube);
-        const professorId = pickId(rawProfessor);
 
         const limparEscolinha =
           rawEscolinha === "" ||
@@ -1049,12 +1144,31 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
           rawClube === null ||
           String(rawClube).toLowerCase() === "nenhum";
 
-        const limparProfessor =
-          rawProfessor === "" ||
-          rawProfessor === null ||
-          String(rawProfessor).toLowerCase() === "nenhum";
+        const rawProfessorMulti =
+          tipo.professorIds ??
+          tipo.professoresIds ??
+          tipo.professorIdsSelecionados ??
+          null;
 
-       const data: any = {
+        const rawProfessorSingle = tipo.professorId ?? tipo.professor ?? null;
+
+        const professorIds = Array.from(
+          new Set([
+            ...pickIds(rawProfessorMulti),
+            ...(pickId(rawProfessorSingle) ? [pickId(rawProfessorSingle)!] : []),
+          ])
+        ).filter(Boolean);
+
+        const limparProfessor =
+          (rawProfessorMulti === "" ||
+            rawProfessorMulti === null ||
+            String(rawProfessorMulti).toLowerCase() === "nenhum") &&
+          (rawProfessorSingle === "" ||
+            rawProfessorSingle === null ||
+            String(rawProfessorSingle).toLowerCase() === "nenhum" ||
+            professorIds.length === 0);
+
+        const data: any = {
           nome: tipo.nome,
           sobrenome: tipo.sobrenome,
           idade: isNaN(parseInt(tipo.idade)) ? undefined : parseInt(tipo.idade),
@@ -1163,28 +1277,30 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
             await tx.relacaoTreinamento.deleteMany({
               where: { atletaId, professorId: { not: null } },
             });
-          } else if (professorId) {
+          } else {
             await tx.relacaoTreinamento.deleteMany({
               where: {
                 atletaId,
-                professorId: { not: professorId },
+                professorId: { not: null, notIn: professorIds },
               },
             });
 
-            const existe = await tx.relacaoTreinamento.findFirst({
-              where: { atletaId, professorId },
-            });
-
-            if (!existe) {
-              await tx.relacaoTreinamento.create({
-                data: { atletaId, professorId },
+            for (const pid of professorIds) {
+              const existe = await tx.relacaoTreinamento.findFirst({
+                where: { atletaId, professorId: pid },
               });
 
-              await ensureSolicitacaoVinculo(tx, {
-                atletaId,
-                entidadeId: professorId,
-                tipoEntidade: "professor",
-              });
+              if (!existe) {
+                await tx.relacaoTreinamento.create({
+                  data: { atletaId, professorId: pid },
+                });
+
+                await ensureSolicitacaoVinculo(tx, {
+                  atletaId,
+                  entidadeId: pid,
+                  tipoEntidade: "professor",
+                });
+              }
             }
           }
         });
@@ -1590,7 +1706,7 @@ export async function getPerfilProfessor(req: AuthenticatedRequest, res: Respons
     if (gruposCriados > 0) conquistas += 1;
 
     const usuarioMin = (prof as any).usuario ?? null;
-    const fotoPerfil: string | null = (prof as any).fotoUrl ?? (usuarioMin?.foto ?? null);
+    const fotoPerfil = withDefaultImg((prof as any).fotoUrl ?? usuarioMin?.foto);
 
     return res.json({
       tipo: "Professor" as const,
@@ -1680,7 +1796,7 @@ export async function getPerfilClube(req: Request, res: Response) {
     ]);
 
     const usuarioMin = (clube as any).usuario ?? null;
-    const logoOuFoto: string | null = (clube as any).logo ?? (usuarioMin?.foto ?? null);
+    const logoOuFoto = withDefaultImg((clube as any).logo ?? usuarioMin?.foto);
 
     return res.json({
       tipo: "Clube" as const,
@@ -1759,7 +1875,7 @@ export async function getPerfilEscola(req: Request, res: Response) {
     const treinosCount = await prisma.treinoProgramado.count({ where: { escolinhaId: escola.id } });
 
     const usuarioMin = (escola as any).usuario ?? null;
-    const logoOuFoto: string | null = (escola as any).logo ?? (usuarioMin?.foto ?? null);
+    const logoOuFoto = withDefaultImg((escola as any).logo ?? usuarioMin?.foto);
 
     return res.json({
       tipo: "Escolinha" as const,
@@ -1802,7 +1918,6 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
   try {
     const { id } = req.params;
 
-    // resolve o olheiro alvo primeiro
     const olheiro: any = await resolveByUsuarioOrEntity({
       entity: "olheiro",
       usuarioOrEntityId: id,
@@ -1828,7 +1943,6 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
 
     if (!olheiro) return res.status(404).json({ error: "Olheiro não encontrado" });
 
-    // ✅ só conta “perfil visto” quando o viewer é olheiro e está vendo OUTRO usuário
     const viewerIsOlheiro = req.user?.tipo === "Olheiro";
     const isOwnProfile = !!req.userId && (req.userId === olheiro.usuarioId);
 
@@ -1836,12 +1950,6 @@ export async function getPerfilOlheiro(req: AuthenticatedRequest, res: Response)
       const ok = await requireUsage(req, res, "perfis_vistos_dia");
       if (!ok) return;
     }
-
-    // ❌ REMOVA COMPLETAMENTE isso daqui:
-    // if (req.user?.tipo === "Olheiro" && req.user?.plano !== "PRO") {
-    //   const ok = await requireUsage(req, res, "listas_salvas_total");
-    //   if (!ok) return;
-    // }
 
     const usuarioMin = olheiro.usuario ?? null;
 

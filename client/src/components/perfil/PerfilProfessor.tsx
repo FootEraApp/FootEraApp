@@ -1,4 +1,3 @@
-// client/src/components/perfil/PerfilProfessor
 import { useEffect, useMemo, useState, useCallback, ReactNode } from "react";
 import axios from "axios";
 import {
@@ -119,21 +118,14 @@ type AtividadeRecente = {
   pontuacao?: number;
 };
 
-/**
- * ✅ IMPORTANTE:
- * Agora uma turma pode ter VÁRIOS professores.
- * Então a turma tem professorIds[] e professorNomes[].
- */
 type Turma = {
   id: string;
   nome: string;
   ownerTipo?: "Clube" | "Escolinha" | null;
   ownerId?: string | null;
-
-  professorIds?: string[];     // ✅ vários professores
-  professorNomes?: string[];   // ✅ nomes
-  professorNome?: string | null; // opcional (join)
-
+  professorIds?: string[];  
+  professorNomes?: string[]; 
+  professorNome?: string | null; 
   alunosCount?: number | null;
   categoria?: string | null;
 };
@@ -323,13 +315,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     setTreinosCriados(parsed);
   }, [rawToken, data?.professor?.id, data?.usuario?.id, headers]);
 
-  /**
-   * ✅ MULTI PROFESSORES:
-   * - A turma não tem mais um "professorId" único.
-   * - Então NÃO busque /api/turmas com params { professorId } (isso quebra o multi).
-   * - Busque por owner (Clube/Escolinha) e filtre no FRONT:
-   *   turma.professorIds.includes(professorId)
-   */
   const reloadTurmas = useCallback(async () => {
     if (!rawToken || !professorId) return;
     setTurmasLoading(true);
@@ -365,7 +350,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
       });
 
     try {
-      // 1) Busca por owner (organização)
       const params: any = {};
       if (owner?.tipo && owner?.id) {
         params.ownerTipo = owner.tipo;
@@ -375,8 +359,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
       const r = await axios.get(`${API.BASE_URL}/api/turmas`, { headers, params });
       const arr = Array.isArray(r.data) ? r.data : r.data?.items ?? r.data?.data ?? [];
       const parsed = parse(arr);
-
-      // 2) Filtra as turmas onde esse professor participa
       const minhas = parsed.filter((t) => (t.professorIds ?? []).includes(String(professorId)));
 
       setTurmas(minhas);
@@ -601,11 +583,8 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
             : prev
         );
       }
-
-      // ✅ Como mudou o owner, recarrega turmas.
       setTurmas(null);
       await reloadTurmas();
-
       alert("Vínculo atualizado!");
     } catch (e) {
       console.error(e);
@@ -1122,9 +1101,8 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         open={turmasOpen && canEdit}
         onClose={handleCloseTurmas}
         owner={owner}
-        professorId={professorId}  // mantém: o modal usa o professor atual como “contexto”
+        professorId={professorId} 
       />
-
       <div className="h-6" />
     </div>
   );

@@ -191,7 +191,7 @@ export default function TurmasManager({
 
   const onFiltrarProf = async (prof: string) => {
     setFiltroProf(prof);
-    if (owner) await carregarTurmas(owner, prof); // ✅ usa o valor novo
+    if (owner) await carregarTurmas(owner, prof);
   };
 
   const marcarProfessoresDaTurma = (turmaId: string) => {
@@ -225,12 +225,9 @@ export default function TurmasManager({
     setSalvando(true);
 
     try {
-      // 1) salva PROFESSORES primeiro
       await salvarProfessores();
 
-      // 2) salva ALUNOS depois
       const usuarioIds = alunos.filter((a) => a.checked).map((a) => a.usuarioId);
-
       const r = await axios.post(
         `${API.BASE_URL}/api/turmas/${selecionada}/alunos`,
         { usuarioIds },
@@ -275,7 +272,6 @@ export default function TurmasManager({
       const res = await axios.post(`${API.BASE_URL}/api/turmas`, payload, { headers });
       const novaId = String(res.data?.id || "");
 
-      // 🔥 garante que salva professores da turma nova
       if (novaId && novoProfessores.length) {
         await axios.put(
           `${API.BASE_URL}/api/turmas/${novaId}/vincular-professor`,
@@ -432,7 +428,6 @@ export default function TurmasManager({
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
-                  {/* ✅ Card: Professores da turma */}
                   <div className="rounded-xl border border-zinc-200 bg-white">
                     <div className="border-b border-zinc-100 p-3 text-sm font-semibold text-zinc-900 flex items-center gap-2">
                       <User className="h-4 w-4" /> Professores da turma
@@ -467,7 +462,6 @@ export default function TurmasManager({
                     </div>
                   </div>
 
-                  {/* ✅ Card: Alunos da turma */}
                   <div className="rounded-xl border border-zinc-200 bg-white flex flex-col max-h-[70dvh]">
                     <div className="flex items-center justify-between border-b border-zinc-100 p-3 flex-none">
                       <div className="text-sm font-semibold text-zinc-900 flex items-center gap-2">

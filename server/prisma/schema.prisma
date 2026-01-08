@@ -93,35 +93,45 @@ model EmailVerification {
 }
 
 model Assinatura {
-  id                     String    @id @default(uuid())
-  usuarioId              String    @unique
+  id                     String           @id @default(uuid())
+  usuarioId              String           @unique
   plano                  String
-  periodicidade          String
+  periodicidade          Periodicidade
   startsAt               DateTime
   renovaEm               DateTime
   canceledAt             DateTime?
-  ativo                  Boolean   @default(true)
-  lembreteEnviado        Boolean   @default(false)
-  usuario                Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  providerSubscriptionId String?   @unique
+  ativo                  Boolean          @default(true)
+  lembreteEnviado        Boolean          @default(false)
+  usuario                Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  providerSubscriptionId String?          @unique
+  status                 AssinaturaStatus @default(TRIAL)
+  trialStartsAt          DateTime?
+  trialEndsAt            DateTime?
+
+  metodoPreferido           MetodoPagamento?
+  metodoPreferidoDefinidoEm DateTime?
+
+  bloqueadoEm DateTime?
 
   @@index([startsAt])
   @@index([canceledAt])
+  @@index([status])
+  @@index([trialEndsAt])
 }
 
 model Professor {
-  id            String      @id @default(uuid())
-  codigo        String      @unique
-  cref          String?
-  areaFormacao  String
-  escola        String?
-  fotoUrl       String?
-  nome          String      @unique
-  usuarioId     String?     @unique
-  statusCref    StatusCref?
-  qualificacoes String[]
-  certificacoes String[]
-  email         String?     @db.VarChar(191)
+  id                  String               @id @default(uuid())
+  codigo              String               @unique
+  cref                String?
+  areaFormacao        String
+  escola              String?
+  fotoUrl             String?
+  nome                String               @unique
+  usuarioId           String?              @unique
+  statusCref          StatusCref?
+  qualificacoes       String[]
+  certificacoes       String[]
+  email               String?              @db.VarChar(191)
   observacoes         AtletaObservado[]    @relation("ObservacaoProfessor")
   usuario             Usuario?             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoProfessor")
@@ -133,7 +143,6 @@ model Professor {
   escolinhas ProfessorEscolinha[]
 
   turmasParticipando  TurmaProfessor[]
-  atletas             Atleta[]
   TreinoSalvo         TreinoSalvo[]
   TreinoSalvoReuso    TreinoSalvoReuso[]
   treinosCriados      TreinoProgramado[]          @relation("TreinoProgramadoCriador")
@@ -259,14 +268,12 @@ model Atleta {
   consentimento                 Boolean                    @default(false)
   clubeId                       String?
   escolinhaId                   String?
-  professorId                   String?
   statusConexao                 StatusConexao              @default(Pendente)
   dataCriacao                   DateTime                   @default(now())
   dataUltimaModificacao         DateTime?
   perfilTipoTreinoAtualizadoEm  DateTime?
   pontosTotal                   Int?                       @default(0)
   perfilTipoTreino              TipoTreino?
-  professor                     Professor?                 @relation(fields: [professorId], references: [id], onDelete: SetNull)
   clube                         Clube?                     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha                     Escolinha?                 @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   usuario                       Usuario                    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -299,9 +306,6 @@ model Atleta {
   AtletaHistoricoVinculo        AtletaHistoricoVinculo[]
   PresencaSessaoTreino          PresencaSessaoTreino[]
   avaliacoesTreino              AvaliacaoTreino[]
-
-  @@index([perfilTipoTreino])
-  @@index([professorId])
 }
 
 model TreinoProgramado {
@@ -438,13 +442,19 @@ model RelacaoTreinamento {
   escolinhaId   String?
   clubeId       String?
   organizacaoId String?
-  ativo         Boolean?
+  ativo         Boolean    @default(true)
   criadoEm      DateTime   @default(now())
   atleta        Atleta?    @relation("RelacaoAtleta", fields: [atletaId], references: [id], onDelete: SetNull)
   clube         Clube?     @relation("RelacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha     Escolinha? @relation("RelacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
   professor     Professor? @relation("RelacaoProfessor", fields: [professorId], references: [id], onDelete: SetNull)
   encerradoEm   DateTime?
+
+  @@index([atletaId])
+  @@index([professorId])
+  @@index([clubeId])
+  @@index([escolinhaId])
+  @@index([ativo])
 }
 
 model AtletaObservado {
@@ -456,6 +466,7 @@ model AtletaObservado {
   criadoEm     DateTime   @default(now())
   atualizadoEm DateTime   @updatedAt
   olheiroId    String?
+  ativo        Boolean    @default(true)
   atleta       Atleta     @relation("ObservacaoAtleta", fields: [atletaId], references: [id], onDelete: Cascade)
   clube        Clube?     @relation("ObservacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha    Escolinha? @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
@@ -994,13 +1005,20 @@ model AtividadeRecente {
 }
 
 model TreinoRealizado {
-  id            String           @id @default(uuid())
+  id            String    @id @default(uuid())
   usuarioId     String
   treinoId      String
   local         String?
   dataExpiracao DateTime?
-  treino        TreinoProgramado @relation(fields: [treinoId], references: [id])
-  usuario       Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  treino  TreinoProgramado @relation(fields: [treinoId], references: [id], onDelete: Cascade)
+  usuario Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([treinoId])
+  @@index([usuarioId])
+  @@index([createdAt])
 }
 
 model TreinoProgramadoRecebido {
@@ -1510,11 +1528,9 @@ model TreinoSalvoReuso {
 }
 
 model EstatisticaTreino {
-  treinoId        String    @id
-  usosProfessores Int       @default(0)
-  feitosAlunos    Int       @default(0)
-  ultimoUsoEm     DateTime?
-  ultimoFeitoEm   DateTime?
+  treinoId          String    @id
+  realizacoes       Int       @default(0)
+  ultimoRealizadoEm DateTime?
 
   treino TreinoProgramado @relation(fields: [treinoId], references: [id], onDelete: Cascade)
 }
@@ -1953,6 +1969,13 @@ enum MetodoPagamento {
   BOLETO
 }
 
+enum AssinaturaStatus {
+  TRIAL
+  ATIVA
+  BLOQUEADA
+  CANCELADA
+}
+
 enum TipoCupom {
   PERCENTUAL
   VALOR
@@ -2138,4 +2161,5 @@ enum AvaliacaoAutorTipo {
   Professor
   Clube
   Escolinha
+  Atleta
 }

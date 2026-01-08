@@ -58,12 +58,11 @@ export async function listarElencosMinha(req: AuthenticatedRequest, res: Respons
           id: true,
           clubeId: true,
           escolinhaId: true,
-          professores: { select: { professorId: true } }, // <- existe no schema
+          professores: { select: { professorId: true } },
         },
       });
       if (!turma) return res.status(404).json({ error: "Turma não encontrada" });
 
-      // donoId pode ser clubeId/escolinhaId/professorId (id da entidade)
       const ligado =
         turma.clubeId === donoId ||
         turma.escolinhaId === donoId ||

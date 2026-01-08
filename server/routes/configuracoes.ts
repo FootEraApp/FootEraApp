@@ -1,4 +1,3 @@
-// server/routes/configuracoes
 import express from "express";
 import {
   getConfiguracoes,
@@ -10,7 +9,6 @@ const router = express.Router();
 
 router.get("/", getConfiguracoes);
 router.patch("/", atualizarConfiguracoes);
-
 router.delete("/minha-conta", excluirConta);
 
 export default router;

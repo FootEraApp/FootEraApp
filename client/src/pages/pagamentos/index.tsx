@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { CreditCard, Landmark, QrCode, BadgeCheck, Gift, XCircle, RefreshCcw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CreditCard, Landmark, QrCode, ArrowLeft, BadgeCheck, Gift, XCircle } from "lucide-react";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import { Link } from "wouter";
-import { ArrowLeft } from "lucide-react";
 
 type Periodicidade = "Mensal" | "Anual";
 type MetodoPagamento = "PIX" | "CREDITO" | "DEBITO" | "BOLETO";
@@ -20,7 +19,13 @@ type Assinatura = {
   id: string;
   usuarioId: string;
   plano: string;
+  periodicidade?: Periodicidade;
   startsAt: string;
+  renovaEm?: string | null;
+  status?: "TRIAL" | "ATIVA" | "BLOQUEADA" | string;
+  trialStartsAt?: string | null;
+  trialEndsAt?: string | null;
+  metodoPreferido?: MetodoPagamento | null;
   canceledAt: string | null;
   ativo: boolean;
 };
@@ -40,6 +45,16 @@ type Pagamento = {
 
 type Pagador = { nome: string; email: string; cpf?: string; telefone?: string };
 type Cartao = { numero: string; nomeImpresso: string; validade: string; cvv: string };
+
+type BillingState = {
+  status: "TRIAL" | "ATIVA" | "BLOQUEADA" | string;
+  trialAtivo: boolean;
+  trialEndsAt: string | null;
+  diasRestantes: number | null;
+  precisaEscolherPagamento: boolean;
+  metodoPreferido: MetodoPagamento | null;
+  bloqueado: boolean;
+};
 
 function diasRestantes(renovaEm?: string | null) {
   if (!renovaEm) return null;
@@ -97,7 +112,7 @@ export default function PagamentosPage() {
   const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
   const [cupomInput, setCupomInput] = useState("");
   const [cupomPreview, setCupomPreview] = useState<{ total: number, base: number, desconto: number, codigo: string, tipo: string } | null>(null);
-
+  const [billingState, setBillingState] = useState<BillingState | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<string>("");
   const [period, setPeriod] = useState<Periodicidade>("Mensal");
   const [method, setMethod] = useState<MetodoPagamento>("PIX");
@@ -145,6 +160,11 @@ export default function PagamentosPage() {
         const data = await me.json();
         setAssinatura(data.assinatura || null);
         setPagamentos(data.pagamentos || []);
+        setBillingState(data.billingState || null);
+
+        if (data.billingState?.metodoPreferido) {
+          setMethod(data.billingState.metodoPreferido);
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -212,6 +232,13 @@ export default function PagamentosPage() {
   }
 
   async function startCheckout() {
+    if (billingState?.trialAtivo && billingState?.diasRestantes != null && billingState.diasRestantes > 7) {
+      alert(
+        `Seu mês grátis está ativo. Você poderá escolher a forma de pagamento quando faltarem 7 dias para terminar.\n\nDias restantes: ${billingState.diasRestantes}`
+      );
+      return;
+    }
+
     const err = validarCamposAntesDoCheckout();
     if (err) return alert(err);
 
@@ -230,9 +257,15 @@ export default function PagamentosPage() {
       });
       const data = await r.json();
       if (!r.ok) {
-        alert(data.message || "Erro ao iniciar pagamento");
+      if (r.status === 403 && data.code === "TRIAL_ACTIVE") {
+        alert(data.message || "Trial ativo. Volte quando faltarem 7 dias.");
+        await reloadMe();
         return;
       }
+
+      alert(data.message || "Erro ao iniciar pagamento");
+      return;
+    }
 
       setPixCopiaECola(null);
       setPixQrUrl(null);
@@ -311,15 +344,19 @@ export default function PagamentosPage() {
     }
   }
 
-  async function renewSub() {
+  async function salvarMetodoPreferido() {
     try {
-      const r = await fetch(`${API.BASE_URL}/api/billing/renew`, { method: "POST", headers });
+      const r = await fetch(`${API.BASE_URL}/api/billing/preferred-method`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ metodoFinal: method }),
+      });
       const data = await r.json();
-      if (!r.ok) return alert(data.message || "Erro ao reativar");
-      alert("Assinatura reativada!");
-      reloadMe();
+      if (!r.ok) return alert(data.message || "Erro ao salvar método");
+      alert("Método de pagamento salvo! ✅");
+      await reloadMe();
     } catch {
-      alert("Erro ao reativar");
+      alert("Erro ao salvar método preferido");
     }
   }
 
@@ -344,6 +381,11 @@ export default function PagamentosPage() {
     const data = await me.json();
     setAssinatura(data.assinatura || null);
     setPagamentos(data.pagamentos || []);
+    setBillingState(data.billingState || null);
+
+    if (data.billingState?.metodoPreferido) {
+      setMethod(data.billingState.metodoPreferido);
+    }
   }
 
   async function pollPaymentStatus(pagamentoId: string) {
@@ -357,10 +399,11 @@ export default function PagamentosPage() {
         const me = await fetch(`${API.BASE_URL}/api/billing/me`, { headers });
         const data = await me.json();
 
-        const pago = (data.pagamentos || []).find((p: any) => p.id === pagamentoId);
-        const ativo = Boolean(data.assinatura?.ativo);
+        const pago = (data.pagamentos || []).find((p: Pagamento) => p.id === pagamentoId);
+        const status = data.billingState?.status ?? data.assinatura?.status;
+        const isAtiva = status === "ATIVA";
 
-        if (pago?.status === "APROVADO" || ativo) {
+        if (pago?.status === "APROVADO" || isAtiva) {
           alert("Pagamento aprovado! Assinatura ativada 🎉");
           setPixCopiaECola(null);
           setPixQrUrl(null);
@@ -394,6 +437,16 @@ export default function PagamentosPage() {
 
   const p = selectedObj;
   const total = totalComCupom();
+  const statusAssinatura = billingState?.status ?? assinatura?.status ?? "SEM_ASSINATURA";
+  const isTrial = billingState?.trialAtivo || statusAssinatura === "TRIAL";
+  const isAtiva = statusAssinatura === "ATIVA";
+  const isBloqueada = billingState?.bloqueado || statusAssinatura === "BLOQUEADA";
+  const mostrarMsgTrial = Boolean(billingState?.trialAtivo) && !isBloqueada;
+  const bloquearCheckoutPorTrial =
+    Boolean(billingState?.trialAtivo) &&
+    billingState?.diasRestantes != null &&
+    billingState.diasRestantes > 7;
+
   const anualDisponivel =
     selectedPlan !== "ESCOLINHA_PRO" &&
     !!selectedObj?.annual &&
@@ -426,6 +479,12 @@ export default function PagamentosPage() {
           {aviso}
         </div>
       )}
+      {billingState?.bloqueado && (
+        <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+          Sua conta está <b>bloqueada</b>. Para liberar, finalize um pagamento aprovado.
+        </div>
+      )}
+
       <div className="mb-6 rounded-lg border bg-emerald-50 text-emerald-900 p-3 text-sm">
         <ul className="list-disc pl-4 space-y-1">
           <li>Rede social aberta: posts/DMs ilimitados para todos. Vídeos ≤ 60s.</li>
@@ -439,18 +498,52 @@ export default function PagamentosPage() {
           <BadgeCheck className="w-5 h-5" />
           <h2 className="font-semibold text-lg">Sua assinatura</h2>
         </div>
-        {assinatura?.ativo ? (
+        {isAtiva ? (
           <div className="flex flex-col gap-2">
             <span className="text-green-700 font-semibold">ATIVA</span>
-            <div>Plano: <b>{assinatura.plano}</b></div>
-            <div>Início: {new Date(assinatura.startsAt).toLocaleDateString()}</div>
-            {assinatura.canceledAt && <div>Cancelada em: {new Date(assinatura.canceledAt).toLocaleDateString()}</div>}
+            <div>Plano: <b>{assinatura?.plano}</b></div>
+            <div>Início: {assinatura?.startsAt ? new Date(assinatura.startsAt).toLocaleDateString() : "—"}</div>
+
             <div className="flex flex-wrap gap-2 mt-2">
-              <button onClick={cancelSub} className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-2">
+              <button
+                onClick={cancelSub}
+                disabled={polling}
+                className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-2 disabled:opacity-60"
+              >
                 <XCircle className="w-4 h-4" /> Cancelar
               </button>
-              <button onClick={renewSub} className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 flex items-center gap-2">
-                <RefreshCcw className="w-4 h-4" /> Reativar
+            </div>
+          </div>
+        ) : isTrial ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-emerald-700 font-semibold">TRIAL (mês grátis)</span>
+            <div>Plano: <b>{assinatura?.plano ?? "—"}</b></div>
+
+            {billingState?.trialEndsAt && (
+              <div>
+                Termina em: {new Date(billingState.trialEndsAt).toLocaleDateString()}{" "}
+                {billingState?.diasRestantes != null ? `(faltam ${billingState.diasRestantes} dia(s))` : ""}
+              </div>
+            )}
+
+            <div className="text-sm text-gray-600">
+              Durante o trial não é necessário pagar. Quando faltarem 7 dias, você poderá escolher o método.
+            </div>
+          </div>
+        ) : isBloqueada ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-red-700 font-semibold">BLOQUEADA</span>
+            <div>Plano atual: <b>{assinatura?.plano ?? "—"}</b></div>
+            <div className="mt-2 text-sm text-red-800">
+              Sua assinatura está bloqueada. Para liberar, faça um pagamento aprovado.
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                className="px-3 py-2 rounded-lg bg-green-800 text-white disabled:opacity-60"
+                onClick={startCheckout}
+                disabled={polling}
+              >
+                Reativar agora
               </button>
             </div>
           </div>
@@ -471,7 +564,9 @@ export default function PagamentosPage() {
               key={pl.id}
               onClick={() => {
                 setSelectedPlan(pl.id);
-                if (pl.id === "ESCOLINHA_PRO") setPeriod("Mensal");
+
+                const hasAnnual = pl.id !== "ESCOLINHA_PRO" && !!pl.annual && pl.annual > 0;
+                if (!hasAnnual) setPeriod("Mensal");
               }}
               className={`px-3 py-2 rounded-lg border ${selectedPlan === pl.id ? "bg-green-700 text-white border-green-600" : "bg-white text-gray-800"}`}
             >
@@ -530,6 +625,43 @@ export default function PagamentosPage() {
           )}
         </div>
 
+        {billingState?.precisaEscolherPagamento && !billingState?.bloqueado && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <div className="font-semibold">Seu mês grátis está acabando!</div>
+            <div className="mt-1">
+              Faltam <b>{billingState.diasRestantes}</b> dia(s). Escolha uma forma de pagamento para evitar bloqueio.
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={salvarMetodoPreferido}
+                className="px-3 py-2 rounded-lg bg-amber-700 text-white disabled:opacity-60"
+                disabled={polling}
+              >
+                Escolher forma de pagamento
+              </button>
+
+              <button
+                onClick={startCheckout}
+                className="px-3 py-2 rounded-lg border border-amber-300 bg-white text-amber-900 disabled:opacity-60"
+                disabled={polling}
+              >
+                Pagar agora
+              </button>
+            </div>
+          </div>
+        )}
+
+        {bloquearCheckoutPorTrial ? (
+          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+            <div className="font-semibold">Seu mês grátis está ativo ✅</div>
+            <div className="mt-1">
+              Faltam <b>{billingState?.diasRestantes}</b> dias para terminar.
+              Quando faltar 7 dias, você poderá escolher a forma de pagamento.
+            </div>
+          </div>
+        ) : (
+          <>
         <div className="mb-2">
           <div className="font-semibold mb-2">Método de pagamento</div>
           <div className="flex flex-wrap gap-3">
@@ -556,9 +688,11 @@ export default function PagamentosPage() {
           {method === "PIX" && (
             <div>
               <div className="font-semibold mb-2">Pagar com PIX</div>
-              <p className="text-xs text-emerald-700 mt-1">
-                Seu primeiro mês em qualquer plano é gratuito. A cobrança começa só no próximo ciclo.
-              </p>
+              {mostrarMsgTrial && (
+                <p className="text-xs text-emerald-700 mt-1">
+                  Seu mês grátis está ativo. A cobrança só começa após o fim do trial.
+                </p>
+              )}
 
               <p className="text-sm text-gray-700 mb-3">
                 Valor: <b>{brl(total)}</b>. Clique em <b>Assinar agora</b> para gerar o QR Code e o código “copia e cola”.
@@ -613,9 +747,11 @@ export default function PagamentosPage() {
                 Pagar com {method === "CREDITO" ? "Cartão de Crédito" : "Cartão de Débito"}
               </div>
 
-              <p className="text-xs text-emerald-700 mt-1">
-                Seu primeiro mês em qualquer plano é gratuito. A cobrança começa só no próximo ciclo.
-              </p>
+              {mostrarMsgTrial && (
+                <p className="text-xs text-emerald-700 mt-1">
+                  Seu mês grátis está ativo. A cobrança só começa após o fim do trial.
+                </p>
+              )}
 
               <p className="text-sm text-gray-700 mb-3">
                 Valor: <b>{brl(total)}</b>
@@ -687,9 +823,11 @@ export default function PagamentosPage() {
             <div>
               <div className="font-semibold mb-2">Pagar com Boleto</div>
 
-              <p className="text-xs text-emerald-700 mt-1">
-                Seu primeiro mês em qualquer plano é gratuito. A cobrança começa só no próximo ciclo.
-              </p>
+              {mostrarMsgTrial && (
+                <p className="text-xs text-emerald-700 mt-1">
+                  Seu mês grátis está ativo. A cobrança só começa após o fim do trial.
+                </p>
+              )}
 
               <p className="text-sm text-gray-700 mb-3">
                 Valor: <b>{brl(total)}</b>
@@ -751,10 +889,14 @@ export default function PagamentosPage() {
         <div className="flex items-center justify-between border-t pt-3 mt-4">
           <div className="text-sm text-gray-600">
             Total a pagar: <b className="text-gray-900">{brl(total)}</b>
-            <span className="block text-xs text-emerald-700">
-              Seu primeiro mês em qualquer plano é gratuito. Se esta for sua primeira assinatura, você não será cobrado agora.
-            </span>
+
+            {mostrarMsgTrial ? (
+              <span className="block text-xs text-emerald-700">
+                Seu mês grátis está ativo. Você só paga se escolher pagar agora.
+              </span>
+            ) : null}
           </div>
+
           <button
             onClick={startCheckout}
             className="px-4 py-2 rounded-lg bg-green-800 text-white disabled:opacity-60"
@@ -763,6 +905,8 @@ export default function PagamentosPage() {
             Assinar agora
           </button>
         </div>
+      </>
+     )}
       </section>
 
       <section className="mb-8 p-4 border rounded-xl bg-white shadow-sm">

@@ -104,6 +104,7 @@ const EMPTY_DASH = {
 function getToken() {
   return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
 }
+
 function authHeaders(extra: Record<string, string> = {}) {
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}`, ...extra } : { ...extra };
@@ -298,7 +299,6 @@ const [fbError, setFbError] = useState<string | null>(null);
 const [fbTipo, setFbTipo] = useState<string>("");
 const [fbFrom, setFbFrom] = useState<string>("");
 const [fbOnlyUnread, setFbOnlyUnread] = useState(false);
-const [realizadoCountByTreinoId, setRealizadoCountByTreinoId] = useState<Record<string, number>>({});
 
 useEffect(() => {
   const h = setTimeout(() => setAssDebQ(assQ.trim()), 400);
@@ -325,32 +325,6 @@ useEffect(() => {
 
   return () => window.clearInterval(id);
 }, [aba]);
-
-function normalizeRealizadosCountResponse(j: any): Record<string, number> {
-  if (!j || typeof j !== "object") return {};
-
-  if (j.realizadoCountByTreinoId && typeof j.realizadoCountByTreinoId === "object") {
-    const map: Record<string, number> = {};
-    for (const [k, v] of Object.entries(j.realizadoCountByTreinoId)) {
-      map[String(k)] = Number(v ?? 0);
-    }
-    return map;
-  }
-
-  if (Array.isArray(j.items)) {
-    const map: Record<string, number> = {};
-    for (const it of j.items) {
-      if (it?.treinoId) map[String(it.treinoId)] = Number(it.count ?? 0);
-    }
-    return map;
-  }
-
-  const map: Record<string, number> = {};
-  for (const [k, v] of Object.entries(j)) {
-    map[String(k)] = Number(v ?? 0);
-  }
-  return map;
-}
 
 async function carregarAssinantes(page: number) {
   setAssLoading(true);
@@ -560,59 +534,44 @@ async function marcarFeedbackComoLido(id: string) {
   }, []);
 
   useEffect(() => {
-  if (aba !== "treinos") return;
+    if (aba !== "treinos") return;
 
-  const token = getToken();
-  if (!token) return;
+    (async () => {
+      try {
+        const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/programados`, {
+          headers: authHeaders(),
+        });
 
-  (async () => {
-    try {
-      const resTreinos = await fetch(`${API.BASE_URL}/api/treinos/programados`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+        if (!resTreinos.ok) throw new Error(`/treinos/programados: ${resTreinos.status}`);
 
-      if (!resTreinos.ok) throw new Error(`/treinos/programados: ${resTreinos.status}`);
+        const jsonTreinos = await resTreinos.json();
+        const arr = Array.isArray(jsonTreinos)
+          ? jsonTreinos
+          : (jsonTreinos?.items ?? jsonTreinos?.data ?? []);
 
-      const jsonTreinos = await resTreinos.json();
-      const arr = Array.isArray(jsonTreinos)
-        ? jsonTreinos
-        : (jsonTreinos?.items ?? jsonTreinos?.data ?? []);
+        const normTreinos = (Array.isArray(arr) ? arr : []).map((tr: any) => ({
+          id: String(tr.id),
+          nome: String(tr.nome ?? ""),
+          codigo: String(tr.codigo ?? ""),
+          nivel: String(tr.nivel ?? ""),
+          descricao: tr.descricao ?? "",
+          realizadoCount: Number(
+            tr.realizadoCount ??
+            tr.realizados ??
+            tr.realizacoes ??
+            tr.estatistica?.realizacoes ??
+            0
+          ),
+        }));
 
-      const normTreinos = (Array.isArray(arr) ? arr : []).map((tr: any) => ({
-        id: String(tr.id),
-        nome: String(tr.nome ?? ""),
-        codigo: String(tr.codigo ?? ""),
-        nivel: String(tr.nivel ?? ""),
-        descricao: tr.descricao ?? "",
-      }));
+        setTreinos(normTreinos);
 
-      setTreinos(normTreinos);
-
-      const ids = normTreinos.map((t) => t.id).filter(Boolean);
-      if (!ids.length) {
-        setRealizadoCountByTreinoId({});
-        return;
+      } catch (e) {
+        console.error("[admin-page] erro ao carregar treinos:", e);
+        setTreinos([]);
       }
-
-      const r = await fetch(
-        `${API.BASE_URL}/api/treinos/realizados-count?ids=${encodeURIComponent(ids.join(","))}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (!r.ok) {
-        setRealizadoCountByTreinoId({});
-        return;
-      }
-
-      const j = await r.json();
-      setRealizadoCountByTreinoId(normalizeRealizadosCountResponse(j));
-    } catch (e) {
-      console.error("[admin-page] erro ao carregar treinos:", e);
-      setTreinos([]);
-      setRealizadoCountByTreinoId({});
-    }
-  })();
-}, [aba]);
+    })();
+  }, [aba]);
 
   useEffect(() => {
     if (!FLAGS.DESAFIOS_ENABLED) return;
@@ -955,6 +914,21 @@ async function confirmarExcluirProfessor() {
   const ver = Number(dados.totalVerificados || 0);
   const nver = Number(dados.totalNaoVerificados || 0);
   
+  const treinosOrdenados = [...treinos].sort((a: any, b: any) => {
+    const ra = Number(a.realizadoCount ?? a.realizados ?? 0);
+    const rb = Number(b.realizadoCount ?? b.realizados ?? 0);
+
+    if (rb !== ra) return rb - ra;
+
+    const na = String(a.nome ?? "").toLowerCase();
+    const nb = String(b.nome ?? "").toLowerCase();
+    if (na !== nb) return na.localeCompare(nb);
+
+    const ca = String(a.codigo ?? "").toLowerCase();
+    const cb = String(b.codigo ?? "").toLowerCase();
+    return ca.localeCompare(cb);
+  });
+
   const exerciciosOrdenados = [...exercicios].sort((a: any, b: any) => {
     const ca = Number(a.usadoEmTreinos ?? 0);
     const cb = Number(b.usadoEmTreinos ?? 0);
@@ -1305,10 +1279,10 @@ async function confirmarExcluirProfessor() {
               <p className="text-gray-500">Nenhum treino encontrado.</p>
             ) : (
               <ul className="space-y-2">
-                {treinos.map((t: any) => {
+                {treinosOrdenados.map((t: any) => {
                   const nome = t.nome ?? t.titulo ?? "(sem nome)";
                   const codigo = t.codigo ?? "-";
-                  const realizado = Number(realizadoCountByTreinoId[t.id] ?? t.realizadoCount ?? 0);
+                  const realizado = Number(t.realizadoCount ?? t.realizados ?? 0);
                   const nivel = t.nivel ?? t.dificuldade ?? "-";
                   const descricao = t.descricao ?? t.resumo ?? "";
                   return (
