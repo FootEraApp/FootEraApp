@@ -93,6 +93,7 @@ type TreinoProgramadoItem = {
   codigo?: string | null;
   nivel?: string | null;
   descricao?: string | null;
+  autor?: { tipo: "Professor" | "Clube" | "Escolinha" | "Desconhecido"; id: string | null; nome: string | null };
 };
 
 type AvaliacaoResp = {
@@ -452,11 +453,22 @@ const GerenciarAtletas: React.FC = () => {
       if (!normalizado) throw new Error("Perfil institucional inválido para Gerenciar Atletas.");
 
       const usuarioId = data?.usuario?.id || Storage.usuarioId || null;
-      const tipoId =
-        (perfilTipo === "Professor"  && (data?.professor?.id))  ||
-        (perfilTipo === "Clube"      && (data?.clube?.id))      ||
-        (perfilTipo === "Escolinha"  && (data?.escolinha?.id))  ||
+      const tipoIdFromApi =
+        (perfilTipo === "Professor"  && data?.professor?.id) ||
+        (perfilTipo === "Clube"      && data?.clube?.id) ||
+        (perfilTipo === "Escolinha"  && data?.escolinha?.id) ||
         null;
+
+      // ✅ fallback: pega do Storage/localStorage caso a API não retorne
+      const tipoId =
+        tipoIdFromApi ||
+        (Storage as any).tipoUsuarioId ||
+        localStorage.getItem("tipoUsuarioId") ||
+        sessionStorage.getItem("tipoUsuarioId") ||
+        null;
+
+      setTipoUsuarioIdEntidade(tipoId);
+
 
       if (!usuarioId) throw new Error("Não foi possível identificar o usuarioId da entidade.");
 
@@ -729,11 +741,19 @@ const carregarProfessores = async () => {
 
         // tenta seu endpoint já existente de treinos do gerenciador
         // se você preferir, pode trocar por /api/treinos/programados se existir
-        const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados`, {
+        const entidadeId = tipoUsuarioIdEntidade || usuarioIdEntidade;
+
+        const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`, {
           headers,
-          params: tipoUsuarioIdEntidade
-            ? { criador: tipo ? tipoParaVinculo(tipo) : undefined, id: usuarioIdEntidade, tipoUsuarioId: tipoUsuarioIdEntidade }
-            : { criador: tipo ? tipoParaVinculo(tipo) : undefined, id: usuarioIdEntidade },
+          params: {
+            vinculo: tipo ? tipoParaVinculo(tipo) : undefined,
+
+            // ✅ manda SEMPRE o id da entidade quando existir
+            id: entidadeId,
+
+            // ✅ mantém também (seu backend prioriza ele)
+            tipoUsuarioId: tipoUsuarioIdEntidade || undefined,
+          },
         });
 
         const items = (res.data?.items ?? res.data ?? []) as any[];
@@ -744,8 +764,12 @@ const carregarProfessores = async () => {
             codigo: t.codigo ?? null,
             nivel: t.nivel ?? null,
             descricao: t.descricao ?? null,
+            autor: t.autor
+              ? { tipo: t.autor.tipo, id: t.autor.id ?? null, nome: t.autor.nome ?? null }
+              : undefined,
           }))
         );
+
       } catch (e) {
         console.error("Erro ao carregar treinos programados:", e);
         setTreinosProgramados([]);
@@ -753,7 +777,7 @@ const carregarProfessores = async () => {
         setLoadingProgramados(false);
       }
     })();
-  }, [carreiraOpen, focado?.id]);
+  }, [carreiraOpen, focado?.id, tipo, usuarioIdEntidade,tipoUsuarioIdEntidade]);
 
   useEffect(() => {
     if (!carreiraOpen || !focado?.id) return;
@@ -1058,7 +1082,7 @@ async function salvarAvaliacao() {
 
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-4 py-6">
+    <div className="mx-auto w-full max-w-[1600px] px-3 sm:px-4 py-4 sm:py-6 pb-24">
       <div className="mb-3">
         <Link
           href="/perfil"
@@ -1071,7 +1095,7 @@ async function salvarAvaliacao() {
         </Link>
       </div>
       
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 sm:mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-emerald-600/10 p-3 text-emerald-700">
             <Users className="h-6 w-6" />
@@ -1099,38 +1123,33 @@ async function salvarAvaliacao() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex w-full flex-wrap items-center justify-start sm:justify-end gap-2">
           {tipo && tipo !== "Professor" && (
             <>
               <button
                 onClick={() => { setTurmasProfessorId(null); setTurmasOpen(true); }}
-                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-zinc-700 hover:bg-zinc-50"
+                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
               >
-                <CirclePlus className="h-4 w-4" /> Adicionar turma
+                <CirclePlus className="h-4 w-4 shrink-0" />
+                <span className="whitespace-nowrap text-sm">Adicionar</span>
+                <span className="hidden sm:inline whitespace-nowrap">turma</span>
               </button>
+
               <button
                 onClick={() => { setTurmasProfessorId(null); setTurmasOpen(true); }}
-                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-zinc-700 hover:bg-zinc-50"
+                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
               >
-                <ListChecks className="h-4 w-4" /> Administrar turmas
+                <ListChecks className="h-4 w-4 shrink-0" />
+                <span className="whitespace-nowrap text-sm">Turmas</span>
+                <span className="hidden sm:inline whitespace-nowrap"> (admin)</span>
               </button>
             </>
           )}
-
-          <button
-            onClick={() => setCarreiraOpen(true)}
-            disabled={!focado}
-            title={!focado ? "Selecione um atleta para gerenciar a agenda" : "Gerenciar agenda do atleta selecionado"}
-            className="ml-auto inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-white hover:bg-emerald-700 disabled:opacity-60 disabled:hover:bg-emerald-600"
-          >
-            <CalendarClock className="h-4 w-4" />
-            Gerenciar agenda
-          </button>
-
         </div>
+
       </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-12">
+      <div className="mb-3 sm:mb-4 grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-12">
         <div className="md:col-span-4">
           <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2">
             <Search className="h-4 w-4 text-zinc-500" />
@@ -1146,7 +1165,7 @@ async function salvarAvaliacao() {
           <select
             value={categoria}
             onChange={(e) => setCategoria(e.target.value as any)}
-            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[13px] sm:text-sm"
           >
             <option value="">Categoria (todas)</option>
             {["Sub-9", "Sub-11", "Sub-13", "Sub-15", "Sub-17", "Sub-20", "Livre"].map((c) => (
@@ -1160,7 +1179,7 @@ async function salvarAvaliacao() {
           <select
             value={posicaoCodigo}
             onChange={(e) => setPosicaoCodigo(e.target.value as any)}
-            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[13px] sm:text-sm"
           >
             <option value="">Posição (todas)</option>
             {Object.entries(posicoesMap).map(([valor, label]) => (
@@ -1174,7 +1193,7 @@ async function salvarAvaliacao() {
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as any)}
-            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[13px] sm:text-sm"
           >
             <option value="">Status</option>
             <option value="ativo">Ativo recentemente</option>
@@ -1183,29 +1202,7 @@ async function salvarAvaliacao() {
         </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-zinc-600">
-            <Shield className="h-4 w-4" /> Atletas vinculados
-          </div>
-          <div className="mt-2 text-2xl font-semibold">{metricas.total}</div>
-          <div className="text-xs text-zinc-500">Total filtrado nesta visão</div>
-        </div>
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-zinc-600">
-            <Activity className="h-4 w-4" /> Ativos recentemente
-          </div>
-          <div className="mt-2 text-2xl font-semibold">{metricas.ativos}</div>
-          <div className="text-xs text-zinc-500">Baseado em última atividade</div>
-        </div>
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-zinc-600">
-            <Trophy className="h-4 w-4" /> Média de pontuação
-          </div>
-          <div className="mt-2 text-2xl font-semibold">{metricas.mediaPont}</div>
-          <div className="text-xs text-zinc-500">Pontuação FootEra</div>
-        </div>
-      </div>
+
 
       {aba === "professores" && tipo !== "Professor" ? (
         <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
@@ -1241,7 +1238,7 @@ async function salvarAvaliacao() {
                     </td>
                     <td className="p-3">
                       <div className="font-medium text-zinc-900">{p.nome}</div>
-                      <div className="text-xs text-zinc-500">ID: {p.usuarioId || p.id}</div>
+                      
                     </td>
                     <td className="p-3 text-sm text-zinc-700">{p.cref ?? "—"}</td>
                     <td className="p-3 text-sm text-zinc-700">{p.turmas ?? 0}</td>
@@ -1270,6 +1267,33 @@ async function salvarAvaliacao() {
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
           <div className="lg:col-span-7 xl:col-span-8">
+
+  <div className="mb-4 hidden sm:grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+      <div className="flex items-center gap-2 text-zinc-600">
+        <Shield className="h-4 w-4" /> Atletas vinculados
+      </div>
+      <div className="mt-2 text-2xl font-semibold">{metricas.total}</div>
+      <div className="text-xs text-zinc-500">Total filtrado nesta visão</div>
+    </div>
+
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+      <div className="flex items-center gap-2 text-zinc-600">
+        <Activity className="h-4 w-4" /> Ativos recentemente
+      </div>
+      <div className="mt-2 text-2xl font-semibold">{metricas.ativos}</div>
+      <div className="text-xs text-zinc-500">Baseado em última atividade</div>
+    </div>
+
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+      <div className="flex items-center gap-2 text-zinc-600">
+        <Trophy className="h-4 w-4" /> Média de pontuação
+      </div>
+      <div className="mt-2 text-2xl font-semibold">{metricas.mediaPont}</div>
+      <div className="text-xs text-zinc-500">Pontuação FootEra</div>
+    </div>
+  </div>
+
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-zinc-600">
                 <Filter className="h-4 w-4" /> {filtrados.length} resultado(s)
@@ -1295,111 +1319,129 @@ async function salvarAvaliacao() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-zinc-200 bg-white">
-              <div className="overflow-x-auto">
+<div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
+  {loading ? (
+    <div className="p-6 text-center text-zinc-600">
+      <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+      Carregando atletas…
+    </div>
+  ) : error ? (
+    <div className="p-6 text-center text-red-600">{error}</div>
+  ) : filtrados.length === 0 ? (
+    <div className="p-8 text-center text-zinc-500">Nenhum atleta encontrado.</div>
+  ) : (
+    <>
+      {/* ✅ MOBILE: cards */}
+      <div className="sm:hidden divide-y divide-zinc-100">
+        {filtrados.map((a) => (
+          <div key={a.id} className="p-3">
+            <div className="flex items-center gap-3">
+              <img
+                src={getFoto(a.foto)}
+                alt={a.nome}
+                className="h-11 w-11 rounded-full object-cover ring-2 ring-white shadow"
+              />
 
-              {loading ? (
-                <div className="p-6 text-center text-zinc-600">
-                  <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
-                  Carregando atletas…
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-zinc-900 truncate">{a.nome}</div>
+                <div className="text-xs text-zinc-500 truncate">
+                  {a.categoria ?? "—"} · {a.posicao ?? "—"}
                 </div>
-              ) : error ? (
-                <div className="p-6 text-center text-red-600">{error}</div>
-              ) : filtrados.length === 0 ? (
-                <div className="p-8 text-center text-zinc-500">Nenhum atleta encontrado.</div>
-              ) : (
-                <table className="w-full min-w-[1100px] table-auto">
-                  <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-500">
-                    <tr>
-                      <th className="w-10 p-3">
-                        <input
-                          type="checkbox"
-                          aria-label="Selecionar todos"
-                          checked={filtrados.length > 0 && filtrados.every((a) => !!selecionados[a.usuarioId || a.id])}
-                          onChange={(e) => {
-                            const checked = e.currentTarget.checked;
-                            setSelecionados((prev) => {
-                              const next = { ...prev };
-                              filtrados.forEach((a) => {
-                                const key = a.usuarioId || a.id;
-                                next[key] = checked;
-                              });
-                              return next;
-                            });
-                          }}
-                        />
-                      </th>
-                      <th className="w-16 p-3">Foto</th>
-                      <th className="p-3">Nome</th>
-                      <th className="w-28 p-3">Categoria</th>
-                      <th className="w-32 p-3">Posição</th>
-                      <th className="w-40 p-3">Time</th>       
-                      <th className="w-40 p-3">Professor</th>  
-                      <th className="w-28 p-3">Pontuação</th>
-                      <th className="w-28 p-3">Status</th>
-                      <th className="w-40 p-3">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtrados.map((a) => {
-                      const key = a.usuarioId || a.id;
-                      const checked = !!selecionados[key];
-                      return (
-                        <tr key={a.id} className="border-t border-zinc-100 hover:bg-zinc-50">
-                          <td className="p-3">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleSelecionado(key)}
-                              aria-label={`Selecionar ${a.nome}`}
-                            />
-                          </td>
-                          <td className="p-3">
-                            <img
-                              src={getFoto(a.foto)}
-                              alt={a.nome}
-                              className={`h-10 w-10 rounded-full object-cover ring-2 ring-white shadow ${checked ? "outline outline-2 outline-emerald-500" : ""}`}
-                            />
-                          </td>
-                          <td className="p-3">
-                            <div className="font-medium text-zinc-900">{a.nome}</div>
-                            <div className="text-xs text-zinc-500">ID: {key}</div>
-                          </td>
-                          <td className="p-3 text-sm text-zinc-700">{a.categoria ?? "—"}</td>
-                          <td className="p-3 text-sm text-zinc-700">{a.posicao ?? "—"}</td>
 
-                          <td className="p-3 text-sm text-zinc-700">
-                            {a.clubeNome ?? a.escolinhaNome ?? "Independente"}
-                          </td>
-
-                          <td className="p-3 text-sm text-zinc-700">
-                            {a.professorNome ?? "Sem professor"}
-                          </td>
-
-                          <td className="p-3 text-sm text-zinc-900">{numberOrDash(a.pontuacao)}</td>
-                          <td className="p-3">
-                            <StatusBadge ativo={a.ativoRecentemente} />
-                          </td>
-
-                          <td className="p-3">
-                            <div className="flex flex-wrap items-center justify-end gap-2">
-                              <button
-                                onClick={() => abrirDetalhe(a)}
-                                className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100"
-                              >
-                                Ver detalhes <ChevronRight className="h-4 w-4" />
-                              </button>
-
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="text-xs text-zinc-700">
+                    Pontos: <strong className="text-zinc-900">{numberOrDash(a.pontuacao)}</strong>
+                  </span>
+                  <StatusBadge ativo={a.ativoRecentemente} />
+                </div>
               </div>
             </div>
+
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => { setFocado(a); setCarreiraOpen(true); }}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-emerald-700"
+              >
+                <CalendarClock className="h-4 w-4" />
+                Agenda
+              </button>
+
+              <button
+                onClick={() => abrirDetalhe(a)}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+              >
+                Detalhes <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ✅ DESKTOP/TABLET: tabela */}
+      <div className="hidden sm:block overflow-x-auto">
+        <table className="w-full min-w-[980px] table-auto">
+          <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-500">
+            <tr>
+              <th className="w-24 p-3">Agenda</th>
+              <th className="w-16 p-3">Foto</th>
+              <th className="p-3">Nome</th>
+              <th className="w-28 p-3">Categoria</th>
+              <th className="w-32 p-3">Posição</th>
+              <th className="w-28 p-3">Pontuação</th>
+              <th className="w-28 p-3">Status</th>
+              <th className="w-40 p-3">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtrados.map((a) => (
+              <tr key={a.id} className="border-t border-zinc-100 hover:bg-zinc-50">
+                <td className="p-3">
+                  <button
+                    onClick={() => { setFocado(a); setCarreiraOpen(true); }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
+                    title="Gerenciar agenda"
+                  >
+                    <CalendarClock className="h-4 w-4" />
+                    Gerenciar
+                  </button>
+                </td>
+
+                <td className="p-3">
+                  <img
+                    src={getFoto(a.foto)}
+                    alt={a.nome}
+                    className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow"
+                  />
+                </td>
+
+                <td className="p-3">
+                  <div className="font-medium text-zinc-900">{a.nome}</div>
+                </td>
+
+                <td className="p-3 text-sm text-zinc-700">{a.categoria ?? "—"}</td>
+                <td className="p-3 text-sm text-zinc-700">{a.posicao ?? "—"}</td>
+                <td className="p-3 text-sm text-zinc-900">{numberOrDash(a.pontuacao)}</td>
+
+                <td className="p-3">
+                  <StatusBadge ativo={a.ativoRecentemente} />
+                </td>
+
+                <td className="p-3">
+                  <button
+                    onClick={() => abrirDetalhe(a)}
+                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100"
+                  >
+                    Ver detalhes <ChevronRight className="h-4 w-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )}
+</div>
 
 
             <div className="mt-3 flex flex-col items-start justify-between gap-2 text-sm sm:flex-row sm:items-center">
@@ -1510,26 +1552,29 @@ async function salvarAvaliacao() {
       />
 
 {carreiraOpen && focado && (
-  <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center">
+  <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/50 p-0 sm:p-3">
     <div
       className="
-        w-full max-w-6xl overflow-hidden rounded-2xl border border-zinc-200 bg-white text-zinc-900 shadow-2xl
+        w-full sm:max-w-6xl overflow-hidden
+        rounded-none sm:rounded-2xl
+        border-0 sm:border border-zinc-200
+        bg-white text-zinc-900 shadow-2xl
         flex flex-col
-        h-[calc(100dvh-1.5rem)] max-h-[calc(100dvh-1.5rem)]
-        sm:h-[70vh] sm:max-h-[70vh]
+        h-[100dvh] sm:h-[70vh] sm:max-h-[70vh]
       "
     >
 
+
       {/* topo */}
-<div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+<div className="flex items-center justify-between border-b border-zinc-200 px-3 sm:px-4 py-2 sm:py-3">
   <div className="min-w-0">
-    <div className="text-xs text-zinc-500">Agenda de Treinos</div>
-    <div className="font-extrabold truncate text-zinc-900">{focado.nome}</div>
+    <div className="text-[11px] sm:text-xs text-zinc-500">Agenda de Treinos</div>
+    <div className="font-extrabold truncate text-zinc-900 text-sm sm:text-base">{focado.nome}</div>
   </div>
 
   <button
     onClick={() => setCarreiraOpen(false)}
-    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+    className="rounded-xl border border-zinc-200 bg-white px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-zinc-700 hover:bg-zinc-50"
   >
     Fechar
   </button>
@@ -1538,50 +1583,56 @@ async function salvarAvaliacao() {
 
       <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr_380px] overflow-hidden">
         {/* Calendário */}
-        <div className="p-4 border-b xl:border-b-0 xl:border-r border-zinc-200 min-h-0 overflow-y-auto">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button
-                onClick={() => setCursorMonth((d) => addMonths(d, -1))}
-                className="p-2 rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-                title="Mês anterior"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => setCursorMonth((d) => addMonths(d, 1))}
-                className="p-2 rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-                title="Próximo mês"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-              <div className="font-extrabold text-lg text-zinc-900">{monthLabel}</div>
-            </div>
+        <div className="p-3 sm:p-4 border-b xl:border-b-0 xl:border-r border-zinc-200 min-h-0 overflow-y-auto">
 
-            <div className="text-xs text-zinc-600 flex items-center gap-3">
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-3 w-3 rounded bg-green-500" /> Concluído
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-3 w-3 rounded bg-red-500" /> Perdido
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-3 w-3 rounded bg-zinc-300" /> Normal / Pendente
-              </span>
-            </div>
-          </div>
+<div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+  <div className="flex items-center gap-2">
+    <button
+      onClick={() => setCursorMonth((d) => addMonths(d, -1))}
+      className="h-9 w-9 sm:h-10 sm:w-10 flex items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+      title="Mês anterior"
+    >
+      <ChevronLeft className="h-5 w-5" />
+    </button>
+
+    <div className="flex-1 text-center font-extrabold text-base sm:text-lg text-zinc-900">
+      {monthLabel}
+    </div>
+
+    <button
+      onClick={() => setCursorMonth((d) => addMonths(d, 1))}
+      className="h-9 w-9 sm:h-10 sm:w-10 flex items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+      title="Próximo mês"
+    >
+      <ChevronRight className="h-5 w-5" />
+    </button>
+  </div>
+
+  <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-zinc-600">
+    <span className="flex items-center gap-1">
+      <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-500" /> Concluído
+    </span>
+    <span className="flex items-center gap-1">
+      <span className="inline-block h-2.5 w-2.5 rounded bg-red-500" /> Perdido
+    </span>
+    <span className="flex items-center gap-1 col-span-2 sm:col-auto">
+      <span className="inline-block h-2.5 w-2.5 rounded bg-zinc-300" /> Normal / Pendente
+    </span>
+  </div>
+</div>
+
 
           {loadingCalendar ? (
             <div className="p-4 text-sm opacity-80">Carregando calendário...</div>
           ) : (
             <>
-              <div className="grid grid-cols-7 gap-2 text-xs opacity-80 mb-2 px-1">
+              <div className="grid grid-cols-7 gap-1 sm:gap-2 text-[10px] sm:text-xs opacity-80 mb-2 px-0.5 sm:px-1">
                 {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((w) => (
                   <div key={w} className="text-center">{w}</div>
                 ))}
               </div>
 
-              <div className="grid grid-cols-7 gap-2">
+              <div className="grid grid-cols-7 gap-1 sm:gap-2">
                 {daysGrid.map(({ date, key, inMonth }) => {
                   const items = agendadosPorDia.get(key) ?? [];
                   const hasTreino = items.length > 0;
@@ -1605,27 +1656,49 @@ async function salvarAvaliacao() {
                       key={key}
                       onClick={() => toggleDay(key)}
                       className={[
-                        "h-16 rounded-xl border text-left p-2 transition relative",
+                        "h-12 sm:h-16 rounded-xl border text-left p-1.5 sm:p-2 transition relative",
                         bg,
                         opacity,
                         selected ? "ring-2 ring-emerald-400" : "hover:bg-zinc-50",
                         past ? "opacity-70" : "",
                       ].join(" ")}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-bold">{date.getDate()}</div>
-                        {done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : null}
-                        {lost ? <XCircle className="h-4 w-4 text-red-600" /> : null}
+<div className="flex items-start justify-between gap-1">
+  <div className="text-xs sm:text-sm font-extrabold">{date.getDate()}</div>
 
-                      </div>
-                      {hasTreino ? (
-                        <div className="mt-1 text-[11px] opacity-90 truncate">
-                          {items[0]?.treinoProgramado?.nome || items[0]?.titulo || "Treino"}
-                          {items.length > 1 ? ` +${items.length - 1}` : ""}
-                        </div>
-                      ) : (
-                        <div className="mt-1 text-[11px] opacity-60 truncate">Sem treino</div>
-                      )}
+  {/* Ícones só no desktop, pq no mobile ocupa muito */}
+  <div className="hidden sm:flex items-center gap-1">
+    {done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : null}
+    {lost ? <XCircle className="h-4 w-4 text-red-600" /> : null}
+  </div>
+</div>
+
+{/* MOBILE: bolinhas + contador */}
+<div className="sm:hidden mt-1 flex items-center gap-1">
+  {hasTreino ? (
+    <>
+      <span className={`h-2 w-2 rounded-full ${done ? "bg-emerald-500" : lost ? "bg-red-500" : "bg-zinc-400"}`} />
+      {items.length > 1 ? (
+        <span className="text-[10px] text-zinc-600 font-semibold">+{items.length - 1}</span>
+      ) : (
+        <span className="text-[10px] text-zinc-500">treino</span>
+      )}
+    </>
+  ) : (
+    <span className="text-[10px] text-zinc-400">—</span>
+  )}
+</div>
+
+{/* DESKTOP: nome do treino */}
+{hasTreino ? (
+  <div className="hidden sm:block mt-1 text-[11px] opacity-90 truncate">
+    {items[0]?.treinoProgramado?.nome || items[0]?.titulo || "Treino"}
+    {items.length > 1 ? ` +${items.length - 1}` : ""}
+  </div>
+) : (
+  <div className="hidden sm:block mt-1 text-[11px] opacity-60 truncate">Sem treino</div>
+)}
+
                     </button>
                   );
                 })}
@@ -1635,7 +1708,7 @@ async function salvarAvaliacao() {
         </div>
 
         {/* Drawer */}
-        <div className="p-4 min-h-0 overflow-hidden flex flex-col">
+        <div className="p-3 sm:p-4 min-h-0 overflow-hidden flex flex-col">
           <div className="flex items-center justify-between mb-2">
             <div className="flex flex-wrap items-center justify-end gap-2">
               <ClipboardList className="h-5 w-5 text-zinc-500" />
@@ -1671,9 +1744,11 @@ async function salvarAvaliacao() {
           >
             <option value="">Selecionar...</option>
             {treinosProgramados.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.nome}{t.codigo ? ` (${t.codigo})` : ""}
-              </option>
+            <option key={t.id} value={t.id}>
+              {t.nome}
+              {t.codigo ? ` (${t.codigo})` : ""}
+              {t.autor?.nome ? ` — ${t.autor.tipo}: ${t.autor.nome}` : t.autor?.tipo ? ` — ${t.autor.tipo}` : ""}
+            </option>
             ))}
           </select>
 
