@@ -15,6 +15,13 @@ type AtividadeUI = {
   link?: string | null; 
 };
 
+const DEFAULT_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
+
+function withDefaultImg(v: any) {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s ? s : DEFAULT_AVATAR;
+}
+
 async function ensureSolicitacaoVinculo(
   tx: any,
   params: { atletaId: string; entidadeId: string; tipoEntidade: "clube" | "escolinha" | "professor" }
@@ -1069,7 +1076,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         id: usuario.id,
         nome: usuario.nome,
         email: usuario.email,
-        foto: usuario.foto,
+        foto: withDefaultImg(usuario.foto),
       },
       dadosEspecificos,
       vinculos,
@@ -1699,7 +1706,7 @@ export async function getPerfilProfessor(req: AuthenticatedRequest, res: Respons
     if (gruposCriados > 0) conquistas += 1;
 
     const usuarioMin = (prof as any).usuario ?? null;
-    const fotoPerfil: string | null = (prof as any).fotoUrl ?? (usuarioMin?.foto ?? null);
+    const fotoPerfil = withDefaultImg((prof as any).fotoUrl ?? usuarioMin?.foto);
 
     return res.json({
       tipo: "Professor" as const,
@@ -1789,7 +1796,7 @@ export async function getPerfilClube(req: Request, res: Response) {
     ]);
 
     const usuarioMin = (clube as any).usuario ?? null;
-    const logoOuFoto: string | null = (clube as any).logo ?? (usuarioMin?.foto ?? null);
+    const logoOuFoto = withDefaultImg((clube as any).logo ?? usuarioMin?.foto);
 
     return res.json({
       tipo: "Clube" as const,
@@ -1868,7 +1875,7 @@ export async function getPerfilEscola(req: Request, res: Response) {
     const treinosCount = await prisma.treinoProgramado.count({ where: { escolinhaId: escola.id } });
 
     const usuarioMin = (escola as any).usuario ?? null;
-    const logoOuFoto: string | null = (escola as any).logo ?? (usuarioMin?.foto ?? null);
+    const logoOuFoto = withDefaultImg((escola as any).logo ?? usuarioMin?.foto);
 
     return res.json({
       tipo: "Escolinha" as const,

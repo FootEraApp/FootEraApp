@@ -2,16 +2,16 @@ import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { publicImgUrl } from "../../utils/publicUrl.js";
 import { FaHeart, FaRegCommentDots } from "react-icons/fa";
-import {
-  getFeedPosts,
-  type PostagemComUsuario,
-} from "../../services/feedService.js";
-import { APP } from "../../config.js";
+import { getFeedPosts, type PostagemComUsuario } from "../../services/feedService.js";
+import { APP, API } from "../../config.js";
 import {
   ALL_ACHIEVEMENTS,
   type AchievementLite,
   type Tier,
 } from "../../lib/achievementsCatalog.js";
+import Storage from "../../../../server/utils/storage.js";
+import axios from "axios";
+import { X } from "lucide-react";
 
 type ParsedAchievement = {
   ach?: AchievementLite;
@@ -48,7 +48,6 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
   }
 
   const userMsg = achId ? rest.replace(/\[[^\]]+\]\s*/, "").trim() : rest;
-
   return { ach, headTitle, headDesc, userMsg };
 }
 
@@ -98,9 +97,60 @@ function AchievementShareCard({ parsed }: { parsed: ParsedAchievement }) {
   );
 }
 
+function ownerIdOfPost(p: PostagemComUsuario, fallbackAny: any): string {
+  const fromUsuario = String(p?.usuario?.id ?? "").trim();
+  if (fromUsuario) return fromUsuario;
+
+  const fromAlt = String(
+    fallbackAny?.usuarioId ?? fallbackAny?.autorId ?? fallbackAny?.userId ?? ""
+  ).trim();
+
+  return fromAlt;
+}
+
+function midiaImg(url?: string | null) {
+  const u = publicImgUrl(url ?? null);
+  return u || null;
+}
+function midiaVideo(url?: string | null) {
+  const u = publicImgUrl(url ?? null);
+  return u || null;
+}
+
 export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }) {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
+  const [deletandoId, setDeletandoId] = useState<string | null>(null);
+
+  async function apagarPost(postId: string) {
+    const token = Storage.token;
+    if (!token) {
+      alert("Você precisa estar logado para apagar.");
+      return;
+    }
+
+    const ok = confirm("Tem certeza que deseja apagar esta postagem?");
+    if (!ok) return;
+
+    try {
+      setDeletandoId(postId);
+
+      await axios.delete(`${API.BASE_URL}/api/feed/posts/${postId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+    } catch (err: any) {
+      console.error(err);
+      alert(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Não foi possível apagar agora."
+      );
+    } finally {
+      setDeletandoId(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -109,8 +159,30 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
       try {
         setLoadingPosts(true);
 
-        let dados = await getFeedPosts("meus");
-        dados = (dados || []).filter((p) => p.usuario?.id === usuarioId);
+        const alvo = String(usuarioId || "").trim();
+        const isOwn = alvo === String(Storage.usuarioId || "").trim();
+
+        let dados = await getFeedPosts(isOwn ? "meus" : "todos");
+
+        dados = (dados || []).filter((p) => {
+          const anyP = p as any;
+          const dono = ownerIdOfPost(p, anyP);
+
+          const reposterId = String(
+            anyP?.reposterId ??
+              anyP?.repostUserId ??
+              anyP?.repostById ??
+              anyP?.usuarioRepostId ??
+              ""
+          ).trim();
+
+          return dono === alvo || reposterId === alvo;
+        });
+
+        dados.sort(
+          (a, b) =>
+            new Date(b.dataCriacao).getTime() - new Date(a.dataCriacao).getTime()
+        );
 
         if (!cancelled) setPosts(dados);
       } catch (e) {
@@ -126,9 +198,11 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
     };
   }, [usuarioId]);
 
+  const FALLBACK_AVATAR = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+
   return (
     <div className="max-w-3xl mx-auto px-4 -mt-2 pb-10">
-      <div className="bg-white rounded-2xl shadow-sm pt-4 pb-4">
+      <div className="pt-2 pb-2">
         <h2 className="text-green-900 font-bold text-lg px-4 mb-2">
           Minhas postagens
         </h2>
@@ -143,51 +217,105 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
 
         <div className="space-y-4 px-4 mt-2">
           {posts.map((post) => {
+            const anyP = post as any;
+            const dono = ownerIdOfPost(post, anyP);
+            const me = String(Storage.usuarioId || "").trim();
+            const isMyProfile = String(usuarioId || "").trim() === me;
+
+            const reposterId = String(
+              anyP?.reposterId ??
+                anyP?.repostUserId ??
+                anyP?.repostById ??
+                anyP?.usuarioRepostId ??
+                ""
+            ).trim();
+
+            const canDelete = isMyProfile && (dono === me || reposterId === me);
             const curtidas = post.curtidas || [];
             const comentarios = post.comentarios || [];
-            const imgSrc = publicImgUrl(post.imagemUrl) ?? undefined;
-            const videoSrc = publicImgUrl(post.videoUrl) ?? undefined;
-
             const parsed = parseAchievement(post.conteudo || "");
             const isAchievement = !!parsed;
+            const avatarSrc = publicImgUrl(post?.usuario?.foto) || FALLBACK_AVATAR;
+            const imgSrc = midiaImg(post.imagemUrl);
+            const videoSrc = midiaVideo(post.videoUrl);
+            const ro = post.repostOf ?? null; 
+            const roImg = ro ? midiaImg(ro.imagemUrl) : null;
+            const roVideo = ro ? midiaVideo(ro.videoUrl) : null;
 
             return (
               <div
                 key={post.id}
                 className="bg-white rounded-2xl shadow-md p-4 space-y-3"
               >
-                <div className="flex items-center gap-2">
-                  <img
-                    src={
-                      publicImgUrl(post.usuario.foto) ||
-                      `${APP.FRONTEND_BASE_URL}/assets/usuarios/default-user.png`
-                    }
-                    alt={post.usuario.nome}
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
-                  <div>
-                    <p className="font-semibold">{post.usuario.nome}</p>
-                    <p className="text-xs text-gray-500">
-                      {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
-                    </p>
-                  </div>
+               <div className="flex items-center gap-2">
+                <img
+                  src={avatarSrc}
+                  alt={post?.usuario?.nome || "Usuário"}
+                  className="w-10 h-10 rounded-full object-cover"
+                  onError={(e) => {
+                    const img = e.currentTarget;
+                    if ((img as any).dataset?.fallbackApplied) return;
+                    (img as any).dataset.fallbackApplied = "1";
+                    img.src = FALLBACK_AVATAR;
+                  }}
+                />
+
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold truncate">
+                    {post?.usuario?.nome || "Usuário"}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {format(new Date(post.dataCriacao), "dd/MM, HH:mm")}
+                  </p>
                 </div>
 
+                {canDelete && (
+                  <button
+                    onClick={() => apagarPost(post.id)}
+                    disabled={deletandoId === post.id}
+                    className="ml-auto p-2 rounded-full hover:bg-gray-100 text-gray-500 disabled:opacity-50"
+                    title="Apagar"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
                 <div>
-                  {post.repostOf ? (
+                  {ro ? (
                     <>
                       {post.conteudo && (
                         <p className="text-gray-800 font-medium whitespace-pre-line mb-2">
                           {post.conteudo}
                         </p>
                       )}
-                      <div className="border rounded-xl p-3 bg-gray-50">
-                        <p className="text-xs text-gray-500 mb-1">
-                          Repost de {post.repostOf.usuario?.nome || "Usuário"}
+
+                      <div className="border border-gray-200 rounded-2xl p-4 bg-white">
+                        <p className="text-sm text-gray-500 mb-2">
+                          Repostou de{" "}
+                          <span className="text-green-900 font-medium">
+                            {ro.usuario?.nome || "Usuário"}
+                          </span>
                         </p>
-                        <p className="text-sm text-gray-800 whitespace-pre-line">
-                          {post.repostOf.conteudo}
-                        </p>
+
+                        {!!ro.conteudo && (
+                          <p className="text-sm text-gray-800 whitespace-pre-line">
+                            {ro.conteudo}
+                          </p>
+                        )}
+
+                        {roImg && (
+                          <img
+                            src={roImg}
+                            alt="Post original"
+                            className="mt-3 rounded-2xl max-h-72 w-full object-cover"
+                          />
+                        )}
+
+                        {roVideo && (
+                          <video controls className="w-full mt-3 rounded-2xl">
+                            <source src={roVideo} type="video/mp4" />
+                          </video>
+                        )}
                       </div>
                     </>
                   ) : (
@@ -200,21 +328,21 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                       {isAchievement && parsed && (
                         <AchievementShareCard parsed={parsed} />
                       )}
+
+                      {imgSrc && (
+                        <img
+                          src={imgSrc}
+                          alt="Post"
+                          className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
+                        />
+                      )}
+
+                      {videoSrc && (
+                        <video controls className="w-full mt-2 rounded-lg">
+                          <source src={videoSrc} type="video/mp4" />
+                        </video>
+                      )}
                     </>
-                  )}
-
-                  {imgSrc && (
-                    <img
-                      src={imgSrc}
-                      alt="Post"
-                      className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
-                    />
-                  )}
-
-                  {videoSrc && (
-                    <video controls className="w-full mt-2 rounded-lg">
-                      <source src={videoSrc} type="video/mp4" />
-                    </video>
                   )}
                 </div>
 

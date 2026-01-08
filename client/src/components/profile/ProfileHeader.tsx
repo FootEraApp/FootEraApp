@@ -64,6 +64,8 @@ function Badge({ count }: { count?: number }) {
   );
 }
 
+const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
+
 export default function ProfileHeader({
   perfilId,
   nome,
@@ -705,10 +707,16 @@ export default function ProfileHeader({
     }
   };
 
-  const imageSrc =
-  (foto ?? avatar)
-    ? formatarUrlFoto((foto ?? avatar) as string, "usuarios")
-    : "/assets/usuarios/default-user.png";
+  const rawAvatar = String(foto ?? avatar ?? "").trim();
+  const temAvatarValido =
+    rawAvatar &&
+    rawAvatar !== "null" &&
+    rawAvatar !== "undefined" &&
+    rawAvatar !== "0";
+
+  const imageSrc = temAvatarValido
+    ? formatarUrlFoto(rawAvatar, "usuarios")
+    : FALLBACK_AVATAR;
 
   const alvoUsuarioId = isOwnProfile
     ? String(Storage.usuarioId ?? "")
@@ -1051,6 +1059,12 @@ export default function ProfileHeader({
           src={imageSrc}
           alt={`${nome} profile`}
           className="w-full h-full object-cover"
+          onError={(e) => {
+            const img = e.currentTarget;
+            if (img.dataset.fallbackApplied) return;
+            img.dataset.fallbackApplied = "1";
+            img.src = FALLBACK_AVATAR;
+          }}
         />
       </div>
 
