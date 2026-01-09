@@ -1,17 +1,9 @@
-// client/src/pages/notificacoes
 import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
-import {
-  ArrowLeft,
-  Volleyball,
-  User,
-  CirclePlus,
-  Search,
-  House,
-} from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 import BottomNav from "@/components/layout/BottomNav.js";
 
 type StatusSolicitacao = "pendente" | "ativa";
@@ -53,8 +45,14 @@ function limparMensagem(mensagem: string) {
 
 function isConvocacao(n: { titulo: string; mensagem: string }) {
   const t = `${n.titulo} ${n.mensagem}`.toLowerCase();
-  return t.includes("convoc") || t.includes("você foi convoc") || t.includes("voce foi convoc");
+  return (
+    t.includes("convoc") ||
+    t.includes("você foi convoc") ||
+    t.includes("voce foi convoc")
+  );
 }
+
+const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
 
 export default function PaginaNotificacoes() {
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
@@ -69,16 +67,16 @@ export default function PaginaNotificacoes() {
       try {
         const resp = await fetch(
           `${API.BASE_URL}/api/solicitacoes-treino/recebidas`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
+          { headers: { Authorization: `Bearer ${token}` } }
         );
+
         if (!resp.ok) {
           const txt = await resp.text();
           throw new Error(
             `GET /solicitacoes-treino/recebidas falhou (${resp.status}): ${txt}`
           );
         }
+
         const data: Solicitacao[] = await resp.json();
         setSolicitacoes(data);
       } catch (err) {
@@ -87,33 +85,64 @@ export default function PaginaNotificacoes() {
     })();
   }, []);
 
+  const apagarNotificacao = async (notifId: string) => {
+    const token = Storage.token;
+    if (!token) return;
+
+    const prev = notificacoes;
+    setNotificacoes((p) => p.filter((n) => n.id !== notifId));
+
+    try {
+      const r = await fetch(
+        `${API.BASE_URL}/api/notificacoes/${encodeURIComponent(notifId)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!r.ok) {
+        setNotificacoes(prev);
+        console.warn("Falha ao apagar notificação:", r.status, await r.text());
+        alert("Não foi possível apagar a notificação agora.");
+      }
+    } catch (e) {
+      setNotificacoes(prev);
+      console.error("Erro ao apagar notificação:", e);
+      alert("Erro ao apagar a notificação.");
+    }
+  };
+
   const marcarComoLida = async (notifId: string) => {
-              const token = Storage.token;
-              if (!token) return;
+    const token = Storage.token;
+    if (!token) return;
 
-              setNotificacoes((prev) =>
-                prev.map((n) => (n.id === notifId ? { ...n, lida: true } : n))
-              );
+    setNotificacoes((prev) =>
+      prev.map((n) => (n.id === notifId ? { ...n, lida: true } : n))
+    );
 
-              try {
-                const r = await fetch(`${API.BASE_URL}/api/notificacoes/${encodeURIComponent(notifId)}/lida`, {
-                  method: "PATCH",
-                  headers: { Authorization: `Bearer ${token}` },
-                });
+    try {
+      const r = await fetch(
+        `${API.BASE_URL}/api/notificacoes/${encodeURIComponent(notifId)}/lida`,
+        {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
-                if (!r.ok) {
-                  setNotificacoes((prev) =>
-                    prev.map((n) => (n.id === notifId ? { ...n, lida: false } : n))
-                  );
-                  console.warn("Falha ao marcar como lida:", r.status, await r.text());
-                }
-              } catch (e) {
-                setNotificacoes((prev) =>
-                  prev.map((n) => (n.id === notifId ? { ...n, lida: false } : n))
-                );
-                console.error("Erro ao marcar como lida:", e);
-              }
-            };
+      if (!r.ok) {
+        setNotificacoes((prev) =>
+          prev.map((n) => (n.id === notifId ? { ...n, lida: false } : n))
+        );
+        console.warn("Falha ao marcar como lida:", r.status, await r.text());
+      }
+    } catch (e) {
+      setNotificacoes((prev) =>
+        prev.map((n) => (n.id === notifId ? { ...n, lida: false } : n))
+      );
+      console.error("Erro ao marcar como lida:", e);
+    }
+  };
 
   const NOTIFS_BASE = `${API.BASE_URL}/api/notificacoes/me`;
 
@@ -133,7 +162,6 @@ export default function PaginaNotificacoes() {
         }
 
         const json = await r.json();
-
         setNotificacoes(Array.isArray(json?.items) ? json.items : []);
       } catch (e) {
         console.error("Erro ao buscar notificações", e);
@@ -142,10 +170,8 @@ export default function PaginaNotificacoes() {
   }, []);
 
   useEffect(() => {
-    const temFlagLida = notificacoes.some((n) => typeof n?.lida === "boolean");
-    const naoLidas = notificacoes.filter((n) => n?.lida === false).length;
-    const qtdNotifs = temFlagLida ? naoLidas : notificacoes.length;
-    const totalNotificacoes = qtdNotifs + solicitacoes.length;
+    const totalNotificacoes =
+      (notificacoes?.length || 0) + (solicitacoes?.length || 0);
 
     window.dispatchEvent(
       new CustomEvent("badge:update", { detail: totalNotificacoes })
@@ -163,6 +189,7 @@ export default function PaginaNotificacoes() {
       const url = `${API.BASE_URL}/api/solicitacoes-treino/${id}/${
         aceitar ? "aceitar" : "recusar"
       }`;
+
       const resp = await fetch(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -205,23 +232,39 @@ export default function PaginaNotificacoes() {
         </h1>
       </header>
 
-
       {notificacoes.length > 0 && (
         <div className="mb-6 space-y-3">
           {notificacoes.map((n) => {
             const data = formatarDataCurta(n.criadaEm || null);
             const msgLimpa = limparMensagem(n.mensagem || "");
-            const ehConv = isConvocacao({ titulo: n.titulo || "", mensagem: n.mensagem || "" });
+            const ehConv = isConvocacao({
+              titulo: n.titulo || "",
+              mensagem: n.mensagem || "",
+            });
 
             return (
               <div
                 key={n.id}
-                className={`bg-white shadow-md rounded-2xl p-4 border ${
+                className={`relative bg-white shadow-md rounded-2xl p-4 border ${
                   ehConv ? "border-green-200" : "border-transparent"
                 }`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm("Apagar esta notificação?"))
+                      apagarNotificacao(n.id);
+                  }}
+                  className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full
+                  bg-white hover:bg-gray-100 text-green-900 shadow" 
+                  aria-label="Apagar notificação"
+                  title="Apagar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 pr-10">
                     <p className="font-semibold text-green-900 flex items-center gap-2">
                       {n.titulo}
                       {ehConv && (
@@ -237,33 +280,31 @@ export default function PaginaNotificacoes() {
                     </p>
 
                     {!!data && (
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {data}
-                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">{data}</p>
                     )}
 
-                    {!!msgLimpa && (() => {
-                      const parts = msgLimpa.split(/Data\/Hora:\s*/i);
-                      const texto = (parts[0] || "").trim();
-                      const dataHora = (parts[1] || "").trim();
+                    {!!msgLimpa &&
+                      (() => {
+                        const parts = msgLimpa.split(/Data\/Hora:\s*/i);
+                        const texto = (parts[0] || "").trim();
+                        const dataHora = (parts[1] || "").trim();
 
-                      return (
-                        <div className="text-sm text-gray-700 mt-2 leading-relaxed space-y-2">
-                          {!!texto && <p>{texto}</p>}
-
-                          {!!dataHora && (
-                            <p>
-                              <strong>Data/Hora:</strong> {dataHora}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })()}
+                        return (
+                          <div className="text-sm text-gray-700 mt-2 leading-relaxed space-y-2">
+                            {!!texto && <p>{texto}</p>}
+                            {!!dataHora && (
+                              <p>
+                                <strong>Data/Hora:</strong> {dataHora}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                     {n.link && (
                       <div className="mt-3">
                         <p className="text-sm text-gray-700">
-                            Visualizar o evento:{" "}
+                          Visualizar o evento:{" "}
                         </p>
                         <Link
                           href={n.link}
@@ -288,8 +329,16 @@ export default function PaginaNotificacoes() {
       ) : (
         <div className="space-y-4">
           {solicitacoes.map((solicitacao) => {
-            const foto = solicitacao.remetente?.foto;
-            const fotoSrc = foto ? formatarUrlFoto(foto, "usuarios") : "";
+            const fotoRaw = String(solicitacao.remetente?.foto ?? "").trim();
+            const temFotoValida =
+              fotoRaw &&
+              fotoRaw !== "null" &&
+              fotoRaw !== "undefined" &&
+              fotoRaw !== "0";
+
+            const fotoSrc = temFotoValida
+              ? formatarUrlFoto(fotoRaw, "usuarios")
+              : FALLBACK_AVATAR;
 
             const podeResponder =
               solicitacao.status === "pendente" ||
@@ -298,28 +347,39 @@ export default function PaginaNotificacoes() {
             return (
               <div
                 key={solicitacao.id}
-                className="bg-white shadow-md rounded-xl p-4 flex items-center justify-between hover:bg-gray-100 cursor-pointer"
+                className="relative bg-white shadow-md rounded-xl p-4 flex items-center justify-between hover:bg-gray-100 cursor-pointer"
                 onClick={() => irParaPerfil(solicitacao.remetenteId)}
               >
-                <div className="flex items-center gap-4">
-                  {foto ? (
-                    <img
-                      src={fotoSrc}
-                      alt={`Foto de ${solicitacao.remetente.nomeDeUsuario}`}
-                      className="w-12 h-12 rounded-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src =
-                          "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
-                      }}
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-gray-300 text-gray-700 flex items-center justify-center">
-                      {(solicitacao.remetente.nomeDeUsuario || "?")
-                        .charAt(0)
-                        .toUpperCase()}
-                    </div>
-                  )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm("Remover esta solicitação?")) {
+                      responderSolicitacao(solicitacao.id, false);
+                    }
+                  }}
+                  className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full
+                  bg-white hover:bg-gray-100 text-green-900 shadow"
+                  aria-label="Remover solicitação"
+                  title="Remover"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+
+                <div className="flex items-center gap-4 pr-10">
+                  <img
+                    src={fotoSrc}
+                    alt={`Foto de ${solicitacao.remetente.nomeDeUsuario}`}
+                    className="w-12 h-12 rounded-full object-cover bg-white"
+                    onError={(e) => {
+                      const img = e.currentTarget as HTMLImageElement & {
+                        dataset: any;
+                      };
+                      if (img.dataset?.fallbackApplied) return;
+                      img.dataset.fallbackApplied = "1";
+                      img.src = FALLBACK_AVATAR;
+                    }}
+                  />
 
                   <div>
                     <p className="font-semibold">
@@ -365,7 +425,6 @@ export default function PaginaNotificacoes() {
       )}
 
       <BottomNav />
-
     </div>
   );
 }
