@@ -1,4 +1,3 @@
-// server/controllers/gerenciarAtletasController
 import { Prisma, PrismaClient, Categoria, AvaliacaoAutorTipo } from "@prisma/client";
 import { Request, Response } from "express";
 
@@ -93,7 +92,9 @@ export const gerenciarAtletasController = {
   list: async (req: Request, res: Response) => {
     try {
       const vinculo = String(req.query.vinculo || "").toLowerCase();
-      const entidadeUsuarioId = String(req.query.id || "");
+      const idOrUser = String(req.query.id || "").trim(); 
+      const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim();
+      const entidadeUsuarioId = tipoUsuarioId || idOrUser;
       const search = (req.query.search as string) || "";
       const categoria = (req.query.categoria as Categoria) || undefined;
       const posicaoFiltro = (req.query.posicao as string) || undefined;
@@ -110,87 +111,81 @@ export const gerenciarAtletasController = {
       let whereByVinculo: any = {};
       let entidadeId: string | null = null;
 
-if (vinculo === "clube") {
-  let entidade = await prisma.clube.findUnique({
-    where: { usuarioId: entidadeUsuarioId },
-    select: { id: true },
-  });
-  if (!entidade) {
-    entidade = await prisma.clube.findUnique({
-      where: { id: entidadeUsuarioId },
+  if (vinculo === "clube") {
+    let entidade = await prisma.clube.findUnique({
+      where: { usuarioId: entidadeUsuarioId },
       select: { id: true },
     });
+    if (!entidade) {
+      entidade = await prisma.clube.findUnique({
+        where: { id: entidadeUsuarioId },
+        select: { id: true },
+      });
+    }
+    if (!entidade) {
+      return res.status(404).json({ message: "Entidade não encontrada" });
+    }
+
+    entidadeId = entidade.id;
+
+    whereByVinculo = {
+      OR: [
+        { clubeId: entidadeId },
+        { relacoesTreinamento: { some: { clubeId: entidadeId, ativo: true } } },
+      ],
+    };
   }
-  if (!entidade) {
-    return res.status(404).json({ message: "Entidade não encontrada" });
-  }
-
-  entidadeId = entidade.id;
-
-  whereByVinculo = {
-    OR: [
-      { clubeId: entidadeId },
-      { relacoesTreinamento: { some: { clubeId: entidadeId, ativo: true } } },
-    ],
-  };
-}
-else if (vinculo === "escolinha") {
-  let entidade = await prisma.escolinha.findUnique({
-    where: { usuarioId: entidadeUsuarioId },
-    select: { id: true },
-  });
-
-  if (!entidade) {
-    entidade = await prisma.escolinha.findUnique({
-      where: { id: entidadeUsuarioId },
+  else if (vinculo === "escolinha") {
+    let entidade = await prisma.escolinha.findUnique({
+      where: { usuarioId: entidadeUsuarioId },
       select: { id: true },
     });
-  }
 
-  if (!entidade) {
-    return res.status(404).json({ message: "Entidade não encontrada" });
-  }
+    if (!entidade) {
+      entidade = await prisma.escolinha.findUnique({
+        where: { id: entidadeUsuarioId },
+        select: { id: true },
+      });
+    }
 
-  entidadeId = entidade.id;
+    if (!entidade) {
+      return res.status(404).json({ message: "Entidade não encontrada" });
+    }
 
-  // 🔥 ATIVO = true OU null (legado)
-  const rels = await prisma.relacaoTreinamento.findMany({
-    where: {
-      escolinhaId: entidade.id,
-      ativo: true,
-    },
-    select: { atletaId: true },
-  });
+    entidadeId = entidade.id;
 
+    const rels = await prisma.relacaoTreinamento.findMany({
+      where: {
+        escolinhaId: entidade.id,
+        ativo: { not: false},
+      },
+      select: { atletaId: true },
+    });
 
-  const idsRelacao = rels
-    .map((r) => r.atletaId)
-    .filter((x): x is string => !!x);
+    const idsRelacao = rels
+      .map((r) => r.atletaId)
+      .filter((x): x is string => !!x);
 
-  // ✅ união correta: vínculo direto + relação
-  whereByVinculo = {
-    OR: [
-      { escolinhaId: entidade.id },
-      ...(idsRelacao.length ? [{ id: { in: idsRelacao } }] : []),
-    ],
-  };
-} else {
-        const prof = await prisma.professor.findUnique({
-          where: { usuarioId: entidadeUsuarioId },
-          select: { id: true },
-        });
-        if (!prof) return res.status(404).json({ message: "Professor não encontrado" });
-        entidadeId = prof.id;
+      whereByVinculo = {
+          OR: [
+            { escolinhaId: entidade.id },
+            ...(idsRelacao.length ? [{ id: { in: idsRelacao } }] : []),
+          ],
+        };
+     } else {
+        const resolved = await resolveEntidadeId("professor", entidadeUsuarioId);
+        if (!resolved) return res.status(404).json({ message: "Professor não encontrado" });
+
+        entidadeId = resolved.entidadeId;
+
         whereByVinculo = {
           relacoesTreinamento: {
             some: {
-              professorId: prof.id,
-              ativo: true,
+              professorId: entidadeId,
+              ativo: { not: false }, 
             },
           },
         };
-
-
       }
       
       const where: any = { AND: [whereByVinculo] };
@@ -300,7 +295,7 @@ else if (vinculo === "escolinha") {
         return res.status(400).json({ message: "Parâmetro 'vinculo' inválido (use 'escolinha' ou 'clube')" });
       }
       if (!entidadeUsuarioId) {
-        return res.status(400).json({ message: "Parâmetro 'id' (usuarioId da entidade) é obrigatório" });
+        return res.status(400).json({ message: "Parâmetro 'id' é obrigatório" });
       }
 
       const resolved = await resolveEntidadeId(vinculo, entidadeUsuarioId);
@@ -467,299 +462,306 @@ else if (vinculo === "escolinha") {
     }
   },
 
-listTreinosVisiveis: async (req: Request, res: Response) => {
-  try {
-    const vinculo = String(req.query.vinculo || "").toLowerCase() as
-      | "escolinha"
-      | "clube"
-      | "professor";
+  listTreinosVisiveis: async (req: Request, res: Response) => {
+    try {
+      const vinculo = String(req.query.vinculo || "").toLowerCase() as
+        | "escolinha"
+        | "clube"
+        | "professor";
 
-    const idOrUser = String(req.query.id || "").trim(); // fallback (usuarioId)
-    const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim(); // ID REAL da entidade
+      const idOrUser = String(req.query.id || "").trim();
+      const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim(); 
+      const debug = String(req.query.debug || "") === "1";
 
-    if (!["escolinha", "clube", "professor"].includes(vinculo)) {
-      return res.status(400).json({
-        message: "Parâmetro 'vinculo' inválido (use 'professor', 'clube' ou 'escolinha')",
-      });
-    }
+      if (!["escolinha", "clube", "professor"].includes(vinculo)) {
+        return res.status(400).json({
+          message: "Parâmetro 'vinculo' inválido (use 'professor', 'clube' ou 'escolinha')",
+        });
+      }
 
-    if (!idOrUser && !tipoUsuarioId) {
-      return res.status(400).json({ message: "Parâmetro 'id' obrigatório" });
-    }
+      if (!idOrUser && !tipoUsuarioId) {
+        return res.status(400).json({ message: "Parâmetro 'id' obrigatório" });
+      }
 
-    // ===============================
-    // 0) Resolver entidadeId (prioriza tipoUsuarioId)
-    // ===============================
-    let entidadeId = "";
+      let entidadeId = "";
 
-    if (tipoUsuarioId) {
-      entidadeId = tipoUsuarioId;
-    } else {
-      const resolved = await resolveEntidadeId(vinculo, idOrUser);
-      if (!resolved) return res.status(404).json({ message: "Entidade não encontrada" });
-      entidadeId = resolved.entidadeId;
-    }
+      if (tipoUsuarioId) {
+        entidadeId = tipoUsuarioId;
+      } else {
+        const resolved = await resolveEntidadeId(vinculo, idOrUser);
+        if (!resolved) return res.status(404).json({ message: "Entidade não encontrada" });
+        entidadeId = resolved.entidadeId;
+      }
 
-    // ===============================
-    // 1) Descobrir vínculos (Turmas + RelacaoTreinamento)
-    // ===============================
-    let professorIds: string[] = [];
-    let clubeIds: string[] = [];
-    let escolinhaIds: string[] = [];
+      let professorIds: string[] = [];
+      let clubeIds: string[] = [];
+      let escolinhaIds: string[] = [];
 
-// ativo pode ser TRUE ou NULL (legado). Só exclui se for FALSE.
-const ativoOuNull = { ativo: true };
+      const ativoOuNull = { NOT: { ativo: false } };
 
-    // ---------- (A) TURMAS ----------
-    if (vinculo === "clube") {
-      const turmas = await prisma.turma.findMany({
-        where: { clubeId: entidadeId },
-        select: { professores: { select: { professorId: true } } },
-      });
+      if (vinculo === "clube") {
+        const profsDiretos = await prisma.professor.findMany({
+          where: { clubeId: entidadeId },
+          select: { id: true },
+        });
 
-      professorIds = Array.from(
-        new Set(
-          turmas
-            .flatMap((t) => t.professores.map((p) => p.professorId))
-            .filter((x): x is string => !!x)
-        )
-      );
-    }
+        const idsDiretos = profsDiretos.map((p) => p.id).filter(Boolean);
+        professorIds = Array.from(new Set([...professorIds, ...idsDiretos]));
+      }
 
-    if (vinculo === "escolinha") {
-      const turmas = await prisma.turma.findMany({
-        where: { escolinhaId: entidadeId },
-        select: { professores: { select: { professorId: true } } },
-      });
+      if (vinculo === "escolinha") {
+        const profsDiretos = await prisma.professor.findMany({
+          where: { escolinhaId: entidadeId },
+          select: { id: true },
+        });
 
-      professorIds = Array.from(
-        new Set(
-          turmas
-            .flatMap((t) => t.professores.map((p) => p.professorId))
-            .filter((x): x is string => !!x)
-        )
-      );
-    }
+        const idsDiretos = profsDiretos.map((p) => p.id).filter(Boolean);
+        professorIds = Array.from(new Set([...professorIds, ...idsDiretos]));
+      }
 
-    if (vinculo === "professor") {
-      const turmasDoProfessor = await prisma.turmaProfessor.findMany({
-        where: { professorId: entidadeId },
-        select: { turma: { select: { clubeId: true, escolinhaId: true } } },
-      });
+      if (vinculo === "professor") {
+        const turmasDoProfessor = await prisma.turmaProfessor.findMany({
+          where: { professorId: entidadeId },
+          select: { turma: { select: { clubeId: true, escolinhaId: true } } },
+        });
 
-      clubeIds = Array.from(
-        new Set(
-          turmasDoProfessor
-            .map((x) => x.turma?.clubeId)
-            .filter((x): x is string => !!x)
-        )
-      );
+        const clubeIdsViaTurma = turmasDoProfessor
+          .map((x) => x.turma?.clubeId)
+          .filter((x): x is string => !!x);
 
-      escolinhaIds = Array.from(
-        new Set(
-          turmasDoProfessor
-            .map((x) => x.turma?.escolinhaId)
-            .filter((x): x is string => !!x)
-        )
-      );
-    }
+        const escolinhaIdsViaTurma = turmasDoProfessor
+          .map((x) => x.turma?.escolinhaId)
+          .filter((x): x is string => !!x);
 
-    // ---------- (B) RELACAO_TREINAMENTO ----------
-    // ✅ aqui é o vínculo “real” professor<->clube/escolinha
-    if (vinculo === "clube") {
-      const rels = await prisma.relacaoTreinamento.findMany({
+        const prof = await prisma.professor.findUnique({
+          where: { id: entidadeId },
+          select: { clubeId: true, escolinhaId: true },
+        });
+
+        const clubeIdDireto = prof?.clubeId ? [prof.clubeId] : [];
+        const escolinhaIdDireto = prof?.escolinhaId ? [prof.escolinhaId] : [];
+
+        clubeIds = Array.from(new Set([...clubeIdsViaTurma, ...clubeIdDireto]));
+        escolinhaIds = Array.from(new Set([...escolinhaIdsViaTurma, ...escolinhaIdDireto]));
+      }
+
+      let relacaoRows: Array<{ professorId: string | null }> = [];
+
+      if (vinculo === "clube") {
+        const rels = await prisma.relacaoTreinamento.findMany({
+          where: {
+            clubeId: entidadeId,
+            professorId: { not: null },
+            ...ativoOuNull,
+          },
+          select: { professorId: true },
+        });
+
+        relacaoRows = rels;
+        const profFromRel = rels.map((r) => r.professorId).filter((x): x is string => !!x);
+        professorIds = Array.from(new Set([...professorIds, ...profFromRel]));
+      }
+
+      if (vinculo === "escolinha") {
+        const rels = await prisma.relacaoTreinamento.findMany({
+          where: {
+            escolinhaId: entidadeId,
+            professorId: { not: null },
+            ...ativoOuNull,
+          },
+          select: { professorId: true },
+        });
+
+        relacaoRows = rels;
+        const profFromRel = rels.map((r) => r.professorId).filter((x): x is string => !!x);
+        professorIds = Array.from(new Set([...professorIds, ...profFromRel]));
+      }
+
+      if (vinculo === "professor") {
+        const rels = await prisma.relacaoTreinamento.findMany({
+          where: {
+            professorId: entidadeId,
+            ...ativoOuNull,
+          },
+          select: { clubeId: true, escolinhaId: true },
+        });
+
+        const clubesFromRel = rels.map((r) => r.clubeId).filter((x): x is string => !!x);
+        const escolasFromRel = rels.map((r) => r.escolinhaId).filter((x): x is string => !!x);
+
+        clubeIds = Array.from(new Set([...clubeIds, ...clubesFromRel]));
+        escolinhaIds = Array.from(new Set([...escolinhaIds, ...escolasFromRel]));
+      }
+
+    const professorIdsRaw = Array.from(new Set((professorIds || []).map(String).filter(Boolean)));
+
+    let profsFull: Array<{ id: string; usuarioId: string | null }> = [];
+    let professorIdsNorm: string[] = [];
+    let professorIdOrUsuarioIds: string[] = [];
+
+    if (professorIdsRaw.length) {
+      profsFull = await prisma.professor.findMany({
         where: {
-          clubeId: entidadeId,
-          professorId: { not: null },
-          AND: [ativoOuNull],
-        },  
-        select: { professorId: true },
-      });
-
-      const profFromRel = rels.map((r) => r.professorId).filter((x): x is string => !!x);
-      professorIds = Array.from(new Set([...professorIds, ...profFromRel]));
-    }
-
-    if (vinculo === "escolinha") {
-      const rels = await prisma.relacaoTreinamento.findMany({
-        where: {
-          escolinhaId: entidadeId,
-          professorId: { not: null },
-          AND: [ativoOuNull],
+          OR: [
+            { id: { in: professorIdsRaw } },
+            { usuarioId: { in: professorIdsRaw } },
+          ],
         },
-        select: { professorId: true },
-      });
-
-      const profFromRel = rels.map((r) => r.professorId).filter((x): x is string => !!x);
-      professorIds = Array.from(new Set([...professorIds, ...profFromRel]));
-    }
-
-    if (vinculo === "professor") {
-      const rels = await prisma.relacaoTreinamento.findMany({
-        where: {
-          professorId: entidadeId,
-          AND: [ativoOuNull],
-        },
-        select: { clubeId: true, escolinhaId: true },
-      });
-
-      const clubesFromRel = rels.map((r) => r.clubeId).filter((x): x is string => !!x);
-      const escolasFromRel = rels.map((r) => r.escolinhaId).filter((x): x is string => !!x);
-
-      clubeIds = Array.from(new Set([...clubeIds, ...clubesFromRel]));
-      escolinhaIds = Array.from(new Set([...escolinhaIds, ...escolasFromRel]));
-    }
-
-    // ✅ suporte a legado: alguns treinos podem ter professorId gravado como usuarioId do professor
-    let professorIdOrUsuarioIds: string[] = professorIds;
-
-    if (professorIds.length) {
-      const profsFull = await prisma.professor.findMany({
-        where: { id: { in: professorIds } },
         select: { id: true, usuarioId: true },
       });
+
+      professorIdsNorm = Array.from(new Set(profsFull.map((p) => p.id)));
 
       const usuarioIdsDosProfs = profsFull
         .map((p) => p.usuarioId)
         .filter((x): x is string => !!x);
 
-      professorIdOrUsuarioIds = Array.from(new Set([...professorIds, ...usuarioIdsDosProfs]));
+      professorIdOrUsuarioIds = Array.from(
+        new Set([...professorIdsNorm, ...usuarioIdsDosProfs])
+      );
+
+      professorIds = professorIdsNorm;
+    } else {
+      professorIdsNorm = [];
+      professorIdOrUsuarioIds = [];
     }
+      const orWhere: any[] = [];
 
-    // ===============================
-    // 2) Montar OR de visibilidade
-    // ===============================
-    const orWhere: any[] = [];
+      if (vinculo === "clube") {
+        orWhere.push({ clubeId: entidadeId });
 
-if (vinculo === "clube") {
-  orWhere.push({ clubeId: entidadeId });
+        if (professorIdOrUsuarioIds.length) {
+          orWhere.push({
+            OR: [
+              { professorId: { in: professorIdOrUsuarioIds } },
+              { criadorProfessorId: { in: professorIdOrUsuarioIds } },
+            ],
+          });
+        }
+      }
 
-  if (professorIds.length) {
-    orWhere.push({
-      OR: [
-        { professorId: { in: professorIds } },
-        { criadorProfessorId: { in: professorIds } },
-      ],
-    });
-  }
-}
+      if (vinculo === "escolinha") {
+        orWhere.push({ escolinhaId: entidadeId });
 
-if (vinculo === "escolinha") {
-  orWhere.push({ escolinhaId: entidadeId });
+        if (professorIdOrUsuarioIds.length) {
+          orWhere.push({
+            OR: [
+              { professorId: { in: professorIdOrUsuarioIds } },
+              { criadorProfessorId: { in: professorIdOrUsuarioIds } },
+            ],
+          });
+        }
+      }
 
-  if (professorIds.length) {
-    orWhere.push({
-      OR: [
-        { professorId: { in: professorIds } },
-        { criadorProfessorId: { in: professorIds } },
-      ],
-    });
-  }
-}
+      if (vinculo === "professor") {
+        orWhere.push({
+          OR: [{ professorId: entidadeId }, { criadorProfessorId: entidadeId }],
+        });
 
-if (vinculo === "professor") {
-  orWhere.push({
-    OR: [{ professorId: entidadeId }, { criadorProfessorId: entidadeId }],
-  });
+        if (clubeIds.length) orWhere.push({ clubeId: { in: clubeIds } });
+        if (escolinhaIds.length) orWhere.push({ escolinhaId: { in: escolinhaIds } });
+      }
 
-  if (clubeIds.length) orWhere.push({ clubeId: { in: clubeIds } });
-  if (escolinhaIds.length) orWhere.push({ escolinhaId: { in: escolinhaIds } });
-}
+      const treinos = await prisma.treinoProgramado.findMany({
+        where: { OR: orWhere.length ? orWhere : [{ id: "__never__" }] },
+        select: {
+          id: true,
+          nome: true,
+          codigo: true,
+          nivel: true,
+          descricao: true,
+          createdAt: true,
+          professorId: true,
+          criadorProfessorId: true,
+          clubeId: true,
+          escolinhaId: true,
+        },
+        orderBy: { createdAt: "desc" },
+      });
 
+      const autorProfessorIds = Array.from(
+        new Set(
+          treinos
+            .flatMap((t) => [t.professorId, t.criadorProfessorId])
+            .filter((x): x is string => !!x)
+        )
+      );
 
-// ===============================
-// 3) Buscar treinos (SEM relações no select)
-// ===============================
+      const autorClubeIds = Array.from(new Set(treinos.map((t) => t.clubeId).filter((x): x is string => !!x)));
+      const autorEscolinhaIds = Array.from(new Set(treinos.map((t) => t.escolinhaId).filter((x): x is string => !!x)));
 
-console.log("[visiveis] vinculo", vinculo, "entidadeId", entidadeId);
-console.log("[visiveis] professorIds", professorIds);
-console.log("[visiveis] professorIdOrUsuarioIds", professorIdOrUsuarioIds);
-console.log("[visiveis] orWhere", JSON.stringify(orWhere, null, 2));
+      const [profs, clubes, escolas] = await Promise.all([
+        autorProfessorIds.length
+          ? prisma.professor.findMany({ where: { id: { in: autorProfessorIds } }, select: { id: true, nome: true } })
+          : Promise.resolve([]),
+        autorClubeIds.length
+          ? prisma.clube.findMany({ where: { id: { in: autorClubeIds } }, select: { id: true, nome: true } })
+          : Promise.resolve([]),
+        autorEscolinhaIds.length
+          ? prisma.escolinha.findMany({ where: { id: { in: autorEscolinhaIds } }, select: { id: true, nome: true } })
+          : Promise.resolve([]),
+      ]);
 
+      const profNomeMap = new Map(profs.map((p) => [p.id, p.nome]));
+      const clubeNomeMap = new Map(clubes.map((c) => [c.id, c.nome]));
+      const escolaNomeMap = new Map(escolas.map((e) => [e.id, e.nome]));
 
-const treinos = await prisma.treinoProgramado.findMany({
-  where: { OR: orWhere.length ? orWhere : [{ id: "__never__" }] },
-  select: {
-    id: true,
-    nome: true,
-    codigo: true,
-    nivel: true,
-    descricao: true,
-    createdAt: true,
-    professorId: true,
-    criadorProfessorId: true,
-    clubeId: true,
-    escolinhaId: true,
+      const seen = new Set<string>();
+      const professorIdsBeforeNormalize = [...professorIds];
+
+      const items = treinos
+        .filter((t) => {
+          if (seen.has(t.id)) return false;
+          seen.add(t.id);
+          return true;
+        })
+        .map((t) => {
+          const professorAutorId = t.professorId ?? t.criadorProfessorId ?? null;
+
+          const autor =
+            professorAutorId
+              ? { tipo: "Professor" as const, id: professorAutorId, nome: profNomeMap.get(professorAutorId) ?? null }
+              : t.clubeId
+              ? { tipo: "Clube" as const, id: t.clubeId, nome: clubeNomeMap.get(t.clubeId) ?? null }
+              : t.escolinhaId
+              ? { tipo: "Escolinha" as const, id: t.escolinhaId, nome: escolaNomeMap.get(t.escolinhaId) ?? null }
+              : { tipo: "Desconhecido" as const, id: null, nome: null };
+
+          return {
+            id: t.id,
+            nome: t.nome ?? "Treino",
+            codigo: t.codigo ?? null,
+            nivel: t.nivel ?? null,
+            descricao: t.descricao ?? null,
+            autor,
+          };
+        });
+
+      if (debug) {
+        return res.json({
+          items,
+          debug: {
+            vinculo,
+            entidadeId,
+            professorIds,
+            professorIdOrUsuarioIds,
+            relacaoProfessorIds: relacaoRows.map((r) => r.professorId).filter(Boolean),
+            profsFull,
+            orWhere,
+            professorIdsRaw,
+            professorIdsNorm,
+            professorIdsBeforeNormalize,
+            totalTreinos: items.length,
+          },
+        });
+      }
+
+      return res.json({ items });
+    } catch (e: any) {
+      console.error("[gerenciarAtletas.listTreinosVisiveis]", e);
+      return res.status(500).json({ message: e?.message || "Erro ao listar treinos visíveis" });
+    }
   },
-  orderBy: { createdAt: "desc" },
-});
-
-// ===============================
-// 3.5) Resolver nomes dos autores por lookup (sem depender do nome da relação)
-// ===============================
-const autorProfessorIds = Array.from(new Set(treinos.flatMap((t) => [t.professorId, t.criadorProfessorId]).filter((x): x is string => !!x)));
-const autorClubeIds = Array.from(new Set(treinos.map(t => t.clubeId).filter((x): x is string => !!x)));
-const autorEscolinhaIds = Array.from(new Set(treinos.map(t => t.escolinhaId).filter((x): x is string => !!x)));
-
-const [profs, clubes, escolas] = await Promise.all([
-  autorProfessorIds.length
-    ? prisma.professor.findMany({ where: { id: { in: autorProfessorIds } }, select: { id: true, nome: true } })
-    : Promise.resolve([]),
-  autorClubeIds.length
-    ? prisma.clube.findMany({ where: { id: { in: autorClubeIds } }, select: { id: true, nome: true } })
-    : Promise.resolve([]),
-  autorEscolinhaIds.length
-    ? prisma.escolinha.findMany({ where: { id: { in: autorEscolinhaIds } }, select: { id: true, nome: true } })
-    : Promise.resolve([]),
-]);
-
-
-const profNomeMap = new Map(profs.map(p => [p.id, p.nome]));
-const clubeNomeMap = new Map(clubes.map(c => [c.id, c.nome]));
-const escolaNomeMap = new Map(escolas.map(e => [e.id, e.nome]));
-
-// ===============================
-// 4) Normalizar + deduplicar
-// ===============================
-const seen = new Set<string>();
-
-const items = treinos
-  .filter((t) => {
-    if (seen.has(t.id)) return false;
-    seen.add(t.id);
-    return true;
-  })
-  .map((t) => {
-  const professorAutorId = t.professorId ?? t.criadorProfessorId ?? null;
-
-  const autor =
-    professorAutorId
-      ? { tipo: "Professor" as const, id: professorAutorId, nome: profNomeMap.get(professorAutorId) ?? null }
-      : t.clubeId
-      ? { tipo: "Clube" as const, id: t.clubeId, nome: clubeNomeMap.get(t.clubeId) ?? null }
-      : t.escolinhaId
-      ? { tipo: "Escolinha" as const, id: t.escolinhaId, nome: escolaNomeMap.get(t.escolinhaId) ?? null }
-      : { tipo: "Desconhecido" as const, id: null, nome: null };
-
-
-    return {
-      id: t.id,
-      nome: t.nome ?? "Treino",
-      codigo: t.codigo ?? null,
-      nivel: t.nivel ?? null,
-      descricao: t.descricao ?? null,
-      autor,
-    };
-  });
-
-return res.json({ items });
-
-
-  } catch (e: any) {
-    console.error("[gerenciarAtletas.listTreinosVisiveis]", e);
-    return res.status(500).json({ message: e?.message || "Erro ao listar treinos visíveis" });
-  }
-},
 
   convocarTreino: async (req: Request, res: Response) => {
     try {
@@ -1476,7 +1478,4 @@ return res.json({ items });
       return res.status(500).json({ message: e?.message || "Erro ao listar agendados do atleta" });
     }
   },
-
-
-
 };

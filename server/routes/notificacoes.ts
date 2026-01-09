@@ -1,4 +1,4 @@
-import { getBadge, listarMinhasNotificacoes } from "../controllers/notificacoesController.js";
+import { getBadge, listarMinhasNotificacoes, deletarNotificacao } from "../controllers/notificacoesController.js";
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateToken } from "../middlewares/auth.js";
@@ -23,6 +23,7 @@ router.patch("/:id/lida", authenticateToken, async (req: any, res) => {
     return res.status(500).json({ error: "Erro ao marcar como lida" });
   }
 });
+router.delete("/:id", authenticateToken, deletarNotificacao);
 router.get("/me", authenticateToken, listarMinhasNotificacoes);
 router.get("/badge", authenticateToken, getBadge);
 
