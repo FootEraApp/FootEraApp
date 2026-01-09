@@ -90,11 +90,9 @@ export default function ProfileHeader({
   const [pontosTotal, setPontosTotal] = useState<number>(pontuacao ?? 0);
   const [ehFavorito, setEhFavorito] = useState(false);
   const [seguindo, setSeguindo] = useState<boolean | null>(null);
-
   const [treinoJunto, setTreinoJunto] = useState<boolean>(false);
   const [souSolicitanteTreino, setSouSolicitanteTreino] = useState<boolean | null>(null);
   const [temVinculoTreino, setTemVinculoTreino] = useState(false);
-
   const [observando, setObservando] = useState<boolean | null>(null);
   const [unreadDM, setUnreadDM] = useState<number>(0);
   const [badgeCount, setBadgeCount] = useState(0);
@@ -106,15 +104,13 @@ export default function ProfileHeader({
   const [checouVinculo, setChecouVinculo] = useState(false);
 
   const viewerTipo =
-  (Storage as any).tipoSalvo ??
-  localStorage.getItem("tipoUsuario") ??
-  sessionStorage.getItem("tipoUsuario") ??
-  "";
+    (Storage as any).tipoSalvo ??
+    localStorage.getItem("tipoUsuario") ??
+    sessionStorage.getItem("tipoUsuario") ??
+    "";
 
   const viewerCanObserve = /olheiro|professor|clube|escolinha/i.test(String(viewerTipo));
-
-  const obsKey =
-    Storage.usuarioId && alvoAtletaId ? `obs_${Storage.usuarioId}_${alvoAtletaId}` : null;
+  const obsKey = Storage.usuarioId && alvoAtletaId ? `obs_${Storage.usuarioId}_${alvoAtletaId}` : null;
   const storageKey = `tj_${Storage.usuarioId}_${perfilId}`;
   const isMe = String(Storage.usuarioId || "").trim() === String(perfilId || "").trim();
   
@@ -126,9 +122,16 @@ export default function ProfileHeader({
 
   useEffect(() => {
     const onBadge = (e: Event) => {
-      const total = (e as CustomEvent<number>).detail ?? 0;
+      const d: any = (e as CustomEvent<any>).detail;
+
+      const total =
+        typeof d === "number"
+          ? d
+          : Number(d?.totalNotificacoes ?? d?.total ?? 0) || 0;
+
       setBadgeCount(total);
     };
+
     window.addEventListener("badge:update", onBadge as EventListener);
     return () => window.removeEventListener("badge:update", onBadge as EventListener);
   }, []);
@@ -555,7 +558,7 @@ export default function ProfileHeader({
       ).trim();
     })
     .filter(Boolean);
-}
+  }
 
   async function readBodySafe(r: Response) {
     try {
@@ -723,59 +726,105 @@ export default function ProfileHeader({
     : perfilId;
 
   useEffect(() => {
-  if (!perfilTipo && !perfilTipoProp) return;
-  if (isOwnProfile || !perfilId) return;
+    if (!perfilTipo && !perfilTipoProp) return;
+    if (isOwnProfile || !perfilId) return;
 
-  const token =
-    Storage.token ||
-    localStorage.getItem("token") ||
-    sessionStorage.getItem("token") ||
-    "";
+    const token =
+      Storage.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
 
-  if (!token) return;
+    if (!token) return;
 
-  const me = String(Storage.usuarioId || localStorage.getItem("usuarioId") || "");
-  const cacheKey = me ? `follow_${me}_${perfilId}` : null;
+    const me = String(Storage.usuarioId || localStorage.getItem("usuarioId") || "");
+    const cacheKey = me ? `follow_${me}_${perfilId}` : null;
 
-  if (cacheKey) {
-    const cached = localStorage.getItem(cacheKey);
-    if (cached === "1") setSeguindo(true);
-    if (cached === "0") setSeguindo(false);
-  }
-
-  let alive = true;
-
-  (async () => {
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/seguidores/seguindo`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!r.ok) {
-        if (alive) {
-          setSeguindo((v) => v ?? false);
-        }
-        return;
-      }
-
-      const j = await r.json().catch(() => null);
-      const ids = extrairIdsSeguindo(j);
-
-      const isSeguindo = ids.includes(String(perfilId).trim());
-
-      if (!alive) return;
-      setSeguindo(isSeguindo);
-
-      if (cacheKey) localStorage.setItem(cacheKey, isSeguindo ? "1" : "0");
-    } catch {
-      if (alive) setSeguindo((v) => v ?? false);
+    if (cacheKey) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached === "1") setSeguindo(true);
+      if (cached === "0") setSeguindo(false);
     }
-  })();
 
-  return () => {
-    alive = false;
-  };
-}, [perfilId, isOwnProfile, perfilTipo, perfilTipoProp]);
+    let alive = true;
+
+    (async () => {
+      try {
+        const r = await fetch(`${API.BASE_URL}/api/seguidores/seguindo`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!r.ok) {
+          if (alive) {
+            setSeguindo((v) => v ?? false);
+          }
+          return;
+        }
+
+        const j = await r.json().catch(() => null);
+        const ids = extrairIdsSeguindo(j);
+
+        const isSeguindo = ids.includes(String(perfilId).trim());
+
+        if (!alive) return;
+        setSeguindo(isSeguindo);
+
+        if (cacheKey) localStorage.setItem(cacheKey, isSeguindo ? "1" : "0");
+      } catch {
+        if (alive) setSeguindo((v) => v ?? false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [perfilId, isOwnProfile, perfilTipo, perfilTipoProp]);
+
+  useEffect(() => {
+    if (!isOwnProfile) return;
+
+    const token =
+      Storage.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
+
+    if (!token) return;
+
+    let alive = true;
+
+    async function carregarBadge() {
+      try {
+        const r = await fetch(`${API.BASE_URL}/api/notificacoes/badge`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!r.ok) return;
+
+        const j = await r.json().catch(() => null);
+
+        const total =
+          Number(j?.totalNotificacoes ?? j?.total ?? 0) || 0;
+
+        if (alive) setBadgeCount(total);
+      } catch {}
+    }
+
+    carregarBadge();
+
+    const onFocus = () => carregarBadge();
+    window.addEventListener("focus", onFocus);
+
+    const onVis = () => {
+      if (document.visibilityState === "visible") carregarBadge();
+    };
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      alive = false;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [isOwnProfile]);
 
   useEffect(() => {
     if (!alvoUsuarioId) return;

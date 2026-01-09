@@ -1,4 +1,3 @@
-// client/src/pages/GerenciarAtletas
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Volleyball, User, CirclePlus, House } from "lucide-react";
@@ -64,7 +63,6 @@ type EstatisticasAtleta = {
   evolucaoSemanas: Array<{ semana: string; pontos: number }>;
 };
 
-
 type SubmissaoItem = {
   id: string;
   tipo: "treino" | "desafio";
@@ -123,7 +121,6 @@ function startOfToday() {
 }
 
 function isPastDayISO(dayISO: string) {
-  // dayISO = "YYYY-MM-DD"
   const [y, m, d] = dayISO.split("-").map((n) => Number(n));
   const dt = new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
   return dt.getTime() < startOfToday().getTime();
@@ -175,7 +172,6 @@ function normalizeAgendadosPayload(payload: any): TreinoAgendadoItem[] {
       treinoProgramadoObj?.id ??
       null;
 
-    // backend às vezes manda dataTreino, dataHora, data...
     const dataTreino =
       t?.dataTreino ??
       t?.dataHora ??
@@ -214,7 +210,7 @@ function statusLabel(s?: string | null) {
 function autorTipoFromTela(t: "Escola" | "Clube" | "Professor"): AutorTipoApi {
   if (t === "Professor") return "Professor";
   if (t === "Clube") return "Clube";
-  return "Escolinha"; // "Escola" na tela vira "Escolinha" na API
+  return "Escolinha";
 }
 
 function isCompleted(s?: string | null) {
@@ -228,17 +224,14 @@ function isExpiredStatus(s?: string | null) {
 }
 
 function isLost(t: TreinoAgendadoItem) {
-  // 1) se backend já marcou como expired/perdido
   if (isExpiredStatus(t.meuStatus) || isExpiredStatus(t.execucaoStatus) || isExpiredStatus(t.status)) return true;
 
-  // 2) se a data do treino já passou e não foi concluído => perdido
   const dt = parseAsDate(t.dataTreino);
   if (!dt) return false;
 
   const today = new Date();
   const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const treinoOnly = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
-
   const passouDoDia = treinoOnly.getTime() < todayOnly.getTime();
   const concluido = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
 
@@ -252,14 +245,9 @@ function submissaoToAgendadoLike(s: SubmissaoItem): TreinoAgendadoItem {
     dataTreino: s.data,
     treinoProgramadoId: null,
     treinoProgramado: { id: "", nome: s.titulo ?? "Treino" },
-
-    // aprovado=true => concluído no calendário
     meuStatus: s.aprovado === true ? "COMPLETED" : "PENDENTE",
     status: null,
     execucaoStatus: null,
-
-    // se quiser habilitar o botão “Avaliar treino” aqui,
-    // você pode mapear submissaoTreinoId = s.id
     submissaoTreinoId: s.tipo === "treino" ? s.id : null,
   };
 }
@@ -347,7 +335,6 @@ const uiToApiCategoria = (c?: CategoriaBase | ""): string | undefined => {
   return c.replace("Sub-", "Sub");
 };
 
-
 const GerenciarAtletas: React.FC = () => {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -358,7 +345,6 @@ const GerenciarAtletas: React.FC = () => {
   const [atletas, setAtletas] = useState<AtletaMin[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [q, setQ] = useState("");
   const [categoria, setCategoria] = useState<"" | CategoriaBase>("");
   const [posicaoCodigo, setPosicaoCodigo] = useState<"" | PosicaoCodigo>("");
@@ -374,17 +360,14 @@ const GerenciarAtletas: React.FC = () => {
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingStatsRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingSubsRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   const [submissoes, setSubmissoes] = useState<SubmissaoItem[]>([]);
   const [subsLoading, setSubsLoading] = useState(false);
-
   const [aba, setAba] = useState<"atletas" | "professores">("atletas");
   const [turmasOpen, setTurmasOpen] = useState(false);
   const [turmasProfessorId, setTurmasProfessorId] = useState<string | null>(null);
   const [professores, setProfessores] = useState<ProfessorMin[]>([]);
   const [profLoading, setProfLoading] = useState(false);
   const [profError, setProfError] = useState<string | null>(null);
-
   const [carreiraOpen, setCarreiraOpen] = useState(false);
   const [cursorMonth, setCursorMonth] = useState<Date>(() => startOfMonth(new Date()));
   const [loadingCalendar, setLoadingCalendar] = useState(false);
@@ -394,19 +377,15 @@ const GerenciarAtletas: React.FC = () => {
   const [loadingProgramados, setLoadingProgramados] = useState(false);
   const [treinosProgramados, setTreinosProgramados] = useState<TreinoProgramadoItem[]>([]);
   const [treinoProgramadoId, setTreinoProgramadoId] = useState<string>("");
-
   const [salvandoAgenda, setSalvandoAgenda] = useState(false);
-
   const [avaliarOpen, setAvaliarOpen] = useState(false);
   const [avaliarLoading, setAvaliarLoading] = useState(false);
   const [submissaoSelecionada, setSubmissaoSelecionada] = useState<string>("");
-
   const [nota, setNota] = useState<number>(0);
   const [concluiu, setConcluiu] = useState<boolean>(true);
   const [teveDificuldade, setTeveDificuldade] = useState<boolean>(false);
   const [dificuldadeMotivo, setDificuldadeMotivo] = useState<string>("");
   const [motivoNaoConcluiu, setMotivoNaoConcluiu] = useState<string>("");
-
   const [comentarioLivre, setComentarioLivre] = useState<string>("");
 
   const OPCOES_COMENTARIOS = [
@@ -422,14 +401,12 @@ const GerenciarAtletas: React.FC = () => {
 
   const [comentariosMarcados, setComentariosMarcados] = useState<Record<string, boolean>>({});
   const [salvandoAvaliacao, setSalvandoAvaliacao] = useState(false);
-
   const [detalheAtivo, setDetalheAtivo] = useState(false);
 
   const tipoParaVinculo = (t: "Escola" | "Clube" | "Professor") =>
     t === "Escola" ? "escolinha" : t.toLowerCase();
 
   function getAutorId() {
-    // seu backend quer o ID da entidade (Professor.id / Clube.id / Escolinha.id)
     return String(tipoUsuarioIdEntidade || "");
   }
 
@@ -460,7 +437,6 @@ const GerenciarAtletas: React.FC = () => {
         (perfilTipo === "Escolinha"  && data?.escolinha?.id) ||
         null;
 
-      // ✅ fallback: pega do Storage/localStorage caso a API não retorne
       const tipoId =
         tipoIdFromApi ||
         (Storage as any).tipoUsuarioId ||
@@ -469,7 +445,6 @@ const GerenciarAtletas: React.FC = () => {
         null;
 
       setTipoUsuarioIdEntidade(tipoId);
-
 
       if (!usuarioId) throw new Error("Não foi possível identificar o usuarioId da entidade.");
 
@@ -490,12 +465,27 @@ const GerenciarAtletas: React.FC = () => {
       setError(null);
       setLoading(true);
 
+      const usuarioId = String(usuarioIdEntidade || "").trim();
+
+      const entidadeIdReal = String(tipoUsuarioIdEntidade || "").trim();
+      if (!entidadeIdReal) {
+        setError("Não foi possível identificar o ID da entidade (tipoUsuarioId). Faça logout/login ou verifique /api/perfil/me.");
+        setAtletas([]);
+        setLoading(false);
+        return;
+      }
+
       const params: any = {
         vinculo: tipoParaVinculo(tipo),
-        id: usuarioIdEntidade,      
+        id: entidadeIdReal,
+        tipoUsuarioId: entidadeIdReal,
         order: ordenacao,
+        usuarioId: String(usuarioIdEntidade || "").trim(),
       };
-      if (tipoUsuarioIdEntidade) params.tipoUsuarioId = tipoUsuarioIdEntidade; 
+
+      if (entidadeIdReal) params.tipoUsuarioId = entidadeIdReal;
+
+      params.usuarioId = usuarioId;
       if (q.trim()) params.search = q.trim();
       if (categoria) params.categoria = uiToApiCategoria(categoria);
       if (posicaoCodigo) params.posicao = posicaoCodigo;
@@ -531,41 +521,55 @@ const GerenciarAtletas: React.FC = () => {
     }
   };
 
-const carregarProfessores = async () => {
-  if (!tipo || tipo === "Professor" || !usuarioIdEntidade) return;
-  try {
-    setProfError(null);
-    setProfLoading(true);
+  const carregarProfessores = async () => {
+    if (!tipo || tipo === "Professor" || !usuarioIdEntidade) return;
+    try {
+      setProfError(null);
+      setProfLoading(true);
 
-    const params: any = {
-      vinculo: tipoParaVinculo(tipo),
-      id: usuarioIdEntidade,      
-    };
-    if (q.trim()) params.search = q.trim();
+      const usuarioId = String(usuarioIdEntidade || "").trim();
+      const entidadeIdReal = String(tipoUsuarioIdEntidade || "").trim();
+      if (!entidadeIdReal) {
+        setError("Não foi possível identificar o ID da entidade (tipoUsuarioId). Faça logout/login ou verifique /api/perfil/me.");
+        setAtletas([]);
+        setLoading(false);
+        return;
+      }
 
-    const { data } = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, { headers, params });
-    const lista = (data?.professores || data || []) as any[];
+      const params: any = {
+        vinculo: tipoParaVinculo(tipo),
+        id: entidadeIdReal,
+        tipoUsuarioId: entidadeIdReal,
+        order: ordenacao,
+        usuarioId: String(usuarioIdEntidade || "").trim(),
+      };
 
-    setProfessores(
-      lista.map((p) => ({
-        id: p.id,
-        usuarioId: p.usuarioId,
-        nome: p.nome,
-        cref: p.cref ?? null,
-        foto: p.fotoUrl ?? p.foto ?? null,
-        turmas: p._count?.turmas ?? p.turmasCount ?? 0,
-      }))
-    );
-  } catch (e: any) {
-    setProfessores([]);
-    setProfError(e?.response?.data?.message || e?.message || "Falha ao carregar professores");
-  } finally {
-    setProfLoading(false);
-  }
-};
+      if (entidadeIdReal) params.tipoUsuarioId = entidadeIdReal;
 
+      params.usuarioId = usuarioId;
 
+      if (q.trim()) params.search = q.trim();
 
+      const { data } = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, { headers, params });
+      const lista = (data?.professores || data || []) as any[];
+
+      setProfessores(
+        lista.map((p) => ({
+          id: p.id,
+          usuarioId: p.usuarioId,
+          nome: p.nome,
+          cref: p.cref ?? null,
+          foto: p.fotoUrl ?? p.foto ?? null,
+          turmas: p._count?.turmas ?? p.turmasCount ?? 0,
+        }))
+      );
+    } catch (e: any) {
+      setProfessores([]);
+      setProfError(e?.response?.data?.message || e?.message || "Falha ao carregar professores");
+    } finally {
+      setProfLoading(false);
+    }
+  };
 
   const carregarStatsAtleta = async (atletaUsuarioId: string) => {
     setStatsLoading(true);
@@ -637,8 +641,6 @@ const carregarProfessores = async () => {
     };
   }, [tipo, usuarioIdEntidade]);
 
-
-
   const filtrosRef = useRef<any>(null);
 
   useEffect(() => {
@@ -655,9 +657,7 @@ const carregarProfessores = async () => {
     };
   }, [q, categoria, posicaoCodigo, status, ordenacao, tipo, usuarioIdEntidade]);
 
-
   const filtrados = useMemo(() => atletas, [atletas]);
-
   const metricas = useMemo(() => {
     const total = filtrados.length || 0;
     const soma = filtrados.reduce((acc, a) => acc + (a.pontuacao ?? 0), 0);
@@ -666,7 +666,6 @@ const carregarProfessores = async () => {
     return { total, mediaPont, ativos };
   }, [filtrados]);
 
-  const toggleSelecionado = (id: string) => setSelecionados((prev) => ({ ...prev, [id]: !prev[id] }));
   const limparSelecao = () => setSelecionados({});
 
   const abrirDetalhe = (a: AtletaMin) => {
@@ -687,21 +686,16 @@ const carregarProfessores = async () => {
   const focadoUid = focado?.usuarioId ?? focado?.id ?? null;
 
   useEffect(() => {
-    // ✅ só carrega quando o usuário abriu os detalhes
     if (!detalheAtivo || !focadoUid) return;
 
-    // ✅ 1 fetch (sem polling infinito)
     carregarStatsAtleta(focadoUid);
     carregarSubmissoesAtleta(focadoUid);
 
-    // ✅ garantia: se sobrar interval antigo por algum motivo, mata
     return () => {
       if (pollingStatsRef.current) clearInterval(pollingStatsRef.current);
       if (pollingSubsRef.current) clearInterval(pollingSubsRef.current);
     };
   }, [detalheAtivo, focadoUid]);
-
-
 
   async function carregarAgendadosDoAtleta(atletaId: string, mes: Date) {
     const month = `${mes.getFullYear()}-${pad2(mes.getMonth() + 1)}`;
@@ -712,52 +706,53 @@ const carregarProfessores = async () => {
     setAgendados(normalizeAgendadosPayload(r.data));
   }
 
-
   useEffect(() => {
     if (!carreiraOpen || !focado) return;
 
-    // resetzinho ao abrir
     setSelectedDays([]);
     setDrawerOpen(true);
     setTreinoProgramadoId("");
 
-    const atletaId = focado.id; // no seu /api/treinos/agendados você usa atletaId (id do Atleta)
+    const atletaId = focado.id;
 
-  (async () => {
-    try {
-      setLoadingCalendar(true);
-      await carregarAgendadosDoAtleta(atletaId, cursorMonth);
-    } catch (e) {
-      console.error("Erro ao carregar agendados:", e);
-      setAgendados([]);
-    } finally {
-      setLoadingCalendar(false);
-    }
-  })();
-
+    (async () => {
+      try {
+        setLoadingCalendar(true);
+        await carregarAgendadosDoAtleta(atletaId, cursorMonth);
+      } catch (e) {
+        console.error("Erro ao carregar agendados:", e);
+        setAgendados([]);
+      } finally {
+        setLoadingCalendar(false);
+      }
+    })();
 
     (async () => {
       try {
         setLoadingProgramados(true);
 
-        // tenta seu endpoint já existente de treinos do gerenciador
-        // se você preferir, pode trocar por /api/treinos/programados se existir
-        const entidadeId = tipoUsuarioIdEntidade || usuarioIdEntidade;
+        const entidadeIdReal = String(tipoUsuarioIdEntidade || "").trim();
+        const entidadeFallback = String(usuarioIdEntidade || "").trim();
+        const idParaEnviar = entidadeIdReal || entidadeFallback;
+
+        if (!entidadeIdReal) {
+          console.warn(
+            "[GerenciarAtletas] tipoUsuarioIdEntidade está vazio — usando usuarioIdEntidade como fallback. Ideal: /perfil/me retornar o id da entidade."
+          );
+        }
 
         const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`, {
           headers,
           params: {
             vinculo: tipo ? tipoParaVinculo(tipo) : undefined,
-
-            // ✅ manda SEMPRE o id da entidade quando existir
-            id: entidadeId,
-
-            // ✅ mantém também (seu backend prioriza ele)
-            tipoUsuarioId: tipoUsuarioIdEntidade || undefined,
+            id: idParaEnviar,
+            tipoUsuarioId: entidadeIdReal || undefined,
+            debug: "1",
           },
         });
 
         const items = (res.data?.items ?? res.data ?? []) as any[];
+
         setTreinosProgramados(
           items.map((t) => ({
             id: String(t.id),
@@ -770,7 +765,6 @@ const carregarProfessores = async () => {
               : undefined,
           }))
         );
-
       } catch (e) {
         console.error("Erro ao carregar treinos programados:", e);
         setTreinosProgramados([]);
@@ -795,7 +789,6 @@ const carregarProfessores = async () => {
       }
     })();
   }, [carreiraOpen, focado?.id, cursorMonth]);
-
 
   const chartData = useMemo(() => {
     const bins = [
@@ -822,8 +815,6 @@ const carregarProfessores = async () => {
     return bins;
   }, [submissoes]);
 
-
-
 const monthLabel = useMemo(() => {
   const d = cursorMonth;
   const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -831,7 +822,6 @@ const monthLabel = useMemo(() => {
 }, [cursorMonth]);
 
 function formatDayPtBR(dayISO: string) {
-  // dayISO = "YYYY-MM-DD"
   const [y, m, d] = dayISO.split("-").map((n) => Number(n));
   const dt = new Date(y, (m || 1) - 1, d || 1);
   return dt.toLocaleDateString("pt-BR", {
@@ -844,7 +834,7 @@ function formatDayPtBR(dayISO: string) {
 
 const daysGrid = useMemo(() => {
   const first = startOfMonth(cursorMonth);
-  const firstWeekday = (first.getDay() + 6) % 7; // segunda=0
+  const firstWeekday = (first.getDay() + 6) % 7;
   const start = new Date(first);
   start.setDate(first.getDate() - firstWeekday);
 
@@ -859,7 +849,6 @@ const daysGrid = useMemo(() => {
 const agendadosPorDia = useMemo(() => {
   const map = new Map<string, TreinoAgendadoItem[]>();
 
-  // 1) Treinos agendados (fonte principal)
   for (const t of agendados) {
     const k = dayKeyFromAny(t.dataTreino);
     if (!k) continue;
@@ -868,44 +857,31 @@ const agendadosPorDia = useMemo(() => {
     map.set(k, arr);
   }
 
-// 2) Submissões (merge/fallback)
-for (const s of submissoes) {
-  const k = dayKeyFromAny(s.data);
-  if (!k) continue;
+  for (const s of submissoes) {
+    const k = dayKeyFromAny(s.data);
+    if (!k) continue;
 
-  const arr = map.get(k) ?? [];
-  const like = submissaoToAgendadoLike(s);
+    const arr = map.get(k) ?? [];
+    const like = submissaoToAgendadoLike(s);
+    const nomeLike = (like.treinoProgramado?.nome || like.titulo || "").trim();
+    const idx = arr.findIndex((x) => {
+      const nomeX = (x.treinoProgramado?.nome || x.titulo || "").trim();
+      return nomeX && nomeX === nomeLike;
+    });
 
-  const nomeLike = (like.treinoProgramado?.nome || like.titulo || "").trim();
-
-  // tenta achar um agendado do mesmo "nome" naquele dia
-  const idx = arr.findIndex((x) => {
-    const nomeX = (x.treinoProgramado?.nome || x.titulo || "").trim();
-    return nomeX && nomeX === nomeLike;
-  });
-
-  if (idx >= 0) {
-    // ✅ mescla a submissão no item existente (sem duplicar)
-    const atual = arr[idx];
-
-    arr[idx] = {
-      ...atual,
-      // se já tiver id, mantém; se não tiver, usa o da submissão
-      submissaoTreinoId: atual.submissaoTreinoId ?? like.submissaoTreinoId ?? null,
-      // marca como feita se veio da submissão
-      submissaoFeita: atual.submissaoFeita ?? true,
-      // se quiser, garante concluído quando a submissão foi aprovada
-      meuStatus: atual.meuStatus ?? like.meuStatus,
-    };
-  } else {
-    // não tinha agendado no dia → adiciona como fallback visual
-    arr.push(like);
+    if (idx >= 0) {
+      const atual = arr[idx];
+      arr[idx] = {
+        ...atual,
+        submissaoTreinoId: atual.submissaoTreinoId ?? like.submissaoTreinoId ?? null,
+        submissaoFeita: atual.submissaoFeita ?? true,
+        meuStatus: atual.meuStatus ?? like.meuStatus,
+      };
+    } else {
+      arr.push(like);
+    }
+    map.set(k, arr);
   }
-
-  map.set(k, arr);
-}
-
-
   return map;
 }, [agendados, submissoes]);
 
@@ -924,12 +900,10 @@ const forceScrollDetails = useMemo(() => selectedDays.length >= 2, [selectedDays
 
 function toggleDay(dayISO: string) {
   setDrawerOpen(true);
-
   setSelectedDays((prev) =>
     prev.includes(dayISO) ? prev.filter((d) => d !== dayISO) : [...prev, dayISO]
   );
 }
-
 
 async function agendarParaDiasSelecionados() {
   if (selectedDays.some(isPastDayISO)) {
@@ -940,39 +914,45 @@ async function agendarParaDiasSelecionados() {
   if (!selectedDays.length) return alert("Selecione ao menos 1 dia no calendário.");
   if (salvandoAgenda) return;
 
+  const autorId = getAutorId();           
+  const autorTipo = tipo ? autorTipoFromTela(tipo) : undefined; 
+
+  if (!autorId || !autorTipo) {
+    return alert("Não foi possível identificar o autor (entidade) para agendar.");
+  }
+
   setSalvandoAgenda(true);
   try {
-    // ✅ agenda todos os dias (em paralelo)
     await Promise.all(
       selectedDays.map((day) =>
         axios.post(
           `${API.BASE_URL}/api/treinos/agendados`,
-          { atletaId: focado.id, treinoProgramadoId, dataTreino: day },
+          {
+            atletaId: focado.id,
+            treinoProgramadoId,
+            dataTreino: day,
+            autorId,
+            autorTipo,
+          },
           { headers }
         )
       )
     );
 
-    // ✅ recarrega agenda do atleta (para refletir no calendário)
     const r = await axios.get(`${API.BASE_URL}/api/treinos/agendados`, {
       headers,
       params: { atletaId: focado.id },
     });
     setAgendados(normalizeAgendadosPayload(r.data));
-
-    // ✅ AQUI: limpa os dias selecionados (remove o "ring" do calendário)
     setSelectedDays([]);
-
     alert("Treino(s) agendado(s) com sucesso!");
   } catch (e: any) {
     console.error(e);
 
-    // opcional: se o backend devolver 409 (já existe no dia), mostra msg melhor
     const msg =
       e?.response?.data?.message ||
       (e?.response?.status === 409 ? "Já existe treino agendado em um dos dias selecionados." : null) ||
       "Erro ao agendar treinos.";
-
     alert(msg);
   } finally {
     setSalvandoAgenda(false);
@@ -1053,34 +1033,32 @@ async function salvarAvaliacao() {
 
   const comentarios = comentariosTextoFinal.map((texto, idx) => ({ texto, ordem: idx }));
 
-
   setSalvandoAvaliacao(true);
-  try {
-    await axios.put(
-      `${API.BASE_URL}/api/gerenciar/submissoes/treino/${submissaoSelecionada}/avaliacao`,
-      {
-        autorTipo,
-        autorId,
-        nota,
-        concluiu,
-        teveDificuldade,
-        dificuldadeMotivo: teveDificuldade ? dificuldadeMotivo : null,
-        motivoNaoConcluiu: concluiu ? null : motivoNaoConcluiu,
-        comentarios,
-      },
-      { headers }
-    );
+    try {
+      await axios.put(
+        `${API.BASE_URL}/api/gerenciar/submissoes/treino/${submissaoSelecionada}/avaliacao`,
+        {
+          autorTipo,
+          autorId,
+          nota,
+          concluiu,
+          teveDificuldade,
+          dificuldadeMotivo: teveDificuldade ? dificuldadeMotivo : null,
+          motivoNaoConcluiu: concluiu ? null : motivoNaoConcluiu,
+          comentarios,
+        },
+        { headers }
+      );
 
-    alert("Avaliação salva!");
-    fecharModalAvaliacao();
-  } catch (e: any) {
-    console.error(e);
-    alert(e?.response?.data?.message || "Erro ao salvar avaliação");
-  } finally {
-    setSalvandoAvaliacao(false);
+      alert("Avaliação salva!");
+      fecharModalAvaliacao();
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.response?.data?.message || "Erro ao salvar avaliação");
+    } finally {
+      setSalvandoAvaliacao(false);
+    }
   }
-}
-
 
   return (
     <div className="mx-auto w-full max-w-[1600px] px-3 sm:px-4 py-4 sm:py-6 pb-24">
@@ -1147,7 +1125,6 @@ async function salvarAvaliacao() {
             </>
           )}
         </div>
-
       </div>
 
       <div className="mb-3 sm:mb-4 grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-12">
@@ -1202,8 +1179,6 @@ async function salvarAvaliacao() {
           </select>
         </div>
       </div>
-
-
 
       {aba === "professores" && tipo !== "Professor" ? (
         <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
@@ -1268,32 +1243,31 @@ async function salvarAvaliacao() {
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
           <div className="lg:col-span-7 xl:col-span-8">
+            <div className="mb-4 hidden sm:grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                <div className="flex items-center gap-2 text-zinc-600">
+                  <Shield className="h-4 w-4" /> Atletas vinculados
+                </div>
+                <div className="mt-2 text-2xl font-semibold">{metricas.total}</div>
+                <div className="text-xs text-zinc-500">Total filtrado nesta visão</div>
+              </div>
 
-  <div className="mb-4 hidden sm:grid grid-cols-1 gap-3 sm:grid-cols-3">
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-      <div className="flex items-center gap-2 text-zinc-600">
-        <Shield className="h-4 w-4" /> Atletas vinculados
-      </div>
-      <div className="mt-2 text-2xl font-semibold">{metricas.total}</div>
-      <div className="text-xs text-zinc-500">Total filtrado nesta visão</div>
-    </div>
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                <div className="flex items-center gap-2 text-zinc-600">
+                  <Activity className="h-4 w-4" /> Ativos recentemente
+                </div>
+                <div className="mt-2 text-2xl font-semibold">{metricas.ativos}</div>
+                <div className="text-xs text-zinc-500">Baseado em última atividade</div>
+              </div>
 
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-      <div className="flex items-center gap-2 text-zinc-600">
-        <Activity className="h-4 w-4" /> Ativos recentemente
-      </div>
-      <div className="mt-2 text-2xl font-semibold">{metricas.ativos}</div>
-      <div className="text-xs text-zinc-500">Baseado em última atividade</div>
-    </div>
-
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-      <div className="flex items-center gap-2 text-zinc-600">
-        <Trophy className="h-4 w-4" /> Média de pontuação
-      </div>
-      <div className="mt-2 text-2xl font-semibold">{metricas.mediaPont}</div>
-      <div className="text-xs text-zinc-500">Pontuação FootEra</div>
-    </div>
-  </div>
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                <div className="flex items-center gap-2 text-zinc-600">
+                  <Trophy className="h-4 w-4" /> Média de pontuação
+                </div>
+                <div className="mt-2 text-2xl font-semibold">{metricas.mediaPont}</div>
+                <div className="text-xs text-zinc-500">Pontuação FootEra</div>
+              </div>
+            </div>
 
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-zinc-600">
@@ -1320,130 +1294,127 @@ async function salvarAvaliacao() {
               </div>
             </div>
 
-<div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
-  {loading ? (
-    <div className="p-6 text-center text-zinc-600">
-      <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
-      Carregando atletas…
-    </div>
-  ) : error ? (
-    <div className="p-6 text-center text-red-600">{error}</div>
-  ) : filtrados.length === 0 ? (
-    <div className="p-8 text-center text-zinc-500">Nenhum atleta encontrado.</div>
-  ) : (
-    <>
-      {/* ✅ MOBILE: cards */}
-      <div className="sm:hidden divide-y divide-zinc-100">
-        {filtrados.map((a) => (
-          <div key={a.id} className="p-3">
-            <div className="flex items-center gap-3">
-              <img
-                src={getFoto(a.foto)}
-                alt={a.nome}
-                className="h-11 w-11 rounded-full object-cover ring-2 ring-white shadow"
-              />
-
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold text-zinc-900 truncate">{a.nome}</div>
-                <div className="text-xs text-zinc-500 truncate">
-                  {a.categoria ?? "—"} · {a.posicao ?? "—"}
+            <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
+              {loading ? (
+                <div className="p-6 text-center text-zinc-600">
+                  <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+                  Carregando atletas…
                 </div>
+              ) : error ? (
+                <div className="p-6 text-center text-red-600">{error}</div>
+              ) : filtrados.length === 0 ? (
+                <div className="p-8 text-center text-zinc-500">Nenhum atleta encontrado.</div>
+              ) : (
+                <>
+                  <div className="sm:hidden divide-y divide-zinc-100">
+                    {filtrados.map((a) => (
+                      <div key={a.id} className="p-3">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={getFoto(a.foto)}
+                            alt={a.nome}
+                            className="h-11 w-11 rounded-full object-cover ring-2 ring-white shadow"
+                          />
 
-                <div className="mt-1 flex items-center gap-2">
-                  <span className="text-xs text-zinc-700">
-                    Pontos: <strong className="text-zinc-900">{numberOrDash(a.pontuacao)}</strong>
-                  </span>
-                  <StatusBadge ativo={a.ativoRecentemente} />
-                </div>
-              </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-zinc-900 truncate">{a.nome}</div>
+                            <div className="text-xs text-zinc-500 truncate">
+                              {a.categoria ?? "—"} · {a.posicao ?? "—"}
+                            </div>
+
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="text-xs text-zinc-700">
+                                Pontos: <strong className="text-zinc-900">{numberOrDash(a.pontuacao)}</strong>
+                              </span>
+                              <StatusBadge ativo={a.ativoRecentemente} />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            onClick={() => { setFocado(a); setCarreiraOpen(true); }}
+                            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-emerald-700"
+                          >
+                            <CalendarClock className="h-4 w-4" />
+                            Agenda
+                          </button>
+
+                          <button
+                            onClick={() => abrirDetalhe(a)}
+                            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                          >
+                            Detalhes <ChevronRight className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full min-w-[980px] table-auto">
+                      <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-500">
+                        <tr>
+                          <th className="w-24 p-3">Agenda</th>
+                          <th className="w-16 p-3">Foto</th>
+                          <th className="p-3">Nome</th>
+                          <th className="w-28 p-3">Categoria</th>
+                          <th className="w-32 p-3">Posição</th>
+                          <th className="w-28 p-3">Pontuação</th>
+                          <th className="w-28 p-3">Status</th>
+                          <th className="w-40 p-3">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtrados.map((a) => (
+                          <tr key={a.id} className="border-t border-zinc-100 hover:bg-zinc-50">
+                            <td className="p-3">
+                              <button
+                                onClick={() => { setFocado(a); setCarreiraOpen(true); }}
+                                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
+                                title="Gerenciar agenda"
+                              >
+                                <CalendarClock className="h-4 w-4" />
+                                Gerenciar
+                              </button>
+                            </td>
+
+                            <td className="p-3">
+                              <img
+                                src={getFoto(a.foto)}
+                                alt={a.nome}
+                                className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow"
+                              />
+                            </td>
+
+                            <td className="p-3">
+                              <div className="font-medium text-zinc-900">{a.nome}</div>
+                            </td>
+
+                            <td className="p-3 text-sm text-zinc-700">{a.categoria ?? "—"}</td>
+                            <td className="p-3 text-sm text-zinc-700">{a.posicao ?? "—"}</td>
+                            <td className="p-3 text-sm text-zinc-900">{numberOrDash(a.pontuacao)}</td>
+
+                            <td className="p-3">
+                              <StatusBadge ativo={a.ativoRecentemente} />
+                            </td>
+
+                            <td className="p-3">
+                              <button
+                                onClick={() => abrirDetalhe(a)}
+                                className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100"
+                              >
+                                Ver detalhes <ChevronRight className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
-
-            <div className="mt-3 flex gap-2">
-              <button
-                onClick={() => { setFocado(a); setCarreiraOpen(true); }}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-emerald-700"
-              >
-                <CalendarClock className="h-4 w-4" />
-                Agenda
-              </button>
-
-              <button
-                onClick={() => abrirDetalhe(a)}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
-              >
-                Detalhes <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ✅ DESKTOP/TABLET: tabela */}
-      <div className="hidden sm:block overflow-x-auto">
-        <table className="w-full min-w-[980px] table-auto">
-          <thead className="bg-zinc-50 text-left text-xs uppercase text-zinc-500">
-            <tr>
-              <th className="w-24 p-3">Agenda</th>
-              <th className="w-16 p-3">Foto</th>
-              <th className="p-3">Nome</th>
-              <th className="w-28 p-3">Categoria</th>
-              <th className="w-32 p-3">Posição</th>
-              <th className="w-28 p-3">Pontuação</th>
-              <th className="w-28 p-3">Status</th>
-              <th className="w-40 p-3">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtrados.map((a) => (
-              <tr key={a.id} className="border-t border-zinc-100 hover:bg-zinc-50">
-                <td className="p-3">
-                  <button
-                    onClick={() => { setFocado(a); setCarreiraOpen(true); }}
-                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
-                    title="Gerenciar agenda"
-                  >
-                    <CalendarClock className="h-4 w-4" />
-                    Gerenciar
-                  </button>
-                </td>
-
-                <td className="p-3">
-                  <img
-                    src={getFoto(a.foto)}
-                    alt={a.nome}
-                    className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow"
-                  />
-                </td>
-
-                <td className="p-3">
-                  <div className="font-medium text-zinc-900">{a.nome}</div>
-                </td>
-
-                <td className="p-3 text-sm text-zinc-700">{a.categoria ?? "—"}</td>
-                <td className="p-3 text-sm text-zinc-700">{a.posicao ?? "—"}</td>
-                <td className="p-3 text-sm text-zinc-900">{numberOrDash(a.pontuacao)}</td>
-
-                <td className="p-3">
-                  <StatusBadge ativo={a.ativoRecentemente} />
-                </td>
-
-                <td className="p-3">
-                  <button
-                    onClick={() => abrirDetalhe(a)}
-                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100"
-                  >
-                    Ver detalhes <ChevronRight className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  )}
-</div>
-
 
             <div className="mt-3 flex flex-col items-start justify-between gap-2 text-sm sm:flex-row sm:items-center">
               <div className="text-zinc-600">
@@ -1456,7 +1427,6 @@ async function salvarAvaliacao() {
                 >
                   Limpar seleção
                 </button>
-
               </div>
             </div>
           </div>
@@ -1541,7 +1511,6 @@ async function salvarAvaliacao() {
         </div>
       )}
 
-
       <TurmasManager
         open={turmasOpen}
         onClose={() => setTurmasOpen(false)}
@@ -1552,433 +1521,411 @@ async function salvarAvaliacao() {
         professorId={turmasProfessorId || undefined}
       />
 
-{carreiraOpen && focado && (
-  <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/50 p-0 sm:p-3">
-    <div
-      className="
-        w-full sm:max-w-6xl overflow-hidden
-        rounded-none sm:rounded-2xl
-        border-0 sm:border border-zinc-200
-        bg-white text-zinc-900 shadow-2xl
-        flex flex-col
-        h-[100dvh] sm:h-[70vh] sm:max-h-[70vh]
-      "
-    >
-
-
-      {/* topo */}
-<div className="flex items-center justify-between border-b border-zinc-200 px-3 sm:px-4 py-2 sm:py-3">
-  <div className="min-w-0">
-    <div className="text-[11px] sm:text-xs text-zinc-500">Agenda de Treinos</div>
-    <div className="font-extrabold truncate text-zinc-900 text-sm sm:text-base">{focado.nome}</div>
-  </div>
-
-  <button
-    onClick={() => setCarreiraOpen(false)}
-    className="rounded-xl border border-zinc-200 bg-white px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-zinc-700 hover:bg-zinc-50"
-  >
-    Fechar
-  </button>
-</div>
-
-
-      <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr_380px] overflow-hidden">
-        {/* Calendário */}
-        <div className="p-3 sm:p-4 border-b xl:border-b-0 xl:border-r border-zinc-200 min-h-0 overflow-y-auto">
-
-<div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-  <div className="flex items-center gap-2">
-    <button
-      onClick={() => setCursorMonth((d) => addMonths(d, -1))}
-      className="h-9 w-9 sm:h-10 sm:w-10 flex items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-      title="Mês anterior"
-    >
-      <ChevronLeft className="h-5 w-5" />
-    </button>
-
-    <div className="flex-1 text-center font-extrabold text-base sm:text-lg text-zinc-900">
-      {monthLabel}
-    </div>
-
-    <button
-      onClick={() => setCursorMonth((d) => addMonths(d, 1))}
-      className="h-9 w-9 sm:h-10 sm:w-10 flex items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-      title="Próximo mês"
-    >
-      <ChevronRight className="h-5 w-5" />
-    </button>
-  </div>
-
-  <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-zinc-600">
-    <span className="flex items-center gap-1">
-      <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-500" /> Concluído
-    </span>
-    <span className="flex items-center gap-1">
-      <span className="inline-block h-2.5 w-2.5 rounded bg-red-500" /> Perdido
-    </span>
-    <span className="flex items-center gap-1 col-span-2 sm:col-auto">
-      <span className="inline-block h-2.5 w-2.5 rounded bg-zinc-300" /> Normal / Pendente
-    </span>
-  </div>
-</div>
-
-
-          {loadingCalendar ? (
-            <div className="p-4 text-sm opacity-80">Carregando calendário...</div>
-          ) : (
-            <>
-              <div className="grid grid-cols-7 gap-1 sm:gap-2 text-[10px] sm:text-xs opacity-80 mb-2 px-0.5 sm:px-1">
-                {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((w) => (
-                  <div key={w} className="text-center">{w}</div>
-                ))}
+      {carreiraOpen && focado && (
+        <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/50 p-0 sm:p-3">
+          <div
+            className="
+              w-full sm:max-w-6xl overflow-hidden
+              rounded-none sm:rounded-2xl
+              border-0 sm:border border-zinc-200
+              bg-white text-zinc-900 shadow-2xl
+              flex flex-col
+              h-[100dvh] sm:h-[70vh] sm:max-h-[70vh]
+            "
+          >
+            <div className="flex items-center justify-between border-b border-zinc-200 px-3 sm:px-4 py-2 sm:py-3">
+              <div className="min-w-0">
+                <div className="text-[11px] sm:text-xs text-zinc-500">Agenda de Treinos</div>
+                <div className="font-extrabold truncate text-zinc-900 text-sm sm:text-base">{focado.nome}</div>
               </div>
 
-              <div className="grid grid-cols-7 gap-1 sm:gap-2">
-                {daysGrid.map(({ date, key, inMonth }) => {
-                  const items = agendadosPorDia.get(key) ?? [];
-                  const hasTreino = items.length > 0;
-                  const done = hasTreino && items.some((t) => isCompleted(t.meuStatus || t.execucaoStatus || t.status));
-                  const lost = hasTreino && !done && items.some((t) => isLost(t));
-                  const pending = hasTreino && !done && !lost;
-
-                  const bg =
-                    done ? "bg-emerald-50 border-emerald-200"
-                    : lost ? "bg-red-50 border-red-200"
-                    : "bg-white border-zinc-200";
-
-                  const opacity = inMonth ? "opacity-100" : "opacity-40";
-
-                  const selected = selectedDays.includes(key);
-
-                  const past = isPastDayISO(key);
-
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => toggleDay(key)}
-                      className={[
-                        "h-12 sm:h-16 rounded-xl border text-left p-1.5 sm:p-2 transition relative",
-                        bg,
-                        opacity,
-                        selected ? "ring-2 ring-emerald-400" : "hover:bg-zinc-50",
-                        past ? "opacity-70" : "",
-                      ].join(" ")}
-                    >
-<div className="flex items-start justify-between gap-1">
-  <div className="text-xs sm:text-sm font-extrabold">{date.getDate()}</div>
-
-  {/* Ícones só no desktop, pq no mobile ocupa muito */}
-  <div className="hidden sm:flex items-center gap-1">
-    {done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : null}
-    {lost ? <XCircle className="h-4 w-4 text-red-600" /> : null}
-  </div>
-</div>
-
-{/* MOBILE: bolinhas + contador */}
-<div className="sm:hidden mt-1 flex items-center gap-1">
-  {hasTreino ? (
-    <>
-      <span className={`h-2 w-2 rounded-full ${done ? "bg-emerald-500" : lost ? "bg-red-500" : "bg-zinc-400"}`} />
-      {items.length > 1 ? (
-        <span className="text-[10px] text-zinc-600 font-semibold">+{items.length - 1}</span>
-      ) : (
-        <span className="text-[10px] text-zinc-500">treino</span>
-      )}
-    </>
-  ) : (
-    <span className="text-[10px] text-zinc-400">—</span>
-  )}
-</div>
-
-{/* DESKTOP: nome do treino */}
-{hasTreino ? (
-  <div className="hidden sm:block mt-1 text-[11px] opacity-90 truncate">
-    {items[0]?.treinoProgramado?.nome || items[0]?.titulo || "Treino"}
-    {items.length > 1 ? ` +${items.length - 1}` : ""}
-  </div>
-) : (
-  <div className="hidden sm:block mt-1 text-[11px] opacity-60 truncate">Sem treino</div>
-)}
-
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Drawer */}
-        <div className="p-3 sm:p-4 min-h-0 overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <ClipboardList className="h-5 w-5 text-zinc-500" />
-              <h3 className="font-extrabold text-zinc-900">Detalhes</h3>
+              <button
+                onClick={() => setCarreiraOpen(false)}
+                className="rounded-xl border border-zinc-200 bg-white px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-zinc-700 hover:bg-zinc-50"
+              >
+                Fechar
+              </button>
             </div>
-            <button
-              onClick={() => setDrawerOpen((v) => !v)}
-              className="text-xs px-3 py-1 rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-            >
-              {drawerOpen ? "Recolher" : "Abrir"}
-            </button>
-          </div>
 
-        {!drawerOpen ? null : selectedDays.length === 0 ? (
-          <div className="text-sm opacity-80">
-            Clique em um ou mais dias do calendário para ver/agendar treinos.
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4 min-h-0 flex-1">
-            {/* Agendamento rápido (fixo no topo) */}
-            {!hasPastSelectedDay ? (
-              <div className={["rounded-xl border border-zinc-200 bg-white flex-none", forceScrollDetails ? "p-2" : "p-3"].join(" ")}>
-                <div className={["font-bold", forceScrollDetails ? "text-xs mb-1" : "text-sm mb-2"].join(" ")}>
-                  Agendar para {selectedDays.length === 1 ? "1 dia selecionado" : `${selectedDays.length} dias selecionados`}
-                </div>
+            <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr_380px] overflow-hidden">
+              <div className="p-3 sm:p-4 border-b xl:border-b-0 xl:border-r border-zinc-200 min-h-0 overflow-y-auto">
 
-                <div className="space-y-2">
-                  <label className="text-xs opacity-80">Treino programado</label>
-                  <select
-                    value={treinoProgramadoId}
-                    onChange={(e) => setTreinoProgramadoId(e.target.value)}
-                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800"
-                  >
-                    <option value="">Selecionar...</option>
-                    {treinosProgramados.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.nome}
-                      {t.codigo ? ` (${t.codigo})` : ""}
-                      {t.autor?.nome ? ` — ${t.autor.tipo}: ${t.autor.nome}` : t.autor?.tipo ? ` — ${t.autor.tipo}` : ""}
-                    </option>
-                    ))}
-                  </select>
+                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCursorMonth((d) => addMonths(d, -1))}
+                      className="h-9 w-9 sm:h-10 sm:w-10 flex items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                      title="Mês anterior"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
 
-                  <button
-                    onClick={agendarParaDiasSelecionados}
-                    disabled={loadingProgramados || salvandoAgenda}
-                    className="w-full mt-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 disabled:hover:bg-emerald-600 transition"
-                  >
-                    {salvandoAgenda ? "Agendando..." : loadingProgramados ? "Carregando..." : "Agendar treino nos dias selecionados"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-zinc-200 bg-white p-3 flex-none">
-                <div className="text-sm font-bold mb-1">Agendamento indisponível</div>
-                <div className="text-sm opacity-80">
-                  Você selecionou pelo menos um dia no passado. Selecione apenas hoje ou datas futuras.
-                </div>
-              </div>
-            )}
-
-            {/* Lista rolável (não estoura o modal) */}
-            <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
-
-
-              {selectedDayItems.map(({ day, items }) => (
-                <div key={day} className="rounded-xl border border-zinc-200 bg-white p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-bold">{formatDayPtBR(day)}</div>
-                    <div className="text-xs opacity-80">
-                      {items.length ? `${items.length} treino(s)` : "Sem treino"}
+                    <div className="flex-1 text-center font-extrabold text-base sm:text-lg text-zinc-900">
+                      {monthLabel}
                     </div>
+
+                    <button
+                      onClick={() => setCursorMonth((d) => addMonths(d, 1))}
+                      className="h-9 w-9 sm:h-10 sm:w-10 flex items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                      title="Próximo mês"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
                   </div>
 
-                  {!items.length ? (
-                    <div className="text-sm opacity-80">Nenhum treino agendado neste dia.</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {items.map((t) => {
-                        const nome = t.treinoProgramado?.nome || t.titulo || "Treino";
-                        const done = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
-                        const lost = !done && isLost(t);
+                  <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-zinc-600">
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-500" /> Concluído
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block h-2.5 w-2.5 rounded bg-red-500" /> Perdido
+                    </span>
+                    <span className="flex items-center gap-1 col-span-2 sm:col-auto">
+                      <span className="inline-block h-2.5 w-2.5 rounded bg-zinc-300" /> Normal / Pendente
+                    </span>
+                  </div>
+                </div>
 
-                        const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
-                        const statusClass = done ? "text-emerald-600" : lost ? "text-red-600" : "text-zinc-600";
+                {loadingCalendar ? (
+                  <div className="p-4 text-sm opacity-80">Carregando calendário...</div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-7 gap-1 sm:gap-2 text-[10px] sm:text-xs opacity-80 mb-2 px-0.5 sm:px-1">
+                      {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((w) => (
+                        <div key={w} className="text-center">{w}</div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                      {daysGrid.map(({ date, key, inMonth }) => {
+                        const items = agendadosPorDia.get(key) ?? [];
+                        const hasTreino = items.length > 0;
+                        const done = hasTreino && items.some((t) => isCompleted(t.meuStatus || t.execucaoStatus || t.status));
+                        const lost = hasTreino && !done && items.some((t) => isLost(t));
+                        const pending = hasTreino && !done && !lost;
+
+                        const bg =
+                          done ? "bg-emerald-50 border-emerald-200"
+                          : lost ? "bg-red-50 border-red-200"
+                          : "bg-white border-zinc-200";
+
+                        const opacity = inMonth ? "opacity-100" : "opacity-40";
+                        const selected = selectedDays.includes(key);
+                        const past = isPastDayISO(key);
 
                         return (
-                          <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="font-bold truncate">{nome}</div>
+                          <button
+                            key={key}
+                            onClick={() => toggleDay(key)}
+                            className={[
+                              "h-12 sm:h-16 rounded-xl border text-left p-1.5 sm:p-2 transition relative",
+                              bg,
+                              opacity,
+                              selected ? "ring-2 ring-emerald-400" : "hover:bg-zinc-50",
+                              past ? "opacity-70" : "",
+                            ].join(" ")}
+                          >
+                            <div className="flex items-start justify-between gap-1">
+                              <div className="text-xs sm:text-sm font-extrabold">{date.getDate()}</div>
 
-                                <div className="text-xs opacity-80 mt-1">
-                                  Status: <span className={statusClass}>{statusText}</span>
-                                </div>
-
-                                {done && !!t.submissaoTreinoId ? (
-                                  <button
-                                    onClick={() => abrirModalAvaliacao(String(t.submissaoTreinoId || ""))}
-                                    className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
-                                  >
-                                    💬 Avaliar treino
-                                  </button>
-                                ) : null}
+                              <div className="hidden sm:flex items-center gap-1">
+                                {done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : null}
+                                {lost ? <XCircle className="h-4 w-4 text-red-600" /> : null}
                               </div>
-
-                              {done ? (
-                                <CheckCircle2 className="h-5 w-5 text-green-300" />
-                              ) : lost ? (
-                                <XCircle className="h-5 w-5 text-red-300" />
-                              ) : null}
                             </div>
-                          </div>
+
+                            <div className="sm:hidden mt-1 flex items-center gap-1">
+                              {hasTreino ? (
+                                <>
+                                  <span className={`h-2 w-2 rounded-full ${done ? "bg-emerald-500" : lost ? "bg-red-500" : "bg-zinc-400"}`} />
+                                  {items.length > 1 ? (
+                                    <span className="text-[10px] text-zinc-600 font-semibold">+{items.length - 1}</span>
+                                  ) : (
+                                    <span className="text-[10px] text-zinc-500">treino</span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-zinc-400">—</span>
+                              )}
+                            </div>
+
+                            {hasTreino ? (
+                              <div className="hidden sm:block mt-1 text-[11px] opacity-90 truncate">
+                                {items[0]?.treinoProgramado?.nome || items[0]?.titulo || "Treino"}
+                                {items.length > 1 ? ` +${items.length - 1}` : ""}
+                              </div>
+                            ) : (
+                              <div className="hidden sm:block mt-1 text-[11px] opacity-60 truncate">Sem treino</div>
+                            )}
+                          </button>
                         );
                       })}
                     </div>
-                  )}
+                  </>
+                )}
+              </div>
+
+              <div className="p-3 sm:p-4 min-h-0 overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <ClipboardList className="h-5 w-5 text-zinc-500" />
+                    <h3 className="font-extrabold text-zinc-900">Detalhes</h3>
+                  </div>
+                  <button
+                    onClick={() => setDrawerOpen((v) => !v)}
+                    className="text-xs px-3 py-1 rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                  >
+                    {drawerOpen ? "Recolher" : "Abrir"}
+                  </button>
                 </div>
-              ))}
+
+              {!drawerOpen ? null : selectedDays.length === 0 ? (
+                <div className="text-sm opacity-80">
+                  Clique em um ou mais dias do calendário para ver/agendar treinos.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4 min-h-0 flex-1">
+                  {!hasPastSelectedDay ? (
+                    <div className={["rounded-xl border border-zinc-200 bg-white flex-none", forceScrollDetails ? "p-2" : "p-3"].join(" ")}>
+                      <div className={["font-bold", forceScrollDetails ? "text-xs mb-1" : "text-sm mb-2"].join(" ")}>
+                        Agendar para {selectedDays.length === 1 ? "1 dia selecionado" : `${selectedDays.length} dias selecionados`}
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs opacity-80">Treino programado</label>
+                        <select
+                          value={treinoProgramadoId}
+                          onChange={(e) => setTreinoProgramadoId(e.target.value)}
+                          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800"
+                        >
+                          <option value="">Selecionar...</option>
+                          {treinosProgramados.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.nome}
+                            {t.codigo ? ` (${t.codigo})` : ""}
+                            {t.autor?.nome ? ` — ${t.autor.tipo}: ${t.autor.nome}` : t.autor?.tipo ? ` — ${t.autor.tipo}` : ""}
+                          </option>
+                          ))}
+                        </select>
+
+                        <button
+                          onClick={agendarParaDiasSelecionados}
+                          disabled={loadingProgramados || salvandoAgenda}
+                          className="w-full mt-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 disabled:hover:bg-emerald-600 transition"
+                        >
+                          {salvandoAgenda ? "Agendando..." : loadingProgramados ? "Carregando..." : "Agendar treino nos dias selecionados"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-zinc-200 bg-white p-3 flex-none">
+                      <div className="text-sm font-bold mb-1">Agendamento indisponível</div>
+                      <div className="text-sm opacity-80">
+                        Você selecionou pelo menos um dia no passado. Selecione apenas hoje ou datas futuras.
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
+
+                    {selectedDayItems.map(({ day, items }) => (
+                      <div key={day} className="rounded-xl border border-zinc-200 bg-white p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-bold">{formatDayPtBR(day)}</div>
+                          <div className="text-xs opacity-80">
+                            {items.length ? `${items.length} treino(s)` : "Sem treino"}
+                          </div>
+                        </div>
+
+                        {!items.length ? (
+                          <div className="text-sm opacity-80">Nenhum treino agendado neste dia.</div>
+                        ) : (
+                          <div className="space-y-2">
+                            {items.map((t) => {
+                              const nome = t.treinoProgramado?.nome || t.titulo || "Treino";
+                              const done = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
+                              const lost = !done && isLost(t);
+
+                              const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
+                              const statusClass = done ? "text-emerald-600" : lost ? "text-red-600" : "text-zinc-600";
+
+                              return (
+                                <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-3">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <div className="font-bold truncate">{nome}</div>
+
+                                      <div className="text-xs opacity-80 mt-1">
+                                        Status: <span className={statusClass}>{statusText}</span>
+                                      </div>
+
+                                      {done && !!t.submissaoTreinoId ? (
+                                        <button
+                                          onClick={() => abrirModalAvaliacao(String(t.submissaoTreinoId || ""))}
+                                          className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
+                                        >
+                                          💬 Avaliar treino
+                                        </button>
+                                      ) : null}
+                                    </div>
+
+                                    {done ? (
+                                      <CheckCircle2 className="h-5 w-5 text-green-300" />
+                                    ) : lost ? (
+                                      <XCircle className="h-5 w-5 text-red-300" />
+                                    ) : null}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              </div>
             </div>
-          </div>
-        )}
-
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-
-
-{avaliarOpen && (
-  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-3">
-    <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
-        <div>
-          <div className="text-xs text-zinc-500">Avaliar treino</div>
-          <div className="font-extrabold text-zinc-900">
-            Submissão: {submissaoSelecionada ? submissaoSelecionada.slice(0, 8) : ""}…
-          </div>
-        </div>
-        <button
-          onClick={fecharModalAvaliacao}
-          className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm hover:bg-zinc-50"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      {avaliarLoading ? (
-        <div className="p-6 text-sm text-zinc-600">Carregando…</div>
-      ) : (
-        <div className="p-4 space-y-4">
-          <div>
-            <div className="text-sm font-semibold text-zinc-800 mb-2">Nota</div>
-            <div className="flex gap-2">
-              {[1, 2, 3, 4, 5].map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setNota(v)}
-                  className={[
-                    "h-10 w-10 rounded-xl border text-sm font-bold",
-                    nota >= v
-                      ? "bg-emerald-600 text-white border-emerald-600"
-                      : "bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50",
-                  ].join(" ")}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between rounded-xl border border-zinc-200 p-3">
-            <div>
-              <div className="font-semibold text-zinc-800">Concluiu o treino?</div>
-              <div className="text-xs text-zinc-500">Desmarque se não conseguiu finalizar.</div>
-            </div>
-            <input
-              type="checkbox"
-              checked={concluiu}
-              onChange={(e) => setConcluiu(e.currentTarget.checked)}
-              className="h-5 w-5"
-            />
-          </div>
-
-          {!concluiu && (
-            <div>
-              <div className="text-sm font-semibold text-zinc-800 mb-1">Motivo de não ter concluído</div>
-              <textarea
-                value={motivoNaoConcluiu}
-                onChange={(e) => setMotivoNaoConcluiu(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 p-3 text-sm"
-                rows={3}
-              />
-            </div>
-          )}
-
-          <div className="flex items-center justify-between rounded-xl border border-zinc-200 p-3">
-            <div>
-              <div className="font-semibold text-zinc-800">Teve dificuldade?</div>
-              <div className="text-xs text-zinc-500">Marque se teve algum problema/dificuldade.</div>
-            </div>
-            <input
-              type="checkbox"
-              checked={teveDificuldade}
-              onChange={(e) => setTeveDificuldade(e.currentTarget.checked)}
-              className="h-5 w-5"
-            />
-          </div>
-
-          {teveDificuldade && (
-            <div>
-              <div className="text-sm font-semibold text-zinc-800 mb-1">Qual dificuldade?</div>
-              <textarea
-                value={dificuldadeMotivo}
-                onChange={(e) => setDificuldadeMotivo(e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 p-3 text-sm"
-                rows={3}
-              />
-            </div>
-          )}
-
-<div className="mt-3">
-  <div className="text-sm font-semibold text-zinc-800 mb-1">Comentário livre</div>
-  <textarea
-    value={comentarioLivre}
-    onChange={(e) => setComentarioLivre(e.target.value)}
-    placeholder="Escreva seu comentário…"
-    className="w-full rounded-xl border border-zinc-200 p-3 text-sm"
-    rows={3}
-  />
-  <div className="mt-1 text-xs text-zinc-500">
-    Dica: você pode escrever do seu jeito (sem precisar marcar opções).
-  </div>
-</div>
-
-
-          <div className="flex items-center justify-end gap-2 pt-2">
-
-<button
-  type="button"
-  onClick={() => { setComentariosMarcados({}); setComentarioLivre(""); }}
-  className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm hover:bg-zinc-50"
->
-  Limpar comentários
-</button>
-
-
-            <button
-              onClick={fecharModalAvaliacao}
-              className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm hover:bg-zinc-50"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={salvarAvaliacao}
-              disabled={salvandoAvaliacao}
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60"
-            >
-              {salvandoAvaliacao ? "Salvando..." : "Salvar"}
-            </button>
           </div>
         </div>
       )}
-    </div>
-  </div>
-)}
 
+          {avaliarOpen && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-3">
+              <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+                  <div>
+                    <div className="text-xs text-zinc-500">Avaliar treino</div>
+                    <div className="font-extrabold text-zinc-900">
+                      Submissão: {submissaoSelecionada ? submissaoSelecionada.slice(0, 8) : ""}…
+                    </div>
+                  </div>
+                  <button
+                    onClick={fecharModalAvaliacao}
+                    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm hover:bg-zinc-50"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
 
+                {avaliarLoading ? (
+                  <div className="p-6 text-sm text-zinc-600">Carregando…</div>
+                ) : (
+                  <div className="p-4 space-y-4">
+                    <div>
+                      <div className="text-sm font-semibold text-zinc-800 mb-2">Nota</div>
+                      <div className="flex gap-2">
+                        {[1, 2, 3, 4, 5].map((v) => (
+                          <button
+                            key={v}
+                            onClick={() => setNota(v)}
+                            className={[
+                              "h-10 w-10 rounded-xl border text-sm font-bold",
+                              nota >= v
+                                ? "bg-emerald-600 text-white border-emerald-600"
+                                : "bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50",
+                            ].join(" ")}
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-xl border border-zinc-200 p-3">
+                      <div>
+                        <div className="font-semibold text-zinc-800">Concluiu o treino?</div>
+                        <div className="text-xs text-zinc-500">Desmarque se não conseguiu finalizar.</div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={concluiu}
+                        onChange={(e) => setConcluiu(e.currentTarget.checked)}
+                        className="h-5 w-5"
+                      />
+                    </div>
+
+                    {!concluiu && (
+                      <div>
+                        <div className="text-sm font-semibold text-zinc-800 mb-1">Motivo de não ter concluído</div>
+                        <textarea
+                          value={motivoNaoConcluiu}
+                          onChange={(e) => setMotivoNaoConcluiu(e.target.value)}
+                          className="w-full rounded-xl border border-zinc-200 p-3 text-sm"
+                          rows={3}
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between rounded-xl border border-zinc-200 p-3">
+                      <div>
+                        <div className="font-semibold text-zinc-800">Teve dificuldade?</div>
+                        <div className="text-xs text-zinc-500">Marque se teve algum problema/dificuldade.</div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={teveDificuldade}
+                        onChange={(e) => setTeveDificuldade(e.currentTarget.checked)}
+                        className="h-5 w-5"
+                      />
+                    </div>
+
+                    {teveDificuldade && (
+                      <div>
+                        <div className="text-sm font-semibold text-zinc-800 mb-1">Qual dificuldade?</div>
+                        <textarea
+                          value={dificuldadeMotivo}
+                          onChange={(e) => setDificuldadeMotivo(e.target.value)}
+                          className="w-full rounded-xl border border-zinc-200 p-3 text-sm"
+                          rows={3}
+                        />
+                      </div>
+                    )}
+
+                    <div className="mt-3">
+                      <div className="text-sm font-semibold text-zinc-800 mb-1">Comentário livre</div>
+                      <textarea
+                        value={comentarioLivre}
+                        onChange={(e) => setComentarioLivre(e.target.value)}
+                        placeholder="Escreva seu comentário…"
+                        className="w-full rounded-xl border border-zinc-200 p-3 text-sm"
+                        rows={3}
+                      />
+                      <div className="mt-1 text-xs text-zinc-500">
+                        Dica: você pode escrever do seu jeito (sem precisar marcar opções).
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2">
+
+                    <button
+                      type="button"
+                      onClick={() => { setComentariosMarcados({}); setComentarioLivre(""); }}
+                      className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm hover:bg-zinc-50"
+                    >
+                      Limpar comentários
+                    </button>
+
+                    <button
+                      onClick={fecharModalAvaliacao}
+                      className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm hover:bg-zinc-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={salvarAvaliacao}
+                      disabled={salvandoAvaliacao}
+                      className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60"
+                    >
+                      {salvandoAvaliacao ? "Salvando..." : "Salvar"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
       <BottomNav />
     </div>
   );
