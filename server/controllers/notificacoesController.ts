@@ -26,32 +26,56 @@ export async function listarMinhasNotificacoes(req: AuthenticatedRequest, res: R
 export async function getBadge(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.userId!;
-    const [pendSolic, unreadMsgs] = await Promise.all([
+    if (!userId) return res.status(401).json({ error: "Não autenticado" });
+
+    const [pendSolic, unreadMsgs, totalNotifs] = await Promise.all([
       prisma.solicitacaoTreino.count({
         where: {
           destinatarioId: userId,
           OR: [
             { status: null },
-            { status: { in: ["Pendente", "pendente", "Aguardando", "aguardando", "Pending", "pending"] } },
+            {
+              status: {
+                in: [
+                  "Pendente",
+                  "pendente",
+                  "Aguardando",
+                  "aguardando",
+                  "Pending",
+                  "pending",
+                ],
+              },
+            },
           ],
         },
       }),
       prisma.mensagem.count({ where: { paraId: userId, lida: false } }),
+      prisma.notificacao.count({ where: { usuarioId: userId } }),
     ]);
 
-    res.json({
-      total: pendSolic,
+    const totalNotificacoes = totalNotifs + pendSolic;
+
+    return res.json({
+      totalNotificacoes,
+      notificacoes: totalNotifs,
       solicitacoes: pendSolic,
+      total: totalNotificacoes,
       mensagens: unreadMsgs,
     });
   } catch (e) {
     console.error("getBadge error:", e);
-    res.json({ total: 0, solicitacoes: 0, mensagens: 0 });
+    return res.json({
+      totalNotificacoes: 0,
+      notificacoes: 0,
+      solicitacoes: 0,
+      total: 0,
+      mensagens: 0,
+    });
   }
 }
 
 export async function recomputeAndEmitBadge(userId: string) {
-  const [pendSolic, unreadMsgs] = await Promise.all([
+  const [pendSolic, unreadMsgs, totalNotifs] = await Promise.all([
     prisma.solicitacaoTreino.count({
       where: {
         destinatarioId: userId,
@@ -62,11 +86,39 @@ export async function recomputeAndEmitBadge(userId: string) {
       },
     }),
     prisma.mensagem.count({ where: { paraId: userId, lida: false } }),
+    prisma.notificacao.count({ where: { usuarioId: userId } }),
   ]);
 
   getIO()?.to(userId).emit("badge:update", {
-    total: pendSolic + unreadMsgs,
+    totalNotificacoes: totalNotifs + pendSolic,
+    notificacoes: totalNotifs,
     solicitacoes: pendSolic,
     mensagens: unreadMsgs,
   });
+}
+
+export async function deletarNotificacao(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: "Não autenticado" });
+
+    const id = String(req.params.id || "").trim();
+    if (!id) return res.status(400).json({ error: "ID inválido" });
+
+    const del = await prisma.notificacao.deleteMany({
+      where: { id, usuarioId: userId },
+    });
+
+    if (!del.count) {
+      await recomputeAndEmitBadge(userId);
+      return res.status(404).json({ error: "Notificação não encontrada" });
+    }
+
+    await recomputeAndEmitBadge(userId);
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("[deletarNotificacao]", e);
+    return res.status(500).json({ error: "Erro ao deletar notificação" });
+  }
 }
