@@ -26,9 +26,9 @@ import Storage from "../../../server/utils/storage.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 
 const ENABLE_EVENTOS_TAB = false; 
+const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
 
 type UsuarioBasic = { id: string; nome: string; foto?: string | null };
-
 type AtletaItem = {
   id: string;
   usuario: UsuarioBasic;
@@ -295,7 +295,7 @@ function Explorar() {
     const img = e.currentTarget;
     if (img.dataset.fallbackDone === "1") return;
     img.dataset.fallbackDone = "1";
-    img.src = "/assets/default-user.png";
+    img.src = FALLBACK_AVATAR;
   };
 
   useEffect(() => {
@@ -936,7 +936,7 @@ const eventosFiltrados = useMemo(() => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                   {atletasFiltrados.slice(0, showCountAtletas).map((a) => {
                     const rawFoto = a.foto ?? a.usuario?.foto;
-                    const foto = formatarUrlFoto(rawFoto, "usuarios") || "/assets/default-user.png";
+                    const foto = formatarUrlFoto(rawFoto, "usuarios") || FALLBACK_AVATAR;
                     const nome = a?.usuario?.nome ?? "profile";
                     const uid = a?.usuario?.id ?? a?.usuarioId ?? a.id;
                     const categoria = a.categoriaBase || mapIdadeParaCategoria(a.idade);
@@ -1040,7 +1040,7 @@ const eventosFiltrados = useMemo(() => {
             <h2 className="text-base sm:text-lg font-bold my-4">Escolas de Futebol</h2>
             <div className="space-y-3">
               {dados.escolas.slice(0, showCountEscolas).map((e) => {
-                const logo = formatarUrlFoto(e.logo) || "/placeholder.png";
+                const logo = formatarUrlFoto(e.logo) || FALLBACK_AVATAR;
                 const href = e.usuarioId ? `/perfil/${e.usuarioId}` : undefined;
                 const Card = (
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
@@ -1091,7 +1091,7 @@ const eventosFiltrados = useMemo(() => {
             <h2 className="text-base sm:text-lg font-bold my-4">Clubes</h2>
             <div className="space-y-3">
               {dados.clubes.slice(0, showCountClubes).map((c) => {
-                const logo = formatarUrlFoto(c.logo) || "/placeholder.png";
+                const logo = formatarUrlFoto(c.logo) || FALLBACK_AVATAR;
                 const href = c.usuarioId ? `/perfil/${c.usuarioId}` : undefined;
                 const Card = (
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
