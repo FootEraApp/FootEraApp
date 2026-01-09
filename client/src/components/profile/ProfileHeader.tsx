@@ -111,9 +111,15 @@ export default function ProfileHeader({
 
   const viewerCanObserve = /olheiro|professor|clube|escolinha/i.test(String(viewerTipo));
   const obsKey = Storage.usuarioId && alvoAtletaId ? `obs_${Storage.usuarioId}_${alvoAtletaId}` : null;
-  const storageKey = `tj_${Storage.usuarioId}_${perfilId}`;
-  const isMe = String(Storage.usuarioId || "").trim() === String(perfilId || "").trim();
-  
+    const meId = String(
+    Storage.usuarioId ||
+    localStorage.getItem("usuarioId") ||
+    sessionStorage.getItem("usuarioId") ||
+    ""
+  ).trim();
+
+  const isMe = meId && String(perfilId || "").trim() === meId;
+  const storageKey = meId ? `tj_${meId}_${perfilId}` : `tj_${perfilId}`;
   const [confirmBox, setConfirmBox] = useState<{
     open: boolean;
     text: string;
@@ -249,6 +255,24 @@ export default function ProfileHeader({
 
         const url = `${API.BASE_URL}/api/solicitacoes-treino/vinculo?${qs}`;
 
+        const viewerTipoNorm = String(viewerTipo || "").toLowerCase();
+        const alvoTipoNorm = String(perfilTipo || perfilTipoProp || "").toLowerCase();
+
+        const viewerEhAtleta = viewerTipoNorm === "atleta";
+        const viewerEhFormador = ["professor", "clube", "escolinha"].includes(viewerTipoNorm);
+
+        const alvoEhAtleta = alvoTipoNorm === "atleta";
+        const alvoEhFormador = ["professor", "clube", "escolinha"].includes(alvoTipoNorm);
+
+        // só checa vínculo se for (Atleta <-> Formador)
+        const podeChecarVinculo =
+          (viewerEhAtleta && alvoEhFormador) || (viewerEhFormador && alvoEhAtleta);
+
+        if (!podeChecarVinculo) {
+          setTemVinculoTreino(false);
+          return;
+        }
+
         const resp = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -273,7 +297,7 @@ export default function ProfileHeader({
     return () => {
       alive = false;
     };
-  }, [perfilId, isOwnProfile, isMe, checouVinculo]);
+  }, [perfilId, isOwnProfile, isMe, checouVinculo, perfilTipo, perfilTipoProp, viewerTipo]);
 
   useEffect(() => {
     if (!isOwnProfile) return;
@@ -311,6 +335,16 @@ export default function ProfileHeader({
   useEffect(() => {
     if (!perfilTipo && !perfilTipoProp) return;
     if (isOwnProfile || !perfilId) return;
+
+    const alvoTipoNorm = String(perfilTipo || perfilTipoProp || "").toLowerCase();
+    const alvoEhFormador = ["professor", "clube", "escolinha"].includes(alvoTipoNorm);
+
+    if (!alvoEhFormador) {
+      setTreinoJunto(false);
+      setSouSolicitanteTreino(null);
+      localStorage.removeItem(storageKey);
+      return;
+    }
 
     const token = Storage.token;
     if (!token) return;
@@ -1038,6 +1072,13 @@ export default function ProfileHeader({
 
   const treinoLoading = !checouVinculo && !isOwnProfile && !isMe;
   const treinoDisabled = treinoLoading;
+  const alvoTipoNorm = String(perfilTipo || perfilTipoProp || "").toLowerCase();
+
+  // Treinar juntos só aparece quando o perfil alvo é formador
+  const mostrarTreinarJuntos =
+    !isOwnProfile &&
+    !isMe &&
+    ["professor", "clube", "escolinha"].includes(alvoTipoNorm);
 
   let treinoLabel = "Treinar juntos";
   let treinoTitle = "Solicitar treino em conjunto";
@@ -1226,18 +1267,20 @@ export default function ProfileHeader({
               <span className="truncate">Enviar mensagem</span>
             </button>
 
-            <button
-              disabled={treinoDisabled}
-              aria-pressed={!!(temVinculoTreino || treinoJunto)}
-              onClick={toggleTreino}
-              className={`${btnBase} ${treinoBtnClass}
-                    disabled:opacity-60 disabled:cursor-not-allowed
-                    px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
-              title={treinoTitle}
-            >
-              <Users size={16} />
-              <span className="truncate">{treinoLabel}</span>
-            </button>
+            {mostrarTreinarJuntos && (
+              <button
+                disabled={treinoDisabled}
+                aria-pressed={!!(temVinculoTreino || treinoJunto)}
+                onClick={toggleTreino}
+                className={`${btnBase} ${treinoBtnClass}
+                      disabled:opacity-60 disabled:cursor-not-allowed
+                      px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
+                title={treinoTitle}
+              >
+                <Users size={16} />
+                <span className="truncate">{treinoLabel}</span>
+              </button>
+            )}
 
             {viewerCanObserve && podeObservar && (
               <button
