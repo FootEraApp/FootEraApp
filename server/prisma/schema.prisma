@@ -78,7 +78,8 @@ model Usuario {
   convitesEvento         InscricaoEvento[]         @relation("ConvitesEvento")
   feedbacks              Feedback[]
   SessaoTreinoTurma      SessaoTreinoTurma[]
-  Notificacao            Notificacao[]
+  notificacoes           Notificacao[]             @relation("NotificacaoUsuario")
+  notificacoesGeradas    Notificacao[]             @relation("NotificacaoActor")
   AvaliacaoTreino        AvaliacaoTreino[]
 }
 
@@ -428,11 +429,16 @@ model DesafioOficial {
 }
 
 model Seguidor {
-  id                String  @id @default(uuid())
+  id                String @id @default(uuid())
   seguidoUsuarioId  String
   seguidorUsuarioId String
-  seguidoUsuario    Usuario @relation("Seguido", fields: [seguidoUsuarioId], references: [id], onDelete: Cascade)
-  seguidorUsuario   Usuario @relation("Seguidor", fields: [seguidorUsuarioId], references: [id], onDelete: Cascade)
+
+  seguidoUsuario  Usuario @relation("Seguido", fields: [seguidoUsuarioId], references: [id], onDelete: Cascade)
+  seguidorUsuario Usuario @relation("Seguidor", fields: [seguidorUsuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([seguidorUsuarioId, seguidoUsuarioId])
+  @@index([seguidoUsuarioId])
+  @@index([seguidorUsuarioId])
 }
 
 model RelacaoTreinamento {
@@ -1920,15 +1926,20 @@ model EventoConvocado {
 }
 
 model Notificacao {
-  id        String   @id @default(uuid())
+  id        String          @id @default(uuid())
   usuarioId String
   titulo    String
   mensagem  String
   link      String?
-  lida      Boolean  @default(false)
-  createdAt DateTime @default(now())
+  lida      Boolean         @default(false)
+  createdAt DateTime        @default(now())
+  tipo      NotificacaoTipo @default(GENERICA)
+  actorId   String?
+  actor     Usuario?        @relation("NotificacaoActor", fields: [actorId], references: [id], onDelete: SetNull)
+  usuario   Usuario         @relation("NotificacaoUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
 
-  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  @@index([usuarioId, createdAt])
+  @@index([actorId])
 }
 
 enum ConvocacaoStatus {
@@ -2102,6 +2113,13 @@ enum TipoMensagem {
   GRUPO_DESAFIO
   GRUPO_DESAFIO_BONUS
   CARD
+}
+
+enum NotificacaoTipo {
+  GENERICA
+  FOLLOW
+  FOLLOW_BACK
+  FOLLOW_REMOVED
 }
 
 enum TipoMembro {

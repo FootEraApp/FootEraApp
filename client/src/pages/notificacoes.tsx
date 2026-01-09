@@ -25,8 +25,18 @@ type NotificacaoItem = {
   titulo: string;
   mensagem: string;
   link?: string | null;
-  criadaEm?: string | null;
+  createdAt?: string | null;
   lida?: boolean | null;
+
+  // ✅ novos campos vindos do backend
+  tipo?: string | null; // ex: "FOLLOW" | "FOLLOW_REMOVED" | ...
+  actorId?: string | null;
+  actor?: {
+    id: string;
+    nomeDeUsuario: string;
+    nome?: string | null;
+    foto?: string | null;
+  } | null;
 };
 
 function formatarDataCurta(iso?: string | null) {
@@ -144,6 +154,59 @@ export default function PaginaNotificacoes() {
     }
   };
 
+  const seguirDeVolta = async (userToFollowId: string) => {
+    const token = Storage.token;
+    if (!token) return;
+
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/seguidores`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ seguidoUsuarioId: userToFollowId }),
+      });
+
+      if (!r.ok) {
+        const txt = await r.text();
+        alert(`Não foi possível seguir de volta (${r.status}): ${txt}`);
+        return;
+      }
+
+      alert("Agora você também está seguindo essa pessoa ✅");
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao seguir de volta.");
+    }
+  };
+
+  const removerSeguidor = async (seguidorUsuarioId: string) => {
+    const token = Storage.token;
+    if (!token) return;
+
+    try {
+      const r = await fetch(
+        `${API.BASE_URL}/api/seguidores/seguidores/${encodeURIComponent(seguidorUsuarioId)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!r.ok) {
+        const txt = await r.text();
+        alert(`Não foi possível remover seguidor (${r.status}): ${txt}`);
+        return;
+      }
+
+      alert("Seguidor removido ✅");
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao remover seguidor.");
+    }
+  };
+
   const NOTIFS_BASE = `${API.BASE_URL}/api/notificacoes/me`;
 
   useEffect(() => {
@@ -162,7 +225,35 @@ export default function PaginaNotificacoes() {
         }
 
         const json = await r.json();
-        setNotificacoes(Array.isArray(json?.items) ? json.items : []);
+
+        // 1️⃣ normaliza os itens
+        const items: NotificacaoItem[] = Array.isArray(json?.items)
+          ? json.items
+          : [];
+
+        // 2️⃣ joga na tela
+        setNotificacoes(items);
+
+        // 3️⃣ identifica as não-lidas
+        const naoLidas = items.filter((x) => x?.lida === false);
+
+        // 4️⃣ marca no backend como lidas (fire-and-forget)
+        for (const it of naoLidas) {
+          fetch(
+            `${API.BASE_URL}/api/notificacoes/${encodeURIComponent(it.id)}/lida`,
+            {
+              method: "PATCH",
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          ).catch(() => {});
+        }
+
+        // 5️⃣ 🔴 É EXATAMENTE AQUI QUE ENTRA 🔴
+        if (naoLidas.length) {
+          setNotificacoes((prev) =>
+            prev.map((n) => ({ ...n, lida: true }))
+          );
+        }
       } catch (e) {
         console.error("Erro ao buscar notificações", e);
       }
@@ -170,9 +261,9 @@ export default function PaginaNotificacoes() {
   }, []);
 
   useEffect(() => {
-    const totalNotificacoes =
-      (notificacoes?.length || 0) + (solicitacoes?.length || 0);
-
+    const naoLidas = (notificacoes || []).filter((n) => n.lida === false).length;
+    const totalNotificacoes = naoLidas + (solicitacoes?.length || 0);
+    
     window.dispatchEvent(
       new CustomEvent("badge:update", { detail: totalNotificacoes })
     );
@@ -235,12 +326,115 @@ export default function PaginaNotificacoes() {
       {notificacoes.length > 0 && (
         <div className="mb-6 space-y-3">
           {notificacoes.map((n) => {
-            const data = formatarDataCurta(n.criadaEm || null);
+            const data = formatarDataCurta((n as any).createdAt || (n as any).criadaEm || null);
             const msgLimpa = limparMensagem(n.mensagem || "");
             const ehConv = isConvocacao({
               titulo: n.titulo || "",
               mensagem: n.mensagem || "",
             });
+
+            const isFollow = String(n.tipo || "").toUpperCase() === "FOLLOW";
+            const actor = n.actor;
+            const actorId = actor?.id || n.actorId || null;
+
+            const actorFotoRaw = String(actor?.foto ?? "").trim();
+            const actorFotoOk =
+              actorFotoRaw &&
+              actorFotoRaw !== "null" &&
+              actorFotoRaw !== "undefined" &&
+              actorFotoRaw !== "0";
+
+            const actorFotoSrc = actorFotoOk
+              ? formatarUrlFoto(actorFotoRaw, "usuarios")
+              : FALLBACK_AVATAR;
+
+            const actorLabel = actor?.nomeDeUsuario ? `@${actor.nomeDeUsuario}` : "Usuário";
+
+            if (isFollow && actorId) {
+              return (
+                <div
+                  key={n.id}
+                  className="relative bg-white shadow-md rounded-2xl p-4 border border-green-200"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm("Apagar esta notificação?")) apagarNotificacao(n.id);
+                    }}
+                    className="absolute top-2 right-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full
+                      bg-white hover:bg-gray-100 text-green-900 shadow"
+                    aria-label="Apagar notificação"
+                    title="Apagar"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+
+                  <div className="flex items-center gap-3 pr-10">
+                    <img
+                      src={actorFotoSrc}
+                      alt={`Foto de ${actorLabel}`}
+                      className="w-12 h-12 rounded-full object-cover bg-white"
+                      onError={(e) => {
+                        const img = e.currentTarget as HTMLImageElement & { dataset: any };
+                        if (img.dataset?.fallbackApplied) return;
+                        img.dataset.fallbackApplied = "1";
+                        img.src = FALLBACK_AVATAR;
+                      }}
+                    />
+
+                    <div className="flex-1">
+                      <p className="font-semibold text-green-900 flex items-center gap-2">
+                        {n.titulo || "Novo seguidor"}
+                        {n.lida === false && (
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                            Novo
+                          </span>
+                        )}
+                      </p>
+
+                      {!!data && <p className="text-xs text-gray-500 mt-0.5">{data}</p>}
+
+                      <p className="text-sm text-gray-700 mt-2">
+                        {actorLabel} começou a te seguir
+                      </p>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          className="rounded-lg bg-green-800 text-white text-sm px-4 py-2 hover:bg-green-900"
+                          onClick={async () => {
+                            await marcarComoLida(n.id);
+                            setLocation(`/perfil/${actorId}`);
+                          }}
+                        >
+                          Ver perfil
+                        </button>
+
+                        <button
+                          className="rounded-lg bg-green-600 text-white text-sm px-4 py-2 hover:bg-green-700"
+                          onClick={async () => {
+                            await seguirDeVolta(actorId);
+                            await marcarComoLida(n.id);
+                          }}
+                        >
+                          Seguir de volta
+                        </button>
+
+                        <button
+                          className="rounded-lg bg-red-600 text-white text-sm px-4 py-2 hover:bg-red-700"
+                          onClick={async () => {
+                            if (!confirm("Remover essa pessoa dos seus seguidores?")) return;
+                            await removerSeguidor(actorId);
+                            await marcarComoLida(n.id);
+                          }}
+                        >
+                          Remover seguidor
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
 
             return (
               <div
