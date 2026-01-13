@@ -1,6 +1,6 @@
-import React, { useMemo, useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { format, isSameDay } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   ArrowUpRight, Calendar, CheckCircle2, Clock,
@@ -30,6 +30,7 @@ interface TrainingProgressProps {
   tipoUsuarioId?: string | null;
 }
 
+const ENABLE_CHALLENGES_TAB = false; 
 const toDate = (v?: string | null) => (v ? new Date(v) : null);
 const timeKey = (t: Training) =>
   (toDate(t.prazoEnvio)?.getTime() ??
@@ -233,6 +234,8 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
       .sort((a, b) => timeKey(a) - timeKey(b));
   }, [treinosAgendados]);
 
+  const pendentesCount = useMemo(() => upcomingTrainings.length, [upcomingTrainings]);
+
   useEffect(() => {
     const tipoAtual = upcomingTrainings?.[0]?.tipo;
     if (tipoAtual) {
@@ -275,13 +278,24 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
         <TabsList className="w-full mb-4">
           <TabsTrigger value="overview" className="flex-1">Resumo</TabsTrigger>
           <TabsTrigger value="upcoming" className="flex-1">Próximos</TabsTrigger>
-          <TabsTrigger value="challenges" className="flex-1">Desafios</TabsTrigger>
+          {ENABLE_CHALLENGES_TAB && (
+          <TabsTrigger value="challenges" className="flex-1">
+            Desafios
+          </TabsTrigger>
+        )}
         </TabsList>
 
         <TabsContent value="overview">
           <Card className="bg-white">
             <CardContent className="p-4">
               <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="bg-purple-50 rounded-lg p-3 flex flex-col items-center justify-center">
+                <span className="text-xs text-purple-600 font-medium">Treinos Pendentes</span>
+                <div className="flex items-center mt-1">
+                  <CalendarClock className="text-purple-600 h-4 w-4 mr-1" />
+                  <span className="text-xl font-bold text-purple-700">{pendentesCount}</span>
+                </div>
+              </div>
                 <div className="bg-green-50 rounded-lg p-3 flex flex-col items-center justify-center">
                   <span className="text-xs text-green-600 font-medium">Treinos Completos</span>
                   <div className="flex items-center mt-1">
@@ -289,17 +303,10 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                     <span className="text-xl font-bold text-green-700">{trainingStats.completed}</span>
                   </div>
                 </div>
-
-                <div className="bg-blue-50 rounded-lg p-3 flex flex-col items-center justify-center">
-                  <span className="text-xs text-blue-600 font-medium">Horas Treinadas</span>
-                  <div className="flex items-center mt-1">
-                    <Clock className="text-blue-600 h-4 w-4 mr-1" />
-                    <span className="text-xl font-bold text-blue-700">{trainingStats.totalHours}h</span>
-                  </div>
-                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2 mb-4">
+               {/* {ENABLE_CHALLENGES_TAB && (
                 <div className="bg-purple-50 rounded-lg p-3 flex flex-col items-center justify-center">
                   <span className="text-xs text-purple-600 font-medium">Desafios Completos</span>
                   <div className="flex items-center mt-1">
@@ -307,7 +314,14 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                     <span className="text-xl font-bold text-purple-700">{resumo?.desafios ?? 0}</span>
                   </div>
                 </div>
-
+               )} */}
+                <div className="bg-blue-50 rounded-lg p-3 flex flex-col items-center justify-center">
+                  <span className="text-xs text-blue-600 font-medium">Horas Treinadas</span>
+                  <div className="flex items-center mt-1">
+                    <Clock className="text-blue-600 h-4 w-4 mr-1" />
+                    <span className="text-xl font-bold text-blue-700">{trainingStats.totalHours}h</span>
+                  </div>
+                </div>
                 <div className="bg-amber-50 rounded-lg p-3 flex flex-col items-center justify-center">
                   <span className="text-xs text-amber-600 font-medium">Pontos Conquistados</span>
                   <div className="flex items-center mt-1">
@@ -410,39 +424,41 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
           </Card>
         </TabsContent>
 
-        <TabsContent value="challenges">
-          <Card className="bg-white">
-            <CardContent className="p-2">
-              <div className="bg-purple-50 rounded-lg p-3 flex flex-col items-center justify-center">
-                  <span className="text-xs text-purple-600 font-medium">Completos</span>
-                  <div className="flex items-center mt-1">
-                    <Trophy className="text-purple-600 h-4 w-4 mr-1" />
-                    <span className="text-xl font-bold text-purple-700">{resumo?.desafios ?? 0}</span>
-                  </div>
-              </div>
+        {ENABLE_CHALLENGES_TAB && (
+          <TabsContent value="challenges">
+            <Card className="bg-white">
+              <CardContent className="p-2">
+                <div className="bg-purple-50 rounded-lg p-3 flex flex-col items-center justify-center">
+                    <span className="text-xs text-purple-600 font-medium">Completos</span>
+                    <div className="flex items-center mt-1">
+                      <Trophy className="text-purple-600 h-4 w-4 mr-1" />
+                      <span className="text-xl font-bold text-purple-700">{resumo?.desafios ?? 0}</span>
+                    </div>
+                </div>
 
-              {(resumo?.desafios ?? 0) > 0 ? (
-                <div className="text-center py-6 text-green-800 text-sm">
-                  Você já concluiu {resumo?.desafios} desafio(s). Confira o ranking e novos desafios.
-                  <div className="mt-3">
+                {(resumo?.desafios ?? 0) > 0 ? (
+                  <div className="text-center py-6 text-green-800 text-sm">
+                    Você já concluiu {resumo?.desafios} desafio(s). Confira o ranking e novos desafios.
+                    <div className="mt-3">
+                      <Link href="/challenges">
+                        <Button className="bg-footera-green hover:bg-footera-green-dark">Abrir Desafios</Button>
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <Trophy className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                    <h4 className="text-gray-500 font-medium">Nenhum desafio completado</h4>
+                    <p className="text-gray-400 text-sm mt-1">Complete desafios para ganhar pontos e subir no ranking</p>
                     <Link href="/challenges">
-                      <Button className="bg-footera-green hover:bg-footera-green-dark">Abrir Desafios</Button>
+                      <Button className="mt-4 bg-footera-green hover:bg-footera-green-dark">Ver Desafios</Button>
                     </Link>
                   </div>
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <Trophy className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                  <h4 className="text-gray-500 font-medium">Nenhum desafio completado</h4>
-                  <p className="text-gray-400 text-sm mt-1">Complete desafios para ganhar pontos e subir no ranking</p>
-                  <Link href="/challenges">
-                    <Button className="mt-4 bg-footera-green hover:bg-footera-green-dark">Ver Desafios</Button>
-                  </Link>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

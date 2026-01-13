@@ -1,22 +1,43 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  ALL_ACHIEVEMENTS,
-  entityFromTipoUsuario,
-  AchievementLite,
-} from "../lib/achievementsCatalog.js";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { ArrowLeft, Volleyball, User, CirclePlus, Search, House, HelpCircle } from "lucide-react";
 import { Link } from "wouter";
 
 type Earned = {
+  vinculoId: string;
+  conquista: {
+    id: string;
+    titulo: string;
+    descricao?: string | null;
+    tipo: string;
+    icon?: string | null;
+    iconUrl?: string | null;
+    pontos?: number | null;
+    meta?: number | null;
+    ativo: boolean;
+    publico: string[];
+  };
+  conquistadoEm?: string | null;
+  progresso: number;
+  concluida: boolean;
+  refTipo?: string | null;
+  refId?: string | null;
+};
+
+type CatalogItem = {
   id: string;
-  entity: string;
-  title: string;
-  description: string;
-  icon?: string;
+  titulo: string;
+  descricao?: string | null;
+  tipo: string;
+  icon?: string | null;
+  iconUrl?: string | null;
+  ativo: boolean;
+  publico: string[];
   tier?: "bronze" | "prata" | "ouro" | "platina";
-  group: string;
+  groupLabel: string; 
+  entityLabel: string;
+  meta?: number | null;
 };
 
 const groupOrder = [
@@ -34,6 +55,57 @@ function pickFirst<T>(...vals: (T | null | undefined)[]) {
     if (s.trim() !== "") return v as T;
   }
   return "" as any;
+}
+
+function extractTierFromDescricao(desc?: string | null): "bronze" | "prata" | "ouro" | "platina" | undefined {
+  if (!desc) return undefined;
+  const m = desc.match(/Tier:\s*(bronze|prata|ouro|platina)/i);
+  const t = m?.[1]?.toLowerCase() as any;
+  return t;
+}
+
+function limparDescricao(desc?: string | null) {
+  if (!desc) return "";
+
+  let s = String(desc);
+
+  s = s.replace(/(^|\s|•)\s*Grupo:\s*([^\n\r•]+)\s*/gi, " ");
+  s = s.replace(/(^|\s|•)\s*Tier:\s*(bronze|prata|ouro|platina)\s*/gi, " ");
+  s = s.replace(/\s*•\s*/g, " ").replace(/\s{2,}/g, " ").trim();
+
+  return s;
+}
+
+function extractGrupoFromDescricao(desc?: string | null): string | null {
+  if (!desc) return null;
+  const m = desc.match(/Grupo:\s*([^\n\r•]+)/i);
+  const g = m?.[1]?.trim();
+  return g ? g : null;
+}
+
+function groupLabelFromTipo(tipo?: string | null): string {
+  const t = String(tipo || "").toUpperCase();
+  if (t === "TREINO") return "Treinos";
+  if (t === "DESAFIO") return "Desafios";
+  if (t === "PERFIL") return "Pontuação";
+  if (t === "ORGANIZACAO") return "Gestão";
+  if (t === "EVENTO") return "Eventos";
+  return "Outros";
+}
+
+function entityLabelFromOwnerTipo(ownerTipo?: string | null): string {
+  const t = String(ownerTipo || "");
+  if (!t) return "Atleta";
+  return t[0].toUpperCase() + t.slice(1).toLowerCase();
+}
+
+function entityFromTipoUsuario(tipo: string): "Atleta" | "Professor" | "Escolinha" | "Clube" | null {
+  const t = String(tipo || "").toLowerCase();
+  if (t === "atleta") return "Atleta";
+  if (t === "professor") return "Professor";
+  if (t === "escolinha") return "Escolinha";
+  if (t === "clube") return "Clube";
+  return null;
 }
 
 function readTipoUsuario(): string {
@@ -69,6 +141,21 @@ function readUsuarioId(): string | null {
 }
 
 const USE_API = true;
+const ENABLE_DESAFIOS = false;
+const ENABLE_DESAFIOS_GRUPO = false;
+
+const BLOQUEADOS_POR_FLAG = new Set<string>([
+  ...(ENABLE_DESAFIOS ? [] : ["Desafios"]),
+  ...(ENABLE_DESAFIOS_GRUPO ? [] : ["Desafios em Grupo"]),
+]);
+
+const GROUPS_PROGRESSO_BASE = new Set<string>(["Treinos", "Pontuação", "Gestão", "Eventos"]);
+
+const GROUPS_PROGRESSO_TOTAL = new Set<string>([
+  ...GROUPS_PROGRESSO_BASE,
+  ...(ENABLE_DESAFIOS ? ["Desafios"] : []),
+  ...(ENABLE_DESAFIOS_GRUPO ? ["Desafios em Grupo"] : []),
+]);
 
 const getToken = () =>
   (Storage as any)?.token ??
@@ -80,27 +167,103 @@ export default function ConquistasPage() {
   const usuarioId = readUsuarioId();
   const tipoRaw = readTipoUsuario();
 
+  const usuarioIdDaPagina = useMemo(() => {
+    const qs = new URLSearchParams(window.location.search);
+    return qs.get("usuarioId") || qs.get("userId") || usuarioId;
+  }, [usuarioId]);
+
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [earned, setEarned] = useState<Earned[]>([]);
   const [serverEntity, setServerEntity] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
 
   const entity = useMemo(() => {
     return serverEntity || entityFromTipoUsuario(String(tipoRaw)) || "Atleta";
   }, [serverEntity, tipoRaw]);
 
-  const catalog: AchievementLite[] = useMemo(
-    () => ALL_ACHIEVEMENTS.filter((a: AchievementLite) => a.entity === entity),
-    [entity]
+  const earnedIds = useMemo(
+    () =>
+      new Set(
+        earned
+          .filter((e) => e?.concluida)
+          .map((e) => String(e?.conquista?.id ?? ""))
+          .filter(Boolean)
+      ),
+    [earned]
   );
 
-  const earnedIds = useMemo(() => new Set(earned.map((e) => e.id)), [earned]);
+  useEffect(() => {
+    const loadCatalog = async () => {
+      setLoadingCatalog(true);
+
+      try {
+        const base = (API?.BASE_URL ? String(API.BASE_URL).replace(/\/+$/, "") : "") || "";
+        const url = `${base}/api/conquistas/catalog/${String(entity).toLowerCase()}`;
+
+        const token = getToken();
+        const r = await fetch(url, {
+          credentials: "include",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        if (!r.ok) throw new Error(`Falha ao carregar catálogo (${r.status})`);
+
+        const json = await r.json();
+        const itemsRaw = Array.isArray(json?.items) ? json.items : [];
+        const ownerTipo = String(json?.ownerTipo ?? entity ?? "Atleta");
+        const entityLabel = entityLabelFromOwnerTipo(ownerTipo);
+
+        const items: CatalogItem[] = itemsRaw.map((c: any) => {
+          const grupoDesc = extractGrupoFromDescricao(c?.descricao);
+          const groupLabel = grupoDesc || groupLabelFromTipo(c?.tipo);
+          const tier = extractTierFromDescricao(c?.descricao);
+
+          return {
+            id: String(c.id),
+            titulo: String(c.titulo ?? ""),
+            descricao: c.descricao ?? null,
+            tipo: String(c.tipo ?? ""),
+            icon: c.icon ?? null,
+            iconUrl: c.iconUrl ?? null,
+            ativo: Boolean(c.ativo),
+            publico: Array.isArray(c.publico) ? c.publico : [],
+            tier,
+            groupLabel,
+            entityLabel,
+            meta: (c?.meta ?? null) == null ? null : Number(c.meta),
+          };
+        });
+
+        setCatalog(items);
+      } catch (e) {
+        console.error("ERRO loadCatalog:", e);
+        setCatalog([]);
+      } finally {
+        setLoadingCatalog(false);
+      }
+    };
+
+    loadCatalog();
+  }, [entity]);
 
   const grouped = useMemo(() => {
-    const map: Record<string, AchievementLite[]> = {};
-    for (const c of catalog) (map[c.group] ||= []).push(c);
-    for (const k of Object.keys(map))
-      map[k].sort((a, b) => a.title.localeCompare(b.title));
+    const map: Record<string, CatalogItem[]> = {};
+
+    for (const c of catalog) {
+      if (BLOQUEADOS_POR_FLAG.has(c.groupLabel)) continue;
+      (map[c.groupLabel] ||= []).push(c);
+    }
+
+    for (const k of Object.keys(map)) {
+      map[k].sort((a, b) => {
+        const am = a.meta == null ? 999999 : Number(a.meta);
+        const bm = b.meta == null ? 999999 : Number(b.meta);
+        if (am !== bm) return am - bm;
+        return a.titulo.localeCompare(b.titulo);
+      });
+    }
+
     return map;
   }, [catalog]);
 
@@ -109,7 +272,7 @@ export default function ConquistasPage() {
       setLoading(true);
       setErro(null);
 
-      if (!usuarioId || !USE_API) {
+      if (!usuarioIdDaPagina || !USE_API) {
         setEarned([]);
         setServerEntity(entityFromTipoUsuario(String(tipoRaw)) ?? "Atleta");
         setLoading(false);
@@ -118,7 +281,7 @@ export default function ConquistasPage() {
 
       try {
         const base = (API?.BASE_URL ? String(API.BASE_URL).replace(/\/+$/, "") : "") || "";
-        const url = `${base}/api/conquistas/${usuarioId}`;
+        const url = `${base}/api/conquistas/${usuarioIdDaPagina}?sync=1`;
         const token = getToken();
 
         const r = await fetch(url, {
@@ -138,7 +301,7 @@ export default function ConquistasPage() {
         }
 
         const json = await r.json();
-        setServerEntity(json?.entity || null);
+        setServerEntity(json?.ownerTipo || null);
         setEarned(Array.isArray(json?.earned) ? json.earned : []);
       } catch (e: any) {
         setErro(e?.message || "Erro ao carregar conquistas.");
@@ -149,10 +312,21 @@ export default function ConquistasPage() {
       }
     };
     load();
-  }, [usuarioId, tipoRaw]);
+  }, [usuarioIdDaPagina, tipoRaw]);
 
-  const totalEarned = earnedIds.size;
-  const totalCatalog = catalog.length;
+  const progressoCatalogIds = useMemo(() => {
+    return new Set(
+      catalog.filter((c) => GROUPS_PROGRESSO_TOTAL.has(c.groupLabel)).map((c) => c.id)
+    );
+  }, [catalog]);
+
+  const totalCatalog = progressoCatalogIds.size;
+
+  const totalEarned = useMemo(() => {
+    return earned.filter(
+      (e) => e?.concluida && progressoCatalogIds.has(String(e?.conquista?.id ?? ""))
+    ).length;
+  }, [earned, progressoCatalogIds]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
@@ -176,7 +350,7 @@ export default function ConquistasPage() {
           </p>
 
           <div className="mt-4 bg-white border rounded-xl p-4 shadow-sm">
-            {loading ? (
+            {(loading || loadingCatalog) ? (
               <div className="h-2 w-full bg-gray-200 rounded overflow-hidden">
                 <div className="h-full w-1/3 bg-green-600 animate-pulse" />
               </div>
@@ -211,6 +385,7 @@ export default function ConquistasPage() {
         </header>
 
         {groupOrder
+          .filter((g) => !BLOQUEADOS_POR_FLAG.has(g))
           .filter((g) => grouped[g]?.length)
           .map((group) => (
             <section key={group} className="mb-8">
@@ -252,17 +427,19 @@ export default function ConquistasPage() {
 
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-gray-900">{item.title}</h3>
+                            <h3 className="font-semibold text-gray-900">{item.titulo}</h3>
                             <TierPill tier={item.tier} active={has} />
                           </div>
-                          <p className="text-sm text-gray-600 mt-0.5">{item.description}</p>
+                          <p className="text-sm text-gray-600 mt-0.5">
+                            {limparDescricao(item.descricao)}
+                          </p>
 
                           <div className="mt-3 text-xs text-gray-500 flex items-center gap-2">
                             <span className="inline-block px-2 py-0.5 rounded bg-gray-100 border text-gray-600">
-                              {item.entity}
+                              {item.entityLabel}
                             </span>
                             <span className="inline-block px-2 py-0.5 rounded bg-gray-100 border text-gray-600">
-                              {item.group}
+                              {item.groupLabel}
                             </span>
                             {!has && <span className="ml-auto text-gray-400">Bloqueado</span>}
                             {has && <span className="ml-auto text-green-700 font-medium">Conquistado</span>}
