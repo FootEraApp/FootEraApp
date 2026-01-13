@@ -28,11 +28,6 @@ import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
 import { publicImgUrl } from "../utils/publicUrl.js";
 import socket from "../services/socket.js";
-import {
-  ALL_ACHIEVEMENTS,
-  type AchievementLite,
-  type Tier,
-} from "../lib/achievementsCatalog.js";
 import { FaRetweet } from "react-icons/fa";
 import { http } from "../services/http.js";
 import { TreinosApi } from "../utils/treinosApi.js";
@@ -203,8 +198,16 @@ type AgendaItem = {
   origem: string;
 };
 
+type ConquistaDB = {
+  id: string;
+  titulo: string;
+  descricao: string | null;
+  icone: string | null;
+  tier?: string | null; 
+};
+
 type ParsedAchievement = {
-  ach?: AchievementLite;
+  conquistaId?: string;
   headTitle?: string;
   headDesc?: string;
   userMsg?: string;
@@ -220,12 +223,9 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
   const isHeadAchievement = /^🏆\s*Conquista:/i.test(head);
 
   const idMatch = rest.match(/\[([^\]]+)\]/);
-  const achId = idMatch?.[1]?.trim();
-  const ach: AchievementLite | undefined = achId
-    ? (ALL_ACHIEVEMENTS as AchievementLite[]).find((a: AchievementLite) => a.id === achId)
-    : undefined;
+  const conquistaId = idMatch?.[1]?.trim();
 
-  if (!isHeadAchievement && !achId) return null;
+  if (!isHeadAchievement && !conquistaId) return null;
 
   let headTitle: string | undefined;
   let headDesc: string | undefined;
@@ -235,30 +235,39 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
     headDesc = m[2];
   }
 
-  const userMsg = achId ? rest.replace(/\[[^\]]+\]\s*/, "").trim() : rest;
-  return { ach, headTitle, headDesc, userMsg };
+  const userMsg = conquistaId ? rest.replace(/\[[^\]]+\]\s*/, "").trim() : rest;
+  return { conquistaId, headTitle, headDesc, userMsg };
 }
 
-function TierPill({ tier }: { tier?: Tier }) {
+function TierPill({ tier }: { tier?: string | null }) {
   if (!tier) return null;
-  const map: Record<Tier, string> = {
+
+  const t = String(tier).toLowerCase();
+  const map: Record<string, string> = {
     bronze: "bg-amber-100 text-amber-800 border-amber-200",
     prata: "bg-gray-100 text-gray-700 border-gray-300",
     ouro: "bg-yellow-100 text-yellow-800 border-yellow-200",
     platina: "bg-blue-100 text-blue-800 border-blue-200",
   };
+
   return (
-    <span className={`text-[11px] px-2 py-0.5 rounded border ${map[tier] || ""}`}>
-      {tier[0].toUpperCase() + tier.slice(1)}
+    <span className={`text-[11px] px-2 py-0.5 rounded border ${map[t] || "bg-gray-100 text-gray-700 border-gray-300"}`}>
+      {t ? t[0].toUpperCase() + t.slice(1) : ""}
     </span>
   );
 }
 
-function AchievementShareCard({ parsed }: { parsed: ParsedAchievement }) {
-  const icon = parsed.ach?.icon || "🏆";
-  const title = parsed.ach?.title || parsed.headTitle || "Conquista";
-  const desc = parsed.ach?.description || parsed.headDesc || "";
-  const tier = parsed.ach?.tier;
+function AchievementShareCard({
+  parsed,
+  conquista,
+}: {
+  parsed: ParsedAchievement;
+  conquista: ConquistaDB | null;
+}) {
+  const icon = conquista?.icone || "🏆";
+  const title = conquista?.titulo || parsed.headTitle || "Conquista";
+  const desc = conquista?.descricao || parsed.headDesc || "";
+  const tier = conquista?.tier ?? null;
 
   return (
     <div className="mt-1 rounded-xl border border-yellow-200 bg-yellow-50/60 p-3">
@@ -268,12 +277,20 @@ function AchievementShareCard({ parsed }: { parsed: ParsedAchievement }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h4 className="font-semibold text-yellow-900 truncate">Conquista: {title}</h4>
+            <h4 className="font-semibold text-yellow-900 truncate">
+              Conquista: {title}
+            </h4>
             <TierPill tier={tier} />
           </div>
-          {!!desc && <p className="text-sm text-yellow-900/90 mt-0.5">{desc}</p>}
+
+          {!!desc && (
+            <p className="text-sm text-yellow-900/90 mt-0.5">{desc}</p>
+          )}
+
           {!!parsed.userMsg && (
-            <p className="text-sm text-gray-700 mt-2 italic">“{parsed.userMsg}”</p>
+            <p className="text-sm text-gray-700 mt-2 italic">
+              “{parsed.userMsg}”
+            </p>
           )}
         </div>
       </div>
@@ -347,12 +364,11 @@ function PaginaFeed(): JSX.Element {
   const [comentarioTextoPorPost, setComentarioTextoPorPost] = useState<Record<string, string>>(
     {}
   );
-
   const [modalAberto, setModalAberto] = useState(false);
   const [linkCompartilhado, setLinkCompartilhado] = useState("");
   const [comentariosModalAberto, setComentariosModalAberto] = useState(false);
   const [postSelecionado, setPostSelecionado] = useState<PostagemComUsuario | null>(null);
-
+  const [conquistasById, setConquistasById] = useState<Record<string, ConquistaDB>>({});
   const [usuariosMutuos, setUsuariosMutuos] = useState<Usuario[]>([]);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [carregandoMutuos, setCarregandoMutuos] = useState(false);
@@ -364,6 +380,24 @@ function PaginaFeed(): JSX.Element {
 
   const toggleFiltro = (target: "seguindo" | "favoritos") => {
     setFiltro((atual) => (atual === target ? "todos" : target));
+  };
+
+  const carregarConquista = async (conquistaId: string) => {
+    const id = String(conquistaId || "").trim();
+    if (!id) return;
+    if (conquistasById[id]) return;
+
+    try {
+      const { data } = await http.get<{ conquista: ConquistaDB | null }>(
+        `/api/conquistas/${id}`
+      );
+
+      if (data?.conquista) {
+        setConquistasById((prev) => ({ ...prev, [id]: data.conquista! }));
+      }
+    } catch (e) {
+      console.error("Falha ao carregar conquista:", id, e);
+    }
   };
 
   const userId = Storage.usuarioId as string | null;
@@ -442,6 +476,13 @@ function PaginaFeed(): JSX.Element {
         );
 
         setPosts(unicos);
+        const ids = new Set<string>();
+        for (const p of unicos) {
+          const parsed = parseAchievement(p.conteudo || "");
+          if (parsed?.conquistaId) ids.add(parsed.conquistaId);
+        }
+        ids.forEach((cid) => carregarConquista(cid));
+
       } catch (e) {
         console.error("Falha ao carregar feed:", e);
         setPosts([]);
@@ -686,6 +727,7 @@ function PaginaFeed(): JSX.Element {
         const videoSrc = publicImgUrl(post.videoUrl) ?? undefined;
         const parsed = parseAchievement(post.conteudo);
         const isAchievement = !!parsed;
+        const conquista = parsed?.conquistaId ? (conquistasById[parsed.conquistaId] ?? null) : null;
 
         return (
           <div
@@ -802,7 +844,7 @@ function PaginaFeed(): JSX.Element {
                   )}
 
                   {isAchievement && parsed && (
-                    <AchievementShareCard parsed={parsed} />
+                    <AchievementShareCard parsed={parsed} conquista={conquista} />
                   )}
 
                   {imgSrc && (

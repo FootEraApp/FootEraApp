@@ -137,8 +137,8 @@ model Professor {
   usuario             Usuario?             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   relacoesTreinamento RelacaoTreinamento[] @relation("RelacaoProfessor")
   treinosProgramados  TreinoProgramado[]
-
-  organizacaoId String?
+  conquistas          ConquistaVinculo[]   @relation("ConquistaProfessor")
+  organizacaoId       String?
 
   clubes     ProfessorClube[]
   escolinhas ProfessorEscolinha[]
@@ -307,6 +307,7 @@ model Atleta {
   AtletaHistoricoVinculo        AtletaHistoricoVinculo[]
   PresencaSessaoTreino          PresencaSessaoTreino[]
   avaliacoesTreino              AvaliacaoTreino[]
+  conquistas                    ConquistaVinculo[]         @relation("ConquistaAtleta")
 }
 
 model TreinoProgramado {
@@ -586,6 +587,7 @@ model Escolinha {
   eventos                Evento[]
   AtletaHistoricoVinculo AtletaHistoricoVinculo[]
   ProfessorEscolinha     ProfessorEscolinha[]
+  conquistas             ConquistaVinculo[]       @relation("ConquistaEscolinha")
 }
 
 model Comentario {
@@ -646,6 +648,7 @@ model Clube {
   TreinoRotina           TreinoRotina[]
   AtletaHistoricoVinculo AtletaHistoricoVinculo[]
   ProfessorClube         ProfessorClube[]
+  conquistas             ConquistaVinculo[]       @relation("ConquistaClube")
 }
 
 model SolicitacaoVinculo {
@@ -1942,6 +1945,65 @@ model Notificacao {
   @@index([actorId])
 }
 
+model Conquista {
+  id        String               @id @default(uuid())
+  codigo    String               @unique
+  titulo    String
+  descricao String?
+  tipo      ConquistaTipo        @default(GERAL)
+  publico   ConquistaOwnerTipo[] @default([Atleta])
+  icon      String?
+  iconUrl   String?
+  pontos    Int?                 @default(0)
+  meta      Int?
+  ativo     Boolean              @default(true)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  vinculos ConquistaVinculo[]
+
+  @@index([tipo])
+  @@index([ativo])
+}
+
+model ConquistaVinculo {
+  id String @id @default(uuid())
+
+  conquistaId String
+  ownerTipo   ConquistaOwnerTipo
+  ownerId     String
+
+  atletaId    String?
+  professorId String?
+  clubeId     String?
+  escolinhaId String?
+
+  conquistadoEm DateTime?
+  progresso     Int       @default(0)
+  concluida     Boolean   @default(false)
+
+  refTipo String?
+  refId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conquista Conquista @relation(fields: [conquistaId], references: [id], onDelete: Cascade)
+
+  atleta    Atleta?    @relation("ConquistaAtleta", fields: [atletaId], references: [id], onDelete: Cascade)
+  professor Professor? @relation("ConquistaProfessor", fields: [professorId], references: [id], onDelete: Cascade)
+  clube     Clube?     @relation("ConquistaClube", fields: [clubeId], references: [id], onDelete: Cascade)
+  escolinha Escolinha? @relation("ConquistaEscolinha", fields: [escolinhaId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerTipo, ownerId, conquistaId])
+  @@index([ownerTipo, ownerId])
+  @@index([atletaId])
+  @@index([professorId])
+  @@index([clubeId])
+  @@index([escolinhaId])
+  @@index([concluida, conquistadoEm])
+}
+
 enum ConvocacaoStatus {
   PENDENTE
   CONFIRMADO
@@ -2180,4 +2242,20 @@ enum AvaliacaoAutorTipo {
   Clube
   Escolinha
   Atleta
+}
+
+enum ConquistaOwnerTipo {
+  Atleta
+  Professor
+  Clube
+  Escolinha
+}
+
+enum ConquistaTipo {
+  GERAL
+  TREINO
+  DESAFIO
+  SOCIAL
+  PERFIL
+  ORGANIZACAO
 }
