@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { PrismaClient, EventoStatus } from "@prisma/client";
 import dayjs from "dayjs";
 import jwt from "jsonwebtoken";
+import { getIO } from "../socket.js";
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
@@ -25,6 +26,18 @@ function mapEventoTipoLabel(tipo?: string | null): string {
   if (!tipo) return "Evento";
   const upper = String(tipo).toUpperCase();
   return EVENTO_TIPO_LABEL[upper] ?? "Evento";
+}
+
+function syncEventos(opts: { clubeId?: string | null; escolinhaId?: string | null }) {
+  const io = getIO?.();
+  if (!io) return;
+
+  // público (tela de explorar/eventos abertos)
+  io.to("public:eventos").emit("eventos:sync", { scope: "public" });
+
+  // telas internas do clube/escolinha
+  if (opts.clubeId) io.to(`clube:${opts.clubeId}`).emit("eventos:sync", { scope: "clube", id: opts.clubeId });
+  if (opts.escolinhaId) io.to(`escolinha:${opts.escolinhaId}`).emit("eventos:sync", { scope: "escolinha", id: opts.escolinhaId });
 }
 
 export async function auth(req: any, res: Response, next: NextFunction) {
@@ -170,7 +183,6 @@ export async function listarPublicos(req: Request & { user?: any }, res: Respons
   }
 }
 
-
 export async function listarDoClube(req: Request, res: Response) {
   const { clubeId } = req.params;
   const { status, tipo } = req.query as { status?: string; tipo?: string };
@@ -288,6 +300,8 @@ export async function criar(req: any, res: Response) {
         requisitos: requisitosArr,
       },
     });
+
+    syncEventos({ clubeId: ownerClubeId, escolinhaId: ownerEscolinhaId });
 
     return res.status(201).json(evento);
   } catch (e) {
