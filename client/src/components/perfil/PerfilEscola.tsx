@@ -1,3 +1,4 @@
+// client/src/components/perfil/PerfilEscola
 import { useEffect, useState } from "react";
 import axios from "axios";
 import {
@@ -1067,17 +1068,17 @@ export default function PerfilEscola({ idDaUrl }: Props) {
           <SectionCard
             title="Professores da Escolinha"
             right={
-              <button
-                onClick={() => {
-                  setProfessorSelecionado(undefined);
-                  setTurmasOpen(true);
-                }}
-                className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
-              >
-                <PlusCircle className="w-4 h-4" />
-                Gerenciar professores
-              </button>
+              <Link href="/perfil/GerenciarProfessores">
+                <button
+                  className="text-sm px-3 py-1.5 rounded-md bg-green-600 text-white inline-flex items-center gap-1"
+                  type="button"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Gerenciar professores
+                </button>
+              </Link>
             }
+
           >
             {professoresLoading ? (
               <div className="text-sm text-green-900/70">
