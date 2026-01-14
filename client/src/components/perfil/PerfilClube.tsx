@@ -173,11 +173,65 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
   const [eventosLoading, setEventosLoading] = useState(false);
   const [eventosErro, setEventosErro] = useState<string>("");
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
+  const [conquistasCount, setConquistasCount] = useState<number | null>(null);
+  const [eventosCount, setEventosCount] = useState<number | null>(null);
 
   const clubeId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
   const entidadeUsuarioId = isOwn
     ? Storage.usuarioId
     : data?.clube?.usuarioId ?? null;
+
+  useEffect(() => {
+    if (!token) return;
+    if (!clubeId) return;
+
+    let cancel = false;
+
+    (async () => {
+      try {
+        const { data } = await axios.get(
+          `${API.BASE_URL}/api/eventos/clubes/${clubeId}`,
+          { headers }
+        );
+
+        const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+        if (!cancel) setEventosCount((arr ?? []).length);
+      } catch {
+        if (!cancel) setEventosCount(0);
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [token, clubeId]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const usuarioIdEnt = isOwn ? Storage.usuarioId : (data?.clube?.usuarioId ?? null);
+    if (!usuarioIdEnt) return;
+
+    let cancel = false;
+
+    (async () => {
+      try {
+        const { data: resp } = await axios.get(
+          `${API.BASE_URL}/api/conquistas/${encodeURIComponent(usuarioIdEnt)}?onlyConcluidas=1`,
+          { headers, withCredentials: true }
+        );
+
+        const earnedArr = Array.isArray(resp?.earned) ? resp.earned : [];
+        if (!cancel) setConquistasCount(earnedArr.length); // agora vai ser 2
+      } catch {
+        if (!cancel) setConquistasCount(0);
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [token, isOwn, data?.clube?.usuarioId]);
 
   useEffect(() => {
     if (!token) return;
@@ -236,7 +290,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     return () => {
       cancel = true;
     };
-  }, [token, clubeId]);
+  }, [token, entidadeUsuarioId]);
 
   useEffect(() => {
     setAtividades(null);
@@ -432,6 +486,8 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
       );
 
       const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+      setEventosCount((arr ?? []).length);
+
       const mapped: EventoPreview[] = (arr ?? []).map((ev: any) => ({
         id: String(ev.id),
         titulo: String(ev.titulo ?? "Evento"),
@@ -442,7 +498,9 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
         estado: ev.estado ?? null,
         descricao: ev.descricao ?? null,
       }));
+
       setEventosPreview(mapped.slice(0, 3));
+
     } catch (e: any) {
       setEventosPreview([]);
       setEventosErro(
@@ -576,16 +634,14 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     : undefined;
 
   const athletesCount = vinculados?.length ?? data.metrics?.atletas ?? 0;
-
   const kpis = [
     {
       label: "Atletas",
       value: atletasHeaderCount ?? athletesCount ?? data.metrics?.atletas ?? 0,
     },
-    { label: "Eventos", value: data.metrics?.eventos ?? 0 },
-    { label: "Conquistas", value: data.metrics?.conquistas ?? 0 },
+    { label: "Eventos", value: (typeof eventosCount === "number" ? eventosCount : 0) },
+    { label: "Conquistas", value: (typeof conquistasCount === "number" ? conquistasCount : 0) },
   ];
-
   const clubeIdStr = data.clube.id;
 
   return (

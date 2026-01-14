@@ -1,14 +1,31 @@
-// client/src/pages/minhaRede
 import { useEffect, useMemo, useState } from "react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
-import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Link } from 'wouter';
 import BottomNav from "@/components/layout/BottomNav.js";
 
 type Usuario = { id: string; nome: string; foto?: string | null };
 type Seguidor = Usuario & { isSeguindo?: boolean };
+
+const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
+
+function temFotoValida(foto?: string | null) {
+  const v = String(foto ?? "").trim();
+  return !!v && v !== "null" && v !== "undefined" && v !== "0";
+}
+
+function fotoSrcUsuario(foto?: string | null) {
+  return temFotoValida(foto) ? formatarUrlFoto(foto as any, "usuarios") : FALLBACK_AVATAR;
+}
+
+function aplicarFallback(e: React.SyntheticEvent<HTMLImageElement>) {
+  const img = e.currentTarget;
+  if (img.dataset.fallbackApplied) return;
+  img.dataset.fallbackApplied = "1";
+  img.src = FALLBACK_AVATAR;
+}
 
 export default function MinhaRede() {
   const [aba, setAba] = useState<"seguindo" | "seguidores">("seguindo");
@@ -93,13 +110,10 @@ export default function MinhaRede() {
           <ArrowLeft className="h-5 w-5" />
         </Link>
 
-        {/* título centralizado sem cobrir o botão */}
         <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold pointer-events-none">
           Minha rede
         </h1>
       </div>
-
-
 
       <div className="flex gap-2 mb-3">
         <button
@@ -128,10 +142,16 @@ export default function MinhaRede() {
               className="bg-white rounded-lg p-3 flex items-center justify-between shadow"
             >
               <div className="flex items-center gap-3">
-                <img
-                  src={ formatarUrlFoto(u.foto, "usuarios") }
-                  className="w-10 h-10 rounded-full object-cover"
-                />
+                <Link href={`/perfil/${u.id}`} onClick={(e) => e.stopPropagation()}>
+                  <img
+                    src={fotoSrcUsuario(u.foto)}
+                    onError={aplicarFallback}
+                    className="w-10 h-10 rounded-full object-cover cursor-pointer"
+                    alt={u.nome || "Usuário"}
+                    title="Ver perfil"
+                  />
+                </Link>
+
                 <span className="font-medium">{u.nome || "Usuário"}</span>
               </div>
               <button
@@ -155,10 +175,15 @@ export default function MinhaRede() {
                 className="bg-white rounded-lg p-3 flex items-center justify-between shadow"
               >
                 <div className="flex items-center gap-3">
-                  <img
-                    src={ formatarUrlFoto(u.foto, "usuarios") }
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
+                  <Link href={`/perfil/${u.id}`} onClick={(e) => e.stopPropagation()}>
+                    <img
+                      src={fotoSrcUsuario(u.foto)}
+                      onError={aplicarFallback}
+                      className="w-10 h-10 rounded-full object-cover cursor-pointer"
+                      alt={u.nome || "Usuário"}
+                      title="Ver perfil"
+                    />
+                  </Link>
                   <span className="font-medium">{u.nome || "Usuário"}</span>
                 </div>
 
@@ -179,10 +204,7 @@ export default function MinhaRede() {
           })}
         </div>
       )}
-
-
       <BottomNav />
-
     </div>
   );
 }

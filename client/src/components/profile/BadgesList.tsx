@@ -65,6 +65,36 @@ function chooseHardest(list: Earned[], k = 6) {
     })
     .slice(0, k);
 }
+function extractTierFromDescricao(desc?: string | null): Earned["tier"] {
+  if (!desc) return undefined;
+  const m = desc.match(/Tier:\s*(bronze|prata|ouro|platina)/i);
+  const t = (m?.[1] || "").toLowerCase();
+  if (t === "bronze" || t === "prata" || t === "ouro" || t === "platina") return t;
+  return undefined;
+}
+
+function extractGrupoFromDescricao(desc?: string | null): string | null {
+  if (!desc) return null;
+  const m = desc.match(/Grupo:\s*([^\n\r•]+)/i);
+  const g = m?.[1]?.trim();
+  return g ? g : null;
+}
+
+function groupLabelFromTipo(tipo?: string | null): string {
+  const t = String(tipo || "").toUpperCase();
+  if (t === "TREINO") return "Treinos";
+  if (t === "DESAFIO") return "Desafios";
+  if (t === "PERFIL") return "Pontuação";
+  if (t === "ORGANIZACAO") return "Gestão";
+  if (t === "EVENTO") return "Eventos";
+  return "Outros";
+}
+
+function entityLabelFromOwnerTipo(ownerTipo?: string | null): string {
+  const t = String(ownerTipo || "");
+  if (!t) return "Atleta";
+  return t[0].toUpperCase() + t.slice(1).toLowerCase();
+}
 
 function BadgeIcon({
   emoji,
@@ -123,6 +153,7 @@ export function BadgesList({
 
   useEffect(() => {
     let cancelled = false;
+
     async function fetchEarned() {
       setLoading(true);
       try {
@@ -131,26 +162,46 @@ export function BadgesList({
           setLoading(false);
           return;
         }
-        const url = `${API.BASE_URL.replace(/\/+$/, "")}/api/conquistas/${ownerId}`;
+
+        const url = `${API.BASE_URL.replace(/\/+$/, "")}/api/conquistas/${ownerId}?sync=1`;
         const r = await axios.get(url, {
           withCredentials: true,
-          headers: Storage?.token
-            ? { Authorization: `Bearer ${Storage.token}` }
+          headers: (Storage as any)?.token
+            ? { Authorization: `Bearer ${(Storage as any).token}` }
             : undefined,
         });
         if (cancelled) return;
 
-        const data = r.data?.earned || [];
+        const ownerTipo = r.data?.ownerTipo; // "Atleta"|"Professor"|"Clube"|"Escolinha"
+        const entityLabel = entityLabelFromOwnerTipo(ownerTipo);
+
+        const earnedRaw = Array.isArray(r.data?.earned) ? r.data.earned : [];
+
+        // ✅ pega só conquistas realmente concluídas
+        const onlyDone = earnedRaw.filter((e: any) => Boolean(e?.concluida));
+
         setEarned(
-          data.map((e: any) => ({
-            id: e.id,
-            title: e.title,
-            description: e.description,
-            icon: e.icon,
-            tier: e.tier,
-            group: e.group,
-            entity: e.entity,
-          }))
+          onlyDone.map((e: any) => {
+            const c = e?.conquista || {};
+            const desc = c?.descricao ?? null;
+
+            const group =
+              extractGrupoFromDescricao(desc) || groupLabelFromTipo(c?.tipo);
+
+            const tier =
+              extractTierFromDescricao(desc) ||
+              (typeof c?.tier === "string" ? c.tier : undefined);
+
+            return {
+              id: String(c?.id ?? e?.conquistaId ?? e?.id ?? ""),
+              title: String(c?.titulo ?? ""),
+              description: String(c?.descricao ?? ""),
+              icon: c?.icon ?? undefined,
+              tier,
+              group,
+              entity: entityLabel,
+            } as Earned;
+          }).filter((x: Earned) => Boolean(x.id) && Boolean(x.title))
         );
       } catch (e) {
         setEarned([]);
@@ -158,6 +209,7 @@ export function BadgesList({
         if (!cancelled) setLoading(false);
       }
     }
+
     fetchEarned();
     return () => {
       cancelled = true;
@@ -193,7 +245,7 @@ export function BadgesList({
     try {
       await axios.post(
         `${API.BASE_URL}/api/conquistas/compartilhar`,
-        { badgeId: selected.id, mensagem },
+        { conquistaId: selected.id, mensagem },
         Storage?.token
           ? { headers: { Authorization: `Bearer ${Storage.token}` } }
           : undefined
@@ -213,7 +265,7 @@ export function BadgesList({
     );
   }
 
-  const usingLegacy = !loading && earnedFiltered.length === 0 && badges.length;
+  const usingLegacy = false;
   const legacyToShow = useMemo(() => badges.slice(0, 6), [badges]);
 
   return (
@@ -365,7 +417,7 @@ export function BadgesList({
 
       <div className="px-4 pb-2">
         <Link
-          href="/perfil/conquistas"
+          href={`/perfil/conquistas?usuarioId=${encodeURIComponent(ownerId || "")}`}
           className="text-sm text-green-800 hover:underline"
         >
           Ver todas as conquistas →
