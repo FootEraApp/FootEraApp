@@ -13,11 +13,31 @@ export async function listarFeed(req: Request, res: Response) {
     const postagens = await prisma.postagem.findMany({
       orderBy: { dataCriacao: "desc" },
       include: {
-        usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
+        usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
         curtidas: { select: { usuarioId: true } },
         comentarios: {
           orderBy: { dataCriacao: "asc" },
-          include: { usuario: { select: { nome: true, foto: true } } },
+          include: { usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } } },
+        },
+        repostOf: {
+          include: {
+            usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
+            curtidas: { select: { usuarioId: true } },
+            comentarios: {
+              orderBy: { dataCriacao: "asc" },
+              include: { usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } } },
+            },
+            repostOf: {
+              include: {
+                usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
+                curtidas: { select: { usuarioId: true } },
+                comentarios: {
+                  orderBy: { dataCriacao: "asc" },
+                  include: { usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } } },
+                },
+              },
+            },
+          },
         },
       },
     });
@@ -123,24 +143,49 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
 
     const postagens = await prisma.postagem.findMany({
       where,
+      orderBy: { dataCriacao: "desc" },
       include: {
-        usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
+        usuario: {
+          select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true },
+        },
         curtidas: { select: { usuarioId: true } },
         comentarios: {
           orderBy: { dataCriacao: "asc" },
-          include: { usuario: { select: { nome: true, foto: true } } },
+          include: {
+            usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } },
+          },
         },
+
         repostOf: {
           include: {
-            usuario: { select: { id: true, nome: true, foto: true, tipo: true } },
-            curtidas: true,
+            usuario: {
+              select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true },
+            },
+            curtidas: { select: { usuarioId: true } },
             comentarios: {
-              include: { usuario: { select: { nome: true, foto: true } } },
+              orderBy: { dataCriacao: "asc" },
+              include: {
+                usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } },
+              },
+            },
+
+            repostOf: {
+              include: {
+                usuario: {
+                  select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true },
+                },
+                curtidas: { select: { usuarioId: true } },
+                comentarios: {
+                  orderBy: { dataCriacao: "asc" },
+                  include: {
+                    usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } },
+                  },
+                },
+              },
             },
           },
         },
       },
-      orderBy: { dataCriacao: "desc" },
     });
 
     const ads = await getAdsConfigForUser(userId);
@@ -173,6 +218,13 @@ export async function getPostById(req: Request, res: Response) {
             usuario: true,
             comentarios: { include: { usuario: true } },
             curtidas: true,
+            repostOf: {
+              include: {
+                usuario: true,
+                comentarios: { include: { usuario: true } },
+                curtidas: true,
+              },
+            },
           },
         },
       },
@@ -368,12 +420,28 @@ export const deletarPostagem: RequestHandler = async (req, res) => {
         .json({ mensagem: "Não autorizado a excluir esta postagem." });
     }
 
-    // ✅ se for repost, decrementa contador no original
     if (post.repostOfId) {
-      await prisma.postagem.update({
-        where: { id: post.repostOfId },
-        data: { reposts: { decrement: 1 } },
-      }).catch(() => {});
+      let rootId = post.repostOfId;
+
+      let cursor = await prisma.postagem.findUnique({
+        where: { id: rootId },
+        select: { repostOfId: true },
+      });
+
+      while (cursor?.repostOfId) {
+        rootId = cursor.repostOfId;
+        cursor = await prisma.postagem.findUnique({
+          where: { id: cursor.repostOfId },
+          select: { repostOfId: true },
+        });
+      }
+
+      await prisma.postagem
+        .update({
+          where: { id: rootId },
+          data: { reposts: { decrement: 1 } },
+        })
+        .catch(() => {});
     }
 
     await prisma.postagem.delete({ where: { id } });
@@ -453,44 +521,70 @@ export async function repostPost(req: Request, res: Response) {
   try {
     const postId = String(req.params.id);
     const userId = (req as any).userId as string | undefined;
-    const comentario = (req.body?.comentario ?? "").trim();
+    const comentarioRaw = req.body?.comentario;
+    const comentario = String(comentarioRaw ?? "").trim();
 
     if (!userId) return res.status(401).json({ message: "Usuário não autenticado" });
 
-    const original = await prisma.postagem.findUnique({
+    const clicked = await prisma.postagem.findUnique({
       where: { id: postId },
-      include: {
-        usuario: true,
-        curtidas: true,
-        comentarios: { include: { usuario: true } },
-      },
+      select: { id: true, repostOfId: true },
     });
-    if (!original) return res.status(404).json({ message: "Post não encontrado" });
+    if (!clicked) return res.status(404).json({ message: "Post não encontrado" });
 
-    const hidden = "\u200B" + Date.now();
+    const parentId = clicked.id;
+
+    let rootId = clicked.id;
+    let cursor: { repostOfId: string | null } | null = clicked;
+
+    while (cursor?.repostOfId) {
+      rootId = cursor.repostOfId;
+      cursor = await prisma.postagem.findUnique({
+        where: { id: cursor.repostOfId },
+        select: { repostOfId: true },
+      });
+    }
+
+    const rootExists = await prisma.postagem.findUnique({
+      where: { id: rootId },
+      select: { id: true },
+    });
+    if (!rootExists) {
+      return res.status(404).json({ message: "Post original não encontrado" });
+    }
+
+    const conteudoRepost = comentario ? comentario : "\u200B";
+
     const novo = await prisma.postagem.create({
       data: {
         usuarioId: userId,
-        conteudo: comentario || "" || hidden,
-        repostOfId: original.id,
+        conteudo: conteudoRepost,
+        repostOfId: parentId,
       },
       include: {
-        usuario: true,
+        usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
         curtidas: true,
-        comentarios: { include: { usuario: true } },
+        comentarios: { include: { usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } } } },
         repostOf: {
           include: {
-            usuario: true,
+            usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
             curtidas: true,
-            comentarios: { include: { usuario: true } },
+            comentarios: { include: { usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } } } },
+            repostOf: { 
+              include: {
+                usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
+                curtidas: true,
+                comentarios: { include: { usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } } } },
+              },
+            },
           },
         },
       },
     });
 
     await prisma.postagem.update({
-      where: { id: original.id },
-      data: { reposts: (original.reposts ?? 0) + 1 },
+      where: { id: rootId },
+      data: { reposts: { increment: 1 } },
     });
 
     getIO()?.emit("feed:novoPost", novo);

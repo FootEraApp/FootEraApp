@@ -358,6 +358,25 @@ function avatarSrc(foto?: string | null) {
   return publicImgUrl(foto) || AVATAR_FALLBACK;
 }
 
+function cleanText(s?: string | null) {
+  return String(s ?? "").replace(/\u200B/g, "").trim();
+}
+
+function getRootPost(p: PostagemComUsuario): PostagemComUsuario {
+  let cur: any = p;
+  while (cur?.repostOf) cur = cur.repostOf;
+  return cur as PostagemComUsuario;
+}
+
+function getParentPost(p: PostagemComUsuario): PostagemComUsuario | null {
+  return (p as any).repostOf ?? null;
+}
+
+function username(u?: any) {
+  const h = u?.nomeDeUsuario ? `@${u.nomeDeUsuario}` : "";
+  return h || u?.nome || "Usuário";
+}
+
 function PaginaFeed(): JSX.Element {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [mostrarInputPorPost, setMostrarInputPorPost] = useState<Record<string, boolean>>({});
@@ -769,8 +788,7 @@ function PaginaFeed(): JSX.Element {
 
             {post.repostOf && (
               <div className="text-xs text-gray-500 -mt-1">
-                Repostou de{" "}
-                <strong>{post.repostOf.usuario?.nome || "Usuário"}</strong>
+                Repostou de <strong>{username(post.repostOf.usuario)}</strong>
               </div>
             )}
 
@@ -778,62 +796,80 @@ function PaginaFeed(): JSX.Element {
               {post.repostOf ? (
                 <>
                   {(() => {
-                    const comment = (post.conteudo || "").replace(/\u200B\d+$/, "");
-                    return comment.trim() ? (
+                    const clean = (post.conteudo || "")
+                      .replace(/\u200B/g, "") 
+                      .trim();
+
+                    return clean ? (
                       <p className="text-gray-800 font-medium whitespace-pre-line mb-2">
-                        {comment}
+                        {clean}
                       </p>
                     ) : null;
                   })()}
 
-                  <div className="border rounded-xl p-3 bg-gray-50">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Link
-                        href={`/perfil/${post.repostOf.usuario?.id ?? ""}`}
-                        title={`Ver perfil de ${post.repostOf.usuario?.nome ?? "Usuário"}`}
-                        className="shrink-0"
-                      >
-                        <img
-                          src={avatarSrc(post.repostOf.usuario?.foto)}
-                          onError={(e) => ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)}
-                          alt={post.repostOf.usuario?.nome || "avatar original"}
-                          className="w-7 h-7 rounded-full object-cover cursor-pointer"
-                        />
-                      </Link>
-                      <div>
-                        <p className="text-sm font-semibold">
-                          {post.repostOf.usuario?.nome}
-                        </p>
-                        <p className="text[11px] text-gray-500">
-                          {format(
-                            new Date(post.repostOf.dataCriacao),
-                            "dd/MM, HH:mm"
-                          )}
-                        </p>
+                  {(() => {
+                    const parent = getParentPost(post);
+                    const root = getRootPost(post);
+                    const parentComment = parent ? cleanText(parent.conteudo) : "";
+                    const rootText = cleanText(root.conteudo);
+
+                    return (
+                      <div className="border rounded-xl p-3 bg-gray-50">
+                        {!!parentComment && (
+                          <div className="mb-2 text-sm text-gray-700">
+                            <span className="font-semibold">{username(parent?.usuario)}</span>{" "}
+                            <span className="text-gray-600">comentou:</span>{" "}
+                            <span className="italic">“{parentComment}”</span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 mb-1">
+                          <Link
+                            href={`/perfil/${root.usuario?.id ?? ""}`}
+                            title={`Ver perfil de ${root.usuario?.nome ?? "Usuário"}`}
+                            className="shrink-0"
+                          >
+                            <img
+                              src={avatarSrc(root.usuario?.foto)}
+                              onError={(e) => ((e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK)}
+                              alt={root.usuario?.nome || "avatar original"}
+                              className="w-7 h-7 rounded-full object-cover cursor-pointer"
+                            />
+                          </Link>
+
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold truncate">
+                              {root.usuario?.nome}{" "}
+                              <span className="text-gray-500 font-normal">
+                                ({username(root.usuario)})
+                              </span>
+                            </p>
+                            <p className="text-[11px] text-gray-500">
+                              {format(new Date(root.dataCriacao), "dd/MM, HH:mm")}
+                            </p>
+                          </div>
+                        </div>
+
+                        {!!rootText && (
+                          <p className="text-sm text-gray-800 whitespace-pre-line">{rootText}</p>
+                        )}
+
+                        {publicImgUrl(root.imagemUrl) && (
+                          <img
+                            src={publicImgUrl(root.imagemUrl) ?? undefined}
+                            alt="Post principal"
+                            className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
+                          />
+                        )}
+
+                        {publicImgUrl(root.videoUrl) && (
+                          <video controls className="w-full mt-2 rounded-lg">
+                            <source src={publicImgUrl(root.videoUrl) ?? ""} type="video/mp4" />
+                          </video>
+                        )}
                       </div>
-                    </div>
-
-                    <p className="text-sm text-gray-800 whitespace-pre-line">
-                      {post.repostOf.conteudo}
-                    </p>
-
-                    {publicImgUrl(post.repostOf.imagemUrl) && (
-                      <img
-                        src={publicImgUrl(post.repostOf.imagemUrl) ?? undefined}
-                        alt="Post original"
-                        className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
-                      />
-                    )}
-
-                    {publicImgUrl(post.repostOf.videoUrl) && (
-                      <video controls className="w-full mt-2 rounded-lg">
-                        <source
-                          src={publicImgUrl(post.repostOf.videoUrl) ?? ""}
-                          type="video/mp4"
-                        />
-                      </video>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </>
               ) : (
                 <>
