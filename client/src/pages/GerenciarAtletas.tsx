@@ -1,5 +1,6 @@
+// client/src/pages/GerenciarAtletas
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Volleyball, User, CirclePlus, House } from "lucide-react";
 import axios from "axios";
 import {
@@ -336,6 +337,10 @@ const uiToApiCategoria = (c?: CategoriaBase | ""): string | undefined => {
 };
 
 const GerenciarAtletas: React.FC = () => {
+  const [location, setLocation] = useLocation();
+  const isAtletasPage = location === "/perfil/GerenciarAtletas" || location === "/perfil/gerenciarAtletas";
+  const isProfessoresPage = location === "/perfil/GerenciarProfessores" || location === "/perfil/gerenciarProfessores";
+
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
@@ -1086,19 +1091,27 @@ async function salvarAvaliacao() {
             {tipo && tipo !== "Professor" && (
               <div className="mt-2 inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
                 <button
-                  onClick={() => setAba("atletas")}
-                  className={`px-3 py-1.5 rounded-lg ${aba === "atletas" ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"}`}
+                  type="button"
+                  onClick={() => setLocation("/perfil/GerenciarAtletas")}
+                  className={`px-3 py-1.5 rounded-lg ${
+                    isAtletasPage ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
+                  }`}
                 >
                   Atletas
                 </button>
+
                 <button
-                  onClick={() => setAba("professores")}
-                  className={`px-3 py-1.5 rounded-lg ${aba === "professores" ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"}`}
+                  type="button"
+                  onClick={() => setLocation("/perfil/GerenciarProfessores")}
+                  className={`px-3 py-1.5 rounded-lg ${
+                    isProfessoresPage ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
+                  }`}
                 >
                   Professores
                 </button>
               </div>
             )}
+
           </div>
         </div>
 

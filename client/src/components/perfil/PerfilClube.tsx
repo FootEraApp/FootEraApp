@@ -1,3 +1,4 @@
+// client/src/components/perfil/PerfilClube
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
@@ -398,7 +399,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     try {
       const { data } = await axios.get(`${API.BASE_URL}/api/professores`, {
         headers,
-        params: { organizacaoId: clubeId },
+        params: { ownerTipo: "Clube", ownerId: clubeId },
       });
       const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
       setProfessores(
