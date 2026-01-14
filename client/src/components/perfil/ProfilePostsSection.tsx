@@ -13,7 +13,7 @@ type ConquistaDB = {
   titulo: string;
   descricao: string | null;
   icone: string | null;
-  tier?: string | null; // se existir no schema
+  tier?: string | null;
 };
 
 type ParsedAchievement = {
@@ -122,6 +122,25 @@ function midiaVideo(url?: string | null) {
   return u || null;
 }
 
+function cleanText(s?: string | null) {
+  return String(s ?? "").replace(/\u200B/g, "").trim();
+}
+
+function username(u?: any) {
+  const h = u?.nomeDeUsuario ? `@${u.nomeDeUsuario}` : "";
+  return h || u?.nome || "Usuário";
+}
+
+function getRootPost(p: PostagemComUsuario): PostagemComUsuario {
+  let cur: any = p;
+  while (cur?.repostOf) cur = cur.repostOf;
+  return cur as PostagemComUsuario;
+}
+
+function getParentPost(p: PostagemComUsuario): PostagemComUsuario | null {
+  return (p as any).repostOf ?? null;
+}
+
 export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }) {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
@@ -210,7 +229,6 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         );
 
         if (!cancelled) setPosts(dados);
-        // pré-carrega conquistas encontradas nos posts
         const ids = new Set<string>();
         for (const p of dados) {
           const parsed = parseAchievement(p.conteudo || "");
@@ -316,40 +334,86 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                 <div>
                   {ro ? (
                     <>
-                      {post.conteudo && (
+                      {!!cleanText(post.conteudo) && (
                         <p className="text-gray-800 font-medium whitespace-pre-line mb-2">
-                          {post.conteudo}
+                          {cleanText(post.conteudo)}
                         </p>
                       )}
 
-                      <div className="border border-gray-200 rounded-2xl p-4 bg-white">
-                        <p className="text-sm text-gray-500 mb-2">
-                          Repostou de{" "}
-                          <span className="text-green-900 font-medium">
-                            {ro.usuario?.nome || "Usuário"}
-                          </span>
-                        </p>
+                      {(() => {
+                        const parent = getParentPost(post); 
+                        const root = getRootPost(post);     
+                        const parentComment = parent ? cleanText(parent.conteudo) : "";
+                        const rootText = cleanText(root.conteudo);
 
-                        {!!ro.conteudo && (
-                          <p className="text-sm text-gray-800 whitespace-pre-line">
-                            {ro.conteudo}
-                          </p>
-                        )}
+                        const rootAvatar =
+                          publicImgUrl(root.usuario?.foto) || FALLBACK_AVATAR;
+                        const rootImg = midiaImg(root.imagemUrl);
+                        const rootVideo = midiaVideo(root.videoUrl);
 
-                        {roImg && (
-                          <img
-                            src={roImg}
-                            alt="Post original"
-                            className="mt-3 rounded-2xl max-h-72 w-full object-cover"
-                          />
-                        )}
+                        return (
+                          <div className="border border-gray-200 rounded-2xl p-4 bg-white">
+                            <p className="text-sm text-gray-500 mb-2">
+                              Repostou de{" "}
+                              <span className="text-green-900 font-medium">
+                                {username(ro.usuario)}
+                              </span>
+                            </p>
 
-                        {roVideo && (
-                          <video controls className="w-full mt-3 rounded-2xl">
-                            <source src={roVideo} type="video/mp4" />
-                          </video>
-                        )}
-                      </div>
+                            {!!parentComment && (
+                              <div className="mb-3 text-sm text-gray-700">
+                                <span className="font-semibold">{username(parent?.usuario)}</span>{" "}
+                                <span className="text-gray-600">comentou:</span>{" "}
+                                <span className="italic">“{parentComment}”</span>
+                              </div>
+                            )}
+
+                            <div className="border rounded-xl p-3 bg-gray-50">
+                              <div className="flex items-center gap-2 mb-1">
+                                <img
+                                  src={rootAvatar}
+                                  onError={(e) => ((e.currentTarget as HTMLImageElement).src = FALLBACK_AVATAR)}
+                                  alt={root.usuario?.nome || "avatar"}
+                                  className="w-7 h-7 rounded-full object-cover"
+                                />
+
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold truncate">
+                                    {root.usuario?.nome || "Usuário"}{" "}
+                                    <span className="text-gray-500 font-normal">
+                                      ({username(root.usuario)})
+                                    </span>
+                                  </p>
+
+                                  <p className="text-[11px] text-gray-500">
+                                    {format(new Date(root.dataCriacao), "dd/MM, HH:mm")}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {!!rootText && (
+                                <p className="text-sm text-gray-800 whitespace-pre-line">
+                                  {rootText}
+                                </p>
+                              )}
+
+                              {rootImg && (
+                                <img
+                                  src={rootImg}
+                                  alt="Post principal"
+                                  className="mt-2 rounded-lg max-h-72 w-auto mx-auto"
+                                />
+                              )}
+
+                              {rootVideo && (
+                                <video controls className="w-full mt-2 rounded-lg">
+                                  <source src={rootVideo} type="video/mp4" />
+                                </video>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </>
                   ) : (
                     <>

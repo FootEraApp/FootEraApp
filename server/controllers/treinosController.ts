@@ -1,4 +1,3 @@
-// server/controllers/treinosController
 import {
   PrismaClient,
   PosicaoCampo,
@@ -576,16 +575,14 @@ function syncAgendaAtleta(usuarioId: string, atletaId?: string) {
   const io = getIO();
   if (!io || !usuarioId) return;
 
-  // agenda do próprio atleta (telas: /treinos, calendário, próximos)
   io.to(`u:${usuarioId}`).emit("agenda:sync", { usuarioId, atletaId: atletaId ?? null });
-  io.to(usuarioId).emit("agenda:sync", { usuarioId, atletaId: atletaId ?? null }); // compat se você usa room = userId
+  io.to(usuarioId).emit("agenda:sync", { usuarioId, atletaId: atletaId ?? null });
 }
 
 function syncTreinoProgramado(treinoProgramadoId: string) {
   const io = getIO();
   if (!io || !treinoProgramadoId) return;
 
-  // listas/estatísticas (admin, tela de treinos do criador, etc.)
   io.to("treinos:programados").emit("treinos:sync", { treinoProgramadoId });
 }
 
@@ -1193,24 +1190,16 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
 
     const turmaId = typeof turmaIdRaw === "string" ? turmaIdRaw.trim() : "";
     const elencoId = typeof elencoIdRaw === "string" ? elencoIdRaw.trim() : "";
-
     const resolvedMe = req.userId ? await resolveEntidade(req.userId) : null;
     const tipoUser =
       resolvedMe?.tipo ??
       String(req.user?.tipo ?? req.user?.tipoUsuario ?? "").toLowerCase();
 
-    // ✅ Permissões: professor/clube/escolinha só podem agendar se:
-    // - tem vínculo (ativo true OU null, pra não quebrar os casos antigos)
-    // - OU é observado
-    // - OU (clube/escolinha) é vínculo direto (atleta.clubeId/escolinhaId)
-    // - OU se vier turmaId/elencoId e o atleta faz parte E a turma/elenco pertence ao dono
     if (["professor", "clube", "escolinha"].includes(tipoUser)) {
       const resolved = req.userId ? await resolveEntidade(req.userId) : null;
-
       if (resolved) {
         let temVinc = false;
 
-        // --- vínculo por relacaoTreinamento (aceita ativo true OU null) ---
         if (resolved.tipo === "professor") {
           temVinc = !!(await prisma.relacaoTreinamento.findFirst({
             where: {
@@ -1262,7 +1251,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
           }));
         }
 
-        // --- observado ---
         const ehObservado = await prisma.atletaObservado.findFirst({
           where: {
             atletaId,
@@ -1275,7 +1263,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
           select: { id: true },
         });
 
-        // --- vínculo direto (garantia extra, como no código da sua amiga) ---
         const vinculoDireto =
           (resolved.tipo === "clube" &&
             (await prisma.atleta.findUnique({
@@ -1288,7 +1275,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
               select: { escolinhaId: true },
             }))?.escolinhaId === resolved.id);
 
-        // Se não tem nada disso, tenta liberar via turma/elenco (como no código da sua amiga)
         if (!temVinc && !ehObservado && !vinculoDireto) {
           if (turmaId) {
             const membro = await prisma.turmaUsuario.findFirst({
@@ -1385,7 +1371,7 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
     });
 
     syncAgendaAtleta(atleta.usuarioId!, atletaId);
-    syncTreinoProgramado(treinoProgramadoId); // se quiser atualizar estatísticas/listas
+    syncTreinoProgramado(treinoProgramadoId);
 
     if (treinoProgramadoId) {
       await prisma.estatisticaTreino.upsert({
@@ -1609,12 +1595,21 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
       typeof req.query.atletaId === "string" ? req.query.atletaId.trim() : "";
 
     const apenasFuturos = String(req.query.apenasFuturos || "") === "1";
-    const apenasComSubmissao = String(req.query.apenasComSubmissao || "") === "1";
-
     const agora = new Date();
+    const monthStr =
+      typeof req.query.month === "string" ? req.query.month.trim() : "";
 
-    const inicioMes = startOfMonth(agora);
-    const inicioProximoMes = addMonths(inicioMes, 1);
+    let inicioMes: Date;
+    let inicioProximoMes: Date;
+
+    if (/^\d{4}-\d{2}$/.test(monthStr)) {
+      const [y, m] = monthStr.split("-").map(Number);
+      inicioMes = new Date(y, (m || 1) - 1, 1, 0, 0, 0, 0);
+      inicioProximoMes = addMonths(inicioMes, 1);
+    } else {
+      inicioMes = startOfMonth(agora);
+      inicioProximoMes = addMonths(inicioMes, 1);
+    }
 
     let atletaId: string | null = null;
     let atletaUsuarioId: string | null = null;
@@ -1778,25 +1773,25 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
 
     if (apenasFuturos) {
       const hoje = startOfDay(new Date());
+
       resultado = resultado.filter((r: any) => {
-        if (!r.dataTreino) return true; 
+        if (r.status === TreinoAgendadoStatus.CONCLUIDO) return false;
+        if (r.meuStatus === TreinoStatus.COMPLETED) return false;
+        if ((r.submissao?.enviados ?? 0) > 0) return false;
+        if (!r.dataTreino) return true;
+
         const dt = new Date(r.dataTreino);
         if (Number.isNaN(dt.getTime())) return true;
+
         return dt >= hoje;
       });
     }
-
-    if (apenasComSubmissao) {
-      resultado = resultado.filter((r: any) => (r.submissao?.enviados ?? 0) > 0);
-    }
-
     return res.json(resultado);
   } catch (e) {
     console.error("getTreinosAgendados", e);
     return res.status(500).json({ error: "Erro ao buscar treinos agendados" });
   }
 }
-
 
 export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
   try {
@@ -1933,6 +1928,11 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
         startedAt: new Date(),
         completedAt: new Date(),
       },
+    });
+
+    await prisma.treinoAgendado.update({
+      where: { id: treinoAgendadoId },
+      data: { status: TreinoAgendadoStatus.CONCLUIDO },
     });
 
     syncAgendaAtleta(usuarioId, atletaId);
@@ -2478,7 +2478,6 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
       return res.json([]);
     }
 
-    // 🔎 tipoUsuarioId pode ser: Usuario.id OU Perfil.id (Professor/Clube/Escolinha)
     const [prof, clube, escola] = await Promise.all([
       prisma.professor.findFirst({
         where: { OR: [{ id: tipoUsuarioId }, { usuarioId: tipoUsuarioId }] },
@@ -2497,15 +2496,9 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
     const professorIdResolved = prof?.id ?? null;
     const clubeIdResolved = clube?.id ?? null;
     const escolinhaIdResolved = escola?.id ?? null;
-
-    // fallback: se não achou nenhum perfil, usa o próprio valor (compat)
     const anyId = tipoUsuarioId;
-
-    // ✅ Considera vínculos na tabela RelacaoTreinamento (principal)
-    // ✅ Mantém compat com campos diretos clubeId/escolinhaId (legado)
     const whereBase: Prisma.AtletaWhereInput = {
       OR: [
-        // vínculos por professor
         ...(professorIdResolved
           ? [
               {
@@ -2528,7 +2521,6 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
               },
             ]),
 
-        // vínculos por clube (isso é o que estava faltando pra clube/escola)
         ...(clubeIdResolved
           ? [
               {
@@ -2539,7 +2531,7 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
                   },
                 },
               },
-              { clubeId: clubeIdResolved }, // legado (se existir no seu model)
+              { clubeId: clubeIdResolved },
             ]
           : [
               {
@@ -2553,8 +2545,7 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
               { clubeId: anyId },
             ]),
 
-        // vínculos por escolinha/escola ✅ (essa é a correção principal)
-        ...(escolinhaIdResolved
+         ...(escolinhaIdResolved
           ? [
               {
                 relacoesTreinamento: {
@@ -2564,7 +2555,7 @@ export const atletasVinculados = async (req: AuthenticatedRequest, res: Response
                   },
                 },
               },
-              { escolinhaId: escolinhaIdResolved }, // legado
+              { escolinhaId: escolinhaIdResolved },
             ]
           : [
               {
