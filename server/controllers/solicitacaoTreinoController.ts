@@ -483,16 +483,20 @@ export async function verificarVinculoTreino(req: Request, res: Response) {
     const escolinhaId = idsMe.escolinhaId || idsAlvo.escolinhaId;
 
     if (!atletaId) {
-      return res.status(400).json({
-        error:
-          "Não há atleta envolvido na relação (é necessário um atleta e um professor/clube/escolinha).",
+      return res.json({
+        vinculo: false,
+        relacaoId: null,
+        relacao: null,
+        motivo: "Sem atleta envolvido",
       });
     }
 
     if (!professorId && !clubeId && !escolinhaId) {
-      return res.status(400).json({
-        error:
-          "Não há professor/clube/escolinha envolvido na relação de treinamento.",
+      return res.json({
+        vinculo: false,
+        relacaoId: null,
+        relacao: null,
+        motivo: "Sem professor/clube/escolinha envolvido",
       });
     }
 

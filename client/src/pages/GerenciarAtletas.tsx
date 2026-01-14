@@ -260,11 +260,9 @@ const getFoto = (f?: string | null) => {
   const v = String(f).trim();
 
   if (/^https?:\/\//i.test(v)) return v;
-
   if (v.startsWith("/assets/") || v.startsWith("assets/")) {
     return v.startsWith("/") ? v : `/${v}`;
   }
-
   if (v.startsWith("/uploads/") || v.startsWith("uploads/")) {
     const path = v.startsWith("/") ? v.slice(1) : v;
     return `${API.BASE_URL}/${path}`;
@@ -274,7 +272,6 @@ const getFoto = (f?: string | null) => {
 };
 
 const numberOrDash = (n?: number | null) => (typeof n === "number" ? n : "–");
-
 const formatRelativo = (iso: string) => {
   const d = new Date(iso), now = new Date();
   const ms = now.getTime() - d.getTime();
@@ -471,7 +468,6 @@ const GerenciarAtletas: React.FC = () => {
       setLoading(true);
 
       const usuarioId = String(usuarioIdEntidade || "").trim();
-
       const entidadeIdReal = String(tipoUsuarioIdEntidade || "").trim();
       if (!entidadeIdReal) {
         setError("Não foi possível identificar o ID da entidade (tipoUsuarioId). Faça logout/login ou verifique /api/perfil/me.");
@@ -498,26 +494,24 @@ const GerenciarAtletas: React.FC = () => {
 
       const { data } = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, { headers, params });
       const lista = (data?.atletas || []) as any[];
-
       const normalizados: AtletaMin[] = lista.map((a) => ({
-      id: a.id,
-      usuarioId: a.usuarioId,
-      nome: a.nome,
-      idade: a.idade ?? null,
-      foto: a.foto ?? null,
-      posicao: (posicoesMap as any)[a.posicao] ?? a.posicao ?? null,
-      categoria: apiToUiCategoria(a.categoria),
-      pontuacao: a.pontuacao ?? null,
-      ativoRecentemente: !!a.ativoRecentemente,
-      clubeNome: a.clube?.nome ?? a.clubeNome ?? null,
-      escolinhaNome: a.escolinha?.nome ?? a.escolinhaNome ?? null,
-      professorNome:
-        a.professor?.nome ??
-        a.professor?.usuario?.nome ??
-        a.professorNome ??
-        null,
+        id: a.id,
+        usuarioId: a.usuarioId,
+        nome: a.nome,
+        idade: a.idade ?? null,
+        foto: a.foto ?? null,
+        posicao: (posicoesMap as any)[a.posicao] ?? a.posicao ?? null,
+        categoria: apiToUiCategoria(a.categoria),
+        pontuacao: a.pontuacao ?? null,
+        ativoRecentemente: !!a.ativoRecentemente,
+        clubeNome: a.clube?.nome ?? a.clubeNome ?? null,
+        escolinhaNome: a.escolinha?.nome ?? a.escolinhaNome ?? null,
+        professorNome:
+          a.professor?.nome ??
+          a.professor?.usuario?.nome ??
+          a.professorNome ??
+          null,
     }));
-
       setAtletas(normalizados);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Falha ao carregar atletas");
@@ -1018,24 +1012,19 @@ async function abrirModalAvaliacao(submissaoTreinoId: string) {
 
 async function salvarAvaliacao() {
   if (!submissaoSelecionada) return;
-
   if (!tipo) return alert("Tipo de perfil inválido.");
   const autorId = getAutorId();
   if (!autorId) return alert("Não foi possível identificar o ID da entidade (autorId).");
 
   const autorTipo = autorTipoFromTela(tipo);
-
   const comentariosMarcadosArr = Object.entries(comentariosMarcados)
     .filter(([, v]) => v)
     .map(([texto]) => String(texto));
-
   const comentarioLivreTrim = comentarioLivre.trim();
-
   const comentariosTextoFinal = [
     ...comentariosMarcadosArr,
     ...(comentarioLivreTrim ? [comentarioLivreTrim] : []),
   ];
-
   const comentarios = comentariosTextoFinal.map((texto, idx) => ({ texto, ordem: idx }));
 
   setSalvandoAvaliacao(true);
@@ -1407,7 +1396,6 @@ async function salvarAvaliacao() {
                             <td className="p-3 text-sm text-zinc-700">{a.categoria ?? "—"}</td>
                             <td className="p-3 text-sm text-zinc-700">{a.posicao ?? "—"}</td>
                             <td className="p-3 text-sm text-zinc-900">{numberOrDash(a.pontuacao)}</td>
-
                             <td className="p-3">
                               <StatusBadge ativo={a.ativoRecentemente} />
                             </td>
@@ -1692,117 +1680,117 @@ async function salvarAvaliacao() {
                   </button>
                 </div>
 
-              {!drawerOpen ? null : selectedDays.length === 0 ? (
-                <div className="text-sm opacity-80">
-                  Clique em um ou mais dias do calendário para ver/agendar treinos.
-                </div>
-              ) : (
-                <div className="flex flex-col gap-4 min-h-0 flex-1">
-                  {!hasPastSelectedDay ? (
-                    <div className={["rounded-xl border border-zinc-200 bg-white flex-none", forceScrollDetails ? "p-2" : "p-3"].join(" ")}>
-                      <div className={["font-bold", forceScrollDetails ? "text-xs mb-1" : "text-sm mb-2"].join(" ")}>
-                        Agendar para {selectedDays.length === 1 ? "1 dia selecionado" : `${selectedDays.length} dias selecionados`}
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-xs opacity-80">Treino programado</label>
-                        <select
-                          value={treinoProgramadoId}
-                          onChange={(e) => setTreinoProgramadoId(e.target.value)}
-                          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800"
-                        >
-                          <option value="">Selecionar...</option>
-                          {treinosProgramados.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.nome}
-                            {t.codigo ? ` (${t.codigo})` : ""}
-                            {t.autor?.nome ? ` — ${t.autor.tipo}: ${t.autor.nome}` : t.autor?.tipo ? ` — ${t.autor.tipo}` : ""}
-                          </option>
-                          ))}
-                        </select>
-
-                        <button
-                          onClick={agendarParaDiasSelecionados}
-                          disabled={loadingProgramados || salvandoAgenda}
-                          className="w-full mt-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 disabled:hover:bg-emerald-600 transition"
-                        >
-                          {salvandoAgenda ? "Agendando..." : loadingProgramados ? "Carregando..." : "Agendar treino nos dias selecionados"}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-zinc-200 bg-white p-3 flex-none">
-                      <div className="text-sm font-bold mb-1">Agendamento indisponível</div>
-                      <div className="text-sm opacity-80">
-                        Você selecionou pelo menos um dia no passado. Selecione apenas hoje ou datas futuras.
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
-
-                    {selectedDayItems.map(({ day, items }) => (
-                      <div key={day} className="rounded-xl border border-zinc-200 bg-white p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="font-bold">{formatDayPtBR(day)}</div>
-                          <div className="text-xs opacity-80">
-                            {items.length ? `${items.length} treino(s)` : "Sem treino"}
-                          </div>
+                {!drawerOpen ? null : selectedDays.length === 0 ? (
+                  <div className="text-sm opacity-80">
+                    Clique em um ou mais dias do calendário para ver/agendar treinos.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4 min-h-0 flex-1">
+                    {!hasPastSelectedDay ? (
+                      <div className={["rounded-xl border border-zinc-200 bg-white flex-none", forceScrollDetails ? "p-2" : "p-3"].join(" ")}>
+                        <div className={["font-bold", forceScrollDetails ? "text-xs mb-1" : "text-sm mb-2"].join(" ")}>
+                          Agendar para {selectedDays.length === 1 ? "1 dia selecionado" : `${selectedDays.length} dias selecionados`}
                         </div>
 
-                        {!items.length ? (
-                          <div className="text-sm opacity-80">Nenhum treino agendado neste dia.</div>
-                        ) : (
-                          <div className="space-y-2">
-                            {items.map((t) => {
-                              const nome = t.treinoProgramado?.nome || t.titulo || "Treino";
-                              const done = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
-                              const lost = !done && isLost(t);
+                        <div className="space-y-2">
+                          <label className="text-xs opacity-80">Treino programado</label>
+                          <select
+                            value={treinoProgramadoId}
+                            onChange={(e) => setTreinoProgramadoId(e.target.value)}
+                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800"
+                          >
+                            <option value="">Selecionar...</option>
+                            {treinosProgramados.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.nome}
+                              {t.codigo ? ` (${t.codigo})` : ""}
+                              {t.autor?.nome ? ` — ${t.autor.tipo}: ${t.autor.nome}` : t.autor?.tipo ? ` — ${t.autor.tipo}` : ""}
+                            </option>
+                            ))}
+                          </select>
 
-                              const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
-                              const statusClass = done ? "text-emerald-600" : lost ? "text-red-600" : "text-zinc-600";
+                          <button
+                            onClick={agendarParaDiasSelecionados}
+                            disabled={loadingProgramados || salvandoAgenda}
+                            className="w-full mt-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 disabled:hover:bg-emerald-600 transition"
+                          >
+                            {salvandoAgenda ? "Agendando..." : loadingProgramados ? "Carregando..." : "Agendar treino nos dias selecionados"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-zinc-200 bg-white p-3 flex-none">
+                        <div className="text-sm font-bold mb-1">Agendamento indisponível</div>
+                        <div className="text-sm opacity-80">
+                          Você selecionou pelo menos um dia no passado. Selecione apenas hoje ou datas futuras.
+                        </div>
+                      </div>
+                    )}
 
-                              return (
-                                <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-3">
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <div className="font-bold truncate">{nome}</div>
+                    <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
 
-                                      <div className="text-xs opacity-80 mt-1">
-                                        Status: <span className={statusClass}>{statusText}</span>
+                      {selectedDayItems.map(({ day, items }) => (
+                        <div key={day} className="rounded-xl border border-zinc-200 bg-white p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="font-bold">{formatDayPtBR(day)}</div>
+                            <div className="text-xs opacity-80">
+                              {items.length ? `${items.length} treino(s)` : "Sem treino"}
+                            </div>
+                          </div>
+
+                          {!items.length ? (
+                            <div className="text-sm opacity-80">Nenhum treino agendado neste dia.</div>
+                          ) : (
+                            <div className="space-y-2">
+                              {items.map((t) => {
+                                const nome = t.treinoProgramado?.nome || t.titulo || "Treino";
+                                const done = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
+                                const lost = !done && isLost(t);
+
+                                const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
+                                const statusClass = done ? "text-emerald-600" : lost ? "text-red-600" : "text-zinc-600";
+
+                                return (
+                                  <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <div className="font-bold truncate">{nome}</div>
+
+                                        <div className="text-xs opacity-80 mt-1">
+                                          Status: <span className={statusClass}>{statusText}</span>
+                                        </div>
+
+                                        {done && !!t.submissaoTreinoId ? (
+                                          <button
+                                            onClick={() => abrirModalAvaliacao(String(t.submissaoTreinoId || ""))}
+                                            className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
+                                          >
+                                            💬 Avaliar treino
+                                          </button>
+                                        ) : null}
                                       </div>
 
-                                      {done && !!t.submissaoTreinoId ? (
-                                        <button
-                                          onClick={() => abrirModalAvaliacao(String(t.submissaoTreinoId || ""))}
-                                          className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
-                                        >
-                                          💬 Avaliar treino
-                                        </button>
+                                      {done ? (
+                                        <CheckCircle2 className="h-5 w-5 text-green-300" />
+                                      ) : lost ? (
+                                        <XCircle className="h-5 w-5 text-red-300" />
                                       ) : null}
                                     </div>
-
-                                    {done ? (
-                                      <CheckCircle2 className="h-5 w-5 text-green-300" />
-                                    ) : lost ? (
-                                      <XCircle className="h-5 w-5 text-red-300" />
-                                    ) : null}
                                   </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
+                )}
                 </div>
-              )}
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
           {avaliarOpen && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-3">
