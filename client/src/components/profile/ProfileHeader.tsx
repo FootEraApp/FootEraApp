@@ -12,6 +12,7 @@ import {
   Eye,
   UserPlus,
   Share2,
+  Trophy
 } from "lucide-react";
 import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
@@ -42,6 +43,7 @@ interface ProfileHeaderProps {
   perfilId: string;
   perfilTipoProp?: string | null;
   perfilTipoIdProp?: string | null;
+  conquistasCount?: number;
 }
 
 function pickAtletaId(payload: any, perfilId: string): string | null {
@@ -81,6 +83,7 @@ export default function ProfileHeader({
   scoreDelta,
   perfilTipoProp = null,
   perfilTipoIdProp = null,
+  conquistasCount = 0,
 }: ProfileHeaderProps) {
   const [modalAberto, setModalAberto] = useState(false);
   const [usuariosMutuos, setUsuariosMutuos] = useState<any[]>([]);
@@ -111,9 +114,15 @@ export default function ProfileHeader({
 
   const viewerCanObserve = /olheiro|professor|clube|escolinha/i.test(String(viewerTipo));
   const obsKey = Storage.usuarioId && alvoAtletaId ? `obs_${Storage.usuarioId}_${alvoAtletaId}` : null;
-  const storageKey = `tj_${Storage.usuarioId}_${perfilId}`;
-  const isMe = String(Storage.usuarioId || "").trim() === String(perfilId || "").trim();
-  
+    const meId = String(
+    Storage.usuarioId ||
+    localStorage.getItem("usuarioId") ||
+    sessionStorage.getItem("usuarioId") ||
+    ""
+  ).trim();
+
+  const isMe = meId && String(perfilId || "").trim() === meId;
+  const storageKey = meId ? `tj_${meId}_${perfilId}` : `tj_${perfilId}`;
   const [confirmBox, setConfirmBox] = useState<{
     open: boolean;
     text: string;
@@ -248,6 +257,21 @@ export default function ProfileHeader({
         }).toString();
 
         const url = `${API.BASE_URL}/api/solicitacoes-treino/vinculo?${qs}`;
+        const viewerTipoNorm = String(viewerTipo || "").toLowerCase();
+        const alvoTipoNorm = String(perfilTipo || perfilTipoProp || "").toLowerCase();
+        
+        const viewerEhAtleta = viewerTipoNorm === "atleta";
+        const viewerEhFormador = ["professor", "clube", "escolinha"].includes(viewerTipoNorm);
+        const alvoEhAtleta = alvoTipoNorm === "atleta";
+        const alvoEhFormador = ["professor", "clube", "escolinha"].includes(alvoTipoNorm);
+        
+        const podeChecarVinculo =
+          (viewerEhAtleta && alvoEhFormador) || (viewerEhFormador && alvoEhAtleta);
+
+        if (!podeChecarVinculo) {
+          setTemVinculoTreino(false);
+          return;
+        }
 
         const resp = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
@@ -273,7 +297,7 @@ export default function ProfileHeader({
     return () => {
       alive = false;
     };
-  }, [perfilId, isOwnProfile, isMe, checouVinculo]);
+  }, [perfilId, isOwnProfile, isMe, checouVinculo, perfilTipo, perfilTipoProp, viewerTipo]);
 
   useEffect(() => {
     if (!isOwnProfile) return;
@@ -311,6 +335,16 @@ export default function ProfileHeader({
   useEffect(() => {
     if (!perfilTipo && !perfilTipoProp) return;
     if (isOwnProfile || !perfilId) return;
+
+    const alvoTipoNorm = String(perfilTipo || perfilTipoProp || "").toLowerCase();
+    const alvoEhFormador = ["professor", "clube", "escolinha"].includes(alvoTipoNorm);
+
+    if (!alvoEhFormador) {
+      setTreinoJunto(false);
+      setSouSolicitanteTreino(null);
+      localStorage.removeItem(storageKey);
+      return;
+    }
 
     const token = Storage.token;
     if (!token) return;
@@ -725,6 +759,21 @@ export default function ProfileHeader({
     ? String(Storage.usuarioId ?? "")
     : perfilId;
 
+  const conquistasTotal = Number(conquistasCount || 0) || 0;
+  const conquistasHref = `/perfil/conquistas?usuarioId=${encodeURIComponent(
+    String(perfilId || "")
+  )}&tipo=${encodeURIComponent(String(perfilTipo || perfilTipoProp || ""))}`;
+
+  const irConquistas = () => {
+    try {
+      localStorage.setItem(
+        `conquistas_count_${perfilId}`,
+        String(conquistasTotal)
+      );
+    } catch {}
+    window.location.href = conquistasHref;
+  };
+
   useEffect(() => {
     if (!perfilTipo && !perfilTipoProp) return;
     if (isOwnProfile || !perfilId) return;
@@ -1038,6 +1087,12 @@ export default function ProfileHeader({
 
   const treinoLoading = !checouVinculo && !isOwnProfile && !isMe;
   const treinoDisabled = treinoLoading;
+  const alvoTipoNorm = String(perfilTipo || perfilTipoProp || "").toLowerCase();
+
+  const mostrarTreinarJuntos =
+    !isOwnProfile &&
+    !isMe &&
+    ["professor", "clube", "escolinha"].includes(alvoTipoNorm);
 
   let treinoLabel = "Treinar juntos";
   let treinoTitle = "Solicitar treino em conjunto";
@@ -1134,19 +1189,40 @@ export default function ProfileHeader({
       <div className="w-full mt-4">
         {kpis && kpis.length ? (
           <div className="grid grid-cols-3 gap-3">
-            {kpis.map((k, i) => (
-              <div
-                key={i}
-                className="rounded-xl bg-white/15 border border-footera-cream/40 p-3 text-center"
-              >
-                <div className="footera-text-cream text-2xl font-bold">
-                  {k.value ?? 0}
+            {kpis.map((k, i) => {
+              const isConquistas = String(k.label || "").toLowerCase() === "conquistas";
+              const podeIrConquistas = isConquistas;
+
+              const card = (
+                <div
+                  className={`rounded-xl bg-white/15 border border-footera-cream/40 p-3 text-center ${
+                    podeIrConquistas ? "cursor-pointer hover:bg-white/20" : ""
+                  }`}
+                  title={podeIrConquistas ? "Ver conquistas" : undefined}
+                  role={podeIrConquistas ? "button" : undefined}
+                >
+                  <div className="footera-text-cream text-2xl font-bold">
+                    {Number(k.value ?? 0)}
+                  </div>
+                  <div className="footera-text-cream/80 text-xs mt-1">
+                    {k.label}
+                  </div>
                 </div>
-                <div className="footera-text-cream/80 text-xs mt-1">
-                  {k.label}
-                </div>
-              </div>
-            ))}
+              );
+
+              return podeIrConquistas ? (
+                <button
+                  key={`${k.label}-${i}`}
+                  type="button"
+                  onClick={irConquistas}
+                  className="text-left"
+                >
+                  {card}
+                </button>
+              ) : (
+                <div key={`${k.label}-${i}`}>{card}</div>
+              );
+            })}
           </div>
         ) : (
           <>
@@ -1226,18 +1302,20 @@ export default function ProfileHeader({
               <span className="truncate">Enviar mensagem</span>
             </button>
 
-            <button
-              disabled={treinoDisabled}
-              aria-pressed={!!(temVinculoTreino || treinoJunto)}
-              onClick={toggleTreino}
-              className={`${btnBase} ${treinoBtnClass}
-                    disabled:opacity-60 disabled:cursor-not-allowed
-                    px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
-              title={treinoTitle}
-            >
-              <Users size={16} />
-              <span className="truncate">{treinoLabel}</span>
-            </button>
+            {mostrarTreinarJuntos && (
+              <button
+                disabled={treinoDisabled}
+                aria-pressed={!!(temVinculoTreino || treinoJunto)}
+                onClick={toggleTreino}
+                className={`${btnBase} ${treinoBtnClass}
+                      disabled:opacity-60 disabled:cursor-not-allowed
+                      px-3 py-1.5 text-xs md:px-4 md:py-2 md:text-sm`}
+                title={treinoTitle}
+              >
+                <Users size={16} />
+                <span className="truncate">{treinoLabel}</span>
+              </button>
+            )}
 
             {viewerCanObserve && podeObservar && (
               <button
@@ -1283,22 +1361,26 @@ export default function ProfileHeader({
       )}
 
       {isOwnProfile && (
-        <div className="mt-4 w-full grid grid-cols-2 gap-2">
-          <Link href="/minha-rede">
-            <Button className="w-full bg-white/10 hover:bg-white/20 text-white border-white/30">
-              <Users size={16} className="mr-2" />
-              Minha rede
-            </Button>
-          </Link>
-          <Link href="/configuracoes">
-            <Button
-              variant="outline"
-              className="w-full bg-white/10 hover:bg-white/20 text-white border-white/30"
-            >
-              <Settings size={16} className="mr-2" />
-              Configurações
-            </Button>
-          </Link>
+        <div className="mt-4 w-full flex justify-center">
+          <div className="w-full max-w-md flex items-center justify-center gap-3">
+            <Link href="/minha-rede">
+              <Button
+                className="flex-1 h-12 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30"
+              >
+                <Users size={18} className="mr-2" />
+                Minha rede
+              </Button>
+            </Link>
+
+            <Link href="/configuracoes">
+              <Button
+                className="flex-1 h-12 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/30"
+              >
+                <Settings size={18} className="mr-2" />
+                Configurações
+              </Button>
+            </Link>
+          </div>
         </div>
       )}
 

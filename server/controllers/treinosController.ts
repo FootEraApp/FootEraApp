@@ -282,6 +282,8 @@ export async function agendarTreinoPessoal(req: AuthenticatedRequest, res: Respo
     },
   });
 
+  syncAgendaAtleta(usuarioId, atletaId);
+
   return res.status(201).json(treino);
 }
 
@@ -422,11 +424,14 @@ export async function agendarTreinoLote(req: AuthenticatedRequest, res: Response
     )
   );
 
+  syncTreinoProgramado(treinoProgramadoId);
+
   await prisma.estatisticaTreino.upsert({
     where: { treinoId: treinoProgramadoId },
     create: { treinoId: treinoProgramadoId, realizacoes: 0, ultimoRealizadoEm: null },
     update: {},
   });
+  
   return res.status(201).json({ ok: true });
 }
 
@@ -565,6 +570,23 @@ async function notificarNovoTreino(
     io.to(deUsuarioId).emit("novaMensagem", { ...saved, pending: false });
     io.to(`u:${deUsuarioId}`).emit("novaMensagem", { ...saved, pending: false });
   }
+}
+
+function syncAgendaAtleta(usuarioId: string, atletaId?: string) {
+  const io = getIO();
+  if (!io || !usuarioId) return;
+
+  // agenda do próprio atleta (telas: /treinos, calendário, próximos)
+  io.to(`u:${usuarioId}`).emit("agenda:sync", { usuarioId, atletaId: atletaId ?? null });
+  io.to(usuarioId).emit("agenda:sync", { usuarioId, atletaId: atletaId ?? null }); // compat se você usa room = userId
+}
+
+function syncTreinoProgramado(treinoProgramadoId: string) {
+  const io = getIO();
+  if (!io || !treinoProgramadoId) return;
+
+  // listas/estatísticas (admin, tela de treinos do criador, etc.)
+  io.to("treinos:programados").emit("treinos:sync", { treinoProgramadoId });
 }
 
 async function resolveEntidade(
@@ -1362,6 +1384,9 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
       },
     });
 
+    syncAgendaAtleta(atleta.usuarioId!, atletaId);
+    syncTreinoProgramado(treinoProgramadoId); // se quiser atualizar estatísticas/listas
+
     if (treinoProgramadoId) {
       await prisma.estatisticaTreino.upsert({
         where: { treinoId: treinoProgramadoId },
@@ -1411,6 +1436,9 @@ export const excluirTreinoAgendado = async (req: AuthenticatedRequest, res: Resp
       descricao: "Agendamento cancelado",
       meta: { atletaId: ag.atletaId, dataTreino: ag.dataTreino, status: "Cancelado" },
     });
+
+    syncAgendaAtleta(ag.atleta?.usuarioId!, ag.atletaId);
+    syncTreinoProgramado(String(ag.treinoProgramadoId ?? ""));
 
     return res.status(200).json({ message: "Treino agendado deletado." });
   } catch (error) {
@@ -1907,6 +1935,9 @@ export async function concluirTreino(req: AuthenticatedRequest, res: Response) {
       },
     });
 
+    syncAgendaAtleta(usuarioId, atletaId);
+    if (agendado.treinoProgramadoId) syncTreinoProgramado(String(agendado.treinoProgramadoId));
+
     res.json({
       ok: true,
       pontos: temVinc ? 0 : pontosTemplate,
@@ -2320,6 +2351,12 @@ export async function atualizarAgendamento(req: AuthenticatedRequest, res: Respo
     where: { id },
     data: { dataTreino: dt },
   });
+
+  const at = await prisma.atleta.findUnique({
+    where: { id: row.atletaId },
+    select: { usuarioId: true },
+  });
+  if (at?.usuarioId) syncAgendaAtleta(at.usuarioId, row.atletaId);
 
   await audit(req, {
     acao: 'ALTERAR_AGENDA',
@@ -2917,6 +2954,8 @@ export async function criarTreinoProgramado(
         })),
       });
     }
+
+    syncTreinoProgramado(treino.id);
 
   for (const [i, e] of exsTemp.entries()) {
     const nomeTemp = String(e.nome ?? "").trim();

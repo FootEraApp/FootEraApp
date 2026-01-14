@@ -4,17 +4,20 @@ import { publicImgUrl } from "../../utils/publicUrl.js";
 import { FaHeart, FaRegCommentDots } from "react-icons/fa";
 import { getFeedPosts, type PostagemComUsuario } from "../../services/feedService.js";
 import { APP, API } from "../../config.js";
-import {
-  ALL_ACHIEVEMENTS,
-  type AchievementLite,
-  type Tier,
-} from "../../lib/achievementsCatalog.js";
 import Storage from "../../../../server/utils/storage.js";
 import axios from "axios";
 import { X } from "lucide-react";
 
+type ConquistaDB = {
+  id: string;
+  titulo: string;
+  descricao: string | null;
+  icone: string | null;
+  tier?: string | null; // se existir no schema
+};
+
 type ParsedAchievement = {
-  ach?: AchievementLite;
+  conquistaId?: string;
   headTitle?: string;
   headDesc?: string;
   userMsg?: string;
@@ -30,13 +33,9 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
   const isHeadAchievement = /^🏆\s*Conquista:/i.test(head);
 
   const idMatch = rest.match(/\[([^\]]+)\]/);
-  const achId = idMatch?.[1]?.trim();
+  const conquistaId = idMatch?.[1]?.trim();
 
-  const ach: AchievementLite | undefined = achId
-    ? (ALL_ACHIEVEMENTS as AchievementLite[]).find((a) => a.id === achId)
-    : undefined;
-
-  if (!isHeadAchievement && !achId) return null;
+  if (!isHeadAchievement && !conquistaId) return null;
 
   let headTitle: string | undefined;
   let headDesc: string | undefined;
@@ -47,14 +46,14 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
     headDesc = m[2];
   }
 
-  const userMsg = achId ? rest.replace(/\[[^\]]+\]\s*/, "").trim() : rest;
-  return { ach, headTitle, headDesc, userMsg };
+  const userMsg = conquistaId ? rest.replace(/\[[^\]]+\]\s*/, "").trim() : rest;
+  return { conquistaId, headTitle, headDesc, userMsg };
 }
 
-function TierPill({ tier }: { tier?: Tier }) {
+function TierPill({ tier }: { tier?: string | null }) {
   if (!tier) return null;
 
-  const map: Record<Tier, string> = {
+  const map: Record<string, string> = {
     bronze: "bg-amber-100 text-amber-800 border-amber-200",
     prata: "bg-gray-100 text-gray-700 border-gray-300",
     ouro: "bg-yellow-100 text-yellow-800 border-yellow-200",
@@ -68,11 +67,17 @@ function TierPill({ tier }: { tier?: Tier }) {
   );
 }
 
-function AchievementShareCard({ parsed }: { parsed: ParsedAchievement }) {
-  const icon = parsed.ach?.icon || "🏆";
-  const title = parsed.ach?.title || parsed.headTitle || "Conquista";
-  const desc = parsed.ach?.description || parsed.headDesc || "";
-  const tier = parsed.ach?.tier;
+function AchievementShareCard({
+  parsed,
+  conquista,
+}: {
+  parsed: ParsedAchievement;
+  conquista: ConquistaDB | null;
+}) {
+  const icon = conquista?.icone || "🏆";
+  const title = conquista?.titulo || parsed.headTitle || "Conquista";
+  const desc = conquista?.descricao || parsed.headDesc || "";
+  const tier = conquista?.tier ?? null;
 
   return (
     <div className="mt-1 rounded-xl border border-yellow-200 bg-yellow-50/60 p-3">
@@ -121,6 +126,26 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [deletandoId, setDeletandoId] = useState<string | null>(null);
+  const [conquistasById, setConquistasById] = useState<Record<string, ConquistaDB>>({});
+
+  async function carregarConquista(conquistaId: string) {
+    const id = String(conquistaId || "").trim();
+    if (!id) return;
+
+    if (conquistasById[id]) return;
+
+    try {
+      const { data } = await axios.get<{ conquista: ConquistaDB | null }>(
+        `${API.BASE_URL}/api/conquistas/${id}`
+      );
+
+      if (data?.conquista) {
+        setConquistasById((prev) => ({ ...prev, [id]: data.conquista! }));
+      }
+    } catch (e) {
+      console.error("Falha ao carregar conquista:", id, e);
+    }
+  }
 
   async function apagarPost(postId: string) {
     const token = Storage.token;
@@ -185,6 +210,13 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         );
 
         if (!cancelled) setPosts(dados);
+        // pré-carrega conquistas encontradas nos posts
+        const ids = new Set<string>();
+        for (const p of dados) {
+          const parsed = parseAchievement(p.conteudo || "");
+          if (parsed?.conquistaId) ids.add(parsed.conquistaId);
+        }
+        ids.forEach((cid) => carregarConquista(cid));
       } catch (e) {
         console.error("Erro ao carregar postagens do perfil:", e);
         if (!cancelled) setPosts([]);
@@ -235,6 +267,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
             const comentarios = post.comentarios || [];
             const parsed = parseAchievement(post.conteudo || "");
             const isAchievement = !!parsed;
+            const conquista = parsed?.conquistaId ? (conquistasById[parsed.conquistaId] ?? null) : null;
             const avatarSrc = publicImgUrl(post?.usuario?.foto) || FALLBACK_AVATAR;
             const imgSrc = midiaImg(post.imagemUrl);
             const videoSrc = midiaVideo(post.videoUrl);
@@ -325,8 +358,9 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                           {post.conteudo}
                         </p>
                       )}
+                      
                       {isAchievement && parsed && (
-                        <AchievementShareCard parsed={parsed} />
+                        <AchievementShareCard parsed={parsed} conquista={conquista} />
                       )}
 
                       {imgSrc && (

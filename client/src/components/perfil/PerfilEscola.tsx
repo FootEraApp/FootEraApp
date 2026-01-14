@@ -185,6 +185,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
 
   const [eventos, setEventos] = useState<EventoItem[] | null>(null);
   const [eventosLoading, setEventosLoading] = useState(false);
+  const [conquistasReal, setConquistasReal] = useState<number>(0);
 
   const escolinhaId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
 
@@ -453,6 +454,40 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aba, canEdit, escolinhaId, token]);
 
+  useEffect(() => {
+    if (!token) return;
+
+    const ownerId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
+
+    if (!ownerId) {
+      setConquistasReal(0);
+      return;
+    }
+
+    let cancel = false;
+
+    (async () => {
+      try {
+        const { data: resp } = await axios.get(
+          `${API.BASE_URL}/api/conquistas/count`,
+          {
+            headers,
+            params: { ownerTipo: "Escolinha", ownerId },
+          }
+        );
+
+        const count = Number(resp?.count ?? 0);
+        if (!cancel) setConquistasReal(Number.isFinite(count) ? count : 0);
+      } catch (e) {
+        if (!cancel) setConquistasReal(0);
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [token, isOwn, data?.escolinha?.id]);
+
   if (loading)
     return (
       <div className="text-center p-10 text-green-800">
@@ -483,7 +518,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
       }`
     : undefined;
 
-  const conquistasCount = data.metrics.conquistas ?? 0;
   const escolinhaIdStr = data.escolinha.id;
 
   return (
@@ -493,15 +527,17 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         time="Escola de Futebol"
         isOwnProfile={isOwn}
         foto={headerFoto}
+        conquistasCount={conquistasReal}
         kpis={[
           { label: "Atletas", value: data.metrics.atletas ?? 0 },
           { label: "Treinos", value: data.metrics.treinosProgramados ?? 0 },
-          { label: "Conquistas", value: (data.metrics as any).conquistas ?? 0 },
+          { label: "Conquistas", value: conquistasReal },
         ]}
         perfilId={perfilUsuarioId}
         perfilTipoProp="escolinha"
         perfilTipoIdProp={data.escolinha.id}
       />
+
       <div className="mt-4 px-3 sm:px-4">
         <div className="bg-white/90 rounded-xl p-1 border border-green-100">
           <div className="flex gap-2 overflow-x-auto no-scrollbar px-1">
@@ -510,14 +546,12 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                   { id: "visao", label: "Visão Geral" },
                   { id: "eventos", label: "Eventos" },
                   { id: "atletas", label: "Atletas" },
-                  { id: "conquistas", label: "Conquistas" },
                   { id: "postagens", label: "Postagens" },
                   { id: "professores", label: "Professores" },
                 ]
               : [
                   { id: "visao", label: "Visão Geral" },
                   { id: "eventos", label: "Eventos" },
-                  { id: "conquistas", label: "Conquistas" },
                   { id: "postagens", label: "Postagens" },
                 ]
             ).map((t) => (
@@ -1025,33 +1059,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
               </SectionCard>
             )}
           </div>
-        </div>
-      )}
-
-      {aba === "conquistas" && (
-        <div className="mt-4 px-3 sm:px-4 grid gap-4">
-          <SectionCard title="Conquistas e Troféus">
-            {conquistasCount > 0 ? (
-              <div className="grid grid-cols-2 gap-3">
-                {Array.from({ length: conquistasCount }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="rounded-xl p-4 border border-green-100 text-center"
-                  >
-                    <Trophy className="mx-auto mb-2" />
-                    <div className="text-sm font-medium text-green-900">
-                      Conquista #{i + 1}
-                    </div>
-                    <div className="text-xs text-green-900/70">
-                      da sua escola ou atleta
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState text="Nenhuma conquista registrada ainda" />
-            )}
-          </SectionCard>
         </div>
       )}
 

@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import {
-  Volleyball,
-  User,
-  CirclePlus,
-  Search,
-  House,
   Award,
   Trophy,
   UploadCloud,
@@ -18,17 +13,19 @@ import {
 import { criarPost } from "@/services/feedService.js";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
-import { ALL_ACHIEVEMENTS, type AchievementLite } from "../../lib/achievementsCatalog.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 
 type EarnedFromApi = {
-  id: string;
-  entity: string;
-  title: string;
-  description: string;
-  icon?: string;
-  tier?: "bronze" | "prata" | "ouro" | "platina";
-  group: string;
+  vinculoId?: string;        
+  conquistaId: string;       
+  codigo?: string;           
+  titulo: string;            
+  descricao?: string | null;
+  icon?: string | null;    
+  iconUrl?: string | null;  
+  pontos?: number | null;    
+  concluida?: boolean;       
+  conquistadoEm?: string | null; 
 };
 
 function getUsuarioId(): string | null {
@@ -94,7 +91,9 @@ function Chip({
     gray: "bg-gray-50 text-gray-700 border-gray-200",
   };
   return (
-    <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 border rounded-md ${maps[color]}`}>
+    <span
+      className={`inline-flex items-center gap-1 text-xs px-2 py-1 border rounded-md ${maps[color]}`}
+    >
       {children}
     </span>
   );
@@ -115,34 +114,13 @@ export default function PaginaPostagem() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const catalogMap = useMemo(
-    () =>
-      new Map<string, AchievementLite>(
-        (ALL_ACHIEVEMENTS as AchievementLite[]).map((a: AchievementLite) => [a.id, a])
-      ),
-    []
-  );
-
-  const selectedAch: AchievementLite | null = useMemo(() => {
+  const selectedConquista = useMemo(() => {
     if (!selectedAchId) return null;
-    const fromCat = catalogMap.get(selectedAchId);
-    if (fromCat) return fromCat;
-    const fromApi = earned.find((e) => e.id === selectedAchId);
-    return fromApi
-      ? {
-          id: fromApi.id,
-          entity: fromApi.entity as any,
-          title: fromApi.title,
-          description: fromApi.description,
-          icon: fromApi.icon,
-          tier: fromApi.tier,
-          group: fromApi.group as any,
-        }
-      : null;
-  }, [selectedAchId, earned, catalogMap]);
+    return earned.find((e) => e.conquistaId === selectedAchId) || null;
+  }, [selectedAchId, earned]);
 
   const temArquivo = !!arquivo;
-  const temConquista = !!selectedAch;
+  const temConquista = !!selectedConquista;
   const temDescricao = !!descricao.trim();
 
   useEffect(() => {
@@ -152,14 +130,17 @@ export default function PaginaPostagem() {
         localStorage.getItem("tipoUsuario") ||
         sessionStorage.getItem("tipoUsuario") ||
         ""
-    ).trim().toLowerCase();
+    )
+      .trim()
+      .toLowerCase();
 
     if (!usuarioId || perfil !== "atleta") {
       setEarned([]);
       return;
     }
 
-    const base = (API?.BASE_URL ? String(API.BASE_URL).replace(/\/+$/, "") : "") || "";
+    const base =
+      (API?.BASE_URL ? String(API.BASE_URL).replace(/\/+$/, "") : "") || "";
     const url = `${base}/api/conquistas/${usuarioId}`;
 
     const token =
@@ -174,7 +155,37 @@ export default function PaginaPostagem() {
       .then(async (r) => {
         if (!r.ok) throw new Error(`Falha ao carregar conquistas (${r.status})`);
         const json = await r.json();
-        setEarned(Array.isArray(json?.earned) ? json.earned : []);
+
+        const lista =
+          (Array.isArray(json?.earned) && json.earned) ||
+          (Array.isArray(json?.vinculos) && json.vinculos) ||
+          (Array.isArray(json?.data) && json.data) ||
+          [];
+
+        const normalizado: EarnedFromApi[] = lista
+          .map((v: any) => {
+            const c = v?.conquista ?? v?.Conquista ?? v?.achievement ?? null;
+
+            const conquistaId = String(v?.conquistaId ?? c?.id ?? "").trim();
+            if (!conquistaId) return null;
+
+            return {
+              vinculoId: v?.id ? String(v.id) : undefined,
+              conquistaId,
+              codigo: c?.codigo ?? v?.codigo ?? undefined,
+              titulo: c?.titulo ?? v?.titulo ?? v?.title ?? conquistaId,
+              descricao: c?.descricao ?? v?.descricao ?? v?.description ?? null,
+              icon: c?.icon ?? v?.icon ?? "🏆",
+              iconUrl: c?.iconUrl ?? v?.iconUrl ?? null,
+              pontos: c?.pontos ?? v?.pontos ?? null,
+              concluida:
+                typeof v?.concluida === "boolean" ? v.concluida : true,
+              conquistadoEm: v?.conquistadoEm ? String(v.conquistadoEm) : null,
+            } as EarnedFromApi;
+          })
+          .filter(Boolean) as EarnedFromApi[];
+
+        setEarned(normalizado.filter((x) => x.concluida !== false));
       })
       .catch(() => setEarned([]));
   }, []);
@@ -183,17 +194,29 @@ export default function PaginaPostagem() {
     setMensagem("");
 
     if (!temDescricao && !temConquista && !temArquivo) {
-      setMensagem("Escreva algo, selecione uma conquista ou anexe uma mídia (arquivo).");
+      setMensagem(
+        "Escreva algo, selecione uma conquista ou anexe uma mídia (arquivo)."
+      );
       return;
     }
 
     setCarregando(true);
     try {
       const partes: string[] = [];
-      if (selectedAch) {
-        const icon = selectedAch.icon || "🏆";
-        partes.push(`🏆 Conquista: ${selectedAch.title} — ${selectedAch.description} ${icon} [${selectedAch.id}]`);
+
+      if (selectedConquista) {
+        const icon = selectedConquista.icon || "🏆";
+        const cod = selectedConquista.codigo
+          ? ` (${selectedConquista.codigo})`
+          : "";
+        const desc = selectedConquista.descricao
+          ? ` — ${selectedConquista.descricao}`
+          : "";
+        partes.push(
+          `🏆 Conquista${cod}: ${selectedConquista.titulo}${desc} ${icon} [${selectedConquista.conquistaId}]`
+        );
       }
+
       if (descricao.trim()) partes.push(descricao.trim());
 
       const descricaoFinal = partes.join("\n\n");
@@ -231,26 +254,37 @@ export default function PaginaPostagem() {
     );
   })();
 
-  const previewConquista = selectedAch ? (
+  const previewConquista = selectedConquista ? (
     <div className="mt-3 rounded-xl border bg-white p-3 shadow-sm">
       <div className="flex items-start gap-3">
         <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-emerald-50 border text-xl">
-          <span>{selectedAch.icon || "🏆"}</span>
+          <span>{selectedConquista.icon || "🏆"}</span>
         </div>
         <div className="min-w-0">
-          <div className="font-semibold text-emerald-900">Conquista: {selectedAch.title}</div>
-          <div className="text-sm text-gray-600">{selectedAch.description}</div>
+          <div className="font-semibold text-emerald-900">
+            Conquista: {selectedConquista.titulo}
+          </div>
+          {selectedConquista.descricao ? (
+            <div className="text-sm text-gray-600">
+              {selectedConquista.descricao}
+            </div>
+          ) : null}
           <div className="mt-2 flex items-center gap-2">
             <Chip color="emerald">
               <ShieldCheck className="h-3.5 w-3.5" />
-              <span>ID {selectedAch.id}</span>
+              <span>ID {selectedConquista.conquistaId}</span>
             </Chip>
-            {selectedAch.tier && (
+            {selectedConquista.codigo ? (
+              <Chip color="sky">
+                <span>Código {selectedConquista.codigo}</span>
+              </Chip>
+            ) : null}
+            {typeof selectedConquista.pontos === "number" ? (
               <Chip color="amber">
                 <Trophy className="h-3.5 w-3.5" />
-                <span>{selectedAch.tier[0].toUpperCase() + selectedAch.tier.slice(1)}</span>
+                <span>{selectedConquista.pontos} pts</span>
               </Chip>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
@@ -261,21 +295,21 @@ export default function PaginaPostagem() {
 
   return (
     <div className="min-h-screen bg-[#FEFBE9] pb-24">
-
-<div className="bg-green-900 text-white h-16 sm:h-20">
-  <div className="max-w-xl mx-auto h-full px-6 flex items-center justify-center">
-    <div className="flex items-center gap-3">
-      <Flag className="h-7 w-7 opacity-90" />
-      <h1 className="text-xl font-extrabold tracking-wide">
-        Nova Postagem
-      </h1>
-    </div>
-  </div>
-</div>
-
+      <div className="bg-green-900 text-white h-16 sm:h-20">
+        <div className="max-w-xl mx-auto h-full px-6 flex items-center justify-center">
+          <div className="flex items-center gap-3">
+            <Flag className="h-7 w-7 opacity-90" />
+            <h1 className="text-xl font-extrabold tracking-wide">
+              Nova Postagem
+            </h1>
+          </div>
+        </div>
+      </div>
 
       <div className="p-6 max-w-xl mx-auto">
-        <label className="block text-sm font-semibold text-emerald-900 mb-2">Texto da postagem</label>
+        <label className="block text-sm font-semibold text-emerald-900 mb-2">
+          Texto da postagem
+        </label>
         <div className="rounded-2xl border bg-white shadow-sm focus-within:ring-2 ring-emerald-100 transition">
           <textarea
             className="w-full rounded-2xl p-4 outline-none"
@@ -286,7 +320,9 @@ export default function PaginaPostagem() {
           />
           <div className="px-4 pb-3 flex items-center justify-between text-xs text-gray-500">
             <span>{descricao.length}/1.000</span>
-            <span className="italic">Dica: fale do objetivo, resultado e próxima meta.</span>
+            <span className="italic">
+              Dica: fale do objetivo, resultado e próxima meta.
+            </span>
           </div>
         </div>
 
@@ -299,7 +335,7 @@ export default function PaginaPostagem() {
             Selecionar conquista
           </SportButton>
 
-        <SportButton
+          <SportButton
             variant="outline"
             onClick={() => fileInputRef.current?.click()}
             icon={<UploadCloud className="h-5 w-5" />}
@@ -383,7 +419,9 @@ export default function PaginaPostagem() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Award className="h-5 w-5 text-emerald-700" />
-                  <h2 className="font-bold text-emerald-900">Selecionar conquista</h2>
+                  <h2 className="font-bold text-emerald-900">
+                    Selecionar conquista
+                  </h2>
                 </div>
                 <button
                   onClick={() => setAchPickerOpen(false)}
@@ -405,43 +443,49 @@ export default function PaginaPostagem() {
                 )}
 
                 {earned.map((e) => {
-                  const meta: AchievementLite | undefined = catalogMap.get(e.id);
-                  const title = meta?.title || e.title || e.id;
-                  const desc = meta?.description || e.description || "";
-                  const tier = (meta?.tier || e.tier) as EarnedFromApi["tier"];
-
-                  const picked = selectedAchId === e.id;
+                  const picked = selectedAchId === e.conquistaId;
 
                   return (
                     <button
-                      key={e.id}
+                      key={e.conquistaId}
                       type="button"
                       onClick={() => {
-                        setSelectedAchId(e.id);
+                        setSelectedAchId(e.conquistaId);
                         setAchPickerOpen(false);
                       }}
                       className={`w-full text-left rounded-xl border px-4 py-3 hover:bg-emerald-50 transition ${
-                        picked ? "border-emerald-400 bg-emerald-50" : "border-gray-200"
+                        picked
+                          ? "border-emerald-400 bg-emerald-50"
+                          : "border-gray-200"
                       }`}
                     >
                       <div className="flex items-start gap-3">
                         <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-emerald-50 border text-xl">
-                          <span>{meta?.icon || e.icon || "🏆"}</span>
+                          <span>{e.icon || "🏆"}</span>
                         </div>
                         <div className="min-w-0">
-                          <div className="font-semibold text-emerald-900">{title}</div>
-                          <div className="text-xs text-gray-600 line-clamp-2">{desc}</div>
+                          <div className="font-semibold text-emerald-900">
+                            {e.titulo}
+                          </div>
+                          {e.descricao ? (
+                            <div className="text-xs text-gray-600 line-clamp-2">
+                              {e.descricao}
+                            </div>
+                          ) : null}
                           <div className="mt-2 flex items-center gap-2">
-                            <Chip color="emerald">ID {e.id}</Chip>
-                            {tier && (
+                            <Chip color="emerald">ID {e.conquistaId}</Chip>
+                            {e.codigo ? (
+                              <Chip color="sky">Código {e.codigo}</Chip>
+                            ) : null}
+                            {typeof e.pontos === "number" ? (
                               <Chip color="amber">
                                 <Trophy className="h-3.5 w-3.5" />
-                                <span>{tier[0].toUpperCase() + tier.slice(1)}</span>
+                                <span>{e.pontos} pts</span>
                               </Chip>
-                            )}
+                            ) : null}
                           </div>
                         </div>
-                        {selectedAchId === e.id && (
+                        {picked && (
                           <Check className="h-5 w-5 text-emerald-600 ml-auto mt-1" />
                         )}
                       </div>
@@ -455,7 +499,6 @@ export default function PaginaPostagem() {
       )}
 
       <BottomNav active="post" />
-
     </div>
   );
 }
