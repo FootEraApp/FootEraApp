@@ -4,6 +4,7 @@ import { readToken } from "../utils/auth.js";
 export interface Usuario {
   id: string;
   nome: string;
+  nomeDeUsuario?: string;
   foto?: string;
   tipo: string;
 }
@@ -133,12 +134,19 @@ export async function deletarPost(postId: string) {
 }
 
 export async function repostPost(postId: string, comentario = "") {
+  const payload = { comentario: String(comentario ?? "").trim() };
+
   const r = await fetch(`${API.BASE_URL}/api/feed/${postId}/repost`, {
     method: "POST",
     headers: { ...auth(), "Content-Type": "application/json" },
-    body: JSON.stringify({ comentario }),
+    body: JSON.stringify(payload),
   });
-  if (!r.ok) throw new Error("Erro ao repostar");
+
+  if (!r.ok) {
+    const msg = await r.text().catch(() => "");
+    throw new Error(msg || "Erro ao repostar");
+  }
+
   return r.json();
 }
 
