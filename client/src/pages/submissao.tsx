@@ -298,14 +298,12 @@ export default function PaginaSubmissao() {
     const dId = params.get("desafioId");
     const mode = params.get("mode") as "camera" | "galeria" | null;
     const tempoSegParam = Number(params.get("tempoSeg") || 0);
-
     const sId = params.get("sessaoId");
     const pontosParam = Number(params.get("pontos") || 0);
     const atletasParam = params.get("atletas");
 
     if (sId) setSessaoId(sId);
     if (Number.isFinite(pontosParam)) setAwardPontos(pontosParam);
-
     if (sId) {
       try {
         const token =
@@ -733,6 +731,11 @@ export default function PaginaSubmissao() {
               "Submissão enviada com sucesso!";
 
         alert(msg);
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("treino:submetido"));
+          window.dispatchEvent(new Event("perfil:refresh"));
+        }
         const submissaoId =
           String(
             (js as any)?.submissao?.id ??
