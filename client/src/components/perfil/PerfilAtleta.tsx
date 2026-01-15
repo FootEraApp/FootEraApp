@@ -3,13 +3,8 @@ import axios from "axios";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
-import ActivityGrid from "../profile/ActivityGrid.js";
-import { BadgesList } from "../profile/BadgesList.js";
-import ScorePanel from "../profile/ScorePanel.js";
 import TrainingProgress from "../profile/TrainingProgress.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
-
-type TipoAtividade = "Desafio" | "Treino" | "Vídeo";
 
 interface Perfil {
   tipo: string;
@@ -26,26 +21,6 @@ interface Perfil {
   };
   atleta?: { id: string };
   tipoUsuarioId?: string;
-}
-
-interface Badge {
-  id: string;
-  nome: string;
-  icon: string;
-}
-
-interface Activity {
-  id: string;
-  tipo: TipoAtividade;
-  imagemUrl: string;
-  nome: string;
-}
-
-interface Pontuacao {
-  pontuacaoTotal: number;
-  pontuacaoPerformance: number;
-  pontuacaoDisciplina: number;
-  pontuacaoResponsabilidade: number;
 }
 
 type Props = {
@@ -92,9 +67,6 @@ function VinculoItem({ icon, label, value }: { icon: string; label: string; valu
 export default function PerfilAtleta({ idDaUrl }: Props) {
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [badges, setBadges] = useState<Badge[]>([]);
-  const [pontuacao, setPontuacao] = useState<Pontuacao | null>(null);
   const [loading, setLoading] = useState(true);
   const [professor, setProfessor] = useState<{ id?: string; nome: string } | null>(null);
   const [escolaNome, setEscolaNome] = useState<string | null>(null);
@@ -118,11 +90,10 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   (async () => {
     setLoading(true);
     try {
-      const [{ data: meOuOutro }, { data: atividades }, { data: badgesData }] = await Promise.all([
+      const [{ data: meOuOutro }] = await Promise.all([
         axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}`, { headers }),
-        axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}/atividades`, { headers }),
-        axios.get(`${API.BASE_URL}/api/perfil/${basePerfil}/badges`, { headers }),
       ]);
+
       if (!alive) return;
 
       setPerfil(meOuOutro);
@@ -157,13 +128,6 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
       setEscolaNome(escola);
       setClubeNome(clube);
       setProfessor(prof ? { nome: prof } : null);
-      setActivities((atividades || []).map((a: any) => ({
-        id: a.id,
-        tipo: a.tipo as TipoAtividade,
-        imagemUrl: a.imagemUrl || "",
-        nome: a.nome || a.tipo,
-      })));
-      setBadges(badgesData || []);
 
       if (uid) {
         const { data: p } = await axios.get(`${API.BASE_URL}/api/perfil/${uid}/pontuacao`, { headers });
@@ -171,14 +135,6 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
         const performance = Number(p?.performance) || 0;
         const disciplina = Number(p?.disciplina) || 0;
         const responsabilidade = Number(p?.responsabilidade) || 0;
-
-        setPontuacao({
-          pontuacaoTotal: performance + disciplina + responsabilidade,
-          pontuacaoPerformance: performance,
-          pontuacaoDisciplina: disciplina,
-          pontuacaoResponsabilidade: responsabilidade,
-        });
-
         const totalAtual = performance + disciplina + responsabilidade;
         const viewerId = String(Storage?.usuarioId ?? "");
         const key = `lastSeenScore:${viewerId}:${uid}`;
@@ -187,7 +143,6 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
         setScoreDelta(d);
         setTimeout(() => { try { localStorage.setItem(key, String(totalAtual)); } catch {} }, 2000);
       } else {
-        setPontuacao(null);
       }
     } catch (err) {
       console.error("Erro ao carregar dados do perfil do atleta:", err);
@@ -210,7 +165,11 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   const temVinculo = Boolean(professor?.nome || escolaNome || clubeNome);
   const isIndependente = perfil.tipo === "Atleta" && !temVinculo;
 
-  const total = pontuacao?.pontuacaoTotal || 0;
+  const total =
+    Number((perfil as any)?.pontuacaoTotal) ||
+    Number((perfil as any)?.pontos) ||
+    Number((perfil as any)?.usuario?.pontuacao) ||
+    0;
 
   const timeLabel =
     professor?.nome ||
@@ -221,59 +180,59 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
   return (
     <div className="min-h-screen bg-transparent">
       <div className="max-w-3xl mx-auto px-4 py-6">
-<ProfileHeader
-  nome={perfil.usuario.nome}
-  idade={perfil.dadosEspecificos.idade}
-  posicao={perfil.dadosEspecificos.posicao}
-  pontuacao={total}
-  scoreDelta={scoreDelta}
-  isOwnProfile={isOwnProfile}
-  foto={perfil.usuario.foto || perfil.dadosEspecificos.foto || undefined}
+        <ProfileHeader
+          nome={perfil.usuario.nome}
+          idade={perfil.dadosEspecificos.idade}
+          posicao={perfil.dadosEspecificos.posicao}
+          pontuacao={total}
+          scoreDelta={scoreDelta}
+          isOwnProfile={isOwnProfile}
+          foto={perfil.usuario.foto || perfil.dadosEspecificos.foto || undefined}
 
-  perfilId={perfil.usuario.id}
-  perfilTipoProp="atleta"
-  perfilTipoIdProp={
-    (perfil as any)?.dadosEspecificos?.atletaId ??
-    perfil?.atleta?.id ??
-    perfil?.tipoUsuarioId ??
-    undefined
-  }
-/>
-
-        <VinculosCard
-          professor={professor?.nome || null}
-          escola={escolaNome}
-          clube={clubeNome}
+          perfilId={perfil.usuario.id}
+          perfilTipoProp="atleta"
+          perfilTipoIdProp={
+            (perfil as any)?.dadosEspecificos?.atletaId ??
+            perfil?.atleta?.id ??
+            perfil?.tipoUsuarioId ??
+            undefined
+          }
         />
 
-        {isIndependente && (
-          <div className="bg-yellow-100 border border-yellow-300 rounded p-4 my-4 text-sm text-yellow-900">
-            <div className="font-semibold">Atleta Independente</div>
-            Você pode usar todas as funcionalidades do FootEra, mas aparecerá apenas em
-            rankings públicos e de engajamento.
-          </div>
-        )}
+                <VinculosCard
+                  professor={professor?.nome || null}
+                  escola={escolaNome}
+                  clube={clubeNome}
+                />
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {[
-            { key: "perfil", label: "Perfil" },
-            { key: "postagens", label: "Postagens" },
-          ].map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setAba(t.key as AbaTopo)}
-              className={`py-2 rounded-lg text-sm font-medium ${
-                aba === t.key
-                  ? "bg-green-100 text-green-900"
-                  : "bg-white/70 text-green-900 hover:bg-white"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+                {isIndependente && (
+                  <div className="bg-yellow-100 border border-yellow-300 rounded p-4 my-4 text-sm text-yellow-900">
+                    <div className="font-semibold">Atleta Independente</div>
+                    Você pode usar todas as funcionalidades do FootEra, mas aparecerá apenas em
+                    rankings públicos e de engajamento.
+                  </div>
+                )}
 
-        {aba === "perfil" && (
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  {[
+                    { key: "perfil", label: "Perfil" },
+                    { key: "postagens", label: "Postagens" },
+                  ].map((t) => (
+                    <button
+                      key={t.key}
+                      onClick={() => setAba(t.key as AbaTopo)}
+                      className={`py-2 rounded-lg text-sm font-medium ${
+                        aba === t.key
+                          ? "bg-green-100 text-green-900"
+                          : "bg-white/70 text-green-900 hover:bg-white"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {aba === "perfil" && (
           <>
             <TrainingProgress
               userId={perfil.usuario.id}
@@ -281,17 +240,6 @@ export default function PerfilAtleta({ idDaUrl }: Props) {
                 perfil.tipoUsuarioId ?? perfil.dadosEspecificos?.id ?? perfil.atleta?.id ?? null
               }
             />
-
-            <ActivityGrid activities={activities} perfilUsuarioId={usuarioId ?? perfil.usuario.id} />
-            <BadgesList userId={usuarioId ?? undefined} badges={badges} />
-
-            {pontuacao && (
-              <ScorePanel
-                performance={pontuacao.pontuacaoPerformance}
-                disciplina={pontuacao.pontuacaoDisciplina}
-                responsabilidade={pontuacao.pontuacaoResponsabilidade}
-              />
-            )}
           </>
         )}
 
