@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FootEra</string>
+    <string name="title_activity_main">FootEra</string>
+    <string name="package_name">br.app.footera</string>
+    <string name="custom_url_scheme">br.app.footera</string>
+</resources>
