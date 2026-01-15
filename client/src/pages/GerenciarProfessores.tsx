@@ -68,6 +68,8 @@ const GerenciarProfessores: React.FC = () => {
   const [turmasOpen, setTurmasOpen] = useState(false);
   const [professorSelecionado, setProfessorSelecionado] = useState<string | undefined>();
 
+  const [turmaSelecionadaId, setTurmaSelecionadaId] = useState<string | undefined>();
+
   const descobrirPerfil = async () => {
     try {
       let data: any | null = null;
@@ -307,6 +309,7 @@ const GerenciarProfessores: React.FC = () => {
               <button
                 onClick={() => {
                   setProfessorSelecionado(undefined);
+                  setTurmaSelecionadaId(undefined);
                   setTurmasOpen(true);
                 }}
                 className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
@@ -319,6 +322,7 @@ const GerenciarProfessores: React.FC = () => {
               <button
                 onClick={() => {
                   setProfessorSelecionado(undefined);
+                  setTurmaSelecionadaId(undefined);
                   setTurmasOpen(true);
                 }}
                 className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
@@ -513,10 +517,10 @@ const GerenciarProfessores: React.FC = () => {
                           {t.professorNome ? ` • Professores: ${t.professorNome}` : ""}
                         </div>
                       </div>
-
                       <button
                         onClick={() => {
                           setProfessorSelecionado(t.professorIds?.[0]);
+                          setTurmaSelecionadaId(t.id);
                           setTurmasOpen(true);
                         }}
                         className="mt-2 inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50 sm:mt-0"
@@ -581,6 +585,7 @@ const GerenciarProfessores: React.FC = () => {
           }}
           owner={owner}
           professorId={professorSelecionado}
+          initialTurmaId={turmaSelecionadaId} // ✅ ADD AQUI
         />
       )}
 
