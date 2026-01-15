@@ -1,3 +1,4 @@
+// client/src/components/profile/TrainingProgress
 import { useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
