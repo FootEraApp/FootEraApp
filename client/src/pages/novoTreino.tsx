@@ -35,7 +35,6 @@ type PontuacaoDetalhe = {
   tipo: number;
   exercicios: number;
   duracao: number;
-  dicas: number;
   exCount: number;
 };
 
@@ -50,8 +49,6 @@ const PONTOS = {
   TIPO: { Tecnico: 5, Fisico: 6, Tatico: 8 } as Record<string, number>,
   POR_EXERCICIO: 4,
   POR_15_MIN: 1,
-  POR_DICA: 1,
-  DICAS_MAX: 5,
 };
 
 const NOMES_MESES_PT = [
@@ -138,8 +135,8 @@ function calcularPontuacaoTreino(
   tipoTreino: string,
   duracaoMin: number,
   exercicios: ExItemUI[],
-  dicas: string[],
 ): PontuacaoDetalhe {
+
   const exCount = exercicios.filter((e) => e.idCatalogo || (e.nome && e.nome.trim())).length;
   const ptsEx = exCount * PONTOS.POR_EXERCICIO;
 
@@ -149,11 +146,8 @@ function calcularPontuacaoTreino(
   const dur = Number.isFinite(Number(duracaoMin)) ? Number(duracaoMin) : 0;
   const ptsDur = Math.max(0, Math.floor(dur / 15) * PONTOS.POR_15_MIN);
 
-  const dicasValidas = Math.min(PONTOS.DICAS_MAX, Math.max(0, dicas?.length ?? 0));
-  const ptsDicas = dicasValidas * PONTOS.POR_DICA;
-
-  const total = ptsEx + ptsNivel + ptsTipo + ptsDur + ptsDicas;
-  return { total, nivel: ptsNivel, tipo: ptsTipo, exercicios: ptsEx, duracao: ptsDur, dicas: ptsDicas, exCount };
+  const total = ptsEx + ptsNivel + ptsTipo + ptsDur;
+  return { total, nivel: ptsNivel, tipo: ptsTipo, exercicios: ptsEx, duracao: ptsDur, exCount };
 }
 
 interface UsuarioLogado {
@@ -379,7 +373,7 @@ async function tentarSalvarComoTreinoSalvo(
       tipoTreino: payload.tipoTreino ?? null,
       categoria: categorias,
       duracao: payload.duracao ?? null,
-      dicas: Array.isArray(payload.dicas) ? payload.dicas : [],
+      dicas: [],
       conteudo: {
         objetivo: payload.objetivo ?? null,
         exercicios: payload.exercicios,
@@ -423,8 +417,7 @@ function saveState(partial: any) {
 const steps = [
   { id: 1, label: "Informações" },
   { id: 2, label: "Exercícios" },
-  { id: 3, label: "Dicas" },
-  { id: 4, label: "Atletas" },
+  { id: 3, label: "Atletas" },
 ] as const;
 
 function Stepper({
@@ -437,7 +430,7 @@ function Stepper({
   completedUntil: number;
 }) {
   return (
-    <div className="mb-4 sm:mb-6 -mx-2 sm:mx-0">
+    <div className="-mx-2 sm:mx-0">
       <div className="overflow-x-auto px-2">
         <ol className="flex items-center gap-2 sm:gap-3 min-w-max">
           {steps.map((s, idx) => {
@@ -568,13 +561,12 @@ export default function NovoTreino() {
   const [nivel, setNivel] = useState("Base");
   const [duracao, setDuracao] = useState<number>(60);
   const [dataTreino, setDataTreino] = useState<string>("");
-  const [categorias, setCategorias] = useState<string[]>(["Sub13"]);
+  const [categorias, setCategorias] = useState<string[]>([]);
   const [tipoTreino, setTipoTreino] = useState<string>("Tecnico");
   const [objetivo, setObjetivo] = useState<string>("");
   const [iniciado, setIniciado] = useState<boolean>(false);
   const [exerciciosSelecionados, setExerciciosSelecionados] = useState<ExItemUILocal[]>([]);
-  const [dicas, setDicas] = useState<string[]>([]);
-  const [dicaAtual, setDicaAtual] = useState<string>("");
+
   const [filtroEx, setFiltroEx] = useState("");
   const [filtroCategorias, setFiltroCategorias] = useState<string[]>([]);
   const [filtroNiveis, setFiltroNiveis] = useState<string[]>([]);
@@ -849,15 +841,8 @@ useEffect(() => {
   const MOSTRAR_TODOS = "__todos__";
 
   const score = useMemo(
-    () =>
-      calcularPontuacaoTreino(
-        nivel,
-        tipoTreino,
-        duracao,
-        exerciciosSelecionados,
-        dicas,
-      ),
-    [nivel, tipoTreino, duracao, exerciciosSelecionados, dicas],
+    () => calcularPontuacaoTreino(nivel, tipoTreino, duracao, exerciciosSelecionados),
+    [nivel, tipoTreino, duracao, exerciciosSelecionados],
   );
 
   function normalizaTreinos(raw: any[]): TreinoProgramado[] {
@@ -1268,7 +1253,7 @@ useEffect(() => {
                 ? Array.isArray(saved.categoria)
                   ? saved.categoria
                   : [saved.categoria]
-                : ["Sub13"]),
+                : []),
           );
           setTipoTreino(saved.tipoTreino ?? "Tecnico");
           setObjetivo(saved.objetivo ?? "");
@@ -1284,7 +1269,6 @@ useEffect(() => {
             series: x.series ?? "",
           }));
           setExerciciosSelecionados(exUi);
-          setDicas(saved.dicas ?? []);
           setAtletasSelecionados(saved.atletasSelecionados ?? []);
           setDatasAgendamento(saved.datasAgendamento ?? []);
           setProfessoresSelecionados(
@@ -1487,11 +1471,10 @@ useEffect(() => {
       duracao,
       dataTreino,
       categorias,
-      categoria: categorias[0] ?? "",
+
       tipoTreino,
       objetivo,
       exerciciosSelecionados,
-      dicas,
       atletasSelecionados,
       datasAgendamento,
       professoresSelecionados
@@ -1507,7 +1490,6 @@ useEffect(() => {
     tipoTreino,
     objetivo,
     exerciciosSelecionados,
-    dicas,
     atletasSelecionados,
     datasAgendamento,
     professoresSelecionados,
@@ -1809,12 +1791,7 @@ useEffect(() => {
     });
   };
 
-  const adicionarDica = () => {
-    if (dicaAtual.trim()) {
-      setDicas((prev) => [...prev, dicaAtual.trim()]);
-      setDicaAtual("");
-    }
-  };
+
 
   function getDono() {
     const tipoRaw =
@@ -2071,7 +2048,7 @@ const criarTreino = async () => {
       duracao: duracao ? Number(duracao) : null,
       dataTreino: dataTreino || null,
       dataAgendada: dataTreino || null,
-      dicas,
+      dicas: [],
       atletasIds: atletasSelecionados,
       elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
       exercicios,
@@ -2253,12 +2230,10 @@ const criarTreino = async () => {
     setNivel("Base");
     setDuracao(60);
     setDataTreino("");
-    setCategorias(["Sub13"]);
+    setCategorias([]);
     setTipoTreino("Tecnico");
     setObjetivo("");
     setExerciciosSelecionados([]);
-    setDicas([]);
-    setDicaAtual("");
     setAtletasSelecionados([]);
     setDatasAgendamento([]);
     setProfessoresSelecionados([]);
@@ -2485,7 +2460,7 @@ const criarTreino = async () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-gray-50 pt-16 pb-28">
       <div className="p-4 sm:p-6 max-w-3xl mx-auto">
         <div className="grid grid-cols-3 items-center mb-3 sm:mb-4">
           <h2 className="text-lg sm:text-xl font-bold col-start-1">
@@ -2495,9 +2470,9 @@ const criarTreino = async () => {
           <div
             className="justify-self-center col-start-2"
             title={
-              `Nível: +${score.nivel} • Tipo: +${score.tipo} • ` +
+              `Tipo: +${score.tipo} • ` +
               `Exercícios (${score.exCount}): +${score.exercicios} • ` +
-              `Duração: +${score.duracao} • Dicas: +${score.dicas}`
+              `Duração: +${score.duracao}`
             }
           >
             <span
@@ -2520,12 +2495,10 @@ const criarTreino = async () => {
                 setNivel("Base");
                 setDuracao(60);
                 setDataTreino("");
-                setCategorias(["Sub13"]);
+                setCategorias([]);
                 setTipoTreino("Tecnico");
                 setObjetivo("");
                 setExerciciosSelecionados([]);
-                setDicas([]);
-                setDicaAtual("");
                 setAtletasSelecionados([]);
                 setProfessoresSelecionados([]);
                 sessionStorage.removeItem(SAVE_KEY);
@@ -2538,7 +2511,7 @@ const criarTreino = async () => {
           </button>
         </div>
 
-        <Stepper current={etapa} onJump={goTo} completedUntil={completedUntil} />
+
 
         {etapa === 1 && (
           <StepCard title="Informações Básicas">
@@ -2563,51 +2536,6 @@ const criarTreino = async () => {
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">
-                  Nível do Treino
-                </label>
-                <select
-                  className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
-                  value={nivel}
-                  onChange={(e) => setNivel(e.target.value)}
-                >
-                  <option value="">--</option>
-                  <option value="Base">Base</option>
-                  <option value="Avancado">Avançado</option>
-                  <option value="Performance">Performance</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">
-                  Categoria (Faixa Etária)
-                </label>
-                <select
-                  multiple
-                  size={7}
-                  className="border w-full mb-2 p-2 rounded text-sm sm:text-base h-32"
-                  value={categorias}
-                  onChange={(e) => {
-                    const selected = Array.from(e.target.selectedOptions).map(
-                      (opt) => opt.value
-                    );
-                    setCategorias(selected);
-                  }}
-                >
-                  <option value="Sub9">Sub-9</option>
-                  <option value="Sub11">Sub-11</option>
-                  <option value="Sub13">Sub-13</option>
-                  <option value="Sub15">Sub-15</option>
-                  <option value="Sub17">Sub-17</option>
-                  <option value="Sub20">Sub-20</option>
-                  <option value="Livre">Livre</option>
-                </select>
-                <p className="text-xs text-gray-600">
-                  Segure <b>Ctrl</b> (ou toque e selecione) para escolher mais de uma
-                  faixa etária.
-                </p>
-              </div>
 
               <div>
                 <label className="block text-sm text-gray-700 mb-1">
@@ -2704,14 +2632,8 @@ const criarTreino = async () => {
 
             </div>
 
-            <div className="flex justify-end">
-              <button
-                onClick={() => goTo(2)}
-                className="bg-green-800 text-white px-4 py-2 rounded mt-3"
-              >
-                Próximo
-              </button>
-            </div>
+
+
           </StepCard>
         )}
 
@@ -3115,65 +3037,15 @@ const criarTreino = async () => {
                 )}
               </ul>
 
-              <div className="flex flex-col sm:flex-row justify-between gap-2 mt-6">
-                <button
-                  onClick={() => goTo(1)}
-                  className="bg-gray-200 px-4 py-2 rounded w-full sm:w-auto"
-                >
-                  Voltar
-                </button>
-                <button
-                  onClick={() => goTo(3)}
-                  className="bg-green-800 text-white px-4 py-2 rounded w-full sm:w-auto"
-                >
-                  Próximo
-                </button>
-              </div>
+
+
+
             </StepCard>
           </>
         )}
 
+
         {etapa === 3 && (
-          <StepCard title="Dicas para os Atletas">
-            <div className="flex gap-2 mb-3">
-              <input
-                className="border w-full p-2 rounded"
-                placeholder="Ex: Mantenha a postura correta"
-                value={dicaAtual}
-                onChange={(e) => setDicaAtual(e.target.value)}
-              />
-              <button
-                onClick={adicionarDica}
-                className="bg-gray-300 px-3 py-2 rounded"
-              >
-                + Adicionar
-              </button>
-            </div>
-
-            <ul className="list-disc pl-5 text-sm text-gray-700">
-              {dicas.map((dica, i) => (
-                <li key={i}>{dica}</li>
-              ))}
-            </ul>
-
-            <div className="flex flex-col sm:flex-row justify-between gap-2 mt-6">
-              <button
-                onClick={() => goTo(2)}
-                className="bg-gray-200 px-4 py-2 rounded w-full sm:w-auto"
-              >
-                Voltar
-              </button>
-              <button
-                onClick={() => goTo(4)}
-                className="bg-green-800 text-white px-4 py-2 rounded w-full sm:w-auto"
-              >
-                Próximo
-              </button>
-            </div>
-          </StepCard>
-        )}
-
-        {etapa === 4 && (
           <StepCard title="Selecionar Atletas Vinculados">
             <div className="mb-4 grid gap-2">
               <label className="block text-sm text-gray-700">
@@ -3485,27 +3357,65 @@ const criarTreino = async () => {
                 )}
             </div>
 
-            <div className="flex flex-col sm:flex-row justify-between gap-2 mt-6">
-              <button
-                onClick={() => goTo(3)}
-                className="bg-gray-200 px-4 py-2 rounded w-full sm:w-auto"
-              >
-                Voltar
-              </button>
-              <button
-                onClick={criarTreino}
-                disabled={salvando}
-                className={[
-                  "bg-green-800 text-white px-4 py-2 rounded w-full sm:w-auto",
-                  salvando ? "opacity-60 cursor-not-allowed" : "",
-                ].join(" ")}
-              >
-                {salvando ? "Salvando..." : "Salvar Treino"}
-              </button>
-            </div>
+
+
+
+
           </StepCard>
         )}
       </div>
+
+{/* ActionBar flutuante (acima da navbar) */}
+<div className="fixed top-0 left-0 right-0 z-40 px-4 pt-2">
+  <div className="max-w-3xl mx-auto">
+    <div className="bg-white/95 backdrop-blur border border-gray-200 shadow-lg rounded-2xl p-2 sm:p-3 flex items-center gap-2">
+      {/* Voltar */}
+      <button
+        type="button"
+        onClick={() => {
+          if (etapa === 1) navigate("/treinos");
+          else goTo(etapa - 1);
+        }}
+        className="px-3 sm:px-4 py-2 rounded-xl bg-gray-200 text-gray-900 shrink-0"
+      >
+        Voltar
+      </button>
+
+      {/* Stepper no meio (a barra de cima) */}
+      <div className="flex-1 min-w-0">
+        <div className="overflow-x-auto">
+          <div className="min-w-max">
+            <Stepper current={etapa} onJump={goTo} completedUntil={completedUntil} />
+          </div>
+        </div>
+      </div>
+
+      {/* Próximo / Salvar */}
+      {etapa < 3 ? (
+        <button
+          type="button"
+          onClick={() => goTo(etapa + 1)}
+          className="px-3 sm:px-4 py-2 rounded-xl bg-green-800 text-white shrink-0"
+        >
+          Próximo
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={criarTreino}
+          disabled={salvando}
+          className={[
+            "px-3 sm:px-4 py-2 rounded-xl bg-green-800 text-white shrink-0",
+            salvando ? "opacity-60 cursor-not-allowed" : "",
+          ].join(" ")}
+        >
+          {salvando ? "Salvando..." : "Salvar"}
+        </button>
+      )}
+    </div>
+  </div>
+</div>
+
 
       {toast && (
         <div className="fixed bottom-20 inset-x-0 flex justify-center z-40 px-4">
