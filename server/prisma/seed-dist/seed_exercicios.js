@@ -2447,7 +2447,6 @@ async function main() {
     let count = 0;
     for (const ex of exercicios) {
         count++;
-        
         await prisma.exercicio.upsert({
             where: { codigo: ex.codigo },
             update: {},

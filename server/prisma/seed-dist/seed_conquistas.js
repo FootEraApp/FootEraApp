@@ -1,0 +1,160 @@
+import { PrismaClient, ConquistaTipo } from "@prisma/client";
+const prisma = new PrismaClient();
+function mapOwnerTipo(entity) {
+    return entity;
+}
+function mapConquistaTipo(group) {
+    const g = (group ?? "").toLowerCase();
+    if (g.includes("treino"))
+        return ConquistaTipo.TREINO;
+    if (g.includes("desafio"))
+        return ConquistaTipo.DESAFIO;
+    if (g.includes("pontua"))
+        return ConquistaTipo.PERFIL;
+    if (g.includes("gest") || g.includes("event"))
+        return ConquistaTipo.ORGANIZACAO;
+    return ConquistaTipo.GERAL;
+}
+function buildDescricao(base, group, tier) {
+    const extra = [];
+    if (group)
+        extra.push(`Grupo: ${group}`);
+    if (tier)
+        extra.push(`Tier: ${tier}`);
+    if (!extra.length)
+        return base;
+    return `${base}\n\n${extra.join(" • ")}`;
+}
+// helper: se você não setar meta manualmente em algum item, tenta inferir do código
+function inferMetaFromCodigo(codigo) {
+    // pega último número do código (ath_train_25 => 25)
+    const m = String(codigo).match(/_(\d+)(?:$|_)/);
+    if (!m)
+        return null;
+    const n = Number(m[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+}
+async function seedConquistasCatalog() {
+    const achievements = [
+        { id: "ath_train_1", entity: "Atleta", title: "Primeiro Treino", description: "Concluiu 1 treino.", icon: "💪", tier: "bronze", group: "Treinos", meta: 1 },
+        { id: "ath_train_5", entity: "Atleta", title: "Rotina Iniciada", description: "Concluiu 5 treinos.", icon: "🏃", tier: "bronze", group: "Treinos", meta: 5 },
+        { id: "ath_train_10", entity: "Atleta", title: "Constante", description: "Concluiu 10 treinos.", icon: "🔥", tier: "prata", group: "Treinos", meta: 10 },
+        { id: "ath_train_25", entity: "Atleta", title: "Vício Saudável", description: "Concluiu 25 treinos.", icon: "🏅", tier: "prata", group: "Treinos", meta: 25 },
+        { id: "ath_train_50", entity: "Atleta", title: "Meio-Centenário", description: "Concluiu 50 treinos.", icon: "🥈", tier: "ouro", group: "Treinos", meta: 50 },
+        { id: "ath_train_100", entity: "Atleta", title: "Cem por Cento", description: "Concluiu 100 treinos.", icon: "🥇", tier: "ouro", group: "Treinos", meta: 100 },
+        { id: "ath_train_200", entity: "Atleta", title: "Maratonista", description: "Concluiu 200 treinos.", icon: "🏆", tier: "platina", group: "Treinos", meta: 200 },
+        { id: "ath_train_365", entity: "Atleta", title: "Ano de Treino", description: "Concluiu 365 treinos.", icon: "📆", tier: "platina", group: "Treinos", meta: 365 },
+        { id: "ath_first_submit", entity: "Atleta", title: "Primeiro Envio", description: "Fez a primeira submissão de treino.", icon: "🆕", tier: "bronze", group: "Treinos", meta: 1 },
+        { id: "ath_chal_1", entity: "Atleta", title: "Desafio Aceito", description: "Concluiu 1 desafio oficial.", icon: "🎯", tier: "bronze", group: "Desafios", meta: 1 },
+        { id: "ath_chal_3", entity: "Atleta", title: "Trinca Vencedora", description: "Concluiu 3 desafios oficiais.", icon: "🥉", tier: "bronze", group: "Desafios", meta: 3 },
+        { id: "ath_chal_5", entity: "Atleta", title: "Serial Challenger", description: "Concluiu 5 desafios oficiais.", icon: "💥", tier: "prata", group: "Desafios", meta: 5 },
+        { id: "ath_chal_10", entity: "Atleta", title: "Top 10", description: "Concluiu 10 desafios oficiais.", icon: "🏅", tier: "ouro", group: "Desafios", meta: 10 },
+        { id: "ath_chal_20", entity: "Atleta", title: "Máquina de Desafios", description: "Concluiu 20 desafios oficiais.", icon: "🏆", tier: "platina", group: "Desafios", meta: 20 },
+        { id: "ath_chal_send_try1", entity: "Atleta", title: "Primeiro Take (Enviado)", description: "Enviou um desafio gravado em 1ª tentativa.", icon: "🎬", tier: "bronze", group: "Desafios", meta: 1 },
+        { id: "ath_chal_send_try2", entity: "Atleta", title: "Vai na Segunda (Enviado)", description: "Enviou um desafio gravado em 2ª tentativa.", icon: "🔁", tier: "bronze", group: "Desafios", meta: 1 },
+        { id: "ath_chal_valid_try1_1", entity: "Atleta", title: "Primeiro Take", description: "Teve 1 desafio aprovado de 1ª tentativa.", icon: "🎯", tier: "bronze", group: "Desafios", meta: 1 },
+        { id: "ath_chal_valid_try1_5", entity: "Atleta", title: "Cinco de Primeira", description: "Teve 5 desafios aprovados de 1ª tentativa.", icon: "🏅", tier: "prata", group: "Desafios", meta: 5 },
+        { id: "ath_chal_valid_try1_10", entity: "Atleta", title: "Dez de Primeira", description: "Teve 10 desafios aprovados de 1ª tentativa.", icon: "🥇", tier: "ouro", group: "Desafios", meta: 10 },
+        { id: "ath_chal_valid_try1_20", entity: "Atleta", title: "Impecável", description: "Teve 20 desafios aprovados de 1ª tentativa.", icon: "🏆", tier: "platina", group: "Desafios", meta: 20 },
+        { id: "ath_chal_valid_try2_1", entity: "Atleta", title: "Valeu a Segunda", description: "Teve 1 desafio aprovado de 2ª tentativa.", icon: "🩹", tier: "bronze", group: "Desafios", meta: 1 },
+        { id: "ath_chal_valid_try2_5", entity: "Atleta", title: "Resiliente", description: "Teve 5 desafios aprovados de 2ª tentativa.", icon: "🔁", tier: "prata", group: "Desafios", meta: 5 },
+        { id: "ath_chal_valid_try2_10", entity: "Atleta", title: "Persistente", description: "Teve 10 desafios aprovados de 2ª tentativa.", icon: "💪", tier: "ouro", group: "Desafios", meta: 10 },
+        { id: "ath_grp_1", entity: "Atleta", title: "Time em Campo", description: "Concluiu 1 desafio em grupo.", icon: "🤝", tier: "bronze", group: "Desafios em Grupo", meta: 1 },
+        { id: "ath_grp_3", entity: "Atleta", title: "Entrosado", description: "Concluiu 3 desafios em grupo.", icon: "🧩", tier: "prata", group: "Desafios em Grupo", meta: 3 },
+        { id: "ath_grp_5", entity: "Atleta", title: "Coletivo Forte", description: "Concluiu 5 desafios em grupo.", icon: "🎽", tier: "ouro", group: "Desafios em Grupo", meta: 5 },
+        { id: "ath_grp_10", entity: "Atleta", title: "Capitão de Equipe", description: "Concluiu 10 desafios em grupo.", icon: "👑", tier: "platina", group: "Desafios em Grupo", meta: 10 },
+        { id: "ath_grp_25", entity: "Atleta", title: "Líder de Grupo", description: "Concluiu 25 desafios em grupo.", icon: "🧠", tier: "platina", group: "Desafios em Grupo", meta: 25 },
+        { id: "ath_pts_total_100", entity: "Atleta", title: "Cem Pontos", description: "Atingiu 100 pontos totais.", icon: "🔢", tier: "bronze", group: "Pontuação", meta: 100 },
+        { id: "ath_pts_total_250", entity: "Atleta", title: "Quarto de Milhar", description: "Atingiu 250 pontos totais.", icon: "📈", tier: "prata", group: "Pontuação", meta: 250 },
+        { id: "ath_pts_total_500", entity: "Atleta", title: "Meio Milhar", description: "Atingiu 500 pontos totais.", icon: "💹", tier: "ouro", group: "Pontuação", meta: 500 },
+        { id: "ath_pts_total_1000", entity: "Atleta", title: "Milhão em Vista", description: "Atingiu 1000 pontos totais.", icon: "🏆", tier: "platina", group: "Pontuação", meta: 1000 },
+        { id: "ath_pts_total_2000", entity: "Atleta", title: "Dois Mil Pontos", description: "Atingiu 2000 pontos totais.", icon: "💠", tier: "platina", group: "Pontuação", meta: 2000 },
+        { id: "ath_pts_perf_50", entity: "Atleta", title: "Foco em Performance I", description: "50 pts em Performance.", icon: "⚙️", tier: "bronze", group: "Pontuação", meta: 50 },
+        { id: "ath_pts_perf_100", entity: "Atleta", title: "Foco em Performance II", description: "100 pts em Performance.", icon: "⚙️", tier: "prata", group: "Pontuação", meta: 100 },
+        { id: "ath_pts_perf_200", entity: "Atleta", title: "Foco em Performance III", description: "200 pts em Performance.", icon: "⚙️", tier: "ouro", group: "Pontuação", meta: 200 },
+        { id: "ath_pts_disc_50", entity: "Atleta", title: "Disciplina I", description: "50 pts em Disciplina.", icon: "⏱️", tier: "bronze", group: "Pontuação", meta: 50 },
+        { id: "ath_pts_disc_100", entity: "Atleta", title: "Disciplina II", description: "100 pts em Disciplina.", icon: "⏱️", tier: "prata", group: "Pontuação", meta: 100 },
+        { id: "ath_pts_disc_200", entity: "Atleta", title: "Disciplina III", description: "200 pts em Disciplina.", icon: "⏱️", tier: "ouro", group: "Pontuação", meta: 200 },
+        { id: "ath_pts_resp_50", entity: "Atleta", title: "Responsabilidade I", description: "50 pts em Responsabilidade.", icon: "📋", tier: "bronze", group: "Pontuação", meta: 50 },
+        { id: "ath_pts_resp_100", entity: "Atleta", title: "Responsabilidade II", description: "100 pts em Responsabilidade.", icon: "📋", tier: "prata", group: "Pontuação", meta: 100 },
+        { id: "ath_pts_resp_200", entity: "Atleta", title: "Responsabilidade III", description: "200 pts em Responsabilidade.", icon: "📋", tier: "ouro", group: "Pontuação", meta: 200 },
+        { id: "prof_tp_1", entity: "Professor", title: "Primeiro Treino Programado", description: "Criou 1 treino programado.", icon: "📝", tier: "bronze", group: "Gestão", meta: 1 },
+        { id: "prof_tp_5", entity: "Professor", title: "Série de Treinos", description: "Criou 5 treinos programados.", icon: "🗂️", tier: "bronze", group: "Gestão", meta: 5 },
+        { id: "prof_tp_10", entity: "Professor", title: "Planejamento Sólido", description: "Criou 10 treinos programados.", icon: "📘", tier: "prata", group: "Gestão", meta: 10 },
+        { id: "prof_tp_25", entity: "Professor", title: "Catálogo de Sessões", description: "Criou 25 treinos programados.", icon: "📚", tier: "ouro", group: "Gestão", meta: 25 },
+        { id: "prof_tp_50", entity: "Professor", title: "Biblioteca de Treinos", description: "Criou 50 treinos programados.", icon: "🏗️", tier: "platina", group: "Gestão", meta: 50 },
+        { id: "prof_atletas_5", entity: "Professor", title: "Grupo Inicial", description: "Treina 5 atletas (vínculo).", icon: "👥", tier: "bronze", group: "Gestão", meta: 5 },
+        { id: "prof_atletas_10", entity: "Professor", title: "Turma Cheia", description: "Treina 10 atletas (vínculo).", icon: "👨‍👩‍👧‍👦", tier: "prata", group: "Gestão", meta: 10 },
+        { id: "prof_atletas_25", entity: "Professor", title: "Mentor de Elenco", description: "Treina 25 atletas (vínculo).", icon: "🧑‍🏫", tier: "ouro", group: "Gestão", meta: 25 },
+        { id: "prof_subs_50", entity: "Professor", title: "Feedback Contínuo", description: "Recebeu 50 submissões de treino.", icon: "📥", tier: "ouro", group: "Gestão", meta: 50 },
+        { id: "prof_subs_200", entity: "Professor", title: "Central de Avaliações", description: "Recebeu 200 submissões de treino.", icon: "🧾", tier: "platina", group: "Gestão", meta: 200 },
+        { id: "prof_grp_1", entity: "Professor", title: "Movimenta a Galera", description: ("Criou 1 desafio em grupo."), icon: "🧑‍🤝‍🧑", tier: "bronze", group: "Desafios em Grupo", meta: 1 },
+        { id: "prof_grp_5", entity: "Professor", title: "Campeonato Interno", description: "Criou 5 desafios em grupo.", icon: "🏟️", tier: "ouro", group: "Desafios em Grupo", meta: 5 },
+        { id: "esc_atletas_10", entity: "Escolinha", title: "Turma Formada", description: "10 atletas vinculados.", icon: "🎒", tier: "bronze", group: "Gestão", meta: 10 },
+        { id: "esc_atletas_25", entity: "Escolinha", title: "Base Forte", description: "25 atletas vinculados.", icon: "🏫", tier: "prata", group: "Gestão", meta: 25 },
+        { id: "esc_atletas_50", entity: "Escolinha", title: "Centro de Formação", description: "50 atletas vinculados.", icon: "🏟️", tier: "ouro", group: "Gestão", meta: 50 },
+        { id: "esc_tp_1", entity: "Escolinha", title: "Primeiro Treino da Escolinha", description: "Criou 1 treino programado.", icon: "📝", tier: "bronze", group: "Gestão", meta: 1 },
+        { id: "esc_tp_10", entity: "Escolinha", title: "Rotina Estruturada", description: "Criou 10 treinos programados.", icon: "📘", tier: "prata", group: "Gestão", meta: 10 },
+        { id: "esc_tp_25", entity: "Escolinha", title: "Programa Completo", description: "Criou 25 treinos programados.", icon: "🧩", tier: "ouro", group: "Gestão", meta: 25 },
+        { id: "esc_evento_1", entity: "Escolinha", title: "Primeiro Evento", description: "Organizou 1 evento.", icon: "📅", tier: "bronze", group: "Eventos", meta: 1 },
+        { id: "esc_evento_5", entity: "Escolinha", title: "Calendário Forte", description: "Organizou 5 eventos.", icon: "🗓️", tier: "prata", group: "Eventos", meta: 5 },
+        { id: "esc_evento_10", entity: "Escolinha", title: "Clube Ativo", description: "Organizou 10 eventos.", icon: "🎟️", tier: "ouro", group: "Eventos", meta: 10 },
+        { id: "esc_evento_25", entity: "Escolinha", title: "Agenda Lotada", description: "Organizou 25 eventos.", icon: "🏟️", tier: "platina", group: "Eventos", meta: 25 },
+        { id: "esc_subs_100", entity: "Escolinha", title: "Quadra Cheia", description: "100 submissões de treino de atletas da escolinha.", icon: "📥", tier: "ouro", group: "Gestão", meta: 100 },
+        { id: "esc_subs_300", entity: "Escolinha", title: "Ritmo de Competição", description: "300 submissões de treino de atletas da escolinha.", icon: "📦", tier: "platina", group: "Gestão", meta: 300 },
+        { id: "esc_desafios_aprov_10", entity: "Escolinha", title: "Talentos em Ascensão", description: "10 desafios aprovados por atletas da escolinha.", icon: "🎯", tier: "prata", group: "Desafios", meta: 10 },
+        { id: "esc_desafios_aprov_50", entity: "Escolinha", title: "Lapidando Craques", description: "50 desafios aprovados por atletas da escolinha.", icon: "💎", tier: "platina", group: "Desafios", meta: 50 },
+        { id: "clu_atletas_10", entity: "Clube", title: "Olho na Base", description: "10 atletas vinculados.", icon: "👶", tier: "bronze", group: "Gestão", meta: 10 },
+        { id: "clu_atletas_25", entity: "Clube", title: "Elenco em Formação", description: "25 atletas vinculados.", icon: "🧑‍🎓", tier: "prata", group: "Gestão", meta: 25 },
+        { id: "clu_atletas_50", entity: "Clube", title: "Projeto de Base", description: "50 atletas vinculados.", icon: "🌱", tier: "ouro", group: "Gestão", meta: 50 },
+        { id: "clu_tp_1", entity: "Clube", title: "Primeiro Treino do Clube", description: "Criou 1 treino programado.", icon: "📝", tier: "bronze", group: "Gestão", meta: 1 },
+        { id: "clu_tp_10", entity: "Clube", title: "Estratégia de Treinos", description: "Criou 10 treinos programados.", icon: "📘", tier: "prata", group: "Gestão", meta: 10 },
+        { id: "clu_tp_25", entity: "Clube", title: "Método do Clube", description: "Criou 25 treinos programados.", icon: "📚", tier: "ouro", group: "Gestão", meta: 25 },
+        { id: "clu_evento_1", entity: "Clube", title: "Primeiro Evento", description: "Organizou 1 evento.", icon: "📅", tier: "bronze", group: "Eventos", meta: 1 },
+        { id: "clu_evento_5", entity: "Clube", title: "Calendário Forte", description: "Organizou 5 eventos.", icon: "🗓️", tier: "prata", group: "Eventos", meta: 5 },
+        { id: "clu_evento_10", entity: "Clube", title: "Clube Ativo", description: "Organizou 10 eventos.", icon: "🎟️", tier: "ouro", group: "Eventos", meta: 10 },
+        { id: "clu_evento_25", entity: "Clube", title: "Agenda Lotada", description: "Organizou 25 eventos.", icon: "🏟️", tier: "platina", group: "Eventos", meta: 25 },
+    ];
+    const uniqueByCodigo = new Map();
+    for (const a of achievements)
+        uniqueByCodigo.set(a.id, a);
+    const finalList = Array.from(uniqueByCodigo.values());
+    // ✅ UPSERT: atualiza se já existir
+    for (const a of finalList) {
+        const metaFinal = a.meta ?? inferMetaFromCodigo(a.id);
+        await prisma.conquista.upsert({
+            where: { codigo: a.id },
+            create: {
+                codigo: a.id,
+                titulo: a.title,
+                descricao: buildDescricao(a.description, a.group, a.tier),
+                tipo: mapConquistaTipo(a.group),
+                publico: [mapOwnerTipo(a.entity)],
+                icon: a.icon ?? null,
+                meta: metaFinal ?? null,
+                ativo: true,
+            },
+            update: {
+                titulo: a.title,
+                descricao: buildDescricao(a.description, a.group, a.tier),
+                tipo: mapConquistaTipo(a.group),
+                publico: [mapOwnerTipo(a.entity)],
+                icon: a.icon ?? null,
+                meta: metaFinal ?? null,
+                ativo: true,
+            },
+        });
+    }
+    console.log(`✅ Conquistas (catálogo) seeded (upsert): ${finalList.length} registros`);
+}
+async function main() {
+    await seedConquistasCatalog();
+}
+main()
+    .catch((e) => {
+    console.error("❌ Seed error:", e);
+    process.exit(1);
+})
+    .finally(async () => {
+    await prisma.$disconnect();
+});

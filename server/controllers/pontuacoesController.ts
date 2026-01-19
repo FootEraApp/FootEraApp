@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import { inferirTipoTreino } from "server/utils/inferirTipoTreino.js";
 
-const prisma = new PrismaClient();
 
 type AuthedReq = Request & { user?: { id?: string } };
 

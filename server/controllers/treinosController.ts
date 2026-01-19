@@ -29,8 +29,8 @@ import {
 import jwt from "jsonwebtoken";
 import { startOfMonth, addMonths } from "date-fns";
 import { recalcularEstatisticaExercicios } from "server/services/estatisticasExercicio.service.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 type Request = ExpressRequest;
 type Response = ExpressResponse;
 

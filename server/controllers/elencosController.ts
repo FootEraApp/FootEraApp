@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
-import { PrismaClient, PosicaoCampo } from "@prisma/client";
+import { PosicaoCampo } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 async function montarRespostaElencos(donoId: string, turmaId?: string) {
   const whereBase: any = {

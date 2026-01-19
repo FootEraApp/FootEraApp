@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
-import { PrismaClient, Categoria, Nivel, TipoTreino } from "@prisma/client";
+import { Categoria, Nivel, TipoTreino } from "@prisma/client";
 import { requireUsage } from "server/lib/usage.js";
 import { enforceTotalLimit } from "server/services/usage.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 const MAX_SLOTS = 5;
 const TTL_DIAS = 30;
 
