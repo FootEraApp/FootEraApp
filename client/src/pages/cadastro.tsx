@@ -31,6 +31,9 @@ const mapTipo = {
   Olheiro: "OLHEIRO",
 } as const;
 
+const PRECISA_NASCIMENTO = (t: TipoPerfil) =>
+  t === "Atleta" || t === "Olheiro" || t === "Professor";
+
 type CamposProfessor = {
   treinaEscolinha: "sim" | "nao" | "";
   areaFormacao: string;
@@ -208,10 +211,6 @@ export default function Cadastro() {
     if (!confirmarOk) return setErro("As senhas não coincidem."), false;
     if (emailDisp === false) return setErro("E-mail já cadastrado."), false;
     if (userDisp === false) return setErro("Nome de usuário indisponível."), false;
-    if (!dataNascimento) return setErro("Informe a data de nascimento."), false;
-    const nasc = new Date(dataNascimento);
-    if (nasc > new Date()) return setErro("Data de nascimento no futuro."), false;
-
     if (!CEP_RE.test(cep) || !cidade || !estado) {
       return setErro("Informe um CEP válido para preencher Cidade e UF (ou ajuste manualmente)."), false;
     }
@@ -221,6 +220,12 @@ export default function Cadastro() {
   };
 
   const podeIrParaEtapa3 = () => {
+    if (PRECISA_NASCIMENTO(tipoPerfil)) {
+      if (!dataNascimento) return setErro("Informe a data de nascimento."), false;
+      const nasc = new Date(dataNascimento);
+      if (nasc > new Date()) return setErro("Data de nascimento no futuro."), false;
+    }
+
     if (tipoPerfil === "Atleta") {
       if (idade === null) return setErro("Informe a data de nascimento do atleta."), false;
       if (!atleta.categoria) return setErro("Selecione a categoria do atleta."), false;
@@ -269,7 +274,7 @@ export default function Cadastro() {
         estado: estado || undefined,
         pais: pais || undefined,
         bairro: bairro || undefined,
-        dataNascimento,
+        ...(PRECISA_NASCIMENTO(tipoPerfil) ? { dataNascimento } : {}),
       };
 
       if (tipoPerfil === "Atleta") {
@@ -559,12 +564,6 @@ export default function Cadastro() {
                 </div>
               </div>
 
-              <div className="mt-3">
-                <label className="block text-sm font-medium mb-1">Data de nascimento</label>
-                <input type="date" className="w-full border rounded px-3 py-2" value={dataNascimento} onChange={(e) => setDataNascimento(e.target.value)} />
-                {idade !== null && <p className="text-xs text-gray-500 mt-1">Idade estimada: {idade} anos</p>}
-              </div>
-
               <div className="mt-4 mb-3">
                 <label className="flex items-center text-sm">
                   <input type="checkbox" className="mr-2" checked={aceitaTermos} onChange={(e) => setAceitaTermos(e.target.checked)} />
@@ -591,6 +590,19 @@ export default function Cadastro() {
             <div>
               <h2 className="text-xl font-semibold mb-1">Dados do Tipo: {tipoPerfil}</h2>
               <p className="text-sm text-green-600 mb-4">Complete as informações específicas</p>
+
+              {PRECISA_NASCIMENTO(tipoPerfil) && (
+                <div className="mt-3">
+                  <label className="block text-sm font-medium mb-1">Data de nascimento</label>
+                  <input
+                    type="date"
+                    className={`w-full border rounded px-3 py-2 ${erro && !dataNascimento ? "border-red-400" : ""}`}
+                    value={dataNascimento}
+                    onChange={(e) => setDataNascimento(e.target.value)}
+                  />
+                  {idade !== null && <p className="text-xs text-gray-500 mt-1">Idade estimada: {idade} anos</p>}
+                </div>
+              )}
 
               {tipoPerfil === "Atleta" && (
                 <>
@@ -879,7 +891,9 @@ export default function Cadastro() {
                 <div><span className="font-medium">Nome:</span> {nome}</div>
                 <div><span className="font-medium">Email:</span> {email}</div>
                 <div><span className="font-medium">Username:</span> @{nomeDeUsuario}</div>
-                <div><span className="font-medium">Nascimento:</span> {dataNascimento || "-"}</div>
+                {PRECISA_NASCIMENTO(tipoPerfil) && (
+                  <div><span className="font-medium">Nascimento:</span> {dataNascimento || "-"}</div>
+                )}
 
                 <div className="mt-2">
                   <span className="font-medium">Localização:</span> {`${bairro ? bairro + ", " : ""}${cidade || "-"}`} {estado ? `- ${estado}` : ""} {pais ? `• ${pais}` : ""}
