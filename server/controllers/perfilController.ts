@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
-import { PrismaClient, PosicaoCampo } from "@prisma/client";
+import { PosicaoCampo } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
 import { requireUsage } from "server/lib/usage.js";
 import { validarJanelaAtleta, getRangeFromQuery, PlanoAtleta } from "../utils/analyticsWindow.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 type AtividadeUI = {
   id: string;

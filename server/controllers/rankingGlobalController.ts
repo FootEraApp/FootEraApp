@@ -1,7 +1,7 @@
-import { PrismaClient, Prisma, Categoria } from "@prisma/client";
+import { Prisma, Categoria } from "@prisma/client";
 import { Request, Response } from "express";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 function normalizeUF(uf?: string) {
   return (uf || "").trim().toUpperCase();

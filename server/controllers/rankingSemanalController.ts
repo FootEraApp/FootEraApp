@@ -1,7 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import { Request, Response } from "express";
 
-const prisma = new PrismaClient();
 
 function categoriaPorIdade(idade?: number | null): string {
   if (idade == null) return "Livre";

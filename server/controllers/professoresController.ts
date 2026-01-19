@@ -1,9 +1,8 @@
 // server/controller/professoresController
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
 
-const prisma = new PrismaClient();
 
 export const listarAtletasDoProfessor = async (req: Request, res: Response) => {
   const { professorId } = req.params;

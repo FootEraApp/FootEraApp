@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
-import { PrismaClient, OrigemFormador } from "@prisma/client";
+import { OrigemFormador } from "@prisma/client";
 import { resolveAtletaId, resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 const SOLIDARIEDADE_PCT = 0.05;
 function ensureNumber(n: any, fallback = 0) {

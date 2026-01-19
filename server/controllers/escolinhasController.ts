@@ -1,10 +1,9 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import { touchFairUse } from "server/lib/usage.js";
 import { aplicarCorteEscolinha, getRangeFromQuery } from "../utils/analyticsWindow.js";
 import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
 
-const prisma = new PrismaClient();
 
 export async function relatorioRetencaoEscolinha(req: Request, res: Response) {
   try {

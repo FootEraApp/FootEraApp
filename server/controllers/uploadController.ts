@@ -2,13 +2,13 @@ import { Request, Response } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { PrismaClient, TipoMidia, StorageClass } from "@prisma/client";
+import { TipoMidia, StorageClass } from "@prisma/client";
 import { probeImage, probeVideo } from "../services/mediaMetadata.js";
 import { audit } from "../services/audit.js";
 import { uploadError } from "../services/uploadErrors.js";
 import { transcodeTo720p } from "../services/transcodeService.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 const MAX_VIDEO_SEC = 60;
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
 

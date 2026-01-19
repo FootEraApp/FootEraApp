@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { prisma } from "../lib/prisma.js";
+import { prisma } from "../prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { audit } from "../services/audit.js";
 
