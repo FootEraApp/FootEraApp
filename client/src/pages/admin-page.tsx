@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { API } from "../config.js";
+import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import ValidacaoVideo from "./validacaovideo.js";
 import { FLAGS } from "../config.js";
@@ -84,6 +84,7 @@ interface UsuarioDetalhe extends UsuarioAdmin {
 }
 
 const USERS_ENDPOINT = `${API.BASE_URL}/api/admin/usuarios`;
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 const EMPTY_DASH = {
   totalUsuarios: 0,
@@ -120,6 +121,17 @@ function toAbsoluteUrl(raw?: string | null) {
   if (v.startsWith("uploads/")) return `${API.BASE_URL}/${v}`;
   if (/^[\w-]{11}$/.test(v)) return `https://www.youtube.com/watch?v=${v}`;
   return `${API.BASE_URL}${v.startsWith("/") ? v : `/${v}`}`;
+}
+
+function avatarSrc(raw?: string | null) {
+  const v = formatarUrlFoto(raw, "usuarios");
+  return v && String(v).trim() ? v : AVATAR_FALLBACK;
+}
+
+function onAvatarError(e: React.SyntheticEvent<HTMLImageElement>) {
+  const img = e.currentTarget;
+  if (img.src.includes("footera-logo-fundo-verde.png")) return;
+  img.src = AVATAR_FALLBACK;
 }
 
 function resolveVideoUrl(ex: any) {
@@ -405,6 +417,12 @@ async function carregarFeedback() {
       arr = arr.filter((f) => !f.lidoEm);
     }
 
+    arr = [...arr].sort((a, b) => {
+      const da = new Date(a.createdAt).getTime();
+      const db = new Date(b.createdAt).getTime();
+      return da - db; 
+    });
+
     setFbItems(arr);
   } catch (err: any) {
     console.error("Erro ao carregar feedbacks:", err);
@@ -466,6 +484,12 @@ async function marcarFeedbackComoLido(id: string) {
     const p = toPlayer(raw);
     if (p) setPlayer(p);
   }
+
+  useEffect(() => {
+    if (aba !== "usuarios") return;
+    carregarUsuarios(1).catch(() => {});
+  }, [aba, tipoFiltro, debouncedQ]);
+
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPlayer(null);
@@ -944,6 +968,9 @@ async function confirmarExcluirProfessor() {
     return ka.localeCompare(kb);
   });
 
+  const usuariosOrdenados = usuarios;
+  const assinantesOrdenados = assinantes;
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <header className="flex justify-between items-center bg-green-900 text-white px-6 py-4 rounded">
@@ -1087,14 +1114,18 @@ async function confirmarExcluirProfessor() {
                   </tr>
                 </thead>
                 <tbody>
-                  {usuarios.map((u) => {
+                  {usuariosOrdenados.map((u) => {
                     const nome = u.nome ?? u.nomeDeUsuario ?? "(sem nome)";
-                    const foto = formatarUrlFoto(u.foto, "usuarios") || "/default-profile.png";
+                    const foto = avatarSrc(u.foto);
                     return (
                       <tr key={u.id} className="border-t">
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
-                            <img src={foto} className="w-8 h-8 rounded-full object-cover border" />
+                           <img
+                              src={foto}
+                              onError={onAvatarError}
+                              className="w-8 h-8 rounded-full object-cover border"
+                            />
                             <div className="font-medium flex items-center gap-2">
                               {nome}
                               <label className="flex items-center gap-2">
@@ -1159,7 +1190,7 @@ async function confirmarExcluirProfessor() {
                   })}
                   {!carregandoUsuarios && usuarios.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-8 text-center text-gray-500">
+                      <td colSpan={7} className="px-3 py-8 text-center text-gray-500">
                         Nenhum usuário encontrado.
                       </td>
                     </tr>
@@ -1452,12 +1483,16 @@ async function confirmarExcluirProfessor() {
 
                   <tbody>
                     {modPendentes.map((it) => {
-                      const fotoAtleta = formatarUrlFoto(it.atleta.foto, "usuarios") || "/default-profile.png";
+                      const fotoAtleta = avatarSrc(it.atleta.foto);
                       return (
                         <tr key={it.id} className="border-t">
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-2">
-                              <img src={fotoAtleta} className="w-8 h-8 rounded-full object-cover border" />
+                              <img
+                                src={fotoAtleta}
+                                onError={onAvatarError}
+                                className="w-8 h-8 rounded-full object-cover border"
+                              />
                               <div className="font-medium">{it.atleta.nome}</div>
                             </div>
                           </td>
@@ -1576,15 +1611,19 @@ async function confirmarExcluirProfessor() {
                   </tr>
                 </thead>
                 <tbody>
-                  {assinantes.map((a) => {
+                  {assinantesOrdenados.map((a) => {
                     const u = a.usuario;
                     const nome = u.nome ?? u.nomeDeUsuario ?? "(sem nome)";
-                    const foto = formatarUrlFoto(u.foto, "usuarios") || "/default-profile.png";
+                    const foto = avatarSrc(u.foto);
                     return (
                       <tr key={a.id} className="border-t">
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
-                            <img src={foto} className="w-8 h-8 rounded-full object-cover border" />
+                            <img
+                              src={foto}
+                              onError={onAvatarError}
+                              className="w-8 h-8 rounded-full object-cover border"
+                            />
                             <div>
                               <div className="font-medium">{nome}</div>
                               <div className="text-xs text-gray-600">{u.email ?? "—"}</div>
@@ -2001,7 +2040,11 @@ async function confirmarExcluirProfessor() {
                   return (
                     <div className="space-y-4">
                       <div className="flex items-center gap-3">
-                        <img src={formatarUrlFoto(userSelecionado?.foto, "usuarios")} className="w-14 h-14 rounded-full object-cover border" />
+                        <img
+                          src={avatarSrc(userSelecionado?.foto)}
+                          onError={onAvatarError}
+                          className="w-14 h-14 rounded-full object-cover border"
+                        />
                         <div>
                           <div className="font-semibold text-base">{u.nome ?? u.nomeDeUsuario}</div>
                           <div className="text-sm text-gray-600">{u.email ?? "-"}</div>
@@ -2522,10 +2565,6 @@ function AnalyticsPane() {
       setLoading(false);
     }
   }
-
-  useEffect(() => {
-    void loadAll();
-  }, []);
 
   useEffect(() => {
     void loadAll();
