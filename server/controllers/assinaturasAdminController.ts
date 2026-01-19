@@ -89,7 +89,12 @@ export async function listar(req: AdminReq, res: Response) {
             },
           },
         },
-        orderBy: [{ startsAt: "desc" }],
+        orderBy: [
+          { usuario: { nome: "asc" } },       
+          { usuario: { nomeDeUsuario: "asc" } },  
+          { usuario: { email: "asc" } },          
+          { id: "asc" },                          
+        ],
         skip: (p - 1) * ps,
         take: ps,
       }),
