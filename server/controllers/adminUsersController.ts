@@ -49,7 +49,12 @@ export async function listAdminUsers(req: Request, res: Response) {
         where,
         skip: (page - 1) * pageSize,
         take: pageSize,
-        orderBy: { dataCriacao: "desc" },
+        orderBy: [
+          { nome: "asc" },
+          { nomeDeUsuario: "asc" },
+          { email: "asc" },
+          { id: "asc" },
+        ],
         include: {
           atleta: { select: { foto: true } },
           professor: { select: { fotoUrl: true } },
