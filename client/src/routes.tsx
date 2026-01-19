@@ -1,3 +1,4 @@
+// client/src/routes
 import { Route, Switch } from "wouter";
 import { Private, PublicOnly, HomeRedirect } from "./auth.js";
 import RequireAdmin from "./routes/RequireAdmin.js";
@@ -56,6 +57,8 @@ import PaginaPagamentos from "./pages/pagamentos/index.js";
 import PaginaJogosElenco from "./pages/jogos-elenco.js";
 import PaginaGerenciarProfessores from "./pages/GerenciarProfessores.js"
 import PaginaConvocarEvento from "./pages/eventos/convocar.js";
+import PaginaVerificarEmail from "./pages/verificar-email.js";
+
 
 export function AppRoutes() {
   return (
@@ -64,6 +67,9 @@ export function AppRoutes() {
         <PublicOnly><PaginaLogin /></PublicOnly>
       </Route>
       <Route path="/cadastro"><PaginaCadastro /></Route>
+
+      <Route path="/verificar-email" component={PaginaVerificarEmail} />
+
       <Route path="/termos"><PaginaTermosEPrivacidade /></Route>
       <Route path="/esqueci-senha">
         <PublicOnly><PaginaEsqueciSenha /></PublicOnly>
