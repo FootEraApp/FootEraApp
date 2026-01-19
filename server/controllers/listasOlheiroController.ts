@@ -1,8 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from "../prisma.js";
 import type { Request, Response } from 'express';
 import { enforceTotalLimit } from '../services/usage.js';
 
-const prisma = new PrismaClient();
 
 async function assertListaDoOlheiro(listaId: string, olheiroId: string) {
   const lista = await prisma.listaOlheiro.findUnique({

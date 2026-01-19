@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 function toAtletaCard(a: any) {
   const nome = a?.nome ?? a?.usuario?.nome ?? "Atleta";

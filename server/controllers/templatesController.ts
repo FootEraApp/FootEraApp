@@ -1,7 +1,7 @@
-import { PrismaClient, TipoUsuario, Nivel, TipoTreino, Categoria } from "@prisma/client";
+import { TipoUsuario, Nivel, TipoTreino, Categoria } from "@prisma/client";
 import type { Request, Response } from "express";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 function isTipo(u?: any, t?: TipoUsuario) {
   return String(u?.tipo) === String(t);

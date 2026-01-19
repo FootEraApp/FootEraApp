@@ -1,11 +1,11 @@
 import { Request, Response } from "express";
-import { PrismaClient, TipoUsuario, Nivel, StatusCref } from "@prisma/client";
+import { TipoUsuario, Nivel, StatusCref } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { sendEmailVerification } from "../utils/mailer.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 const FRONTEND_URL = (process.env.WEB_BASE_URL || "http://localhost:5173").replace(/\/+$/, "");
 

@@ -1,7 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import type { Request, Response } from "express";
 
-const prisma = new PrismaClient();
 
 export async function getIndicacoes(req: Request, res: Response) {
   try {

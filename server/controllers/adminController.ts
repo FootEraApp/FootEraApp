@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
-import { PrismaClient, TipoUsuario } from "@prisma/client";
+import { TipoUsuario } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
+
 const SECRET = process.env.JWT_SECRET || "footera_secret"
 
 export const adminDashboard = async (_: Request, res: Response) => {

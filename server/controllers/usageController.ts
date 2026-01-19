@@ -1,10 +1,9 @@
 import type { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from "../prisma.js";
 import { USAGE_MESSAGES, WINDOW_BY_KEY, type WindowKind } from '../services/usage.messages.js';
 import { getUserPlan, planLimitFor } from '../services/plan.js';
 import { windowBounds } from '../services/usage.js';
 
-const prisma = new PrismaClient();
 
 type Req = Request & { user?: { id?: string } };
 
