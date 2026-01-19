@@ -264,6 +264,15 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     const tipoEnum = stringParaTipoUsuario(tipo);
     if (!tipoEnum) return res.status(400).json({ error: "Tipo de usuário inválido." });
 
+    const precisaNascimento =
+      tipoEnum === TipoUsuario.Atleta ||
+      tipoEnum === TipoUsuario.Olheiro ||
+      tipoEnum === TipoUsuario.Professor;
+
+    const dataNascFinal = precisaNascimento && dataNascimento
+      ? new Date(dataNascimento)
+      : null;
+
     const emailNorm = String(email).trim().toLowerCase();
     const usernameFinal = (nomeDeUsuario ? String(nomeDeUsuario) : String(nome).toLowerCase().replace(/\s+/g, "_"))
       .trim().toLowerCase();
@@ -289,7 +298,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         pais:   pais ?? null,
         bairro: bairro ?? null,
         cpf:    cpf ?? null,
-        dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
+        dataNascimento: dataNascFinal,
         responsavelNome: responsavel?.nome ?? null,
         responsavelEmail: responsavel?.email ?? null,
         responsavelTelefone: responsavel?.telefone ?? null,
@@ -307,10 +316,19 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           ? (req.body as any).categoria
           : [];
 
+        const idadeFinal = dataNascFinal
+          ? (new Date().getFullYear() - dataNascFinal.getFullYear()
+              - ((new Date().getMonth() < dataNascFinal.getMonth()
+                  || (new Date().getMonth() === dataNascFinal.getMonth()
+                      && new Date().getDate() < dataNascFinal.getDate()))
+                ? 1
+                : 0))
+          : (typeof idade === "number" ? idade : 0);
+
         const atleta = await prisma.atleta.create({
           data: {
             usuarioId: usuario.id,
-            idade: typeof idade === "number" ? idade : 0,
+            idade: Math.max(0, idadeFinal),
             categoria: categorias,
             email: emailNorm,
           },
@@ -321,7 +339,6 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         tipoUsuarioId = atleta.id;
         break;
       }
-
       case TipoUsuario.Professor: {
         const professor = await prisma.professor.create({
           data: {
@@ -431,8 +448,8 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
 
     try {
       let idadeCalc: number | null = null;
-      if (dataNascimento) {
-        const d = new Date(dataNascimento);
+      if (dataNascFinal) {
+        const d = new Date(dataNascFinal);
         const hoje = new Date();
         idadeCalc =
           hoje.getFullYear()
@@ -440,6 +457,7 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
           - ((hoje.getMonth() < d.getMonth()
               || (hoje.getMonth() === d.getMonth() && hoje.getDate() < d.getDate())) ? 1 : 0);
       }
+
       const privacidadeDefault =
         idadeCalc !== null && idadeCalc < 12
           ? { perfil: "private",    dms: "closed",         geoloc: false, videosAudience: "private" }

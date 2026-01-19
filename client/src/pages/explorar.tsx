@@ -1,13 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "wouter";
-import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import {
-  Volleyball,
   User,
-  CirclePlus,
   Search,
-  House,
   Filter,
   X,
   Trophy,
@@ -21,14 +17,30 @@ import {
   Users,
   Ticket
 } from "lucide-react";
-import { API } from "../config.js";
+import { API, APP } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+import { publicImgUrl } from "@/utils/publicUrl.js";
 
 const ENABLE_EVENTOS_TAB = false; 
-const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
-type UsuarioBasic = { id: string; nome: string; foto?: string | null };
+function avatarSrc(foto?: string | null) {
+  return publicImgUrl(foto) || AVATAR_FALLBACK;
+}
+
+function onAvatarError(e: React.SyntheticEvent<HTMLImageElement, Event>) {
+  const img = e.currentTarget;
+  if (img.src !== AVATAR_FALLBACK) img.src = AVATAR_FALLBACK;
+}
+
+type UsuarioBasic = {
+  id: string;
+  nome: string;
+  foto?: string | null;
+  assinatura?: { status?: string | null; plano?: string | null } | null;
+};
+
 type AtletaItem = {
   id: string;
   usuario: UsuarioBasic;
@@ -42,10 +54,10 @@ type AtletaItem = {
   pontuacao?: number | null;
   categoriaBase?: string | null;
   idade?: number | null;
+  categoria?: string[];
 };
 
 type ProfessorItem = { id: string; usuario: UsuarioBasic; foto?: string | null };
-
 type ClubeItem = {
   id: string;
   usuarioId?: string;
@@ -53,6 +65,7 @@ type ClubeItem = {
   cidade?: string | null;
   estado?: string | null;
   logo?: string | null;
+  usuario?: UsuarioBasic;
 };
 type EscolaItem = {
   id: string;
@@ -62,6 +75,7 @@ type EscolaItem = {
   estado?: string | null;
   logo?: string | null;
   siteOficial?: string | null;
+  usuario?: UsuarioBasic;
 };
 type OlheiroItem = { id: string; usuario: UsuarioBasic; foto?: string | null };
 
@@ -82,6 +96,19 @@ type Filtros = {
   independente?: boolean | null;
   pontuacaoMin?: number | null;
   pontuacaoMax?: number | null;
+};
+
+type FiltrosProfissionais = {
+  papel?: "Professor" | "Olheiro" | "Ambos";
+  vinculo?: "Qualquer" | "Independente" | "Vinculado";
+  estado?: string;
+  cidade?: string;
+};
+
+type FiltrosOrgs = {
+  estado?: string;
+  cidade?: string;
+  temSite?: boolean | null;
 };
 
 type RankItem = {
@@ -205,6 +232,14 @@ function formatDateRange(inicioIso: string, fimIso?: string | null) {
   return `${dia} ${horaInicio}h → ${diaFim} ${horaFim}h`;
 }
 
+function getProfMeta(p: any) {
+  const role = p.role as "Professor" | "Olheiro";
+  const cidade = p.usuario?.cidade ?? "";
+  const estado = p.usuario?.estado ?? "";
+  const vinculado = !!(p.clubeId || p.escolinhaId);
+  return { role, cidade, estado, vinculado };
+}
+
 function Pill({
   children,
   tone = "emerald",
@@ -227,6 +262,41 @@ function Pill({
     </span>
   );
 }
+
+const stripDiacritics = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const normText = (s?: string | null) =>
+  stripDiacritics(String(s ?? "").trim().toLowerCase());
+
+function isItemPro(x: any): boolean {
+  if (typeof x?.isPro === "boolean") return x.isPro;
+
+  const status = x?.usuario?.assinatura?.status;
+  const plano = x?.usuario?.assinatura?.plano;
+  return status === "ATIVA" || String(plano ?? "").toUpperCase().includes("PRO");
+}
+
+function sortProThenName<T>(arr: T[], getName: (x: T) => string) {
+  return [...arr].sort((a, b) => {
+    const ap = isItemPro(a) ? 1 : 0;
+    const bp = isItemPro(b) ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    return getName(a).localeCompare(getName(b), "pt-BR", { sensitivity: "base" });
+  });
+}
+
+const normKey = (s?: string | null) =>
+  normText(s).replace(/[^a-z0-9]/g, "");
+
+const includesText = (base?: string | null, term?: string | null) => {
+  const b = normText(base);
+  const t = normText(term);
+  if (!t) return true;
+  return b.includes(t);
+};
 
 function Tab({
   active,
@@ -268,79 +338,61 @@ function Explorar() {
   const [showFilters, setShowFilters] = useState(false);
   const [filtros, setFiltros] = useState<Filtros>({ independente: null, pontuacaoMin: null, pontuacaoMax: null });
   const [draft, setDraft] = useState<Filtros>({ independente: null, pontuacaoMin: null, pontuacaoMax: null });
+  const [filtrosProf, setFiltrosProf] = useState<FiltrosProfissionais>({
+    papel: "Ambos",
+    vinculo: "Qualquer",
+  });
+  const [draftProf, setDraftProf] = useState<FiltrosProfissionais>({
+    papel: "Ambos",
+    vinculo: "Qualquer",
+  });
 
+  const [filtrosOrgs, setFiltrosOrgs] = useState<FiltrosOrgs>({ temSite: null });
+  const [draftOrgs, setDraftOrgs] = useState<FiltrosOrgs>({ temSite: null });
   const updateDraft = (patch: Partial<Filtros>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
   };
   const [topGeral, setTopGeral] = useState<RankItem[]>([]);
   const [topPorCategoria, setTopPorCategoria] = useState<Record<string, RankItem[]>>({});
-
   const [carregandoDados, setCarregandoDados] = useState(false);
-
-  const [pageSize, setPageSize] = useState(12);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  const [showCountAtletas, setShowCountAtletas] = useState(12);
-  const [showCountEscolas, setShowCountEscolas] = useState(12);
-  const [showCountClubes, setShowCountClubes] = useState(12);
-  const [showCountProfs, setShowCountProfs] = useState(12);
-
+  const BATCH = 20;
+  const [showCountAtletas, setShowCountAtletas] = useState(BATCH);
+  const [showCountEscolas, setShowCountEscolas] = useState(BATCH);
+  const [showCountClubes, setShowCountClubes] = useState(BATCH);
+  const [showCountProfs, setShowCountProfs] = useState(BATCH);
   const [selectedEvento, setSelectedEvento] = useState<EventoItem | null>(null);
   const [showEventoModal, setShowEventoModal] = useState(false);
   const [inscrevendoEvento, setInscrevendoEvento] = useState(false);
   const [erroEvento, setErroEvento] = useState<string | null>(null);
 
-
-  const handleImgError: React.ReactEventHandler<HTMLImageElement> = (e) => {
-    const img = e.currentTarget;
-    if (img.dataset.fallbackDone === "1") return;
-    img.dataset.fallbackDone = "1";
-    img.src = FALLBACK_AVATAR;
-  };
+  useEffect(() => {
+    setShowFilters(false);
+  }, [aba]);
 
   useEffect(() => {
-    const compute = () => {
-      const w = window.innerWidth;
-      if (w >= 1024) setPageSize(24);
-      else if (w >= 640) setPageSize(16);
-      else setPageSize(12);
-    };
-    compute();
-    window.addEventListener("resize", compute);
-    return () => window.removeEventListener("resize", compute);
-  }, []);
+    if (!ENABLE_EVENTOS_TAB || aba !== "eventos") return;
 
-  useEffect(() => {
-    setShowCountAtletas((c) => Math.max(c, pageSize));
-    setShowCountEscolas((c) => Math.max(c, pageSize));
-    setShowCountClubes((c) => Math.max(c, pageSize));
-    setShowCountProfs((c) => Math.max(c, pageSize));
-  }, [pageSize]);
+    const token = Storage?.token || "";
 
-useEffect(() => {
-  if (!ENABLE_EVENTOS_TAB || aba !== "eventos") return;
+    axios.get(`${API.BASE_URL}/api/eventos`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+    .then(res => {
+      setDados(prev => ({
+        ...prev,
+        eventos: res.data || [],
+      }));
+    })
+    .catch(err => {
+      console.error("❌ Erro ao buscar eventos", err);
+      setDados(prev => ({ ...prev, eventos: [] }));
+    });
 
-  const token = Storage?.token || "";
-
-  axios.get(`${API.BASE_URL}/api/eventos`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  })
-  .then(res => {
-    setDados(prev => ({
-      ...prev,
-      eventos: res.data || [],
-    }));
-  })
-  .catch(err => {
-    console.error("❌ Erro ao buscar eventos", err);
-    setDados(prev => ({ ...prev, eventos: [] }));
-  });
-
-}, [aba]);
-
+  }, [aba]);
 
   const filtrosKey = JSON.stringify(filtros);
-
   const profissionais = useMemo(
     () =>
       [
@@ -360,114 +412,231 @@ useEffect(() => {
     [dados.professores, dados.olheiros]
   );
 
-  const atletasFiltrados = useMemo(() => {
-    const f = filtros;
-    const norm = (s?: string | null) => (s || "").toLowerCase();
-    return (dados.atletas || []).filter((a) => {
-      if (f.categoria) {
-        const cat = a.categoriaBase || mapIdadeParaCategoria(a.idade);
-        if (!cat || norm(cat) !== norm(f.categoria)) return false;
-      }
-      if (f.posicoes && f.posicoes.length > 0) {
-        const posNorm = norm(a.posicao);
-        if (!posNorm) return false;
-
-        const bate = f.posicoes.some((p) => posNorm.includes(norm(p)));
-        if (!bate) return false;
-      }
-      if (f.estado && !norm(a.estado).includes(norm(f.estado))) return false;
-      if (f.cidade && !norm(a.cidade).includes(norm(f.cidade))) return false;
-      if (f.independente !== null && f.independente !== undefined) {
-        if (a.independente == null || a.independente !== f.independente) return false;
-      }
-      if (typeof f.pontuacaoMin === "number") {
-        if (typeof a.pontuacao !== "number" || a.pontuacao < f.pontuacaoMin) return false;
-      }
-      if (typeof f.pontuacaoMax === "number") {
-        if (typeof a.pontuacao !== "number" || a.pontuacao > f.pontuacaoMax) return false;
-      }
-      return true;
-    });
-  }, [dados.atletas, filtros]);
-
-const eventosFiltrados = useMemo(() => {
-  const q = (busca || "").toLowerCase();
-
-  return (dados.eventos || []).filter((ev) => {
-    if (!q) return true;
-
-    const organizadorNome =
-      ev.clube?.nome ||
-      (ev as any).escolinha?.nome ||
+  function getAtletaMeta(a: AtletaItem) {
+    const nome = a?.usuario?.nome ?? "";
+    const posicao =
+      (a as any)?.posicao ??
+      (a as any)?.posicaoCampo ??
+      (a as any)?.posicaoPrincipal ??
+      "";
+    const cidade =
+      (a as any)?.cidade ??
+      (a as any)?.usuario?.cidade ??
+      "";
+    const estado =
+      (a as any)?.estado ??
+      (a as any)?.usuario?.estado ??
+      "";
+    const independenteRaw =
+      (a as any)?.independente ??
+      ((a as any)?.vinculado != null ? !(a as any).vinculado : null);
+    const independente =
+      typeof independenteRaw === "boolean" ? independenteRaw : null;
+    const pontuacaoRaw =
+      (a as any)?.pontuacao ??
+      (a as any)?.total ??
+      (a as any)?.pontos ??
+      (a as any)?.pontuacaoTotal ??
+      null;
+    const pontuacao =
+      typeof pontuacaoRaw === "number"
+        ? pontuacaoRaw
+        : pontuacaoRaw != null && !Number.isNaN(Number(pontuacaoRaw))
+        ? Number(pontuacaoRaw)
+        : null;
+    const categoria =
+      (a as any)?.categoriaBase ||
+      (Array.isArray((a as any)?.categoria) && (a as any).categoria[0]) ||
+      mapIdadeParaCategoria((a as any)?.idade) ||
       "";
 
-    const campos = [
-      ev.titulo,
-      ev.descricao || "",
-      ev.cidade || "",
-      ev.estado || "",
-      ev.local || "",
-      organizadorNome,
-    ]
-      .join(" ")
-      .toLowerCase();
+    return { nome, posicao, cidade, estado, independente, pontuacao, categoria };
+  }
 
-    return campos.includes(q);
-  });
-}, [dados.eventos, busca]);
+  const atletasFiltrados = useMemo(() => {
+    const f = filtros;
+    const q = normText(busca);
 
+    const base = (dados.atletas || []).filter((a) => {
+      const m = getAtletaMeta(a);
 
-  useEffect(() => {
-    setShowCountAtletas(pageSize);
-  }, [pageSize, busca, filtrosKey, dados.atletas.length]);
-
-  useEffect(() => {
-    setShowCountEscolas(pageSize);
-  }, [pageSize, busca, filtrosKey, dados.escolas.length]);
-
-  useEffect(() => {
-    setShowCountClubes(pageSize);
-  }, [pageSize, busca, filtrosKey, dados.clubes.length]);
-
-  useEffect(() => {
-    setShowCountProfs(pageSize);
-  }, [pageSize, busca, filtrosKey, dados.professores.length, dados.olheiros.length]);
-
-  useEffect(() => {
-  const el = sentinelRef.current;
-  if (!el) return;
-
-  const io = new IntersectionObserver(
-    (entries) => {
-      const [entry] = entries;
-      if (!entry.isIntersecting) return;
-
-      if (aba === "atletas") {
-        setShowCountAtletas((c) => Math.min(c + pageSize, atletasFiltrados.length));
-      } else if (aba === "escolas") {
-        setShowCountEscolas((c) => Math.min(c + pageSize, dados.escolas.length));
-      } else if (aba === "clubes") {
-        setShowCountClubes((c) => Math.min(c + pageSize, dados.clubes.length));
-      } else if (aba === "profissionais") {
-        setShowCountProfs((c) => Math.min(c + pageSize, profissionais.length));
+      if (f.categoria) {
+        if (normKey(m.categoria) !== normKey(f.categoria)) return false;
       }
-    },
-    { root: null, rootMargin: "400px", threshold: 0 }
-  );
 
-  io.observe(el);
-  return () => io.disconnect();
-}, [
-  aba,
-  pageSize,
-  dados.escolas.length,
-  dados.clubes.length,
-  dados.professores.length,
-  dados.olheiros.length,
-  dados.atletas.length,
-  atletasFiltrados.length,
-  profissionais.length,
-]);
+      if (f.posicoes && f.posicoes.length > 0) {
+        const posKey = normKey(m.posicao);
+        if (!posKey) return false;
+
+        const bate = f.posicoes.some((p) => posKey === normKey(p));
+        if (!bate) return false;
+      }
+
+      if (f.estado && !includesText(m.estado, f.estado)) return false;
+      if (f.cidade && !includesText(m.cidade, f.cidade)) return false;
+
+      if (f.independente !== null && f.independente !== undefined) {
+        if (m.independente == null || m.independente !== f.independente) return false;
+      }
+
+      if (typeof f.pontuacaoMin === "number") {
+        if (typeof m.pontuacao !== "number" || m.pontuacao < f.pontuacaoMin) return false;
+      }
+      if (typeof f.pontuacaoMax === "number") {
+        if (typeof m.pontuacao !== "number" || m.pontuacao > f.pontuacaoMax) return false;
+      }
+
+      if (q) {
+        const bag = normText([m.nome, m.posicao, m.cidade, m.estado, m.categoria].join(" "));
+        if (!bag.includes(q)) return false;
+      }
+
+      return true;
+    });
+
+    return sortProThenName(base, (a) => (a as any)?.usuario?.nome ?? "");
+  }, [dados.atletas, filtrosKey, busca]);
+
+  const eventosFiltrados = useMemo(() => {
+    const q = (busca || "").toLowerCase();
+
+    return (dados.eventos || []).filter((ev) => {
+      if (!q) return true;
+
+      const organizadorNome =
+        ev.clube?.nome ||
+        (ev as any).escolinha?.nome ||
+        "";
+
+      const campos = [
+        ev.titulo,
+        ev.descricao || "",
+        ev.cidade || "",
+        ev.estado || "",
+        ev.local || "",
+        organizadorNome,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return campos.includes(q);
+    });
+  }, [dados.eventos, busca]);
+
+  const escolasFiltradas = useMemo(() => {
+    const q = normText(busca);
+    const f = filtrosOrgs;
+
+    const base = (dados.escolas || []).filter((e) => {
+      if (f.estado && !includesText(e.estado, f.estado)) return false;
+      if (f.cidade && !includesText(e.cidade, f.cidade)) return false;
+
+      if (f.temSite !== null && f.temSite !== undefined) {
+        const tem = !!(e.siteOficial && String(e.siteOficial).trim());
+        if (tem !== f.temSite) return false;
+      }
+
+      if (q) {
+        const bag = normText([e.nome, e.cidade, e.estado, e.siteOficial].join(" "));
+        if (!bag.includes(q)) return false;
+      }
+
+      return true;
+    });
+
+    return sortProThenName(base, (e) => (e as any)?.nome ?? "");
+  }, [dados.escolas, busca, JSON.stringify(filtrosOrgs)]);
+
+  const clubesFiltrados = useMemo(() => {
+    const q = normText(busca);
+    const f = filtrosOrgs;
+
+    const base = (dados.clubes || []).filter((c) => {
+      if (f.estado && !includesText(c.estado, f.estado)) return false;
+      if (f.cidade && !includesText(c.cidade, f.cidade)) return false;
+
+      if (q) {
+        const bag = normText([c.nome, c.cidade, c.estado].join(" "));
+        if (!bag.includes(q)) return false;
+      }
+
+      return true; 
+    });
+
+    return sortProThenName(base, (c) => (c as any)?.nome ?? "");
+  }, [dados.clubes, busca, JSON.stringify(filtrosOrgs)]);
+
+  const profissionaisFiltrados = useMemo(() => {
+    const q = normText(busca);
+    const f = filtrosProf;
+
+    const base = (profissionais || []).filter((p: any) => {
+      const m = getProfMeta(p);
+
+      if (f.papel && f.papel !== "Ambos") {
+        if (m.role !== f.papel) return false;
+      }
+
+      if (f.vinculo === "Vinculado" && !m.vinculado) return false;
+      if (f.vinculo === "Independente" && m.vinculado) return false;
+
+      if (f.estado && !includesText(m.estado, f.estado)) return false;
+      if (f.cidade && !includesText(m.cidade, f.cidade)) return false;
+
+      if (q) {
+        const bag = normText([p.usuario?.nome, m.role, m.cidade, m.estado].join(" "));
+        if (!bag.includes(q)) return false;
+      }
+
+      return true;
+    });
+
+    return sortProThenName(base, (p) => (p as any)?.usuario?.nome ?? "");
+  }, [profissionais, busca, JSON.stringify(filtrosProf)]);
+
+  useEffect(() => setShowCountAtletas(BATCH), [busca, filtrosKey, dados.atletas.length]);
+  useEffect(() => setShowCountEscolas(BATCH), [busca, escolasFiltradas.length]);
+  useEffect(() => setShowCountClubes(BATCH), [busca, clubesFiltrados.length]);
+  useEffect(() => setShowCountProfs(BATCH), [busca, profissionaisFiltrados.length]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (!entry.isIntersecting) return;
+
+        if (aba === "atletas") {
+          setShowCountAtletas((c) => Math.min(c + BATCH, atletasFiltrados.length));
+        } else if (aba === "escolas") {
+          setShowCountEscolas((c) => Math.min(c + BATCH, escolasFiltradas.length));
+        } else if (aba === "clubes") {
+          setShowCountClubes((c) => Math.min(c + BATCH, clubesFiltrados.length));
+        } else if (aba === "profissionais") {
+          setShowCountProfs((c) => Math.min(c + BATCH, profissionaisFiltrados.length));
+        }
+      },
+      { root: null, rootMargin: "400px", threshold: 0 }
+    );
+
+    io.observe(el);
+    return () => io.disconnect();
+  }, [
+    aba,
+    atletasFiltrados.length,
+    escolasFiltradas.length,
+    clubesFiltrados.length,
+    profissionaisFiltrados.length,
+    dados.escolas.length,
+    dados.clubes.length,
+    dados.professores.length,
+    dados.olheiros.length,
+    dados.atletas.length,
+    atletasFiltrados.length,
+    profissionais.length,
+  ]);
 
   const loggedUserId = useMemo(
     () => (Storage?.usuarioId ?? (typeof window !== "undefined" ? Storage.usuarioId : "") ?? "") as string,
@@ -503,16 +672,6 @@ const eventosFiltrados = useMemo(() => {
   useEffect(() => {
     const token = Storage?.token ?? (typeof window !== "undefined" ? Storage.token : "");
     const params: any = { q: busca, excludeUsuarioId: loggedUserId };
-    if (filtros.categoria) params.categoria = filtros.categoria;
-    if (filtros.posicoes && filtros.posicoes.length) {
-      params.posicoes = filtros.posicoes.join(",");
-    }
-    if (filtros.estado) params.estado = filtros.estado;
-    if (filtros.cidade) params.cidade = filtros.cidade;
-    if (filtros.independente !== null && filtros.independente !== undefined)
-      params.independente = String(!!filtros.independente);
-    if (typeof filtros.pontuacaoMin === "number") params.pMin = filtros.pontuacaoMin;
-    if (typeof filtros.pontuacaoMax === "number") params.pMax = filtros.pontuacaoMax;
 
     setCarregandoDados(true);
     axios
@@ -525,8 +684,28 @@ const eventosFiltrados = useMemo(() => {
           atletas: filtrarEu<AtletaItem>(data.atletas || []),
           professores: filtrarEu<ProfessorItem>(data.professores || []),
           olheiros: filtrarEu<OlheiroItem>(data.olheiros || []),
-          clubes: filtrarEu<ClubeItem>(data.clubes || []),
-          escolas: filtrarEu<EscolaItem>(data.escolas || []),
+          clubes: filtrarEu<ClubeItem>(
+            (data.clubes || []).map((c: any) => ({
+              ...c,
+              nome: c.nome ?? c.usuario?.nome ?? "",
+              usuarioId: c.usuarioId ?? c.usuario?.id,
+              logo: c.logo ?? c.usuario?.foto ?? c.logo,
+              cidade: c.cidade ?? c.usuario?.cidade ?? null,
+              estado: c.estado ?? c.usuario?.estado ?? null,
+              usuario: c.usuario ?? undefined,
+            }))
+          ),
+          escolas: filtrarEu<EscolaItem>(
+            (data.escolas || []).map((e: any) => ({
+              ...e,
+              nome: e.nome ?? e.usuario?.nome ?? "",
+              usuarioId: e.usuarioId ?? e.usuario?.id,
+              logo: e.logo ?? e.usuario?.foto ?? e.logo,
+              cidade: e.cidade ?? e.usuario?.cidade ?? null,
+              estado: e.estado ?? e.usuario?.estado ?? null,
+              usuario: e.usuario ?? undefined,
+            }))
+          ),
           eventos: (data.eventos || []) as EventoItem[],
         });
       })
@@ -534,41 +713,79 @@ const eventosFiltrados = useMemo(() => {
         setDados({ atletas: [], professores: [], olheiros: [], clubes: [], escolas: [], eventos: [] });
       })
       .finally(() => setCarregandoDados(false));
-  }, [busca, loggedUserId, filtrosKey, filtrarEu]);
+  }, [busca, loggedUserId, filtrarEu]);
 
   const abrirFiltros = () => {
-    setDraft(filtros);
+    if (aba === "atletas") setDraft(filtros);
+    else if (aba === "profissionais") setDraftProf(filtrosProf);
+    else if (aba === "escolas" || aba === "clubes") setDraftOrgs(filtrosOrgs);
+
     setShowFilters(true);
   };
+
   const aplicarFiltros = () => {
-    setFiltros(draft);
+    if (aba === "atletas") setFiltros(draft);
+    else if (aba === "profissionais") setFiltrosProf(draftProf);
+    else if (aba === "escolas" || aba === "clubes") setFiltrosOrgs(draftOrgs);
+
     setShowFilters(false);
   };
+
   const limparFiltros = () => {
-    const base: Filtros = {
-      independente: null,
-      pontuacaoMin: null,
-      pontuacaoMax: null,
-      posicoes: [],
-    };
-    setDraft(base);
-    setFiltros(base);
+    if (aba === "atletas") {
+      const base: Filtros = { independente: null, pontuacaoMin: null, pontuacaoMax: null, posicoes: [] };
+      setDraft(base); setFiltros(base);
+    } else if (aba === "profissionais") {
+      const base: FiltrosProfissionais = { papel: "Ambos", vinculo: "Qualquer", cidade: "", estado: "" };
+      setDraftProf(base); setFiltrosProf(base);
+    } else if (aba === "escolas" || aba === "clubes") {
+      const base: FiltrosOrgs = { cidade: "", estado: "", temSite: null };
+      setDraftOrgs(base); setFiltrosOrgs(base);
+    }
     setShowFilters(false);
   };
 
-  const hasMoreAtletas = showCountAtletas < atletasFiltrados.length;
-  const hasMoreEscolas = showCountEscolas < dados.escolas.length;
-  const hasMoreClubes = showCountClubes < dados.clubes.length;
-  const hasMoreProfs = showCountProfs < profissionais.length;
+  const hasMoreEscolas = showCountEscolas < escolasFiltradas.length;
+  const hasMoreClubes = showCountClubes < clubesFiltrados.length;
+  
+  const activeFiltersCount = useMemo(() => {
+    if (aba === "atletas") {
+      return (
+        (filtros.categoria ? 1 : 0) +
+        (filtros.posicoes && filtros.posicoes.length ? 1 : 0) +
+        (filtros.estado ? 1 : 0) +
+        (filtros.cidade ? 1 : 0) +
+        (filtros.independente !== null && filtros.independente !== undefined ? 1 : 0) +
+        (typeof filtros.pontuacaoMin === "number" ? 1 : 0) +
+        (typeof filtros.pontuacaoMax === "number" ? 1 : 0)
+      );
+    }
 
-  const activeFiltersCount =
-    (filtros.categoria ? 1 : 0) +
-    (filtros.posicoes && filtros.posicoes.length ? 1 : 0) +
-    (filtros.estado ? 1 : 0) +
-    (filtros.cidade ? 1 : 0) +
-    (filtros.independente !== null && filtros.independente !== undefined ? 1 : 0) +
-    (typeof filtros.pontuacaoMin === "number" ? 1 : 0) +
-    (typeof filtros.pontuacaoMax === "number" ? 1 : 0);
+    if (aba === "profissionais") {
+      return (
+        (filtrosProf.papel && filtrosProf.papel !== "Ambos" ? 1 : 0) +
+        (filtrosProf.vinculo && filtrosProf.vinculo !== "Qualquer" ? 1 : 0) +
+        (filtrosProf.estado ? 1 : 0) +
+        (filtrosProf.cidade ? 1 : 0)
+      );
+    }
+
+    if (aba === "escolas") {
+      return (
+        (filtrosOrgs.estado ? 1 : 0) +
+        (filtrosOrgs.cidade ? 1 : 0) +
+        (filtrosOrgs.temSite !== null && filtrosOrgs.temSite !== undefined ? 1 : 0)
+      );
+    }
+
+    if (aba === "clubes") {
+      return (filtrosOrgs.estado ? 1 : 0) + (filtrosOrgs.cidade ? 1 : 0);
+    }
+
+    return 0;
+  }, [aba, filtros, filtrosProf, filtrosOrgs]);
+
+  const rawLogoOrg = selectedEvento?.clube?.logo || (selectedEvento as any)?.escolinha?.logo || null;
 
   return (
     <div className="min-h-screen bg-[#FEFBE9] text-green-900 pb-28 sm:pb-24">
@@ -592,7 +809,7 @@ const eventosFiltrados = useMemo(() => {
             />
           </div>
 
-          {aba === "atletas" && (
+          {aba !== "eventos" && (
             <>
               <button
                 onClick={abrirFiltros}
@@ -606,13 +823,18 @@ const eventosFiltrados = useMemo(() => {
                   </span>
                 )}
               </button>
+
               <button
                 onClick={abrirFiltros}
                 className="hidden sm:flex px-3 py-2 rounded-xl border bg-white items-center gap-2 text-sm hover:bg-emerald-50"
                 title="Filtros"
               >
                 <Filter size={16} /> Filtros
-                {activeFiltersCount > 0 && <Pill tone="emerald" className="ml-1">{activeFiltersCount}</Pill>}
+                {activeFiltersCount > 0 && (
+                  <Pill tone="emerald" className="ml-1">
+                    {activeFiltersCount}
+                  </Pill>
+                )}
               </button>
             </>
           )}
@@ -677,7 +899,7 @@ const eventosFiltrados = useMemo(() => {
           </div>
 
         </div>
-            </div>
+       </div>
 
       {showFilters && (
         <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/40">
@@ -704,194 +926,308 @@ const eventosFiltrados = useMemo(() => {
             </div>
 
             <div className="space-y-4 text-sm">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Categoria
-                </label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                  value={draft.categoria ?? ""}
-                  onChange={(e) =>
-                    updateDraft({
-                      categoria: e.target.value || undefined,
-                    })
-                  }
-                >
-                  <option value="">Todas</option>
-                  {CATEGORIAS.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {aba === "atletas" && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Categoria
+                    </label>
+                    <select
+                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                      value={draft.categoria ?? ""}
+                      onChange={(e) => updateDraft({ categoria: e.target.value || undefined })}
+                    >
+                      <option value="">Todas</option>
+                      {CATEGORIAS.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Posição
-                </label>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Posição
+                    </label>
 
-                <select
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                  value="" 
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (!v) return;
-                    const atuais = draft.posicoes || [];
-                    if (!atuais.includes(v)) {
-                      updateDraft({ posicoes: [...atuais, v] });
-                    }
-                    e.target.value = "";
-                  }}
-                >
-                  <option value="">Selecione uma posição...</option>
-                  {POSICOES.map((pos) => (
-                    <option key={pos} value={pos}>
-                      {pos}
-                    </option>
-                  ))}
-                </select>
+                    <select
+                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                      value=""
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) return;
+                        const atuais = draft.posicoes || [];
+                        if (!atuais.includes(v)) updateDraft({ posicoes: [...atuais, v] });
+                        e.target.value = "";
+                      }}
+                    >
+                      <option value="">Selecione uma posição...</option>
+                      {POSICOES.map((pos) => (
+                        <option key={pos} value={pos}>
+                          {pos}
+                        </option>
+                      ))}
+                    </select>
 
-                {draft.posicoes && draft.posicoes.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {draft.posicoes.map((pos) => (
+                    {draft.posicoes && draft.posicoes.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {draft.posicoes.map((pos) => (
+                          <button
+                            key={pos}
+                            type="button"
+                            onClick={() =>
+                              updateDraft({ posicoes: (draft.posicoes || []).filter((p) => p !== pos) })
+                            }
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[11px] bg-emerald-50 border-emerald-200 text-emerald-800"
+                          >
+                            {pos}
+                            <span className="text-[10px]">✕</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Estado
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                        placeholder="Ex: SP, RJ..."
+                        value={draft.estado ?? ""}
+                        onChange={(e) => updateDraft({ estado: e.target.value || undefined })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Cidade
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                        placeholder="Ex: São Paulo"
+                        value={draft.cidade ?? ""}
+                        onChange={(e) => updateDraft({ cidade: e.target.value || undefined })}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Vínculo do Atleta
+                    </label>
+                    <div className="flex gap-2">
                       <button
-                        key={pos}
                         type="button"
-                        onClick={() =>
-                          updateDraft({
-                            posicoes: (draft.posicoes || []).filter((p) => p !== pos),
-                          })
-                        }
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[11px] bg-emerald-50 border-emerald-200 text-emerald-800"
+                        onClick={() => updateDraft({ independente: null })}
+                        className={`flex-1 px-3 py-2 rounded-lg border text-xs ${
+                          draft.independente === null || draft.independente === undefined
+                            ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold"
+                            : "bg-white hover:bg-gray-50"
+                        }`}
                       >
-                        {pos}
-                        <span className="text-[10px]">✕</span>
+                        Qualquer
                       </button>
-                    ))}
+                      <button
+                        type="button"
+                        onClick={() => updateDraft({ independente: true })}
+                        className={`flex-1 px-3 py-2 rounded-lg border text-xs ${
+                          draft.independente === true
+                            ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold"
+                            : "bg-white hover:bg-gray-50"
+                        }`}
+                      >
+                        Independente
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateDraft({ independente: false })}
+                        className={`flex-1 px-3 py-2 rounded-lg border text-xs ${
+                          draft.independente === false
+                            ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold"
+                            : "bg-white hover:bg-gray-50"
+                        }`}
+                      >
+                        Vinculado
+                      </button>
+                    </div>
                   </div>
-                )}
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Estado
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
-                    placeholder="Ex: SP, RJ..."
-                    value={draft.estado ?? ""}
-                    onChange={(e) =>
-                      updateDraft({
-                        estado: e.target.value || undefined,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Cidade
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full border rounded-lg px-3 py-2 text-sm"
-                    placeholder="Ex: São Paulo"
-                    value={draft.cidade ?? ""}
-                    onChange={(e) =>
-                      updateDraft({
-                        cidade: e.target.value || undefined,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Vínculo do Atleta
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => updateDraft({ independente: null })}
-                    className={`flex-1 px-3 py-2 rounded-lg border text-xs ${
-                      draft.independente === null || draft.independente === undefined
-                        ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold"
-                        : "bg-white hover:bg-gray-50"
-                    }`}
-                  >
-                    Qualquer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateDraft({ independente: true })}
-                    className={`flex-1 px-3 py-2 rounded-lg border text-xs ${
-                      draft.independente === true
-                        ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold"
-                        : "bg-white hover:bg-gray-50"
-                    }`}
-                  >
-                    Independente
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateDraft({ independente: false })}
-                    className={`flex-1 px-3 py-2 rounded-lg border text-xs ${
-                      draft.independente === false
-                        ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold"
-                        : "bg-white hover:bg-gray-50"
-                    }`}
-                  >
-                    Vinculado
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Pontuação
-                </label>
-                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <span className="block text-[11px] text-gray-600 mb-1">
-                      Mínima
-                    </span>
-                    <input
-                      type="number"
-                      min={0}
-                      className="w-full border rounded-lg px-3 py-2 text-sm"
-                      value={draft.pontuacaoMin ?? ""}
-                      onChange={(e) =>
-                        updateDraft({
-                          pontuacaoMin: e.target.value
-                            ? Number(e.target.value)
-                            : null,
-                        })
-                      }
-                    />
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Pontuação
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <span className="block text-[11px] text-gray-600 mb-1">Mínima</span>
+                        <input
+                          type="number"
+                          min={0}
+                          className="w-full border rounded-lg px-3 py-2 text-sm"
+                          value={draft.pontuacaoMin ?? ""}
+                          onChange={(e) =>
+                            updateDraft({ pontuacaoMin: e.target.value ? Number(e.target.value) : null })
+                          }
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-[11px] text-gray-600 mb-1">Máxima</span>
+                        <input
+                          type="number"
+                          min={0}
+                          className="w-full border rounded-lg px-3 py-2 text-sm"
+                          value={draft.pontuacaoMax ?? ""}
+                          onChange={(e) =>
+                            updateDraft({ pontuacaoMax: e.target.value ? Number(e.target.value) : null })
+                          }
+                        />
+                      </div>
+                    </div>
                   </div>
+                </>
+              )}
+
+              {aba === "profissionais" && (
+                <>
                   <div>
-                    <span className="block text-[11px] text-gray-600 mb-1">
-                      Máxima
-                    </span>
-                    <input
-                      type="number"
-                      min={0}
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Tipo
+                    </label>
+                    <select
                       className="w-full border rounded-lg px-3 py-2 text-sm"
-                      value={draft.pontuacaoMax ?? ""}
+                      value={draftProf.papel ?? "Ambos"}
                       onChange={(e) =>
-                        updateDraft({
-                          pontuacaoMax: e.target.value
-                            ? Number(e.target.value)
-                            : null,
-                        })
+                        setDraftProf((p) => ({ ...p, papel: e.target.value as any }))
                       }
-                    />
+                    >
+                      <option value="Ambos">Todos</option>
+                      <option value="Professor">Professores</option>
+                      <option value="Olheiro">Olheiros</option>
+                    </select>
                   </div>
-                </div>
-              </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Vínculo
+                    </label>
+                    <select
+                      className="w-full border rounded-lg px-3 py-2 text-sm"
+                      value={draftProf.vinculo ?? "Qualquer"}
+                      onChange={(e) =>
+                        setDraftProf((p) => ({ ...p, vinculo: e.target.value as any }))
+                      }
+                    >
+                      <option value="Qualquer">Qualquer</option>
+                      <option value="Independente">Independente</option>
+                      <option value="Vinculado">Vinculado</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Estado
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                        placeholder="Ex: SP"
+                        value={draftProf.estado ?? ""}
+                        onChange={(e) =>
+                          setDraftProf((p) => ({ ...p, estado: e.target.value || undefined }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Cidade
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                        placeholder="Ex: São Paulo"
+                        value={draftProf.cidade ?? ""}
+                        onChange={(e) =>
+                          setDraftProf((p) => ({ ...p, cidade: e.target.value || undefined }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] text-gray-600">
+                    * O filtro “vínculo” só funciona se o backend enviar clubeId/escolinhaId.
+                    Se não enviar, deixe em “Qualquer”.
+                  </div>
+                </>
+              )}
+
+              {(aba === "escolas" || aba === "clubes") && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Estado
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                        placeholder="Ex: SP"
+                        value={draftOrgs.estado ?? ""}
+                        onChange={(e) =>
+                          setDraftOrgs((p) => ({ ...p, estado: e.target.value || undefined }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Cidade
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                        placeholder="Ex: São Paulo"
+                        value={draftOrgs.cidade ?? ""}
+                        onChange={(e) =>
+                          setDraftOrgs((p) => ({ ...p, cidade: e.target.value || undefined }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {aba === "escolas" && (
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Site
+                      </label>
+                      <select
+                        className="w-full border rounded-lg px-3 py-2 text-sm"
+                        value={
+                          draftOrgs.temSite === null || draftOrgs.temSite === undefined
+                            ? ""
+                            : draftOrgs.temSite
+                            ? "sim"
+                            : "nao"
+                        }
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setDraftOrgs((p) => ({
+                            ...p,
+                            temSite: v === "" ? null : v === "sim",
+                          }));
+                        }}
+                      >
+                        <option value="">Qualquer</option>
+                        <option value="sim">Com site</option>
+                        <option value="nao">Sem site</option>
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             <div className="mt-4 flex gap-3">
@@ -920,7 +1256,7 @@ const eventosFiltrados = useMemo(() => {
             <h2 className="text-base sm:text-lg font-bold mb-2">Atletas em Destaque</h2>
 
             {carregandoDados && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="bg-white rounded-xl p-3 shadow-sm animate-pulse">
                     <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto rounded-full bg-gray-200" />
@@ -933,42 +1269,55 @@ const eventosFiltrados = useMemo(() => {
 
             {!carregandoDados && (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
                   {atletasFiltrados.slice(0, showCountAtletas).map((a) => {
                     const rawFoto = a.foto ?? a.usuario?.foto;
-                    const foto = formatarUrlFoto(rawFoto, "usuarios") || FALLBACK_AVATAR;
                     const nome = a?.usuario?.nome ?? "profile";
+                    const meta = getAtletaMeta(a);
+                    const categoria = meta.categoria;
                     const uid = a?.usuario?.id ?? a?.usuarioId ?? a.id;
-                    const categoria = a.categoriaBase || mapIdadeParaCategoria(a.idade);
                     return (
                       <Link href={`/perfil/${uid}`} key={`${a.id}-${uid}`}>
                         <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
-                          <img
-                            src={foto}
-                            alt={`${nome} profile`}
-                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
-                            onError={handleImgError}
-                          />
-                          <p className="mt-2 font-medium text-center line-clamp-2 text-sm sm:text-base">{nome}</p>
+                          <div className="relative">
+                            <img
+                              src={avatarSrc(rawFoto)}
+                              onError={onAvatarError}
+                              alt={`${nome} profile`}
+                              className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
+                            />
+                            {isItemPro(a) && (
+                              <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
+                                PRO
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="mt-2 font-medium text-center line-clamp-2 text-sm sm:text-base">
+                            {nome}
+                          </p>
+
                           <div className="mt-1 flex flex-wrap gap-1 justify-center">
                             {categoria && (
                               <Pill tone="emerald">
                                 <Shield className="h-3.5 w-3.5" /> {categoria}
                               </Pill>
                             )}
-                            {a.posicao && (
+                            {meta.posicao && (
                               <Pill tone="sky">
-                                <Goal className="h-3.5 w-3.5" /> {a.posicao}
+                                <Goal className="h-3.5 w-3.5" /> {meta.posicao}
                               </Pill>
                             )}
-                            {(a.cidade || a.estado) && (
+
+                            {(meta.cidade || meta.estado) && (
                               <Pill tone="gray">
-                                <MapPin className="h-3.5 w-3.5" /> {a.cidade ?? ""} {a.estado ? `, ${a.estado}` : ""}
+                                <MapPin className="h-3.5 w-3.5" /> {meta.cidade ?? ""} {meta.estado ? `, ${meta.estado}` : ""}
                               </Pill>
                             )}
-                            {typeof a.pontuacao === "number" && (
+
+                            {typeof meta.pontuacao === "number" && (
                               <Pill tone="amber">
-                                <Heart className="h-3.5 w-3.5" /> {a.pontuacao}
+                                <Heart className="h-3.5 w-3.5" /> {meta.pontuacao}
                               </Pill>
                             )}
                           </div>
@@ -979,19 +1328,19 @@ const eventosFiltrados = useMemo(() => {
                 </div>
 
                 <h2 className="text-base sm:text-lg font-bold mt-6 mb-2">Top da semana (geral)</h2>
-                {topGeral.length === 0 ? (
-                  <p className="text-gray-600 mb-4">Sem dados desta semana.</p>
-                ) : (
+                  {topGeral.length === 0 ? (
+                    <p className="text-gray-600 mb-4">Sem dados desta semana.</p>
+                  ) : (
                   <div className="flex gap-3 overflow-x-auto pb-2 mb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
                     {topGeral.slice(0, 10).map((r, idx) => {
-                      const foto = formatarUrlFoto(r.usuario?.foto, "usuarios") || "/assets/default-user.png";
+                      const foto = r.usuario?.foto;
                       return (
                         <Link href={`/perfil/${r.usuario.id}`} key={r.atletaId}>
                           <div className="min-w-[130px] sm:min-w-[150px] bg-white rounded-xl shadow-sm p-3 flex flex-col items-center hover:shadow transition">
                             <div className="text-xs font-semibold mb-1">{idx + 1}º</div>
                             <img
-                              src={foto}
-                              onError={handleImgError}
+                              src={avatarSrc(foto)}
+                              onError={onAvatarError}
                               className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border"
                               alt={r.usuario.nome}
                             />
@@ -1009,15 +1358,15 @@ const eventosFiltrados = useMemo(() => {
                   {Object.entries(topPorCategoria).map(([cat, lista]) => {
                     const top = (lista as RankItem[])[0];
                     if (!top) return null;
-                    const foto = formatarUrlFoto(top.usuario?.foto, "usuarios") || "/assets/default-user.png";
+                    const foto = top.usuario?.foto;
                     const rotulo = CAT_LABEL[cat] ?? cat;
                     return (
                       <Link href={`/perfil/${top.usuario.id}`} key={`cat-${cat}`}>
                         <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition">
                           <div className="text-xs sm:text-sm font-bold w-20 sm:w-24">{rotulo}</div>
                           <img
-                            src={foto}
-                            onError={handleImgError}
+                            src={avatarSrc(foto)}
+                            onError={onAvatarError}
                             className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border"
                             alt={top.usuario.nome}
                           />
@@ -1039,20 +1388,40 @@ const eventosFiltrados = useMemo(() => {
           <>
             <h2 className="text-base sm:text-lg font-bold my-4">Escolas de Futebol</h2>
             <div className="space-y-3">
-              {dados.escolas.slice(0, showCountEscolas).map((e) => {
-                const logo = formatarUrlFoto(e.logo) || FALLBACK_AVATAR;
+              {escolasFiltradas.slice(0, showCountEscolas).map((e) => {
+                const rawLogo = e.logo;
                 const href = e.usuarioId ? `/perfil/${e.usuarioId}` : undefined;
                 const Card = (
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
-                    <img src={logo} alt="Logo da escola" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border" />
-                    <div className="min-w-0">
+                    <div className="relative shrink-0">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border bg-white flex items-center justify-center overflow-hidden">
+                        <img
+                          src={avatarSrc(rawLogo)}
+                          onError={onAvatarError}
+                          alt="Logo da escola"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+
+                      {isItemPro(e) && (
+                        <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
+                          PRO
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
                       <h3 className="font-semibold truncate">{e.nome}</h3>
+
                       <p className="text-sm text-gray-600 flex items-center gap-1">
                         <MapPin className="h-3.5 w-3.5" />
                         {e.cidade ?? "Cidade"}
                         {e.estado ? `, ${e.estado}` : ""}
                       </p>
-                      <p className="text-xs text-gray-600 truncate">{e.siteOficial || "Site indisponível"}</p>
+
+                      <p className="text-xs text-gray-600 truncate">
+                        {e.siteOficial || "Site indisponível"}
+                      </p>
                     </div>
                   </div>
                 );
@@ -1069,7 +1438,7 @@ const eventosFiltrados = useMemo(() => {
             <div className="mt-3 flex flex-col items-center">
               {hasMoreEscolas && (
                 <button
-                  onClick={() => setShowCountEscolas((c) => Math.min(c + pageSize, dados.escolas.length))}
+                  onClick={() => setShowCountEscolas((c) => Math.min(c + BATCH, escolasFiltradas.length))}
                   className="mt-2 px-4 py-2 rounded-xl border bg-white text-sm hover:bg-emerald-50"
                 >
                   Carregar mais
@@ -1090,19 +1459,36 @@ const eventosFiltrados = useMemo(() => {
           <>
             <h2 className="text-base sm:text-lg font-bold my-4">Clubes</h2>
             <div className="space-y-3">
-              {dados.clubes.slice(0, showCountClubes).map((c) => {
-                const logo = formatarUrlFoto(c.logo) || FALLBACK_AVATAR;
+              {clubesFiltrados.slice(0, showCountClubes).map((c) => {
+                const rawLogo = c.logo;
                 const href = c.usuarioId ? `/perfil/${c.usuarioId}` : undefined;
                 const Card = (
                   <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-3 hover:shadow transition cursor-pointer">
-                    <img src={logo} alt="Logo do clube" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border" />
-                    <div className="min-w-0">
+                    <div className="relative shrink-0">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border bg-white flex items-center justify-center overflow-hidden">
+                        <img
+                          src={avatarSrc(rawLogo)}
+                          onError={onAvatarError}
+                          alt="Logo do clube"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+
+                      {isItemPro(c) && (
+                        <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
+                          PRO
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
                       <h3 className="font-semibold truncate">{c.nome}</h3>
                       <p className="text-sm text-gray-600 flex items-center gap-1">
                         <MapPin className="h-3.5 w-3.5" />
                         {c.cidade ?? "Cidade"}
                         {c.estado ? `, ${c.estado}` : ""}
                       </p>
+
                       <p className="text-xs text-gray-600">Clube Profissional</p>
                     </div>
                   </div>
@@ -1120,7 +1506,7 @@ const eventosFiltrados = useMemo(() => {
             <div className="mt-3 flex flex-col items-center">
               {hasMoreClubes && (
                 <button
-                  onClick={() => setShowCountClubes((c) => Math.min(c + pageSize, dados.clubes.length))}
+                  onClick={() => setShowCountClubes((c) => Math.min(c + BATCH, clubesFiltrados.length))}
                   className="mt-2 px-4 py-2 rounded-xl border bg-white text-sm hover:bg-emerald-50"
                 >
                   Carregar mais
@@ -1141,23 +1527,33 @@ const eventosFiltrados = useMemo(() => {
           <>
             <h2 className="text-base sm:text-lg font-bold my-4">Professores e Olheiros</h2>
             {profissionais.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {profissionais.slice(0, showCountProfs).map((p) => {
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+                {profissionaisFiltrados.slice(0, showCountProfs).map((p) => {
                   const rawFoto = p.foto ?? p.usuario?.foto;
-                  const foto = formatarUrlFoto(rawFoto, "usuarios") || "/assets/default-user.png";
                   const uid = p.usuario.id;
                   const href = p.role === "Olheiro" ? `/perfil-olheiro/${uid}` : `/perfil/${uid}`;
-
+                  
                   return (
                     <Link href={href} key={`${p.role}-${p.id}`}>
                       <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
-                        <img
-                          src={foto}
-                          alt="Foto do usuário"
-                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
-                          onError={handleImgError}
-                        />
-                        <p className="mt-2 font-medium text-center line-clamp-2 text-sm sm:text-base">{p.usuario.nome}</p>
+                        <div className="relative">
+                          <img
+                            src={avatarSrc(rawFoto)}
+                            onError={onAvatarError}
+                            alt="Foto do usuário"
+                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border"
+                          />
+                          {isItemPro(p) && (
+                            <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
+                              PRO
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="mt-2 font-medium text-center line-clamp-2 text-sm sm:text-base">
+                          {p.usuario.nome}
+                        </p>
+
                         <Pill tone="amber" className="mt-1">
                           {p.role}
                         </Pill>
@@ -1308,14 +1704,14 @@ const eventosFiltrados = useMemo(() => {
 
             {(selectedEvento.clube || (selectedEvento as any).escolinha) && (
               <div className="flex items-center gap-2 mb-3">
-                <img
-                  src={
-                    formatarUrlFoto(selectedEvento.clube?.logo || (selectedEvento as any).escolinha?.logo) ||
-                    "/placeholder.png"
-                  }
-                  alt="Logo do organizador"
-                  className="w-8 h-8 rounded-full object-cover border"
-                />
+                <div className="w-8 h-8 rounded-full border bg-white flex items-center justify-center overflow-hidden">
+                  <img
+                    src={avatarSrc(rawLogoOrg)}
+                    onError={onAvatarError}
+                    alt="Logo do organizador"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
                 <div className="text-xs text-gray-700">
                   <div className="font-semibold">
                     Organizado por{" "}
