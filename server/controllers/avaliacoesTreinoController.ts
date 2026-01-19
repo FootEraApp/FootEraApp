@@ -1,9 +1,9 @@
 import { Response } from "express";
-import { PrismaClient, TipoUsuario, AvaliacaoAutorTipo } from "@prisma/client";
+import { TipoUsuario, AvaliacaoAutorTipo } from "@prisma/client";
 import { z } from "zod";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 const schema = z.object({
   treinoAgendadoId: z.string().min(1),

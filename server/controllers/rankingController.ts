@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
 
-const prisma = new PrismaClient();
 
 export async function getRanking(req: AuthenticatedRequest, res: Response) {
   const categoria = (req.query.categoria as string) || "";

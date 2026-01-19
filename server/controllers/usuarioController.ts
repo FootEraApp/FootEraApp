@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 export const getUsuarioPorId = async (req: Request, res: Response) => {
   const { id } = req.params;

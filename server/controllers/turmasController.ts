@@ -1,9 +1,9 @@
+// server/controllers/turmasController
 import type { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import type { TurmaUsuario, Usuario as UsuarioModel, Atleta as AtletaModel } from "@prisma/client";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 function uniqById<T extends { id: string }>(arr: T[]) {
   const map = new Map<string, T>();
@@ -42,54 +42,129 @@ export async function getAlunosTurma(req: Request, res: Response) {
   const { id } = req.params;
 
   try {
+    // 1) Turma existe?
     const turma = await prisma.turma.findUnique({
       where: { id },
-      include: {
-        membros: {
-          include: {
-            usuario: { select: { id: true, nome: true, foto: true } },
-          },
-        },
-      },
+      select: { id: true },
     });
 
     if (!turma) {
       return res.status(404).json({ error: "Turma não encontrada" });
     }
 
-    const usuarioIds = turma.membros.map((m) => m.usuarioId).filter(Boolean);
+    // 2) Fonte OFICIAL: TurmaUsuario (membros)
+    const membros = await prisma.turmaUsuario.findMany({
+      where: { turmaId: id },
+      include: {
+        usuario: { select: { id: true, nome: true, foto: true } },
+      },
+    });
 
-    const atletas = usuarioIds.length
+    const usuarioIdsFromVinculo = membros
+      .map((m) => m.usuarioId)
+      .filter(Boolean);
+
+    // 3) Camada de precaução: checar colunas legadas na tabela Turma (se existirem)
+    //    Ex.: usuarioIds (text[]), atletaIds (text[])
+    //    - Se o seu schema NÃO tiver isso, não quebra: só ignora.
+    let usuarioIdsFromTurmaLegacy: string[] = [];
+
+    try {
+      const cols = await prisma.$queryRaw<
+        { column_name: string }[]
+      >`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE (table_name = 'Turma' OR table_name = 'turma')
+          AND column_name IN ('usuarioIds', 'atletaIds')
+      `;
+
+      const hasUsuarioIds = cols.some((c) => c.column_name === "usuarioIds");
+      const hasAtletaIds = cols.some((c) => c.column_name === "atletaIds");
+
+      if (hasUsuarioIds || hasAtletaIds) {
+        // pega os arrays (se existirem) dessa turma
+        const rows = await prisma.$queryRaw<any[]>`
+          SELECT
+            ${hasUsuarioIds ? prisma.$queryRaw`"usuarioIds"` : prisma.$queryRaw`NULL`} as "usuarioIds",
+            ${hasAtletaIds ? prisma.$queryRaw`"atletaIds"` : prisma.$queryRaw`NULL`} as "atletaIds"
+          FROM "Turma"
+          WHERE id = ${id}
+          LIMIT 1
+        `;
+
+        const row = rows?.[0];
+
+        const legacyUsuarioIds: string[] = Array.isArray(row?.usuarioIds)
+          ? row.usuarioIds.map(String).filter(Boolean)
+          : [];
+
+        const legacyAtletaIds: string[] = Array.isArray(row?.atletaIds)
+          ? row.atletaIds.map(String).filter(Boolean)
+          : [];
+
+        if (legacyAtletaIds.length) {
+          const atletasLegacy = await prisma.atleta.findMany({
+            where: { id: { in: legacyAtletaIds } },
+            select: { usuarioId: true },
+          });
+
+          const uids = atletasLegacy
+            .map((a) => a.usuarioId)
+            .filter((x): x is string => Boolean(x));
+
+          usuarioIdsFromTurmaLegacy.push(...uids);
+        }
+
+        usuarioIdsFromTurmaLegacy.push(...legacyUsuarioIds);
+      }
+    } catch (legacyErr) {
+      // Se não existir tabela/coluna com esse nome (ou for outro nome), só ignora
+      // e segue com o vínculo oficial TurmaUsuario.
+      console.warn("[turmas] legacy check ignorado:", legacyErr);
+    }
+
+    // 4) União + dedupe
+    const usuarioIdsFinal = Array.from(
+      new Set([...usuarioIdsFromVinculo, ...usuarioIdsFromTurmaLegacy].map(String))
+    ).filter(Boolean);
+
+    // 5) Carrega atletas (para mapear atletaId/posicao)
+    const atletas = usuarioIdsFinal.length
       ? await prisma.atleta.findMany({
-          where: { usuarioId: { in: usuarioIds } },
-          select: {
-            id: true,
-            usuarioId: true,
-            posicao: true,
-          },
+          where: { usuarioId: { in: usuarioIdsFinal } },
+          select: { id: true, usuarioId: true, posicao: true },
         })
       : [];
 
     const atletaByUsuarioId = new Map(
-      atletas.map((a) => [
-        a.usuarioId,
-        { atletaId: a.id, posicao: a.posicao },
-      ])
+      atletas.map((a) => [a.usuarioId, { atletaId: a.id, posicao: a.posicao }])
     );
 
-    const alunos = turma.membros.map((m) => {
-      const usuarioId = m.usuarioId;
+    // 6) Monta alunos no mesmo formato do seu front
+    //    - garante que até usuário vindo do legacy (sem TurmaUsuario) tenha "usuario" preenchido
+    const usuarios = usuarioIdsFinal.length
+      ? await prisma.usuario.findMany({
+          where: { id: { in: usuarioIdsFinal } },
+          select: { id: true, nome: true, foto: true },
+        })
+      : [];
+
+    const usuarioById = new Map(usuarios.map((u) => [u.id, u]));
+
+    const alunos = usuarioIdsFinal.map((usuarioId) => {
       const atletaInfo = atletaByUsuarioId.get(usuarioId) ?? null;
+      const u = usuarioById.get(usuarioId) ?? null;
 
       return {
         atletaId: atletaInfo?.atletaId ?? null,
         usuarioId,
         id: atletaInfo?.atletaId ?? usuarioId,
-        posicao: atletaInfo?.posicao ?? null, 
+        posicao: atletaInfo?.posicao ?? null,
         usuario: {
-          id: m.usuario?.id ?? usuarioId,
-          nome: m.usuario?.nome ?? "Atleta da turma",
-          foto: m.usuario?.foto ?? null,
+          id: u?.id ?? usuarioId,
+          nome: u?.nome ?? "Atleta da turma",
+          foto: u?.foto ?? null,
         },
       };
     });
@@ -97,7 +172,7 @@ export async function getAlunosTurma(req: Request, res: Response) {
     return res.json({
       alunos,
       atletaIds: alunos.map((a) => a.atletaId).filter(Boolean),
-      usuarioIds,
+      usuarioIds: usuarioIdsFinal,
     });
   } catch (e) {
     console.error("[turmas] erro ao buscar alunos da turma", id, e);
