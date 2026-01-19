@@ -1,9 +1,9 @@
 import { Response, RequestHandler, Request } from "express";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { getIO } from "../socket.js";
 import { getDailyUsage } from "../services/usage.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;

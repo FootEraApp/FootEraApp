@@ -1,7 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import { Request, Response } from "express";
 
-const prisma = new PrismaClient();
  export async function catalogoClubes(req: Request, res: Response) {
   const itens = await prisma.clube.findMany({
     select: {

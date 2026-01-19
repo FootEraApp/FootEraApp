@@ -1,8 +1,7 @@
 import { Response, Request } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import { resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
 
-const prisma = new PrismaClient();
 
 const getBase = (req: Request) =>
   process.env.API_BASE_URL || `${req.protocol}://${req.get("host")}`;

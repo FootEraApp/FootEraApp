@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import {
-  PrismaClient,
   TipoMidia,
   TipoTreino,
   StorageClass,
@@ -18,8 +17,8 @@ import {
 } from "server/utils/featureLimit.js";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
 import { logCapabilityDenied } from "server/services/observability.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 async function resolveUsuarioIdForActivity(_: string | undefined, atletaId: string) {
   const atleta = await prisma.atleta.findUnique({

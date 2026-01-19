@@ -1,8 +1,8 @@
 import type { Response } from "express";
-import { PrismaClient, StatusSessaoTreinoTurma } from "@prisma/client";
+import { StatusSessaoTreinoTurma } from "@prisma/client";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 function assertInstrutor(req: AuthenticatedRequest) {
   const u: any = req.authUser || (req as any).user || {};

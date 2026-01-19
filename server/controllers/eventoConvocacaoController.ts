@@ -1,8 +1,7 @@
 import { Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 
-const prisma = new PrismaClient();
 
 function ensureArray<T>(v: any): T[] {
   return Array.isArray(v) ? v : [];

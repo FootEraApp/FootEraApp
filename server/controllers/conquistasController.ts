@@ -1,13 +1,13 @@
 import { Request, Response } from "express";
 import {
-  PrismaClient,
+  
   TipoUsuario,
   ConquistaOwnerTipo,
   TipoMidia,
 } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 const prismaAny = prisma as any;
 
 type AuthReq = Request & { userId?: string };

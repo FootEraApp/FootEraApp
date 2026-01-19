@@ -1,11 +1,10 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { sendPasswordResetEmail } from "../utils/mailer.js";
 import { APP } from "server/config.js";
 
-const prisma = new PrismaClient();
 const RESET_TTL_MS = 30 * 60 * 1000;
 
 export async function forgotPassword(req: Request, res: Response) {
