@@ -1,8 +1,7 @@
 import type { Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import type { AuthenticatedRequest, AuthUser } from "../middlewares/auth.js";
 
-const prisma = new PrismaClient();
 
 function assertAdmin(req: AuthenticatedRequest) {
   const u: AuthUser | undefined = req.authUser;

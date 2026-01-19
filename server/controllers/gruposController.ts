@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { prisma } from "../lib/prisma.js"; 
+import { prisma } from "../prisma.js";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
 import { TipoMembro } from "@prisma/client";
 

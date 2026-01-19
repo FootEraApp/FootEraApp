@@ -1,10 +1,9 @@
 import { Request, Response } from "express";
-import { PrismaClient, Categoria, Nivel, TipoTreino } from "@prisma/client";
+import { Categoria, Nivel, TipoTreino } from "@prisma/client";
 import { onExercicioIncluidoNoTreino } from "../services/statsService.js";
 import { enforceTotalLimit } from '../services/usage.js';
 import { audit } from "../services/audit.js";
-
-const prisma = new PrismaClient();
+import { prisma } from "../prisma.js";
 
 type Dono = "Professor" | "Clube" | "Escolinha";
 
