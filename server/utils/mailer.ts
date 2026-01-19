@@ -1,3 +1,4 @@
+// server/utils/mailer
 import nodemailer from "nodemailer";
 
 type Transporter = nodemailer.Transporter;

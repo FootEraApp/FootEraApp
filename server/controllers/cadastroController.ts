@@ -1,3 +1,4 @@
+// server/controllers/cadastroController
 import { Request, Response } from "express";
 import { TipoUsuario, Nivel, StatusCref } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -58,7 +59,7 @@ async function issueEmailVerification(params: {
     create: { usuarioId: params.userId, token: raw, expiraEm: addHours(new Date(), 24) },
   });
 
-  const verifyUrl = `${API_BASE_URL}/api/auth/cadastro/verify?token=${raw}`;
+  const verifyUrl = `${FRONTEND_URL}/verificar-email?token=${encodeURIComponent(raw)}`;
 
   await sendEmailVerification({
     to: params.emailDestino,
@@ -509,22 +510,37 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
 
 export async function verificarEmail(req: Request, res: Response) {
   const { token } = req.query as { token?: string };
-  if (!token) return res.status(400).send("Token ausente.");
+  if (!token) return res.status(400).json({ ok: false, message: "Token ausente." });
 
   try {
-    const rec = await prisma.emailVerification.findFirst({ where: { token: String(token) } });
-    if (!rec) return res.status(400).send("Token inválido.");
-    if (rec.usadoEm) return res.redirect(302, `${FRONTEND_URL}/login?verified=1`);
-    if (rec.expiraEm && rec.expiraEm < new Date()) return res.status(400).send("Token expirado. Solicite novo envio.");
+    const rec = await prisma.emailVerification.findFirst({
+      where: { token: String(token) },
+    });
 
-    await prisma.usuario.update({ where: { id: rec.usuarioId }, data: { verified: true } });
-    await prisma.emailVerification.update({ where: { usuarioId: rec.usuarioId }, data: { usadoEm: new Date() } });
+    if (!rec) return res.status(400).json({ ok: false, message: "Token inválido." });
+    if (rec.expiraEm && rec.expiraEm < new Date()) {
+      return res.status(410).json({ ok: false, message: "Token expirado. Solicite novo envio." });
+    }
 
-    const redirect = `${FRONTEND_URL}/login?verified=1`;
-    return res.redirect(302, redirect);
+    if (rec.usadoEm) {
+      return res.json({ ok: true, message: "E-mail já verificado.", alreadyVerified: true });
+    }
+
+    await prisma.$transaction([
+      prisma.usuario.update({
+        where: { id: rec.usuarioId },
+        data: { verified: true },
+      }),
+      prisma.emailVerification.update({
+        where: { usuarioId: rec.usuarioId },
+        data: { usadoEm: new Date() },
+      }),
+    ]);
+
+    return res.json({ ok: true, message: "E-mail verificado com sucesso!" });
   } catch (err) {
     console.error("Erro ao verificar e-mail:", err);
-    return res.status(500).send("Erro ao verificar e-mail.");
+    return res.status(500).json({ ok: false, message: "Erro ao verificar e-mail." });
   }
 }
 
@@ -564,7 +580,8 @@ export async function resendVerification(req: Request, res: Response) {
     const destino = (isMenor && usuario.responsavelEmail) ? usuario.responsavelEmail : usuario.email;
     if (!destino) return res.status(400).json({ message: "Usuário sem e-mail cadastrado." });
 
-    const verifyUrl = `${API_BASE_URL}/api/auth/cadastro/verify?token=${raw}`;
+    const verifyUrl = `${FRONTEND_URL}/verificar-email?token=${encodeURIComponent(raw)}`;
+
     await sendEmailVerification({
       to: destino,
       verifyUrl,
