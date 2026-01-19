@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
 
-const prisma = new PrismaClient();
 
 export const getDesafios = async (req: Request, res: Response) => {
   const ativosOnly = req.query.ativosOnly !== "false"; 

@@ -1,9 +1,7 @@
 import { Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { getIO } from "../socket.js";
-
-const prisma = new PrismaClient();
+import { prisma } from "../prisma.js";
 
 export async function listarMinhasNotificacoes(req: AuthenticatedRequest, res: Response) {
   try {

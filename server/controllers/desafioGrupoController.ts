@@ -1,9 +1,8 @@
 import { Request, Response } from "express";
-import { PrismaClient, TipoMensagem } from "@prisma/client";
+import { TipoMensagem } from "@prisma/client";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
-
-const prisma = new PrismaClient();
+import { prisma } from "../prisma.js";
 
 type AuthedRequest = Request & { userId?: string };
 

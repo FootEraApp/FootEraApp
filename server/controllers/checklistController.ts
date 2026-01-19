@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
-import { PrismaClient, ChecklistContext } from "@prisma/client";
-const prisma = new PrismaClient();
+import { ChecklistContext } from "@prisma/client";
+import { prisma } from "../prisma.js";
 
 export async function listarTemplates(req: Request, res: Response) {
   const ctx = String(req.query.context || "SUBMISSAO_TREINO") as ChecklistContext;

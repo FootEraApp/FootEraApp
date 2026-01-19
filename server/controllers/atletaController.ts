@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
-import { PrismaClient, TipoMidia, StorageClass, TipoUsuario } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { TipoMidia, StorageClass, TipoUsuario } from "@prisma/client";
+import { prisma } from "../prisma.js";
 
 export const getAllAtletas = async (_req: Request, res: Response) => {
   const atletas = await prisma.atleta.findMany({

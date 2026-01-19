@@ -1,10 +1,11 @@
 // server/controllers/gerenciarAtletasController
-import { Prisma, PrismaClient, Categoria, AvaliacaoAutorTipo } from "@prisma/client";
+import { Prisma, Categoria, AvaliacaoAutorTipo } from "@prisma/client";
 import { Request, Response } from "express";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 const CATEGORIA_ORDER: Categoria[] = ["Sub9", "Sub11", "Sub13", "Sub15", "Sub17", "Sub20", "Livre"];
+
 function pickMainCategoria(categorias: Categoria[] | null | undefined): Categoria | null {
   if (!categorias || categorias.length === 0) return null;
   const sorted = [...categorias].sort((a, b) => CATEGORIA_ORDER.indexOf(b) - CATEGORIA_ORDER.indexOf(a));
@@ -77,16 +78,6 @@ async function resolveEntidadeId(vinculo: "clube" | "escolinha" | "professor", i
   const p2 = await prisma.professor.findUnique({ where: { id: idOrUser }, select: { id: true, usuarioId: true } });
   if (p2) return { entidadeId: p2.id, usuarioId: p2.usuarioId };
   return null;
-}
-
-async function isAtivoRecentemente(usuarioId: string) {
-  const since = new Date();
-  since.setDate(since.getDate() - 14);
-  const recent = await prisma.atividadeRecente.findFirst({
-    where: { usuarioId, createdAt: { gte: since } },
-    select: { id: true },
-  });
-  return !!recent;
 }
 
 export const gerenciarAtletasController = {
@@ -216,6 +207,32 @@ export const gerenciarAtletasController = {
         },
       });
 
+// --- ATIVOS RECENTEMENTE (1 query só) ---
+const since = new Date();
+since.setDate(since.getDate() - 14);
+
+const usuarioIds = atletas
+  .map((a) => a.usuarioId)
+  .filter((x): x is string => typeof x === "string" && x.length > 0);
+
+const ativosSet = new Set<string>();
+
+if (usuarioIds.length) {
+  const rows = await prisma.atividadeRecente.findMany({
+    where: {
+      usuarioId: { in: usuarioIds },
+      createdAt: { gte: since },
+    },
+    select: { usuarioId: true },
+    distinct: ["usuarioId"],
+  });
+
+  for (const r of rows) {
+    if (r.usuarioId) ativosSet.add(r.usuarioId);
+  }
+}
+
+
       let elencoIds: string[] = [];
       if (vinculo === "clube" && entidadeId) {
         const elencos = await prisma.elenco.findMany({ where: { clubeId: entidadeId }, select: { id: true } });
@@ -242,23 +259,21 @@ export const gerenciarAtletasController = {
         }
       }
 
-      const enriched = await Promise.all(
-        atletas.map(async (a) => {
-          const ativo = await isAtivoRecentemente(a.usuarioId);
-          const posicaoElenco = posicaoPorAtletaId.get(a.id) ?? null;
-          return {
-            id: a.id,
-            usuarioId: a.usuarioId,
-            nome: a.nome || a.usuario?.nome || "—",
-            idade: a.idade,
-            foto: a.foto,
-            posicao: posicaoElenco || a.posicao || null,
-            categoria: pickMainCategoria(a.categoria) || null,
-            pontuacao: a.pontuacao?.pontuacaoTotal ?? 0,
-            ativoRecentemente: ativo,
-          };
-        })
-      );
+      const enriched = atletas.map((a) => {
+        const posicaoElenco = posicaoPorAtletaId.get(a.id) ?? null;
+
+        return {
+          id: a.id,
+          usuarioId: a.usuarioId,
+          nome: a.nome || a.usuario?.nome || "—",
+          idade: a.idade,
+          foto: a.foto,
+          posicao: posicaoElenco || a.posicao || null,
+          categoria: pickMainCategoria(a.categoria) || null,
+          pontuacao: a.pontuacao?.pontuacaoTotal ?? 0,
+          ativoRecentemente: a.usuarioId ? ativosSet.has(a.usuarioId) : false,
+        };
+      });
 
       let filtered = enriched;
       if (posicaoFiltro) {

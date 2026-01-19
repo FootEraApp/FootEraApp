@@ -1,10 +1,9 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { sendMail } from "server/utils/sendMail.js";
 
-const prisma = new PrismaClient();
 
 export const escolha = (_req: Request, res: Response) => {
   res.send("Escolha de perfil");
