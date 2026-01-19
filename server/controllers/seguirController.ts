@@ -1,8 +1,8 @@
 import { Request, Response, RequestHandler } from "express";
-import { PrismaClient, NotificacaoTipo } from "@prisma/client";
+import {  NotificacaoTipo } from "@prisma/client";
 import { recomputeAndEmitBadge } from "./notificacoesController.js"; // ajuste o caminho se necessário
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 interface AuthenticatedRequest extends Request {
   userId: string;

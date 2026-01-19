@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
-import { PrismaClient, TipoUsuario, Nivel } from "@prisma/client";
+import { TipoUsuario, Nivel } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 export async function getMe(req: Request, res: Response) {
   const me = (req as any).me ?? null;

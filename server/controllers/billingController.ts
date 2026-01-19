@@ -9,12 +9,12 @@ import {
 import QRCode from "qrcode";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import * as mercadopagoModule from "mercadopago";
+import { prisma } from "../prisma.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mercadopago: any =
   (mercadopagoModule as any).default ?? (mercadopagoModule as any);
 
-const prisma = new PrismaClient();
 
 const API_BASE_URL = (process.env.APP_BASE_URL || "http://localhost:3001").replace(
   /\/+$/,

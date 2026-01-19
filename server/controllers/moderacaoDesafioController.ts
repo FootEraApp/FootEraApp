@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
+import { prisma } from "../prisma.js";
 
 export async function listPendentesDesafio(req: Request, res: Response) {
   const page = Number(req.query.page || 1);

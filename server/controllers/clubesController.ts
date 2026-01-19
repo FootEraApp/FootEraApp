@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
 
-const prisma = new PrismaClient();
 
 export const desvincularAtletaDoClube = async (req: Request, res: Response) => {
   const { clubeId } = req.params;

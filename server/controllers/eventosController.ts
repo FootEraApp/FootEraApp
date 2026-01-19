@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from "express";
-import { PrismaClient, EventoStatus } from "@prisma/client";
+import { EventoStatus } from "@prisma/client";
 import dayjs from "dayjs";
 import jwt from "jsonwebtoken";
 import { getIO } from "../socket.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
 const EVENTO_TIPO_LABEL: Record<string, string> = {

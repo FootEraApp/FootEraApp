@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
-import { PrismaClient, TipoMidia, StorageClass } from "@prisma/client";
+import { TipoMidia, StorageClass } from "@prisma/client";
 import { uploadFile } from "server/utils/s3.js";
+import { prisma } from "../prisma.js";
 
-const prisma = new PrismaClient();
 
 export const getMidias = async (req: Request, res: Response) => {
   const { atletaId } = req.params;

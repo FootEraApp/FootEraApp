@@ -425,6 +425,194 @@ async function main() {
     const ex3 = await prisma.exercicio.findUnique({ where: { codigo: 'EX010' } });
     const ex4 = await prisma.exercicio.findUnique({ where: { codigo: 'EX020' } });
     const ex5 = await prisma.exercicio.findUnique({ where: { codigo: 'EX001' } });
+    const clubeFooteraDb = await prisma.clube.findFirst({
+        where: { usuario: { nomeDeUsuario: "clube_footera" } },
+        select: { id: true },
+    });
+    const escolinhaEstrelasDb2 = await prisma.escolinha.findFirst({
+        where: { usuario: { nomeDeUsuario: "escola_estrelas" } },
+        select: { id: true },
+    });
+    const profArthurDb = await prisma.professor.findFirst({
+        where: { usuario: { nomeDeUsuario: "arthur.persio" } },
+        select: { id: true },
+    });
+    const profFreeDb2 = await prisma.professor.findFirst({
+        where: { usuario: { nomeDeUsuario: "prof_free" } },
+        select: { id: true },
+    });
+    const profProDb2 = await prisma.professor.findFirst({
+        where: { usuario: { nomeDeUsuario: "prof_pro" } },
+        select: { id: true },
+    });
+    const profClubeFooteraDb2 = await prisma.professor.findFirst({
+        where: { usuario: { nomeDeUsuario: "prof_clube_footera" } },
+        select: { id: true },
+    });
+    async function getExByCodes(codes, min = 3) {
+        const found = await prisma.exercicio.findMany({
+            where: { codigo: { in: codes } },
+            select: { id: true, codigo: true },
+        });
+        const ordered = codes
+            .map((c) => found.find((x) => x.codigo === c))
+            .filter(Boolean);
+        if (ordered.length >= min)
+            return ordered;
+        const fallback = await prisma.exercicio.findMany({
+            take: min,
+            orderBy: { codigo: "asc" },
+            select: { id: true, codigo: true },
+        });
+        return fallback;
+    }
+    function donoData(d) {
+        if (d.kind === "PROF")
+            return { professorId: d.professorId, clubeId: null, escolinhaId: null };
+        if (d.kind === "CLUBE")
+            return { clubeId: d.clubeId, professorId: null, escolinhaId: null };
+        return { escolinhaId: d.escolinhaId, professorId: null, clubeId: null };
+    }
+    async function criarTreinoDoDono(args) {
+        const exs = await getExByCodes(args.exercicioCodes, 3);
+        if (exs.length < 3) {
+            console.warn(`⚠️ Sem exercícios suficientes para ${args.codigo}. Pulando.`);
+            return;
+        }
+        await prisma.treinoProgramado.upsert({
+            where: { codigo: args.codigo },
+            update: {
+                ...donoData(args.dono),
+                nome: args.nome,
+                descricao: args.descricao,
+                tipoTreino: args.tipoTreino,
+                nivel: args.nivel,
+                categoria: args.categoria,
+                duracao: args.duracao,
+                pontuacao: args.pontuacao,
+                dataAgendada: prazo25Out,
+                imagemUrl: args.imagemUrl,
+                exercicios: {
+                    deleteMany: {},
+                    create: [
+                        { exercicioId: exs[0].id, ordem: 1, repeticoes: "3x 40s + 20s descanso" },
+                        { exercicioId: exs[1].id, ordem: 2, repeticoes: "4x 10 reps" },
+                        { exercicioId: exs[2].id, ordem: 3, repeticoes: "3x 8 reps" },
+                    ],
+                },
+            },
+            create: {
+                codigo: args.codigo,
+                ...donoData(args.dono),
+                nome: args.nome,
+                descricao: args.descricao,
+                tipoTreino: args.tipoTreino,
+                nivel: args.nivel,
+                categoria: args.categoria,
+                duracao: args.duracao,
+                pontuacao: args.pontuacao,
+                dataAgendada: prazo25Out,
+                imagemUrl: args.imagemUrl,
+                exercicios: {
+                    create: [
+                        { exercicioId: exs[0].id, ordem: 1, repeticoes: "3x 40s + 20s descanso" },
+                        { exercicioId: exs[1].id, ordem: 2, repeticoes: "4x 10 reps" },
+                        { exercicioId: exs[2].id, ordem: 3, repeticoes: "3x 8 reps" },
+                    ],
+                },
+            },
+        });
+    }
+    if (clubeFooteraDb?.id) {
+        await criarTreinoDoDono({
+            dono: { kind: "CLUBE", clubeId: clubeFooteraDb.id },
+            codigo: "TC_FOOTERA_01",
+            nome: "Treino do Clube FootEra (Coletivo)",
+            descricao: "Seed: treino do clube (organização) para testes de listagem por dono.",
+            tipoTreino: TipoTreino.Tecnico,
+            nivel: Nivel.Base,
+            categoria: [Categoria.Livre],
+            duracao: 60,
+            pontuacao: 12,
+            imagemUrl: "/assets/treinos/agilidade.jpg",
+            exercicioCodes: ["EX009", "EX010", "EX020", "EX005", "EX001"],
+        });
+    }
+    if (escolinhaEstrelasDb2?.id) {
+        await criarTreinoDoDono({
+            dono: { kind: "ESCOLA", escolinhaId: escolinhaEstrelasDb2.id },
+            codigo: "TE_ESTRELAS_01",
+            nome: "Treino da Escola Estrelas (Fundamentos)",
+            descricao: "Seed: treino da escolinha para testes de vínculo/treinos disponíveis.",
+            tipoTreino: TipoTreino.Tecnico,
+            nivel: Nivel.Base,
+            categoria: [Categoria.Sub15, Categoria.Sub17].filter(Boolean),
+            duracao: 50,
+            pontuacao: 10,
+            imagemUrl: "/assets/treinos/controle.jpg",
+            exercicioCodes: ["EX005", "EX001", "EX020", "EX031", "EX032"],
+        });
+    }
+    if (profFreeDb2?.id) {
+        await criarTreinoDoDono({
+            dono: { kind: "PROF", professorId: profFreeDb2.id },
+            codigo: "TP_PROF_FREE_01",
+            nome: "Treino do Prof Free (Resistência)",
+            descricao: "Seed: treino do professor FREE para testar painel e filtros.",
+            tipoTreino: TipoTreino.Fisico,
+            nivel: Nivel.Base,
+            categoria: [Categoria.Livre],
+            duracao: 45,
+            pontuacao: 9,
+            imagemUrl: "/assets/treinos/resistencia.jpg",
+            exercicioCodes: ["EX031", "EX041", "EX042", "EX061", "EX068"],
+        });
+    }
+    if (profProDb2?.id) {
+        await criarTreinoDoDono({
+            dono: { kind: "PROF", professorId: profProDb2.id },
+            codigo: "TP_PROF_PRO_01",
+            nome: "Treino do Prof Pro (Performance)",
+            descricao: "Seed: treino do professor PRO para testes do dashboard.",
+            tipoTreino: TipoTreino.Fisico,
+            nivel: Nivel.Avancado,
+            categoria: [Categoria.Livre],
+            duracao: 55,
+            pontuacao: 14,
+            imagemUrl: "/assets/treinos/explosao.jpg",
+            exercicioCodes: ["EX057", "EX042", "EX061", "EX031", "EX035"],
+        });
+    }
+    if (profClubeFooteraDb2?.id) {
+        await criarTreinoDoDono({
+            dono: { kind: "PROF", professorId: profClubeFooteraDb2.id },
+            codigo: "TP_PROF_CLUBE_FOOTERA_01",
+            nome: "Treino do Prof do Clube FootEra (Tático)",
+            descricao: "Seed: treino do professor vinculado ao clube.",
+            tipoTreino: TipoTreino.Tatico,
+            nivel: Nivel.Base,
+            categoria: [Categoria.Livre],
+            duracao: 60,
+            pontuacao: 11,
+            imagemUrl: "/assets/treinos/tatico.jpg",
+            exercicioCodes: ["EX020", "EX009", "EX010", "EX005", "EX001"],
+        });
+    }
+    if (profArthurDb?.id) {
+        await criarTreinoDoDono({
+            dono: { kind: "PROF", professorId: profArthurDb.id },
+            codigo: "TP_ARTHUR_01",
+            nome: "Treino do Prof Arthur (Resistência + Técnica)",
+            descricao: "Seed: treino do Arthur para testes de rotas e cards.",
+            tipoTreino: TipoTreino.Fisico,
+            nivel: Nivel.Avancado,
+            categoria: [Categoria.Livre],
+            duracao: 50,
+            pontuacao: 13,
+            imagemUrl: "/assets/treinos/resistencia.jpg",
+            exercicioCodes: ["EX006", "EX011", "EX012", "EX021", "EX024"],
+        });
+    }
     if (professorMateus && ex1 && ex2 && ex3 && ex4 && ex5) {
         await prisma.treinoProgramado.upsert({
             where: { codigo: 'TR002' },
@@ -787,37 +975,6 @@ async function main() {
         },
     });
     await prisma.usuario.upsert({
-        where: { nomeDeUsuario: 'prof_free' },
-        update: {
-            senhaHash: H['prof_free'],
-            tipo: TipoUsuario.Professor,
-            verified: true,
-        },
-        create: {
-            nome: 'Professor Free',
-            nomeDeUsuario: 'prof_free',
-            email: 'prof_free@example.com',
-            senhaHash: H['prof_free'],
-            tipo: TipoUsuario.Professor,
-            cidade: 'Vitória',
-            estado: 'ES',
-            pais: 'Brasil',
-            foto: '/assets/usuarios/teste-prof-free.png',
-            professor: {
-                create: {
-                    codigo: 'PROF_FREE',
-                    cref: 'ES000001',
-                    areaFormacao: 'Educação Física',
-                    escola: 'Escola Estrelas',
-                    qualificacoes: ['Professor de teste (FREE)'],
-                    certificacoes: ['Licença C'],
-                    fotoUrl: '/assets/usuarios/teste-prof-free.png',
-                    nome: 'Professor Free',
-                },
-            },
-        },
-    });
-    await prisma.usuario.upsert({
         where: { nomeDeUsuario: 'prof_pro' },
         update: {
             senhaHash: H['prof_pro'],
@@ -1063,6 +1220,51 @@ async function main() {
     const usuarioEscolinha01Db = await prisma.usuario.findUnique({
         where: { nomeDeUsuario: 'escolinha_01' },
     });
+    const clubeFootera = await prisma.clube.findFirst({
+        where: { usuario: { nomeDeUsuario: "clube_footera" } },
+        select: { id: true },
+    });
+    const escolinhaEstrelas = await prisma.escolinha.findFirst({
+        where: { usuario: { nomeDeUsuario: "escola_estrelas" } },
+        select: { id: true },
+    });
+    if (!clubeFootera?.id)
+        console.warn("⚠️ Clube FootEra não encontrado (clube_footera).");
+    if (!escolinhaEstrelas?.id)
+        console.warn("⚠️ Escola Estrelas não encontrada (escola_estrelas).");
+    const professores4 = await prisma.professor.findMany({
+        where: {
+            usuario: {
+                nomeDeUsuario: {
+                    in: ["prof_clube_footera", "prof_free", "arthur.persio", "prof_pro"],
+                },
+            },
+        },
+        select: { id: true, usuario: { select: { nomeDeUsuario: true } } },
+    });
+    if (professores4.length < 4) {
+        console.warn(`⚠️ Achei só ${professores4.length}/4 professores pra vincular. Encontrados:`, professores4
+            .map((p) => p.usuario?.nomeDeUsuario)
+            .filter(Boolean));
+    }
+    if (clubeFootera?.id && professores4.length) {
+        await prisma.professorClube.createMany({
+            data: professores4.map((p) => ({
+                professorId: p.id,
+                clubeId: clubeFootera.id,
+            })),
+            skipDuplicates: true,
+        });
+    }
+    if (escolinhaEstrelas?.id && professores4.length) {
+        await prisma.professorEscolinha.createMany({
+            data: professores4.map((p) => ({
+                professorId: p.id,
+                escolinhaId: escolinhaEstrelas.id,
+            })),
+            skipDuplicates: true,
+        });
+    }
     async function garantirAssinaturaFixa(usuarioId, plano, periodicidade) {
         await prisma.assinatura.upsert({
             where: { usuarioId },
@@ -1155,7 +1357,7 @@ async function main() {
                 duracao: 45,
                 categoria: [Categoria.Livre],
                 imagemUrl: "/assets/treinos/resistencia.jpg",
-                professor: { connect: { id: professorArthur.id } },
+                professorId: professorArthur.id,
                 tipoTreino: TipoTreino.Fisico,
                 dataAgendada: prazo25Out,
                 exercicios: {
@@ -1221,7 +1423,6 @@ async function main() {
                 seguidoUsuarioId: atletaPro.id,
             },
         });
-        // POST 1
         let post1 = await prisma.postagem.findFirst({
             where: { conteudo: "Primeiro treino do dia!", usuarioId: atletaFree.id },
         });
@@ -1234,7 +1435,6 @@ async function main() {
                 },
             });
         }
-        // POST 2
         let post2 = await prisma.postagem.findFirst({
             where: { conteudo: "Treino intenso hoje 💪" },
         });
@@ -1247,7 +1447,6 @@ async function main() {
                 },
             });
         }
-        // POST 3
         let post3 = await prisma.postagem.findFirst({
             where: { conteudo: "Alongamento pós-treino" },
         });
@@ -1340,7 +1539,6 @@ async function main() {
     await prisma.usuario.updateMany({
         data: { verified: true },
     });
-    // --- Professor vinculado a atleta_free para teste E2E "Já treino junto" ---
     const profFreeDb = await prisma.professor.findFirst({
         where: { usuario: { nomeDeUsuario: "prof_free" } },
     });
@@ -1348,7 +1546,6 @@ async function main() {
         where: { usuario: { nomeDeUsuario: "atleta_free" } },
     });
     if (profFreeDb && atletaFreeDb) {
-        // Procura se já existe relação professor-atleta
         const relacaoExistente = await prisma.relacaoTreinamento.findFirst({
             where: {
                 professorId: profFreeDb.id,
@@ -1356,7 +1553,6 @@ async function main() {
             },
         });
         if (relacaoExistente) {
-            // Atualiza para garantir que está ativa (sem encerradoEm)
             await prisma.relacaoTreinamento.update({
                 where: { id: relacaoExistente.id },
                 data: {
@@ -1365,7 +1561,6 @@ async function main() {
             });
         }
         else {
-            // Cria o vínculo novo
             await prisma.relacaoTreinamento.create({
                 data: {
                     professorId: profFreeDb.id,
