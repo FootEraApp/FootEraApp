@@ -54,6 +54,13 @@ function tierScore(t?: Earned["tier"]) {
   if (t === "bronze") return 1;
   return 0;
 }
+function isDesafioEarned(e: Earned) {
+  const t = String(e?.title ?? "");
+  const d = String(e?.description ?? "");
+  const g = String(e?.group ?? "");
+
+  return /desaf/i.test(g) || /desaf/i.test(t) || /desaf/i.test(d);
+}
 function extractNum(s: string) {
   const all = [...String(s).matchAll(/\d+/g)];
   if (!all.length) return 0;
@@ -325,8 +332,7 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
           };
         })
         .filter((x: Earned) => Boolean(x.id) && Boolean(x.title));
-
-      return mapped;
+      return mapped.filter((e) => !isDesafioEarned(e));
     },
   });
 

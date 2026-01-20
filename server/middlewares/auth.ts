@@ -68,10 +68,11 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
     return res.status(401).json({ message: "Invalid/expired token" });
   }
 
-  const userId = payload.id || payload.sub;
+  const userId = payload?.id || payload?.sub || payload?.userId;
+
   if (!userId) {
     console.error(
-      "[AUTH] payload sem id/sub em",
+      "[AUTH] payload sem id/sub/userId em",
       req.originalUrl,
       "payload =",
       payload,
