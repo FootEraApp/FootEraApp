@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import { EVENTO_TIPOS, EventoTipo } from "@/utils/eventos.js";
+import { min } from "date-fns";
 
 type Props = { clubeId: string };
 
@@ -51,6 +52,17 @@ export default function PaginaNovoEventoClube({ clubeId }: Props) {
   const [salvando, setSalvando] = useState<boolean>(false);
   const [erro, setErro] = useState<string>("");
 
+  function pad2(n: number) {
+    return String(n).padStart(2, "0");
+  }
+
+  function toLocalInput(dt: Date) {
+    return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}T${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+  }
+
+  const minDateTime = toLocalInput(new Date());
+  const maxDateTime = "2050-12-31T23:59";
+
   function set<K extends keyof EventoForm>(k: K, v: EventoForm[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
@@ -69,7 +81,6 @@ export default function PaginaNovoEventoClube({ clubeId }: Props) {
       ...form,
       inscricaoInicio: form.inscricaoInicio ? form.inscricaoInicio : null,
       inscricaoFim: form.inscricaoFim ? form.inscricaoFim : null,
-
       vagas: form.vagas ? Number(form.vagas) : null,
       valorInscricao: form.valorInscricao ? Number(form.valorInscricao) : null,
       requisitos: form.requisitos
@@ -141,6 +152,8 @@ export default function PaginaNovoEventoClube({ clubeId }: Props) {
                 type="datetime-local"
                 className="w-full border rounded px-3 py-2"
                 value={form.inscricaoInicio}
+                min={minDateTime}
+                max={maxDateTime}
                 onChange={(e) => set("inscricaoInicio", e.target.value)}
               />
             </div>
@@ -151,17 +164,20 @@ export default function PaginaNovoEventoClube({ clubeId }: Props) {
                 type="datetime-local"
                 className="w-full border rounded px-3 py-2"
                 value={form.inscricaoFim}
+                min={minDateTime}
+                max={maxDateTime}
                 onChange={(e) => set("inscricaoFim", e.target.value)}
               />
             </div>
           </div>
-
-<div>
+          <div>
             <label className="block text-sm">Data do evento*</label>
             <input
               type="datetime-local"
               className="w-full border rounded px-3 py-2"
               value={form.dataEvento}
+              min={minDateTime}
+              max={maxDateTime}
               onChange={(e) => set("dataEvento", e.target.value)}
             />
           </div>

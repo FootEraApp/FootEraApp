@@ -211,6 +211,8 @@ type ParsedAchievement = {
   headTitle?: string;
   headDesc?: string;
   userMsg?: string;
+  tier?: string;
+  grupo?: string;
 };
 
 function parseAchievement(conteudo: string): ParsedAchievement | null {
@@ -219,9 +221,7 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
   const lines = conteudo.split(/\n+/);
   const head = (lines[0] || "").trim();
   const rest = lines.slice(1).join("\n").trim();
-
   const isHeadAchievement = /^🏆\s*Conquista:/i.test(head);
-
   const idMatch = rest.match(/\[([^\]]+)\]/);
   const conquistaId = idMatch?.[1]?.trim();
 
@@ -235,8 +235,19 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
     headDesc = m[2];
   }
 
-  const userMsg = conquistaId ? rest.replace(/\[[^\]]+\]\s*/, "").trim() : rest;
-  return { conquistaId, headTitle, headDesc, userMsg };
+  const tierMatch = (head + "\n" + rest).match(/tier:\s*([a-zç]+)/i);
+  const grupoMatch = (head + "\n" + rest).match(/grupo:\s*([a-z0-9 _-]+)/i);
+  const tier = tierMatch?.[1]?.trim().toLowerCase();
+  const grupo = grupoMatch?.[1]?.trim();
+  let userMsg = conquistaId ? rest.replace(/\[[^\]]+\]\s*/, "").trim() : rest;
+
+  userMsg = userMsg
+    .replace(/grupo\s*:\s*.*$/gim, "")
+    .replace(/tier\s*:\s*.*$/gim, "")
+    .replace(/[•·]/g, "")
+    .trim();
+
+  return { conquistaId, headTitle, headDesc, userMsg, tier, grupo };
 }
 
 function TierPill({ tier }: { tier?: string | null }) {
@@ -267,7 +278,7 @@ function AchievementShareCard({
   const icon = conquista?.icone || "🏆";
   const title = conquista?.titulo || parsed.headTitle || "Conquista";
   const desc = conquista?.descricao || parsed.headDesc || "";
-  const tier = conquista?.tier ?? null;
+  const tier = parsed.tier ?? null;
 
   return (
     <div className="mt-1 rounded-xl border border-yellow-200 bg-yellow-50/60 p-3">
@@ -387,7 +398,6 @@ function PaginaFeed(): JSX.Element {
   const [linkCompartilhado, setLinkCompartilhado] = useState("");
   const [comentariosModalAberto, setComentariosModalAberto] = useState(false);
   const [postSelecionado, setPostSelecionado] = useState<PostagemComUsuario | null>(null);
-  const [conquistasById, setConquistasById] = useState<Record<string, ConquistaDB>>({});
   const [usuariosMutuos, setUsuariosMutuos] = useState<Usuario[]>([]);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [carregandoMutuos, setCarregandoMutuos] = useState(false);
@@ -396,27 +406,10 @@ function PaginaFeed(): JSX.Element {
   const [filtro, setFiltro] = useState<"todos" | "seguindo" | "favoritos">("todos");
   const [agendaFeed, setAgendaFeed] = useState<AgendaItem[]>([]);
   const [carregandoAgenda, setCarregandoAgenda] = useState(false);
+  const [conquistasById, setConquistasById] = useState<Record<string, ConquistaDB>>({});
 
   const toggleFiltro = (target: "seguindo" | "favoritos") => {
     setFiltro((atual) => (atual === target ? "todos" : target));
-  };
-
-  const carregarConquista = async (conquistaId: string) => {
-    const id = String(conquistaId || "").trim();
-    if (!id) return;
-    if (conquistasById[id]) return;
-
-    try {
-      const { data } = await http.get<{ conquista: ConquistaDB | null }>(
-        `/api/conquistas/${id}`
-      );
-
-      if (data?.conquista) {
-        setConquistasById((prev) => ({ ...prev, [id]: data.conquista! }));
-      }
-    } catch (e) {
-      console.error("Falha ao carregar conquista:", id, e);
-    }
   };
 
   const userId = Storage.usuarioId as string | null;
@@ -500,8 +493,7 @@ function PaginaFeed(): JSX.Element {
           const parsed = parseAchievement(p.conteudo || "");
           if (parsed?.conquistaId) ids.add(parsed.conquistaId);
         }
-        ids.forEach((cid) => carregarConquista(cid));
-
+        ids.forEach((id) => carregarConquista(id));
       } catch (e) {
         console.error("Falha ao carregar feed:", e);
         setPosts([]);
@@ -525,10 +517,27 @@ function PaginaFeed(): JSX.Element {
     };
   }, []);
 
+  const carregarConquista = async (conquistaId: string) => {
+    const id = String(conquistaId || "").trim();
+    if (!id) return;
+    if (conquistasById[id]) return;
+
+    try {
+      const { data } = await http.get<{ conquista: ConquistaDB | null }>(
+        `/api/conquistas/id/${id}`
+      );
+
+      if (data?.conquista) {
+        setConquistasById((prev) => ({ ...prev, [id]: data.conquista! }));
+      }
+    } catch (e) {
+      console.error("Falha ao carregar conquista:", id, e);
+    }
+  };
+
   const handleApagarComentario = async (comentarioId: string, postId: string) => {
     try {
       await deletarComentario(comentarioId);
-
       setPostSelecionado((prev) => {
         if (!prev || prev.id !== postId) return prev;
         return {

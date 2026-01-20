@@ -1,7 +1,6 @@
-// client/src/pages/mensagens
 import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
-import { Send, Share2, Volleyball, User, UserPlus, CirclePlus, Search, House, Users, Trash, ArrowLeft } from "lucide-react";
+import { Share2, User, UserPlus, Search, Users, Trash, ArrowLeft } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import socket from "../services/socket.js";
@@ -189,18 +188,18 @@ const markReadFromUser = async (otherId: string) => {
   const [mensagensPrivadas, setMensagensPrivadas] = useState<Mensagem[]>([]);
   const [temMaisPriv, setTemMaisPriv] = useState(true);
   const [carregandoMaisPriv, setCarregandoMaisPriv] = useState(false);
-
   const [mensagensGrupo, setMensagensGrupo] = useState<MensagemGrupo[]>([]);
   const [temMaisGrupo, setTemMaisGrupo] = useState(true);
   const [carregandoMaisGrupo, setCarregandoMaisGrupo] = useState(false);
-
   const [novaMensagem, setNovaMensagem] = useState("");
-
   const [postsCache, setPostsCache] = useState<Record<string, Postagem>>({});
   const [usuariosCache, setUsuariosCache] = useState<Record<string, Usuario>>({});
   const [desafiosCache, setDesafiosCache] = useState<Record<string, Desafio>>({});
-
+  const [lastMsgByUser, setLastMsgByUser] = useState<Record<string, string>>({});
   const [modalAberto, setModalAberto] = useState(false);
+  const [lastMsgAtByUser, setLastMsgAtByUser] = useState<Record<string, number>>({});
+  const [lastMsgAtByGroup, setLastMsgAtByGroup] = useState<Record<string, number>>({});
+
   const abrirModal = () => setModalAberto(true);
   const fecharModal = () => setModalAberto(false);
 
@@ -208,13 +207,63 @@ const markReadFromUser = async (otherId: string) => {
   const fecharModalDesafios = () => setModalDesafiosAberto(false);
 
   const pendingOpenRef = useRef(false);
-
   const RECENTS_KEY = "mensagens_recent_usuarios";
   
   function initials(name?: string) {
     if (!name) return "U";
     const parts = name.trim().split(/\s+/).slice(0, 2);
     return parts.map(p => p[0]?.toUpperCase() ?? "").join("") || "U";
+  }
+
+  function nomeUsuarioByIdSync(id: string) {
+    const cached = usuariosCache[id];
+    if (cached?.nome) return cached.nome;
+
+    const u = usuariosMutuos.find(x => x.id === id);
+    if (u?.nome) return u.nome;
+
+    return null;
+  }
+
+  async function ensureUsuarioNome(id: string) {
+    if (!id) return null;
+    if (usuariosCache[id]?.nome) return usuariosCache[id].nome;
+
+    try {
+      const res = await fetch(`${API.BASE_URL}/api/usuarios/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return null;
+
+      const u: Usuario = await res.json();
+      setUsuariosCache(prev => ({ ...prev, [id]: u }));
+      setUsuariosMutuos(prev =>
+        prev.some(p => p.id === u.id) ? prev : [u, ...prev]
+      );
+      return u.nome || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function formatPreviewFromMsg(msg: { tipo: string; conteudo: string }) {
+    const tipo = String(msg.tipo || "").toUpperCase();
+    const conteudo = String(msg.conteudo || "");
+
+    if (tipo === "CARD") return "📇 Card compartilhado";
+    if (tipo === "POST") return "📰 Post compartilhado";
+    if (tipo === "DESAFIO") return "🏆 Desafio compartilhado";
+
+    if (tipo === "USUARIO") {
+      const nome = nomeUsuarioByIdSync(conteudo);
+      return nome ? `👤 Perfil: ${nome}` : "👤 Perfil compartilhado";
+    }
+
+    if (conteudo.startsWith("NOVO_TREINO:")) return "🏋️ Novo treino";
+    if (conteudo.includes("[CONVOCACAO_EVENTO:")) return "📣 Convocação de evento";
+    if (conteudo.startsWith("data:image/")) return "🖼️ Imagem";
+
+    return conteudo.replace(/\s+/g, " ").trim().slice(0, 60);
   }
 
   function Avatar({ src, name, className = "w-10 h-10" }:{
@@ -348,14 +397,25 @@ const markReadFromUser = async (otherId: string) => {
 
   const SidebarContent = () => {
     const term = searchTerm.trim().toLowerCase();
-
-    const gruposFiltrados = term
+    const gruposFiltradosBase = term
       ? grupos.filter((g) => g.nome.toLowerCase().includes(term))
       : grupos;
 
-    const usuariosFiltrados = term
+    const gruposFiltrados = [...gruposFiltradosBase].sort((a, b) => {
+      const ta = lastMsgAtByGroup[a.id] ?? 0;
+      const tb = lastMsgAtByGroup[b.id] ?? 0;
+      return tb - ta;
+    });
+
+    const usuariosFiltradosBase = term
       ? usuariosMutuos.filter((u) => u.nome.toLowerCase().includes(term))
       : usuariosMutuos;
+
+    const usuariosFiltrados = [...usuariosFiltradosBase].sort((a, b) => {
+      const ta = lastMsgAtByUser[a.id] ?? 0;
+      const tb = lastMsgAtByUser[b.id] ?? 0;
+      return tb - ta; 
+    });
 
     return (
       <div className="p-4 overflow-y-auto h-full">
@@ -462,9 +522,16 @@ const markReadFromUser = async (otherId: string) => {
                   <span className="font-medium text-sm truncate">
                     {u.nome}
                   </span>
-                  <span className="text-xs text-gray-500">
-                    Clique para conversar
-                  </span>
+                  {(() => {
+                    const prev = lastMsgByUser[u.id] || "";
+                    return prev ? (
+                      <span className="text-xs text-gray-500 truncate">
+                        {prev}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">&nbsp;</span>
+                    );
+                  })()}
                 </div>
 
                 {unread > 0 && (
@@ -517,6 +584,11 @@ const markReadFromUser = async (otherId: string) => {
         tipo: "CARD",
       }
     ]);
+
+    setLastMsgByUser(prev => ({
+      ...prev,
+      [alvo.usuario.id]: formatPreviewFromMsg({ tipo: "CARD", conteudo: encoded }),
+    }));
 
     const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
       method: "POST",
@@ -598,6 +670,29 @@ const markReadFromUser = async (otherId: string) => {
         }
       }
 
+      const otherId = mensagem.deId === usuarioId ? mensagem.paraId : mensagem.deId;
+      setLastMsgAtByUser(prev => ({
+        ...prev,
+        [otherId]: new Date(mensagem.criadaEm).getTime(),
+      }));
+
+      setLastMsgByUser(prev => ({
+        ...prev,
+        [otherId]: formatPreviewFromMsg({ tipo: mensagem.tipo, conteudo: mensagem.conteudo })
+      }));
+
+      if (String(mensagem.tipo).toUpperCase() === "USUARIO") {
+        const idCompartilhado = String(mensagem.conteudo || "");
+        ensureUsuarioNome(idCompartilhado).then((nome) => {
+          if (nome) {
+            setLastMsgByUser(p => ({
+              ...p,
+              [otherId]: `👤 Perfil: ${nome}`
+            }));
+          }
+        });
+      }
+
       if (current?.tipo !== "usuario") return;
       const curId = current.usuario.id;
       const relevante =
@@ -620,6 +715,11 @@ const markReadFromUser = async (otherId: string) => {
     socket.on("novaMensagemGrupo", (mensagem: MensagemGrupo) => {
       const current = alvoRef.current;
       if (!(current?.tipo === "grupo" && mensagem.grupoId === current.grupo.id)) return;
+
+      setLastMsgAtByGroup(prev => ({
+        ...prev,
+        [mensagem.grupoId]: new Date(mensagem.criadaEm).getTime(),
+      }));
 
       const replaced = reconcileGrupoByClientId(mensagem);
       if (!replaced) {
@@ -662,16 +762,45 @@ const markReadFromUser = async (otherId: string) => {
         if (!gruposRes.ok) throw new Error(await gruposRes.text());
         const meusGrupos: Grupo[] = await gruposRes.json();
 
-        let conv = {
-          totalNaoLidas: 0,
-          conversas: [] as Array<{
-            id: string;
-            nome: string;
-            foto?: string | null;
-            naoLidas: number;
-          }>,
-        };
+        let conv = { totalNaoLidas: 0, conversas: [] as Array<{ id: string; nome: string; foto?: string | null; naoLidas: number; }> };
         if (convRes.ok) conv = await convRes.json();
+
+        setLastMsgAtByUser(
+          Object.fromEntries(
+            (conv.conversas || []).map((c: any) => [
+              c.id,
+              c.ultimaMensagemEm ? new Date(c.ultimaMensagemEm).getTime() : 0,
+            ])
+          )
+        );
+
+        setLastMsgByUser(
+          Object.fromEntries(
+            (conv.conversas || []).map((c: any) => [
+              c.id,
+              formatPreviewFromMsg({
+                tipo: c.ultimaMensagemTipo || "NORMAL",
+                conteudo: c.ultimaMensagem,
+              }),
+            ])
+          )
+        );
+
+        (conv.conversas || []).forEach((c: any) => {
+          const t = String(c.ultimaMensagemTipo || "").toUpperCase();
+          if (t !== "USUARIO") return;
+
+          const idCompartilhado = String(c.ultimaMensagem || "");
+          if (!idCompartilhado) return;
+
+          ensureUsuarioNome(idCompartilhado).then((nome) => {
+            if (!nome) return;
+            setLastMsgByUser(prev => ({
+              ...prev,
+              [c.id]: `👤 Perfil: ${nome}`,
+            }));
+          });
+        });
 
         const contatosRelacionados: Usuario[] = contatosRes.ok
           ? await contatosRes.json()
@@ -702,6 +831,15 @@ const markReadFromUser = async (otherId: string) => {
 
         setUsuariosMutuos(base);
         setGrupos(meusGrupos);
+        setLastMsgAtByGroup(() => {
+          const entries = (meusGrupos || []).map((g) => {
+            const key = `conversa_grupo_${g.id}`;
+            const cached = safeLoad<MensagemGrupo>(key);
+            const last = cached.length ? cached[cached.length - 1] : null;
+            return [g.id, last ? new Date(last.criadaEm).getTime() : 0] as const;
+          });
+          return Object.fromEntries(entries);
+        });
 
         setUnreadByUser((prev) => ({
           ...prev,
@@ -1022,6 +1160,15 @@ useEffect(() => {
         tipo: "NORMAL",
       };
       setMensagensPrivadas(prev => [...prev, otm]);
+      setLastMsgByUser(prev => ({
+        ...prev,
+        [alvo.usuario.id]: formatPreviewFromMsg({ tipo: otm.tipo, conteudo: otm.conteudo })
+      }));
+      setLastMsgAtByUser(prev => ({
+        ...prev,
+        [alvo.usuario.id]: Date.now(),
+      }));
+      setUnreadByUser(prev => ({ ...prev, [alvo.usuario.id]: 0 }));
 
       try {
         const payload = { paraId: alvo.usuario.id, conteudo: novaMensagem, tipo: "NORMAL" as const, clientMsgId };
@@ -1066,6 +1213,11 @@ useEffect(() => {
         tipo: "NORMAL",
       };
       setMensagensGrupo(prev => [...prev, otm]);
+
+      setLastMsgAtByGroup(prev => ({
+        ...prev,
+        [alvo.grupo.id]: Date.now(),
+      }));
 
       try {
         const payload = { conteudo: novaMensagem, clientMsgId };
@@ -1384,7 +1536,6 @@ function stripConvocacaoTag(text: string) {
 
 <header className="sticky top-0 z-10 bg-green-900 text-white">
   <div className="relative h-14 flex items-center justify-center px-4">
-    {/* Voltar */}
     <Link
       href="/perfil"
       aria-label="Voltar para perfil"
@@ -1395,7 +1546,6 @@ function stripConvocacaoTag(text: string) {
       <ArrowLeft className="h-5 w-5" />
     </Link>
 
-    {/* Botão de conversas (mobile) */}
     <button
       onClick={() => setShowSidebar(true)}
       className="md:hidden absolute right-3 p-2 rounded-full hover:bg-white/10"
@@ -1404,7 +1554,6 @@ function stripConvocacaoTag(text: string) {
       <Users size={18} />
     </button>
 
-    {/* Título */}
     <h1 className="text-base font-semibold truncate">
       {alvo?.tipo === "usuario"
         ? alvo.usuario.nome
