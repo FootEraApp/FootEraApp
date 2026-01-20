@@ -109,13 +109,8 @@ function whereTreinosCriados(ownerTipo: ConquistaOwnerTipo, ownerId: string) {
   if (ownerTipo === ConquistaOwnerTipo.Clube) {
     return {
       OR: [
-        // treino ligado direto ao clube
         { clubeId: ownerId },
-
-        // treino cujo professor (campo Professor) pertence ao clube
         { Professor: { is: { clubeId: ownerId } } },
-
-        // treino cujo criadorProfessor pertence ao clube
         { criadorProfessor: { is: { clubeId: ownerId } } },
       ],
     };
@@ -124,13 +119,8 @@ function whereTreinosCriados(ownerTipo: ConquistaOwnerTipo, ownerId: string) {
   if (ownerTipo === ConquistaOwnerTipo.Escolinha) {
     return {
       OR: [
-        // treino ligado direto à escolinha
         { escolinhaId: ownerId },
-
-        // treino cujo professor (campo Professor) pertence à escolinha
         { Professor: { is: { escolinhaId: ownerId } } },
-
-        // treino cujo criadorProfessor pertence à escolinha
         { criadorProfessor: { is: { escolinhaId: ownerId } } },
       ],
     };
@@ -159,39 +149,29 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
   const ownerId = await resolveOwnerIdByUsuarioId(usuarioId, user.tipo);
   if (!ownerId) return;
 
-  // =========================
-  // CONTADORES (ZERADOS)
-  // =========================
-  let treinosConcluidos = 0;          // Atleta
-  let submissoesTreinoTotal = 0;      // Atleta
-  let pontosTotal = 0;                // Atleta
-  let pontosPerformance = 0;          // Atleta
-  let pontosDisciplina = 0;           // Atleta
-  let pontosResponsabilidade = 0;     // Atleta
-
-  let desafiosConcluidos = 0;         // Atleta (se existir no schema)
-  let desafiosGrupoConcluidos = 0;    // Atleta (se existir)
-  let treinosCriados = 0;             // Prof/Clube/Escolinha
-  let eventosCriados = 0;             // Clube/Escolinha
-  let atletasVinculados = 0;          // Prof/Clube/Escolinha
-
-  let submissoesRecebidas = 0;        // Prof/Clube/Escolinha (fallback)
-  let desafiosGrupoCriados = 0;       // Prof/Clube/Escolinha (fallback)
-  let desafiosAprovadosDoGrupo = 0;   // Prof/Clube/Escolinha (fallback)
-
+  let treinosConcluidos = 0;          
+  let submissoesTreinoTotal = 0;      
+  let pontosTotal = 0;                
+  let pontosPerformance = 0;          
+  let pontosDisciplina = 0;           
+  let pontosResponsabilidade = 0;     
+  let desafiosConcluidos = 0;         
+  let desafiosGrupoConcluidos = 0;     
+  let treinosCriados = 0;             
+  let eventosCriados = 0;             
+  let atletasVinculados = 0;          
+  let submissoesRecebidas = 0;         
+  let desafiosGrupoCriados = 0;      
+  let desafiosAprovadosDoGrupo = 0;    
   let lastTreinoId: string | null = null;
   let lastEventoId: string | null = null;
 
-  // =========================
-  // ATLETA
-  // =========================
   if (ownerTipo === ConquistaOwnerTipo.Atleta) {
     submissoesTreinoTotal = await prisma.submissaoTreino.count({
       where: { atletaId: ownerId },
     });
     treinosConcluidos = submissoesTreinoTotal;
 
-    // Se existir submissaoDesafio no teu schema, conta também:
     try {
       desafiosConcluidos = await prismaAny.submissaoDesafio.count({
         where: { atletaId: ownerId },
@@ -199,7 +179,6 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
     } catch {
       desafiosConcluidos = 0;
     }
-    // Se tiver "grupo", você ajusta depois com a regra real:
     desafiosGrupoConcluidos = 0;
 
     const pontosAgg = await prisma.pontuacaoAtleta.aggregate({
@@ -217,9 +196,6 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
     pontosTotal = pontosPerformance + pontosDisciplina + pontosResponsabilidade;
   }
 
-  // =========================
-  // PROFESSOR / CLUBE / ESCOLINHA
-  // =========================
   if (
     ownerTipo === ConquistaOwnerTipo.Professor ||
     ownerTipo === ConquistaOwnerTipo.Clube ||
@@ -227,7 +203,6 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
   ) {
     const whereTreinos = whereTreinosCriados(ownerTipo, ownerId);
 
-    // Treinos criados
     treinosCriados = await prismaAny.treinoProgramado.count({
       where: whereTreinos,
     });
@@ -235,16 +210,13 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
     const lastTreino = await prismaAny.treinoProgramado.findFirst({
       where: whereTreinos,
       select: { id: true },
-      orderBy: { createdAt: "desc" }, // campo padrão mais provável
+      orderBy: { createdAt: "desc" },
     });
     lastTreinoId = lastTreino?.id ?? null;
-
-    // Atletas vinculados
     atletasVinculados = await prismaAny.relacaoTreinamento.count({
       where: whereAtletasVinculados(ownerTipo, ownerId),
     });
 
-    // Eventos criados (só clube/escolinha)
     if (ownerTipo === ConquistaOwnerTipo.Clube) {
       eventosCriados = await prismaAny.evento.count({ where: { clubeId: ownerId } });
       const lastEvt = await prismaAny.evento.findFirst({
@@ -265,15 +237,13 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
       lastEventoId = lastEvt?.id ?? null;
     }
 
-    // (opcional) submissões recebidas: se teu schema permitir navegar pelo treinoProgramado
-    // deixa fallback 0 sem quebrar o TS
     try {
       submissoesRecebidas = await prismaAny.submissaoTreino.count({
         where: {
           treinoAgendado: {
             is: {
               treinoProgramado: {
-                is: whereTreinos, // pode precisar ajustar dependendo do teu schema
+                is: whereTreinos, 
               },
             },
           },
@@ -284,18 +254,12 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
     }
   }
 
-  // =========================
-  // CATÁLOGO
-  // =========================
   const catalogo = await prisma.conquista.findMany({
     where: { ativo: true, publico: { has: ownerTipo } },
     select: { id: true, codigo: true, tipo: true, meta: true },
     orderBy: { createdAt: "asc" },
   });
 
-  // =========================
-  // UPSERT
-  // =========================
   for (const c of catalogo) {
     const codigo = String(c.codigo || "");
     const meta = c.meta == null ? null : Number(c.meta);
@@ -304,8 +268,7 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
     let atual = 0;
     let refTipo: string | null = null;
     let refId: string | null = null;
-
-    // ATLETA
+  
     if (codigo.startsWith("ath_train_")) atual = treinosConcluidos;
     else if (codigo === "ath_first_submit") atual = submissoesTreinoTotal;
     else if (codigo.startsWith("ath_chal_")) atual = desafiosConcluidos;
@@ -314,25 +277,18 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
     else if (codigo.startsWith("ath_pts_perf_")) atual = pontosPerformance;
     else if (codigo.startsWith("ath_pts_disc_")) atual = pontosDisciplina;
     else if (codigo.startsWith("ath_pts_resp_")) atual = pontosResponsabilidade;
-
-    // PROFESSOR
     else if (codigo.startsWith("prof_tp_")) atual = treinosCriados;
     else if (codigo.startsWith("prof_atletas_")) atual = atletasVinculados;
     else if (codigo.startsWith("prof_subs_")) atual = submissoesRecebidas;
     else if (codigo.startsWith("prof_grp_")) atual = desafiosGrupoCriados;
-
-    // ESCOLINHA
     else if (codigo.startsWith("esc_tp_")) atual = treinosCriados;
     else if (codigo.startsWith("esc_atletas_")) atual = atletasVinculados;
     else if (codigo.startsWith("esc_subs_")) atual = submissoesRecebidas;
     else if (codigo.startsWith("esc_desafios_aprov_")) atual = desafiosAprovadosDoGrupo;
-
-    // CLUBE
     else if (codigo.startsWith("clu_tp_")) atual = treinosCriados;
     else if (codigo.startsWith("clu_atletas_")) atual = atletasVinculados;
     else if (codigo.startsWith("clu_evento_")) atual = eventosCriados;
 
-    // fallback por tipo (mantive tua ideia)
     else {
       switch (String(c.tipo).toUpperCase()) {
         case "TREINO":
@@ -366,7 +322,6 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
       }
     }
 
-    // ref p/ evento
     if (!refTipo && /evt_/i.test(codigo)) {
       refTipo = "Evento";
       refId = lastEventoId;
@@ -490,8 +445,8 @@ export async function getEarnedByUsuarioId(req: AuthReq, res: Response) {
 
 export async function getConquistasCount(req: AuthenticatedRequest, res: Response) {
   try {
-    const ownerTipo = String(req.query.ownerTipo || "").trim(); // "Escolinha"
-    const ownerId = String(req.query.ownerId || "").trim();     // id da escolinha
+    const ownerTipo = String(req.query.ownerTipo || "").trim();
+    const ownerId = String(req.query.ownerId || "").trim();   
 
     if (!ownerTipo || !ownerId) {
       return res.status(400).json({ message: "ownerTipo e ownerId são obrigatórios" });
@@ -722,6 +677,28 @@ export async function syncAllUsuarios(req: Request, res: Response) {
   } catch (e: any) {
     console.error("syncAllUsuarios error:", e);
     return res.status(500).json({ error: e?.message || "Erro no syncAllUsuarios" });
+  }
+}
+
+export async function getConquistaById(req: Request, res: Response) {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) return res.status(400).json({ conquista: null });
+
+    const conquista = await prisma.conquista.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        titulo: true,
+        descricao: true,
+        icon: true,
+      },
+    });
+
+    return res.json({ conquista: conquista ?? null });
+  } catch (e) {
+    console.error("[getConquistaById]", e);
+    return res.status(500).json({ conquista: null });
   }
 }
 

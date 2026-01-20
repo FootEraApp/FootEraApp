@@ -2094,21 +2094,6 @@ const criarTreino = async () => {
 
     // ✅ cria
     const criado: any = await TreinosApi.criar(payload);
-
-    console.groupCollapsed("[NovoTreino] DEBUG retorno treino criado");
-    console.log("criado (raw):", criado);
-    console.log(
-      "criado.id:",
-      criado?.id ?? criado?.treinoProgramadoId ?? criado?.data?.id,
-    );
-    console.log("criado.professoresIds:", criado?.professoresIds);
-    console.log("criado.professores:", criado?.professores);
-    console.log(
-      "criado.criadores / colaboradores:",
-      criado?.criadores ?? criado?.colaboradores,
-    );
-    console.groupEnd();
-
     const profsSelecionadosDetalhe = professoresIdsFinal.map((id) => {
       const p = professores.find((x) => String(x.id) === String(id));
       return {
@@ -2119,16 +2104,6 @@ const criarTreino = async () => {
       };
     });
 
-    console.groupCollapsed("[NovoTreino] DEBUG salvar treino");
-    console.log("professorLogadoId:", professorLogadoId);
-    console.log("professoresSelecionados (state):", professoresSelecionados);
-    console.log("professoresIdsFinal (enviado):", professoresIdsFinal);
-    console.table(profsSelecionadosDetalhe);
-    console.log("payload.professoresIds:", payload.professoresIds);
-    console.log("payload.professorId (singular):", (payload as any).professorId);
-    console.groupEnd();
-
-    // ✅ agendar em lote (se tiver id)
     let qtdAgendados = 0;
     const treinoProgramadoId =
       criado?.id ?? criado?.treinoProgramadoId ?? criado?.data?.id ?? null;
@@ -2145,12 +2120,6 @@ const criarTreino = async () => {
           { headers },
         );
         const jj = await rr.json().catch(() => null);
-
-        console.groupCollapsed("[NovoTreino] DEBUG confirmacao no banco");
-        console.log("GET treino:", jj);
-        console.log("professoresIds:", jj?.professoresIds);
-        console.log("professores:", jj?.professores);
-        console.groupEnd();
       } catch (e) {
         console.warn("[NovoTreino] DEBUG confirmacao falhou:", e);
       }
