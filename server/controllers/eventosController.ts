@@ -31,11 +31,8 @@ function mapEventoTipoLabel(tipo?: string | null): string {
 function syncEventos(opts: { clubeId?: string | null; escolinhaId?: string | null }) {
   const io = getIO?.();
   if (!io) return;
-
-  // público (tela de explorar/eventos abertos)
   io.to("public:eventos").emit("eventos:sync", { scope: "public" });
 
-  // telas internas do clube/escolinha
   if (opts.clubeId) io.to(`clube:${opts.clubeId}`).emit("eventos:sync", { scope: "clube", id: opts.clubeId });
   if (opts.escolinhaId) io.to(`escolinha:${opts.escolinhaId}`).emit("eventos:sync", { scope: "escolinha", id: opts.escolinhaId });
 }
@@ -267,6 +264,44 @@ export async function criar(req: any, res: Response) {
 
     const inscricaoInicioDate = parseDate(inscricaoInicio);
     const inscricaoFimDate = parseDate(inscricaoFim);
+    const now = new Date();
+
+    function isPast(d: Date) {
+      return d.getTime() < now.getTime();
+    }
+
+    function isYearTooHigh(d: Date) {
+      return d.getFullYear() > 2050;
+    }
+
+    if (isPast(dataEventoDia)) {
+      return res.status(400).json({ error: "A data do evento não pode ser no passado." });
+    }
+    if (isYearTooHigh(dataEventoDia)) {
+      return res.status(400).json({ error: "Ano inválido. O ano máximo permitido é 2050." });
+    }
+
+    if (inscricaoInicioDate) {
+      if (isPast(inscricaoInicioDate)) {
+        return res.status(400).json({ error: "Início das inscrições não pode ser no passado." });
+      }
+      if (isYearTooHigh(inscricaoInicioDate)) {
+        return res.status(400).json({ error: "Ano inválido no início das inscrições (máx. 2050)." });
+      }
+    }
+
+    if (inscricaoFimDate) {
+      if (isPast(inscricaoFimDate)) {
+        return res.status(400).json({ error: "Fim das inscrições não pode ser no passado." });
+      }
+      if (isYearTooHigh(inscricaoFimDate)) {
+        return res.status(400).json({ error: "Ano inválido no fim das inscrições (máx. 2050)." });
+      }
+    }
+
+    if (inscricaoInicioDate && inscricaoFimDate && inscricaoFimDate.getTime() < inscricaoInicioDate.getTime()) {
+      return res.status(400).json({ error: "Fim das inscrições não pode ser antes do início." });
+    }
 
     let requisitosArr: string[] = [];
     if (Array.isArray(requisitos)) {

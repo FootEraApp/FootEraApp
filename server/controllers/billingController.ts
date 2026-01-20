@@ -92,42 +92,23 @@ function diffDays(a: Date, b: Date) {
   return Math.ceil(ms / (24 * 60 * 60 * 1000));
 }
 
-async function ensureTrialSubscription(usuarioId: string) {
+async function getSubscriptionReadOnly(usuarioId: string) {
   const now = new Date();
   let a = await prisma.assinatura.findUnique({ where: { usuarioId } });
 
-  if (!a) {
-    const trialEndsAt = addMonths(now, 1);
+  // ✅ NÃO CRIA NADA AUTOMATICAMENTE
+  if (!a) return null;
 
-    const usuario = await prisma.usuario.findUnique({
-      where: { id: usuarioId },
-      select: { tipo: true },
-    });
-
-    const planoTrial =
-      (usuario?.tipo && roleToDefaultPlan[String(usuario.tipo)]) || "ATLETA_PRO";
-
-    a = await prisma.assinatura.create({
-      data: {
-        usuarioId,
-        plano: planoTrial,
-        periodicidade: "Mensal",
-        ativo: true,
-        startsAt: now,
-        status: "TRIAL",
-        trialStartsAt: now,
-        trialEndsAt,
-        renovaEm: trialEndsAt,
-      } as any,
-    });
-
-    return a;
-  }
-
-  if (a.status === "TRIAL" && a.trialEndsAt && now > a.trialEndsAt) {
+  // (Opcional) Se quiser manter a regra de bloquear trial expirado automaticamente:
+  if ((a as any).status === "TRIAL" && (a as any).trialEndsAt && now > (a as any).trialEndsAt) {
     a = await prisma.assinatura.update({
       where: { usuarioId },
-      data: { status: "BLOQUEADA", ativo: false, canceledAt: now, bloqueadoEm: now } as any,
+      data: {
+        status: "BLOQUEADA",
+        ativo: false,
+        canceledAt: now,
+        bloqueadoEm: now,
+      } as any,
     });
   }
 
@@ -282,16 +263,17 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
       orderBy: { resgatadoEm: "desc" },
     });
 
-    const assinaturaSafe = await ensureTrialSubscription(usuarioId);
+    const assinaturaSafe = await getSubscriptionReadOnly(usuarioId);
 
     const now = new Date();
-    const trialEndsAt = (assinaturaSafe as any).trialEndsAt as Date | null;
-    const status = (assinaturaSafe as any).status as string;
+    const trialEndsAt = (assinaturaSafe as any)?.trialEndsAt as Date | null;
+    const status = ((assinaturaSafe as any)?.status as string) ?? "SEM_ASSINATURA";
     const trialAtivo = status === "TRIAL" && trialEndsAt && now <= trialEndsAt;
     const diasRestantes = trialEndsAt ? diffDays(trialEndsAt, now) : null;
-    const precisaEscolherPagamento = trialAtivo && diasRestantes != null && diasRestantes <= 7;
+    const precisaEscolherPagamento =
+      trialAtivo && diasRestantes != null && diasRestantes <= 7;
     const bloqueado = status === "BLOQUEADA";
-    const metodoPreferido = (assinaturaSafe as any).metodoPreferido ?? null;
+    const metodoPreferido = (assinaturaSafe as any)?.metodoPreferido ?? null;
 
     const billingState = {
       status,
@@ -302,7 +284,6 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
       metodoPreferido,
       bloqueado,
     };
-
     res.json({ assinatura: assinaturaSafe, pagamentos, cupons, billingState });
   } catch (err) {
     res.status(500).json({ message: "Erro ao carregar billing", err });
@@ -356,6 +337,82 @@ async function computeCouponDiscount(
   }
 
   return { ok: true, cupom };
+}
+
+export async function startTrial(req: AuthenticatedRequest, res: Response) {
+  try {
+    const usuarioId = getUserId(req);
+    if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
+
+    const { planoId, periodicidade } = req.body as {
+      planoId: string;
+      periodicidade: Periodicidade;
+    };
+
+    const plan = findPlan(planoId);
+    if (!plan) return res.status(400).json({ message: "Plano inválido" });
+
+    if (!["Mensal", "Anual"].includes(periodicidade as any)) {
+      return res.status(400).json({ message: "Periodicidade inválida" });
+    }
+    if (planoId === "ESCOLINHA_PRO" && periodicidade === "Anual") {
+      return res.status(400).json({ message: "ESCOLINHA_PRO é apenas mensal" });
+    }
+
+    const now = new Date();
+
+    const a = await prisma.assinatura.findUnique({ where: { usuarioId } });
+
+    // ✅ já está ativa ou em trial -> não cria de novo
+    if (a?.status === "ATIVA") {
+      return res.status(400).json({ code: "ALREADY_ACTIVE", message: "Você já possui assinatura ativa." });
+    }
+    if (a?.status === "TRIAL" && (a as any).trialEndsAt && now <= (a as any).trialEndsAt) {
+      return res.status(400).json({ code: "TRIAL_ALREADY_ACTIVE", message: "Seu trial já está ativo." });
+    }
+
+    // ✅ se você quer impedir “2º trial” pra sempre:
+    if ((a as any)?.trialStartsAt) {
+      return res.status(400).json({ code: "TRIAL_ALREADY_USED", message: "Você já utilizou o mês grátis." });
+    }
+
+    const trialEndsAt = addMonths(now, 1);
+
+    const out = await prisma.assinatura.upsert({
+      where: { usuarioId },
+      update: {
+        plano: planoId,
+        periodicidade,
+        ativo: true,
+        startsAt: now,
+        status: "TRIAL",
+        trialStartsAt: now,
+        trialEndsAt,
+        renovaEm: trialEndsAt,
+        canceledAt: null,
+        bloqueadoEm: null,
+        lembreteEnviado: false,
+      } as any,
+      create: {
+        usuarioId,
+        plano: planoId,
+        periodicidade,
+        ativo: true,
+        startsAt: now,
+        status: "TRIAL",
+        trialStartsAt: now,
+        trialEndsAt,
+        renovaEm: trialEndsAt,
+        canceledAt: null,
+        lembreteEnviado: false,
+      } as any,
+    });
+
+    return res.json({ ok: true, assinatura: out });
+  } catch (err) {
+    console.error("Erro startTrial:", err);
+    return res.status(500).json({ message: "Erro ao iniciar trial" });
+  }
 }
 
 export async function applyCoupon(req: Request, res: Response) {
@@ -449,12 +506,10 @@ export async function startCheckout(req: Request, res: Response) {
     const { planoId, periodicidade, metodo, cupom, pagador, cartao } =
       req.body as StartCheckoutBody;
 
-    const a = await ensureTrialSubscription(usuarioId);
+    const a = await getSubscriptionReadOnly(usuarioId);
     const now = new Date();
-
-    const status = (a as any).status as string;
-    const trialEndsAt = (a as any).trialEndsAt as Date | null;
-
+    const status = ((a as any)?.status as string) ?? "SEM_ASSINATURA";
+    const trialEndsAt = (a as any)?.trialEndsAt as Date | null;
     const trialAtivo = status === "TRIAL" && trialEndsAt && now <= trialEndsAt;
     const diasRestantes = trialEndsAt ? diffDays(trialEndsAt, now) : null;
     let metodoFinal = metodo;
@@ -781,16 +836,18 @@ export async function requireActiveSubscription(req: AuthenticatedRequest, res: 
   const usuarioId = req.userId;
   if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
-  const a = await ensureTrialSubscription(usuarioId);
+  const a = await getSubscriptionReadOnly(usuarioId);
+
+  if (!a) {
+    return res.status(402).json({ code: "SUBSCRIPTION_REQUIRED" });
+  }
 
   const now = new Date();
   const status = (a as any).status as string;
   const trialEndsAt = (a as any).trialEndsAt as Date | null;
   const trialAtivo = status === "TRIAL" && trialEndsAt && now <= trialEndsAt;
   const bloqueado = status === "BLOQUEADA" || (!trialAtivo && status !== "ATIVA");
-  if (bloqueado) {
-    return res.status(402).json({ code: "SUBSCRIPTION_BLOCKED" });
-  }
+  if (bloqueado) return res.status(402).json({ code: "SUBSCRIPTION_BLOCKED" });
 
   next();
 }
@@ -994,7 +1051,10 @@ export async function setPreferredPaymentMethod(req: AuthenticatedRequest, res: 
       return res.status(400).json({ message: "Método inválido" });
     }
 
-    const a = await ensureTrialSubscription(usuarioId);
+    const a = await getSubscriptionReadOnly(usuarioId);
+    if (!a) {
+      return res.status(400).json({ message: "Você ainda não iniciou um trial nem possui assinatura." });
+    }
 
     await prisma.assinatura.update({
       where: { usuarioId },
