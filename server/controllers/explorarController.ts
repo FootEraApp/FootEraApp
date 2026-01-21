@@ -1,6 +1,22 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 
+function calcIsPro(assinatura: { status?: string | null; trialEndsAt?: Date | string | null } | null | undefined) {
+  if (!assinatura) return false;
+
+  const status = String(assinatura.status || "").toUpperCase();
+
+  if (status === "BLOQUEADA") return false;
+  if (status === "ATIVA") return true;
+
+  if (status === "TRIAL") {
+    const trialEndsAt = assinatura.trialEndsAt ? new Date(assinatura.trialEndsAt as any) : null;
+    return !!trialEndsAt && new Date() <= trialEndsAt;
+  }
+
+  return false;
+}
+
 export async function listarAtletasExplorar(req: Request, res: Response) {
   try {
     const authUserId = (req as any).userId as string | undefined;
@@ -32,7 +48,7 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: {select: {plano: true, status: true}},
+            assinatura: {select: {plano: true, status: true, trialEndsAt: true}},
           },
         },
         pontuacao: {
@@ -48,7 +64,7 @@ export async function listarAtletasExplorar(req: Request, res: Response) {
     const payload = atletas.map((a) => {
       const pontuacaoTotal = a.pontuacao?.pontuacaoTotal ?? a.pontosTotal ?? 0;
       const independente = !a.clubeId && !a.escolinhaId;
-      const isPro = a.usuario?.assinatura?.status === "ATIVA" || a.usuario?.assinatura?.plano === "PRO";
+      const isPro = calcIsPro(a.usuario?.assinatura);
 
       return {
         id: a.id,
@@ -105,7 +121,7 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: {select: {plano: true, status: true}},
+            assinatura: {select: {plano: true, status: true, trialEndsAt: true}},
           },
         },
         pontuacao: {
@@ -121,7 +137,7 @@ export async function explorar(req: Request, res: Response) {
     const atletas = atletasRaw.map((a) => {
       const pontuacaoTotal = a.pontuacao?.pontuacaoTotal ?? a.pontosTotal ?? 0;
       const independente = !a.clubeId && !a.escolinhaId;
-      const isPro = a.usuario?.assinatura?.status === "ATIVA" || a.usuario?.assinatura?.plano === "PRO";
+      const isPro = calcIsPro(a.usuario?.assinatura);
 
       return {
         id: a.id,
@@ -150,7 +166,7 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: { select: { plano: true, status: true } },
+            assinatura: { select: { plano: true, status: true, trialEndsAt: true} },
           },
         },
       },
@@ -161,9 +177,7 @@ export async function explorar(req: Request, res: Response) {
 
     const clubes = clubesRaw.map((c) => ({
       ...c,
-      isPro:
-        c.usuario?.assinatura?.status === "ATIVA" ||
-        c.usuario?.assinatura?.plano === "PRO",
+      isPro: calcIsPro(c.usuario?.assinatura),
     }));
 
     const escolasRaw = await prisma.escolinha.findMany({
@@ -175,7 +189,7 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: { select: { plano: true, status: true } },
+            assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
           },
         },
       },
@@ -186,9 +200,7 @@ export async function explorar(req: Request, res: Response) {
 
     const escolas = escolasRaw.map((e) => ({
       ...e,
-      isPro:
-        e.usuario?.assinatura?.status === "ATIVA" ||
-        e.usuario?.assinatura?.plano === "PRO",
+      isPro: calcIsPro(e.usuario?.assinatura),
     }));
 
     const professoresRaw = await prisma.professor.findMany({
@@ -201,7 +213,7 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: { select: { plano: true, status: true } },
+            assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
           },
         },
       },
@@ -212,9 +224,8 @@ export async function explorar(req: Request, res: Response) {
 
     const professores = professoresRaw.map((p) => ({
       ...p,
-      isPro:
-        p.usuario?.assinatura?.status === "ATIVA" ||
-        p.usuario?.assinatura?.plano === "PRO",
+      isPro: calcIsPro(p.usuario?.assinatura),
+
     }));
 
     const olheirosRaw = await prisma.olheiro.findMany({
@@ -227,7 +238,7 @@ export async function explorar(req: Request, res: Response) {
             foto: true,
             cidade: true,
             estado: true,
-            assinatura: { select: { plano: true, status: true } },
+            assinatura: { select: { plano: true, status: true, trialEndsAt: true } },
           },
         },
       },
@@ -238,9 +249,8 @@ export async function explorar(req: Request, res: Response) {
 
     const olheiros = olheirosRaw.map((o) => ({
       ...o,
-      isPro:
-        o.usuario?.assinatura?.status === "ATIVA" ||
-        o.usuario?.assinatura?.plano === "PRO",
+      isPro: calcIsPro(o.usuario?.assinatura),
+
     }));
 
     const agora = new Date();

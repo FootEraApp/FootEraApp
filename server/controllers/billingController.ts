@@ -344,12 +344,19 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
     const usuarioId = getUserId(req);
     if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
-    const { planoId, periodicidade } = req.body as {
+    const now = new Date();
+
+    const { planoId, periodicidade, metodoPreferido } = req.body as {
       planoId: string;
       periodicidade: Periodicidade;
+      metodoPreferido?: MetodoPagamento | null;
     };
 
+    const metodoPreferidoFinal: MetodoPagamento | null = metodoPreferido ?? null;
+    const metodoPreferidoDefinidoEm: Date | null = metodoPreferidoFinal ? now : null;
+
     const plan = findPlan(planoId);
+
     if (!plan) return res.status(400).json({ message: "Plano inválido" });
 
     if (!["Mensal", "Anual"].includes(periodicidade as any)) {
@@ -358,8 +365,6 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
     if (planoId === "ESCOLINHA_PRO" && periodicidade === "Anual") {
       return res.status(400).json({ message: "ESCOLINHA_PRO é apenas mensal" });
     }
-
-    const now = new Date();
 
     const a = await prisma.assinatura.findUnique({ where: { usuarioId } });
 
@@ -392,6 +397,8 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
         canceledAt: null,
         bloqueadoEm: null,
         lembreteEnviado: false,
+        metodoPreferido: metodoPreferidoFinal,
+        metodoPreferidoDefinidoEm
       } as any,
       create: {
         usuarioId,
@@ -405,6 +412,8 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
         renovaEm: trialEndsAt,
         canceledAt: null,
         lembreteEnviado: false,
+        metodoPreferido: metodoPreferidoFinal,
+        metodoPreferidoDefinidoEm
       } as any,
     });
 
@@ -514,8 +523,9 @@ export async function startCheckout(req: Request, res: Response) {
     const diasRestantes = trialEndsAt ? diffDays(trialEndsAt, now) : null;
     let metodoFinal = metodo;
     if (!metodoFinal) {
-      metodoFinal = (a as any).metodoPreferido;
+      metodoFinal = (a as any)?.metodoPreferido;
     }
+
     if (!metodoFinal) {
       return res.status(400).json({ message: "Escolha um método de pagamento" });
     }
@@ -832,22 +842,28 @@ type PaymentWebhookBody = {
   providerRef: string;
 };
 
-export async function requireActiveSubscription(req: AuthenticatedRequest, res: Response, next: any) {
+export async function requireActiveSubscription(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: any
+) {
   const usuarioId = req.userId;
   if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
 
   const a = await getSubscriptionReadOnly(usuarioId);
-
-  if (!a) {
-    return res.status(402).json({ code: "SUBSCRIPTION_REQUIRED" });
-  }
+  if (!a) return res.status(402).json({ code: "SUBSCRIPTION_REQUIRED" });
 
   const now = new Date();
-  const status = (a as any).status as string;
+  const status = String((a as any).status || "");
   const trialEndsAt = (a as any).trialEndsAt as Date | null;
-  const trialAtivo = status === "TRIAL" && trialEndsAt && now <= trialEndsAt;
-  const bloqueado = status === "BLOQUEADA" || (!trialAtivo && status !== "ATIVA");
-  if (bloqueado) return res.status(402).json({ code: "SUBSCRIPTION_BLOCKED" });
+
+  const isTrialActive = status === "TRIAL" && !!trialEndsAt && now <= trialEndsAt;
+  const isActive = status === "ATIVA";
+  const isBlocked = status === "BLOQUEADA";
+
+  if (isBlocked || (!isActive && !isTrialActive)) {
+    return res.status(402).json({ code: "SUBSCRIPTION_BLOCKED" });
+  }
 
   next();
 }
@@ -1324,9 +1340,13 @@ export async function cancelSubscription(req: Request, res: Response) {
 
     await prisma.assinatura.update({
       where: { usuarioId },
-      data: { ativo: false, canceledAt: now },
+      data: {
+        ativo: false,
+        canceledAt: now,
+        status: "BLOQUEADA",
+        bloqueadoEm: now,
+      } as any,
     });
-
     res.json({ ok: true, message: "Assinatura cancelada" });
   } catch (err) {
     res.status(500).json({ message: "Erro ao cancelar assinatura", err });
