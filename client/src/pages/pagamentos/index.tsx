@@ -594,7 +594,7 @@ export default function PagamentosPage() {
             </button>
 
             <p className="text-xs text-gray-500">
-              O trial começa agora e dura 30 dias. Não é necessário cartão neste momento.
+              O trial começa agora e dura 30 dias. Não é necessário pagamento neste momento.
             </p>
           </div>
         ) : (
