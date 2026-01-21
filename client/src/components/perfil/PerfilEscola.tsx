@@ -186,6 +186,11 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   const [eventos, setEventos] = useState<EventoItem[] | null>(null);
   const [eventosLoading, setEventosLoading] = useState(false);
   const [conquistasReal, setConquistasReal] = useState<number>(0);
+  const [privacidade, setPrivacidade] = useState<{
+    perfilVisivel: boolean;
+    permitirMensagens: boolean;
+    mostrarEmail: boolean;
+  } | null>(null);
 
   const escolinhaId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
 
@@ -235,6 +240,41 @@ export default function PerfilEscola({ idDaUrl }: Props) {
       cancel = true;
     };
   }, [targetId, token]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    let cancel = false;
+
+    (async () => {
+      try {
+        const { data } = await axios.get(
+          `${API.BASE_URL}/api/configuracoes-perfil/privacidade`,
+          { headers }
+        );
+
+        if (cancel) return;
+
+        setPrivacidade({
+          perfilVisivel: data?.perfilVisivel ?? true,
+          permitirMensagens: data?.permitirMensagens ?? true,
+          mostrarEmail: data?.mostrarEmail ?? false,
+        });
+      } catch {
+        if (cancel) return;
+
+        setPrivacidade({
+          perfilVisivel: true,
+          permitirMensagens: true,
+          mostrarEmail: false,
+        });
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -591,9 +631,12 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                   <b>Local:</b> {localidade}
                 </li>
               )}
-              <li>
-                <b>Email:</b> {data.escolinha.email ?? "Não informado"}
-              </li>
+              {privacidade?.mostrarEmail ? (
+                <li>
+                  <b>Email:</b> {data.escolinha.email ?? data.usuario?.email ?? "Não informado"}
+                </li>
+              ) : null}
+
               {data.escolinha.siteOficial && (
                 <li>
                   <b>Site:</b> {data.escolinha.siteOficial}
