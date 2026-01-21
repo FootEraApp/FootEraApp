@@ -6,9 +6,29 @@ import fs from "fs/promises";
 import path from "path";
 import { getDailyUsage } from "../services/usage.js";
 import { audit } from "../services/audit.js"; 
+import { recomputeAndEmitBadge } from "./notificacoesController.js";
 
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
+
+function readPrivacidade(raw: any) {
+  const c = raw && typeof raw === "object" ? raw : {};
+  return {
+    // defaults
+    permitirMensagens: c.permitirMensagens !== false, // default true
+  };
+}
+
+function readNotificacoes(raw: any) {
+  const c = raw && typeof raw === "object" ? raw : {};
+  return {
+    notifMensagens: c.notifMensagens !== false, // default true
+  };
+}
+
+function isAdminTipo(tipo: any) {
+  return String(tipo || "").toLowerCase() === "admin";
+}
 
 async function isProUser(userId: string) {
   const assinatura = await prisma.assinatura.findUnique({
@@ -95,6 +115,7 @@ export async function markReadFromUser(req: any, res: Response) {
       data: { lida: true },
     });
 
+    await recomputeAndEmitBadge(userId);
     res.sendStatus(204);
   } catch (e) {
     console.error("markReadFromUser error:", e);
@@ -119,8 +140,34 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
 
     const destinatario = await prisma.usuario.findUnique({
       where: { id: paraId },
-      select: { id: true, tipo: true },
+      select: { id: true, tipo: true, configuracoesPrivacidade: true, configuracoesNotificacoes: true },
     });
+
+    const priv: any =
+      destinatario?.configuracoesPrivacidade &&
+      typeof destinatario.configuracoesPrivacidade === "object"
+        ? destinatario.configuracoesPrivacidade
+        : {};
+
+    if (priv.permitirMensagens === false) {
+      return res.status(403).json({
+        error: "Este usuário desativou mensagens diretas.",
+      });
+    }
+
+    if (!destinatario) {
+      return res.status(404).json({ error: "Destinatário não encontrado." });
+    }
+
+    const destPriv = readPrivacidade((destinatario as any).configuracoesPrivacidade);
+    const viewerIsAdmin = isAdminTipo((remetente as any)?.tipo);
+
+    if (!destPriv.permitirMensagens && !viewerIsAdmin && destinatario.id !== deId) {
+      return res.status(403).json({
+        code: "DM_DISABLED",
+        error: "Este usuário desativou mensagens diretas.",
+      });
+    }
 
     if (remetente?.tipo === "Olheiro" && destinatario?.tipo === "Atleta") {
       const atleta: any = await prisma.atleta.findFirst({
@@ -162,6 +209,31 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
         deId: deId,
       },
     });
+
+    const destNotif = readNotificacoes((destinatario as any).configuracoesNotificacoes);
+
+    // ✅ só cria registro de notificacao se o usuário quer notif de mensagens
+    if (destNotif.notifMensagens) {
+      try {
+        await prisma.notificacao.create({
+          data: {
+            usuarioId: paraId,
+            actorId: deId,
+            // ajuste esses campos se seu model tiver nomes diferentes
+            tipo: "MENSAGEM",
+            titulo: "Nova mensagem",
+            mensagem: "Você recebeu uma nova mensagem.",
+            link: `/mensagens?otherId=${deId}`,
+          } as any,
+        });
+      } catch (e) {
+        // se seu model notificacao não tem esses campos, não derruba o envio da mensagem
+        console.warn("[enviarMensagem] falha ao criar notificacao:", e);
+      }
+
+      // ✅ atualiza badge via socket (agora emitindo no room certo)
+      await recomputeAndEmitBadge(paraId);
+    }
 
     const payload = { ...saved, clientMsgId, pending: false };
 
@@ -453,6 +525,8 @@ export async function markAllRead(req: any, res: Response) {
     where: { paraId: userId, lida: false },
     data: { lida: true },            
   });
+
+  await recomputeAndEmitBadge(userId);
   res.sendStatus(204);
 }
 
