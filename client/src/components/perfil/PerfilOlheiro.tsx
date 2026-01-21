@@ -1,3 +1,4 @@
+//client/src/components/perfil/PerfilOlheiro
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -46,6 +47,7 @@ type PayloadOlheiro = {
 
 type AtletaItem = {
   id: string;
+  usuarioId?: string;
   atletaId: string;
   nome: string;
   foto?: string | null;
@@ -141,6 +143,7 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
   const [feedback, setFeedback] = useState<{ tipo: "ok" | "erro"; msg: string } | null>(null);
   const [notes, setNotes] = useState<Record<string, Note>>({});
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!token) return;
     let cancel = false;
@@ -162,6 +165,10 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
     return () => { cancel = true; };
   }, [targetId, token]);
 
+useEffect(() => {
+  if (aba === "atletas") setObservados(null);
+}, [aba]);
+
   
   useEffect(() => {
     if (!token) return;
@@ -179,17 +186,38 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
       }
     }
 
-    async function fetchObservados() {
-      try {
-        const { data: lista } = await axios.get<AtletaItem[]>(
-          `${API.BASE_URL}/api/observados`,
-          { headers, params: { incluirPontuacao: 1 } }
-        );
-        setObservados(Array.isArray(lista) ? lista : []);
-      } catch {
-        setObservados([]);
+async function fetchObservados() {
+  // ✅ pega o id do olheiro com prioridade correta
+  const ownerId =
+    (isOwn ? Storage.tipoUsuarioId : data?.olheiro?.id) ??
+    data?.olheiro?.id ??
+    Storage.tipoUsuarioId ??
+    null;
+
+  if (!ownerId) {
+    if (!cancel.v) setObservados([]);
+    return;
+  }
+
+  try {
+    const { data: lista } = await axios.get<AtletaItem[]>(
+      `${API.BASE_URL}/api/observados`,
+      {
+        headers,
+        params: {
+          incluirPontuacao: 1,
+          ownerId,          // ✅ IMPORTANTÍSSIMO
+          tipo: "olheiro",  // ✅ IMPORTANTÍSSIMO
+        },
       }
-    }
+    );
+
+    if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
+  } catch (e) {
+    if (!cancel.v) setObservados([]);
+  }
+}
+
 
     async function fetchIndicacoes() {
       const tipoId = (isOwn ? Storage.tipoUsuarioId : data?.olheiro?.id) ?? null;
@@ -206,7 +234,9 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
     }
 
     if (aba === "visao" && atividades == null) fetchAtividades();
-    if (aba === "atletas" && subAbaAtletas === "observados" && observados == null) fetchObservados();
+    if (aba === "atletas" && subAbaAtletas === "observados" && observados == null) {
+      fetchObservados();
+    }
     if (aba === "indicacoes" && indicacoes == null) fetchIndicacoes();
 
     return () => { cancel.v = true; };
@@ -536,9 +566,9 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
                               {[a.posicao, a.idade ? `${a.idade} anos` : ""].filter(Boolean).join(" • ")}
                             </div>
                           </div>
-                          <Link href={`/perfil/${a.id}`} className="text-sm text-green-800 inline-flex items-center gap-1">
-                            Ver perfil <ChevronRight className="w-4 h-4" />
-                          </Link>
+                            <Link href={`/perfil/${a.usuarioId || a.id}`} className="text-sm text-green-800 inline-flex items-center gap-1">
+                              Ver perfil <ChevronRight className="w-4 h-4" />
+                            </Link>
                         </div>
 
                         {isOwn && (
