@@ -4,7 +4,7 @@ import axios from "axios";
 import {
   X, Loader2, Plus, Users, User, List, Save, Search,
   ChevronLeft, ChevronRight, ClipboardList, CheckCircle2, XCircle, CalendarClock,
-  PanelLeftClose, PanelLeftOpen
+  PanelLeftClose, PanelLeftOpen, Trash2
 } from "lucide-react";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
@@ -21,6 +21,15 @@ type TurmaMin = {
 
 type ProfessorMin = { id: string; nome: string };
 type AtletaMin = { usuarioId: string; nome: string; sobrenome?: string };
+
+type TurmaAluno = {
+  usuarioId: string;
+  atletaId?: string | null;
+  nome: string;
+  sobrenome?: string;
+  foto?: string | null;
+  vinculado: boolean;
+};
 
 type TreinoAgendadoItem = {
   id: string;
@@ -250,6 +259,10 @@ export default function TurmasManager({
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
 
+  const [deletandoTurma, setDeletandoTurma] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmDeleteStep, setConfirmDeleteStep] = useState<1 | 2>(1);
+
   const [turmas, setTurmas] = useState<TurmaMin[]>([]);
   const [profs, setProfs] = useState<ProfessorMin[]>([]);
   const [alunos, setAlunos] = useState<AtletaMin[]>([]);
@@ -284,6 +297,8 @@ export default function TurmasManager({
   const [treinoProgramadoId, setTreinoProgramadoId] = useState<string>("");
   const [salvandoAgenda, setSalvandoAgenda] = useState(false);
 
+  const [turmaAlunos, setTurmaAlunos] = useState<TurmaAluno[]>([]);
+  const [naoVinculadosUsuarioIds, setNaoVinculadosUsuarioIds] = useState<string[]>([]);
 
   const [novoNome, setNovoNome] = useState("");
   const [novoCategoria, setNovoCategoria] = useState<
@@ -508,6 +523,33 @@ useEffect(() => {
         ? res.data.alunos.map((x: any) => String(x.usuarioId)).filter(Boolean)
         : [];
 
+    // ✅ lista real da turma (pode incluir não-vinculado)
+    const alunosTurma: TurmaAluno[] = Array.isArray(res.data?.alunos)
+      ? res.data.alunos.map((a: any) => {
+          const u = a?.usuario ?? {};
+          const nome = String(u?.nome ?? a?.nome ?? "").trim();
+          const sobrenome = String(u?.sobrenome ?? a?.sobrenome ?? "").trim();
+          const nomeCompleto = [nome, sobrenome].filter(Boolean).join(" ").trim() || "Atleta";
+
+          return {
+            usuarioId: String(a?.usuarioId ?? u?.id ?? ""),
+            atletaId: a?.atletaId ? String(a.atletaId) : null,
+            nome: nomeCompleto,
+            sobrenome: sobrenome || undefined,
+            foto: (u?.foto ?? a?.foto ?? null) as any,
+            vinculado: !!a?.vinculado,
+          };
+        }).filter((x: TurmaAluno) => !!x.usuarioId)
+      : [];
+
+    setTurmaAlunos(alunosTurma);
+
+    const naoVinc: string[] = Array.isArray(res.data?.naoVinculadosUsuarioIds)
+      ? res.data.naoVinculadosUsuarioIds.map(String)
+      : alunosTurma.filter((x) => !x.vinculado).map((x) => x.usuarioId);
+
+    setNaoVinculadosUsuarioIds(naoVinc);
+
     setAlunosSelecionados(usuarioIds);
     setDirtyAlunos(false);
   };
@@ -545,6 +587,32 @@ useEffect(() => {
       setSalvando(false);
     }
   };
+
+const deletarTurmaSelecionada = async () => {
+  const turmaId = String(selecionada || "").trim();
+  if (!turmaId) return;
+  // abre o modal de confirmação (passo 1)
+  setConfirmDeleteStep(1);
+  setConfirmDeleteOpen(true);
+};
+
+const confirmarExclusaoTurma = async () => {
+  const turmaId = String(selecionada || "").trim();
+  if (!turmaId) return;
+
+  try {
+    setDeletandoTurma(true);
+    await axios.delete(`${API.BASE_URL}/api/turmas/${turmaId}`, { headers });
+
+    setConfirmDeleteOpen(false);
+    alert("Turma excluída!");
+    fecharModal();
+  } catch (e: any) {
+    alert(e?.response?.data?.message || e?.message || "Falha ao excluir turma.");
+  } finally {
+    setDeletandoTurma(false);
+  }
+};
 
 function autorTipoFromOwner(o: Owner): "Clube" | "Escolinha" {
   return o.tipo === "Clube" ? "Clube" : "Escolinha";
@@ -614,6 +682,11 @@ async function agendarParaDiasSelecionadosTurma() {
   if (!treinoProgramadoId) return alert("Selecione um treino programado para agendar.");
   if (!selectedDays.length) return alert("Selecione ao menos 1 dia no calendário.");
   if (salvandoAgenda) return;
+  if (bloqueiaAgendarTurma) {
+    return alert(
+      "Não é possível agendar para a turma inteira: existe aluno na turma que não está vinculado à sua instituição. Remova-o da turma para continuar."
+    );
+  }
 
   const autorId = String(owner.id);
   const autorTipo = autorTipoFromOwner(owner);
@@ -699,20 +772,26 @@ async function agendarParaDiasSelecionadosTurma() {
 
   // ✅ filtro aplicado nas duas listas
   const termoAluno = filtroAluno.trim().toLowerCase();
+  const setSel = useMemo(() => new Set(alunosSelecionados.map(String)), [alunosSelecionados]);
 
   const alunosNaTurma = useMemo(() => {
-    const setSel = new Set(alunosSelecionados.map(String));
-    return alunos
+    return turmaAlunos
       .filter((a) => setSel.has(String(a.usuarioId)))
       .filter((a) => (termoAluno ? (a.nome || "").toLowerCase().includes(termoAluno) : true));
-  }, [alunos, alunosSelecionados, termoAluno]);
+  }, [turmaAlunos, setSel, termoAluno]);
 
   const alunosForaDaTurma = useMemo(() => {
-    const setSel = new Set(alunosSelecionados.map(String));
     return alunos
       .filter((a) => !setSel.has(String(a.usuarioId)))
       .filter((a) => (termoAluno ? (a.nome || "").toLowerCase().includes(termoAluno) : true));
-  }, [alunos, alunosSelecionados, termoAluno]);
+  }, [alunos, setSel, termoAluno]);
+
+  const bloqueiaAgendarTurma = (naoVinculadosUsuarioIds?.length ?? 0) > 0;
+
+  const membrosNaoVinculados = useMemo(
+    () => alunosNaTurma.filter((a) => !a.vinculado),
+    [alunosNaTurma]
+  );
 
   const fecharModal = () => {
     setSelecionada("");
@@ -727,6 +806,10 @@ async function agendarParaDiasSelecionadosTurma() {
     setDrawerOpen(true);
     setTreinoProgramadoId("");
     setAgendadosTurma([]);
+    setConfirmDeleteOpen(false);
+    setConfirmDeleteStep(1);
+    setTurmaAlunos([]);
+    setNaoVinculadosUsuarioIds([]);
   };
 
   if (!open) return null;
@@ -915,14 +998,31 @@ async function agendarParaDiasSelecionadosTurma() {
                       </div>
 
                       {abaDireita === "membros" ? (
-                        <button
-                          onClick={salvarMembros}
-                          disabled={salvando}
-                          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-white hover:bg-emerald-700 disabled:opacity-70"
-                        >
-                          {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                          Salvar alterações
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={deletarTurmaSelecionada}
+                            disabled={deletandoTurma || salvando || !selecionada}
+                            className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-red-700 hover:bg-red-50 disabled:opacity-60"
+                            title="Excluir esta turma"
+                          >
+                            {deletandoTurma ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                            Excluir turma
+                          </button>
+
+                          <button
+                            onClick={salvarMembros}
+                            disabled={salvando}
+                            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-white hover:bg-emerald-700 disabled:opacity-70"
+                          >
+                            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                            Salvar alterações
+                          </button>
+                        </div>
                       ) : null}
                     </div>
 
@@ -995,6 +1095,18 @@ async function agendarParaDiasSelecionadosTurma() {
                               className="flex-1 min-h-0 overflow-auto p-3 overscroll-contain space-y-4"
                               style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" as any }}
                             >
+
+                            {bloqueiaAgendarTurma ? (
+                              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                                <div className="font-extrabold">Atenção</div>
+                                <div className="mt-1 text-xs leading-relaxed">
+                                  Existe(m) <b>{membrosNaoVinculados.length}</b> aluno(s) na turma que <b>não estão mais vinculados</b> à sua instituição.
+                                  <br />
+                                  Por segurança, <b>não será possível agendar treino para a turma inteira</b> enquanto eles não forem removidos.
+                                </div>
+                              </div>
+                            ) : null}
+
                               {/* ✅ LISTA 1: NA TURMA */}
                               <div className="rounded-xl border border-emerald-100 bg-emerald-50/40">
                                 <div className="flex items-center justify-between px-3 py-2 border-b border-emerald-100">
@@ -1016,8 +1128,22 @@ async function agendarParaDiasSelecionadosTurma() {
                                       const uid = String(a.usuarioId);
                                       return (
                                         <li key={uid} className="px-3 py-2 flex items-center gap-3">
-                                          <div className="flex-1">
-                                            <div className="text-sm font-medium text-emerald-900">{a.nome}</div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                              <div className="text-sm font-medium text-emerald-900 truncate">{a.nome}</div>
+
+                                              {!a.vinculado ? (
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-800 font-extrabold">
+                                                  Não vinculado
+                                                </span>
+                                              ) : null}
+                                            </div>
+
+                                            {!a.vinculado ? (
+                                              <div className="text-[11px] text-amber-900/80 mt-0.5">
+                                                Remova este aluno para liberar o agendamento por turma.
+                                              </div>
+                                            ) : null}
                                           </div>
                                           <input
                                             type="checkbox"
@@ -1251,10 +1377,17 @@ async function agendarParaDiasSelecionadosTurma() {
 
                                     <button
                                       onClick={agendarParaDiasSelecionadosTurma}
-                                      disabled={loadingProgramados || salvandoAgenda}
+                                      disabled={bloqueiaAgendarTurma || loadingProgramados || salvandoAgenda}
                                       className="w-full mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60"
                                     >
-                                      {salvandoAgenda ? "Agendando..." : loadingProgramados ? "Carregando..." : "Agendar treino para a turma"}
+                                      {bloqueiaAgendarTurma
+                                        ? "Remova alunos não vinculados"
+                                        : salvandoAgenda
+                                          ? "Agendando..."
+                                          : loadingProgramados
+                                            ? "Carregando..."
+                                            : "Agendar treino para a turma"}
+
                                     </button>
                                   </div>
                                 ) : (
@@ -1339,6 +1472,110 @@ async function agendarParaDiasSelecionadosTurma() {
           </div>
         </div>
       </div>
+
+
+      {/* =======================
+    MODAL: CONFIRMAR EXCLUSÃO DA TURMA
+   ======================= */}
+{confirmDeleteOpen ? (
+  <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+    <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-zinc-200 overflow-hidden">
+      <div className="flex items-center justify-between border-b border-zinc-100 p-4">
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-xl bg-red-50 flex items-center justify-center border border-red-100">
+            <Trash2 className="h-5 w-5 text-red-600" />
+          </div>
+          <div>
+            <div className="text-sm font-extrabold text-zinc-900">Excluir turma</div>
+            <div className="text-xs text-zinc-500">
+              {confirmDeleteStep === 1 ? "Confirmação" : "Confirmação final"}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (deletandoTurma) return;
+            setConfirmDeleteOpen(false);
+            setConfirmDeleteStep(1);
+          }}
+          className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-50"
+          title="Fechar"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="p-4">
+        {confirmDeleteStep === 1 ? (
+          <>
+            <div className="text-sm text-zinc-800">
+              Tem certeza que deseja <span className="font-extrabold text-red-700">EXCLUIR</span> esta turma?
+            </div>
+            <div className="mt-2 text-xs text-zinc-500">
+              Isso removerá os vínculos de professores e alunos relacionados à turma.
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-sm text-zinc-800">
+              Última confirmação: essa ação é <span className="font-extrabold text-red-700">irreversível</span>.
+            </div>
+            <div className="mt-2 text-xs text-zinc-500">
+              Ao confirmar, a turma será apagada do banco.
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="flex items-center justify-end gap-2 border-t border-zinc-100 p-4">
+        <button
+          type="button"
+          disabled={deletandoTurma}
+          onClick={() => {
+            setConfirmDeleteOpen(false);
+            setConfirmDeleteStep(1);
+          }}
+          className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+        >
+          Cancelar
+        </button>
+
+        {confirmDeleteStep === 1 ? (
+          <button
+            type="button"
+            disabled={deletandoTurma}
+            onClick={() => setConfirmDeleteStep(2)}
+            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-red-700 disabled:opacity-60"
+          >
+            Continuar
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={deletandoTurma}
+            onClick={confirmarExclusaoTurma}
+            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-red-700 disabled:opacity-60 inline-flex items-center gap-2"
+          >
+            {deletandoTurma ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Excluindo...
+              </>
+            ) : (
+              <>
+                <Trash2 className="h-4 w-4" />
+                Excluir definitivamente
+              </>
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+) : null}
+
     </div>
   );
 }
