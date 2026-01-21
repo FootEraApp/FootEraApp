@@ -276,7 +276,12 @@ function isItemPro(x: any): boolean {
 
   const status = x?.usuario?.assinatura?.status;
   const plano = x?.usuario?.assinatura?.plano;
-  return status === "ATIVA" || String(plano ?? "").toUpperCase().includes("PRO");
+
+  // ✅ TRIAL também vira PRO (mês grátis)
+  if (status === "ATIVA" || status === "TRIAL") return true;
+
+  // fallback: plano contendo PRO
+  return String(plano ?? "").toUpperCase().includes("PRO");
 }
 
 function sortProThenName<T>(arr: T[], getName: (x: T) => string) {
