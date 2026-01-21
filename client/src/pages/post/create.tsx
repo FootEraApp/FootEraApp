@@ -7,7 +7,6 @@ import {
   ImagePlay,
   X,
   Check,
-  ShieldCheck,
   Flag,
 } from "lucide-react";
 import { criarPost } from "@/services/feedService.js";
@@ -77,6 +76,15 @@ function SportButton({
   );
 }
 
+function isDesafioAchievement(e: { titulo?: string; descricao?: string | null }) {
+  const t = String(e?.titulo ?? "");
+  const d = String(e?.descricao ?? "");
+  const grupoMatch = d.match(/Grupo:\s*([^\n\r•]+)/i);
+  const grupo = String(grupoMatch?.[1] ?? "");
+
+  return /desaf/i.test(grupo) || /desaf/i.test(t) || /desaf/i.test(d);
+}
+
 function Chip({
   children,
   color = "emerald",
@@ -101,19 +109,15 @@ function Chip({
 
 export default function PaginaPostagem() {
   const [, navigate] = useLocation();
-
   const [descricao, setDescricao] = useState("");
   const [arquivo, setArquivo] = useState<File | null>(null);
-
   const [earned, setEarned] = useState<EarnedFromApi[]>([]);
   const [selectedAchId, setSelectedAchId] = useState<string>("");
-
   const [carregando, setCarregando] = useState(false);
   const [mensagem, setMensagem] = useState("");
   const [achPickerOpen, setAchPickerOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
   const selectedConquista = useMemo(() => {
     if (!selectedAchId) return null;
     return earned.find((e) => e.conquistaId === selectedAchId) || null;
@@ -125,23 +129,14 @@ export default function PaginaPostagem() {
 
   useEffect(() => {
     const usuarioId = getUsuarioId();
-    const perfil = String(
-      (Storage as any)?.tipoSalvo ||
-        localStorage.getItem("tipoUsuario") ||
-        sessionStorage.getItem("tipoUsuario") ||
-        ""
-    )
-      .trim()
-      .toLowerCase();
-
-    if (!usuarioId || perfil !== "atleta") {
+    if (!usuarioId) {
       setEarned([]);
       return;
     }
 
     const base =
       (API?.BASE_URL ? String(API.BASE_URL).replace(/\/+$/, "") : "") || "";
-    const url = `${base}/api/conquistas/${usuarioId}`;
+    const url = `${base}/api/conquistas/${usuarioId}?sync=1`;
 
     const token =
       (Storage as any)?.token ||
@@ -151,7 +146,7 @@ export default function PaginaPostagem() {
 
     const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-    fetch(url, { headers })
+    fetch(url, { headers, credentials: "include" })
       .then(async (r) => {
         if (!r.ok) throw new Error(`Falha ao carregar conquistas (${r.status})`);
         const json = await r.json();
@@ -178,16 +173,22 @@ export default function PaginaPostagem() {
               icon: c?.icon ?? v?.icon ?? "🏆",
               iconUrl: c?.iconUrl ?? v?.iconUrl ?? null,
               pontos: c?.pontos ?? v?.pontos ?? null,
-              concluida:
-                typeof v?.concluida === "boolean" ? v.concluida : true,
+              concluida: typeof v?.concluida === "boolean" ? v.concluida : true,
               conquistadoEm: v?.conquistadoEm ? String(v.conquistadoEm) : null,
             } as EarnedFromApi;
           })
           .filter(Boolean) as EarnedFromApi[];
 
-        setEarned(normalizado.filter((x) => x.concluida !== false));
+        setEarned(
+          normalizado
+            .filter((x) => x.concluida !== false)
+            .filter((x) => !isDesafioAchievement(x)) 
+        );
       })
-      .catch(() => setEarned([]));
+      .catch((err) => {
+        console.error("Erro carregando conquistas no post/create:", err);
+        setEarned([]);
+      });
   }, []);
 
   async function handleEnviar() {
@@ -222,7 +223,7 @@ export default function PaginaPostagem() {
       const descricaoFinal = partes.join("\n\n");
 
       await criarPost({
-        descricao: descricaoFinal || "(post sem texto)",
+        descricao: descricaoFinal,
         imagemUrl: undefined,
         videoUrl: undefined,
         arquivo: arquivo || undefined,
@@ -269,23 +270,6 @@ export default function PaginaPostagem() {
               {selectedConquista.descricao}
             </div>
           ) : null}
-          <div className="mt-2 flex items-center gap-2">
-            <Chip color="emerald">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              <span>ID {selectedConquista.conquistaId}</span>
-            </Chip>
-            {selectedConquista.codigo ? (
-              <Chip color="sky">
-                <span>Código {selectedConquista.codigo}</span>
-              </Chip>
-            ) : null}
-            {typeof selectedConquista.pontos === "number" ? (
-              <Chip color="amber">
-                <Trophy className="h-3.5 w-3.5" />
-                <span>{selectedConquista.pontos} pts</span>
-              </Chip>
-            ) : null}
-          </div>
         </div>
       </div>
     </div>
@@ -472,18 +456,6 @@ export default function PaginaPostagem() {
                               {e.descricao}
                             </div>
                           ) : null}
-                          <div className="mt-2 flex items-center gap-2">
-                            <Chip color="emerald">ID {e.conquistaId}</Chip>
-                            {e.codigo ? (
-                              <Chip color="sky">Código {e.codigo}</Chip>
-                            ) : null}
-                            {typeof e.pontos === "number" ? (
-                              <Chip color="amber">
-                                <Trophy className="h-3.5 w-3.5" />
-                                <span>{e.pontos} pts</span>
-                              </Chip>
-                            ) : null}
-                          </div>
                         </div>
                         {picked && (
                           <Check className="h-5 w-5 text-emerald-600 ml-auto mt-1" />

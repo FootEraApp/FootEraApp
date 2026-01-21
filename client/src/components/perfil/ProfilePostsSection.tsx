@@ -29,10 +29,9 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
   const lines = conteudo.split(/\n+/);
   const head = (lines[0] || "").trim();
   const rest = lines.slice(1).join("\n").trim();
-
-  const isHeadAchievement = /^🏆\s*Conquista:/i.test(head);
-
-  const idMatch = rest.match(/\[([^\]]+)\]/);
+  const all = `${head}\n${rest}`.trim();
+  const isHeadAchievement = /^🏆\s*Conquista(\s*\([^)]+\))?\s*:/i.test(head);
+  const idMatch = all.match(/\[([^\]]+)\]/);
   const conquistaId = idMatch?.[1]?.trim();
 
   if (!isHeadAchievement && !conquistaId) return null;
@@ -40,13 +39,19 @@ function parseAchievement(conteudo: string): ParsedAchievement | null {
   let headTitle: string | undefined;
   let headDesc: string | undefined;
 
-  const m = head.match(/^🏆\s*Conquista:\s*(.+?)\s+—\s+(.+)$/);
+  const m = head.match(/^🏆\s*Conquista(?:\s*\([^)]+\))?\s*:\s*(.+?)(?:\s+—\s+(.+))?\s*(?:🏆|$)/);
   if (m) {
-    headTitle = m[1];
-    headDesc = m[2];
+    headTitle = m[1]?.trim();
+    headDesc = m[2]?.trim();
   }
 
-  const userMsg = conquistaId ? rest.replace(/\[[^\]]+\]\s*/, "").trim() : rest;
+  let userMsg = rest.replace(/\[[^\]]+\]/g, "").trim();
+  userMsg = userMsg
+    .replace(/grupo\s*:\s*.*$/gim, "")
+    .replace(/tier\s*:\s*.*$/gim, "")
+    .replace(/[•·]/g, "")
+    .trim();
+
   return { conquistaId, headTitle, headDesc, userMsg };
 }
 
@@ -150,12 +155,21 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
   async function carregarConquista(conquistaId: string) {
     const id = String(conquistaId || "").trim();
     if (!id) return;
-
     if (conquistasById[id]) return;
+
+    const token =
+      (Storage as any)?.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
+
+    const base =
+      (API?.BASE_URL ? String(API.BASE_URL).replace(/\/+$/, "") : "") || "";
 
     try {
       const { data } = await axios.get<{ conquista: ConquistaDB | null }>(
-        `${API.BASE_URL}/api/conquistas/${id}`
+        `${base}/api/conquistas/id/${id}`,
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
       );
 
       if (data?.conquista) {
@@ -234,7 +248,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
           const parsed = parseAchievement(p.conteudo || "");
           if (parsed?.conquistaId) ids.add(parsed.conquistaId);
         }
-        ids.forEach((cid) => carregarConquista(cid));
+        ids.forEach((id) => carregarConquista(id));
       } catch (e) {
         console.error("Erro ao carregar postagens do perfil:", e);
         if (!cancelled) setPosts([]);
@@ -289,9 +303,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
             const avatarSrc = publicImgUrl(post?.usuario?.foto) || FALLBACK_AVATAR;
             const imgSrc = midiaImg(post.imagemUrl);
             const videoSrc = midiaVideo(post.videoUrl);
-            const ro = post.repostOf ?? null; 
-            const roImg = ro ? midiaImg(ro.imagemUrl) : null;
-            const roVideo = ro ? midiaVideo(ro.videoUrl) : null;
+            const ro = post.repostOf ?? null;
 
             return (
               <div
