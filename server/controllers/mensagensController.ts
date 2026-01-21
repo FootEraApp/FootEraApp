@@ -222,7 +222,7 @@ export async function listarConversas(req: any, res: Response) {
   const msgs = await prisma.mensagem.findMany({
     where: { OR: [{ deId: me }, { paraId: me }] },
     orderBy: { criadaEm: "desc" },
-    select: { deId: true, paraId: true, criadaEm: true, conteudo: true },
+    select: { deId: true, paraId: true, criadaEm: true, conteudo: true, tipo: true },
   });
 
   const partnerIds = Array.from(
@@ -254,10 +254,20 @@ export async function listarConversas(req: any, res: Response) {
     select: { id: true, nome: true, nomeDeUsuario: true, foto: true },
   });
 
-  const lastByPartner = new Map<string, { criadoEm: Date; conteudo: string | null }>();
+  const lastByPartner = new Map<
+    string,
+    { criadoEm: Date; conteudo: string | null; tipo: string | null }
+  >();
+
   for (const m of msgs) {
     const pid = m.deId === me ? m.paraId : m.deId;
-    if (!lastByPartner.has(pid)) lastByPartner.set(pid, { criadoEm: m.criadaEm, conteudo: m.conteudo ?? null });
+    if (!lastByPartner.has(pid)) {
+      lastByPartner.set(pid, {
+        criadoEm: m.criadaEm,
+        conteudo: m.conteudo ?? null,
+        tipo: (m as any).tipo ?? null,
+      });
+    }
   }
 
   const conversas = users
@@ -268,11 +278,11 @@ export async function listarConversas(req: any, res: Response) {
       naoLidas: unreadMap[u.id] ?? 0,
       ultimaMensagemEm: lastByPartner.get(u.id)?.criadoEm ?? null,
       ultimaMensagem: lastByPartner.get(u.id)?.conteudo ?? null,
+      ultimaMensagemTipo: lastByPartner.get(u.id)?.tipo ?? "NORMAL",
     }))
     .sort((a, b) => (b.ultimaMensagemEm?.getTime() ?? 0) - (a.ultimaMensagemEm?.getTime() ?? 0));
 
   const totalNaoLidas = unread.reduce((s, r) => s + r._count._all, 0);
-
   const ads = await getAdsConfigForUser(me);
 
   return res.json({
