@@ -6,6 +6,7 @@ import {
   getAuditoria,
   syncAllUsuarios,
   getConquistasCount,
+  getConquistaById,
 } from "../controllers/conquistasController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 
@@ -17,6 +18,7 @@ router.get("/auditoria", getAuditoria);
 router.get("/count", authenticateToken, getConquistasCount);
 router.post("/sync-all", authenticateToken, syncAllUsuarios);
 router.post("/compartilhar", authenticateToken, compartilharConquista);
+router.get("/id/:id", getConquistaById);
 router.get("/:usuarioId", getEarnedByUsuarioId);
 
 export default router;

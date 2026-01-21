@@ -231,6 +231,37 @@ export default function PagamentosPage() {
     return null;
   }
 
+  async function startTrial() {
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/billing/start-trial`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          planoId: selectedPlan,
+          periodicidade: period,
+        }),
+      });
+
+      const data = await r.json();
+
+      if (billingState?.trialAtivo || statusAssinatura === "TRIAL") {
+        alert("Seu mês grátis já está ativo ✅");
+        return;
+      }
+
+      if (!r.ok) {
+        alert(data.message || "Erro ao iniciar mês grátis");
+        return;
+      }
+
+      alert("🎉 Mês grátis iniciado com sucesso!");
+      await reloadMe();
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao iniciar mês grátis");
+    }
+  }
+
   async function startCheckout() {
     if (billingState?.trialAtivo && billingState?.diasRestantes != null && billingState.diasRestantes > 7) {
       alert(
@@ -438,6 +469,7 @@ export default function PagamentosPage() {
   const p = selectedObj;
   const total = totalComCupom();
   const statusAssinatura = billingState?.status ?? assinatura?.status ?? "SEM_ASSINATURA";
+  const semAssinatura = statusAssinatura === "SEM_ASSINATURA";
   const isTrial = billingState?.trialAtivo || statusAssinatura === "TRIAL";
   const isAtiva = statusAssinatura === "ATIVA";
   const isBloqueada = billingState?.bloqueado || statusAssinatura === "BLOQUEADA";
@@ -546,6 +578,24 @@ export default function PagamentosPage() {
                 Reativar agora
               </button>
             </div>
+          </div>
+        ) : semAssinatura ? (
+          <div className="flex flex-col gap-3">
+            <div className="text-gray-700">
+              Você ainda não possui uma assinatura.
+            </div>
+
+            <button
+              onClick={startTrial}
+              disabled={polling}
+              className="px-4 py-2 rounded-lg bg-green-800 text-white font-semibold disabled:opacity-60"
+            >
+              🎁 Começar mês grátis
+            </button>
+
+            <p className="text-xs text-gray-500">
+              O trial começa agora e dura 30 dias. Não é necessário pagamento neste momento.
+            </p>
           </div>
         ) : (
           <div className="text-gray-700">Você não possui assinatura ativa.</div>
