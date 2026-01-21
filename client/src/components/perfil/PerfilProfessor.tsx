@@ -182,6 +182,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(null);
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
+  const [privacidade, setPrivacidade] = useState<{ mostrarEmail: boolean } | null>(null);
 
   const qtdVinculados = vinculados?.length ?? 0;
   const qtdObservados = observados?.length ?? 0;
@@ -371,6 +372,30 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
   }, [rawToken, professorId, headers, owner?.tipo, owner?.id]);
 
   useEffect(() => {
+    let cancel = false;
+
+    async function fetchPrivacidade() {
+      if (!rawToken) return;
+
+      try {
+        const r = await axios.get(`${API.BASE_URL}/api/configuracoes-perfil/privacidade`, {
+          headers: { Authorization: `Bearer ${rawToken}` },
+        });
+
+        const mostrarEmail = !!(r.data?.mostrarEmail ?? r.data?.email ?? r.data?.mostrar_email);
+        if (!cancel) setPrivacidade({ mostrarEmail });
+      } catch {
+        if (!cancel) setPrivacidade({ mostrarEmail: false });
+      }
+    }
+
+    fetchPrivacidade();
+    return () => {
+      cancel = true;
+    };
+  }, [rawToken]);
+
+  useEffect(() => {
     if (professorId && turmas == null) reloadTurmas();
   }, [professorId, turmas, reloadTurmas]);
 
@@ -542,6 +567,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     return <div className="text-center p-10 text-red-600">Professor não encontrado.</div>;
 
   const nome = data.usuario?.nome || data.professor.nome;
+  const emailDoPerfil = data.usuario?.email ? String(data.usuario.email) : "";
   const headerFoto: string | undefined =
     (typeof data.usuario?.foto === "string" && data.usuario.foto) ||
     (typeof data.professor.fotoUrl === "string" && data.professor.fotoUrl) ||
@@ -693,6 +719,12 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
               <li>
                 <b>Nome:</b> {data.professor.nome}
               </li>
+              {privacidade?.mostrarEmail && emailDoPerfil ? (
+                <li>
+                  <b>Email:</b> {emailDoPerfil}
+                </li>
+              ) : null}
+
               {data.professor.codigo && (
                 <li>
                   <b>Código:</b> {data.professor.codigo}

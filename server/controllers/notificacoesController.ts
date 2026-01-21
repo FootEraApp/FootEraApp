@@ -3,6 +3,21 @@ import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { getIO } from "../socket.js";
 import { prisma } from "../prisma.js";
 
+async function getNotifPrefs(userId: string) {
+  const u = await prisma.usuario.findUnique({
+    where: { id: userId },
+    select: { configuracoesNotificacoes: true },
+  });
+
+  const raw: any = u?.configuracoesNotificacoes || {};
+  return {
+    notifMensagens: raw.notifMensagens ?? true,
+    notifTreinos: raw.notifTreinos ?? true,
+    notifEventos: raw.notifEventos ?? true,
+    notifMarketing: raw.notifMarketing ?? false,
+  };
+}
+
 export async function listarMinhasNotificacoes(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.userId;
@@ -24,7 +39,19 @@ export async function listarMinhasNotificacoes(req: AuthenticatedRequest, res: R
       },
     });
 
-    return res.json({ items: rows });
+    const prefs = await getNotifPrefs(userId);
+    const filtered = rows.filter((n: any) => {
+      const t = String(n.tipo ?? n.categoria ?? n.kind ?? "").toLowerCase();
+
+      if (t.includes("mens")) return prefs.notifMensagens;
+      if (t.includes("trein") || t.includes("solicit")) return prefs.notifTreinos;
+      if (t.includes("event")) return prefs.notifEventos;
+      if (t.includes("market") || t.includes("promo")) return prefs.notifMarketing;
+
+      return true; // se não tiver tipo claro, não some com a notificação
+    });
+
+    return res.json({ items: filtered });
   } catch (e) {
     console.error("[listarMinhasNotificacoes]", e);
     return res.status(500).json({ error: "Erro ao listar notificações" });
@@ -36,6 +63,7 @@ export async function getBadge(req: AuthenticatedRequest, res: Response) {
     const userId = req.userId!;
     if (!userId) return res.status(401).json({ error: "Não autenticado" });
 
+    const prefs = await getNotifPrefs(userId);
     const [pendSolic, unreadMsgs, totalNotifs] = await Promise.all([
       prisma.solicitacaoTreino.count({
         where: {
@@ -60,16 +88,24 @@ export async function getBadge(req: AuthenticatedRequest, res: Response) {
       prisma.mensagem.count({ where: { paraId: userId, lida: false } }),
       prisma.notificacao.count({ where: { usuarioId: userId } }),
     ]);
+    const solicitacoesCount = prefs.notifTreinos ? pendSolic : 0;
+    const mensagensCount = prefs.notifMensagens ? unreadMsgs : 0;
 
-    const totalNotificacoes = totalNotifs + pendSolic;
+    // totalNotifs (notificacoes gerais) você pode manter,
+    // ou zerar também se você tiver tipos e quiser respeitar.
+    // Por segurança, aqui vou manter "notificacoes" como está:
+    const notificacoesCount = totalNotifs;
+
+    const totalNotificacoes = notificacoesCount + solicitacoesCount;
 
     return res.json({
       totalNotificacoes,
-      notificacoes: totalNotifs,
-      solicitacoes: pendSolic,
+      notificacoes: notificacoesCount,
+      solicitacoes: solicitacoesCount,
       total: totalNotificacoes,
-      mensagens: unreadMsgs,
+      mensagens: mensagensCount,
     });
+
   } catch (e) {
     console.error("getBadge error:", e);
     return res.json({
@@ -83,6 +119,7 @@ export async function getBadge(req: AuthenticatedRequest, res: Response) {
 }
 
 export async function recomputeAndEmitBadge(userId: string) {
+  const prefs = await getNotifPrefs(userId);
   const [pendSolic, unreadMsgs, totalNotifs] = await Promise.all([
     prisma.solicitacaoTreino.count({
       where: {
@@ -97,11 +134,14 @@ export async function recomputeAndEmitBadge(userId: string) {
     prisma.notificacao.count({ where: { usuarioId: userId } }),
   ]);
 
+  const solicitacoesCount = prefs.notifTreinos ? pendSolic : 0;
+  const mensagensCount = prefs.notifMensagens ? unreadMsgs : 0;
+
   getIO()?.to(userId).emit("badge:update", {
-    totalNotificacoes: totalNotifs + pendSolic,
+    totalNotificacoes: totalNotifs + solicitacoesCount,
     notificacoes: totalNotifs,
-    solicitacoes: pendSolic,
-    mensagens: unreadMsgs,
+    solicitacoes: solicitacoesCount,
+    mensagens: mensagensCount,
   });
 }
 
