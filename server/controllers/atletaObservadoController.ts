@@ -1,3 +1,4 @@
+// server/controllers/atletaObservadoController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 
