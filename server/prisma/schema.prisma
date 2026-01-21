@@ -9,29 +9,32 @@ datasource db {
 }
 
 model Usuario {
-  id                       String              @id @default(uuid())
-  nomeDeUsuario            String              @unique
-  senhaHash                String
-  nome                     String
-  email                    String              @unique
-  foto                     String?
-  tipo                     TipoUsuario
-  cidade                   String?
-  estado                   String?
-  pais                     String?
-  bairro                   String?
-  cpf                      String?
-  dataNascimento           DateTime?
-  responsavelNome          String?
-  responsavelEmail         String?
-  responsavelTelefone      String?
-  configuracoesPrivacidade Json?
-  dataCriacao              DateTime            @default(now())
-  codigo                   String?
-  verified                 Boolean             @default(false)
-  EmailVerification        EmailVerification[]
-  assinatura               Assinatura?
-  administrador            Administrador?
+  id                        String              @id @default(uuid())
+  nomeDeUsuario             String              @unique
+  senhaHash                 String
+  nome                      String
+  email                     String              @unique
+  foto                      String?
+  tipo                      TipoUsuario
+  cidade                    String?
+  estado                    String?
+  pais                      String?
+  bairro                    String?
+  cpf                       String?
+  dataNascimento            DateTime?
+  responsavelNome           String?
+  responsavelEmail          String?
+  responsavelTelefone       String?
+  configuracoesPrivacidade  Json?
+  configuracoesNotificacoes Json?
+  dataCriacao               DateTime            @default(now())
+  codigo                    String?
+  verified                  Boolean             @default(false)
+  EmailVerification         EmailVerification[]
+  assinatura                Assinatura?
+  administrador             Administrador?
+  tokenVersion              Int                 @default(0) // ✅ ADICIONE ISSO
+  senhaAtualizadaEm         DateTime?
 
   amigosDe               Amigo[]                   @relation("AmigoUsuario")
   amigos                 Amigo[]                   @relation("UsuarioAmigo")
@@ -127,7 +130,7 @@ model Professor {
   areaFormacao        String
   escola              String?
   fotoUrl             String?
-  nome                String               @unique
+  nome                String
   usuarioId           String?              @unique
   statusCref          StatusCref?
   qualificacoes       String[]
@@ -492,7 +495,7 @@ model AtletaObservado {
 
 model Postagem {
   id                String       @id @default(uuid())
-  conteudo          String       @unique
+  conteudo          String
   imagemUrl         String?
   videoUrl          String?
   tipoMidia         TipoMidia?
