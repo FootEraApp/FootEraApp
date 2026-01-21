@@ -53,6 +53,17 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
   const [salvando, setSalvando] = useState<boolean>(false);
   const [erro, setErro] = useState<string>("");
 
+  function pad2(n: number) {
+    return String(n).padStart(2, "0");
+  }
+
+  function toLocalInput(dt: Date) {
+    return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}T${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+  }
+
+  const minDateTime = toLocalInput(new Date());
+  const maxDateTime = "2050-12-31T23:59";
+
   function set<K extends keyof EventoForm>(k: K, v: EventoForm[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
@@ -159,6 +170,8 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
                 type="datetime-local"
                 className="w-full border rounded px-3 py-2"
                 value={form.inscricaoInicio}
+                min={minDateTime}
+                max={maxDateTime}
                 onChange={(e) => set("inscricaoInicio", e.target.value)}
               />
             </div>
@@ -168,16 +181,20 @@ export default function PaginaNovoEventoEscola({ escolaId }: Props) {
                 type="datetime-local"
                 className="w-full border rounded px-3 py-2"
                 value={form.inscricaoFim}
+                min={minDateTime}
+                max={maxDateTime}
                 onChange={(e) => set("inscricaoFim", e.target.value)}
               />
             </div>
           </div>
-<div>
+          <div>
             <label className="block text-sm">Data do evento*</label>
             <input
               type="datetime-local"
               className="w-full border rounded px-3 py-2"
               value={form.dataEvento}
+              min={minDateTime}
+              max={maxDateTime}
               onChange={(e) => set("dataEvento", e.target.value)}
             />
           </div>

@@ -162,7 +162,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   const [data, setData] = useState<PayloadEscola | null>(null);
   const [loading, setLoading] = useState(true);
 
-  type Aba = "visao" | "eventos" | "atletas" | "conquistas" | "postagens"| "professores";
+  type Aba = "visao" | "eventos" | "atletas" | "conquistas" | "professores" | "postagens";
   const [aba, setAba] = useState<Aba>("visao");
 
   type SubAba = "vinculados" | "observados" | "solicitacoes";
@@ -546,8 +546,8 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                   { id: "visao", label: "Visão Geral" },
                   { id: "eventos", label: "Eventos" },
                   { id: "atletas", label: "Atletas" },
-                  { id: "postagens", label: "Postagens" },
                   { id: "professores", label: "Professores" },
+                  { id: "postagens", label: "Postagens" },
                 ]
               : [
                   { id: "visao", label: "Visão Geral" },
