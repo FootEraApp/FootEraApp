@@ -45,7 +45,7 @@ export async function getAlunosTurma(req: Request, res: Response) {
     // 1) Turma existe?
     const turma = await prisma.turma.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, clubeId: true, escolinhaId: true },
     });
 
     if (!turma) {
@@ -129,6 +129,49 @@ export async function getAlunosTurma(req: Request, res: Response) {
       new Set([...usuarioIdsFromVinculo, ...usuarioIdsFromTurmaLegacy].map(String))
     ).filter(Boolean);
 
+    // 4.1) Descobrir se cada membro está VINCULADO ao dono da turma (clube/escolinha)
+    const ownerClubeId = turma.clubeId ? String(turma.clubeId) : null;
+    const ownerEscolinhaId = turma.escolinhaId ? String(turma.escolinhaId) : null;
+
+    const vinculadoByUsuarioId = new Map<string, boolean>();
+
+    if (usuarioIdsFinal.length && (ownerClubeId || ownerEscolinhaId)) {
+      const atletasParaChecar = await prisma.atleta.findMany({
+        where: { usuarioId: { in: usuarioIdsFinal } },
+        select: {
+          id: true,
+          usuarioId: true,
+          clubeId: true,
+          escolinhaId: true,
+          relacoesTreinamento: {
+            where: {
+              ...(ownerClubeId ? { clubeId: ownerClubeId } : {}),
+              ...(ownerEscolinhaId ? { escolinhaId: ownerEscolinhaId } : {}),
+              ativo: { not: false }, // mesma ideia que você usa no gerenciar
+            },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      });
+
+      for (const a of atletasParaChecar) {
+        const direct =
+          (ownerClubeId && a.clubeId === ownerClubeId) ||
+          (ownerEscolinhaId && a.escolinhaId === ownerEscolinhaId);
+
+        const viaRelacao = (a.relacoesTreinamento?.length ?? 0) > 0;
+
+        vinculadoByUsuarioId.set(String(a.usuarioId), !!(direct || viaRelacao));
+      }
+    }
+
+    // Se não achou atleta (usuário sem registro de atleta), considera NÃO vinculado
+    for (const uid of usuarioIdsFinal) {
+      if (!vinculadoByUsuarioId.has(uid)) vinculadoByUsuarioId.set(uid, false);
+    }
+
+
     // 5) Carrega atletas (para mapear atletaId/posicao)
     const atletas = usuarioIdsFinal.length
       ? await prisma.atleta.findMany({
@@ -156,11 +199,14 @@ export async function getAlunosTurma(req: Request, res: Response) {
       const atletaInfo = atletaByUsuarioId.get(usuarioId) ?? null;
       const u = usuarioById.get(usuarioId) ?? null;
 
+      const vinculado = !!vinculadoByUsuarioId.get(usuarioId);
+
       return {
         atletaId: atletaInfo?.atletaId ?? null,
         usuarioId,
         id: atletaInfo?.atletaId ?? usuarioId,
         posicao: atletaInfo?.posicao ?? null,
+        vinculado,
         usuario: {
           id: u?.id ?? usuarioId,
           nome: u?.nome ?? "Atleta da turma",
@@ -169,11 +215,18 @@ export async function getAlunosTurma(req: Request, res: Response) {
       };
     });
 
+    const naoVinculadosUsuarioIds = alunos
+      .filter((a) => !a.vinculado)
+      .map((a) => a.usuarioId);
+
     return res.json({
       alunos,
       atletaIds: alunos.map((a) => a.atletaId).filter(Boolean),
       usuarioIds: usuarioIdsFinal,
+      naoVinculadosUsuarioIds,
     });
+
+
   } catch (e) {
     console.error("[turmas] erro ao buscar alunos da turma", id, e);
     return res.status(500).json({ error: "Erro interno ao buscar alunos" });

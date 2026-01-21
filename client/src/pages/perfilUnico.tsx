@@ -15,6 +15,7 @@ import PerfilAtleta from "../components/perfil/PerfilAtleta.js";
 import PerfilProfessor from "../components/perfil/PerfilProfessor.js";
 import PerfilClube from "../components/perfil/PerfilClube.js";
 import PerfilEscola from "../components/perfil/PerfilEscola.js";
+import BottomNav from "@/components/layout/BottomNav.js";
 
 type TipoPerfil = "Atleta" | "Professor" | "Clube" | "Escolinha";
 
@@ -112,23 +113,8 @@ export default function PerfilUnico() {
       {tipo === "Clube" && <PerfilClube idDaUrl={id} />}
       {tipo === "Escolinha" && <PerfilEscola idDaUrl={id} />}
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed">
-          <House />
-        </Link>
-        <Link href="/explorar">
-          <Search />
-        </Link>
-        <Link href="/post">
-          <CirclePlus />
-        </Link>
-        <Link href="/treinos">
-          <Volleyball />
-        </Link>
-        <Link href="/perfil">
-          <User />
-        </Link>
-      </nav>
+      <BottomNav />
+
     </div>
   );
 }
