@@ -2,7 +2,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 
-
 type OwnerWhere = {
   professorId?: string;
   escolinhaId?: string;
@@ -143,8 +142,15 @@ export async function listarObservados(req: Request, res: Response) {
     const rr: any = r;
     const item = {
       id: r.atleta?.usuario?.id ?? r.atleta?.usuarioId ?? r.atletaId,
+      observadoId: r.id,
       usuarioId: r.atleta?.usuario?.id ?? r.atleta?.usuarioId ?? "",
       atletaId: r.atletaId,
+      owner: {
+          professorId: (r as any).professorId ?? null,
+          clubeId: (r as any).clubeId ?? null,
+          escolinhaId: (r as any).escolinhaId ?? null,
+         olheiroId: (r as any).olheiroId ?? null,
+      },
       nome: r.atleta?.usuario?.nome ?? "Atleta",
       foto: r.atleta?.usuario?.foto ?? null,
       posicao: (r as any).atleta?.posicao ?? null,
@@ -295,5 +301,85 @@ export async function listarObservadosPorOlheiro(req: Request, res: Response) {
     return res
       .status(500)
       .json({ error: "Falha ao listar observados do olheiro" });
+  }
+}
+
+export async function atualizarObservado(req: Request, res: Response) {
+  try {
+    const idParamRaw = String(
+      (req.params as any).id ?? (req.params as any).atletaId ?? ""
+    ).trim();
+
+    const b: any = req.body || {};
+    const q: any = req.query || {};
+    const user: any = (req as any).user || {};
+
+    const ownerId: string =
+      String(
+        b.ownerId ??
+          b.tipoUsuarioId ??
+          q.ownerId ??
+          q.tipoUsuarioId ??
+          user.tipoUsuarioId ??
+          ""
+      ).trim();
+
+    const tipoRaw: string = String(
+      b.tipo ?? q.tipo ?? user.tipo ?? user.tipoUsuario ?? ""
+    ).trim();
+
+    const notaInterna = b.notaInterna;
+    const alertarMudancas = b.alertarMudancas;
+
+    if (!idParamRaw) {
+      return res.status(400).json({ message: "id é obrigatório" });
+    }
+    if (!ownerId) {
+      return res.status(400).json({ message: "ownerId/tipoUsuarioId é obrigatório" });
+    }
+    if (!tipoRaw) {
+      return res.status(400).json({ message: "tipo é obrigatório" });
+    }
+
+    const ownerWhere = buildOwnerWhere(tipoRaw, ownerId);
+
+    // 1) tenta atualizar como se fosse o ID do registro AtletaObservado
+    const byId = await prisma.atletaObservado.findFirst({
+      where: { id: idParamRaw, ...ownerWhere },
+      select: { id: true },
+    });
+
+    if (byId) {
+      await prisma.atletaObservado.update({
+        where: { id: byId.id },
+        data: {
+          notaInterna: typeof notaInterna === "string" ? notaInterna : null,
+          alertarMudancas: !!alertarMudancas,
+        },
+      });
+
+      return res.json({ ok: true, mode: "by_observado_id" });
+    }
+
+    // 2) fallback: tenta atualizar por atletaId (se o param era atletaId mesmo)
+    const result = await prisma.atletaObservado.updateMany({
+      where: {
+        atletaId: idParamRaw,
+        ...ownerWhere,
+      },
+      data: {
+        notaInterna: typeof notaInterna === "string" ? notaInterna : null,
+        alertarMudancas: !!alertarMudancas,
+      },
+    });
+
+    if (result.count === 0) {
+      return res.status(404).json({ message: "Observação não encontrada para atualizar" });
+    }
+
+    return res.json({ ok: true, mode: "by_atleta_id" });
+  } catch (e) {
+    console.error("[atualizarObservado] erro:", e);
+    return res.status(500).json({ message: "Erro ao salvar nota interna" });
   }
 }
