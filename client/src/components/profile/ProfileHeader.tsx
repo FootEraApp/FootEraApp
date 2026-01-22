@@ -1,3 +1,4 @@
+// client/src/components/profile/ProfileHeader
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
@@ -66,6 +67,24 @@ function Badge({ count }: { count?: number }) {
   );
 }
 
+function normalizeTipo(t: any): string {
+  const raw = String(t ?? "")
+    .trim()
+    .toLowerCase();
+
+  // remove acentos
+  const noAccents = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  // pega só a primeira “palavra” (ex.: "Professor Pro" -> "professor")
+  const first = noAccents.split(/\s+/)[0] || "";
+
+  // mapeia variações comuns
+  if (first === "escola") return "escolinha";
+  if (first === "coach") return "professor";
+
+  return first;
+}
+
 const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
 
 export default function ProfileHeader({
@@ -106,11 +125,32 @@ export default function ProfileHeader({
   const [perfilTipoId, setPerfilTipoId] = useState<string | null>(perfilTipoIdProp ?? null);
   const [checouVinculo, setChecouVinculo] = useState(false);
 
+
   const viewerTipo =
     (Storage as any).tipoSalvo ??
     localStorage.getItem("tipoUsuario") ??
     sessionStorage.getItem("tipoUsuario") ??
     "";
+
+  // -------------------- REGRA GLOBAL DO VÍNCULO (reutilizável) --------------------
+  const viewerTipoNorm = normalizeTipo(viewerTipo);
+  const alvoTipoNormGlobal = normalizeTipo(perfilTipo || perfilTipoProp);
+
+  const tiposComVinculo = new Set(["atleta", "professor", "clube", "escolinha"]);
+
+  const viewerPodeVinculo = tiposComVinculo.has(viewerTipoNorm);
+  const alvoPodeVinculo = tiposComVinculo.has(alvoTipoNormGlobal);
+
+  // ❌ Regra: Atleta NÃO pode vínculo com Atleta
+  const atletaComAtleta =
+    viewerTipoNorm === "atleta" && alvoTipoNormGlobal === "atleta";
+
+  const podeChecarVinculo =
+    viewerPodeVinculo && alvoPodeVinculo && !atletaComAtleta;
+
+
+  // -------------------------------------------------------------------------------
+
 
   const viewerCanObserve = /olheiro|professor|clube|escolinha/i.test(String(viewerTipo));
   const obsKey = Storage.usuarioId && alvoAtletaId ? `obs_${Storage.usuarioId}_${alvoAtletaId}` : null;
@@ -221,83 +261,81 @@ export default function ProfileHeader({
     setChecouVinculo(false);
   }, [perfilId]);
 
-  useEffect(() => {
-    if (isOwnProfile || isMe) return;
+  
+useEffect(() => {
+  if (isOwnProfile || isMe) return;
 
-    const token =
-      Storage.token ||
-      localStorage.getItem("token") ||
-      sessionStorage.getItem("token") ||
-      "";
+  const token =
+    Storage.token ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    "";
 
-    const usuarioAlvoId = String(perfilId || "").trim();
+  const usuarioAlvoId = String(perfilId || "").trim();
 
-    if (!token || !usuarioAlvoId) return;
+  if (!token || !usuarioAlvoId) return;
 
-    const usuarioId = String(
-      Storage.usuarioId ||
-      localStorage.getItem("usuarioId") ||
-      sessionStorage.getItem("usuarioId") ||
-      ""
-    ).trim();
+  // sempre reseta ao trocar de perfil / regras
+  setChecouVinculo(false);
+  setTemVinculoTreino(false);
 
-    if (!usuarioId) return;
-    if (checouVinculo) return;
+  // espera os tipos existirem
+  if (!alvoTipoNormGlobal || !viewerTipoNorm) return;
+
+  // se não pode checar (regra), finaliza carregamento
+  if (!podeChecarVinculo) {
+    setTemVinculoTreino(false);
     setChecouVinculo(true);
+    return;
+  }
 
-    let alive = true;
+  let alive = true;
 
-    (async () => {
-      try {
-        const qs = new URLSearchParams({
-          usuarioAlvoId,
-          usuarioId,
-          remetenteId: usuarioId,
-          solicitanteId: usuarioId,
-        }).toString();
+  (async () => {
+    try {
+      const qs = new URLSearchParams({ usuarioAlvoId }).toString();
+      const url = `${API.BASE_URL}/api/solicitacoes-treino/vinculo?${qs}`;
 
-        const url = `${API.BASE_URL}/api/solicitacoes-treino/vinculo?${qs}`;
-        const viewerTipoNorm = String(viewerTipo || "").toLowerCase();
-        const alvoTipoNorm = String(perfilTipo || perfilTipoProp || "").toLowerCase();
-        
-        const viewerEhAtleta = viewerTipoNorm === "atleta";
-        const viewerEhFormador = ["professor", "clube", "escolinha"].includes(viewerTipoNorm);
-        const alvoEhAtleta = alvoTipoNorm === "atleta";
-        const alvoEhFormador = ["professor", "clube", "escolinha"].includes(alvoTipoNorm);
-        
-        const podeChecarVinculo =
-          (viewerEhAtleta && alvoEhFormador) || (viewerEhFormador && alvoEhAtleta);
+      const resp = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-        if (!podeChecarVinculo) {
-          setTemVinculoTreino(false);
-          return;
-        }
+      if (!alive) return;
 
-        const resp = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (!alive) return;
-
-        if (!resp.ok) {
-          setTemVinculoTreino(false);
-          return;
-        }
-
-        const body = await resp.json().catch(() => null as any);
-
-        const vinculo = !!(body && (body.vinculo || body.relacaoId));
-        setTemVinculoTreino(vinculo);
-      } catch {
-        if (!alive) return;
+      if (!resp.ok) {
         setTemVinculoTreino(false);
+        setChecouVinculo(true);
+        return;
       }
-    })();
 
-    return () => {
-      alive = false;
-    };
-  }, [perfilId, isOwnProfile, isMe, checouVinculo, perfilTipo, perfilTipoProp, viewerTipo]);
+      const body = await resp.json().catch(() => null as any);
+
+      const vinculo = Boolean(
+        body?.vinculo === true || body?.relacao || body?.relacaoId
+      );
+
+      setTemVinculoTreino(vinculo);
+      setChecouVinculo(true);
+    } catch {
+      if (!alive) return;
+      setTemVinculoTreino(false);
+      setChecouVinculo(true);
+    }
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [
+  perfilId,
+  isOwnProfile,
+  isMe,
+  viewerTipoNorm,
+  alvoTipoNormGlobal,
+  podeChecarVinculo,
+]);
+
+
 
   useEffect(() => {
     if (!isOwnProfile) return;
@@ -510,6 +548,16 @@ export default function ProfileHeader({
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) return;
+
+        const resolvedUserId = String(
+          data?.usuario?.id ??
+          data?.usuarioId ??
+          data?.usuario?.usuarioId ??
+          ""
+        ).trim();
+
+
+
         const performance = Number(data.performance) || 0;
         const disciplina = Number(data.disciplina) || 0;
         const responsab = Number(data.responsabilidade) || 0;
@@ -755,9 +803,11 @@ export default function ProfileHeader({
     ? formatarUrlFoto(rawAvatar, "usuarios")
     : FALLBACK_AVATAR;
 
-  const alvoUsuarioId = isOwnProfile
-    ? String(Storage.usuarioId ?? "")
-    : perfilId;
+const alvoUsuarioIdFavorito = isOwnProfile
+  ? String(Storage.usuarioId ?? "").trim()
+  : String(perfilId || "").trim();
+
+
 
   const conquistasTotal = Number(conquistasCount || 0) || 0;
   const conquistasHref = `/perfil/conquistas?usuarioId=${encodeURIComponent(
@@ -876,30 +926,32 @@ export default function ProfileHeader({
   }, [isOwnProfile]);
 
   useEffect(() => {
-    if (!alvoUsuarioId) return;
+    if (!alvoUsuarioIdFavorito) return;
     const token = Storage.token;
     if (!token) return;
     fetch(`${API.BASE_URL}/api/favoritos`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => (r.ok ? r.json() : []))
-      .then((ids: string[]) => setEhFavorito(ids.includes(alvoUsuarioId)))
+      .then((ids: string[]) => setEhFavorito(ids.includes(alvoUsuarioIdFavorito)))
       .catch(() => {});
-  }, [alvoUsuarioId]);
+  }, [alvoUsuarioIdFavorito]);
+
 
   async function toggleFavorito() {
-    if (!alvoUsuarioId) return;
+    if (!alvoUsuarioIdFavorito) return;
     const token = Storage.token;
     if (!token) {
       alert("Faça login para favoritar.");
       return;
     }
-    await fetch(`${API.BASE_URL}/api/favoritos/${alvoUsuarioId}`, {
+    await fetch(`${API.BASE_URL}/api/favoritos/${alvoUsuarioIdFavorito}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
     });
     setEhFavorito((v) => !v);
   }
+
 
   const seguirUsuario = async (): Promise<boolean> => {
     const token = Storage.token;
@@ -1092,7 +1144,8 @@ export default function ProfileHeader({
   const mostrarTreinarJuntos =
     !isOwnProfile &&
     !isMe &&
-    ["professor", "clube", "escolinha"].includes(alvoTipoNorm);
+    podeChecarVinculo;
+
 
   let treinoLabel = "Treinar juntos";
   let treinoTitle = "Solicitar treino em conjunto";

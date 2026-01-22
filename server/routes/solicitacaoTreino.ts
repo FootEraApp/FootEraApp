@@ -1,3 +1,4 @@
+// server/routes/solicitacaoTreino
 import { Router } from "express";
 import {
   criarSolicitacao,
