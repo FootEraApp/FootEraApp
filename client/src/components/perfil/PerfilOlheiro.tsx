@@ -125,10 +125,14 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
 
   const [data, setData] = useState<PayloadOlheiro | null>(null);
   const [loading, setLoading] = useState(true);
+  const [privacidade, setPrivacidade] = useState<{
+    perfilVisivel: boolean;
+    permitirMensagens: boolean;
+    mostrarEmail: boolean;
+  } | null>(null);
 
   type Aba = "visao" | "atletas" | "indicacoes" | "postagens";
   const [aba, setAba] = useState<Aba>("visao");
-
   type SubAbaAtletas = "observados";
   const [subAbaAtletas, setSubAbaAtletas] = useState<SubAbaAtletas>("observados");
 
@@ -166,10 +170,36 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
     return () => { cancel = true; };
   }, [targetId, token]);
 
-useEffect(() => {
-  if (aba === "atletas") setObservados(null);
-}, [aba]);
+  useEffect(() => {
+    if (aba === "atletas") setObservados(null);
+  }, [aba]);
 
+  useEffect(() => {
+    if (!token) return;
+    let cancel = false;
+
+    (async () => {
+      try {
+        const { data } = await axios.get(
+          `${API.BASE_URL}/api/configuracoes-perfil/privacidade`,
+          { headers }
+        );
+        if (!cancel) setPrivacidade({
+          perfilVisivel: data?.perfilVisivel ?? true,
+          permitirMensagens: data?.permitirMensagens ?? true,
+          mostrarEmail: data?.mostrarEmail ?? false,
+        });
+      } catch {
+        if (!cancel) setPrivacidade({
+          perfilVisivel: true,
+          permitirMensagens: true,
+          mostrarEmail: false,
+        });
+      }
+    })();
+
+    return () => { cancel = true; };
+  }, [token]);
   
   useEffect(() => {
     if (!token) return;
@@ -352,6 +382,10 @@ async function salvarNota(atletaId: string) {
 
   const nome = data.usuario?.nome || "Olheiro";
   const handle = data.usuario?.nomeDeUsuario ? `@${data.usuario.nomeDeUsuario}` : "";
+  const emailDoPerfil =
+  (data?.usuario?.email && String(data.usuario.email)) ||
+  (data?.olheiro?.emailPublico && String(data.olheiro.emailPublico)) ||
+  "";
   const headerFoto: string | undefined =
     (typeof data.usuario?.foto === "string" && data.usuario.foto) ||
     (typeof data.olheiro.fotoUrl === "string" && data.olheiro.fotoUrl) ||
@@ -442,11 +476,26 @@ async function salvarNota(atletaId: string) {
 
       {aba === "visao" && (
         <div className="mt-4 px-4 grid gap-4">
-          <SectionCard title="Informações do Olheiro" right={handle ? <span className="text-xs text-green-900/60">{handle}</span> : null}>
+          <SectionCard
+            title="Informações do Olheiro"
+            right={handle ? <span className="text-xs text-green-900/60">{handle}</span> : null}
+          >
             <ul className="text-sm text-green-900/90 space-y-2">
+              <li><b>Nome:</b> {nome}</li>
+
+              {privacidade?.mostrarEmail && emailDoPerfil ? (
+                <li>
+                  <b>Email:</b> {emailDoPerfil}
+                </li>
+              ) : null}
+
               {data.olheiro.headline && <li><b>Headline:</b> {data.olheiro.headline}</li>}
               {data.olheiro.areaAtuacao && <li><b>Área de atuação:</b> {data.olheiro.areaAtuacao}</li>}
-              <li><b>Experiência:</b> {data.olheiro.anosExperiencia ?? 0} ano{(data.olheiro.anosExperiencia ?? 0) === 1 ? "" : "s"}</li>
+              <li>
+                <b>Experiência:</b> {data.olheiro.anosExperiencia ?? 0} ano
+                {(data.olheiro.anosExperiencia ?? 0) === 1 ? "" : "s"}
+              </li>
+
               {clubeColab && (
                 <li className="flex items-center gap-2">
                   <b>Colaboração:</b>
@@ -466,6 +515,7 @@ async function salvarNota(atletaId: string) {
                 </li>
               )}
             </ul>
+
             {data.olheiro.descricao && (
               <div className="mt-3">
                 <div className="text-sm font-semibold text-green-900">Sobre: </div>
