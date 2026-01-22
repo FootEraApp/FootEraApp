@@ -1,7 +1,7 @@
 // client/src/pages/GerenciarAtletas
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Volleyball, User, CirclePlus, House } from "lucide-react";
+import {CirclePlus } from "lucide-react";
 import axios from "axios";
 import {
   Users, Search, Filter, ChevronRight, ChevronLeft, CheckCircle2, XCircle, ClipboardList, ChevronDown, ArrowUpAZ, ArrowDownZA,
@@ -11,7 +11,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
 import Storage from "../../../server/utils/storage.js";
-import { API } from "../config.js";
+import { API, APP } from "../config.js";
 import TurmasManager from "../components/turmas/TurmasManager.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 
@@ -36,6 +36,8 @@ type AtletaMin = {
   id: string;
   usuarioId: string;
   nome: string;
+  sobrenome?: string | null;
+  nomeUsuario?: string | null;
   idade?: number | null;
   foto?: string | null;
   categoria?: CategoriaBase | null;
@@ -252,10 +254,9 @@ function submissaoToAgendadoLike(s: SubmissaoItem): TreinoAgendadoItem {
     submissaoTreinoId: s.tipo === "treino" ? s.id : null,
   };
 }
-
-
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 const getFoto = (f?: string | null) => {
-  if (!f || f === "" || f === "null") return "/assets/usuarios/default-user.png";
+  if (!f || f === "" || f === "null") return AVATAR_FALLBACK;
 
   const v = String(f).trim();
 
@@ -270,6 +271,14 @@ const getFoto = (f?: string | null) => {
 
   return `${API.BASE_URL}/${v.replace(/^\/+/, "")}`;
 };
+const nomeCompletoAtleta = (a: Pick<AtletaMin, "nome" | "sobrenome" | "nomeUsuario">) => {
+  const nu = String((a as any).nomeUsuario || "").trim();
+  if (nu) return nu;
+
+  const n = String(a.nome || "").trim();
+  const s = String(a.sobrenome || "").trim();
+  return [n, s].filter(Boolean).join(" ").trim() || "Atleta";
+};
 
 const numberOrDash = (n?: number | null) => (typeof n === "number" ? n : "–");
 const formatRelativo = (iso: string) => {
@@ -282,6 +291,13 @@ const formatRelativo = (iso: string) => {
   if (dias === 1) return "ontem";
   return `há ${dias} d`;
 };
+
+function onImgErrorFallback(e: React.SyntheticEvent<HTMLImageElement>) {
+  const img = e.currentTarget;
+  if ((img as any).dataset?.fallbackApplied) return;
+  (img as any).dataset.fallbackApplied = "1";
+  img.src = AVATAR_FALLBACK;
+}
 
 const AprovacaoPill: React.FC<{ value: boolean | null }> = ({ value }) => {
   const cls = value === true
@@ -494,12 +510,17 @@ const GerenciarAtletas: React.FC = () => {
 
       const { data } = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, { headers, params });
       const lista = (data?.atletas || []) as any[];
-      const normalizados: AtletaMin[] = lista.map((a) => ({
+      const normalizados: AtletaMin[] = lista.map((a) => {
+      const nomeUsuario = a.usuario?.nome ?? null;
+
+      return {
         id: a.id,
         usuarioId: a.usuarioId,
-        nome: a.nome,
+        nome: a.nome ?? "Atleta",
+        sobrenome: a.sobrenome ?? null,
+        nomeUsuario,
         idade: a.idade ?? null,
-        foto: a.foto ?? null,
+        foto: a.foto ?? a.usuario?.foto ?? null,
         posicao: (posicoesMap as any)[a.posicao] ?? a.posicao ?? null,
         categoria: apiToUiCategoria(a.categoria),
         pontuacao: a.pontuacao ?? null,
@@ -511,7 +532,8 @@ const GerenciarAtletas: React.FC = () => {
           a.professor?.usuario?.nome ??
           a.professorNome ??
           null,
-    }));
+      };
+    });
       setAtletas(normalizados);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Falha ao carregar atletas");
@@ -1212,7 +1234,12 @@ async function salvarAvaliacao() {
                 {professores.map((p) => (
                   <tr key={p.id} className="border-t border-zinc-100">
                     <td className="p-3">
-                      <img src={getFoto(p.foto)} alt={p.nome} className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow" />
+                      <img
+                        src={getFoto(p.foto)}
+                        alt={p.nome}
+                        onError={onImgErrorFallback}
+                        className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow"
+                      />
                     </td>
                     <td className="p-3">
                       <div className="font-medium text-zinc-900">{p.nome}</div>
@@ -1314,12 +1341,16 @@ async function salvarAvaliacao() {
                         <div className="flex items-center gap-3">
                           <img
                             src={getFoto(a.foto)}
-                            alt={a.nome}
+                            alt={nomeCompletoAtleta(a)}
+                            onError={onImgErrorFallback}
                             className="h-11 w-11 rounded-full object-cover ring-2 ring-white shadow"
                           />
 
                           <div className="min-w-0 flex-1">
-                            <div className="font-semibold text-zinc-900 truncate">{a.nome}</div>
+                            <div className="font-semibold text-zinc-900 truncate">
+                              {nomeCompletoAtleta(a)}
+                            </div>
+
                             <div className="text-xs text-zinc-500 truncate">
                               {a.categoria ?? "—"} · {a.posicao ?? "—"}
                             </div>
@@ -1384,13 +1415,16 @@ async function salvarAvaliacao() {
                             <td className="p-3">
                               <img
                                 src={getFoto(a.foto)}
-                                alt={a.nome}
+                                alt={nomeCompletoAtleta(a)}
+                                onError={onImgErrorFallback}
                                 className="h-10 w-10 rounded-full object-cover ring-2 ring-white shadow"
                               />
                             </td>
 
                             <td className="p-3">
-                              <div className="font-medium text-zinc-900">{a.nome}</div>
+                              <div className="font-medium text-zinc-900">
+                                {nomeCompletoAtleta(a)}
+                              </div>
                             </td>
 
                             <td className="p-3 text-sm text-zinc-700">{a.categoria ?? "—"}</td>
@@ -1436,9 +1470,16 @@ async function salvarAvaliacao() {
             {focado ? (
               <div className="rounded-2xl border border-zinc-200 bg-white p-4">
                 <div className="flex items-center gap-3">
-                  <img src={getFoto(focado.foto)} className="h-12 w-12 rounded-full object-cover" />
+                  <img
+                    src={getFoto(focado.foto)}
+                    onError={onImgErrorFallback}
+                    className="h-12 w-12 rounded-full object-cover"
+                  />
+
                   <div>
-                    <div className="font-semibold text-zinc-900">{focado.nome}</div>
+                    <div className="font-semibold text-zinc-900">
+                      {nomeCompletoAtleta(focado)}
+                    </div>
                     <div className="text-xs text-zinc-500">{focado.categoria ?? "—"} · {focado.posicao ?? "—"}</div>
                   </div>
                 </div>
@@ -1537,7 +1578,9 @@ async function salvarAvaliacao() {
             <div className="flex items-center justify-between border-b border-zinc-200 px-3 sm:px-4 py-2 sm:py-3">
               <div className="min-w-0">
                 <div className="text-[11px] sm:text-xs text-zinc-500">Agenda de Treinos</div>
-                <div className="font-extrabold truncate text-zinc-900 text-sm sm:text-base">{focado.nome}</div>
+                <div className="font-extrabold truncate text-zinc-900 text-sm sm:text-base">
+                  {nomeCompletoAtleta(focado)}
+                </div>
               </div>
 
               <button
