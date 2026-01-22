@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
-  Activity, PlusCircle, CirclePlus, ChevronRight, House, Search, User, Eye
+  Activity, PlusCircle, CirclePlus, ChevronRight, House, Search, User, Eye,
+  Save, Loader2
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
@@ -285,26 +286,34 @@ async function fetchObservados() {
     }
   }
 
-  const saveNotaDebounced = useMemo(
-    () =>
-      debounce(async (atletaId: string, texto: string) => {
-        setNotes(p => {
-          const prev = p[atletaId] ?? { texto: "", saving: false, dirty: true };
-          return { ...p, [atletaId]: { ...prev, saving: true } };
-        });
-        try {
-          await axios.put(
-            `${API.BASE_URL}/api/observados/${encodeURIComponent(atletaId)}/nota`,
-            { texto },
-            { headers: { "Content-Type": "application/json", ...(headers || {}) } }
-          );
-          setNotes(p => ({ ...p, [atletaId]: { texto, saving: false, dirty: false } }));
-        } catch {
-          setNotes(p => ({ ...p, [atletaId]: { texto, saving: false, dirty: true } }));
-        }
-      }, 600),
-    [headers]
-  );
+async function salvarNota(atletaId: string) {
+  const texto = notes[atletaId]?.texto ?? "";
+
+  // marca como salvando
+  setNotes(p => {
+    const prev = p[atletaId] ?? { texto: "", saving: false, dirty: false };
+    return { ...p, [atletaId]: { ...prev, saving: true } };
+  });
+
+  try {
+    await axios.put(
+      `${API.BASE_URL}/api/observados/${encodeURIComponent(atletaId)}/nota`,
+      { texto },
+      { headers: { "Content-Type": "application/json", ...(headers || {}) } }
+    );
+
+    setNotes(p => ({
+      ...p,
+      [atletaId]: { texto, saving: false, dirty: false },
+    }));
+  } catch {
+    setNotes(p => ({
+      ...p,
+      [atletaId]: { texto, saving: false, dirty: true },
+    }));
+  }
+}
+
 
   useEffect(() => {
     if (clubeQuery) buscarClubes(clubeQuery);
@@ -597,16 +606,38 @@ async function fetchObservados() {
                                       const prev = p[atletaKey] ?? { texto: "", saving: false, dirty: false };
                                       return { ...p, [atletaKey]: { ...prev, texto, dirty: true } };
                                     });
-                                    saveNotaDebounced(atletaKey, texto);
                                   }}
                                 />
-                                <div className="mt-1 text-[11px] text-green-900/60">
-                                  {notes[atletaKey]?.saving
-                                    ? "Salvando…"
-                                    : notes[atletaKey]?.dirty
-                                    ? "Alterações pendentes"
-                                    : "Salvo"}
+
+                                <div className="mt-2 flex items-center justify-between">
+                                  <button
+                                    type="button"
+                                    onClick={() => salvarNota(atletaKey)}
+                                    disabled={!notes[atletaKey]?.dirty || notes[atletaKey]?.saving}
+                                    className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-60"
+                                  >
+                                    {notes[atletaKey]?.saving ? (
+                                      <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Salvando...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Save className="w-4 h-4" />
+                                        Salvar anotação
+                                      </>
+                                    )}
+                                  </button>
+
+                                  <div className="text-[11px] text-green-900/60">
+                                    {notes[atletaKey]?.saving
+                                      ? "Salvando…"
+                                      : notes[atletaKey]?.dirty
+                                      ? "Alterações pendentes"
+                                      : "Salvo"}
+                                  </div>
                                 </div>
+
                               </div>
                             )}
                           </div>

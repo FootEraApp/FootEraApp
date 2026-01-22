@@ -1,3 +1,4 @@
+//server/controllers/solicitacaoTreinoController
 import { Response, Request } from "express";
 import { prisma } from "../prisma.js";
 import { resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
