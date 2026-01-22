@@ -149,58 +149,84 @@ export async function getProfessorDoAtleta(req: Request, res: Response) {
   try {
     const { atletaId } = req.params;
 
-    const rel = await prisma.relacaoTreinamento.findFirst({
+    const rels = await prisma.relacaoTreinamento.findMany({
       where: {
         atletaId,
         ativo: true,
         encerradoEm: null,
         professorId: { not: null },
       },
-      include: {
-        professor: { include: { usuario: true } },
-      },
+      include: { professor: { include: { usuario: true } } },
       orderBy: { criadoEm: "desc" },
     });
 
-    const prof = rel?.professor ?? null;
-
-    const payload = prof
-      ? {
+    const map = new Map<string, { id: string; nome: string | null }>();
+    for (const r of rels) {
+      const prof = r.professor;
+      if (prof?.id) {
+        map.set(prof.id, {
           id: prof.id,
           nome: prof.nome || prof.usuario?.nome || null,
-        }
-      : null;
+        });
+      }
+    }
 
-    return res.json(payload);
+    return res.json(Array.from(map.values()));
   } catch (e) {
     console.error("getProfessorDoAtleta erro:", e);
-    return res.status(500).json({ error: "Erro ao buscar professor do atleta" });
+    return res.status(500).json({ error: "Erro ao buscar professores do atleta" });
   }
 }
 
 export async function vinculosBasic(req: Request, res: Response) {
   try {
-    const { id } = req.params;
-    const rels = await prisma.relacaoTreinamento.findMany({
-      where: { atletaId: id, encerradoEm: null },
-      include: {
-        professor: { select: { id: true, nome: true } },
-        clube:     { select: { id: true, nome: true } },
-        escolinha: { select: { id: true, nome: true } },
-      },
-    });
-
-    let professor = null;
-    let clube = null;
-    let escolinha = null;
-
-    for (const r of rels) {
-      if (r.professor)   professor = r.professor;
-      if (r.clube)       clube = r.clube;
-      if (r.escolinha)   escolinha = r.escolinha;
+    const raw = String(req.params.id ?? "").trim();
+    if (!raw) {
+      return res.status(400).json({ error: "id inválido" });
     }
 
-    return res.json({ professor, clube, escolinha });
+    // ✅ aceita atleta.id OU usuarioId
+    const atleta = await prisma.atleta.findFirst({
+      where: { OR: [{ id: raw }, { usuarioId: raw }] },
+      select: { id: true, clubeId: true, escolinhaId: true },
+    });
+
+    if (!atleta) {
+      return res.json({ professores: [], clube: null, escolinha: null });
+    }
+
+    // ✅ pega vínculos ativos
+    const rels = await prisma.relacaoTreinamento.findMany({
+      where: {
+        atletaId: atleta.id,
+        ativo: true,
+        encerradoEm: null,
+      },
+      select: {
+        professor: { select: { id: true, nome: true } },
+        clube: { select: { id: true, nome: true } },
+        escolinha: { select: { id: true, nome: true } },
+      },
+      orderBy: { criadoEm: "desc" },
+    });
+
+    // ✅ monta lista de professores (sem duplicar)
+    const profMap = new Map<string, { id: string; nome: string }>();
+    for (const r of rels) {
+      if (r.professor?.id) {
+        profMap.set(r.professor.id, {
+          id: r.professor.id,
+          nome: r.professor.nome,
+        });
+      }
+    }
+    const professores = Array.from(profMap.values());
+
+    // ✅ clube/escolinha: pega o primeiro encontrado (mais recente)
+    const clube = rels.find((r) => r.clube)?.clube ?? null;
+    const escolinha = rels.find((r) => r.escolinha)?.escolinha ?? null;
+
+    return res.json({ professores, clube, escolinha });
   } catch (e) {
     console.error("Erro em vinculos-basic:", e);
     return res.status(500).json({ error: "Erro ao carregar vínculos" });
