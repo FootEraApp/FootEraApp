@@ -17,6 +17,20 @@ type AtividadeUI = {
 
 const DEFAULT_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
 
+function readPrivacidadeFlags(config: any) {
+  const c = (config && typeof config === "object") ? config : {};
+  return {
+    perfilVisivel: c.perfilVisivel !== false,         // default true
+    mostrarEmail: c.mostrarEmail === true,            // default false
+    permitirMensagens: c.permitirMensagens !== false, // default true
+  };
+}
+
+function isAdminFromReq(req: any) {
+  const t = String(req?.user?.tipo ?? req?.authUser?.tipo ?? "").toLowerCase();
+  return t === "admin";
+}
+
 function withDefaultImg(v: any) {
   const s = typeof v === "string" ? v.trim() : "";
   return s ? s : DEFAULT_AVATAR;
@@ -856,11 +870,30 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
   try {
     const usuario = await prisma.usuario.findUnique({
       where: { id },
-      select: { id: true, nome: true, email: true, foto: true, nomeDeUsuario: true },
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        foto: true,
+        nomeDeUsuario: true,
+        configuracoesPrivacidade: true, // ✅ NOVO
+      },
     });
 
     if (!usuario) {
       return res.status(404).json({ error: "Usuário não encontrado" });
+    }
+
+    const viewerId = (req as any)?.userId ? String((req as any).userId) : null;
+    const isOwnProfile = !!viewerId && viewerId === usuario.id;
+    const isAdmin = isAdminFromReq(req);
+    const priv = readPrivacidadeFlags((usuario as any).configuracoesPrivacidade);
+
+    if (!priv.perfilVisivel && !isOwnProfile && !isAdmin) {
+      return res.status(403).json({
+        code: "PROFILE_PRIVATE",
+        message: "Este perfil está privado.",
+      });
     }
 
     let dadosEspecificos: any = null;
@@ -1075,7 +1108,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       usuario: {
         id: usuario.id,
         nome: usuario.nome,
-        email: usuario.email,
+        email: (isOwnProfile || isAdmin || priv.mostrarEmail) ? usuario.email : null, // ✅
         foto: withDefaultImg(usuario.foto),
       },
       dadosEspecificos,

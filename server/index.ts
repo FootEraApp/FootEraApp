@@ -100,6 +100,7 @@ import feedbackRoutes from "./routes/feedback.js";
 import statusRoutes from "./routes/status.js";
 import comentariosRoutes from "./routes/comentarios.js";
 import estatisticasRoutes from "./routes/estatisticas.js";
+import configuracoesPerfilRoutes from "./routes/configuracoesPerfil.js";
 
 import { handlePaymentWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
@@ -253,6 +254,7 @@ app.use("/api/atletas", authenticateToken, atletaRoutes);
 app.use("/api/amigos", authenticateToken, amigosRoutes);
 app.use("/api/categorias", authenticateToken, categoriasRoutes);
 app.use("/api/clubes", authenticateToken, clubeRoutes);
+app.use("/api/configuracoes-perfil", configuracoesPerfilRoutes);
 app.use("/api/configuracoes", authenticateToken, configuracoesRoutes);
 app.use("/api/conquistas", authenticateToken, conquistasRoutes);
 app.use("/api/desafios", authenticateToken, desafiosRoutes);

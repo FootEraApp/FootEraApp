@@ -139,10 +139,8 @@ function SectionCard({
 export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
   const isOwn = !idDaUrl || idDaUrl === Storage.usuarioId;
   const canEdit = isOwn;
-
   const targetId = isOwn ? (Storage.tipoUsuarioId || "me") : (idDaUrl as string);
 
   const [data, setData] = useState<PayloadClube | null>(null);
@@ -175,11 +173,43 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
   const [atividades, setAtividades] = useState<AtividadeRecente[] | null>(null);
   const [conquistasCount, setConquistasCount] = useState<number | null>(null);
   const [eventosCount, setEventosCount] = useState<number | null>(null);
+  const [privacidade, setPrivacidade] = useState<{
+    perfilVisivel: boolean;
+    permitirMensagens: boolean;
+    mostrarEmail: boolean;
+  } | null>(null);
 
   const clubeId = (isOwn ? Storage.tipoUsuarioId : data?.clube?.id) ?? null;
   const entidadeUsuarioId = isOwn
     ? Storage.usuarioId
     : data?.clube?.usuarioId ?? null;
+
+  useEffect(() => {
+    if (!token) return;
+    let cancel = false;
+
+    (async () => {
+      try {
+        const { data } = await axios.get(
+          `${API.BASE_URL}/api/configuracoes-perfil/privacidade`,
+          { headers }
+        );
+        if (!cancel) setPrivacidade({
+          perfilVisivel: data?.perfilVisivel ?? true,
+          permitirMensagens: data?.permitirMensagens ?? true,
+          mostrarEmail: data?.mostrarEmail ?? false,
+        });
+      } catch {
+        if (!cancel) setPrivacidade({
+          perfilVisivel: true,
+          permitirMensagens: true,
+          mostrarEmail: false,
+        });
+      }
+    })();
+
+    return () => { cancel = true; };
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -622,6 +652,11 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     );
 
   const nome = data.clube.nome || data.usuario?.nome || "Clube";
+  const emailDoPerfil =
+  (data?.usuario?.email && String(data.usuario.email)) ||
+  (data?.clube?.email && String(data.clube.email)) ||
+  "";
+
   const headerFoto =
     (typeof data.clube.logo === "string" && data.clube.logo) ||
     (typeof data.usuario?.foto === "string" && data.usuario.foto) ||
@@ -703,6 +738,12 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
               <li>
                 <b>Nome:</b> {data.clube.nome}
               </li>
+              {privacidade?.mostrarEmail && emailDoPerfil ? (
+                <li>
+                  <b>Email:</b> {emailDoPerfil}
+                </li>
+              ) : null}
+
               {data.clube.estadio && (
                 <li>
                   <b>Estádio:</b> {data.clube.estadio}
@@ -806,11 +847,11 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                   {data.clube.responsavel || data.usuario?.nome}
                 </li>
               )}
-              {data.clube.email && (
+              {privacidade?.mostrarEmail && (data.clube.email || data.usuario?.email) ? (
                 <li>
-                  <b>Email:</b> {data.clube.email}
+                  <b>Email:</b> {data.clube.email || data.usuario?.email}
                 </li>
-              )}
+              ) : null}
               {(data.clube.telefone1 || data.clube.telefone2) && (
                 <li>
                   <b>Telefone:</b>{" "}
