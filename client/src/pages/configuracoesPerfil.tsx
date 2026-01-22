@@ -2,7 +2,7 @@
 import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
-import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import Atualizacoes from "../components/Atualizacoes.js";
@@ -15,9 +15,18 @@ export default function ConfiguracoesPerfil() {
   const [visivel, setVisivel] = useState(true);
   const [mensagens, setMensagens] = useState(true);
   const [mostrarEmail, setMostrarEmail] = useState(false);
-
-  const REQUIRED_PHRASE = "Excluir Conta Footera";
-
+  const [notifMensagens, setNotifMensagens] = useState(true);
+  const [notifTreinos, setNotifTreinos] = useState(true);
+  const [notifEventos, setNotifEventos] = useState(true);
+  const [notifMarketing, setNotifMarketing] = useState(false);
+  const [showEncerrarModal, setShowEncerrarModal] = useState(false);
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [senhaNova, setSenhaNova] = useState("");
+  const [segLoading, setSegLoading] = useState(false);
+  const [segMsg, setSegMsg] = useState<string | null>(null);
+  const [segErr, setSegErr] = useState<string | null>(null);
+  const [showSenhaAtual, setShowSenhaAtual] = useState(false);
+  const [showSenhaNova, setShowSenhaNova] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -29,6 +38,11 @@ export default function ConfiguracoesPerfil() {
   const [feedbackSending, setFeedbackSending] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [feedbackSuccess, setFeedbackSuccess] = useState<string | null>(null);
+  const [showPrivacidadeModal, setShowPrivacidadeModal] = useState(false);
+  const [showNotificacoesModal, setShowNotificacoesModal] = useState(false);
+  const [showSegurancaModal, setShowSegurancaModal] = useState(false);
+
+  const REQUIRED_PHRASE = "Excluir Conta Footera";
 
   useEffect(() => {
     const token = Storage.token;
@@ -38,12 +52,110 @@ export default function ConfiguracoesPerfil() {
     }
   }, []);
 
+    async function apiTrocarSenha() {
+      setSegErr(null);
+      setSegMsg(null);
+      setSegLoading(true);
+      try {
+        const resp = await fetch(`${API.REST}/configuracoes-perfil/seguranca/senha`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Storage.token}`,
+          },
+          body: JSON.stringify({ senhaAtual, senhaNova }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data?.message || "Erro ao trocar senha.");
+
+        setSegMsg("Senha alterada! Você será deslogado para entrar novamente.");
+        setSenhaAtual("");
+        setSenhaNova("");
+
+        // ✅ AQUI (logo após sucesso)
+        setTimeout(() => {
+          localStorage.clear();
+          sessionStorage.clear();
+          setLocation("/login");
+        }, 800);
+      } catch (e: any) {
+        setSegErr(e?.message || "Erro ao trocar senha.");
+      } finally {
+        setSegLoading(false);
+      }
+    }
+
+  async function apiEncerrarSessoes() {
+    setSegErr(null);
+    setSegMsg(null);
+    setSegLoading(true);
+    try {
+      const resp = await fetch(`${API.REST}/configuracoes-perfil/seguranca/encerrar-sessoes`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${Storage.token}` },
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data?.message || "Erro ao encerrar sessões.");
+      // ✅ força logout local
+      localStorage.clear();
+      sessionStorage.clear();
+      setLocation("/login");
+    } catch (e: any) {
+      setSegErr(e?.message || "Erro ao encerrar sessões.");
+    } finally {
+      setSegLoading(false);
+    }
+  }
+
   function confirmarLogout() {
     if (confirm("Tem certeza que deseja sair?")) {
       localStorage.clear();
       sessionStorage.clear();
       setLocation("/login");
     }
+  }
+
+  async function carregarPrivacidade() {
+    const resp = await fetch(`${API.REST}/configuracoes-perfil/privacidade`, {
+      headers: { Authorization: `Bearer ${Storage.token}` },
+    });
+    const data = await resp.json();
+    setVisivel(!!data.perfilVisivel);
+    setMensagens(!!data.permitirMensagens);
+    setMostrarEmail(!!data.mostrarEmail);
+  }
+
+  async function salvarPrivacidade(patch: any) {
+    await fetch(`${API.REST}/configuracoes-perfil/privacidade`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Storage.token}`,
+      },
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async function carregarNotificacoes() {
+    const resp = await fetch(`${API.REST}/configuracoes-perfil/notificacoes`, {
+      headers: { Authorization: `Bearer ${Storage.token}` },
+    });
+    const data = await resp.json();
+    setNotifMensagens(!!data.notifMensagens);
+    setNotifTreinos(!!data.notifTreinos);
+    setNotifEventos(!!data.notifEventos);
+    setNotifMarketing(!!data.notifMarketing);
+  }
+
+  async function salvarNotificacoes(patch: any) {
+    await fetch(`${API.REST}/configuracoes-perfil/notificacoes`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Storage.token}`,
+      },
+      body: JSON.stringify(patch),
+    });
   }
 
   async function excluirConta(e: React.FormEvent) {
@@ -147,7 +259,16 @@ export default function ConfiguracoesPerfil() {
             <p className="font-semibold">🛡️ Privacidade</p>
             <p className="text-sm text-gray-600">Gerencie quem pode ver seu perfil</p>
           </div>
-          <button className="text-green-800 font-semibold">Configurar</button>
+          <button
+            type="button"
+            onClick={async () => {
+              setShowPrivacidadeModal(true);
+              await carregarPrivacidade();
+            }}
+            className="text-green-800 font-semibold"
+          >
+            Configurar
+          </button>
         </div>
 
         <div className="flex justify-between py-2 items-start border-b">
@@ -155,34 +276,49 @@ export default function ConfiguracoesPerfil() {
             <p className="font-semibold">🔔 Notificações</p>
             <p className="text-sm text-gray-600">Controle quais notificações receber</p>
           </div>
-          <button className="text-green-800 font-semibold">Gerenciar</button>
+          <button
+            type="button"
+            onClick={async () => {
+              setShowNotificacoesModal(true);
+              await carregarNotificacoes();
+            }}
+            className="text-green-800 font-semibold"
+          >
+            Gerenciar
+          </button>
         </div>
 
-        <div className="flex justify-between py-2 items-start">
+        <div className="flex justify-between py-2 items-start border-b">
           <div>
             <p className="font-semibold">🔑 Segurança</p>
             <p className="text-sm text-gray-600">Alterar senha ou configurações de acesso</p>
           </div>
-          <button className="text-green-800 font-semibold">Alterar</button>
+          <button
+            type="button"
+            onClick={() => {
+              setSegErr(null);
+              setSegMsg(null);
+              setSenhaAtual("");
+              setSenhaNova("");
+              setShowSegurancaModal(true);
+              setShowSenhaAtual(false);
+              setShowSenhaNova(false);
+            }}
+            className="text-green-800 font-semibold"
+          >
+            Alterar
+          </button>
         </div>
-      </div>
 
-      <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
-        <h2 className="text-gray-800 font-bold mb-3">Dados e Privacidade</h2>
+        <div className="flex justify-between py-2 items-start">
+          <div>
+            <p className="font-semibold">💲 Assinaturas</p>
+            <p className="text-sm text-gray-600">Ajuste sua assinatura e forma de pagamento</p>
+          </div>
 
-        <div className="flex justify-between items-center py-3 border-b">
-          <span className="font-medium">Perfil Visível para Todos</span>
-          <Switch checked={visivel} onCheckedChange={setVisivel} />
-        </div>
-
-        <div className="flex justify-between items-center py-3 border-b">
-          <span className="font-medium">Permitir Mensagens Diretas</span>
-          <Switch checked={mensagens} onCheckedChange={setMensagens} />
-        </div>
-
-        <div className="flex justify-between items-center py-3">
-          <span className="font-medium">Mostrar E-mail no Perfil</span>
-          <Switch checked={mostrarEmail} onCheckedChange={setMostrarEmail} />
+          <Link href="/pagamentos" className="text-green-800 font-semibold">
+            Alterar
+          </Link>
         </div>
       </div>
 
@@ -323,16 +459,6 @@ export default function ConfiguracoesPerfil() {
             <div className="mt-1 flex-1 overflow-y-auto border-t pt-3">
               <Atualizacoes />
             </div>
-
-            <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowUpdatesModal(false)}
-                className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm"
-              >
-                Fechar
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -441,8 +567,260 @@ export default function ConfiguracoesPerfil() {
         </div>
       )}
 
-      <BottomNav />
+      {/* ================= PRIVACIDADE ================= */}
+      {showPrivacidadeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold text-gray-900">🛡️ Privacidade</h3>
+              <button
+                type="button"
+                onClick={() => setShowPrivacidadeModal(false)}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
 
+            <p className="text-sm text-gray-600 mt-1 mb-4">
+              Ajuste quem pode ver seu perfil e como as pessoas podem interagir com você.
+            </p>
+
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <div className="flex justify-between items-center border-b pb-3">
+                <span className="font-medium">Perfil Visível para Todos</span>
+                <Switch
+                    checked={visivel}
+                    onCheckedChange={(v) => {
+                      setVisivel(v);
+                      salvarPrivacidade({ perfilVisivel: v });
+                    }}
+                  />
+              </div>
+
+              <div className="flex justify-between items-center border-b pb-3">
+                <span className="font-medium">Permitir Mensagens Diretas</span>
+                <Switch
+                  checked={mensagens}
+                  onCheckedChange={(v) => {
+                    setMensagens(v);
+                    salvarPrivacidade({ permitirMensagens: v });
+                  }}
+                />
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="font-medium">Mostrar E-mail no Perfil</span>
+                <Switch
+                  checked={mostrarEmail}
+                  onCheckedChange={(v) => {
+                    setMostrarEmail(v);
+                    salvarPrivacidade({ mostrarEmail: v });
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= NOTIFICAÇÕES ================= */}
+      {showNotificacoesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold text-gray-900">🔔 Notificações</h3>
+              <button
+                type="button"
+                onClick={() => setShowNotificacoesModal(false)}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mt-1 mb-4">
+              Escolha quais avisos você quer receber.
+            </p>
+
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <div className="flex justify-between items-center border-b pb-3">
+                <span className="font-medium">Mensagens</span>
+                <Switch
+                  checked={notifMensagens}
+                  onCheckedChange={(v) => {
+                    setNotifMensagens(v);
+                    salvarNotificacoes({ notifMensagens: v });
+                  }}
+                />
+              </div>
+
+              <div className="flex justify-between items-center border-b pb-3">
+                <span className="font-medium">Treinos</span>
+                <Switch
+                  checked={notifTreinos}
+                  onCheckedChange={(v) => {
+                    setNotifTreinos(v);
+                    salvarNotificacoes({ notifTreinos: v });
+                  }}
+                />
+              </div>
+
+              <div className="flex justify-between items-center border-b pb-3">
+                <span className="font-medium">Eventos</span>
+                <Switch
+                  checked={notifEventos}
+                  onCheckedChange={(v) => {
+                    setNotifEventos(v);
+                    salvarNotificacoes({ notifEventos: v });
+                  }}
+                />
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="font-medium">Novidades / Marketing</span>
+                <Switch
+                  checked={notifMarketing}
+                  onCheckedChange={(v) => {
+                    setNotifMarketing(v);
+                    salvarNotificacoes({ notifMarketing: v });
+                  }}
+                />
+              </div>
+            </div>        
+          </div>
+        </div>
+      )}
+
+      {/* ================= SEGURANÇA ================= */}
+      {showSegurancaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold text-gray-900">🔑 Segurança</h3>
+              <button
+                type="button"
+                onClick={() => setShowSegurancaModal(false)}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mt-1 mb-4">
+              Troque sua senha ou revise opções de acesso.
+            </p>
+
+            <div className="rounded-lg border border-gray-200 p-4 text-sm text-gray-700 space-y-3">
+            <div className="font-semibold">Ações</div>
+
+            {/* ===== Trocar senha ===== */}
+            <div className="rounded-md border border-gray-200 p-3">
+              <div className="font-medium flex items-center gap-2">🔒 Trocar senha</div>
+
+              <div className="mt-3 space-y-2">
+                <div className="relative">
+                  <input
+                    type={showSenhaAtual ? "text" : "password"}
+                    value={senhaAtual}
+                    onChange={(e) => setSenhaAtual(e.target.value)}
+                    placeholder="Senha atual"
+                    className="w-full rounded-md border border-gray-300 pl-3 pr-10 py-2 text-sm outline-none focus:ring-2 focus:ring-green-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSenhaAtual((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    aria-label={showSenhaAtual ? "Ocultar senha atual" : "Mostrar senha atual"}
+                  >
+                    {showSenhaAtual ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type={showSenhaNova ? "text" : "password"}
+                    value={senhaNova}
+                    onChange={(e) => setSenhaNova(e.target.value)}
+                    placeholder="Nova senha"
+                    className="w-full rounded-md border border-gray-300 pl-3 pr-10 py-2 text-sm outline-none focus:ring-2 focus:ring-green-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSenhaNova((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    aria-label={showSenhaNova ? "Ocultar nova senha" : "Mostrar nova senha"}
+                  >
+                    {showSenhaNova ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+
+                {segErr && <div className="text-sm text-red-600">{segErr}</div>}
+                {segMsg && <div className="text-sm text-green-700">{segMsg}</div>}
+
+                <button
+                  type="button"
+                  onClick={apiTrocarSenha}
+                  disabled={segLoading || !senhaAtual || !senhaNova}
+                  className="w-full rounded-md bg-green-700 text-white px-3 py-2 text-sm font-semibold hover:bg-green-800 disabled:opacity-60"
+                >
+                  {segLoading ? "Salvando..." : "Salvar nova senha"}
+                </button>
+              </div>
+            </div>
+
+            {/* ===== Encerrar sessões ===== */}
+            <button
+              type="button"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 text-left"
+              onClick={() => setShowEncerrarModal(true)}
+              disabled={segLoading}
+            >
+              🧹 Encerrar sessões
+              <div className="text-xs text-gray-500">
+                Isso vai deslogar você em todos os dispositivos.
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {showEncerrarModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+        <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-5">
+          <h3 className="text-lg font-semibold text-gray-900">
+            Encerrar sessões
+          </h3>
+
+          <p className="text-sm text-gray-600 mt-2">
+            Tem certeza que deseja sair da sua conta em <strong>todos os dispositivos</strong>?
+          </p>
+
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowEncerrarModal(false)}
+              className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                setShowEncerrarModal(false);
+                await apiEncerrarSessoes();
+              }}
+              className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700"
+            >
+              Encerrar sessões
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    <BottomNav />
     </div>
   );
 }

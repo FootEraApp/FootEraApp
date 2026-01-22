@@ -104,11 +104,14 @@ export async function login(req: Request, res: Response) {
       null;
 
     const token = jwt.sign(
-      { id: usuario.id, tipo: usuario.tipo },
+      {
+        id: usuario.id,
+        tipo: usuario.tipo,
+        tokenVersion: usuario.tokenVersion ?? 0, // ✅ aqui
+      },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
-
 
     return res.json({
       ok: true,
