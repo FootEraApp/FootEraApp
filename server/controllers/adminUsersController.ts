@@ -280,9 +280,11 @@ export async function patchAdminUser(req: Request, res: Response) {
 export async function banUser(_req: Request, res: Response) {
   res.status(501).json({ message: "Banimento não implementado." });
 }
+
 export async function unbanUser(_req: Request, res: Response) {
   res.status(501).json({ message: "Desbanir não implementado." });
 }
+
 export async function removeUserContent(req: Request, res: Response) {
   const { id } = req.params;
   const { escopo } = req.body as {
