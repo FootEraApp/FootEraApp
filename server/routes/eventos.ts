@@ -8,7 +8,7 @@ const r = Router();
 r.get("/clubes/:clubeId", ctrl.listarDoClube);
 r.get("/escolas/:escolinhaId", ctrl.listarDaEscolinha);
 r.get("/minha-agenda", ctrl.auth, ctrl.minhaAgenda);
-r.get("/atleta/:atletaId", ctrl.auth, ctrl.eventosDoAtleta);
+r.get("/atleta", ctrl.auth, ctrl.eventosDoAtleta);
 r.post(
   "/clubes/:clubeId",
   ctrl.auth,
