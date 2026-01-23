@@ -12,9 +12,11 @@ import {
   listarHistoricoAtletasProfessor,
   desvincularAtletaDoProfessor,
   listarAtletasDoProfessor,
-  listarProfessoresVinculados
+  listarProfessoresVinculados,
+  toggleProfessorParceiro
 } from "../controllers/professoresController.js";
 import { authenticateToken } from "../middlewares/auth.js";
+import { requireAdmin } from "../middlewares/adminGuard.js";
 
 const router = express.Router();
 const upload = multer({ dest: "upload/" });
@@ -26,6 +28,15 @@ router.post("/:professorId/desvincular-atleta", desvincularAtletaDoProfessor);
 router.put("/:id/vinculos", authenticateToken, salvarVinculoProfessor);
 router.post("/:id/vinculo", authenticateToken, salvarVinculoProfessor);
 router.get("/:id/vinculos", authenticateToken, listarVinculosProfessor);
+
+// ✅ marcar / desmarcar professor como parceiro FootEra
+router.patch(
+  "/:id/parceiro",
+  authenticateToken,
+  requireAdmin,
+  toggleProfessorParceiro
+);
+
 router.get("/:id", buscarProfessorPorId);
 router.post("/", upload.single("fotoUrl"), criarProfessor);
 router.patch("/:id", upload.single("fotoUrl"), editarProfessor);
