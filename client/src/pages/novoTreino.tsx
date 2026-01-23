@@ -1,5 +1,5 @@
 // client/src/pages/novoTreino
-import { useEffect, useMemo, useRef, useState, ReactNode, memo } from "react";
+import { useEffect, useMemo, useRef, useState, ReactNode, memo, type UIEvent } from "react";
 import { Link, useLocation } from "wouter";
 import {
   ArrowLeft,
@@ -543,15 +543,15 @@ export default function NovoTreino() {
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [isFreePlan, setIsFreePlan] = useState(false);
   const [prazos, setPrazos] = useState<Record<string, string>>({});
-  const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<
-    Exercicio[]
-  >([]);
-  const [treinosDisponiveis, setTreinosDisponiveis] = useState<
-    TreinoProgramado[]
-  >([]);
-  const [atletasVinculados, setAtletasVinculados] = useState<
-    AtletaVinculado[]
-  >([]);
+  const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<Exercicio[]>([]);
+  const [treinosDisponiveis, setTreinosDisponiveis] = useState<TreinoProgramado[]>([]);
+
+  type AbaTreinosAtleta = "meu_professor" | "footera";
+  const [abaTreinosAtleta, setAbaTreinosAtleta] = useState<AbaTreinosAtleta>("meu_professor");
+  const [treinosFootera, setTreinosFootera] = useState<TreinoProgramado[]>([]);
+  const [professorVinculadoIds, setProfessorVinculadoIds] = useState<string[]>([]);
+
+  const [atletasVinculados, setAtletasVinculados] = useState<AtletaVinculado[]>([]);
   const [atletasSelecionados, setAtletasSelecionados] = useState<string[]>([]);
   const [elencos, setElencos] = useState<Elenco[]>([]);
   const [elencoSelecionado, setElencoSelecionado] = useState<string>("");
@@ -584,6 +584,7 @@ export default function NovoTreino() {
     message: string;
   } | null>(null);
 
+  
   const jaSincronizouCalendarioComDatas = useRef(false);
   type ProfessorItem = { id: string; nome: string; codigo?: string; cref?: string };
 
@@ -1083,6 +1084,114 @@ useEffect(() => {
       cancel = true;
     };
   }, [atletaIdLogado]);
+
+useEffect(() => {
+  const tipo =
+    (Storage as any).tipoSalvo ??
+    localStorage.getItem("tipoUsuario") ??
+    sessionStorage.getItem("tipoUsuario") ??
+    "";
+
+  if (String(tipo).toLowerCase() !== "atleta") return;
+
+  let cancel = false;
+
+  (async () => {
+    try {
+      const token = getToken();
+      if (!token) return;
+
+      const atletaId = String(atletaIdLogado || "").trim();
+      if (!atletaId) return;
+
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // tenta pegar os vínculos do Atleta em endpoints comuns do seu projeto
+      const tries = [
+        `${API.BASE_URL}/api/atletas/${encodeURIComponent(atletaId)}`,
+        `${API.BASE_URL}/api/perfil/${encodeURIComponent(atletaId)}`, // se no seu projeto perfil/:id também traz relacoes
+      ];
+
+      let data: any = null;
+      for (const url of tries) {
+        const r = await fetch(url, { headers });
+        if (!r.ok) continue;
+        data = await r.json().catch(() => null);
+        if (data) break;
+      }
+
+      const rels =
+        data?.relacoesTreinamento ??
+        data?.atleta?.relacoesTreinamento ??
+        data?.data?.relacoesTreinamento ??
+        [];
+
+      const profIds = Array.from(
+        new Set(
+          (Array.isArray(rels) ? rels : [])
+            .filter((x: any) => x?.ativo !== false) // ativo=true ou undefined
+            .map((x: any) => String(x?.professorId ?? x?.professor?.id ?? "").trim())
+            .filter((id: string) => id && id !== "undefined" && id !== "null"),
+        ),
+      );
+
+      if (!cancel) setProfessorVinculadoIds(profIds);
+    } catch (e) {
+      console.warn("[NovoTreino] falha ao carregar professorVinculadoIds:", e);
+      if (!cancel) setProfessorVinculadoIds([]);
+    }
+  })();
+
+  return () => {
+    cancel = true;
+  };
+}, [atletaIdLogado]);
+
+useEffect(() => {
+  const tipo =
+    (Storage as any).tipoSalvo ??
+    localStorage.getItem("tipoUsuario") ??
+    sessionStorage.getItem("tipoUsuario") ??
+    "";
+
+  if (String(tipo).toLowerCase() !== "atleta") return;
+
+  let cancel = false;
+
+  (async () => {
+    try {
+      const token = getToken();
+      if (!token) return;
+
+      const headers = { Authorization: `Bearer ${token}` };
+
+      const r = await fetch(
+        `${API.BASE_URL}/api/treinos/publicos-professores-parceiros`,
+        { headers },
+      );
+
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        console.warn("[NovoTreino] falha /publicos-professores-parceiros:", r.status, txt);
+        if (!cancel) setTreinosFootera([]);
+        return;
+      }
+
+      const j = await r.json().catch(() => null);
+      const arr = Array.isArray(j) ? j : (j?.items ?? j?.data ?? j?.rows ?? []);
+
+      if (!cancel) setTreinosFootera(normalizaTreinos(arr || []));
+    } catch (e) {
+      console.warn("[NovoTreino] erro ao carregar treinosFootera:", e);
+      if (!cancel) setTreinosFootera([]);
+    }
+  })();
+
+  return () => {
+    cancel = true;
+  };
+}, []);
+
 
   useEffect(() => {
   (async () => {
@@ -1717,7 +1826,7 @@ useEffect(() => {
 
   const temMaisExercicios = exerciciosVisiveis.length < exerciciosFiltrados.length;
 
-  function onScrollListaExercicios(e: React.UIEvent<HTMLElement>) {
+  function onScrollListaExercicios(e: UIEvent<HTMLElement>) {
     const el = e.currentTarget;
     const faltando = el.scrollHeight - el.scrollTop - el.clientHeight;
 
@@ -2310,9 +2419,28 @@ const criarTreino = async () => {
     );
 
   if (usuario.tipo === "atleta") {
-    const treinosParaAgendar = treinosDisponiveis.filter(
+    // 1) lista “Meu professor”: filtra pelos professores vinculados
+    const treinosMeuProfessorBrutos =
+      professorVinculadoIds.length === 0
+        ? []
+        : treinosDisponiveis.filter((t) => {
+            const criadoresIds = (t.criadores || []).map((c) => String(c.id));
+            const criadorId = t.criador?.id ? String(t.criador.id) : "";
+            const todos = new Set<string>([...criadoresIds, ...(criadorId ? [criadorId] : [])]);
+            return professorVinculadoIds.some((pid) => todos.has(String(pid)));
+          });
+
+    // 2) aplica bloqueio (já agendados) em ambas
+    const treinosMeuProfessor = treinosMeuProfessorBrutos.filter(
       (t) => !idsProgramadosBloqueados.has(t.id),
     );
+
+    const treinosParceirosFootera = treinosFootera.filter(
+      (t) => !idsProgramadosBloqueados.has(t.id),
+    );
+
+    const listaAtiva =
+      abaTreinosAtleta === "meu_professor" ? treinosMeuProfessor : treinosParceirosFootera;
 
     return (
       <div className="p-4 max-w-xl mx-auto mb-5">
@@ -2327,24 +2455,65 @@ const criarTreino = async () => {
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h2 className="text-lg font-bold mb-4">Treinos Disponíveis</h2>
 
-        {treinosParaAgendar.length === 0 ? (
-          <p className="text-gray-600">
-            Nenhum treino disponível para agendar no momento.
-          </p>
+        <h2 className="text-lg font-bold mb-3">Treinos Disponíveis</h2>
+
+        {/* Abas */}
+        <div className="flex gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setAbaTreinosAtleta("meu_professor")}
+            className={[
+              "flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition",
+              abaTreinosAtleta === "meu_professor"
+                ? "bg-green-800 text-white border-green-800"
+                : "bg-white text-green-900 border-green-200 hover:bg-green-50",
+            ].join(" ")}
+          >
+            Meu professor
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAbaTreinosAtleta("footera")}
+            className={[
+              "flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition",
+              abaTreinosAtleta === "footera"
+                ? "bg-green-800 text-white border-green-800"
+                : "bg-white text-green-900 border-green-200 hover:bg-green-50",
+            ].join(" ")}
+          >
+            Professores Footera
+          </button>
+        </div>
+
+        {/* Mensagens vazias específicas */}
+        {listaAtiva.length === 0 ? (
+          <div className="text-gray-600 bg-white border rounded-xl p-4">
+            {abaTreinosAtleta === "meu_professor" ? (
+              <>
+                {professorVinculadoIds.length === 0 ? (
+                  <p>
+                    Você ainda não possui <b>professor vinculado</b>. Assim que houver vínculo,
+                    os treinos dele aparecerão aqui.
+                  </p>
+                ) : (
+                  <p>
+                    Nenhum treino do seu professor está disponível para agendar no momento.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p>Nenhum treino público de professores parceiros encontrado no momento.</p>
+            )}
+          </div>
         ) : (
-          treinosParaAgendar.map((t) => (
-            <div
-              key={t.id}
-              className="bg-white border p-4 rounded shadow mb-4"
-            >
+          listaAtiva.map((t) => (
+            <div key={t.id} className="bg-white border p-4 rounded shadow mb-4">
               <div className="flex items-start justify-between gap-2">
                 <h3
                   className="text-green-800 text-lg font-semibold cursor-pointer hover:underline"
-                  onClick={() =>
-                    navigate(`/treinos/unico?programadoId=${t.id}`)
-                  }
+                  onClick={() => navigate(`/treinos/unico?programadoId=${t.id}`)}
                   title="Ver detalhes do treino"
                 >
                   {t.nome}
@@ -2367,8 +2536,7 @@ const criarTreino = async () => {
 
               {t.criadores?.length ? (
                 <p className="text-sm mt-1">
-                  <strong>Criado por:</strong>{" "}
-                  {t.criadores.map((c) => `Prof. ${c.nome}`).join(", ")}
+                  <strong>Criado por:</strong> {t.criadores.map((c) => `Prof. ${c.nome}`).join(", ")}
                 </p>
               ) : t.criador ? (
                 <p className="text-sm mt-1">
@@ -2412,6 +2580,7 @@ const criarTreino = async () => {
                   }))
                 }
               />
+
               <div className="flex justify-end mt-2">
                 <button
                   className="mt-3 bg-green-800 text-white px-3 py-1 rounded text-sm w-fit"
