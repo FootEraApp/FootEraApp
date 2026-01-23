@@ -6,11 +6,11 @@ import {
   observarAtleta,
   pararDeObservar,
   statusObservacao,
+  atualizarObservado
 } from "../controllers/atletaObservadoController.js";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../prisma.js";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.get("/resolve/:usuarioId", authenticateToken, async (req, res) => {
   try {
@@ -29,9 +29,10 @@ router.get("/resolve/:usuarioId", authenticateToken, async (req, res) => {
     return res.status(500).json({ error: "Falha ao resolver atletaId" });
   }
 });
+router.patch("/:atletaId", authenticateToken, atualizarObservado);
+router.delete("/:atletaId", authenticateToken, pararDeObservar);
 router.get("/status/:atletaId", authenticateToken, statusObservacao);
 router.get("/", authenticateToken, listarObservados);
 router.post("/", authenticateToken, observarAtleta);
-router.delete("/:atletaId", authenticateToken, pararDeObservar);
 
 export default router;

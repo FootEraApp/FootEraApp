@@ -368,6 +368,27 @@ function mapEventoToAgendaItem(ev: any) {
   };
 }
 
+function jsonHasAnyId(value: any, ids: Set<string>): boolean {
+  if (value == null) return false;
+
+  // string/number direto
+  if (typeof value === "string" || typeof value === "number") {
+    return ids.has(String(value));
+  }
+
+  // array
+  if (Array.isArray(value)) {
+    return value.some((v) => jsonHasAnyId(v, ids));
+  }
+
+  // objeto
+  if (typeof value === "object") {
+    return Object.values(value).some((v) => jsonHasAnyId(v, ids));
+  }
+
+  return false;
+}
+
 export async function minhaAgenda(req: any, res: Response) {
   try {
     const { alvoId, from, to } = req.query as {
@@ -403,6 +424,59 @@ export async function minhaAgenda(req: any, res: Response) {
       where.clubeId = String(req.user.tipoUsuarioId);
     }
 
+    const tipo = String(req.user?.tipo || "").toLowerCase();
+    const usuarioId = String(req.user?.id || "").trim();
+
+    if (tipo === "atleta" && usuarioId) {
+      const atleta = await prisma.atleta.findFirst({
+        where: { usuarioId },
+        select: { id: true },
+      });
+
+      if (!atleta?.id) return res.json([]);
+
+      const convWhere: any = {
+        atletaId: atleta.id,
+        evento: {
+          status: "ABERTO",
+          dataEvento: { gte: fromDate },
+        },
+      };
+
+      if (toDate) convWhere.evento.dataEvento.lte = toDate;
+
+      // opcional: filtrar por clube quando vier alvoId (se seu Evento tem clubeId)
+      if (alvoId) {
+        const clube = await prisma.clube.findUnique({
+          where: { id: String(alvoId) },
+          select: { id: true },
+        });
+        if (clube) convWhere.evento.clubeId = clube.id;
+      }
+
+      const convocacoes = await prisma.eventoConvocado.findMany({
+        where: convWhere,
+        include: {
+          evento: { select: { id: true, tipo: true, titulo: true, dataEvento: true } },
+        },
+        orderBy: { evento: { dataEvento: "asc" } },
+        take: 200,
+      });
+
+      const items = convocacoes.map((c) => ({
+        id: c.evento.id,
+        tipo: c.evento.tipo ?? "EVENTO",
+        tipoLabel: mapEventoTipoLabel(c.evento.tipo),
+        titulo: c.evento.titulo,
+        inicio: c.evento.dataEvento,
+        fim: null,
+        origem: "CONVOCACAO" as const,
+      }));
+
+      return res.json(items);
+    }
+
+    // ✅ Para clube/escolinha/admin continua como antes (eventos ABERTOS)
     const eventos = await prisma.evento.findMany({
       where,
       orderBy: { dataEvento: "asc" },
@@ -411,6 +485,7 @@ export async function minhaAgenda(req: any, res: Response) {
 
     const items = eventos.map(mapEventoToAgendaItem);
     return res.json(items);
+
   } catch (e) {
     console.error("Erro em eventos.minhaAgenda:", e);
     return res
@@ -421,26 +496,40 @@ export async function minhaAgenda(req: any, res: Response) {
 
 export async function eventosDoAtleta(req: any, res: Response) {
   try {
-    const { usuarioId } = req.params;
-    void usuarioId;
+    const usuarioId = String(req.user?.id || "").trim();
+    if (!usuarioId) return res.json([]);
+
+    const atleta = await prisma.atleta.findFirst({
+      where: { usuarioId },
+      select: { id: true },
+    });
+    if (!atleta?.id) return res.json([]);
 
     const agora = new Date();
 
-    const eventos = await prisma.evento.findMany({
+    const convocacoes = await prisma.eventoConvocado.findMany({
       where: {
-        dataEvento: { gte: agora },
-        status: "ABERTO",
+        atletaId: atleta.id,
+        evento: { status: "ABERTO", dataEvento: { gte: agora } },
       },
-      orderBy: { dataEvento: "asc" },
-      take: 100,
+      include: {
+        evento: { select: { id: true, tipo: true, titulo: true, dataEvento: true } },
+      },
+      orderBy: { evento: { dataEvento: "asc" } },
+      take: 200,
     });
 
-    const items = eventos.map(mapEventoToAgendaItem);
+    const items = convocacoes.map((c) => ({
+      id: c.evento.id,
+      tipo: c.evento.tipo ?? "EVENTO",
+      titulo: c.evento.titulo,
+      inicio: c.evento.dataEvento,
+      fim: null,
+    }));
+
     return res.json(items);
   } catch (e) {
     console.error("Erro em eventos.eventosDoAtleta:", e);
-    return res
-      .status(500)
-      .json({ error: "Erro ao carregar eventos do atleta" });
+    return res.status(500).json({ error: "Erro ao carregar eventos do atleta" });
   }
 }

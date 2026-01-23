@@ -59,7 +59,7 @@ type PayloadEscola = {
 };
 
 type AtletaItem = {
-  id: string;
+  id: string; // (pode ser usuarioId/atletaId dependendo do backend)
   usuarioId: string;
   nome: string;
   foto?: string | null;
@@ -70,6 +70,10 @@ type AtletaItem = {
   observadoEm?: string;
   categoria?: string | null;
   pontuacao?: number | null;
+  observadoId?: string;        // id do registro AtletaObservado (se backend já envia)
+  atletaId?: string;           // se backend também enviar
+  notaInterna?: string | null;
+  alertarMudancas?: boolean | null;
 };
 
 type SolicitacaoItem = {
@@ -170,6 +174,9 @@ export default function PerfilEscola({ idDaUrl }: Props) {
 
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
+  const [obsDraft, setObsDraft] = useState<Record<string, { nota: string; alertar: boolean }>>({});
+  const [obsSaving, setObsSaving] = useState<Record<string, boolean>>({});
+  const [obsMsg, setObsMsg] = useState<Record<string, string>>({});
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoItem[] | null>(
     null
   );
@@ -217,6 +224,25 @@ export default function PerfilEscola({ idDaUrl }: Props) {
       document.removeEventListener("visibilitychange", onFocus);
     };
   }, [token, aba]);
+
+  useEffect(() => {
+    if (!Array.isArray(observados)) return;
+
+    setObsDraft((prev) => {
+      const next = { ...prev };
+
+      for (const a of observados) {
+        const key = String(a.observadoId ?? a.atletaId ?? a.id); // ✅ chave única
+        if (!next[key]) {
+          next[key] = {
+            nota: typeof a.notaInterna === "string" ? a.notaInterna : "",
+            alertar: !!a.alertarMudancas,
+          };
+        }
+      }
+      return next;
+    });
+  }, [observados]);
 
   useEffect(() => {
     if (!token) return;
@@ -321,12 +347,32 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     async function fetchObservados() {
       const tipoId = escolinhaId;
       if (!tipoId) return;
+
       try {
         const { data: lista } = await axios.get<AtletaItem[]>(
           `${API.BASE_URL}/api/observados`,
-          { headers, params: { tipoUsuarioId: tipoId, incluirPontuacao: 1 } }
+          {
+            headers,
+            params: {
+              tipoUsuarioId: tipoId,
+              incluirPontuacao: 1,
+              incluirNotas: 1, // ✅ IMPORTANTE
+            },
+          }
         );
-        if (!cancel.v) setObservados(Array.isArray(lista) ? lista : []);
+
+        const arr = Array.isArray(lista) ? lista : [];
+
+        // ✅ garante defaults pra UI não ficar "undefined"
+        const normalizados = arr.map((a: any) => ({
+          ...a,
+          notaInterna: typeof a.notaInterna === "string" ? a.notaInterna : "",
+          alertarMudancas: !!a.alertarMudancas,
+          observadoId: a.observadoId ? String(a.observadoId) : undefined,
+          atletaId: a.atletaId ? String(a.atletaId) : undefined,
+        }));
+
+        if (!cancel.v) setObservados(normalizados);
       } catch {
         if (!cancel.v) setObservados([]);
       }
@@ -400,6 +446,53 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     }
   }
 
+  async function salvarObservado(a: AtletaItem) {
+    if (!token) return;
+
+    const key = String(a.observadoId ?? a.atletaId ?? a.id);
+    const draft = obsDraft[key] ?? { nota: "", alertar: false };
+
+    // ✅ id que vai na URL (o mais correto é observadoId; senão usa atletaId/id)
+    const idParaPatch = String(a.observadoId ?? a.atletaId ?? a.id);
+
+    setObsSaving((p) => ({ ...p, [key]: true }));
+    setObsMsg((p) => ({ ...p, [key]: "" }));
+
+    try {
+      await axios.patch(
+        `${API.BASE_URL}/api/observados/${idParaPatch}`,
+        {
+          notaInterna: draft.nota,
+          alertarMudancas: draft.alertar,
+
+          // ✅ você já usa isso no GET; manter aqui ajuda o backend a validar owner
+          tipo: "Escolinha",
+          tipoUsuarioId: escolinhaId,
+        },
+        { headers }
+      );
+
+      // ✅ otimista: atualiza na lista sem precisar refetch
+      setObservados((prev) => {
+        if (!Array.isArray(prev)) return prev;
+        return prev.map((x) => {
+          const kx = String(x.observadoId ?? x.atletaId ?? x.id);
+          if (kx !== key) return x;
+          return { ...x, notaInterna: draft.nota, alertarMudancas: draft.alertar };
+        });
+      });
+
+      setObsMsg((p) => ({ ...p, [key]: "Salvo com sucesso!" }));
+    } catch (err: any) {
+      setObsMsg((p) => ({
+        ...p,
+        [key]: err?.response?.data?.message ?? "Não foi possível salvar.",
+      }));
+    } finally {
+      setObsSaving((p) => ({ ...p, [key]: false }));
+    }
+  }
+
     async function loadEventosEscolinha() {
       if (!token) return;
       if (eventosLoading) return;
@@ -431,18 +524,40 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         Array.isArray(resp?.eventos) ? resp.eventos :
         [];
 
-      setEventos(
-        (arr ?? []).map((e: any) => ({
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+
+      const normalizados: EventoItem[] = (arr ?? []).map((e: any) => {
+        const dt = e.dataEvento ?? e.data ?? e.inicio ?? null;
+
+        return {
           id: String(e.id),
           titulo: String(e.titulo ?? e.nome ?? "Evento"),
           tipo: e.tipo ?? null,
-          dataEvento: e.dataEvento ?? e.data ?? null,
+          dataEvento: dt,
           inicio: e.inicio ?? null,
           cidade: e.cidade ?? null,
           estado: e.estado ?? null,
           endereco: e.endereco ?? null,
-        }))
-      );
+        };
+      });
+
+      // ✅ filtra só hoje pra frente + ✅ ordena do mais próximo pro mais distante
+      const filtradosOrdenados = normalizados
+        .filter((e) => {
+          const raw = e.dataEvento || e.inicio;
+          if (!raw) return false;
+          const d = new Date(raw);
+          d.setHours(0, 0, 0, 0);
+          return d >= hoje;
+        })
+        .sort((a, b) => {
+          const da = new Date(a.dataEvento || a.inicio || 0).getTime();
+          const db = new Date(b.dataEvento || b.inicio || 0).getTime();
+          return da - db; // ✅ mais próximo primeiro
+        })
+
+      setEventos(filtradosOrdenados);
     } catch (err) {
       console.error("Erro ao carregar eventos da escolinha:", err);
       setEventos([]);
@@ -541,6 +656,8 @@ export default function PerfilEscola({ idDaUrl }: Props) {
       </div>
     );
 
+  const vinculadosCount = Array.isArray(vinculados) ? vinculados.length : 0;
+  const observadosCount = Array.isArray(observados) ? observados.length : 0;
   const nome = data.escolinha.nome || data.usuario?.nome || "Escola";
   const headerFoto: string | undefined =
     (typeof data.escolinha.logo === "string" && data.escolinha.logo) ||
@@ -838,7 +955,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                     .sort((a, b) => {
                       const da = new Date(a.dataEvento || a.inicio || 0).getTime();
                       const db = new Date(b.dataEvento || b.inicio || 0).getTime();
-                      return db - da;
+                      return da - db; // ✅ mais próximo primeiro
                     })
                     .slice(0, 8)
                     .map((e) => {
@@ -912,7 +1029,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
           <div className="mt-4 grid gap-4">
             {subAba === "vinculados" && (
               <SectionCard
-                title="Atletas Vinculados"
+                title={`Atletas Vinculados (${vinculadosCount})`}
                 right={
                   <Link
                     href="/perfil/GerenciarAtletas"
@@ -979,7 +1096,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
 
             {subAba === "observados" && (
               <SectionCard
-                title="Atletas Observados"
+                title={`Atletas Observados (${observadosCount})`}
                 right={
                   <Link
                     href="/explorar"
@@ -992,43 +1109,103 @@ export default function PerfilEscola({ idDaUrl }: Props) {
               >
                 {observados && observados.length > 0 ? (
                   <ul className="grid grid-cols-1 gap-3">
-                    {observados.map((a) => (
-                      <li
-                        key={a.id}
-                        className="flex items-center gap-3 rounded-xl border border-green-100 p-3"
-                      >
-                        <Avatar
-                          foto={a.foto ?? null}
-                          alt={a.nome}
-                          className="w-10 h-10"
-                        />
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-green-900">
-                            {a.nome}
-                          </div>
-                          <div className="text-xs text-green-900/70">
-                            {[
-                              a.posicao ?? "-",
-                              a.idade ? `${a.idade} anos` : null,
-                              a.categoria,
-                            ]
-                              .filter(Boolean)
-                              .join(" • ")}
-                          </div>
-                        </div>
-                        {typeof a.pontuacao === "number" && (
-                          <span className="text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-800 border border-green-200">
-                            {a.pontuacao} pts
-                          </span>
-                        )}
-                        <Link
-                          href={`/perfil/${a.usuarioId}`}
-                          className="ml-2 text-sm text-green-800 inline-flex items-center gap-1"
+                    {observados.map((a) => {
+                      const key = String(a.observadoId ?? a.atletaId ?? a.id);
+                      const draft = obsDraft[key] ?? { nota: "", alertar: false };
+                      const saving = !!obsSaving[key];
+                      const msg = obsMsg[key];
+
+                      return (
+                        <li
+                          key={key}
+                          className="rounded-2xl border border-green-100 p-3 bg-white"
                         >
-                          Ver perfil <ChevronRight className="w-4 h-4" />
-                        </Link>
-                      </li>
-                    ))}
+                          {/* header do atleta */}
+                          <div className="flex items-center gap-3">
+                            <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
+
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-green-900">{a.nome}</div>
+                              <div className="text-xs text-green-900/70">
+                                {[a.posicao ?? "-", a.idade ? `${a.idade} anos` : null, a.categoria]
+                                  .filter(Boolean)
+                                  .join(" • ")}
+                              </div>
+                            </div>
+
+                            <Link
+                              href={`/perfil/${a.usuarioId}`}
+                              className="text-sm text-green-800 inline-flex items-center gap-1"
+                            >
+                              Ver perfil <ChevronRight className="w-4 h-4" />
+                            </Link>
+                          </div>
+
+                          {/* nota interna */}
+                          <div className="mt-3">
+                            <div className="text-xs font-semibold text-green-900 mb-1">
+                              Nota interna
+                            </div>
+
+                            <input
+                              value={draft.nota}
+                              onChange={(e) =>
+                                setObsDraft((p) => ({
+                                  ...p,
+                                  [key]: { ...draft, nota: e.target.value },
+                                }))
+                              }
+                              className="w-full rounded-xl border border-green-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-200"
+                              placeholder="Escreva uma nota interna..."
+                            />
+                          </div>
+
+                          {/* checkbox */}
+                          <label className="mt-3 flex items-start gap-2 text-sm text-green-900">
+                            <input
+                              type="checkbox"
+                              checked={draft.alertar}
+                              onChange={(e) =>
+                                setObsDraft((p) => ({
+                                  ...p,
+                                  [key]: { ...draft, alertar: e.target.checked },
+                                }))
+                              }
+                              className="mt-1"
+                            />
+                            <span className="text-green-900/90">
+                              Notificar mudanças (pontuação, posição, idade, novos treinos/desafios)
+                            </span>
+                          </label>
+
+                          {/* botão salvar + mensagem */}
+                          <div className="mt-3 flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => salvarObservado(a)}
+                              disabled={saving}
+                              className={`px-4 py-2 rounded-xl text-white font-semibold text-sm ${
+                                saving ? "bg-green-400" : "bg-green-600 hover:bg-green-700"
+                              }`}
+                            >
+                              {saving ? "Salvando..." : "Salvar"}
+                            </button>
+
+                            {msg ? (
+                              <div
+                                className={`text-sm ${
+                                  msg.toLowerCase().includes("sucesso")
+                                    ? "text-green-700"
+                                    : "text-red-600"
+                                }`}
+                              >
+                                {msg}
+                              </div>
+                            ) : null}
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : (
                   <div>

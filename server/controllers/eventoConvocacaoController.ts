@@ -67,15 +67,20 @@ export async function upsertConvocacaoEvento(req: AuthenticatedRequest, res: Res
       reservasIds,  
     } = req.body ?? {};
 
+    const tipo = String(req.user?.tipo || "").toLowerCase();
+    if (!["clube", "escolinha", "professor", "admin"].includes(tipo)) {
+      return res.status(403).json({ error: "Sem permissão para convocar." });
+    }
+
     if (!eventoId) return res.status(400).json({ error: "eventoId obrigatório" });
     if (!turmaId) return res.status(400).json({ error: "turmaId obrigatório" });
 
-    const reservas = uniq(ensureArray<string>(reservasIds));
+    const reservas = uniq(ensureArray<string>(reservasIds ?? req.body?.reservas));
     if (reservas.length > 11) {
       return res.status(400).json({ error: "Reservas não pode passar de 11." });
     }
 
-    const escalaObj = (escala && typeof escala === "object") ? escala : {};
+    const escalaObj = escala && typeof escala === "object" && !Array.isArray(escala) ? escala : {};
     const titularesIds = uniq(Object.values(escalaObj).filter(Boolean) as string[]);
 
     if (titularesIds.length !== 11) {
@@ -144,6 +149,7 @@ export async function upsertConvocacaoEvento(req: AuthenticatedRequest, res: Res
     if (convocadosData.length) {
       await prisma.eventoConvocado.createMany({
         data: convocadosData,
+        skipDuplicates: true,
       });
     }
 
@@ -156,7 +162,7 @@ export async function upsertConvocacaoEvento(req: AuthenticatedRequest, res: Res
     const inicioStr = evento.dataEvento ? new Date(evento.dataEvento as any).toLocaleString("pt-BR") : "";
     const linkEvento = `/eventos/${eventoId}`;
 
-    const deId = String(req.userId || "");
+    const deId = String(req.userId || req.user?.id || "").trim();
     if (!deId) return res.status(401).json({ error: "Não autenticado" });
 
     const msgTag = `[CONVOCACAO_EVENTO:${eventoId}:${turmaId}]`;
@@ -164,7 +170,8 @@ export async function upsertConvocacaoEvento(req: AuthenticatedRequest, res: Res
     const notifs = atletas.map((a) => {
       const isReserva = reservas.includes(a.id);
       const posRaw = isReserva ? "RESERVA" : (posByAtleta[a.id] || "TITULAR");
-      const pos = isReserva ? "Reserva" : `Titular (${labelPosicao(posRaw)})`;
+      const posKey = posByAtleta[a.id];
+      const pos = isReserva ? "Reserva" : (posKey ? `Titular (${labelPosicao(posKey)})` : "Titular");
 
       return {
         usuarioId: a.usuarioId,
@@ -184,7 +191,7 @@ export async function upsertConvocacaoEvento(req: AuthenticatedRequest, res: Res
       }
     });
 
-    await prisma.notificacao.createMany({ data: notifs });
+    await prisma.notificacao.createMany({ data: notifs, skipDuplicates: true });
 
     await prisma.mensagem.deleteMany({
       where: {
@@ -196,8 +203,8 @@ export async function upsertConvocacaoEvento(req: AuthenticatedRequest, res: Res
     await prisma.mensagem.createMany({
       data: atletas.map((a) => {
         const isReserva = reservas.includes(a.id);
-        const posRaw = isReserva ? "RESERVA" : (posByAtleta[a.id] || "TITULAR");
-        const posLabel = isReserva ? "Reserva" : `Titular (${labelPosicao(posRaw)})`;
+        const posKey = isReserva ? null : posByAtleta[a.id];
+        const posLabel = isReserva ? "Reserva" : (posKey ? `Titular (${labelPosicao(posKey)})` : "Titular");
 
         const conteudo =
           `${msgTag}\n` +
