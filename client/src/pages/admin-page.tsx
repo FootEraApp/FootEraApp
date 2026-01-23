@@ -1,3 +1,4 @@
+// client/src/pages/admin-page.tsx
 import React, { useEffect, useState } from "react";
 import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
@@ -222,6 +223,14 @@ export default function AdminDashboard() {
   const [exercicios, setExercicios] = useState<any[]>([]);
   const [treinos, setTreinos] = useState<Treinos[]>([]);
   const [professores, setProfessores] = useState<any[]>([]);
+  const [profLoading, setProfLoading] = useState(false);
+  const [profErro, setProfErro] = useState<string>("");
+  const [profQ, setProfQ] = useState("");
+  const [profDebQ, setProfDebQ] = useState("");
+  const [profPage, setProfPage] = useState(1);
+  const profPageSize = 20;
+  const [profTotal, setProfTotal] = useState(0);
+
   const [desafios, setDesafios] = useState<any[]>([]);
   const [configuracoes, setConfiguracoes] = useState<any>(null);
 
@@ -312,6 +321,59 @@ const [fbTipo, setFbTipo] = useState<string>("");
 const [fbFrom, setFbFrom] = useState<string>("");
 const [fbOnlyUnread, setFbOnlyUnread] = useState(false);
 
+const [profParceiroBusyId, setProfParceiroBusyId] = useState<string | null>(null);
+
+async function toggleParceiroProfessor(professorId: string, next: boolean) {
+  setProfParceiroBusyId(professorId);
+
+  // optimistic update
+  setProfessores((prev) =>
+    prev.map((p) =>
+      p.id === professorId
+        ? { ...p, usuario: { ...(p.usuario || {}), parceiro: next } }
+        : p
+    )
+  );
+
+  try {
+    const r = await fetch(`${API.BASE_URL}/api/professores/${professorId}/parceiro`, {
+      method: "PATCH",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ parceiro: next }),
+    });
+
+    const txt = await r.text().catch(() => "");
+    if (!r.ok) {
+      // rollback se falhar
+      setProfessores((prev) =>
+        prev.map((p) =>
+          p.id === professorId
+            ? { ...p, usuario: { ...(p.usuario || {}), parceiro: !next } }
+            : p
+        )
+      );
+      alert(txt || `Erro ao atualizar parceiro (HTTP ${r.status}).`);
+      return;
+    }
+
+    // se quiser, dá pra usar a resposta do backend aqui
+    // const payload = txt ? JSON.parse(txt) : null;
+  } catch (e: any) {
+    // rollback se falhar
+    setProfessores((prev) =>
+      prev.map((p) =>
+        p.id === professorId
+          ? { ...p, usuario: { ...(p.usuario || {}), parceiro: !next } }
+          : p
+      )
+    );
+    alert(e?.message || "Falha de rede ao atualizar parceiro.");
+  } finally {
+    setProfParceiroBusyId(null);
+  }
+}
+
+
 useEffect(() => {
   const h = setTimeout(() => setAssDebQ(assQ.trim()), 400);
   return () => clearTimeout(h);
@@ -337,6 +399,63 @@ useEffect(() => {
 
   return () => window.clearInterval(id);
 }, [aba]);
+
+  useEffect(() => {
+    const h = setTimeout(() => setProfDebQ(profQ.trim()), 350);
+    return () => clearTimeout(h);
+  }, [profQ]);
+
+  useEffect(() => {
+    if (aba !== "professores") return;
+    void carregarProfessores(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, profDebQ]);
+
+  async function carregarProfessores(page: number) {
+    setProfLoading(true);
+    setProfErro("");
+
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(profPageSize));
+      if (profDebQ) params.set("q", profDebQ);
+
+      // ✅ padrão: aceita backend que retorna array direto OU { items, total, page }
+      const r = await fetch(`${API.BASE_URL}/api/professores?${params.toString()}`, {
+        headers: authHeaders(),
+      });
+
+      const txt = await r.text().catch(() => "");
+      if (!r.ok) {
+        setProfessores([]);
+        setProfTotal(0);
+        setProfPage(page);
+        setProfErro(txt || `Falha ao carregar professores (HTTP ${r.status}).`);
+        return;
+      }
+
+      const json = txt ? JSON.parse(txt) : [];
+      const arr =
+        Array.isArray(json)
+          ? json
+          : json.items ?? json.data ?? json.professores ?? json.rows ?? json.result ?? [];
+
+      const items = Array.isArray(arr) ? arr : [];
+      const total =
+        (Array.isArray(json) ? json.length : (json.total ?? json.count ?? items.length)) ?? items.length;
+
+      setProfessores(items);
+      setProfTotal(Number(total || 0));
+      setProfPage(Number((json as any)?.page || page));
+    } catch (e: any) {
+      setProfessores([]);
+      setProfTotal(0);
+      setProfErro(e?.message || "Falha de rede ao carregar professores.");
+    } finally {
+      setProfLoading(false);
+    }
+  }
 
 async function carregarAssinantes(page: number) {
   setAssLoading(true);
@@ -507,12 +626,7 @@ async function marcarFeedbackComoLido(id: string) {
     void carregarExercicios();
   }, [aba]);
 
-  useEffect(() => {
-    fetch(`${API.BASE_URL}/api/professores`, { headers: authHeaders() })
-      .then((r) => r.json())
-      .then(setProfessores)
-      .catch(() => setProfessores([]));
-  }, []);
+
 
   useEffect(() => {
     fetch(`${API.BASE_URL}/api/configuracoes`, { headers: authHeaders() })
@@ -786,9 +900,13 @@ async function confirmarExcluirProfessor() {
       return;
     }
 
-    setProfessores((prev) => prev.filter((x) => x.id !== profToDelete.id));
     fecharModalExcluirProfessor();
     alert("Professor e conta vinculada foram excluídos!");
+
+    // ✅ recarrega página atual; se ficou vazia, volta 1 página
+    const nextPage = professores.length <= 1 && profPage > 1 ? profPage - 1 : profPage;
+    await carregarProfessores(nextPage);
+
   } catch (e: any) {
     setProfDeleteErr(e?.message || "Falha de rede ao excluir.");
   } finally {
@@ -1375,32 +1493,160 @@ async function confirmarExcluirProfessor() {
                 + Novo Professor
               </button>
             </div>
+
+            <div className="flex flex-wrap gap-2 items-center mb-4">
+              <input
+                value={profQ}
+                onChange={(e) => setProfQ(e.target.value)}
+                placeholder="Buscar por nome, código, CREF…"
+                className="border rounded px-3 py-2 w-72"
+              />
+
+              <button
+                className="px-3 py-2 rounded bg-gray-200"
+                onClick={() => carregarProfessores(1)}
+                disabled={profLoading}
+              >
+                {profLoading ? "Carregando…" : "Atualizar"}
+              </button>
+
+              <div className="ml-auto text-sm text-gray-600">
+                {profLoading ? "Carregando…" : `${profTotal} resultados`}
+              </div>
+            </div>
+
+            {profErro && <div className="mb-3 text-sm text-red-600">{profErro}</div>}
+
             <ul className="space-y-2">
-              {professores.map((p: any) => (
-                <li key={p.id} className="bg-white p-4 rounded shadow flex justify-between items-center">
-                  <div>
-                    <strong>{p.nome}</strong>
-                    <p>
-                      CREF: {p.cref} — {p.areaFormacao}
-                    </p>
-                    <p className="text-sm text-gray-600">Qualificações: {(Array.isArray(p.qualificacoes) ? p.qualificacoes : []).join(", ") || "—"}</p>
-                    <p className="text-sm text-gray-500">Certificações: {(Array.isArray(p.certificacoes) ? p.certificacoes : []).join(", ") || "—"}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => (window.location.href = `/admin/professores/create?id=${p.id}`)}>✏️</button>
+              {professores.map((p: any) => {
+                const nome = p.nome ?? p.usuario?.nome ?? "(sem nome)";
+                const cref = p.cref ?? p.usuario?.cref ?? "—";
+                const area = p.areaFormacao ?? p.formacao ?? "—";
+                const foto = avatarSrc(p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null);
 
-<button
-  onClick={() => abrirModalExcluirProfessor(p)}
-  className="text-red-600"
-  title="Excluir professor"
->
-  🗑️
-</button>
+                const qualificacoes = Array.isArray(p.qualificacoes) ? p.qualificacoes : [];
+                const certificacoes = Array.isArray(p.certificacoes) ? p.certificacoes : [];
+                
+                const parceiro = !!p.usuario?.parceiro;
+                const parceiroBusy = profParceiroBusyId === p.id;
 
-                  </div>
+                return (
+                  <li
+                    key={p.id}
+                    className="bg-white p-4 rounded shadow flex justify-between items-center"
+                  >
+                    <div className="flex items-start gap-3">
+                      <img
+                        src={foto}
+                        onError={onAvatarError}
+                        className="w-12 h-12 rounded-full object-cover border"
+                        alt="Foto do professor"
+                      />
+                      <div>
+                        <strong>{nome}</strong>
+
+                        <div className="text-sm text-gray-700 mt-1">
+                          <span className="font-medium">CREF:</span> {cref}
+                          {" • "}
+                          <span className="font-medium">Formação:</span> {area}
+                          {p.codigo ? (
+                            <>
+                              {" • "}
+                              <span className="font-medium">Código:</span> {p.codigo}
+                            </>
+                          ) : null}
+                        </div>
+
+                        <p className="text-sm text-gray-600 mt-1">
+                          Qualificações: {qualificacoes.join(", ") || "—"}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Certificações: {certificacoes.join(", ") || "—"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 items-center">
+                      {/* ✅ Toggle Parceiro */}
+                      <label className="flex items-center gap-2 text-sm select-none">
+                        <input
+                          type="checkbox"
+                          checked={parceiro}
+                          disabled={parceiroBusy}
+                          onChange={(e) => {
+                            const next = e.target.checked;
+
+                            // opcional: confirmar ao ativar/desativar
+                            const ok = confirm(
+                              next
+                                ? `Marcar "${nome}" como Parceiro FootEra?`
+                                : `Remover "${nome}" de Parceiro FootEra?`
+                            );
+                            if (!ok) return;
+
+                            void toggleParceiroProfessor(p.id, next);
+                          }}
+                        />
+                        Parceiro FootEra
+                      </label>
+
+                      {/* Badge opcional */}
+                      {parceiro ? (
+                        <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800 border border-green-200">
+                          Parceiro
+                        </span>
+                      ) : (
+                        <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 border border-gray-200">
+                          Não parceiro
+                        </span>
+                      )}
+
+                      <button
+                        onClick={() => (window.location.href = `/admin/professores/create?id=${p.id}`)}
+                        className="text-blue-600"
+                        title="Editar professor"
+                      >
+                        ✏️
+                      </button>
+
+                      <button
+                        onClick={() => abrirModalExcluirProfessor(p)}
+                        className="text-red-600"
+                        title="Excluir professor"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+
+              {!profLoading && professores.length === 0 && (
+                <li className="bg-white p-6 rounded shadow text-center text-gray-500">
+                  Nenhum professor encontrado.
                 </li>
-              ))}
+              )}
             </ul>
+
+            <div className="flex items-center justify-between mt-3">
+              <button
+                disabled={profPage <= 1 || profLoading}
+                onClick={() => carregarProfessores(profPage - 1)}
+                className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
+              >
+                Anterior
+              </button>
+
+              <div className="text-sm text-gray-600">Página {profPage}</div>
+
+              <button
+                disabled={profLoading || profPage * profPageSize >= profTotal || professores.length < profPageSize}
+                onClick={() => carregarProfessores(profPage + 1)}
+                className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
+              >
+                Próxima
+              </button>
+            </div>
           </div>
         )}
 
