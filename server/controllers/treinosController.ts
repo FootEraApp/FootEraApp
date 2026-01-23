@@ -335,6 +335,7 @@ export async function agendarTreinoLote(req: AuthenticatedRequest, res: Response
       nome: true,
       escolinhaId: true,
       clubeId: true,
+      imagemUrl: true,
       professorId: true,
       professores: { select: { professorId: true } },
     },
@@ -1252,6 +1253,7 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
       programadoId,
       turmaId: turmaIdRaw,
       elencoId: elencoIdRaw,
+      imagemUrl
     } = req.body;
 
     const treinoProgramadoId = String(treinoProgramadoIdRaw ?? programadoId ?? "").trim();
@@ -3104,6 +3106,7 @@ export async function criarTreinoProgramado(
       atletasIds = [],
       elencosIds = [],
       pontuacao,
+      imagemUrl
     } = req.body as any;
 
     if (!(Object.values(Nivel) as string[]).includes(String(nivel))) {
@@ -3269,8 +3272,8 @@ export async function criarTreinoProgramado(
         duracao: duracao != null ? Number(duracao) : null,
         objetivo: objetivo ?? null,
         dataAgendada: whenDate,
-
         pontuacao: pontuacaoNum,
+        imagemUrl: imagemUrl || null,
 
         ...(tipoNorm === "professor" ? { professorId: String(tipoUsuarioId) } : {}),
         ...(tipoNorm === "clube" ? { clubeId: String(tipoUsuarioId) } : {}),

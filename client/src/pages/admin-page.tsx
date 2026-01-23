@@ -1,5 +1,5 @@
 // client/src/pages/admin-page.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import ValidacaoVideo from "./validacaovideo.js";
@@ -219,7 +219,8 @@ export default function AdminDashboard() {
     "configuracoes",
   ];
 
-  const [dados, setDados] = useState<any>(null);
+  const [dados, setDados] = useState<any>(EMPTY_DASH);
+  const [dashLoading, setDashLoading] = useState(true);
   const [exercicios, setExercicios] = useState<any[]>([]);
   const [treinos, setTreinos] = useState<Treinos[]>([]);
   const [professores, setProfessores] = useState<any[]>([]);
@@ -242,7 +243,12 @@ export default function AdminDashboard() {
   const [pagina, setPagina] = useState(1);
   const pageSize = 20;
   const [totalUsuarios, setTotalUsuarios] = useState(0);
-
+  const [exQ, setExQ] = useState("");
+  const [exDebQ, setExDebQ] = useState("");
+  const [exCat, setExCat] = useState<string>("");
+  const [trQ, setTrQ] = useState("");
+  const [trDebQ, setTrDebQ] = useState("");
+  const [trCat, setTrCat] = useState<string>("");
   const [detalheAberto, setDetalheAberto] = useState(false);
   const [userSelecionado, setUserSelecionado] = useState<UsuarioDetalhe | null>(null);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
@@ -373,11 +379,20 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
   }
 }
 
-
 useEffect(() => {
   const h = setTimeout(() => setAssDebQ(assQ.trim()), 400);
   return () => clearTimeout(h);
 }, [assQ]);
+
+useEffect(() => {
+  const h = setTimeout(() => setExDebQ(exQ.trim()), 300);
+  return () => clearTimeout(h);
+}, [exQ]);
+
+useEffect(() => {
+  const h = setTimeout(() => setTrDebQ(trQ.trim()), 300);
+  return () => clearTimeout(h);
+}, [trQ]);
 
 useEffect(() => {
   if (aba !== "assinaturas") return;
@@ -605,12 +620,6 @@ async function marcarFeedbackComoLido(id: string) {
   }
 
   useEffect(() => {
-    if (aba !== "usuarios") return;
-    carregarUsuarios(1).catch(() => {});
-  }, [aba, tipoFiltro, debouncedQ]);
-
-
-  useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPlayer(null);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -640,28 +649,30 @@ async function marcarFeedbackComoLido(id: string) {
     carregarUsuarios(1).catch(() => {});
   }, [aba, tipoFiltro, debouncedQ]);
 
-    useEffect(() => {
-      (async () => {
-        try {
-          const res = await fetch(`${API.BASE_URL}/api/admin`, { headers: authHeaders() });
-          const txt = await res.text();
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API.BASE_URL}/api/admin`, { headers: authHeaders() });
+        const txt = await res.text();
 
-          if (!res.ok) {
-            setDashErro(`Erro ao carregar dashboard: [${res.status}] ${txt || res.statusText}`);
-            setDados(EMPTY_DASH);
-            return;
-          }
-
-          const json = txt ? JSON.parse(txt) : {};
-          setDados(json);
-          setDashErro(null);
-        } catch (e) {
-          console.error("erro /api/admin", e);
-          setDashErro("Erro de rede ao carregar dashboard.");
+        if (!res.ok) {
+          setDashErro(`Erro ao carregar dashboard: [${res.status}] ${txt || res.statusText}`);
           setDados(EMPTY_DASH);
+          return;
         }
-      })();
-    }, []);
+
+        const json = txt ? JSON.parse(txt) : {};
+        setDados(json);
+        setDashErro(null);
+      } catch (e) {
+        console.error("erro /api/admin", e);
+        setDashErro("Erro de rede ao carregar dashboard.");
+        setDados(EMPTY_DASH);
+      } finally {
+        setDashLoading(false);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     if (!FLAGS.DESAFIOS_ENABLED) return;
@@ -1030,9 +1041,6 @@ async function confirmarExcluirProfessor() {
     }
   }
 
-
-  if (!dados) return <div className="p-6">Carregando...</div>;
-
     function handleLogout() {
     try {
       if (typeof localStorage !== "undefined") {
@@ -1056,7 +1064,94 @@ async function confirmarExcluirProfessor() {
   const ver = Number(dados.totalVerificados || 0);
   const nver = Number(dados.totalNaoVerificados || 0);
   
-  const treinosOrdenados = [...treinos].sort((a: any, b: any) => {
+  // =====================
+  // Helpers p/ busca
+  // =====================
+  const normStr = (v: any) => String(v ?? "").toLowerCase().trim();
+
+  const itemHasCategoria = (item: any, cat: string) => {
+    if (!cat) return true;
+    const alvo = normStr(cat);
+
+    const raw = item?.categoria ?? item?.categorias ?? item?.Categoria ?? null;
+
+    // aceita string, array, etc.
+    const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    if (list.length === 0) return false;
+
+    return list.some((c: any) => normStr(c).includes(alvo));
+  };
+
+  const matchesText = (item: any, qtxt: string) => {
+    if (!qtxt) return true;
+    const q = normStr(qtxt);
+
+    const nome = normStr(item?.nome ?? item?.titulo);
+    const codigo = normStr(item?.codigo);
+    const nivel = normStr(item?.nivel ?? item?.dificuldade);
+    const desc = normStr(item?.descricao ?? item?.resumo);
+
+    // procura em nome/código/nível/descrição
+    return (
+      nome.includes(q) ||
+      codigo.includes(q) ||
+      nivel.includes(q) ||
+      desc.includes(q)
+    );
+  };
+
+  // =====================
+  // Listas filtradas
+  // =====================
+  const treinosFiltrados = useMemo(() => {
+    return (Array.isArray(treinos) ? treinos : []).filter((t: any) => {
+      if (!matchesText(t, trDebQ)) return false;
+      if (!itemHasCategoria(t, trCat)) return false;
+      return true;
+    });
+  }, [treinos, trDebQ, trCat]);
+
+  const exerciciosFiltrados = useMemo(() => {
+    return (Array.isArray(exercicios) ? exercicios : []).filter((ex: any) => {
+      if (!matchesText(ex, exDebQ)) return false;
+      if (!itemHasCategoria(ex, exCat)) return false;
+      return true;
+    });
+  }, [exercicios, exDebQ, exCat]);
+
+  // =====================
+  // Categorias disponíveis (para o SELECT)
+  // =====================
+  const treinosCats = useMemo(() => {
+    const set = new Set<string>();
+    treinos.forEach((t: any) => {
+      const raw = t?.categoria ?? t?.categorias ?? null;
+      const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      arr.forEach((c: any) => {
+        const s = String(c ?? "").trim();
+        if (s) set.add(s);
+      });
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [treinos]);
+
+  const exerciciosCats = useMemo(() => {
+    const set = new Set<string>();
+    exercicios.forEach((ex: any) => {
+      const raw = ex?.categoria ?? ex?.categorias ?? null;
+      const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      arr.forEach((c: any) => {
+        const s = String(c ?? "").trim();
+        if (s) set.add(s);
+      });
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [exercicios]);
+
+  // =====================
+  // Ordenação (aplica DEPOIS de filtrar)
+  // =====================
+  const treinosOrdenados = [...treinosFiltrados].sort((a: any, b: any) => {
     const ra = Number(a.realizadoCount ?? a.realizados ?? 0);
     const rb = Number(b.realizadoCount ?? b.realizados ?? 0);
 
@@ -1071,7 +1166,7 @@ async function confirmarExcluirProfessor() {
     return ca.localeCompare(cb);
   });
 
-  const exerciciosOrdenados = [...exercicios].sort((a: any, b: any) => {
+  const exerciciosOrdenados = [...exerciciosFiltrados].sort((a: any, b: any) => {
     const ca = Number(a.usadoEmTreinos ?? 0);
     const cb = Number(b.usadoEmTreinos ?? 0);
 
@@ -1115,6 +1210,12 @@ async function confirmarExcluirProfessor() {
       {dashErro && (
         <div className="mb-4 rounded bg-red-50 text-red-700 px-4 py-2 text-sm">
           {dashErro}
+        </div>
+      )}
+
+      {dashLoading && (
+        <div className="mb-4 rounded bg-gray-100 text-gray-700 px-4 py-2 text-sm">
+          Carregando…
         </div>
       )}
 
@@ -1348,6 +1449,21 @@ async function confirmarExcluirProfessor() {
                 + Novo Exercicio
               </button>
             </div>
+
+            {/* Barra de pesquisa - Exercícios */}
+            <div className="flex flex-wrap gap-2 items-center mb-4">
+              <input
+                value={exQ}
+                onChange={(e) => setExQ(e.target.value)}
+                placeholder="Pesquisar por nome, código, nível (Base/Avançado), descrição…"
+                className="border rounded px-3 py-2 w-[min(520px,100%)]"
+              />
+
+              <div className="ml-auto text-sm text-gray-600">
+                {exerciciosOrdenados.length} resultado(s)
+              </div>
+            </div>
+
             <ul className="space-y-2">
               {exerciciosOrdenados.map((ex: any) => {
                 const videoUrl = resolveVideoUrl(ex);
@@ -1424,7 +1540,21 @@ async function confirmarExcluirProfessor() {
               </button>
             </div>
 
-            {treinos.length === 0 ? (
+            {/* Barra de pesquisa - Treinos */}
+            <div className="flex flex-wrap gap-2 items-center mb-4">
+              <input
+                value={trQ}
+                onChange={(e) => setTrQ(e.target.value)}
+                placeholder="Pesquisar por nome, código, nível (Base/Avançado), descrição…"
+                className="border rounded px-3 py-2 w-[min(520px,100%)]"
+              />
+
+              <div className="ml-auto text-sm text-gray-600">
+                {treinosOrdenados.length} resultado(s)
+              </div>
+            </div>
+
+            {treinosOrdenados.length === 0 ? (
               <p className="text-gray-500">Nenhum treino encontrado.</p>
             ) : (
               <ul className="space-y-2">
