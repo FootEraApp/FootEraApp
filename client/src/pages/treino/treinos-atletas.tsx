@@ -3,20 +3,14 @@ import { Link, useLocation } from "wouter";
 import {
   CalendarClock,
   Volleyball,
-  User,
-  CirclePlus,
-  Search,
-  House,
   CircleX,
   CircleCheck,
   Send,
   Share2,
-  Trash2,
   Check,
   X,
   ChevronDown,
   ChevronUp,
-  Play,
   MoreVertical,
   Star as StarIcon,
 } from "lucide-react";
@@ -476,13 +470,6 @@ function abrirMidiaExercicioDireto(
   }, []);
 
   useEffect(() => {
-    if (location === "/treinos") {
-      carregarTreinosAgendados();
-      carregarEventosAtleta();
-    }
-  }, [location]);
-
-  useEffect(() => {
     if (!easterEggMsg) return;
 
     const id = window.setTimeout(() => {
@@ -556,31 +543,44 @@ function abrirMidiaExercicioDireto(
 
   async function carregarEventosAtleta() {
     try {
-      const usuarioId =
-        (Storage as any).usuarioId ??
-        localStorage.getItem("usuarioId") ??
-        sessionStorage.getItem("usuarioId");
+      const token = getToken();
+      if (!token) return;
 
-      const token =
-        (Storage as any).token ??
-        localStorage.getItem("token") ??
-        sessionStorage.getItem("token");
+      // ✅ range do mês atual (inclui eventos no começo do mês)
+      const now = new Date();
+      const from = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      const to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-      if (!usuarioId || !token) return;
+      const qs = new URLSearchParams();
+      qs.set("from", from.toISOString());
+      qs.set("to", to.toISOString());
 
-      const r = await fetch(
-        `${API.BASE_URL}/api/eventos/atleta/${usuarioId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const r = await fetch(`${API.BASE_URL}/api/eventos/minha-agenda?${qs.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      if (!r.ok) throw new Error("Falha ao buscar eventos");
+      if (!r.ok) throw new Error("Falha ao buscar agenda");
+
       const js = await r.json();
 
-      setEventosAtleta(Array.isArray(js) ? js : []);
+      // O endpoint minha-agenda retorna itens no formato { id, tipo, titulo, inicio, ... }
+      // A gente filtra só os de origem EVENTO/CONVOCACAO pra preencher eventosAtleta.
+      const eventos = (Array.isArray(js) ? js : []).filter((it: any) => {
+        const origem = String(it?.origem || "").toUpperCase();
+        return origem === "EVENTO" || origem === "CONVOCACAO";
+      });
+
+      setEventosAtleta(
+        eventos.map((it: any) => ({
+          id: String(it.id),
+          tipo: it.tipo ?? "EVENTO",
+          titulo: it.titulo ?? "Evento",
+          inicio: it.inicio,
+          fim: it.fim ?? null,
+        }))
+      );
     } catch (e) {
-      console.warn("Falha ao carregar eventos do atleta:", e);
+      console.warn("Falha ao carregar agenda de eventos:", e);
       setEventosAtleta([]);
     }
   }
