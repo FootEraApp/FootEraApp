@@ -1,9 +1,51 @@
-// server/controller/professoresController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
+import { StatusCref } from "@prisma/client"; // ✅ ADICIONE ISSO
 import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
-import { Prisma } from "@prisma/client";
 
+function normalizeStatusCref(v: any): StatusCref {
+  const raw = String(v ?? "").trim();
+
+  // valores reais do enum no Prisma (ex: "ATIVO", "INATIVO" ou "Ativo", "Inativo")
+  const values = Object.values(StatusCref) as string[];
+
+  // tenta match case-insensitive
+  const upper = raw.toUpperCase();
+  const found = values.find((x) => String(x).toUpperCase() === upper);
+  if (found) return found as StatusCref;
+
+  // fallback seguro: tenta achar algo "ATIV"
+  const ativo = values.find((x) => String(x).toUpperCase().includes("ATIV"));
+  return (ativo ?? values[0]) as StatusCref;
+}
+
+function parseStringArray(v: any): string[] {
+  if (Array.isArray(v)) return v.filter(Boolean).map(String);
+
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (!t) return [];
+
+    // se veio JSON stringify
+    if ((t.startsWith("[") && t.endsWith("]")) || (t.startsWith("{") && t.endsWith("}"))) {
+      try {
+        const parsed = JSON.parse(t);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String);
+      } catch {}
+    }
+
+    // fallback: um item só
+    return [t];
+  }
+
+  return [];
+}
+
+function makeCodigoProfessor() {
+  // exemplo simples: PRF-ABC123
+  const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `PRF-${rand}`;
+}
 
 export const listarAtletasDoProfessor = async (req: Request, res: Response) => {
   const { professorId } = req.params;
@@ -191,23 +233,37 @@ export const listarProfessores = async (req: Request, res: Response) => {
 
 export const criarProfessor = async (req: Request, res: Response) => {
   try {
-    const { codigo, cref, nome, areaFormacao, usuarioId, statusCref } = req.body;
+    const { codigo, cref, nome, areaFormacao, usuarioId, dataNascimento } = req.body;
 
-    let qualificacoes = req.body.qualificacoes;
-    let certificacoes = req.body.certificacoes;
-    if (typeof qualificacoes === "string") qualificacoes = [qualificacoes];
-    if (typeof certificacoes === "string") certificacoes = [certificacoes];
+    if (!nome || String(nome).trim() === "") {
+      return res.status(400).json({ message: "Nome é obrigatório." });
+    }
+
+    const qualificacoes = parseStringArray(req.body.qualificacoes);
+    const certificacoes = parseStringArray(req.body.certificacoes);
+
+    const statusCref = normalizeStatusCref(req.body.statusCref);
 
     const data: any = {
-      codigo,
-      cref,
-      nome,
-      areaFormacao,
+      // ✅ se não vier codigo, gera
+      codigo: (codigo && String(codigo).trim()) ? String(codigo).trim() : makeCodigoProfessor(),
+
+      // ✅ cref opcional
+      cref: (cref && String(cref).trim()) ? String(cref).trim() : null,
+
+      nome: String(nome).trim(),
+      areaFormacao: areaFormacao ? String(areaFormacao).trim() : null,
       statusCref,
-      qualificacoes: qualificacoes ?? [],
-      certificacoes: certificacoes ?? [],
-      fotoUrl: req.file?.filename || null,
+      qualificacoes,
+      certificacoes,
+      fotoUrl: req.file?.filename ? `/upload/${req.file.filename}` : null,
     };
+
+    // ✅ dataNascimento opcional
+    if (dataNascimento) {
+      const d = new Date(String(dataNascimento));
+      if (!Number.isNaN(d.getTime())) data.dataNascimento = d;
+    }
 
     if (usuarioId) {
       data.usuario = { connect: { id: String(usuarioId) } };
@@ -218,43 +274,67 @@ export const criarProfessor = async (req: Request, res: Response) => {
       include: { usuario: true },
     });
 
-    res.status(201).json(novoProfessor);
-  } catch (error) {
+    return res.status(201).json(novoProfessor);
+  } catch (error: any) {
     console.error("Erro ao criar professor:", error);
-    res.status(500).json({ message: "Erro ao criar professor", error });
+    return res.status(500).json({
+      message: "Erro ao criar professor",
+      error: { name: error?.name, code: error?.code, message: error?.message },
+    });
   }
 };
 
 export const editarProfessor = async (req: Request, res: Response) => {
   const { id } = req.params;
-  try {
-    const { codigo, cref, nome, areaFormacao, statusCref, usuarioId } = req.body;
 
-    let qualificacoes = req.body["qualificacoes[]"] || req.body.qualificacoes;
-    let certificacoes = req.body["certificacoes[]"] || req.body.certificacoes;
-    if (typeof qualificacoes === "string") qualificacoes = [qualificacoes];
-    if (typeof certificacoes === "string") certificacoes = [certificacoes];
+  try {
+    const { codigo, cref, nome, areaFormacao, usuarioId, dataNascimento } = req.body;
+
+    const qualificacoes = parseStringArray(req.body["qualificacoes[]"] ?? req.body.qualificacoes);
+    const certificacoes = parseStringArray(req.body["certificacoes[]"] ?? req.body.certificacoes);
 
     const data: any = {
-      codigo,
-      cref,
-      nome,
-      areaFormacao,
-      statusCref,
-      qualificacoes: qualificacoes ?? [],
-      certificacoes: certificacoes ?? [],
+      // ✅ codigo continua existindo no banco, mas no admin você não precisa mandar.
+      // se mandar, atualiza; se não mandar, não mexe.
+      ...(codigo !== undefined ? { codigo: String(codigo).trim() } : {}),
+
+      // ✅ cref opcional: se vier vazio, seta null
+      ...(cref !== undefined ? { cref: String(cref).trim() || null } : {}),
+
+      ...(nome !== undefined ? { nome: String(nome).trim() } : {}),
+      ...(areaFormacao !== undefined ? { areaFormacao: String(areaFormacao).trim() || null } : {}),
+
+      ...(req.body.statusCref !== undefined
+        ? { statusCref: normalizeStatusCref(req.body.statusCref) }
+        : {}),
+
+      qualificacoes,
+      certificacoes,
     };
 
-    if (req.file) data.fotoUrl = req.file.filename;
+    if (dataNascimento !== undefined) {
+      const d = new Date(String(dataNascimento));
+      data.dataNascimento = Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    if (req.file) data.fotoUrl = `/upload/${req.file.filename}`;
 
     if (usuarioId) {
       data.usuario = { connect: { id: String(usuarioId) } };
     }
-    const professorAtualizado = await prisma.professor.update({ where: { id }, data });
-    res.json(professorAtualizado);
-  } catch (error) {
+
+    const professorAtualizado = await prisma.professor.update({
+      where: { id },
+      data,
+    });
+
+    return res.json(professorAtualizado);
+  } catch (error: any) {
     console.error("Erro ao editar professor:", error);
-    res.status(500).json({ message: "Erro ao editar professor.", error });
+    return res.status(500).json({
+      message: "Erro ao editar professor.",
+      error: { name: error?.name, code: error?.code, message: error?.message },
+    });
   }
 };
 

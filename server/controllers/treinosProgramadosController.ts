@@ -65,9 +65,15 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
     );
   }
   try {
+    const body =
+      typeof req.body?.payload === "string"
+        ? JSON.parse(req.body.payload)
+        : req.body;
+
+    (req as any).body = body;
+
     const {
       nome,
-      codigo,
       nivel,
       descricao,
       categoria,
@@ -88,7 +94,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       elencoId,
       elencosIds = [],
     } = req.body as {
-      nome?: string; codigo?: string; nivel?: string; descricao?: string;
+      nome?: string; nivel?: string; descricao?: string;
       categoria?: string[]; tipoTreino?: string; dataAgendada?: string;
       objetivo?: string; duracao?: number; dicas?: string[];
       imagemUrl?: string; metas?: any; pontuacao?: number;
@@ -97,8 +103,8 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       atletasIds?: string[]; elencoId?: string; elencosIds?: string[];
     };
 
-    if (!nome || !codigo) {
-      return res.status(400).json({ message: "Campos obrigatórios ausentes: 'nome' e/ou 'codigo'." });
+    if (!nome) {
+      return res.status(400).json({ message: "Campo obrigatório ausente: 'nome'." });
     }
     if (!nivel) {
       return res.status(400).json({ message: "Campo obrigatório ausente: 'nivel'." });
@@ -110,53 +116,73 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Todos os exercícios devem possuir 'exercicioId'." });
     }
 
-    const dono = normalizarTipoUsuario(tipoUsuario);
-    if (!dono || !tipoUsuarioId) {
-      return res.status(400).json({ message: "Informe 'tipoUsuario' (Professor/Clube/Escolinha) e 'tipoUsuarioId'." });
+    // ✅ dono vem do front (Professor principal)
+    const professorId = String((req.body as any).professorId ?? "").trim();
+    if (!professorId) {
+      return res.status(400).json({ message: "Campo obrigatório ausente: 'professorId'." });
     }
-
     const nivelNorm      = normNivel(nivel);
     const tipoTreinoNorm = normTipoTreino(tipoTreino);
-    const categoriasNorm = Array.isArray(categoria) ? (categoria.map(normCategoria) as Categoria[]) : [];
-
-    if (categoriasNorm.length === 0) {
-      return res.status(400).json({ message: "Pelo menos uma categoria deve ser selecionada." });
-    }
+    const categoriasNorm: Categoria[] = Array.isArray(categoria)
+      ? (categoria.map(normCategoria) as Categoria[])
+      : [];
 
     const duplicado = await prisma.treinoProgramado.findFirst({
-      where: { OR: [{ nome }, { codigo }] },
-      select: { id: true, nome: true, codigo: true },
+      where: { nome },
+      select: { id: true, nome: true },
     });
     if (duplicado) {
-      return res.status(400).json({ message: "Treino com o mesmo nome ou código já existe.", duplicado });
+      return res.status(400).json({ message: "Treino com o mesmo nome já existe.", duplicado });
     }
 
     const itens = (exercicios as any[]).map((e: any, i: number) => ({
-      exercicioId: e.exercicioId ?? e.id,
+      exercicioId: String(e.exercicioId ?? e.id ?? "").trim(),
       ordem: Number(e.ordem ?? i + 1),
-      repeticoes: toRepeticoes(e.series, e.repeticoes),
+      repeticoes: String(e.repeticoes ?? "").trim(), // ✅ vem pronto do front
     }));
+
+    const profExiste = await prisma.professor.findUnique({
+      where: { id: professorId },
+      select: { id: true },
+    });
+    if (!profExiste) {
+      return res.status(400).json({ message: "professorId inválido (Professor não encontrado)." });
+    }
+
+    const colabs = Array.isArray((req.body as any).professoresColabIds)
+      ? (req.body as any).professoresColabIds
+      : [];
+
+    const allProfIds = Array.from(new Set([professorId, ...colabs]))
+      .map((x) => String(x).trim())
+      .filter(Boolean);
+
+    const uploadedPath =
+      req.file?.filename ? `/upload/${req.file.filename}` : null;
+
+    // prioridade: arquivo enviado; senão mantém imagemUrl vinda do body
+    const imagemFinal = uploadedPath ?? (imagemUrl ? String(imagemUrl) : null);
 
     const treinoCriado = await prisma.treinoProgramado.create({
       data: {
         nome,
-        codigo,
         nivel: nivelNorm,
         descricao: descricao ?? null,
-        categoria: categoriasNorm,
+        categoria: categoriasNorm.length ? categoriasNorm : undefined,
         tipoTreino: tipoTreinoNorm,
         dataAgendada: dataAgendada ? new Date(dataAgendada) : null,
         objetivo: objetivo ?? null,
         duracao: duracao != null ? Number(duracao) : null,
         dicas: Array.isArray(dicas) ? dicas : [],
-        imagemUrl: imagemUrl ?? null,
+        imagemUrl: imagemFinal,
         metas: metas ?? null,
         pontuacao: pontuacao != null ? Number(pontuacao) : null,
         expiraEm: expiraEm ? new Date(expiraEm) : null,
         naoExpira: Boolean(naoExpira),
-        ...(dono === "Professor" ? { professor: { connect: { id: tipoUsuarioId } } } : {}),
-        ...(dono === "Clube" ? { clube: { connect: { id: tipoUsuarioId } } } : {}),
-        ...(dono === "Escolinha" ? { escolinha: { connect: { id: tipoUsuarioId } } } : {}),
+        criadorProfessor: { connect: { id: professorId } },
+        professores: {
+          create: allProfIds.map((pid) => ({ professorId: pid })),
+        },
         exercicios: { create: itens },
       },
       include: {
@@ -198,8 +224,8 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       acao: 'PRESCREVER_TREINO',
       entidade: 'TreinoProgramado',
       entidadeId: treinoCriado.id,
-      descricao: `Treino criado (${treinoCriado.codigo})`,
-      meta: { nome, codigo, tipoTreino: tipoTreinoNorm, categorias: categoriasNorm },
+      descricao: `Treino criado (${treinoCriado.nome})`,
+      meta: { nome, tipoTreino: tipoTreinoNorm, categorias: categoriasNorm },
     });
 
       await Promise.all(
@@ -280,22 +306,27 @@ export const getTreinoById = async (req: Request, res: Response) => {
 
 export async function updateTreino(req: Request, res: Response) {
   try {
+    const body =
+      typeof req.body?.payload === "string"
+        ? JSON.parse(req.body.payload)
+        : req.body;
+
+    (req as any).body = body;
+
     const { id } = req.params;
     const {
-      nome, codigo, descricao, nivel, categoria, tipoTreino, dataAgendada, objetivo,
+      nome, descricao, nivel, categoria, tipoTreino, dataAgendada, objetivo,
       duracao, dicas, imagemUrl, metas, pontuacao, expiraEm, naoExpira,
       exercicios = [],
       tipoUsuario, tipoUsuarioId,
     } = req.body;
 
-    if (nome || codigo) {
+    if (nome) {
       const dup = await prisma.treinoProgramado.findFirst({
-        where: { id: { not: id }, OR: [{ nome: nome ?? "" }, { codigo: codigo ?? "" }] },
-        select: { id: true, nome: true, codigo: true },
+        where: { id: { not: id }, nome },
+        select: { id: true, nome: true },
       });
-      if (dup) {
-        return res.status(400).json({ message: "Já existe treino com esse nome ou código.", duplicado: dup });
-      }
+      if (dup) return res.status(400).json({ message: "Já existe treino com esse nome.", duplicado: dup });
     }
 
     const dataDono: any = {};
@@ -313,9 +344,9 @@ export async function updateTreino(req: Request, res: Response) {
     }
 
     const itens = (exercicios as any[]).map((e: any, i: number) => ({
-      exercicioId: e.exercicioId ?? e.id,
+      exercicioId: String(e.exercicioId ?? e.id ?? "").trim(),
       ordem: Number(e.ordem ?? i + 1),
-      repeticoes: toRepeticoes(e.series, e.repeticoes),
+      repeticoes: String(e.repeticoes ?? "").trim(), // ✅ vem pronto do front
     }));
 
     const antigos = await prisma.treinoProgramadoExercicio.findMany({
@@ -326,13 +357,21 @@ export async function updateTreino(req: Request, res: Response) {
       antigos.map(a => a.exercicioId).filter(Boolean) as string[]
     );
 
+    const uploadedPath =
+      req.file?.filename ? `/upload/${req.file.filename}` : null;
+
+    // se veio arquivo, SEMPRE substitui
+    // se não veio, respeita o que vier no body (ou não altera se undefined)
+    const imagemPatch =
+      uploadedPath ? { imagemUrl: uploadedPath }
+      : (imagemUrl !== undefined ? { imagemUrl: imagemUrl ? String(imagemUrl) : null } : {});
+
     await prisma.$transaction([
       prisma.treinoProgramadoExercicio.deleteMany({ where: { treinoProgramadoId: id } }),
       prisma.treinoProgramado.update({
         where: { id },
         data: {
           ...(nome !== undefined ? { nome } : {}),
-          ...(codigo !== undefined ? { codigo } : {}),
           ...(descricao !== undefined ? { descricao } : {}),
           ...(nivel !== undefined ? { nivel: nivel as Nivel } : {}),
           ...(categoria !== undefined ? { categoria: { set: categoria as Categoria[] } } : {}),
@@ -341,7 +380,7 @@ export async function updateTreino(req: Request, res: Response) {
           ...(objetivo !== undefined ? { objetivo } : {}),
           ...(duracao !== undefined ? { duracao: duracao != null ? Number(duracao) : null } : {}),
           ...(dicas !== undefined ? { dicas: Array.isArray(dicas) ? dicas : [] } : {}),
-          ...(imagemUrl !== undefined ? { imagemUrl } : {}),
+          ...imagemPatch,
           ...(metas !== undefined ? { metas } : {}),
           ...(pontuacao !== undefined ? { pontuacao: pontuacao != null ? Number(pontuacao) : null } : {}),
           ...(expiraEm !== undefined ? { expiraEm: expiraEm ? new Date(expiraEm) : null } : {}),
