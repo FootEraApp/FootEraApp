@@ -1,28 +1,44 @@
-import express from 'express';
-import { authenticateToken } from '../middlewares/auth.js';
+// server/routes/treinosprogramados.ts
+import express from "express";
+import multer from "multer";
+import { authenticateToken } from "../middlewares/auth.js";
+import { requireAdmin } from "../middlewares/adminGuard.js";
 import {
   createTreinoProgramado,
   updateTreino,
-  deleteTreino,
-  getTreinoById,
   getAllTreinos,
-} from '../controllers/treinosProgramadosController.js';
-import { requireUsage } from '../services/usage.js';
+  getTreinoById,
+  deleteTreino,
+} from "../controllers/treinosProgramadosController.js";
 
 const router = express.Router();
+const upload = multer({ dest: "upload/" });
 
-router.get('/:id', authenticateToken, getTreinoById);
-router.get('/', authenticateToken, getAllTreinos);
+// listar
+router.get("/", authenticateToken, getAllTreinos);
 
-router.post('/', authenticateToken, async (req, res) => {
-  const isTemplate = !!req.body?.naoExpira === true;
-  const key = isTemplate ? 'templates_total' : 'planos_ativos_total';
-  const chk = await requireUsage(req as any, res, key);
-  if (chk === undefined) return;
-  return createTreinoProgramado(req, res);
-});
+// buscar por id
+router.get("/:id", authenticateToken, getTreinoById);
 
-router.put('/:id', authenticateToken, updateTreino);
-router.delete('/:id', authenticateToken, deleteTreino);
+// criar (com capa)
+router.post(
+  "/",
+  authenticateToken,
+  requireAdmin,
+  upload.single("imagem"), // 👈 NOME DO CAMPO DO FILE
+  createTreinoProgramado
+);
+
+// editar (com capa)
+router.put(
+  "/:id",
+  authenticateToken,
+  requireAdmin,
+  upload.single("imagem"),
+  updateTreino
+);
+
+// excluir
+router.delete("/:id", authenticateToken, requireAdmin, deleteTreino);
 
 export default router;

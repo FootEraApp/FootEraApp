@@ -15,7 +15,7 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
-import { API } from "../config.js";
+import { API, APP } from "../config.js";
 import { TreinosApi } from "../utils/treinosApi.js";
 import type { ExItemUI, TreinoCreatePayload } from "../utils/treinos.types.js";
 import {
@@ -67,6 +67,7 @@ const NOMES_MESES_PT = [
 ];
 
 const DIAS_SEMANA_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 function formatYMD(ano: number, mesZeroBased: number, dia: number): string {
   const m = String(mesZeroBased + 1).padStart(2, "0");
@@ -108,6 +109,11 @@ function parseDateOnlyToLocalMidnight(dateOnly: string): Date {
   if (!s) return new Date(NaN);
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+}
+
+function resolveAvatarUrl(raw?: string) {
+  const u = resolveMediaUrl(raw);
+  return u || AVATAR_FALLBACK;
 }
 
 function resolveMediaUrl(raw?: string) {
@@ -179,6 +185,7 @@ interface TreinoProgramado {
   nome: string;
   descricao?: string;
   nivel: string;
+  imagemUrl: string | null;
   dataAgendada?: string;
   exercicios: {
     id: string;
@@ -221,6 +228,39 @@ function toCategoriaEnum(val?: string | null): string | null {
   if (m) return `Sub${m[1]}`;
   if (/^livre$/i.test(String(val))) return "Livre";
   return val;
+}
+
+async function uploadImagemCapa(file: File): Promise<string> {
+  const token = getToken();
+  if (!token) throw new Error("Sem token");
+
+  const fd = new FormData();
+  // seu endpoint atual espera "foto"
+  fd.append("foto", file);
+
+  const base = (API as any)?.BASE_URL || "http://localhost:3001";
+
+  const r = await fetch(`${base}/api/upload/perfil`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+
+  const txt = await r.text();
+  if (!r.ok) throw new Error(txt || "Falha no upload");
+
+  const j = txt ? JSON.parse(txt) : null;
+
+  const url =
+    j?.url ||
+    j?.fileUrl ||
+    j?.path ||
+    j?.file?.url ||
+    j?.data?.url ||
+    "";
+
+  if (!url) throw new Error("Upload não retornou URL");
+  return String(url);
 }
 
 async function uploadVideo(file: File): Promise<string> {
@@ -537,7 +577,6 @@ const VideoThumb = memo(function VideoThumb({
 
 export default function NovoTreino() {
   const [, navigate] = useLocation();
-
   const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
@@ -545,6 +584,8 @@ export default function NovoTreino() {
   const [prazos, setPrazos] = useState<Record<string, string>>({});
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<Exercicio[]>([]);
   const [treinosDisponiveis, setTreinosDisponiveis] = useState<TreinoProgramado[]>([]);
+  const [capaPreview, setCapaPreview] = useState<string>(""); // blob pra preview
+  const [capaUrl, setCapaUrl] = useState<string>("");         // url final (backend)
 
   type AbaTreinosAtleta = "meu_professor" | "footera";
   const [abaTreinosAtleta, setAbaTreinosAtleta] = useState<AbaTreinosAtleta>("meu_professor");
@@ -914,6 +955,13 @@ useEffect(() => {
         descricao: t.descricao ?? t.resumo ?? "",
         nivel: t.nivel ?? t.dificuldade ?? "-",
         pontuacao: t.pontuacao ?? null,
+        imagemUrl:
+          t.imagemUrl ??
+          t.imagemURL ??
+          t.capaUrl ??
+          t.capa ??
+          t.foto ??
+          null,
         exercicios: (t.exercicios ?? t.exs ?? []).map(
           (ex: any, i: number) => ({
             id: ex.id ?? ex.exercicioId ?? String(i),
@@ -1385,6 +1433,7 @@ useEffect(() => {
               ? saved.professoresSelecionados.map(String)
               : []
           );
+          setCapaUrl(saved.capaUrl ?? "");
         }
       }
 
@@ -1580,13 +1629,13 @@ useEffect(() => {
       duracao,
       dataTreino,
       categorias,
-
       tipoTreino,
       objetivo,
       exerciciosSelecionados,
       atletasSelecionados,
       datasAgendamento,
-      professoresSelecionados
+      professoresSelecionados,
+      capaUrl
     });
   }, [
     etapa,
@@ -2150,6 +2199,7 @@ const criarTreino = async () => {
       tipoUsuario: tipoUsuarioNorm,
       tipoUsuarioId,
       professoresIds: professoresIdsFinalSemEu,
+      imagemUrl: capaUrl || null,
       categoria:
         categorias.length > 0 ? categorias.map(mapCategoria).filter(Boolean) : [],
       tipoTreino: mapTipoTreino(tipoTreino),
@@ -2315,7 +2365,8 @@ const criarTreino = async () => {
     setAtletasSelecionados([]);
     setDatasAgendamento([]);
     setProfessoresSelecionados([]);
-
+    setCapaUrl("");
+    setCapaPreview("");
     setTimeout(() => {
       navigate("/treinos");
     }, 500);
@@ -2510,6 +2561,14 @@ const criarTreino = async () => {
         ) : (
           listaAtiva.map((t) => (
             <div key={t.id} className="bg-white border p-4 rounded shadow mb-4">
+              {t.imagemUrl ? (
+                <img
+                  src={resolveMediaUrl(t.imagemUrl)}
+                  alt={`Capa do treino ${t.nome}`}
+                  className="w-full h-40 object-cover rounded-xl border mb-3"
+                />
+              ) : null}
+
               <div className="flex items-start justify-between gap-2">
                 <h3
                   className="text-green-800 text-lg font-semibold cursor-pointer hover:underline"
@@ -2639,6 +2698,8 @@ const criarTreino = async () => {
                 setExerciciosSelecionados([]);
                 setAtletasSelecionados([]);
                 setProfessoresSelecionados([]);
+                setCapaUrl("");
+                setCapaPreview("");
                 sessionStorage.removeItem(SAVE_KEY);
                 sessionStorage.removeItem(RESTORE_FLAG_KEY);
               }
@@ -2648,8 +2709,6 @@ const criarTreino = async () => {
             Limpar progresso
           </button>
         </div>
-
-
 
         {etapa === 1 && (
           <StepCard title="Informações Básicas">
@@ -2767,10 +2826,81 @@ const criarTreino = async () => {
                   )}
                 </div>
               </div>
-
             </div>
 
+            <div className="sm:col-span-2">
+              <label className="block text-sm text-gray-700 mb-2 mt-3">
+                Capa do Treino (opcional)
+              </label>
 
+              {/* Preview */}
+              { (capaPreview || capaUrl) ? (
+                <div className="mb-2">
+                  <img
+                    src={resolveMediaUrl(capaPreview || capaUrl)}
+                    alt="Capa do treino"
+                    className="w-full max-h-48 object-cover rounded-xl border"
+                  />
+                </div>
+              ) : (
+                <div className="mb-2 w-full h-32 rounded-xl border bg-gray-50 flex items-center justify-center text-xs text-gray-500">
+                  Sem capa
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <label className="text-xs px-3 py-2 rounded bg-gray-100 border cursor-pointer">
+                  {capaUrl || capaPreview ? "Trocar imagem" : "Upload da galeria"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const input = e.currentTarget; // ✅ salva antes do await
+                      const file = input.files?.[0];
+                      if (!file) return;
+
+                      // preview local
+                      if (capaPreview?.startsWith("blob:")) URL.revokeObjectURL(capaPreview);
+                      const local = URL.createObjectURL(file);
+                      setCapaPreview(local);
+
+                      try {
+                        const urlFinal = await uploadImagemCapa(file);
+                        setCapaUrl(urlFinal);
+
+                        // quando tiver urlFinal, pode soltar o blob
+                        URL.revokeObjectURL(local);
+                        setCapaPreview("");
+                      } catch (err: any) {
+                        console.error(err);
+                        alert(err?.message || "Erro ao enviar imagem");
+                      } finally {
+                        if (input) input.value = ""; // ✅ não quebra
+                      }
+                    }}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  className="text-xs text-red-600 underline"
+                  onClick={() => {
+                    if (capaPreview?.startsWith("blob:")) URL.revokeObjectURL(capaPreview);
+                    setCapaPreview("");
+                    setCapaUrl("");
+                  }}
+                  disabled={!capaPreview && !capaUrl}
+                  title="Deixar sem capa"
+                >
+                  Remover capa
+                </button>
+              </div>
+
+              <p className="text-[11px] text-gray-500 mt-1">
+                Você pode escolher uma imagem da galeria. Se não escolher, o treino ficará sem capa.
+              </p>
+            </div>
 
           </StepCard>
         )}
@@ -2855,7 +2985,8 @@ const criarTreino = async () => {
                                   accept="video/*"
                                   className="hidden"
                                   onChange={async (e) => {
-                                    const file = e.target.files?.[0];
+                                    const input = e.currentTarget; // ✅
+                                    const file = input.files?.[0];
                                     if (!file) return;
 
                                     const old = exerciciosSelecionados[i]?.videoUrl;
@@ -2865,14 +2996,14 @@ const criarTreino = async () => {
                                     setVideoNoEx(i, localPreview);
 
                                     try {
-                                      const url = await uploadVideo(file); 
-                                      setVideoNoEx(i, url);               
+                                      const url = await uploadVideo(file);
+                                      setVideoNoEx(i, url);
                                       URL.revokeObjectURL(localPreview);
                                     } catch (err: any) {
                                       console.error(err);
                                       alert(err?.message || "Erro ao enviar vídeo");
                                     } finally {
-                                      e.currentTarget.value = "";
+                                      if (input) input.value = ""; // ✅
                                     }
                                   }}
                                 />
@@ -3239,10 +3370,17 @@ const criarTreino = async () => {
                       }`}
                     >
                       <img
-                        src={atleta.foto ? resolveMediaUrl(atleta.foto) : "https://via.placeholder.com/80"}
+                        src={resolveAvatarUrl(atleta.foto)}
                         alt={atleta.nome}
                         className="w-20 h-20 mx-auto rounded-full object-cover mb-2"
+                        loading="lazy"
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          // evita loop infinito caso o fallback também falhe
+                          if (img.src !== AVATAR_FALLBACK) img.src = AVATAR_FALLBACK;
+                        }}
                       />
+
                       <p className="font-semibold text-sm sm:text-base">
                         {atleta.nome}
                       </p>
