@@ -9,11 +9,11 @@ datasource db {
 }
 
 model Usuario {
-  id                        String              @id @default(uuid())
-  nomeDeUsuario             String              @unique
+  id                        String      @id @default(uuid())
+  nomeDeUsuario             String      @unique
   senhaHash                 String
   nome                      String
-  email                     String              @unique
+  email                     String      @unique
   foto                      String?
   tipo                      TipoUsuario
   cidade                    String?
@@ -27,14 +27,18 @@ model Usuario {
   responsavelTelefone       String?
   configuracoesPrivacidade  Json?
   configuracoesNotificacoes Json?
-  dataCriacao               DateTime            @default(now())
+  dataCriacao               DateTime    @default(now())
   codigo                    String?
-  verified                  Boolean             @default(false)
-  EmailVerification         EmailVerification[]
-  assinatura                Assinatura?
-  administrador             Administrador?
-  tokenVersion              Int                 @default(0) // ✅ ADICIONE ISSO
-  senhaAtualizadaEm         DateTime?
+  verified                  Boolean     @default(false)
+
+  parceiro     Boolean   @default(false)
+  parceiroInfo Parceiro?
+
+  EmailVerification EmailVerification[]
+  assinatura        Assinatura?
+  administrador     Administrador?
+  tokenVersion      Int                 @default(0) // ✅ ADICIONE ISSO
+  senhaAtualizadaEm DateTime?
 
   amigosDe               Amigo[]                   @relation("AmigoUsuario")
   amigos                 Amigo[]                   @relation("UsuarioAmigo")
@@ -84,6 +88,16 @@ model Usuario {
   notificacoes           Notificacao[]             @relation("NotificacaoUsuario")
   notificacoesGeradas    Notificacao[]             @relation("NotificacaoActor")
   AvaliacaoTreino        AvaliacaoTreino[]
+}
+
+model Parceiro {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
 }
 
 model EmailVerification {
