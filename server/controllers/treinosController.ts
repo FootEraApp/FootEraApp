@@ -1,3 +1,4 @@
+// server/controllers/treinosController
 import {
   PrismaClient,
   PosicaoCampo,
@@ -862,6 +863,120 @@ export async function treinosDisponiveis(req: AuthenticatedRequest, res: Respons
   } catch (error) {
     console.error("Erro ao buscar treinos disponíveis:", error);
     return res.status(500).json({ message: "Erro ao buscar treinos disponíveis" });
+  }
+}
+
+// ✅ GET /api/treinos/publicos-professores-parceiros
+export async function treinosPublicosProfessoresParceiros(
+  _req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    // ✅ "parceiro" está em Usuario
+    const professoresParceiros = await prisma.professor.findMany({
+      where: { usuario: { is: { parceiro: true } } },
+      select: { id: true },
+    });
+
+    const professorIds = professoresParceiros.map((p) => p.id);
+    if (!professorIds.length) return res.json([]);
+
+    // ✅ include tipado corretamente
+    const include = {
+      exercicios: {
+        include: { exercicio: true, exercicioTemporario: true },
+        orderBy: { ordem: "asc" as const },
+      },
+      professores: {
+        include: { professor: { select: { id: true, nome: true } } },
+      },
+      Professor: { select: { id: true, nome: true } }, // professorId
+      criadorProfessor: { select: { id: true, nome: true } }, // criadorProfessorId
+      clube: { select: { id: true, nome: true } },
+      escolinha: { select: { id: true, nome: true } },
+    } satisfies Prisma.TreinoProgramadoInclude;
+
+    const treinos = await prisma.treinoProgramado.findMany({
+      where: {
+        OR: [
+          { criadorProfessorId: { in: professorIds } },
+          { professorId: { in: professorIds } },
+          { professores: { some: { professorId: { in: professorIds } } } },
+        ],
+      },
+      include,
+      orderBy: { createdAt: "desc" },
+    });
+
+    const resposta = treinos.map((t) => {
+      const criadores: Array<{
+        tipo: "Professor" | "Clube" | "Escolinha";
+        id: string;
+        nome: string;
+      }> = [];
+
+      // ✅ criador
+      if (t.criadorProfessor) {
+        criadores.push({
+          tipo: "Professor",
+          id: t.criadorProfessor.id,
+          nome: t.criadorProfessor.nome,
+        });
+      }
+
+      // ✅ professor principal (Professor relation de professorId)
+      if (t.Professor) {
+        const exists = criadores.some(
+          (c) => c.tipo === "Professor" && c.id === t.Professor!.id
+        );
+        if (!exists) {
+          criadores.push({
+            tipo: "Professor",
+            id: t.Professor.id,
+            nome: t.Professor.nome,
+          });
+        }
+      }
+
+      // ✅ colaboradores (TreinoProgramadoProfessor[])
+      for (const link of t.professores) {
+        const prof = link.professor;
+        const exists = criadores.some(
+          (c) => c.tipo === "Professor" && c.id === prof.id
+        );
+        if (!exists) {
+          criadores.push({ tipo: "Professor", id: prof.id, nome: prof.nome });
+        }
+      }
+
+      if (t.clube) criadores.push({ tipo: "Clube", id: t.clube.id, nome: t.clube.nome });
+      if (t.escolinha) criadores.push({ tipo: "Escolinha", id: t.escolinha.id, nome: t.escolinha.nome });
+
+      return {
+        id: t.id,
+        nome: t.nome,
+        descricao: t.descricao,
+        nivel: t.nivel,
+        duracao: t.duracao,
+        objetivo: t.objetivo,
+        dicas: t.dicas,
+        pontuacao: t.pontuacao ?? null,
+        categoria: t.categoria ?? [],
+        tipoTreino: t.tipoTreino ?? null,
+        criadores,
+        exercicios: t.exercicios.map((e) => ({
+          id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
+          nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
+          repeticoes: e.repeticoes,
+          ordem: e.ordem,
+        })),
+      };
+    });
+
+    return res.json(resposta);
+  } catch (error) {
+    console.error("Erro ao buscar treinos públicos (professores parceiros):", error);
+    return res.status(500).json({ message: "Erro ao buscar treinos públicos." });
   }
 }
 

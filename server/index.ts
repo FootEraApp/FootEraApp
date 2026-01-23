@@ -240,15 +240,17 @@ app.use("/api/ranking", rankingRoutes);
 app.use("/api/explorar", explorarRoutes);  
 app.use("/api/legal", legalRoutes);
 app.use("/api/catalogo", catalogoRoutes);
+
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminAdminsRoutes);
 app.use("/api/admin", metricsRoutes);
-app.use("/api/analises", analisesRoutes);
 app.use("/api/admin/usuarios", adminUsuariosRoutes);
 app.use("/api/admin/assinantes", adminAssinantesRoutes);
+app.use("/api/admin/moderacao", authenticateToken, requireAdmin, adminModeracaoRoutes);
+
+app.use("/api/analises", analisesRoutes);
 app.use("/api/assinaturas", assinaturasRoutes);
 app.use("/api/comentarios", comentariosRoutes);
-app.use("/api/admin/moderacao", authenticateToken, requireAdmin, adminModeracaoRoutes);
 app.use("/api/olheiros", authenticateToken, olheirosRouter);
 app.use("/api/atletas", authenticateToken, atletaRoutes);
 app.use("/api/amigos", authenticateToken, amigosRoutes);

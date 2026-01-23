@@ -2,6 +2,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
+import { Prisma } from "@prisma/client";
 
 
 export const listarAtletasDoProfessor = async (req: Request, res: Response) => {
@@ -649,5 +650,73 @@ export const listarProfessoresVinculados = async (req: Request, res: Response) =
   } catch (error) {
     console.error("Erro ao listar professores vinculados:", error);
     return res.status(500).json({ message: "Erro ao listar professores vinculados." });
+  }
+};
+
+export const toggleProfessorParceiro = async (req: Request, res: Response) => {
+  const { id: professorId } = req.params;
+  const { parceiro } = req.body as { parceiro?: boolean };
+
+  if (typeof parceiro !== "boolean") {
+    return res.status(400).json({
+      message: "Campo 'parceiro' deve ser boolean (true ou false).",
+    });
+  }
+
+  try {
+    // 🔎 busca professor + usuário
+    const professor = await prisma.professor.findUnique({
+      where: { id: professorId },
+      select: {
+        id: true,
+        usuarioId: true,
+        usuario: {
+          select: { id: true, parceiro: true },
+        },
+      },
+    });
+
+    if (!professor || !professor.usuarioId) {
+      return res.status(404).json({
+        message: "Professor ou usuário vinculado não encontrado.",
+      });
+    }
+
+    const usuarioId = professor.usuarioId;
+
+    await prisma.$transaction(async (tx) => {
+      // 🔁 atualiza flag rápida
+      await tx.usuario.update({
+        where: { id: usuarioId },
+        data: { parceiro },
+      });
+
+      if (parceiro) {
+        // ✅ cria registro parceiro se não existir
+        await tx.parceiro.upsert({
+          where: { usuarioId },
+          create: { usuarioId },
+          update: { ativo: true },
+        });
+      } else {
+        // ❌ desativa parceiro (mantém histórico)
+        await tx.parceiro.updateMany({
+          where: { usuarioId },
+          data: { ativo: false },
+        });
+      }
+    });
+
+    return res.json({
+      ok: true,
+      professorId,
+      usuarioId,
+      parceiro,
+    });
+  } catch (error) {
+    console.error("Erro ao atualizar parceiro do professor:", error);
+    return res.status(500).json({
+      message: "Erro ao atualizar status de parceiro.",
+    });
   }
 };

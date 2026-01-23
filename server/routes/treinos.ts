@@ -38,7 +38,8 @@ import {
   getCalendarioTreinos,
   relacaoStatus,
   getTreinosProgramadosStats,
-  realizadosCount
+  realizadosCount,
+  treinosPublicosProfessoresParceiros
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
@@ -103,6 +104,8 @@ router.post("/:id/finish", finalizarTreinoAgendado);
 
 router.get("/:treinoId/status", getTreinoStatus);
 router.get("/disponiveis", treinosDisponiveis);
+
+router.get("/publicos-professores-parceiros", treinosPublicosProfessoresParceiros);
 
 router.get("/atletas-vinculados", atletasVinculados);
 router.post("/restaurar", restaurarTreinos);
