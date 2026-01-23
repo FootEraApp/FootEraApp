@@ -482,20 +482,22 @@ model RelacaoTreinamento {
 }
 
 model AtletaObservado {
-  id           String     @id @default(uuid())
-  professorId  String?
-  escolinhaId  String?
-  clubeId      String?
-  atletaId     String
-  criadoEm     DateTime   @default(now())
-  atualizadoEm DateTime   @updatedAt
-  olheiroId    String?
-  ativo        Boolean    @default(true)
-  atleta       Atleta     @relation("ObservacaoAtleta", fields: [atletaId], references: [id], onDelete: Cascade)
-  clube        Clube?     @relation("ObservacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
-  escolinha    Escolinha? @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
-  olheiro      Olheiro?   @relation(fields: [olheiroId], references: [id], onDelete: SetNull)
+  id              String   @id @default(uuid())
+  professorId     String?
+  escolinhaId     String?
+  clubeId         String?
+  atletaId        String
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+  olheiroId       String?
+  ativo           Boolean  @default(true)
+  notaInterna     String?
+  alertarMudancas Boolean  @default(false)
 
+  atleta    Atleta     @relation("ObservacaoAtleta", fields: [atletaId], references: [id], onDelete: Cascade)
+  clube     Clube?     @relation("ObservacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha Escolinha? @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
+  olheiro   Olheiro?   @relation(fields: [olheiroId], references: [id], onDelete: SetNull)
   professor Professor? @relation("ObservacaoProfessor", fields: [professorId], references: [id], onDelete: Cascade)
 
   TreinoRotinaAtribuicao TreinoRotinaAtribuicao[]

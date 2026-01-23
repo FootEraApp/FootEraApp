@@ -599,7 +599,7 @@ async function salvarNota(atletaId: string) {
 
           <div className="mt-4 grid gap-4">
             <SectionCard
-              title="Atletas Observados"
+              title={`Atletas Observados (${observados?.length ?? 0})`}
               right={
                 <Link
                   href="/explorar"

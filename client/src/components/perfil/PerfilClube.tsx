@@ -516,21 +516,37 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
       );
 
       const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
-      setEventosCount((arr ?? []).length);
 
-      const mapped: EventoPreview[] = (arr ?? []).map((ev: any) => ({
-        id: String(ev.id),
-        titulo: String(ev.titulo ?? "Evento"),
-        tipo: ev.tipo ?? null,
-        status: ev.status ?? null,
-        dataEvento: String(ev.dataEvento ?? ""),
-        cidade: ev.cidade ?? null,
-        estado: ev.estado ?? null,
-        descricao: ev.descricao ?? null,
-      }));
+      // ✅ data de hoje (zerada)
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+
+      const mapped: EventoPreview[] = (arr ?? [])
+        // ✅ FILTRO PRINCIPAL: só eventos de hoje pra frente
+        .filter((ev: any) => {
+          if (!ev?.dataEvento) return false;
+          const dataEv = new Date(ev.dataEvento);
+          dataEv.setHours(0, 0, 0, 0);
+          return dataEv >= hoje;
+        })
+        // (opcional) ordenar por data mais próxima
+        .sort(
+          (a: any, b: any) =>
+            new Date(a.dataEvento).getTime() - new Date(b.dataEvento).getTime()
+        )
+        .map((ev: any) => ({
+          id: String(ev.id),
+          titulo: String(ev.titulo ?? "Evento"),
+          tipo: ev.tipo ?? null,
+          status: ev.status ?? null,
+          dataEvento: String(ev.dataEvento ?? ""),
+          cidade: ev.cidade ?? null,
+          estado: ev.estado ?? null,
+          descricao: ev.descricao ?? null,
+        }));
 
       setEventosPreview(mapped.slice(0, 3));
-
+      setEventosCount(mapped.length);
     } catch (e: any) {
       setEventosPreview([]);
       setEventosErro(
@@ -1133,12 +1149,8 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
 
           {subAba === "observados" && (
             <SectionCard
-              title="Atletas Observados"
-              right={
-                <span className="text-xs text-green-900/60">
-                  Futuro: destacar mudanças e enviar alertas
-                </span>
-              }
+              title={`Atletas Observados (${observados?.length ?? 0})`}
+              
             >
               {observados && observados.length > 0 ? (
                 <ul className="grid grid-cols-1 gap-3">
@@ -1180,7 +1192,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                             </div>
                           </div>
                           <Link
-                            href={`/perfil/${a.id}`}
+                            href={`/perfil/${a.usuarioId ?? a.id}`}
                             className="text-sm text-green-800 inline-flex items-center gap-1"
                           >
                             Ver perfil{" "}
