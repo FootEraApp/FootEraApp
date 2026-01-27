@@ -25,6 +25,7 @@ interface Treinos {
   codigo: string;
   nivel: string;
   descricao: string;
+  agendadosCount?: number;
   realizadoCount?: number;
   realizados?: number;
   submissoes?: number;
@@ -698,20 +699,51 @@ async function marcarFeedbackComoLido(id: string) {
           ? jsonTreinos
           : (jsonTreinos?.items ?? jsonTreinos?.data ?? []);
 
-        const normTreinos = (Array.isArray(arr) ? arr : []).map((tr: any) => ({
-          id: String(tr.id),
-          nome: String(tr.nome ?? ""),
-          codigo: String(tr.codigo ?? ""),
-          nivel: String(tr.nivel ?? ""),
-          descricao: tr.descricao ?? "",
-          realizadoCount: Number(
-            tr.realizadoCount ??
-            tr.realizados ??
-            tr.realizacoes ??
-            tr.estatistica?.realizacoes ??
-            0
-          ),
-        }));
+        function pickNum(...vals: any[]) {
+          for (const v of vals) {
+            if (v === 0) return 0;
+            if (v === null || v === undefined) continue;
+            const n = Number(v);
+            if (Number.isFinite(n)) return n;
+          }
+          return 0;
+        }
+
+        const normTreinos = (Array.isArray(arr) ? arr : []).map((tr: any) => {
+          const realizadoCount = pickNum(
+            tr.realizadoCount,
+            tr.realizados,
+            tr.realizacoes,
+            tr.realizacoesCount,
+            tr.totalRealizacoes,
+            tr.estatistica?.realizacoes,
+            tr.stats?.realizacoes,
+            tr.counts?.realizacoes,
+            tr._count?.realizacoes
+          );
+
+          const agendadoCount = pickNum(
+            tr.agendadoCount,
+            tr.agendados,
+            tr.agendamentos,
+            tr.agendamentosCount,
+            tr.totalAgendamentos,
+            tr.estatistica?.agendamentos,
+            tr.stats?.agendamentos,
+            tr.counts?.agendamentos,
+            tr._count?.agendamentos
+          );
+
+          return {
+            id: String(tr.id),
+            nome: String(tr.nome ?? ""),
+            codigo: String(tr.codigo ?? ""),
+            nivel: String(tr.nivel ?? ""),
+            descricao: tr.descricao ?? "",
+            realizadoCount,
+            agendadoCount,
+          };
+        });
 
         setTreinos(normTreinos);
 
@@ -1561,7 +1593,8 @@ async function confirmarExcluirProfessor() {
                 {treinosOrdenados.map((t: any) => {
                   const nome = t.nome ?? t.titulo ?? "(sem nome)";
                   const codigo = t.codigo ?? "-";
-                  const realizado = Number(t.realizadoCount ?? t.realizados ?? 0);
+                  const realizado = Number(t.realizadoCount ?? 0);
+                  const agendado = Number(t.agendadoCount ?? 0);
                   const nivel = t.nivel ?? t.dificuldade ?? "-";
                   const descricao = t.descricao ?? t.resumo ?? "";
                   return (
