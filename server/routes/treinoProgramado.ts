@@ -2,7 +2,7 @@
 import express from "express";
 import multer from "multer";
 import { authenticateToken } from "../middlewares/auth.js";
-import { requireAdmin } from "../middlewares/adminGuard.js";
+import { requireAdminOrTreinoOwner } from "../middlewares/treinoProgramadoGuards.js";
 import {
   createTreinoProgramado,
   updateTreino,
@@ -24,7 +24,7 @@ router.get("/:id", authenticateToken, getTreinoById);
 router.post(
   "/",
   authenticateToken,
-  requireAdmin,
+  requireAdminOrTreinoOwner,
   upload.single("imagem"), // 👈 NOME DO CAMPO DO FILE
   createTreinoProgramado
 );
@@ -33,12 +33,12 @@ router.post(
 router.put(
   "/:id",
   authenticateToken,
-  requireAdmin,
+  requireAdminOrTreinoOwner,
   upload.single("imagem"),
   updateTreino
 );
 
 // excluir
-router.delete("/:id", authenticateToken, requireAdmin, deleteTreino);
+router.delete("/:id", authenticateToken, requireAdminOrTreinoOwner, deleteTreino);
 
 export default router;
