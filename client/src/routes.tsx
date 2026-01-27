@@ -95,7 +95,7 @@ export function AppRoutes() {
         <RequireAdmin><PaginaCreateExercicios /></RequireAdmin>
       </Route>
       <Route path="/admin/treinos/create">
-        <RequireAdmin><PaginaCreateTreinos /></RequireAdmin>
+        <PaginaCreateTreinos />
       </Route>
       <Route path="/admin/professores/create">
         <RequireAdmin><PaginaCreateProfessores /></RequireAdmin>

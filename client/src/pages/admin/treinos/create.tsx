@@ -4,6 +4,20 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { API } from "../../../config.js";
 
+function getReturnTo(): string {
+  // 1) prioridade: query ?returnTo=
+  const qs = new URLSearchParams(window.location.search);
+  const fromQuery = qs.get("returnTo");
+  if (fromQuery) return fromQuery;
+
+  // 2) fallback: sessionStorage (setado pela página anterior)
+  const stored = sessionStorage.getItem("treino_returnTo");
+  if (stored) return stored;
+
+  // 3) default: admin
+  return "/admin";
+}
+
 function getToken() {
   return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
 }
@@ -131,8 +145,7 @@ function buildRepeticoes(series: string, reps: string) {
   const r = String(reps || "").trim();
   if (!s && !r) return "";
   if (s && r) return `${s}x${r}`;
-  // se o usuário preencheu só um, a gente mantém (não trava)
-  return s ? `${s}x` : `x${r}`;
+  return ""; // não salva parcial
 }
 
 function getThumbUrlFromEx(ex: ExercicioMin | null | undefined) {
@@ -253,6 +266,15 @@ export default function CriarOuEditarTreino() {
   const [videoOpen, setVideoOpen] = useState(false);
   const [videoSrc, setVideoSrc] = useState("");
   const [videoTitle, setVideoTitle] = useState("");
+  const [returnTo, setReturnTo] = useState<string>("/admin");
+
+  useEffect(() => {
+    const rt = getReturnTo();
+    setReturnTo(rt);
+
+    // limpa pra não “vazar” pro próximo fluxo
+    sessionStorage.removeItem("treino_returnTo");
+  }, []);
 
   useEffect(() => {
     if (!capaFile) {
@@ -305,6 +327,8 @@ export default function CriarOuEditarTreino() {
       setDescricao(data.descricao || "");
       setNivelTreino(data.nivel || "Base");
       setProfessorId(data.professorId || "");
+      setTipoTreino(data.tipoTreino ? String(data.tipoTreino) : "Técnico");
+      setDuracaoMin(typeof data.duracao === "number" ? data.duracao : 60);
       setCatsSelecionadas(Array.isArray(data.categoria) ? data.categoria : []);
 
       const loaded: ExLinha[] =
@@ -528,7 +552,7 @@ export default function CriarOuEditarTreino() {
 
   const onVoltar = () => {
     if (step === 1) {
-      window.location.href = "/admin";
+      window.location.href = returnTo;
       return;
     }
     setStep(1);
@@ -568,17 +592,41 @@ export default function CriarOuEditarTreino() {
       return;
     }
 
+    const tipoUsuario = (localStorage.getItem("tipoUsuario") || sessionStorage.getItem("tipoUsuario") || "").trim();
+    const tipoUsuarioId =
+      (localStorage.getItem("tipoUsuarioId") || sessionStorage.getItem("tipoUsuarioId") || "").trim();
+
     const payload = {
       nome: titulo,
       descricao,
       nivel: nivelTreino,
-      professorId,
+
+      // ✅ agora vai salvar
+      tipoTreino,
+      duracao: duracaoMin,
+
+      // ✅ “Professor (principal)” vai pro backend como dono se você quiser:
+      // Mas cuidado: se quem criou é Clube/Escolinha e você quer manter dono = Clube/Escolinha,
+      // NÃO mande professorId como dono. Use professorId só como criadorProfessorId.
+      //
+      // A regra ideal é:
+      // - dono real = (tipoUsuario/tipoUsuarioId) do usuário logado
+      // - professor principal = criadorProfessorId (select)
+      tipoUsuario,
+      tipoUsuarioId,
+      criadorProfessorId: professorId,
+
       professoresColabIds,
+
       ...(catsSelecionadas.length ? { categoria: catsSelecionadas } : {}),
+
       exercicios: exerciciosOficiais.map((l, i) => ({
         exercicioId: l.exercicioId,
         ordem: Number(l.ordem ?? i + 1),
-        repeticoes: String(l.repeticoes ?? ""),
+
+        // ✅ manda séries e reps separadas (controller monta "2x10")
+        series: String(l.series ?? ""),
+        repeticoes: String(l.reps ?? ""),
       })),
     };
 
@@ -609,7 +657,7 @@ export default function CriarOuEditarTreino() {
       if (!res.ok) throw new Error(data?.message || "Erro ao salvar treino.");
 
       alert(`Treino ${id ? "atualizado" : "criado"} com sucesso!`);
-      window.location.href = "/admin";
+      window.location.href = returnTo;
     } catch (e: any) {
       console.error(e);
       alert(e?.message || "Erro ao salvar treino.");
@@ -1271,7 +1319,7 @@ export default function CriarOuEditarTreino() {
                   <div className="flex gap-3">
                     <button
                       type="button"
-                      onClick={() => (window.location.href = "/admin")}
+                      onClick={() => (window.location.href = returnTo)}
                       className="rounded-xl bg-gray-200 px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-300"
                     >
                       Cancelar

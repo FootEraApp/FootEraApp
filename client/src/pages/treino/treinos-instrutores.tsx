@@ -3,6 +3,8 @@ import { Link, useLocation } from "wouter";
 import {
   Check,
   X,
+  Pencil,
+  Trash2
 } from "lucide-react";
 import { API } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
@@ -242,12 +244,32 @@ function getOwnerIdsFromTreino(tr: any) {
 
 function getTipoUsuarioIdFromMe(tipo: string, me: any): string {
   const t = String(tipo || "").toLowerCase();
-  if (t === "clube") return pickId(me?.clube?.id) || pickId(me?.clubeId) || pickId(me?.tipoUsuarioId);
-  if (t === "escolinha") return pickId(me?.escolinha?.id) || pickId(me?.escolinhaId) || pickId(me?.tipoUsuarioId);
-  if (t === "professor") return pickId(me?.professor?.id) || pickId(me?.professorId) || pickId(me?.tipoUsuarioId);
-  if (t === "atleta") return pickId(me?.atleta?.id) || pickId(me?.atletaId) || pickId(me?.tipoUsuarioId);
-  if (t === "admin") return pickId(me?.admin?.id) || pickId(me?.adminId) || pickId(me?.tipoUsuarioId);
-  return pickId(me?.tipoUsuarioId);
+
+  const clubeId =
+    pickId(me?.clube?.id) || pickId(me?.Clube?.id) || pickId(me?.clubeId) || pickId(me?.ClubeId);
+
+  const escolinhaId =
+    pickId(me?.escolinha?.id) || pickId(me?.Escolinha?.id) || pickId(me?.escolinhaId) || pickId(me?.EscolinhaId);
+
+  const professorId =
+    pickId(me?.professor?.id) || pickId(me?.Professor?.id) || pickId(me?.professorId) || pickId(me?.ProfessorId);
+
+  const atletaId =
+    pickId(me?.atleta?.id) || pickId(me?.Atleta?.id) || pickId(me?.atletaId) || pickId(me?.AtletaId);
+
+  const adminId =
+    pickId(me?.admin?.id) || pickId(me?.Administrador?.id) || pickId(me?.adminId) || pickId(me?.administradorId);
+
+  // se o backend já devolve tipoUsuarioId certo, aproveita
+  const tipoUsuarioId = pickId(me?.tipoUsuarioId) || pickId(me?.tipoUsuario?.id);
+
+  if (t === "clube") return clubeId || tipoUsuarioId;
+  if (t === "escolinha" || t === "escola") return escolinhaId || tipoUsuarioId;
+  if (t === "professor") return professorId || tipoUsuarioId;
+  if (t === "atleta") return atletaId || tipoUsuarioId;
+  if (t === "admin") return adminId || tipoUsuarioId;
+
+  return tipoUsuarioId;
 }
 
 const getToken = () =>
@@ -1146,8 +1168,15 @@ async function salvarProgressoSessao(sessaoId: string) {
 
     const isMeuTreino = (t: TreinoProgramado) => {
       if (!meuId) return false;
+
       const donoIds = [t.professorId, t.clubeId, t.escolinhaId].map((x) => String(x ?? "").trim());
-      return donoIds.includes(meuId);
+      const souDono = donoIds.includes(meuId);
+
+      const souColab =
+        Array.isArray(t.professoresIds) &&
+        t.professoresIds.map(String).includes(meuId);
+
+      return souDono || souColab;
     };
 
     const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
@@ -1308,6 +1337,28 @@ async function salvarProgressoSessao(sessaoId: string) {
         new Map(listaBruta.map((n) => [normalizarNome(n), n])).values(),
       );
 
+      // 🔥 garante IDs mesmo se getOwnerIdsFromTreino falhar por formato do backend
+      const professorIdFix =
+        ids.professorId ||
+        pickFirstId(tr, ["professorId", "professor_id", "ProfessorId", "criadorProfessorId"]) ||
+        pickFirstId(tr?.professor, ["id", "professorId", "usuarioId"]) ||
+        pickFirstId(tr?.criador, ["professorId", "usuarioId"]) ||
+        undefined;
+
+      const escolinhaIdFix =
+        ids.escolinhaId ||
+        pickFirstId(tr, ["escolinhaId", "escolinha_id", "EscolinhaId", "criadorEscolinhaId"]) ||
+        pickFirstId(tr?.escolinha, ["id", "escolinhaId"]) ||
+        pickFirstId(tr?.criador, ["escolinhaId"]) ||
+        undefined;
+
+      const clubeIdFix =
+        ids.clubeId ||
+        pickFirstId(tr, ["clubeId", "clube_id", "ClubeId", "criadorClubeId"]) ||
+        pickFirstId(tr?.clube, ["id", "clubeId"]) ||
+        pickFirstId(tr?.criador, ["clubeId"]) ||
+        undefined;
+
       return {
         id: String(tr.id),
         nome: String(tr.nome ?? ""),
@@ -1317,9 +1368,9 @@ async function salvarProgressoSessao(sessaoId: string) {
         duracao: typeof tr.duracao === "number" ? tr.duracao : undefined,
         objetivo: tr.objetivo ?? undefined,
         dicas: Array.isArray(tr.dicas) ? tr.dicas : [],
-        professorId: ids.professorId || pickId(tr?.criadorProfessorId) || undefined,
-        escolinhaId: ids.escolinhaId || undefined,
-        clubeId: ids.clubeId || undefined,
+        professorId: professorIdFix,
+        escolinhaId: escolinhaIdFix,
+        clubeId: clubeIdFix,
         pontuacao: typeof tr.pontuacao === "number" ? tr.pontuacao : undefined,
         professoresIds,
         criadoresNomes,
@@ -1914,7 +1965,64 @@ async function salvarProgressoSessao(sessaoId: string) {
     }
   }
 
+  async function deletarTreinoProgramado(treinoId: string) {
+    const token = getToken();
+    if (!token) return;
+
+    if (!window.confirm("Tem certeza que deseja excluir este treino?")) return;
+
+    const tipo = String(usuario?.tipo ?? "").toLowerCase();
+    const tipoUsuarioId = String(usuario?.tipoUsuarioId ?? "").trim();
+
+    const res = await fetch(`${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(treinoId)}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        // fallback caso seu backend não tenha req.user:
+        "x-tipo": tipo,
+        "x-tipoUsuarioId": tipoUsuarioId,
+      } as any,
+    });
+
+    const js = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      alert(js?.message || "Não foi possível excluir o treino.");
+      return;
+    }
+
+    setTreinos((prev) => prev.filter((t) => t.id !== treinoId));
+    alert("Treino excluído com sucesso!");
+  }
+
+  function isTreinoMeuDeVerdade(t: TreinoProgramado, user: UsuarioLogado | null) {
+    const meuTipo = String(user?.tipo ?? "").toLowerCase();
+    const meuTipoUsuarioId = String(user?.tipoUsuarioId ?? "").trim();
+    const meuUsuarioId = String(user?.usuarioId ?? "").trim();
+
+    if (!meuTipo) return false;
+
+    // IDs possíveis para comparar (caso tipoUsuarioId venha errado)
+    const meusIds = Array.from(new Set([meuTipoUsuarioId, meuUsuarioId].filter(Boolean)));
+    const tProfessorId = String(t.professorId ?? "").trim();
+    const tClubeId = String(t.clubeId ?? "").trim();
+    const tEscolinhaId = String(t.escolinhaId ?? "").trim();
+    const souDono =
+      (meuTipo === "professor" && meusIds.includes(tProfessorId)) ||
+      (meuTipo === "clube" && meusIds.includes(tClubeId)) ||
+      ((meuTipo === "escolinha" || meuTipo === "escola") && meusIds.includes(tEscolinhaId));
+
+    const souColaborador =
+      Array.isArray(t.professoresIds) &&
+      t.professoresIds.map(String).some((id) => meusIds.includes(String(id).trim()));
+    const adminPodeTudo = meuTipo === "admin";
+
+    return adminPodeTudo || souDono || souColaborador;
+  }
+
   const renderTreinoCard = (treino: TreinoProgramado) => {
+    const podeEditar = isTreinoMeuDeVerdade(treino, usuario);
+
     return (
       <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border">
         <div className="flex items-start justify-between gap-3">
@@ -1926,25 +2034,57 @@ async function salvarProgressoSessao(sessaoId: string) {
             {treino.nome}
           </h4>
 
-          {typeof treino.pontuacao === "number" && (
-            <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
-              +{treino.pontuacao} pts
-            </span>
-          )}
+          <div className="flex flex-col items-end">
+            {typeof treino.pontuacao === "number" && (
+              <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                +{treino.pontuacao} pts
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="mt-2 text-sm text-gray-700">
           <strong>Nível:</strong> {treino.nivel || "—"}
         </div>
 
-        <div className="mt-2 text-xs text-gray-500">
+        <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="text-xs text-gray-500">
           Clique no nome do treino para ver os detalhes completos.
         </div>
+
+        {podeEditar && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              className="p-2 rounded-lg border hover:bg-gray-50"
+              title="Editar treino"
+              onClick={() => {
+                // 1) guarda a tela de origem (essa)
+                sessionStorage.setItem("treino_returnTo", window.location.pathname + window.location.search);
+
+                // 2) navega para edição no admin, passando returnTo também (mais confiável)
+                navigate(
+                  `/admin/treinos/create?id=${encodeURIComponent(treino.id)}&returnTo=${encodeURIComponent(
+                    window.location.pathname + window.location.search
+                  )}`
+                );
+              }}
+            >
+              <Pencil className="w-4 h-4 text-green-800" />
+            </button>
+
+            <button
+              className="p-2 rounded-lg border hover:bg-red-50"
+              title="Excluir treino"
+              onClick={() => deletarTreinoProgramado(treino.id)}
+            >
+              <Trash2 className="w-4 h-4 text-red-600" />
+            </button>
+          </div>
+        )}
+      </div>
       </div>
     );
   };
-
-
 
   const meuTipoUsuarioId = String(usuario?.tipoUsuarioId ?? "");
 
@@ -2186,7 +2326,10 @@ async function salvarProgressoSessao(sessaoId: string) {
                 </div>
                 <button
                   className="bg-green-800 text-white px-4 py-2 rounded-lg"
-                  onClick={() => navigate("/treinos/novo")}
+                  onClick={() => {
+                    sessionStorage.setItem("treino_returnTo", window.location.pathname + window.location.search);
+                    navigate("/treinos/novo");
+                  }}
                 >
                   Criar novo treino
                 </button>
