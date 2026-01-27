@@ -706,18 +706,20 @@ async function buildTreinosWhereByLogin(req: AuthenticatedRequest) {
   if (!req.userId) return null;
 
   const resolved = await resolveEntidade(req.userId);
-
   const or: any[] = [];
 
   if (resolved?.tipo === "professor") {
     const pid = resolved.id;
 
+    // ✅ treinos dele (criador) + onde é colaborador
     or.push({ professorId: pid });
     or.push({ professores: { some: { professorId: pid } } });
 
+    // ✅ treinos do clube dele (somente do clube, NÃO dos outros professores)
     const cid = await getClubeIdDoProfessor(pid);
     if (cid) or.push({ clubeId: cid });
 
+    // ✅ treinos da escolinha dele (somente da escolinha, NÃO dos outros professores)
     const eid = await getEscolinhaIdDoProfessor(pid);
     if (eid) or.push({ escolinhaId: eid });
 
@@ -851,12 +853,18 @@ export async function treinosDisponiveis(req: AuthenticatedRequest, res: Respons
         objetivo: t.objetivo,
         dicas: t.dicas,
         pontuacao: t.pontuacao ?? null,
+        // 🔑 IDs do criador (usados no front para identificar Clube/Escolinha/Professor)
+        clubeId: (t as any).clubeId ?? null,
+        escolinhaId: (t as any).escolinhaId ?? null,
+        professorId: (t as any).professorId ?? null,
+        criadorProfessorId: (t as any).criadorProfessorId ?? null,
         criadores,
         exercicios: t.exercicios.map((e) => ({
           id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
           nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
           repeticoes: e.repeticoes ?? "",
         })),
+        
       };
     });
 
@@ -962,6 +970,11 @@ export async function treinosPublicosProfessoresParceiros(
         objetivo: t.objetivo,
         dicas: t.dicas,
         pontuacao: t.pontuacao ?? null,
+        // 🔑 IDs do criador (usados no front para identificar Clube/Escolinha/Professor)
+        clubeId: (t as any).clubeId ?? null,
+        escolinhaId: (t as any).escolinhaId ?? null,
+        professorId: (t as any).professorId ?? null,
+        criadorProfessorId: (t as any).criadorProfessorId ?? null,
         categoria: t.categoria ?? [],
         tipoTreino: t.tipoTreino ?? null,
         criadores,
@@ -1150,48 +1163,58 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
     for (const s of statsRows) feitosMap[String(s.treinoId)] = Number(s.realizacoes ?? 0);
 
     const out = rows.map((t) => {
-      const criadores: Array<{ tipo: "Professor" | "Clube" | "Escolinha"; id: string; nome: string }> = [];
+      const criadores: { tipo: string; id: string; nome: string }[] = [];
 
-      if ((t as any).Professor) {
-        pushCriadoresUniq(criadores, {
-          tipo: "Professor",
-          id: (t as any).Professor.id,
-          nome: (t as any).Professor.nome,
-        });
-      }
+      if (t.clube) criadores.push({ tipo: "clube", id: t.clube.id, nome: t.clube.nome });
+      if (t.escolinha) criadores.push({ tipo: "escolinha", id: t.escolinha.id, nome: t.escolinha.nome });
+      if (t.Professor) criadores.push({ tipo: "professor", id: t.Professor.id, nome: t.Professor.nome });
 
-      for (const p of t.professores ?? []) {
-        pushCriadoresUniq(criadores, { tipo: "Professor", id: p.professor.id, nome: p.professor.nome });
-      }
+      // ✅ IDs que o FRONT precisa pra liberar lápis/lixeira
+      const clubeId = String((t as any).clubeId ?? t.clube?.id ?? "").trim() || null;
+      const escolinhaId = String((t as any).escolinhaId ?? t.escolinha?.id ?? "").trim() || null;
+      const professorId = String((t as any).professorId ?? t.Professor?.id ?? "").trim() || null;
 
-      if (t.clube) pushCriadoresUniq(criadores, { tipo: "Clube", id: t.clube.id, nome: t.clube.nome });
-      if (t.escolinha) pushCriadoresUniq(criadores, { tipo: "Escolinha", id: t.escolinha.id, nome: t.escolinha.nome });
+      // ✅ colaboradores (professores) que o FRONT usa pra "sou colaborador"
+      const professoresIds: string[] = Array.from(
+        new Set(
+          (Array.isArray((t as any).professores) ? (t as any).professores : [])
+            .map((p: any) => String(p?.professorId ?? p?.professor?.id ?? p?.id ?? "").trim())
+            .filter(Boolean)
+        )
+      );
 
-      const realizados = feitosMap[t.id] ?? 0;
-      const submissoes = enviadosMap[t.id] ?? 0;
-      const submissoesAprovadas = aprovadosMap[t.id] ?? 0;
+      const criadoresNomes = Array.from(
+        new Set(
+          [
+            ...criadores.map((c) => String(c.nome || "").trim()).filter(Boolean),
+          ]
+        )
+      );
 
       return {
-        id: t.id,
-        nome: t.nome,
-        descricao: t.descricao ?? null,
-        codigo: t.codigo ?? null,
-        nivel: t.nivel ?? null,
-        tipoTreino: t.tipoTreino ?? null,
-        duracao: t.duracao ?? null,
-        pontuacao: t.pontuacao ?? null,
-        dataAgendada: t.dataAgendada ? t.dataAgendada.toISOString() : null,
-        createdAt: t.createdAt.toISOString(),
-        categoria: t.categoria ?? [],
+        id: String(t.id),
+        nome: String(t.nome ?? ""),
+        descricao: t.descricao ?? undefined,
+        nivel: String((t as any).nivel ?? ""),
+        dataAgendada: (t as any).dataAgendada ?? undefined,
+        duracao: typeof (t as any).duracao === "number" ? (t as any).duracao : undefined,
+        objetivo: (t as any).objetivo ?? undefined,
+        dicas: Array.isArray((t as any).dicas) ? (t as any).dicas : [],
+        pontuacao: typeof (t as any).pontuacao === "number" ? (t as any).pontuacao : undefined,
+
+        // ✅ AQUI É O PONTO: mandar os IDs pro front
+        clubeId,
+        escolinhaId,
+        professorId,
+        professoresIds,
+
         criadores,
-        realizados,
-        submissoes,
-        submissoesAprovadas,
-        realizadoCount: realizados,
-        submissoesaprovados: submissoesAprovadas,
-        exercicios: t.exercicios.map((x) => ({
-          repeticoes: x.repeticoes ?? "",
-          exercicio: { nome: x.exercicio?.nome ?? x.exercicioTemporario?.nome ?? "" },
+        criadoresNomes,
+
+        exercicios: (Array.isArray((t as any).exercicios) ? (t as any).exercicios : []).map((ex: any) => ({
+          id: String(ex?.exercicio?.id ?? ex?.id ?? ""),
+          nome: String(ex?.exercicio?.nome ?? ex?.nome ?? ""),
+          repeticoes: ex?.repeticoes ?? undefined,
         })),
       };
     });
@@ -1792,10 +1815,8 @@ export async function getTreinosProgramadosStats(req: any, res: any) {
     const aprovadas = await prisma.submissaoTreino.groupBy({
       by: ["treinoAgendadoId"],
       where: {
-        aprovado: true,
-        treinoAgendado: {
-          treinoProgramadoId: { in: ids },
-        },
+        // ✅ “submetido” = existe submissão (não depende de aprovado)
+        treinoAgendado: { treinoProgramadoId: { in: ids } },
       },
       _count: { _all: true },
     });
@@ -1810,9 +1831,14 @@ export async function getTreinosProgramadosStats(req: any, res: any) {
     for (const a of agMap) treinoByAg[String(a.id)] = String(a.treinoProgramadoId);
 
     const realizadoCountByTreinoId: Record<string, number> = {};
+
     for (const row of aprovadas) {
-      const agId = String(row.treinoAgendadoId);
-      const treinoId = treinoByAg[agId];
+      const ag = await prisma.treinoAgendado.findUnique({
+        where: { id: row.treinoAgendadoId },
+        select: { treinoProgramadoId: true },
+      });
+
+      const treinoId = String(ag?.treinoProgramadoId ?? "");
       if (!treinoId) continue;
 
       realizadoCountByTreinoId[treinoId] =
@@ -2564,6 +2590,7 @@ export async function listarSubmissoesParaValidacao(req: AuthenticatedRequest, r
           programadoId: s.treinoAgendado?.treinoProgramado?.id ?? null,
         },
         midias: s.midias?.map((m) => m.url) ?? [],
+        
       };
     });
 
@@ -3036,9 +3063,9 @@ export async function criarTreinoProgramado(
   req: AuthenticatedRequest,
   res: Response
 ) {
-  let user: any = getUserFromReq(req);
+  let userCtx: any = getUserFromReq(req);
 
-  if (!user) {
+  if (!userCtx) {
     const authHeader =
       (req.headers.authorization as string | undefined) ||
       (req.headers.Authorization as string | undefined);
@@ -3049,35 +3076,35 @@ export async function criarTreinoProgramado(
         : authHeader;
 
       try {
-        user = jwt.verify(token, JWT_SECRET) as any;
-        (req as any).user = user;
-        (req as any).userId = user.id;
+        userCtx = jwt.verify(token, JWT_SECRET) as any;
+        (req as any).userCtx = userCtx;
+        (req as any).userId = userCtx.id;
       } catch (e) {
         console.error("[criarTreinoProgramado] Erro ao decodificar JWT:", e);
       }
     }
   }
 
-  if (!user) {
+  if (!userCtx) {
     return res.status(401).json({
       code: "UNAUTHENTICATED",
       message: "Usuário não autenticado.",
     });
   }
 
-  const tipoStr = String(user.tipo ?? user.tipoUsuario ?? "").toLowerCase();
-  if (!user.plano) {
-    user.plano = "FREE";
+  const tipoStr = String(userCtx.tipo ?? userCtx.tipoUsuario ?? "").toLowerCase();
+  if (!userCtx.plano) {
+    userCtx.plano = "FREE";
   }
 
-  user.plano = String(user.plano ?? "FREE").trim().toUpperCase();
+  userCtx.plano = String(userCtx.plano ?? "FREE").trim().toUpperCase();
 
   const isOrganizador =
     tipoStr === "professor" ||
     tipoStr === "clube" ||
     tipoStr === "escolinha";
 
-  if (!can(user, CAP_CRIAR_TREINO) && !isOrganizador) {
+  if (!can(userCtx, CAP_CRIAR_TREINO) && !isOrganizador) {
     return res.status(403).json({
       code: "FORBIDDEN",
       message: "Seu plano não permite criar novos treinos programados.",
@@ -3093,8 +3120,6 @@ export async function criarTreinoProgramado(
       descricao,
       nivel,
       exercicios,
-      usuarioId,
-      categoria,
       tipoTreino,
       objetivo,
       duracao,
@@ -3109,12 +3134,29 @@ export async function criarTreinoProgramado(
       imagemUrl
     } = req.body as any;
 
+    const tokenUser = (req as any).user as { tipo?: string; tipoUsuarioId?: string } | undefined;
+
+    // prioridade: token -> header -> body
+    const tipoNorm = String(
+      tokenUser?.tipo ||
+        (req.headers["x-tipo"] as string) ||
+        tipoUsuario ||
+        ""
+    ).toLowerCase().trim();
+
+    const tipoUsuarioIdFinal = String(
+      tokenUser?.tipoUsuarioId ||
+        (req.headers["x-tipousuarioid"] as string) ||
+        tipoUsuarioId ||
+        ""
+    ).trim();
+
     if (!(Object.values(Nivel) as string[]).includes(String(nivel))) {
       return res.status(400).json({ message: "Nivel inválido" });
     }
     const nivelEnum = nivel as Nivel;
 
-    const usuarioIdToken = req.userId || user?.id;
+    const usuarioIdToken = req.userId || tokenUser?.tipoUsuarioId;
 
     if (!nome || !nivel || !Array.isArray(exercicios) || !tipoUsuarioId || !usuarioIdToken) {
       console.warn("[criarTreinoProgramado] Dados inválidos:", {
@@ -3157,17 +3199,13 @@ export async function criarTreinoProgramado(
     }
 
     const when = dataTreino || dataAgendada || null;
-    const tipoNorm =
-      typeof tipoUsuario === "string"
-        ? (tipoUsuario as string).toLowerCase()
-        : null;
 
     const pontuacaoNum =
       Number.isFinite(Number(pontuacao))
         ? Math.max(0, Math.floor(Number(pontuacao)))
         : null;
 
-    if (tipoStr === "professor" && !can(user, FEAT.TREINOS_ILIMITADOS)) {
+    if (tipoStr === "professor" && !can(userCtx, FEAT.TREINOS_ILIMITADOS)) {
       const profId = String(tipoUsuarioId);
       const ativos = await prisma.treinoProgramado.count({
         where: {
@@ -3179,7 +3217,7 @@ export async function criarTreinoProgramado(
         }
       });
 
-      const limAtivos = planLimitFor(user.plano ?? "FREE", "planos_ativos_total");
+      const limAtivos = planLimitFor(userCtx.plano ?? "FREE", "planos_ativos_total");
       if (ativos >= limAtivos) {
         return res.status(402).json({
           code: "UPGRADE_REQUIRED",
@@ -3189,13 +3227,13 @@ export async function criarTreinoProgramado(
       }
     }
 
-    if (tipoStr === "professor" && !can(user, FEAT.ROTINAS_ILIMITADAS)) {
+    if (tipoStr === "professor" && !can(userCtx, FEAT.ROTINAS_ILIMITADAS)) {
       const profId = String(tipoUsuarioId);
       const templates = await prisma.treinoProgramado.count({
         where: { professorId: profId, naoExpira: true },
       });
 
-      const limTpl = planLimitFor(user.plano ?? "FREE", "templates_total");
+      const limTpl = planLimitFor(userCtx.plano ?? "FREE", "templates_total");
       if (templates >= limTpl) {
         return res.status(402).json({
           code: "UPGRADE_REQUIRED",
@@ -3275,9 +3313,9 @@ export async function criarTreinoProgramado(
         pontuacao: pontuacaoNum,
         imagemUrl: imagemUrl || null,
 
-        ...(tipoNorm === "professor" ? { professorId: String(tipoUsuarioId) } : {}),
-        ...(tipoNorm === "clube" ? { clubeId: String(tipoUsuarioId) } : {}),
-        ...(tipoNorm === "escolinha" ? { escolinhaId: String(tipoUsuarioId) } : {}),
+        ...(tipoNorm === "clube" ? { clubeId: tipoUsuarioIdFinal } : {}),
+        ...(tipoNorm === "escolinha" ? { escolinhaId: tipoUsuarioIdFinal } : {}),
+        ...(tipoNorm === "professor" ? { professorId: tipoUsuarioIdFinal } : {}),
         ...(professorCriadorId ? { criadoPorProfessorId: professorCriadorId } : {}),
 
         professores: colaboradoresProfessorIds.length
@@ -3581,6 +3619,16 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
         where: { treinoProgramadoId: id },
       });
 
+      const colaboradoresRaw =
+        (req.body as any)?.colaboradoresProfessorIds ??
+        (req.body as any)?.professoresIds ??
+        (req.body as any)?.colaboradoresIds ??
+        [];
+
+      const colaboradoresProfessorIds = Array.isArray(colaboradoresRaw)
+        ? colaboradoresRaw.map((s: any) => String(s)).filter(Boolean)
+        : [];
+
       if (colaboradoresFiltrados.length) {
         await (tx as any).treinoProgramadoProfessor.createMany({
           data: colaboradoresFiltrados.map((professorId: string) => ({
@@ -3771,6 +3819,22 @@ export const deletarTreinoProgramado = async (req: AuthenticatedRequest, res: Re
 
   try {
     await prisma.$transaction(async (tx) => {
+      const ags = await tx.treinoAgendado.findMany({
+        where: { treinoProgramadoId: id },
+        select: { id: true },
+      });
+      const agIds = ags.map((a) => a.id);
+
+      if (agIds.length) {
+        await tx.submissaoTreino.deleteMany({
+          where: { treinoAgendadoId: { in: agIds } },
+        });
+
+        await tx.atividadeRecente.deleteMany({
+          where: { id: { in: agIds } },
+        });
+      }
+
       await tx.treinoAgendado.deleteMany({ where: { treinoProgramadoId: id } });
       await tx.treinoProgramadoExercicio.deleteMany({ where: { treinoProgramadoId: id } });
       await tx.exercicioTemporario.deleteMany({ where: { treinoProgramadoId: id } });

@@ -7,6 +7,116 @@ import { prisma } from "../prisma.js";
 
 type Dono = "Professor" | "Clube" | "Escolinha";
 
+function ownerWhereFrom(tipoUsuario?: string, tipoUsuarioId?: string) {
+  const dono = normalizarTipoUsuario(tipoUsuario);
+  const id = String(tipoUsuarioId ?? "").trim();
+  if (!dono || !id) return null;
+
+  if (dono === "Professor") return { professorId: id };
+  if (dono === "Clube") return { clubeId: id };
+  return { escolinhaId: id };
+}
+
+function assertOwnerIdsFromBodyOrReq(body: any) {
+  // prioridade: tipoUsuario/tipoUsuarioId (mais correto pra todos os tipos)
+  const dono = normalizarTipoUsuario(body?.tipoUsuario);
+  const donoId = String(body?.tipoUsuarioId ?? "").trim();
+
+  // fallback: professorId antigo
+  const professorId = String(body?.professorId ?? "").trim();
+
+  if (dono && donoId) {
+    if (dono === "Professor") return { dono, professorId: donoId, clubeId: null, escolinhaId: null };
+    if (dono === "Clube") return { dono, professorId: null, clubeId: donoId, escolinhaId: null };
+    return { dono, professorId: null, clubeId: null, escolinhaId: donoId };
+  }
+
+  // compat: se ainda vier professorId sem tipoUsuario
+  if (professorId) {
+    return { dono: "Professor" as const, professorId, clubeId: null, escolinhaId: null };
+  }
+
+  return null;
+}
+
+async function mustBeOwner(req: Request, treinoId: string) {
+  // tenta pegar de várias fontes (token > headers/query > body)
+  const tipoRaw = String(
+    (req as any).user?.tipo ??
+      req.headers["x-tipo"] ??
+      req.query.tipoUsuario ??
+      (req as any).body?.tipoUsuario ??
+      ""
+  )
+    .trim()
+    .toLowerCase();
+
+  const tipoUsuarioId = String(
+    (req as any).user?.tipoUsuarioId ??
+      req.headers["x-tipousuarioid"] ??
+      req.query.tipoUsuarioId ??
+      (req as any).body?.tipoUsuarioId ??
+      ""
+  ).trim();
+
+  // ADMIN PODE TUDO
+  const isAdmin =
+    tipoRaw === "admin" || tipoRaw === "administrador" || tipoRaw === "adm";
+
+  if (isAdmin) {
+    const treino = await prisma.treinoProgramado.findUnique({
+      where: { id: treinoId },
+      select: { id: true },
+    });
+    if (!treino)
+      return { ok: false as const, status: 404, message: "Treino não encontrado." };
+    return { ok: true as const, treino, status: 200, message: "ok" };
+  }
+
+  console.log("[mustBeOwner]", { tipoRaw, tipoUsuarioId, treinoId });
+
+  const treino = await prisma.treinoProgramado.findUnique({
+    where: { id: treinoId },
+    select: {
+      id: true,
+      professorId: true,
+      clubeId: true,
+      escolinhaId: true,
+      professores: tipoUsuarioId
+        ? {
+            where: { professorId: tipoUsuarioId },
+            select: { professorId: true },
+          }
+        : { select: { professorId: true } },
+    },
+  });
+
+  if (!treino)
+    return { ok: false as const, status: 404, message: "Treino não encontrado." };
+
+  const donoId = treino.professorId || treino.clubeId || treino.escolinhaId || "";
+  const donoTipo =
+    treino.professorId ? "professor" : treino.clubeId ? "clube" : treino.escolinhaId ? "escolinha" : "desconhecido";
+
+  const isOwner =
+    !!tipoUsuarioId && !!donoId && tipoUsuarioId === donoId && tipoRaw === donoTipo;
+
+  const isColabProfessor =
+    tipoRaw === "professor" &&
+    !!tipoUsuarioId &&
+    Array.isArray(treino.professores) &&
+    treino.professores.length > 0;
+
+  const ok = isOwner || isColabProfessor;
+
+  return {
+    ok,
+    treino,
+    status: ok ? 200 : 403,
+    message: ok ? "ok" : "Você não é dono nem colaborador deste treino.",
+  };
+}
+
 function normalizarTipoUsuario(v?: string): Dono | null {
   if (!v) return null;
   const s = v.toLowerCase();
@@ -31,13 +141,20 @@ function normNivel(v?: string): Nivel {
   return "Base";
 }
 
+function stripAccents(s: string) {
+  return s.normalize("NFD").replace(/\p{Diacritic}/gu, "");
+}
+
 function normTipoTreino(v?: string): TipoTreino | null {
-  const s = String(v || "").toLowerCase();
+  const s0 = String(v || "").trim().toLowerCase();
+  const s = stripAccents(s0); // "técnico" -> "tecnico"
+
   if (s.startsWith("tec")) return "Tecnico";
   if (s.startsWith("fis")) return "Fisico";
   if (s.startsWith("tat")) return "Tatico";
   return null;
 }
+
 function normCategoria(v?: string): Categoria {
   const s = String(v || "").replace(/-/g, "").toUpperCase();
   const ok = ["Sub9","Sub11","Sub13","Sub15","Sub17","Sub20","Livre"];
@@ -47,23 +164,6 @@ function normCategoria(v?: string): Categoria {
 export const createTreinoProgramado = async (req: Request, res: Response) => {
   const isTemplate = !!req.body?.naoExpira === true;
 
-  if (isTemplate) {
-    await enforceTotalLimit(req, res, 'templates_total', async () =>
-      prisma.treinoProgramado.count({
-        where: { professorId: req.body.professorId, naoExpira: true }
-      })
-    );
-  } else {
-    await enforceTotalLimit(req, res, 'planos_ativos_total', async () =>
-      prisma.treinoProgramado.count({
-        where: {
-          professorId: req.body.professorId,
-          OR: [{ expiraEm: null }, { expiraEm: { gt: new Date() } }],
-          NOT: { naoExpira: true }
-        }
-      })
-    );
-  }
   try {
     const body =
       typeof req.body?.payload === "string"
@@ -93,6 +193,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       atletasIds = [],
       elencoId,
       elencosIds = [],
+      criadorProfessorId
     } = req.body as {
       nome?: string; nivel?: string; descricao?: string;
       categoria?: string[]; tipoTreino?: string; dataAgendada?: string;
@@ -101,6 +202,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       expiraEm?: string; naoExpira?: boolean; exercicios?: any[];
       tipoUsuario?: string; tipoUsuarioId?: string;
       atletasIds?: string[]; elencoId?: string; elencosIds?: string[];
+      criadorProfessorId?: string;
     };
 
     if (!nome) {
@@ -117,10 +219,46 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
     }
 
     // ✅ dono vem do front (Professor principal)
-    const professorId = String((req.body as any).professorId ?? "").trim();
-    if (!professorId) {
-      return res.status(400).json({ message: "Campo obrigatório ausente: 'professorId'." });
+    const owner = assertOwnerIdsFromBodyOrReq(req.body);
+    if (!owner) {
+      return res.status(400).json({
+        message: "Informe o dono do treino: (tipoUsuario + tipoUsuarioId) ou (professorId).",
+      });
     }
+
+    const criadorProfessorIdNorm = String(criadorProfessorId ?? "").trim();
+
+    if (criadorProfessorIdNorm) {
+      const profOk = await prisma.professor.findUnique({
+        where: { id: criadorProfessorIdNorm },
+        select: { id: true },
+      });
+      if (!profOk) return res.status(400).json({ message: "Professor principal inválido." });
+    }
+
+        // ✅ limites só fazem sentido para professor (ajuste se quiser também para clube/escolinha)
+    if (owner.dono === "Professor") {
+      const pid = owner.professorId!;
+
+      if (Boolean((req.body as any).naoExpira) === true) {
+        await enforceTotalLimit(req, res, "templates_total", async () =>
+          prisma.treinoProgramado.count({
+            where: { professorId: pid, naoExpira: true },
+          })
+        );
+      } else {
+        await enforceTotalLimit(req, res, "planos_ativos_total", async () =>
+          prisma.treinoProgramado.count({
+            where: {
+              professorId: pid,
+              OR: [{ expiraEm: null }, { expiraEm: { gt: new Date() } }],
+              NOT: { naoExpira: true },
+            },
+          })
+        );
+      }
+    }
+
     const nivelNorm      = normNivel(nivel);
     const tipoTreinoNorm = normTipoTreino(tipoTreino);
     const categoriasNorm: Categoria[] = Array.isArray(categoria)
@@ -138,24 +276,48 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
     const itens = (exercicios as any[]).map((e: any, i: number) => ({
       exercicioId: String(e.exercicioId ?? e.id ?? "").trim(),
       ordem: Number(e.ordem ?? i + 1),
-      repeticoes: String(e.repeticoes ?? "").trim(), // ✅ vem pronto do front
+      repeticoes: toRepeticoes(e.series ?? e.serie, e.repeticoes), // <- aqui
     }));
 
-    const profExiste = await prisma.professor.findUnique({
-      where: { id: professorId },
-      select: { id: true },
-    });
-    if (!profExiste) {
-      return res.status(400).json({ message: "professorId inválido (Professor não encontrado)." });
+    if (owner.dono === "Professor") {
+      const profExiste = await prisma.professor.findUnique({
+        where: { id: owner.professorId! },
+        select: { id: true },
+      });
+      if (!profExiste) return res.status(400).json({ message: "Professor dono inválido." });
+    }
+
+    if (owner.dono === "Clube") {
+      const clubeExiste = await prisma.clube.findUnique({
+        where: { id: owner.clubeId! },
+        select: { id: true },
+      });
+      if (!clubeExiste) return res.status(400).json({ message: "Clube dono inválido." });
+    }
+
+    if (owner.dono === "Escolinha") {
+      const escExiste = await prisma.escolinha.findUnique({
+        where: { id: owner.escolinhaId! },
+        select: { id: true },
+      });
+      if (!escExiste) return res.status(400).json({ message: "Escolinha dona inválida." });
     }
 
     const colabs = Array.isArray((req.body as any).professoresColabIds)
       ? (req.body as any).professoresColabIds
       : [];
 
-    const allProfIds = Array.from(new Set([professorId, ...colabs]))
+    // dono pode ser professor (ou não). se for professor, entra como "base" para lista de profs
+    const donoProfessorId = owner.dono === "Professor" ? owner.professorId : null;
+
+    const allProfIds = Array.from(
+      new Set([...(donoProfessorId ? [donoProfessorId] : []), ...colabs])
+    )
       .map((x) => String(x).trim())
       .filter(Boolean);
+
+    // lista final de colaboradores (sem duplicar o dono)
+    const colabProfIds = allProfIds.filter((pid) => pid !== owner.professorId);
 
     const uploadedPath =
       req.file?.filename ? `/upload/${req.file.filename}` : null;
@@ -179,9 +341,20 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         pontuacao: pontuacao != null ? Number(pontuacao) : null,
         expiraEm: expiraEm ? new Date(expiraEm) : null,
         naoExpira: Boolean(naoExpira),
-        criadorProfessor: { connect: { id: professorId } },
+        // DONO REAL (apenas um)
+        ...(owner.professorId ? { Professor: { connect: { id: owner.professorId } } } : {}),
+        ...(owner.clubeId ? { clube: { connect: { id: owner.clubeId } } } : {}),
+        ...(owner.escolinhaId ? { escolinha: { connect: { id: owner.escolinhaId } } } : {}),
+
+        // se você quiser manter criadorProfessor como “criador humano”, ok:
+        ...(criadorProfessorIdNorm
+          ? { criadorProfessor: { connect: { id: criadorProfessorIdNorm } } }
+          : owner.dono === "Professor"
+          ? { criadorProfessor: { connect: { id: owner.professorId! } } }
+          : {}),
+
         professores: {
-          create: allProfIds.map((pid) => ({ professorId: pid })),
+          create: colabProfIds.map((professorId: string) => ({ professorId })),
         },
         exercicios: { create: itens },
       },
@@ -321,6 +494,9 @@ export async function updateTreino(req: Request, res: Response) {
       tipoUsuario, tipoUsuarioId,
     } = req.body;
 
+    const perm = await mustBeOwner(req, id);
+    if (!perm.ok) return res.status(perm.status).json({ message: perm.message });
+
     if (nome) {
       const dup = await prisma.treinoProgramado.findFirst({
         where: { id: { not: id }, nome },
@@ -335,10 +511,11 @@ export async function updateTreino(req: Request, res: Response) {
       if (!dono || !tipoUsuarioId) {
         return res.status(400).json({ message: "Para trocar o dono, informe tipoUsuario e tipoUsuarioId." });
       }
-      dataDono.professor = { disconnect: true };
+      dataDono.Professor = { disconnect: true };
       dataDono.clube = { disconnect: true };
       dataDono.escolinha = { disconnect: true };
-      if (dono === "Professor") dataDono.professor = { connect: { id: tipoUsuarioId } };
+
+      if (dono === "Professor") dataDono.Professor = { connect: { id: tipoUsuarioId } };
       if (dono === "Clube") dataDono.clube = { connect: { id: tipoUsuarioId } };
       if (dono === "Escolinha") dataDono.escolinha = { connect: { id: tipoUsuarioId } };
     }
@@ -346,7 +523,7 @@ export async function updateTreino(req: Request, res: Response) {
     const itens = (exercicios as any[]).map((e: any, i: number) => ({
       exercicioId: String(e.exercicioId ?? e.id ?? "").trim(),
       ordem: Number(e.ordem ?? i + 1),
-      repeticoes: String(e.repeticoes ?? "").trim(), // ✅ vem pronto do front
+      repeticoes: toRepeticoes(e.series ?? e.serie, e.repeticoes), // <- aqui
     }));
 
     const antigos = await prisma.treinoProgramadoExercicio.findMany({
@@ -391,6 +568,18 @@ export async function updateTreino(req: Request, res: Response) {
       }),
     ]);
 
+    const atualizado = await prisma.treinoProgramado.findUnique({
+      where: { id },
+      include: {
+        criadorProfessor: { include: { usuario: true } },
+        Professor: { include: { usuario: true } },
+        clube: true,
+        escolinha: true,
+        professores: { include: { professor: { include: { usuario: true } } } },
+        exercicios: { include: { exercicio: true } },
+      },
+    });
+
     const novosOficiais = (Array.isArray(exercicios) ? exercicios : [])
       .map((e: any) => e.exercicioId ?? e.id)
       .filter((v: any) => typeof v === "string" && v);
@@ -419,7 +608,7 @@ export async function updateTreino(req: Request, res: Response) {
       entidadeId: id,
       descricao: 'Treino programado atualizado',
     });
-    return res.json({ ok: true, id, updated: true });
+    return res.json(atualizado);
   } catch (error: any) {
     console.error("ERRO PUT treinosprogramados:", error);
     return res.status(500).json({ message: "Erro ao atualizar treino.", error: error.message });
@@ -428,6 +617,9 @@ export async function updateTreino(req: Request, res: Response) {
 
 export const deleteTreino = async (req: Request, res: Response) => {
   const { id } = req.params;
+  const perm = await mustBeOwner(req, id);
+  if (!perm.ok) return res.status(perm.status).json({ message: perm.message });
+
   try {
     await prisma.$transaction([
       prisma.treinoProgramadoExercicio.deleteMany({ where: { treinoProgramadoId: id } }),
@@ -440,16 +632,58 @@ export const deleteTreino = async (req: Request, res: Response) => {
   }
 };
 
-export const getAllTreinos = async (_req: Request, res: Response) => {
+export const getAllTreinos = async (req: Request, res: Response) => {
   try {
+    const {
+      professorId,
+      ownerTipo,          // "Professor" | "Clube" | "Escolinha"
+      apenasCriador,      // "1" para forçar somente treinos do professor
+      order = "desc",
+      limit,
+    } = req.query as Record<string, string | undefined>;
+
+    const dono = normalizarTipoUsuario(ownerTipo);
+
+    const take = limit ? Math.max(1, Math.min(Number(limit), 50)) : undefined;
+    const orderBy = { createdAt: order === "asc" ? ("asc" as const) : ("desc" as const) };
+
+    const where: any = {};
+
+    // ✅ CASO 1: PERFIL PROFESSOR (somente treinos do professor dono)
+    // - passa ownerTipo=Professor (ou apenasCriador=1)
+    // - e professorId=<id do professor>
+    if ((apenasCriador === "1" || dono === "Professor") && professorId) {
+      where.professorId = String(professorId);
+      where.clubeId = null;
+      where.escolinhaId = null;
+    }
+    // ✅ CASO 2: outras telas podem filtrar por professorId sem restringir dono
+    else if (professorId) {
+      where.professorId = String(professorId);
+      // aqui NÃO forçamos clubeId/escolinhaId = null
+      // pois você pode querer incluir treinos do “ecossistema” do professor
+    }
+
+    const onlyMine = String((req.query?.onlyMine ?? "")).toLowerCase() === "true";
+    const tipoUsuario = String((req.query?.tipoUsuario ?? "")).trim();
+    const tipoUsuarioId = String((req.query?.tipoUsuarioId ?? "")).trim();
+
+    const ownerWhere = ownerWhereFrom(tipoUsuario, tipoUsuarioId);
+
     const treinos = await prisma.treinoProgramado.findMany({
+      where: onlyMine && ownerWhere ? ownerWhere : undefined,
       orderBy: { createdAt: "desc" },
       include: {
-        criadorProfessor: { include: { usuario: true } }, 
+        criadorProfessor: { include: { usuario: true } },
+        Professor: { include: { usuario: true } }, // se existir relação professor dono
         clube: true,
         escolinha: true,
+        professores: { // join de colaboradores
+          include: { professor: { include: { usuario: true } } },
+        },
         exercicios: { include: { exercicio: true } },
       },
+
     });
 
     return res.json(treinos);
