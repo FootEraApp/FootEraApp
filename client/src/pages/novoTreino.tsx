@@ -53,13 +53,6 @@ function toRepeticoesStr(v: any): string {
   return String(v);
 }
 
-/**
- * ✅ Payload final SEM atletas:
- * - infos (nome/descricao/nivel/duracao/categoria/dicas/metas/pontuacao)
- * - exercicios: [{ exercicioId, ordem, repeticoes }]
- *
- * Ajuste os nomes caso seu backend espere diferente.
- */
 export function montarPayloadSomenteInfoEExercicios(params: {
   // infos básicas
   titulo: string;
@@ -69,13 +62,13 @@ export function montarPayloadSomenteInfoEExercicios(params: {
   tipoTreino?: string | null; // se existir no seu backend
   metas?: string | null;
   pontuacao?: number | null;
-
-  // arrays
   categoria?: any[]; // Categoria[]
   dicas?: string[];
-
-  // exercícios selecionados (da sua UI)
   exerciciosSelecionados: ExercicioSelecionadoUI[];
+  atletasIds?: string[];
+  elencosIds?: string[];
+  colaboradoresProfessorIds?: string[];
+  tipoUsuarioId?: string;
 }) {
   const {
     titulo,
@@ -107,27 +100,33 @@ export function montarPayloadSomenteInfoEExercicios(params: {
     // ✅ remove linhas inválidas (sem exercicioId)
     .filter((x) => !!x.exercicioId);
 
-  // ✅ monta payload base (SEM atletas)
-  const payload: any = {
-    nome: (titulo ?? "").trim(),
-    descricao: (descricao ?? "").trim() || null,
-    nivel,
-    duracao: duracaoMinutos === null ? null : Number(duracaoMinutos),
-    exercicios,
-  };
+    const payload: any = {
+      nome: (titulo ?? "").trim(),
+      descricao: (descricao ?? "").trim() || null,
+      nivel,
+      duracao: duracaoMinutos === null ? null : Number(duracaoMinutos),
 
-  // opcionais (só inclui se existir)
-  if (tipoTreino !== undefined) {
-    payload.tipo = tipoTreino ?? null;
-    payload.tipoTreino = tipoTreino ?? null;
-  }
-  if (metas !== undefined) payload.metas = metas ?? null;
-  if (pontuacao !== undefined) payload.pontuacao = pontuacao ?? null;
+      // ✅ no seu schema essas duas normalmente NÃO são opcionais
+      categoria: Array.isArray(categoria) ? categoria : [],
+      dicas: Array.isArray(dicas) ? dicas.filter(Boolean) : [],
 
-  if (Array.isArray(categoria)) payload.categoria = categoria;
-  if (Array.isArray(dicas)) payload.dicas = dicas.filter(Boolean);
+      exercicios,
+      atletasIds: Array.isArray(params.atletasIds) ? params.atletasIds : [],
+      elencosIds: Array.isArray(params.elencosIds) ? params.elencosIds : [],
+      colaboradoresProfessorIds: Array.isArray(params.colaboradoresProfessorIds)
+        ? params.colaboradoresProfessorIds
+        : [],
+      tipoUsuarioId: params.tipoUsuarioId ?? "",
+    };
 
-  return payload;
+    if (tipoTreino !== undefined) {
+      payload.tipoTreino = tipoTreino ?? null;
+    }
+    if (metas !== undefined) payload.metas = metas ?? null;
+    if (pontuacao !== undefined) payload.pontuacao = pontuacao ?? null;
+
+    return payload;
+
 }
 
 const getToken = () =>
@@ -498,6 +497,12 @@ async function tentarSalvarComoTreinoSalvo(
     const categorias = Array.isArray(payload.categoria)
       ? payload.categoria.map(toCategoriaEnum).filter(Boolean)
       : [];
+    
+    if (!Array.isArray(payload.exercicios) || payload.exercicios.length === 0) {
+      console.warn("[Gaveta] pulou: treino sem exercícios no payload");
+      return { saved: false, reason: "sem-exercicios" as const };
+    }
+
     const body = {
       titulo: payload.nome,
       descricao: payload.descricao ?? null,
@@ -668,6 +673,8 @@ const VideoThumb = memo(function VideoThumb({
 
 export default function NovoTreino() {
   const [route, navigate] = useLocation();
+  const opcoesNiveis = ["Base", "Avancado", "Performance"] as const;
+  type NivelTreino = (typeof opcoesNiveis)[number];
 
   // helpers de querystring (wouter)
   const getQueryParam = (search: string, key: string) => {
@@ -727,7 +734,7 @@ export default function NovoTreino() {
   const [etapa, setEtapa] = useState<number>(1);
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [nivel, setNivel] = useState("Base");
+  const [nivel, setNivel] = useState<NivelTreino>("Base");
   const [duracao, setDuracao] = useState<number>(60);
   const [dataTreino, setDataTreino] = useState<string>("");
   const [categorias, setCategorias] = useState<string[]>([]);
@@ -1840,7 +1847,12 @@ useEffect(() => {
     setEditProgramadoId(String(pid || id));
     setNome(String(t.nome ?? t.titulo ?? ""));
     setDescricao(String(t.descricao ?? t.resumo ?? ""));
-    setNivel(String(t.nivel ?? "Base"));
+    const nivelCarregado = String(t.nivel ?? "Base");
+    setNivel(
+      (opcoesNiveis.includes(nivelCarregado as NivelTreino)
+        ? (nivelCarregado as NivelTreino)
+        : "Base")
+    );
     setDuracao(Number(t.duracao ?? 60) || 60);
 
     // tipoTreino pode vir null
@@ -2393,17 +2405,40 @@ useEffect(() => {
         return; // ✅ fica na página
       }
 
-      const exercicios = montarExerciciosParaPayload(
-        exerciciosSelecionados.map((e) => {
-          const v = e.videoUrl ?? null;
-          const videoFinal = v && String(v).startsWith("blob:") ? null : v;
+      const exerciciosRaw = montarExerciciosParaPayload(
+        exerciciosSelecionados.map((e) => ({
+          ...e,
+          videoDemonstrativoUrl:
+            e.videoUrl && String(e.videoUrl).startsWith("blob:") ? null : (e.videoUrl ?? null),
+        })) as any,
+      );
+
+      // 🔥 normaliza pro formato que o backend geralmente valida
+      const exerciciosPayload = (Array.isArray(exerciciosRaw) ? exerciciosRaw : []).map(
+        (x: any, idx: number) => {
+          const exercicioId = String(
+            x.exercicioId ?? x.idCatalogo ?? x.id ?? ""
+          ).trim();
 
           return {
-            ...e,
-            videoDemonstrativoUrl: videoFinal,
+            exercicioId,                          // ✅ chave certa
+            ordem: Number(x.ordem ?? idx + 1),     // ✅ número
+            repeticoes: String(x.repeticoes ?? x.repeticoesStr ?? "1"), // ✅ string
+            observacao: x.observacao ?? null,
           };
-        }) as any,
+        }
       );
+
+      const exerciciosValidos = exerciciosSelecionados.filter((x: any) => {
+        const id = x?.exercicioId ?? x?.idCatalogo ?? x?.id;
+        return !!id;
+      });
+
+      if (exerciciosValidos.length !== exerciciosSelecionados.length) {
+        // remove linhas vazias e renumera
+        const renumerado = exerciciosValidos.map((x: any, i: number) => ({ ...x, ordem: i + 1 }));
+        setExerciciosSelecionados(renumerado);
+      }
 
       const mapNivel = (s: string) =>
         ({ Base: "Base", Avancado: "Avancado", Performance: "Performance" } as const)[
@@ -2435,33 +2470,14 @@ useEffect(() => {
           ? String(professorLogadoId || tipoUsuarioId)
           : null;
 
-      const payload = montarPayloadSomenteInfoEExercicios({
-        titulo: nome,
-        descricao,
-        nivel,
-        duracaoMinutos: duracao,
-        tipoTreino,
-        metas,
-        pontuacao,
-        categoria: categorias,
-        dicas,
-        exerciciosSelecionados,
-      });
-
-      // ✅ edição (PUT)
-      if (isEditMode && treinoIdEdit) {
-        const { data } = await axios.get(
-          `${API.BASE_URL}/api/treinosprogramados/${treinoIdEdit}`,
-          { headers: { Authorization: `Bearer ${Storage.token}` } }
-        );
-      } else {
-        // ✅ criação (POST)
-        await axios.post(`${API}/treinosprogramados`, payload, {
-          headers: { Authorization: `Bearer ${Storage.token}` },
-        });
+      // ✅ só manda exercícios que têm id do banco
+      const exValidos = exerciciosSelecionados.filter(
+        (ex: any) => ex?.exercicioId || ex?.idCatalogo || ex?.id
+      );
+      if (!exValidos.length) {
+        showToast("Selecione pelo menos 1 exercício válido.", "error");
+        return;
       }
-
-      (payload as any).colaboradoresProfessorIds = professoresIdsFinalSemEu;
 
       // ✅ valida duplicados
       const vistosId = new Set<string>();
@@ -2487,16 +2503,33 @@ useEffect(() => {
           `Remova os exercícios repetidos antes de salvar: ${duplicados.join(", ")}`,
           "error",
         );
-        return; // ✅ fica na página
+        return;
       }
 
-      const exValidos = exerciciosSelecionados.filter(
-        (x) => x.idCatalogo || (x.nome && x.nome.trim()),
-      );
-      if (exValidos.length === 0) {
-        showToast("Adicione pelo menos 1 exercício válido antes de salvar.", "error");
-        return; // ✅ fica na página
-      }
+      const payload = montarPayloadSomenteInfoEExercicios({
+        titulo: nome,
+        descricao,
+        nivel,
+        duracaoMinutos: duracao,
+        tipoTreino,
+        categoria: categorias,
+        dicas,
+        exerciciosSelecionados: exerciciosValidos, // 🔥 OBRIGATÓRIO
+      });
+
+      (payload as any).atletasIds = atletasSelecionados;
+      (payload as any).elencosIds = elencoSelecionado ? [elencoSelecionado] : [];
+      (payload as any).tipoUsuario = tipoUsuarioNorm;     // "professor" | "clube" | "escolinha"
+      (payload as any).tipoUsuarioId = String(tipoUsuarioId); // ✅ o dono real do treino
+      (payload as any).pontuacao = pontuacao ?? null;
+      (payload as any).metas = metas ?? null;
+      (payload as any).codigo = codigo; // se você quiser salvar o código que você gera
+      (payload as any).colaboradoresProfessorIds = professoresIdsFinalSemEu;
+      // garante que a “Gaveta” receba exercícios válidos
+      (payload as any).exercicios = Array.isArray(exValidos) ? exValidos : [];
+      (payload as any).exercicios = (payload as any).exercicios.filter((e: any) => e?.exercicioId);
+      const capaFinal = capaUrl && String(capaUrl).startsWith("blob:") ? null : capaUrl;
+      (payload as any).imagemUrl = capaFinal ? String(capaFinal) : null;
 
       const resp = isEditing
         ? await TreinosApi.atualizar(editProgramadoId || editId, payload)
@@ -3035,7 +3068,6 @@ useEffect(() => {
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-
               <div>
                 <label className="block text-sm text-gray-700 mb-1">
                   Tipo do Treino
@@ -3052,6 +3084,7 @@ useEffect(() => {
                   <option value="Mental">Mental</option>
                 </select>
               </div>
+            </div>
 
               <div>
                 <label className="block text-sm text-gray-700 mb-1">
@@ -3067,6 +3100,26 @@ useEffect(() => {
                   }
                 />
               </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">
+                    Nível do Treino
+                  </label>
+
+                  <select
+                    className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
+                    value={nivel}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setNivel((opcoesNiveis.includes(v as NivelTreino) ? (v as NivelTreino) : "Base"));
+                    }}
+                  >
+                    {opcoesNiveis.map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                </div>
 
               <div>
                 <label className="block text-sm text-gray-700 mb-1">
@@ -3234,7 +3287,7 @@ useEffect(() => {
                   const nomeFinal = base?.nome ?? ex.nome ?? "";
                   const nivelFinal = base?.nivel ?? undefined;
                   const descFinal = base?.descricao ?? ex.descricao ?? "";
-
+                  
                   const ehDoBanco = Boolean(ex.idCatalogo);
 
                   return (
@@ -3607,9 +3660,6 @@ useEffect(() => {
                   </li>
                 )}
               </ul>
-
-
-
 
             </StepCard>
           </>
