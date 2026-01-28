@@ -15,20 +15,19 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
-import { API } from "../config.js";
+import { API, APP } from "../config.js";
 import { TreinosApi } from "../utils/treinosApi.js";
 import type { ExItemUI, TreinoCreatePayload } from "../utils/treinos.types.js";
 import {
   montarExerciciosParaPayload,
   parseRepeticoesStr,
 } from "../utils/treinos.helpers.js";
+import axios from "axios";
 
 type ExItemUILocal = ExItemUI & {
   videoUrl?: string | null;
 };
-
 type Organizacao = { id: string; nome: string; tipo: "Escolinha" | "Clube" };
-
 type PontuacaoDetalhe = {
   total: number;
   nivel: number;
@@ -37,6 +36,98 @@ type PontuacaoDetalhe = {
   duracao: number;
   exCount: number;
 };
+
+// ✅ Tipagem mínima do exercício selecionado (adapte nomes se os seus forem diferentes)
+type ExercicioSelecionadoUI = {
+  exercicioId?: string;      // preferencial
+  id?: string;               // fallback (se sua UI usa "id")
+  ordem?: number | null;
+  repeticoes?: string | number | null;
+};
+
+// ✅ helper: converte repetição pra string SEMPRE
+function toRepeticoesStr(v: any): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") return v.trim();
+  if (typeof v === "number") return String(v);
+  return String(v);
+}
+
+export function montarPayloadSomenteInfoEExercicios(params: {
+  // infos básicas
+  titulo: string;
+  descricao: string;
+  nivel: any; // Nivel enum/string
+  duracaoMinutos: number | null;
+  tipoTreino?: string | null; // se existir no seu backend
+  metas?: string | null;
+  pontuacao?: number | null;
+  categoria?: any[]; // Categoria[]
+  dicas?: string[];
+  exerciciosSelecionados: ExercicioSelecionadoUI[];
+  atletasIds?: string[];
+  elencosIds?: string[];
+  colaboradoresProfessorIds?: string[];
+  tipoUsuarioId?: string;
+}) {
+  const {
+    titulo,
+    descricao,
+    nivel,
+    duracaoMinutos,
+    tipoTreino,
+    metas,
+    pontuacao,
+    categoria,
+    dicas,
+    exerciciosSelecionados,
+  } = params;
+
+  // ✅ normaliza exercícios
+  const exercicios = (exerciciosSelecionados ?? [])
+    .map((it, idx) => {
+      const rawId = it.exercicioId ?? it.id ?? "";
+      const exercicioId = String(rawId).trim();
+
+      return {
+        exercicioId,
+        ordem: Number.isFinite(Number(it.ordem)) ? Number(it.ordem) : idx + 1,
+        repeticoes: toRepeticoesStr(it.repeticoes),
+        series: (it as any).series ?? null,
+        descansoSeg: (it as any).descansoSeg ?? null,
+      };
+    })
+    // ✅ remove linhas inválidas (sem exercicioId)
+    .filter((x) => !!x.exercicioId);
+
+    const payload: any = {
+      nome: (titulo ?? "").trim(),
+      descricao: (descricao ?? "").trim() || null,
+      nivel,
+      duracao: duracaoMinutos === null ? null : Number(duracaoMinutos),
+
+      // ✅ no seu schema essas duas normalmente NÃO são opcionais
+      categoria: Array.isArray(categoria) ? categoria : [],
+      dicas: Array.isArray(dicas) ? dicas.filter(Boolean) : [],
+
+      exercicios,
+      atletasIds: Array.isArray(params.atletasIds) ? params.atletasIds : [],
+      elencosIds: Array.isArray(params.elencosIds) ? params.elencosIds : [],
+      colaboradoresProfessorIds: Array.isArray(params.colaboradoresProfessorIds)
+        ? params.colaboradoresProfessorIds
+        : [],
+      tipoUsuarioId: params.tipoUsuarioId ?? "",
+    };
+
+    if (tipoTreino !== undefined) {
+      payload.tipoTreino = tipoTreino ?? null;
+    }
+    if (metas !== undefined) payload.metas = metas ?? null;
+    if (pontuacao !== undefined) payload.pontuacao = pontuacao ?? null;
+
+    return payload;
+
+}
 
 const getToken = () =>
   (Storage as any).token ??
@@ -67,6 +158,7 @@ const NOMES_MESES_PT = [
 ];
 
 const DIAS_SEMANA_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 function formatYMD(ano: number, mesZeroBased: number, dia: number): string {
   const m = String(mesZeroBased + 1).padStart(2, "0");
@@ -108,6 +200,11 @@ function parseDateOnlyToLocalMidnight(dateOnly: string): Date {
   if (!s) return new Date(NaN);
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+}
+
+function resolveAvatarUrl(raw?: string) {
+  const u = resolveMediaUrl(raw);
+  return u || AVATAR_FALLBACK;
 }
 
 function resolveMediaUrl(raw?: string) {
@@ -179,6 +276,7 @@ interface TreinoProgramado {
   nome: string;
   descricao?: string;
   nivel: string;
+  imagemUrl: string | null;
   dataAgendada?: string;
   exercicios: {
     id: string;
@@ -221,6 +319,39 @@ function toCategoriaEnum(val?: string | null): string | null {
   if (m) return `Sub${m[1]}`;
   if (/^livre$/i.test(String(val))) return "Livre";
   return val;
+}
+
+async function uploadImagemCapa(file: File): Promise<string> {
+  const token = getToken();
+  if (!token) throw new Error("Sem token");
+
+  const fd = new FormData();
+  // seu endpoint atual espera "foto"
+  fd.append("foto", file);
+
+  const base = (API as any)?.BASE_URL || "http://localhost:3001";
+
+  const r = await fetch(`${base}/api/upload/perfil`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+
+  const txt = await r.text();
+  if (!r.ok) throw new Error(txt || "Falha no upload");
+
+  const j = txt ? JSON.parse(txt) : null;
+
+  const url =
+    j?.url ||
+    j?.fileUrl ||
+    j?.path ||
+    j?.file?.url ||
+    j?.data?.url ||
+    "";
+
+  if (!url) throw new Error("Upload não retornou URL");
+  return String(url);
 }
 
 async function uploadVideo(file: File): Promise<string> {
@@ -415,6 +546,12 @@ async function tentarSalvarComoTreinoSalvo(
     const categorias = Array.isArray(payload.categoria)
       ? payload.categoria.map(toCategoriaEnum).filter(Boolean)
       : [];
+    
+    if (!Array.isArray(payload.exercicios) || payload.exercicios.length === 0) {
+      console.warn("[Gaveta] pulou: treino sem exercícios no payload");
+      return { saved: false, reason: "sem-exercicios" as const };
+    }
+
     const body = {
       titulo: payload.nome,
       descricao: payload.descricao ?? null,
@@ -463,17 +600,22 @@ function saveState(partial: any) {
   } catch {}
 }
 
-const steps = [
-  { id: 1, label: "Informações" },
-  { id: 2, label: "Exercícios" },
-  { id: 3, label: "Atletas" },
-] as const;
+function getQueryParam(search: string, key: string) {
+    try {
+      const s = search.startsWith("?") ? search : `?${search}`;
+      return new URLSearchParams(s).get(key);
+    } catch {
+      return null;
+    }
+ }
 
 function Stepper({
+  steps,
   current,
   onJump,
   completedUntil,
 }: {
+  steps: Array<{ id: number; label: string }>;
   current: number;
   onJump: (n: number) => void;
   completedUntil: number;
@@ -501,11 +643,7 @@ function Stepper({
                   title={`Ir para ${s.label}`}
                 >
                   <span className="inline-flex items-center justify-center w-6 h-6 rounded-full border text-xs">
-                    {isCompleted ? (
-                      <Check className="w-3.5 h-3.5" />
-                    ) : (
-                      s.id
-                    )}
+                    {isCompleted ? <Check className="w-3.5 h-3.5" /> : s.id}
                   </span>
                   <span className="font-semibold text-xs sm:text-sm">
                     {s.label}
@@ -582,10 +720,45 @@ const VideoThumb = memo(function VideoThumb({
   );
 });
 
-
-
 export default function NovoTreino() {
-  const [, navigate] = useLocation();
+  const [route, navigate] = useLocation();
+  const opcoesNiveis = ["Base", "Avancado", "Performance"] as const;
+  type NivelTreino = (typeof opcoesNiveis)[number];
+
+  // helpers de querystring (wouter)
+  const getQueryParam = (search: string, key: string) => {
+    const sp = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+    return (sp.get(key) || "").trim();
+  };
+
+  const search = route.includes("?") ? route.slice(route.indexOf("?")) : "";
+  const treinoIdEdit =
+    getQueryParam(search, "id") ||
+    getQueryParam(search, "treinoId") ||
+    getQueryParam(search, "programadoId");
+  const isEditMode = !!treinoIdEdit;
+  const editId = useMemo(() => {
+    const qs = route.includes("?") ? route.split("?")[1] : "";
+    const sp = new URLSearchParams(qs);
+    return (
+      sp.get("id") ||
+      sp.get("treinoId") ||
+      sp.get("programadoId") ||
+      ""
+    ).trim();
+  }, [route]);
+
+  const isEditing = Boolean(editId);
+  const carregouEdicaoRef = useRef(false);
+
+  const steps = useMemo(() => {
+    const base = [
+      { id: 1, label: "Informações" },
+      { id: 2, label: "Exercícios" },
+    ];
+    if (!isEditing) base.push({ id: 3, label: "Atletas" });
+    return base;
+  }, [isEditing]);
 
   const [videoModalSrc, setVideoModalSrc] = useState<string | null>(null);
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
@@ -594,6 +767,9 @@ export default function NovoTreino() {
   const [prazos, setPrazos] = useState<Record<string, string>>({});
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<Exercicio[]>([]);
   const [treinosDisponiveis, setTreinosDisponiveis] = useState<TreinoProgramado[]>([]);
+  const [capaPreview, setCapaPreview] = useState<string>(""); // blob pra preview
+  const [capaUrl, setCapaUrl] = useState<string>("");         // url final (backend)
+  const [editProgramadoId, setEditProgramadoId] = useState<string>("");
 
   type AbaTreinosAtleta = "meu_professor" | "footera";
   const [abaTreinosAtleta, setAbaTreinosAtleta] = useState<AbaTreinosAtleta>("meu_professor");
@@ -607,7 +783,7 @@ export default function NovoTreino() {
   const [etapa, setEtapa] = useState<number>(1);
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [nivel, setNivel] = useState("Base");
+  const [nivel, setNivel] = useState<NivelTreino>("Base");
   const [duracao, setDuracao] = useState<number>(60);
   const [dataTreino, setDataTreino] = useState<string>("");
   const [categorias, setCategorias] = useState<string[]>([]);
@@ -615,6 +791,9 @@ export default function NovoTreino() {
   const [objetivo, setObjetivo] = useState<string>("");
   const [iniciado, setIniciado] = useState<boolean>(false);
   const [exerciciosSelecionados, setExerciciosSelecionados] = useState<ExItemUILocal[]>([]);
+  const [pontuacao, setPontuacao] = useState<number>(0);
+  const [metas, setMetas] = useState<string>("");
+  const [dicas, setDicas] = useState<string[]>([]);
 
   const [filtroEx, setFiltroEx] = useState("");
   const [filtroCategorias, setFiltroCategorias] = useState<string[]>([]);
@@ -633,7 +812,6 @@ export default function NovoTreino() {
     message: string;
   } | null>(null);
 
-  
   const jaSincronizouCalendarioComDatas = useRef(false);
   type ProfessorItem = { id: string; nome: string; codigo?: string; cref?: string };
 
@@ -858,6 +1036,8 @@ export default function NovoTreino() {
     setIsFreePlan(ehFree);
   }, []);
 
+  const [loadingEdit, setLoadingEdit] = useState(false);
+
 useEffect(() => {
   if (!toast) return;
   const ms = toast.type === "error" ? 9000 : 4000; // erro fica mais tempo
@@ -888,6 +1068,8 @@ useEffect(() => {
     }
   }, [datasAgendamento]);
 
+  // ✅ wouter -> location é STRING (path atual)
+  const routeStr = typeof location === "string" ? location : String((location as any)?.href ?? "");
   const MOSTRAR_TODOS = "__todos__";
 
   const score = useMemo(
@@ -963,6 +1145,13 @@ useEffect(() => {
         descricao: t.descricao ?? t.resumo ?? "",
         nivel: t.nivel ?? t.dificuldade ?? "-",
         pontuacao: t.pontuacao ?? null,
+        imagemUrl:
+          t.imagemUrl ??
+          t.imagemURL ??
+          t.capaUrl ??
+          t.capa ??
+          t.foto ??
+          null,
         exercicios: (t.exercicios ?? t.exs ?? []).map(
           (ex: any, i: number) => ({
             id: ex.id ?? ex.exercicioId ?? String(i),
@@ -1434,6 +1623,7 @@ useEffect(() => {
               ? saved.professoresSelecionados.map(String)
               : []
           );
+          setCapaUrl(saved.capaUrl ?? "");
         }
       }
 
@@ -1442,6 +1632,24 @@ useEffect(() => {
 
     setIniciado(true);
   }, []);
+
+    useEffect(() => {
+    if (!isEditing) return;
+    if (!iniciado) return;
+    if (carregouEdicaoRef.current) return;
+
+    carregouEdicaoRef.current = true;
+
+    (async () => {
+      try {
+        await carregarTreinoParaEdicao(editId);
+        showToast("Modo edição: treino carregado.", "info");
+      } catch (e: any) {
+        console.error("[NovoTreino] falha ao carregar edição:", e);
+        showToast(e?.message || "Falha ao carregar treino para editar.", "error");
+      }
+    })();
+  }, [isEditing, iniciado, editId]);
 
   useEffect(() => {
     const tipo = String(
@@ -1629,13 +1837,13 @@ useEffect(() => {
       duracao,
       dataTreino,
       categorias,
-
       tipoTreino,
       objetivo,
       exerciciosSelecionados,
       atletasSelecionados,
       datasAgendamento,
-      professoresSelecionados
+      professoresSelecionados,
+      capaUrl
     });
   }, [
     etapa,
@@ -1652,6 +1860,98 @@ useEffect(() => {
     datasAgendamento,
     professoresSelecionados,
   ]);
+
+  async function carregarTreinoParaEdicao(id: string) {
+    const token = getToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+    // tenta endpoints comuns do seu projeto
+    const tries = [
+      `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(id)}`,
+      `${API.BASE_URL}/api/treinosprogramados/${encodeURIComponent(id)}`,
+      `${API.BASE_URL}/api/treinos/${encodeURIComponent(id)}`,
+    ];
+
+    let data: any = null;
+
+    for (const url of tries) {
+      const r = await fetch(url, { headers });
+      if (!r.ok) continue;
+      data = await r.json().catch(() => null);
+      if (data) break;
+    }
+
+    if (!data) throw new Error("Não foi possível carregar o treino para editar.");
+
+    // normaliza o payload vindo do backend (vários formatos possíveis)
+    const t = data?.data ?? data;
+
+    const pid =
+      t?.treinoProgramadoId ??
+      t?.programadoId ??
+      t?.programado?.id ??
+      t?.id ??
+      "";
+
+    setEditProgramadoId(String(pid || id));
+    setNome(String(t.nome ?? t.titulo ?? ""));
+    setDescricao(String(t.descricao ?? t.resumo ?? ""));
+    const nivelCarregado = String(t.nivel ?? "Base");
+    setNivel(
+      (opcoesNiveis.includes(nivelCarregado as NivelTreino)
+        ? (nivelCarregado as NivelTreino)
+        : "Base")
+    );
+    setDuracao(Number(t.duracao ?? 60) || 60);
+
+    // tipoTreino pode vir null
+    setTipoTreino(String(t.tipoTreino ?? "Tecnico") || "Tecnico");
+
+    // objetivo pode estar dentro de conteudo
+    setObjetivo(String(t.objetivo ?? t?.conteudo?.objetivo ?? ""));
+
+    // capa
+    setCapaUrl(String(t.imagemUrl ?? t.capaUrl ?? t.capa ?? t.foto ?? ""));
+
+    // categorias (pode vir string[] / Categoria[])
+    const cats = t.categoria ?? t.categorias ?? [];
+    setCategorias(Array.isArray(cats) ? cats.map(String) : cats ? [String(cats)] : []);
+
+    // professores colaboradores (pode vir professoresIds, colaboradores, criadores etc)
+    const profIds =
+      t.professoresIds ??
+      t.colaboradoresProfessorIds ??
+      t.colaboradoresIds ??
+      (Array.isArray(t.colaboradores)
+        ? t.colaboradores
+            .map((c: any) => c.professorId ?? c.professor?.id)
+            .filter(Boolean)
+        : []);
+
+    setProfessoresSelecionados(Array.isArray(profIds) ? profIds.map(String) : []);
+
+    // atletas selecionados (se seu treino programado guarda isso)
+    const atIds = t.atletasIds ?? t.atletaIds ?? [];
+    if (Array.isArray(atIds)) setAtletasSelecionados(atIds.map(String));
+
+    // datas agendamento (se existir)
+    const datas = t.datasAgendamento ?? t.datas ?? [];
+    if (Array.isArray(datas) && datas.length) setDatasAgendamento(datas.map(String));
+
+    // exercícios
+    const exs = t.exercicios ?? t.exs ?? t.conteudo?.exercicios ?? [];
+    const exUi: ExItemUILocal[] = (Array.isArray(exs) ? exs : []).map((ex: any, idx: number) => ({
+      idCatalogo: ex.exercicioId ?? ex.idCatalogo ?? ex.id ?? null,
+      nome: ex.nome ?? ex.exercicio?.nome ?? "",
+      descricao: ex.descricao ?? ex.exercicio?.descricao ?? "",
+      repeticoes: ex.repeticoes ?? ex.reps ?? "",
+      series: ex.series ?? "",
+      ordem: Number(ex.ordem ?? idx + 1),
+      videoUrl: ex.videoDemonstrativoUrl ?? ex.videoUrl ?? null,
+    }));
+
+    setExerciciosSelecionados(exUi);
+  }
 
   async function criarTurmaComSelecionados() {
     const token =
@@ -2006,6 +2306,12 @@ useEffect(() => {
   function isDono(v: string): v is DonoLiteral {
     return v === "professor" || v === "clube" || v === "escolinha";
   }
+  type DonoCapital = "Professor" | "Clube" | "Escolinha";
+  function toDonoCapital(v: DonoLiteral): DonoCapital {
+    if (v === "professor") return "Professor";
+    if (v === "clube") return "Clube";
+    return "Escolinha";
+  }
 
   function extrairIdAtleta(a: any): string {
     if (!a) return "";
@@ -2110,291 +2416,325 @@ useEffect(() => {
     }
   }
 
-const criarTreino = async () => {
-  if (salvando) return;
-  setSalvando(true);
+  const criarTreino = async () => {
+    if (salvando) return;
+    setSalvando(true);
 
-  try {
-    // ✅ limpa erro antigo (se você quiser manter, pode remover)
-    // setToast(null);
+    try {
+      // ✅ limpa erro antigo (se você quiser manter, pode remover)
+      // setToast(null);
 
-    const { tipoUsuario, tipoUsuarioId } = getDono();
-    const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
+      const { tipoUsuario, tipoUsuarioId } = getDono();
+      const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
 
-    const professoresIdsFinal = Array.from(
-      new Set(
-        (professoresSelecionados || [])
-          .map((x) => String(x))
-          .filter(Boolean),
-      ),
-    );
-
-    const professoresIdsFinalSemEu = professorLogadoId
-      ? professoresIdsFinal.filter(
-          (id) => String(id) !== String(professorLogadoId),
-        )
-      : professoresIdsFinal;
-
-    if (!tipoUsuario || !tipoUsuarioId) {
-      showToast(
-        "Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).",
-        "error",
+      const professoresIdsFinal = Array.from(
+        new Set(
+          (professoresSelecionados || [])
+            .map((x) => String(x))
+            .filter(Boolean),
+        ),
       );
-      return; // ✅ fica na página
-    }
 
-    if (!isDono(tipoUsuarioNormRaw)) {
-      showToast("Erro: tipo de usuário inválido.", "error");
-      return; // ✅ fica na página
-    }
-    const tipoUsuarioNorm: DonoLiteral = tipoUsuarioNormRaw;
+      const professoresIdsFinalSemEu = professorLogadoId
+        ? professoresIdsFinal.filter(
+            (id) => String(id) !== String(professorLogadoId),
+          )
+        : professoresIdsFinal;
 
-    if (!usuarioId) {
-      showToast("Erro: usuário não autenticado.", "error");
-      return; // ✅ fica na página
-    }
+      if (!tipoUsuario || !tipoUsuarioId) {
+        showToast(
+          "Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).",
+          "error",
+        );
+        return; // ✅ fica na página
+      }
 
-    const exercicios = montarExerciciosParaPayload(
-      exerciciosSelecionados.map((e) => {
-        const v = e.videoUrl ?? null;
-        const videoFinal = v && String(v).startsWith("blob:") ? null : v;
+      if (!isDono(tipoUsuarioNormRaw)) {
+        showToast("Erro: tipo de usuário inválido.", "error");
+        return; // ✅ fica na página
+      }
+      const tipoUsuarioNorm: DonoLiteral = tipoUsuarioNormRaw;
 
-        return {
+      if (!usuarioId) {
+        showToast("Erro: usuário não autenticado.", "error");
+        return; // ✅ fica na página
+      }
+
+      const exerciciosRaw = montarExerciciosParaPayload(
+        exerciciosSelecionados.map((e) => ({
           ...e,
-          videoDemonstrativoUrl: videoFinal,
+          videoDemonstrativoUrl:
+            e.videoUrl && String(e.videoUrl).startsWith("blob:") ? null : (e.videoUrl ?? null),
+        })) as any,
+      );
+
+      // 🔥 normaliza pro formato que o backend geralmente valida
+      const exerciciosPayload = (Array.isArray(exerciciosRaw) ? exerciciosRaw : []).map(
+        (x: any, idx: number) => {
+          const exercicioId = String(
+            x.exercicioId ?? x.idCatalogo ?? x.id ?? ""
+          ).trim();
+
+          return {
+            exercicioId,                          // ✅ chave certa
+            ordem: Number(x.ordem ?? idx + 1),     // ✅ número
+            repeticoes: String(x.repeticoes ?? x.repeticoesStr ?? "1"), // ✅ string
+            observacao: x.observacao ?? null,
+          };
+        }
+      );
+
+      const exerciciosValidos = exerciciosSelecionados.filter((x: any) => {
+        const id = x?.exercicioId ?? x?.idCatalogo ?? x?.id;
+        return !!id;
+      });
+
+      if (exerciciosValidos.length !== exerciciosSelecionados.length) {
+        // remove linhas vazias e renumera
+        const renumerado = exerciciosValidos.map((x: any, i: number) => ({ ...x, ordem: i + 1 }));
+        setExerciciosSelecionados(renumerado);
+      }
+
+      const mapNivel = (s: string) =>
+        ({ Base: "Base", Avancado: "Avancado", Performance: "Performance" } as const)[
+          s
+        ] ?? "Base";
+
+      const mapTipoTreino = (s: string) =>
+        ({ Tecnico: "Tecnico", Fisico: "Fisico", Tatico: "Tatico", Mental: "Mental" } as const)[
+          s
+        ] ?? null;
+
+      const mapCategoria = (s: string) => {
+        const m = String(s || "").match(/sub[\s\-]?(\d{1,2})/i);
+        if (m) return `Sub${m[1]}`;
+        if (/^livre$/i.test(String(s))) return "Livre";
+        return s;
+      };
+
+      const codigo =
+        `${nome}`.trim()
+          ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) +
+            "-" +
+            Date.now().toString(36)
+          : "TP-" + Date.now().toString(36);
+
+      // (mantive como estava, mesmo que não seja usado)
+      const professorIdDoTreino =
+        tipoUsuarioNorm === "professor"
+          ? String(professorLogadoId || tipoUsuarioId)
+          : null;
+
+      // ✅ só manda exercícios que têm id do banco
+      const exValidos = exerciciosSelecionados.filter(
+        (ex: any) => ex?.exercicioId || ex?.idCatalogo || ex?.id
+      );
+      if (!exValidos.length) {
+        showToast("Selecione pelo menos 1 exercício válido.", "error");
+        return;
+      }
+
+      // ✅ valida duplicados
+      const vistosId = new Set<string>();
+      const vistosNome = new Set<string>();
+      const duplicados: string[] = [];
+
+      for (const ex of exerciciosSelecionados) {
+        const idK = ex.idCatalogo ? String(ex.idCatalogo) : null;
+        const nomeK = normalizaNome(ex.nome);
+
+        if (idK) {
+          if (vistosId.has(idK)) duplicados.push(`ID ${idK}`);
+          vistosId.add(idK);
+        }
+        if (nomeK) {
+          if (vistosNome.has(nomeK)) duplicados.push(ex.nome || nomeK);
+          vistosNome.add(nomeK);
+        }
+      }
+
+      if (duplicados.length) {
+        showToast(
+          `Remova os exercícios repetidos antes de salvar: ${duplicados.join(", ")}`,
+          "error",
+        );
+        return;
+      }
+
+      const payload = montarPayloadSomenteInfoEExercicios({
+        titulo: nome,
+        descricao,
+        nivel,
+        duracaoMinutos: duracao,
+        tipoTreino,
+        categoria: categorias,
+        dicas,
+        exerciciosSelecionados: exerciciosValidos, // 🔥 OBRIGATÓRIO
+      });
+
+      (payload as any).atletasIds = atletasSelecionados;
+      (payload as any).elencosIds = elencoSelecionado ? [elencoSelecionado] : [];
+      (payload as any).tipoUsuario = tipoUsuarioNorm;     // "professor" | "clube" | "escolinha"
+      (payload as any).tipoUsuarioId = String(tipoUsuarioId); // ✅ o dono real do treino
+      (payload as any).pontuacao = pontuacao ?? null;
+      (payload as any).metas = metas ?? null;
+      (payload as any).codigo = codigo; // se você quiser salvar o código que você gera
+      (payload as any).colaboradoresProfessorIds = professoresIdsFinalSemEu;
+      // garante que a “Gaveta” receba exercícios válidos
+      (payload as any).exercicios = Array.isArray(exValidos) ? exValidos : [];
+      (payload as any).exercicios = (payload as any).exercicios.filter((e: any) => e?.exercicioId);
+      const capaFinal = capaUrl && String(capaUrl).startsWith("blob:") ? null : capaUrl;
+      (payload as any).imagemUrl = capaFinal ? String(capaFinal) : null;
+
+      const resp = isEditing
+        ? await TreinosApi.atualizar(editProgramadoId || editId, payload)
+        : await TreinosApi.criar(payload);
+
+      const criado = resp?.data ?? resp;
+
+      const profsSelecionadosDetalhe = professoresIdsFinal.map((id) => {
+        const p = professores.find((x) => String(x.id) === String(id));
+        return {
+          id,
+          nome: p?.nome ?? "(não encontrado na lista carregada)",
+          codigo: p?.codigo ?? null,
+          cref: p?.cref ?? null,
         };
-      }) as any,
-    );
+      });
 
-    const mapNivel = (s: string) =>
-      ({ Base: "Base", Avancado: "Avancado", Performance: "Performance" } as const)[
-        s
-      ] ?? "Base";
+      let qtdAgendados = 0;
+      const treinoProgramadoId =
+        (isEditing ? editId : null) ||
+        criado?.id ||
+        criado?.treinoProgramadoId ||
+        criado?.data?.id ||
+        null;
 
-    const mapTipoTreino = (s: string) =>
-      ({ Tecnico: "Tecnico", Fisico: "Fisico", Tatico: "Tatico", Mental: "Mental" } as const)[
-        s
-      ] ?? null;
+      if (treinoProgramadoId) {
+        try {
+          const token = getToken();
+          const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-    const mapCategoria = (s: string) => {
-      const m = String(s || "").match(/sub[\s\-]?(\d{1,2})/i);
-      if (m) return `Sub${m[1]}`;
-      if (/^livre$/i.test(String(s))) return "Livre";
-      return s;
-    };
+          const rr = await fetch(
+            `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(
+              String(treinoProgramadoId),
+            )}`,
+            { headers },
+          );
+          const jj = await rr.json().catch(() => null);
+        } catch (e) {
+          console.warn("[NovoTreino] DEBUG confirmacao falhou:", e);
+        }
 
-    const codigo =
-      `${nome}`.trim()
-        ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) +
-          "-" +
-          Date.now().toString(36)
-        : "TP-" + Date.now().toString(36);
+        qtdAgendados = await agendarTreinoEmLote(String(treinoProgramadoId));
+      } else {
+        console.warn(
+          "TreinosApi.criar não retornou id do treino programado. Agendamento em lote foi pulado.",
+        );
+      }
 
-    // (mantive como estava, mesmo que não seja usado)
-    const professorIdDoTreino =
-      tipoUsuarioNorm === "professor"
-        ? String(professorLogadoId || tipoUsuarioId)
+      // ✅ tenta salvar na gaveta (não bloqueia sucesso)
+      const resultadoSalvar = await tentarSalvarComoTreinoSalvo(payload, score.total);
+
+      const atletasDoTreino = atletasVinculados.filter((a) =>
+        atletasSelecionados.includes(a.id),
+      );
+      const nomesAtletas = atletasDoTreino.map((a) => a.nome);
+
+      const datasBase =
+        datasAgendamento.length > 0 ? datasAgendamento : dataTreino ? [dataTreino] : [];
+
+      const datasLabel = datasBase.length
+        ? datasBase
+            .slice()
+            .sort()
+            .map((str) => {
+              const iso = str.includes("T") ? str : `${str}T00:00:00`;
+              const d = new Date(iso);
+              if (isNaN(d.getTime())) return str;
+              return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+            })
+            .join(", ")
         : null;
 
-    const payload: TreinoCreatePayload = {
-      codigo,
-      nome,
-      descricao: descricao || null,
-      nivel: mapNivel(nivel),
-      usuarioId,
-      tipoUsuario: tipoUsuarioNorm,
-      tipoUsuarioId,
-      professoresIds: professoresIdsFinalSemEu,
-      categoria:
-        categorias.length > 0 ? categorias.map(mapCategoria).filter(Boolean) : [],
-      tipoTreino: mapTipoTreino(tipoTreino),
-      objetivo: objetivo || null,
-      duracao: duracao ? Number(duracao) : null,
-      dataTreino: dataTreino || null,
-      dataAgendada: dataTreino || null,
-      dicas: [],
-      atletasIds: atletasSelecionados,
-      elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
-      exercicios,
-      pontuacao: Math.max(0, Math.floor(score.total)),
-    };
+      let msgPrincipal = isEditing
+        ? `Treino "${nome || codigo}" atualizado com sucesso.`
+        : `Treino "${nome || codigo}" criado com sucesso.`;
 
-    (payload as any).colaboradoresProfessorIds = professoresIdsFinalSemEu;
+      if (qtdAgendados > 0 && nomesAtletas.length && datasLabel) {
+        const nomesPreview =
+          nomesAtletas.length <= 3
+            ? nomesAtletas.join(", ")
+            : `${nomesAtletas.slice(0, 3).join(", ")} + ${
+                nomesAtletas.length - 3
+              } atleta(s)`;
 
-    // ✅ valida duplicados
-    const vistosId = new Set<string>();
-    const vistosNome = new Set<string>();
-    const duplicados: string[] = [];
-
-    for (const ex of exerciciosSelecionados) {
-      const idK = ex.idCatalogo ? String(ex.idCatalogo) : null;
-      const nomeK = normalizaNome(ex.nome);
-
-      if (idK) {
-        if (vistosId.has(idK)) duplicados.push(`ID ${idK}`);
-        vistosId.add(idK);
-      }
-      if (nomeK) {
-        if (vistosNome.has(nomeK)) duplicados.push(ex.nome || nomeK);
-        vistosNome.add(nomeK);
-      }
-    }
-
-    if (duplicados.length) {
-      showToast(
-        `Remova os exercícios repetidos antes de salvar: ${duplicados.join(", ")}`,
-        "error",
-      );
-      return; // ✅ fica na página
-    }
-
-    const exValidos = exerciciosSelecionados.filter(
-      (x) => x.idCatalogo || (x.nome && x.nome.trim()),
-    );
-    if (exValidos.length === 0) {
-      showToast("Adicione pelo menos 1 exercício válido antes de salvar.", "error");
-      return; // ✅ fica na página
-    }
-
-    // ✅ cria
-    const criado: any = await TreinosApi.criar(payload);
-    const profsSelecionadosDetalhe = professoresIdsFinal.map((id) => {
-      const p = professores.find((x) => String(x.id) === String(id));
-      return {
-        id,
-        nome: p?.nome ?? "(não encontrado na lista carregada)",
-        codigo: p?.codigo ?? null,
-        cref: p?.cref ?? null,
-      };
-    });
-
-    let qtdAgendados = 0;
-    const treinoProgramadoId =
-      criado?.id ?? criado?.treinoProgramadoId ?? criado?.data?.id ?? null;
-
-    if (treinoProgramadoId) {
-      try {
-        const token = getToken();
-        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
-        const rr = await fetch(
-          `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(
-            String(treinoProgramadoId),
-          )}`,
-          { headers },
-        );
-        const jj = await rr.json().catch(() => null);
-      } catch (e) {
-        console.warn("[NovoTreino] DEBUG confirmacao falhou:", e);
+        msgPrincipal += ` Foi agendado automaticamente para ${nomesAtletas.length} atleta(s) (${nomesPreview}) nos dias ${datasLabel}.`;
+      } else if (qtdAgendados > 0) {
+        msgPrincipal += ` Foram gerados ${qtdAgendados} agendamentos para seus atletas.`;
+      } else {
+        msgPrincipal +=
+          " Nenhum agendamento automático foi criado (você pode agendar depois na tela de treinos).";
       }
 
-      qtdAgendados = await agendarTreinoEmLote(String(treinoProgramadoId));
-    } else {
-      console.warn(
-        "TreinosApi.criar não retornou id do treino programado. Agendamento em lote foi pulado.",
-      );
+      let extra = "";
+      if (resultadoSalvar.saved) {
+        extra = " O treino também foi salvo na sua Gaveta.";
+      } else if (resultadoSalvar.reason === "usuario-pulou") {
+        extra = " Você optou por não salvar este treino na Gaveta (limite de 5).";
+      } else if (resultadoSalvar.reason === "falha-apagar") {
+        extra = " Não foi possível liberar espaço na Gaveta, então o treino não foi salvo lá.";
+      } else if (resultadoSalvar.reason === "erro") {
+        extra = " O treino foi criado, mas houve um erro ao salvar na Gaveta.";
+      } else if (resultadoSalvar.reason === "sem-dono") {
+        console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
+      }
+
+      showToast(msgPrincipal + extra, "success");
+
+      // ✅ aqui pode limpar e voltar pra /treinos (SUCESSO)
+      sessionStorage.removeItem(SAVE_KEY);
+      sessionStorage.removeItem(RESTORE_FLAG_KEY);
+
+      setEtapa(1);
+      setCompletedUntil(1);
+      setNome("");
+      setDescricao("");
+      setNivel("Base");
+      setDuracao(60);
+      setDataTreino("");
+      setCategorias([]);
+      setTipoTreino("Tecnico");
+      setObjetivo("");
+      setExerciciosSelecionados([]);
+      setAtletasSelecionados([]);
+      setDatasAgendamento([]);
+      setProfessoresSelecionados([]);
+      setCapaUrl("");
+      setCapaPreview("");
+      setTimeout(() => {
+        navigate("/treinos");
+      }, 500);
+    } catch (e: any) {
+      console.error("Falha inesperada ao criar treino:", e?.response?.data || e);
+
+      // ✅ pega mensagem em vários formatos (axios/fetch/string)
+      const msgErro =
+        e?.response?.data?.error ||
+        e?.response?.data?.message ||
+        e?.message ||
+        (typeof e === "string" ? e : "") ||
+        "Erro inesperado ao criar treino.";
+
+      // ✅ mostra o erro e NÃO navega
+      showToast(msgErro, "error");
+
+      // ✅ mantém o state + sessionStorage para usuário corrigir e tentar de novo
+      // (não remove SAVE_KEY / RESTORE_FLAG_KEY)
+    } finally {
+      setSalvando(false);
     }
-
-    // ✅ tenta salvar na gaveta (não bloqueia sucesso)
-    const resultadoSalvar = await tentarSalvarComoTreinoSalvo(payload, score.total);
-
-    const atletasDoTreino = atletasVinculados.filter((a) =>
-      atletasSelecionados.includes(a.id),
-    );
-    const nomesAtletas = atletasDoTreino.map((a) => a.nome);
-
-    const datasBase =
-      datasAgendamento.length > 0 ? datasAgendamento : dataTreino ? [dataTreino] : [];
-
-    const datasLabel = datasBase.length
-      ? datasBase
-          .slice()
-          .sort()
-          .map((str) => {
-            const iso = str.includes("T") ? str : `${str}T00:00:00`;
-            const d = new Date(iso);
-            if (isNaN(d.getTime())) return str;
-            return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-          })
-          .join(", ")
-      : null;
-
-    let msgPrincipal = `Treino "${nome || codigo}" criado com sucesso.`;
-
-    if (qtdAgendados > 0 && nomesAtletas.length && datasLabel) {
-      const nomesPreview =
-        nomesAtletas.length <= 3
-          ? nomesAtletas.join(", ")
-          : `${nomesAtletas.slice(0, 3).join(", ")} + ${
-              nomesAtletas.length - 3
-            } atleta(s)`;
-
-      msgPrincipal += ` Foi agendado automaticamente para ${nomesAtletas.length} atleta(s) (${nomesPreview}) nos dias ${datasLabel}.`;
-    } else if (qtdAgendados > 0) {
-      msgPrincipal += ` Foram gerados ${qtdAgendados} agendamentos para seus atletas.`;
-    } else {
-      msgPrincipal +=
-        " Nenhum agendamento automático foi criado (você pode agendar depois na tela de treinos).";
-    }
-
-    let extra = "";
-    if (resultadoSalvar.saved) {
-      extra = " O treino também foi salvo na sua Gaveta.";
-    } else if (resultadoSalvar.reason === "usuario-pulou") {
-      extra = " Você optou por não salvar este treino na Gaveta (limite de 5).";
-    } else if (resultadoSalvar.reason === "falha-apagar") {
-      extra = " Não foi possível liberar espaço na Gaveta, então o treino não foi salvo lá.";
-    } else if (resultadoSalvar.reason === "erro") {
-      extra = " O treino foi criado, mas houve um erro ao salvar na Gaveta.";
-    } else if (resultadoSalvar.reason === "sem-dono") {
-      console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
-    }
-
-    showToast(msgPrincipal + extra, "success");
-
-    // ✅ aqui pode limpar e voltar pra /treinos (SUCESSO)
-    sessionStorage.removeItem(SAVE_KEY);
-    sessionStorage.removeItem(RESTORE_FLAG_KEY);
-
-    setEtapa(1);
-    setCompletedUntil(1);
-    setNome("");
-    setDescricao("");
-    setNivel("Base");
-    setDuracao(60);
-    setDataTreino("");
-    setCategorias([]);
-    setTipoTreino("Tecnico");
-    setObjetivo("");
-    setExerciciosSelecionados([]);
-    setAtletasSelecionados([]);
-    setDatasAgendamento([]);
-    setProfessoresSelecionados([]);
-
-    setTimeout(() => {
-      navigate("/treinos");
-    }, 500);
-  } catch (e: any) {
-    console.error("Falha inesperada ao criar treino:", e?.response?.data || e);
-
-    // ✅ pega mensagem em vários formatos (axios/fetch/string)
-    const msgErro =
-      e?.response?.data?.error ||
-      e?.response?.data?.message ||
-      e?.message ||
-      (typeof e === "string" ? e : "") ||
-      "Erro inesperado ao criar treino.";
-
-    // ✅ mostra o erro e NÃO navega
-    showToast(msgErro, "error");
-
-    // ✅ mantém o state + sessionStorage para usuário corrigir e tentar de novo
-    // (não remove SAVE_KEY / RESTORE_FLAG_KEY)
-  } finally {
-    setSalvando(false);
-  }
-};
-
+  };
 
   const agendarTreino = async (t: TreinoProgramado) => {
     try {
@@ -2565,6 +2905,14 @@ const criarTreino = async () => {
         ) : (
           listaAtiva.map((t) => (
             <div key={t.id} className="bg-white border p-4 rounded shadow mb-4">
+              {t.imagemUrl ? (
+                <img
+                  src={resolveMediaUrl(t.imagemUrl)}
+                  alt={`Capa do treino ${t.nome}`}
+                  className="w-full h-40 object-cover rounded-xl border mb-3"
+                />
+              ) : null}
+
               <div className="flex items-start justify-between gap-2">
                 <h3
                   className="text-green-800 text-lg font-semibold cursor-pointer hover:underline"
@@ -2657,7 +3005,7 @@ const criarTreino = async () => {
       <div className="p-4 sm:p-6 max-w-3xl mx-auto">
         <div className="grid grid-cols-3 items-center mb-3 sm:mb-4">
           <h2 className="text-lg sm:text-xl font-bold col-start-1">
-            Criar Novo Treino
+            {isEditing ? "Editar Treino" : "Criar Novo Treino"}
           </h2>
 
           <div
@@ -2694,6 +3042,8 @@ const criarTreino = async () => {
                 setExerciciosSelecionados([]);
                 setAtletasSelecionados([]);
                 setProfessoresSelecionados([]);
+                setCapaUrl("");
+                setCapaPreview("");
                 sessionStorage.removeItem(SAVE_KEY);
                 sessionStorage.removeItem(RESTORE_FLAG_KEY);
               }
@@ -2704,7 +3054,51 @@ const criarTreino = async () => {
           </button>
         </div>
 
+        {isEditing && (
+          <button
+            type="button"
+            onClick={async () => {
+                if (!confirm("Tem certeza que deseja apagar este treino?")) return;
 
+                try {
+                  const idParaApagar = (editProgramadoId || editId || "").trim();
+                  if (!idParaApagar) throw new Error("ID do treino para apagar está vazio.");
+
+                  const headers = authHeaders();
+
+                  const tries = [
+                    `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(idParaApagar)}`,
+                    `${API.BASE_URL}/api/treinosprogramados/${encodeURIComponent(idParaApagar)}`,
+                    `${API.BASE_URL}/api/treinos/${encodeURIComponent(idParaApagar)}`,
+                  ];
+
+                  let ok = false;
+                  let lastTxt = "";
+
+                  for (const url of tries) {
+                    const r = await fetch(url, { method: "DELETE", headers });
+                    if (r.ok) { ok = true; break; }
+                    lastTxt = await r.text().catch(() => "");
+                  }
+
+                  if (!ok) throw new Error(lastTxt || "Falha ao apagar no backend.");
+
+                  sessionStorage.removeItem(SAVE_KEY);
+                  sessionStorage.removeItem(RESTORE_FLAG_KEY);
+
+                  showToast("Treino apagado com sucesso.", "success");
+                  setTimeout(() => navigate("/treinos"), 300);
+                } catch (e: any) {
+                  console.error(e);
+                  showToast(e?.message || "Erro ao apagar treino.", "error");
+                }
+              }}
+
+            className="text-sm text-red-700 underline justify-self-end col-start-3"
+          >
+            Apagar treino
+          </button>
+        )}
 
         {etapa === 1 && (
           <StepCard title="Informações Básicas">
@@ -2729,7 +3123,6 @@ const criarTreino = async () => {
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-
               <div>
                 <label className="block text-sm text-gray-700 mb-1">
                   Tipo do Treino
@@ -2746,6 +3139,7 @@ const criarTreino = async () => {
                   <option value="Mental">Mental</option>
                 </select>
               </div>
+            </div>
 
               <div>
                 <label className="block text-sm text-gray-700 mb-1">
@@ -2761,6 +3155,26 @@ const criarTreino = async () => {
                   }
                 />
               </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">
+                    Nível do Treino
+                  </label>
+
+                  <select
+                    className="border w-full mb-2 p-2 rounded text-sm sm:text-base"
+                    value={nivel}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setNivel((opcoesNiveis.includes(v as NivelTreino) ? (v as NivelTreino) : "Base"));
+                    }}
+                  >
+                    {opcoesNiveis.map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                </div>
 
               <div>
                 <label className="block text-sm text-gray-700 mb-1">
@@ -2822,10 +3236,81 @@ const criarTreino = async () => {
                   )}
                 </div>
               </div>
-
             </div>
 
+            <div className="sm:col-span-2">
+              <label className="block text-sm text-gray-700 mb-2 mt-3">
+                Capa do Treino (opcional)
+              </label>
 
+              {/* Preview */}
+              { (capaPreview || capaUrl) ? (
+                <div className="mb-2">
+                  <img
+                    src={resolveMediaUrl(capaPreview || capaUrl)}
+                    alt="Capa do treino"
+                    className="w-full max-h-48 object-cover rounded-xl border"
+                  />
+                </div>
+              ) : (
+                <div className="mb-2 w-full h-32 rounded-xl border bg-gray-50 flex items-center justify-center text-xs text-gray-500">
+                  Sem capa
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <label className="text-xs px-3 py-2 rounded bg-gray-100 border cursor-pointer">
+                  {capaUrl || capaPreview ? "Trocar imagem" : "Upload da galeria"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const input = e.currentTarget; // ✅ salva antes do await
+                      const file = input.files?.[0];
+                      if (!file) return;
+
+                      // preview local
+                      if (capaPreview?.startsWith("blob:")) URL.revokeObjectURL(capaPreview);
+                      const local = URL.createObjectURL(file);
+                      setCapaPreview(local);
+
+                      try {
+                        const urlFinal = await uploadImagemCapa(file);
+                        setCapaUrl(urlFinal);
+
+                        // quando tiver urlFinal, pode soltar o blob
+                        URL.revokeObjectURL(local);
+                        setCapaPreview("");
+                      } catch (err: any) {
+                        console.error(err);
+                        alert(err?.message || "Erro ao enviar imagem");
+                      } finally {
+                        if (input) input.value = ""; // ✅ não quebra
+                      }
+                    }}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  className="text-xs text-red-600 underline"
+                  onClick={() => {
+                    if (capaPreview?.startsWith("blob:")) URL.revokeObjectURL(capaPreview);
+                    setCapaPreview("");
+                    setCapaUrl("");
+                  }}
+                  disabled={!capaPreview && !capaUrl}
+                  title="Deixar sem capa"
+                >
+                  Remover capa
+                </button>
+              </div>
+
+              <p className="text-[11px] text-gray-500 mt-1">
+                Você pode escolher uma imagem da galeria. Se não escolher, o treino ficará sem capa.
+              </p>
+            </div>
 
           </StepCard>
         )}
@@ -2857,7 +3342,7 @@ const criarTreino = async () => {
                   const nomeFinal = base?.nome ?? ex.nome ?? "";
                   const nivelFinal = base?.nivel ?? undefined;
                   const descFinal = base?.descricao ?? ex.descricao ?? "";
-
+                  
                   const ehDoBanco = Boolean(ex.idCatalogo);
 
                   return (
@@ -2910,7 +3395,8 @@ const criarTreino = async () => {
                                   accept="video/*"
                                   className="hidden"
                                   onChange={async (e) => {
-                                    const file = e.target.files?.[0];
+                                    const input = e.currentTarget; // ✅
+                                    const file = input.files?.[0];
                                     if (!file) return;
 
                                     const old = exerciciosSelecionados[i]?.videoUrl;
@@ -2920,14 +3406,14 @@ const criarTreino = async () => {
                                     setVideoNoEx(i, localPreview);
 
                                     try {
-                                      const url = await uploadVideo(file); 
-                                      setVideoNoEx(i, url);               
+                                      const url = await uploadVideo(file);
+                                      setVideoNoEx(i, url);
                                       URL.revokeObjectURL(localPreview);
                                     } catch (err: any) {
                                       console.error(err);
                                       showToast(err?.message || "Erro ao enviar vídeo", "error");
                                     } finally {
-                                      e.currentTarget.value = "";
+                                      if (input) input.value = ""; // ✅
                                     }
                                   }}
                                 />
@@ -3230,9 +3716,6 @@ const criarTreino = async () => {
                 )}
               </ul>
 
-
-
-
             </StepCard>
           </>
         )}
@@ -3294,10 +3777,17 @@ const criarTreino = async () => {
                       }`}
                     >
                       <img
-                        src={atleta.foto ? resolveMediaUrl(atleta.foto) : "https://via.placeholder.com/80"}
+                        src={resolveAvatarUrl(atleta.foto)}
                         alt={atleta.nome}
                         className="w-20 h-20 mx-auto rounded-full object-cover mb-2"
+                        loading="lazy"
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          // evita loop infinito caso o fallback também falhe
+                          if (img.src !== AVATAR_FALLBACK) img.src = AVATAR_FALLBACK;
+                        }}
                       />
+
                       <p className="font-semibold text-sm sm:text-base">
                         {atleta.nome}
                       </p>
@@ -3578,7 +4068,7 @@ const criarTreino = async () => {
       <div className="flex-1 min-w-0">
         <div className="overflow-x-auto">
           <div className="min-w-max">
-            <Stepper current={etapa} onJump={goTo} completedUntil={completedUntil} />
+            <Stepper steps={steps} current={etapa} onJump={goTo} completedUntil={completedUntil} />
           </div>
         </div>
       </div>

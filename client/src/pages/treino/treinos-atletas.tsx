@@ -644,16 +644,49 @@ function abrirMidiaExercicioDireto(
                 dataAgendada: tp.dataAgendada ?? null,
                 pontuacao: tp.pontuacao ?? null,
                 exercicios:
-                  (tp.exercicios ?? []).map((ex: any) => ({
-                    exercicio: {
-                      id: ex.exercicio?.id ?? "",
-                      nome: ex.exercicio?.nome ?? "",
-                      videoDemonstrativoUrl: ex.exercicio?.videoDemonstrativoUrl ?? null,
-                      imgDemonstrativaUrl: ex.exercicio?.imgDemonstrativaUrl ?? null,
-                    },
-                    repeticoes: ex.repeticoes ?? "",
-                  })) ?? [],
+                  (tp.exercicios ?? []).map((ex: any, idx: number) => {
+                    const exNormal = ex.exercicio ?? null;
+                    const exTemp = ex.exercicioTemporario ?? ex.exercicio_temporario ?? null;
 
+                    // ✅ id único SEMPRE (normal > temporário > fallback com idx)
+                    const resolvedId =
+                      exNormal?.id
+                        ? String(exNormal.id)
+                        : exTemp?.id
+                        ? `temp:${String(exTemp.id)}`
+                        : `tempidx:${String(tp.id)}:${idx}`;
+
+                    // ✅ nome SEMPRE (normal > temporário > "Exercício")
+                    const resolvedNome =
+                      exNormal?.nome ?? exTemp?.nome ?? exTemp?.titulo ?? "Exercício";
+
+                    return {
+                      // ✅ chave única por linha (vamos usar isso no render e checklist)
+                      _key: `${resolvedId}:${idx}`,
+
+                      exercicio: {
+                        id: resolvedId,
+                        nome: resolvedNome,
+
+                        // ✅ mídia direta: normal > temporário
+                        videoDemonstrativoUrl:
+                          exNormal?.videoDemonstrativoUrl ??
+                          exNormal?.videoUrl ??
+                          exTemp?.videoDemonstrativoUrl ??
+                          exTemp?.videoUrl ??
+                          null,
+
+                        imgDemonstrativaUrl:
+                          exNormal?.imgDemonstrativaUrl ??
+                          exNormal?.imagemUrl ??
+                          exTemp?.imgDemonstrativaUrl ??
+                          exTemp?.imagemUrl ??
+                          null,
+                      },
+
+                      repeticoes: ex.repeticoes ?? exTemp?.repeticoes ?? "",
+                    };
+                  }) ?? [],
                 criador: tp.criador ?? null,
                 criadorNome: tp.criadorNome ?? tp.criadoPorNome ?? null,
                 criadorTipo:
@@ -1085,17 +1118,15 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
     return <p className="text-gray-500">Nenhum exercício cadastrado.</p>;
 
   const ck = checklistByTreino[t.id] ?? {};
-
   const tileInfo = tiles.find((tl) => tl.id === t.id);
   const isMissedTreino = tileInfo?.isMissed ?? false;
-
-  const toggleExercicio = (exId: string) => {
+  const toggleExercicio = (itemKey: string) => {
     if (isMissedTreino) return;
 
     setChecklistByTreino((prev) => {
       const atualTreino = { ...(prev[t.id] ?? {}) };
-      const novoValor = !atualTreino[exId];
-      atualTreino[exId] = novoValor;
+      const novoValor = !atualTreino[itemKey];
+      atualTreino[itemKey] = novoValor;
 
       const next = { ...prev, [t.id]: atualTreino };
       try {
@@ -1108,17 +1139,18 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
   return (
     <div className="space-y-4">
       {exs.map((ex) => {
-        const checked = ck[ex.exercicio.id] === true;
-
+        const itemKey = (ex as any)._key ?? ex.exercicio.id;
+        const checked = ck[itemKey] === true;
+        
         return (
-          <div
-            key={ex.exercicio.id}
+          <div 
+            key={(ex as any)._key ?? ex.exercicio.id}
             className="p-3 border rounded-lg bg-neutral-50 flex justify-between items-center gap-3"
           >
             <div className="flex items-start gap-3">
               <button
                 type="button"
-                onClick={() => toggleExercicio(ex.exercicio.id)}
+                onClick={() => toggleExercicio(itemKey)}
                 disabled={isMissedTreino}
                 className={`mt-1 inline-flex items-center justify-center rounded-full border w-6 h-6 transition
                   ${
@@ -1170,7 +1202,7 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                   null;
 
                 const midiaFallback = (() => {
-                  const m = midiaDoCatalogo(ex.exercicio.nome);
+                  const m = midiaDoCatalogo(ex.exercicio.nome); // agora nome resolve
                   return m?.video || m?.img || null;
                 })();
 
@@ -1622,12 +1654,10 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                 fullscreenId && (elapsedByTreino[fullscreenId] ?? 0);
 
               const exList = atual?.treinoProgramado?.exercicios ?? [];
-              const exIds = exList.map((e) => e.exercicio.id);
-              const ck =
-                fullscreenId ? checklistByTreino[fullscreenId] ?? {} : {};
-              const total = exIds.length;
-              const allChecked = total > 0 && exIds.every((id) => ck[id]);
-
+              const exKeys = exList.map((e: any) => e?._key ?? e?.exercicio?.id).filter(Boolean);
+              const ck = fullscreenId ? checklistByTreino[fullscreenId] ?? {} : {};
+              const total = exKeys.length;
+              const allChecked = total > 0 && exKeys.every((k: string) => ck[k]);
               const d = atual?.dataTreino
                 ? new Date(atual.dataTreino)
                 : null;
@@ -1792,13 +1822,11 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
             }
 
             const exList = t.treinoProgramado?.exercicios ?? [];
-            const exIds = exList.map((e) => e.exercicio.id);
+            const exKeys = exList.map((e: any) => e?._key ?? e?.exercicio?.id).filter(Boolean);
             const ck = checklistByTreino[fullscreenId] ?? {};
-            const total = exIds.length;
-            const allChecked = total > 0 && exIds.every((id) => ck[id]);
-
+            const total = exKeys.length;
+            const allChecked = total > 0 && exKeys.every((k: string) => ck[k]);
             const isReadyToSubmit = st === "READY_TO_SUBMIT";
-
             const d = t.dataTreino ? new Date(t.dataTreino) : null;
             const diaPassou = d ? endOfDay(d) < now : false;
             const expiradoBackend =

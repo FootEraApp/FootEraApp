@@ -34,7 +34,6 @@ function isUsuarioFree() {
       "";
 
     const normalized = String(planoRaw || "").toLowerCase();
-
     if (!normalized) return true;
 
     if (
@@ -44,7 +43,6 @@ function isUsuarioFree() {
     ) {
       return false;
     }
-
     return true;
   } catch {
     return true;
@@ -59,15 +57,10 @@ export const TreinosApi = {
   },
 
   atualizar(id: string, payload: Partial<TreinoCreatePayload>) {
-    return axios.put(
-      `${API.BASE_URL}/api/treinos/programados/${id}`,
-      {
-        ...payload,
-      },
-      {
-        headers: auth(),
-      },
-    );
+    // ✅ aqui já é o “PUT” certo
+    return axios.put(`${API.BASE_URL}/api/treinos/programados/${id}`, payload, {
+      headers: auth(),
+    });
   },
 
   listarExercicios() {
@@ -78,10 +71,7 @@ export const TreinosApi = {
 
   async getCalendario(start: Date, end: Date) {
     const res = await axios.get(`${API.BASE_URL}/api/treinos/calendario`, {
-      params: {
-        start: start.toISOString(),
-        end: end.toISOString(),
-      },
+      params: { start: start.toISOString(), end: end.toISOString() },
       headers: auth(),
       withCredentials: false,
     });
@@ -117,13 +107,8 @@ export const TreinosApi = {
 
     return axios.post(
       `${API.BASE_URL}/api/treinos/rotina/agendar`,
-      {
-        ...payload,
-        datas: datasValidas,
-      },
-      {
-        headers: auth(),
-      },
+      { ...payload, datas: datasValidas },
+      { headers: auth() },
     );
   },
 };

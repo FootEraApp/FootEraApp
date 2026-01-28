@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import UploadVideo from "@/components/UploadVideo.js";
 import { API } from "../../../config.js";
 
+function getToken() {
+  return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
+}
+
 export default function CreateOrEditExercicio() {
   const [codigo, setCodigo] = useState("");
   const [nome, setNome] = useState("");
@@ -27,7 +31,11 @@ export default function CreateOrEditExercicio() {
   useEffect(() => {
     if (!id) return;
 
-    fetch(`${API.BASE_URL}/api/exercicios/${id}`)
+    fetch(`${API.BASE_URL}/api/exercicios/${id}`, {
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+      },
+    })
       .then(res => res.json())
       .then(data => {
         setCodigo(data.codigo);
@@ -58,8 +66,19 @@ export default function CreateOrEditExercicio() {
     if (video) formData.append("video", video);
 
     try {
+      const token = getToken();
+
+      if (!token) {
+        alert("Você precisa estar logado para criar/editar exercícios.");
+        window.location.href = "/admin/login";
+        return;
+      }
+
       const res = await fetch(`${API.BASE_URL}/api/exercicios${id ? `/${id}` : ""}`, {
         method: id ? "PUT" : "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
         body: formData,
       });
 
