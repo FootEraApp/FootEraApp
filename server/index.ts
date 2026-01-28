@@ -174,7 +174,13 @@ const corsConfig: cors.CorsOptions = {
     "X-Requested-With",
     "Accept",
     "Origin",
+
+    // ✅ seus headers customizados
+    "x-tipo-usuario",
+    "x-tipo-usuario-id",
+    "x-user-id",
   ],
+
   credentials: true,
   maxAge: 86400,
   optionsSuccessStatus: 204,

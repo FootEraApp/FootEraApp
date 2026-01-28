@@ -746,6 +746,28 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                         a?.tipo ?? a?.categoria ?? a?.kind ?? (a?.desafioId ? "Desafio" : "Treino");
                       const titulo =
                         a?.titulo ?? a?.nome ?? a?.treino?.nome ?? a?.desafio?.nome ?? "Atividade";
+                      const dataWire =
+                        a?.criadoEm ??                 // ✅ vem do seu backend (AtividadeUI)
+                        a?.data ??                     // ✅ vem do mapGrupoToAtividade
+                        a?.dataRealizada ??
+                        a?.dataConclusao ??
+                        a?.dataFim ??
+                        a?.dataCriacao ??
+                        a?.createdAt ??
+                        a?.updatedAt ??
+                        a?.treinoAgendado?.dataTreino ??
+                        a?.treinoAgendado?.dataHora ??
+                        a?.treinoAgendado?.createdAt ??
+                        a?.treinoAgendado?.updatedAt ??
+                        a?.treinoAgendado?.submissao?.createdAt ??
+                        a?.submissao?.createdAt ??
+                        a?.submissaoTreino?.createdAt ??
+                        a?.submissaoDesafio?.createdAt ??
+                        null;
+
+                      const dataAtividade = safeDateFromWire(
+                        typeof dataWire === "string" || dataWire instanceof Date ? String(dataWire) : null
+                      );
 
                       const isTreino = /treino/i.test(String(label));
 
@@ -779,6 +801,13 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                           <div className="p-2">
                             <div className="text-[11px] font-semibold leading-tight line-clamp-2">
                               {titulo}
+                            </div>
+
+                            <div className="mt-1 text-[10px] text-gray-500 flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {dataAtividade
+                                ? formatDateFns(dataAtividade, "dd/MM/yyyy", { locale: ptBR })
+                                : "Sem data"}
                             </div>
                           </div>
                         </button>
