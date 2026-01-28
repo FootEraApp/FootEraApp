@@ -285,42 +285,42 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
 
     const h = { Authorization: `Bearer ${rawToken}` };
 
-    const profId = data?.professor?.id ?? Storage.tipoUsuarioId ?? null;
-    const usuarioCriou = data?.usuario?.id ?? Storage.usuarioId ?? null;
+    // ✅ sempre o professor DO PERFIL (ou o logado)
+    const profId = String(data?.professor?.id ?? Storage.tipoUsuarioId ?? "").trim();
+    if (!profId) return;
 
-    const candidates = [
-      { professorId: profId, order: "desc", limit: 6 },
-      { criadoPorId: usuarioCriou, order: "desc", limit: 6 },
-    ].filter((p) => Object.values(p)[0]);
+    try {
+      // ✅ IMPORTANTE: o backend tem que entender isso como "somente professor"
+      // se não tiver esse filtro ainda, veja o passo 2 abaixo (backend).
+      const r = await axios.get(`${API.BASE_URL}/api/treinosprogramados`, {
+        headers: h,
+        params: {
+          professorId: profId,
+          ownerTipo: "Professor", // ✅ garante que não pega clube/escolinha (vamos implementar no backend)
+          order: "desc",
+          limit: 6,
+        },
+      });
 
-    if (candidates.length === 0) return;
+      const lista = Array.isArray(r.data) ? r.data : r.data?.items ?? r.data?.data ?? [];
 
-    let lista: any[] = [];
-    for (const params of candidates) {
-      try {
-        const r = await axios.get(`${API.BASE_URL}/api/treinosprogramados`, { headers: h, params });
-        const arr = Array.isArray(r.data) ? r.data : r.data?.items ?? r.data?.data ?? [];
-        if (Array.isArray(arr) && arr.length) {
-          lista = arr;
-          break;
-        }
-      } catch {}
+      const parseDate = (x: any) =>
+        x?.criadoEm || x?.createdAt || x?.dataCriacao || x?.created_at || new Date().toISOString();
+
+      const parsed: TreinoCriado[] = (lista ?? []).map((t: any) => ({
+        id: String(t.id),
+        nome: String(t.nome ?? t.titulo ?? "Treino"),
+        criadoEm: String(parseDate(t)),
+        categoria: t.categoria ?? null,
+        nivel: t.nivel ?? t.level ?? null,
+        alunos: t._count?.atletas ?? t._count?.agendamentos ?? t.alunosCount ?? null,
+      }));
+
+      setTreinosCriados(parsed);
+    } catch {
+      setTreinosCriados([]);
     }
-
-    const parseDate = (x: any) =>
-      x?.criadoEm || x?.createdAt || x?.dataCriacao || x?.created_at || new Date().toISOString();
-
-    const parsed: TreinoCriado[] = (lista ?? []).map((t: any) => ({
-      id: String(t.id),
-      nome: String(t.nome ?? t.titulo ?? "Treino"),
-      criadoEm: String(parseDate(t)),
-      categoria: t.categoria ?? null,
-      nivel: t.nivel ?? t.level ?? null,
-      alunos: t._count?.atletas ?? t._count?.agendamentos ?? t.alunosCount ?? null,
-    }));
-
-    setTreinosCriados(parsed);
-  }, [rawToken, data?.professor?.id, data?.usuario?.id, headers]);
+  }, [rawToken, data?.professor?.id, headers]);
 
   const reloadTurmas = useCallback(async () => {
     if (!rawToken || !professorId) return;
