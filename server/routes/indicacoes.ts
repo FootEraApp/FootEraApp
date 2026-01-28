@@ -7,7 +7,18 @@ const router = Router();
 function getOlheiroIdFromReq(req: any): string | null {
   return (
     req?.user?.tipoUsuarioId ||
+    req?.userCtx?.tipoUsuarioId ||
+    req?.userCtx?.tipoUsuarioIdRaw ||
     (req.headers["x-tipo-usuario-id"] as string) ||
+    null
+  );
+}
+
+function getTipoUsuarioFromReq(req: any): string | null {
+  return (
+    req?.user?.tipoUsuario ||
+    req?.userCtx?.tipoUsuario ||
+    (req.headers["x-tipo-usuario"] as string) ||
     null
   );
 }
@@ -15,22 +26,80 @@ function getOlheiroIdFromReq(req: any): string | null {
 router.post("/", async (req, res) => {
   try {
     const olheiroId = getOlheiroIdFromReq(req);
-    if (!olheiroId) return res.status(401).json({ error: "Não autenticado como olheiro." });
+    if (!olheiroId) {
+      return res.status(401).json({ error: "Não autenticado como olheiro." });
+    }
 
-    const { atletaId, clubeId } = req.body || {};
-    if (!atletaId || !clubeId) return res.status(400).json({ error: "Informe atletaId e clubeId." });
+    // ✅ AQUI é onde entra o seu trecho do "tipo"
+    const tipo = getTipoUsuarioFromReq(req);
+    if (tipo && tipo.toLowerCase() !== "olheiro") {
+      return res.status(403).json({ error: "Apenas olheiro pode criar indicação." });
+    }
 
-    const [olheiro, atleta, clube] = await Promise.all([
+    const { atletaId, clubeId, escolinhaId } = req.body || {};
+
+    if (!atletaId) {
+      return res.status(400).json({ error: "Informe atletaId." });
+    }
+
+    // exatamente 1 destino
+    const hasClube = Boolean(clubeId);
+    const hasEscolinha = Boolean(escolinhaId);
+
+    if ((hasClube && hasEscolinha) || (!hasClube && !hasEscolinha)) {
+      return res
+        .status(400)
+        .json({ error: "Informe clubeId OU escolinhaId (apenas um)." });
+    }
+
+    const [olheiro, atleta] = await Promise.all([
       prisma.olheiro.findUnique({ where: { id: olheiroId } }),
-      prisma.atleta.findUnique({ where: { id: atletaId } }),
-      prisma.clube.findUnique({ where: { id: clubeId } }),
+      prisma.atleta.findUnique({ where: { id: String(atletaId) } }),
     ]);
+
     if (!olheiro) return res.status(404).json({ error: "Olheiro não encontrado." });
     if (!atleta) return res.status(404).json({ error: "Atleta não encontrado." });
-    if (!clube) return res.status(404).json({ error: "Clube não encontrado." });
+
+    // ✅ Clube
+    if (hasClube) {
+      const clube = await prisma.clube.findUnique({
+        where: { id: String(clubeId) },
+      });
+      if (!clube) return res.status(404).json({ error: "Clube não encontrado." });
+
+      const created = await prisma.indicacao.create({
+        data: {
+          olheiroId,
+          atletaId: String(atletaId),
+          clubeId: String(clubeId),
+          status: IndicacaoStatus.PENDENTE,
+        },
+        select: { id: true, status: true, criadoEm: true },
+      });
+
+      await prisma.olheiro.update({
+        where: { id: olheiroId },
+        data: { totalIndicacoes: { increment: 1 } },
+      });
+
+      return res.status(201).json(created);
+    }
+
+    // ✅ Escolinha
+    const escolinha = await prisma.escolinha.findUnique({
+      where: { id: String(escolinhaId) },
+    });
+    if (!escolinha) {
+      return res.status(404).json({ error: "Escolinha não encontrada." });
+    }
 
     const created = await prisma.indicacao.create({
-      data: { olheiroId, atletaId, clubeId, status: IndicacaoStatus.PENDENTE },
+      data: {
+        olheiroId,
+        atletaId: String(atletaId),
+        escolinhaId: String(escolinhaId),
+        status: IndicacaoStatus.PENDENTE,
+      },
       select: { id: true, status: true, criadoEm: true },
     });
 
@@ -49,8 +118,9 @@ router.post("/", async (req, res) => {
 router.get("/olheiros/:id/indicacoes", async (req, res) => {
   try {
     const { id } = req.params;
+
     const list = await prisma.indicacao.findMany({
-      where: { olheiroId: id },
+      where: { olheiroId: String(id) },
       orderBy: { criadoEm: "desc" },
       select: {
         id: true,
@@ -58,6 +128,7 @@ router.get("/olheiros/:id/indicacoes", async (req, res) => {
         criadoEm: true,
         atleta: { select: { id: true, nome: true, foto: true } },
         clube: { select: { id: true, nome: true, logo: true } },
+        escolinha: { select: { id: true, nome: true, logo: true } },
       },
     });
 
@@ -65,13 +136,21 @@ router.get("/olheiros/:id/indicacoes", async (req, res) => {
       id: i.id,
       criadoEm: i.criadoEm,
       status: i.status as "PENDENTE" | "APROVADA" | "REJEITADA",
-      atleta: { id: i.atleta.id, nome: i.atleta.nome || "Atleta", foto: i.atleta.foto },
-      clube: { id: i.clube.id, nome: i.clube.nome, logo: i.clube.logo },
+      atleta: {
+        id: i.atleta.id,
+        nome: i.atleta.nome || "Atleta",
+        foto: i.atleta.foto,
+      },
+      destino: i.clube
+        ? { tipo: "Clube" as const, id: i.clube.id, nome: i.clube.nome, logo: i.clube.logo }
+        : i.escolinha
+        ? { tipo: "Escolinha" as const, id: i.escolinha.id, nome: i.escolinha.nome, logo: i.escolinha.logo }
+        : null,
     }));
 
     return res.json(payload);
   } catch (e: any) {
-    console.error("GET /api/olheiros/:id/indicacoes", e);
+    console.error("GET /api/indicacoes/olheiros/:id/indicacoes", e);
     return res.status(500).json({ error: "Falha ao listar indicações." });
   }
 });
@@ -80,12 +159,13 @@ router.patch("/:id/status", async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body || {};
+
     if (!["PENDENTE", "APROVADA", "REJEITADA"].includes(status)) {
       return res.status(400).json({ error: "Status inválido." });
     }
 
     const updated = await prisma.indicacao.update({
-      where: { id },
+      where: { id: String(id) },
       data: { status },
       select: { id: true, status: true, atualizadoEm: true, olheiroId: true },
     });

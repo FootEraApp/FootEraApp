@@ -133,7 +133,12 @@ export async function deletarPost(postId: string) {
   }
 }
 
-export async function repostPost(postId: string, comentario = "") {
+export type RepostResponse =
+  | { ok: true; action: "repost"; post: PostagemComUsuario }
+  | { ok: true; action: "unrepost"; id: string }
+  | { ok: boolean; action?: string; post?: PostagemComUsuario; id?: string };
+
+export async function repostPost(postId: string, comentario = ""): Promise<RepostResponse> {
   const payload = { comentario: String(comentario ?? "").trim() };
 
   const r = await fetch(`${API.BASE_URL}/api/feed/${postId}/repost`, {
@@ -144,8 +149,8 @@ export async function repostPost(postId: string, comentario = "") {
 
   if (!r.ok) {
     const msg = await r.text().catch(() => "");
-    throw new Error(msg || "Erro ao repostar");
-  }
+    throw new Error(msg || `Erro ao repostar (${r.status})`);
+  } 
 
   return r.json();
 }

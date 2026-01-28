@@ -15,10 +15,9 @@ type Dia = { dia: string; curtidas: number; comentarios: number; submissoes: num
 
 type Payload = {
   atleta: { id: string; nome: string; foto?: string|null };
-  kpis: { curtidas7d: number; submissoes7d: number; pontos7d: number };
+  kpis: { curtidas7d: number; submissoes7d: number; pontos7d: number; consistencia30d: number };
   porDia30d: Dia[];
   porTipo: Serie[];
-  porCategoria: Serie[];
 };
 
 export default function DesempenhoAtleta() {
@@ -60,10 +59,11 @@ export default function DesempenhoAtleta() {
 
       <h1 className="text-xl font-bold mb-2">Desempenho — {data.atleta.nome}</h1>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <Kpi label="Curtidas (7d)" value={data.kpis.curtidas7d}/>
         <Kpi label="Submissões (7d)" value={data.kpis.submissoes7d}/>
         <Kpi label="Pontos (7d)" value={data.kpis.pontos7d}/>
+        <Kpi label="Consistência (30d)" value={data.kpis.consistencia30d}/>
       </div>
 
       <Card title="Atividade diária (30 dias)">
@@ -73,10 +73,38 @@ export default function DesempenhoAtleta() {
               <CartesianGrid strokeDasharray="3 3"/>
               <XAxis dataKey="dia"/>
               <YAxis allowDecimals={false}/>
-              <Tooltip/>
-              <Line type="monotone" dataKey="submissoes" />
-              <Line type="monotone" dataKey="curtidas" />
-              <Line type="monotone" dataKey="comentarios" />
+              <Tooltip />
+              <Legend
+                layout="vertical"
+                align="right"
+                verticalAlign="middle"
+                iconType="circle"
+              />
+
+              <Line
+                type="monotone"
+                dataKey="submissoes"
+                name="Submissões"
+                stroke={COLORS[0]}
+                strokeWidth={2}
+                dot={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="curtidas"
+                name="Curtidas"
+                stroke={COLORS[1]}
+                strokeWidth={2}
+                dot={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="comentarios"
+                name="Comentários"
+                stroke={COLORS[2]}
+                strokeWidth={2}
+                dot={false}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -93,27 +121,6 @@ export default function DesempenhoAtleta() {
                 <Tooltip/>
                 <Bar dataKey="value" />
               </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-        <Card title="Categorias de desafio (últ. 30d)">
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={data.porCategoria}
-                  nameKey="label"
-                  dataKey="value"
-                  outerRadius={100}
-                  label={(e: any) => `${e.name} (${Math.round(e.percent * 100)}%)`}
-                >
-                  {data.porCategoria.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend verticalAlign="bottom" height={24} />
-              </PieChart>
             </ResponsiveContainer>
           </div>
         </Card>
