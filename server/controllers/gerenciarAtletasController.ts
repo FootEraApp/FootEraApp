@@ -488,6 +488,7 @@ if (usuarioIds.length) {
       const idOrUser = String(req.query.id || "").trim();
       const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim(); 
       const debug = String(req.query.debug || "") === "1";
+      const conteudo = String(req.query.conteudo ?? "1") === "1";
 
       if (!["escolinha", "clube", "professor"].includes(vinculo)) {
         return res.status(400).json({
@@ -678,21 +679,74 @@ if (usuarioIds.length) {
         if (escolinhaIds.length) orWhere.push({ escolinhaId: { in: escolinhaIds } });
       }
 
+      const selectLeve = {
+        id: true,
+        nome: true,
+        codigo: true,
+        nivel: true,
+        descricao: true,
+        createdAt: true,
+        professorId: true,
+        criadorProfessorId: true,
+        clubeId: true,
+        escolinhaId: true,
+      } as const;
+
+      const selectCompleto = {
+        ...selectLeve,
+
+        imagemUrl: true,
+        duracao: true,
+        metas: true,
+        pontuacao: true,
+        categoria: true,
+        dicas: true,
+        tipoTreino: true,
+        objetivo: true,
+        expiraEm: true,
+        naoExpira: true,
+
+        exercicios: {
+          orderBy: { ordem: "asc" as const },
+          select: {
+            id: true,
+            ordem: true,
+            repeticoes: true,
+
+            exercicioId: true,
+            exercicio: {
+              select: {
+                id: true,
+                codigo: true,
+                nome: true,
+                descricao: true,
+                nivel: true,
+                categorias: true,
+                videoDemonstrativoUrl: true,
+              },
+            },
+
+            exercicioTemporarioId: true,
+            exercicioTemporario: {
+              select: {
+                id: true,
+                codigo: true,
+                nome: true,
+                descricao: true,
+                nivel: true,
+                categorias: true,
+                videoDemonstrativoUrl: true,
+              },
+            },
+          },
+        },
+      } as const;
+
+
       const treinos = await prisma.treinoProgramado.findMany({
         where: { OR: orWhere.length ? orWhere : [{ id: "__never__" }] },
-        select: {
-          id: true,
-          nome: true,
-          codigo: true,
-          nivel: true,
-          descricao: true,
-          createdAt: true,
-          professorId: true,
-          criadorProfessorId: true,
-          clubeId: true,
-          escolinhaId: true,
-        },
         orderBy: { createdAt: "desc" },
+        select: conteudo ? selectCompleto : selectLeve,
       });
 
       const autorProfessorIds = Array.from(
@@ -743,7 +797,7 @@ if (usuarioIds.length) {
               ? { tipo: "Escolinha" as const, id: t.escolinhaId, nome: escolaNomeMap.get(t.escolinhaId) ?? null }
               : { tipo: "Desconhecido" as const, id: null, nome: null };
 
-          return {
+          const base = {
             id: t.id,
             nome: t.nome ?? "Treino",
             codigo: t.codigo ?? null,
@@ -751,6 +805,75 @@ if (usuarioIds.length) {
             descricao: t.descricao ?? null,
             autor,
           };
+
+          if (!conteudo) return base;
+
+          // @ts-ignore (se o TS reclamar do select condicional)
+          const exercicios = (t.exercicios || []).map((te: any) => {
+            // pode vir exercicio OU exercicioTemporario
+            const ex = te.exercicio
+              ? {
+                  tipo: "catalogo" as const,
+                  id: te.exercicio.id,
+                  codigo: te.exercicio.codigo,
+                  nome: te.exercicio.nome,
+                  descricao: te.exercicio.descricao ?? null,
+                  nivel: te.exercicio.nivel ?? null,
+                  categorias: te.exercicio.categorias ?? [],
+                  videoUrl: te.exercicio.videoDemonstrativoUrl ?? null,
+                }
+              : te.exercicioTemporario
+              ? {
+                  tipo: "temporario" as const,
+                  id: te.exercicioTemporario.id,
+                  codigo: null,
+                  nome: te.exercicioTemporario.nome ?? "Exercício",
+                  descricao: te.exercicioTemporario.descricao ?? null,
+                  nivel: null,
+                  categorias: [],
+                  videoUrl: te.exercicioTemporario.videoDemonstrativoUrl ?? null,
+                }
+              : null;
+
+            return {
+              id: te.id,
+              ordem: te.ordem,
+              repeticoes: te.repeticoes,
+              exercicioId: te.exercicioId ?? null,
+              exercicioTemporarioId: te.exercicioTemporarioId ?? null,
+              exercicio: ex,
+            };
+          }).filter(Boolean);
+
+          return {
+            ...base,
+
+            // ====== extras do treino ======
+            // @ts-ignore
+            imagemUrl: (t as any).imagemUrl ?? null,
+            // @ts-ignore
+            duracao: (t as any).duracao ?? null,
+            // @ts-ignore
+            metas: (t as any).metas ?? null,
+            // @ts-ignore
+            pontuacao: (t as any).pontuacao ?? null,
+            // @ts-ignore
+            categoria: (t as any).categoria ?? [],
+            // @ts-ignore
+            dicas: (t as any).dicas ?? [],
+            // @ts-ignore
+            tipoTreino: (t as any).tipoTreino ?? null,
+            // @ts-ignore
+            objetivo: (t as any).objetivo ?? null,
+            // @ts-ignore
+            expiraEm: (t as any).expiraEm ?? null,
+            // @ts-ignore
+            naoExpira: (t as any).naoExpira ?? false,
+
+            // ====== conteúdo ======
+            exercicios,
+          };
+
         });
 
       if (debug) {
