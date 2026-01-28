@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
+import AgendaTreinos, { normalizeAgendadosPayload } from "@/components/agenda/AgendaTreinos";
 
 type TurmaMin = {
   id: string;
@@ -124,103 +125,7 @@ function isLost(t: TreinoAgendadoItem) {
 
   return passouDoDia && !concluido;
 }
-function normalizeAgendadosPayload(payload: any): TreinoAgendadoItem[] {
-  const arr =
-    Array.isArray(payload) ? payload :
-    payload?.items ??
-    payload?.agendados ??
-    payload?.treinosAgendados ??
-    payload?.treinos ??
-    payload?.data?.items ??     // <- MUITO comum
-    payload?.data ??
-    [];
 
-  if (!Array.isArray(arr)) return [];
-
-  return arr.map((t: any) => {
-    const treinoProgramadoObj = t?.treinoProgramado ?? t?.programado ?? null;
-
-    const nomeProgramado =
-      treinoProgramadoObj?.nome ??
-      treinoProgramadoObj?.titulo ??
-      t?.treinoProgramadoNome ??
-      t?.nomeTreinoProgramado ??
-      t?.titulo ??
-      t?.nome ??
-      null;
-
-    const treinoProgramadoId =
-      t?.treinoProgramadoId ??
-      treinoProgramadoObj?.id ??
-      null;
-
-    const dataTreino =
-      t?.dataTreino ??
-      t?.dataHora ??
-      t?.data ??
-      null;
-
-    const submissaoFeita = !!(t?.submissao?.feito ?? t?.submissaoFeita ?? false);
-    
-    // ✅ atleta (nome/foto) vem do backend quando você lista por turmaId
-    const atletaObj =
-      t?.atleta ??
-      t?.atletaUsuario ??
-      t?.atletaInfo ??
-      t?.usuario ??
-      null;
-
-    const atletaNome =
-      atletaObj?.nome ??
-      [atletaObj?.usuario?.nome, atletaObj?.usuario?.sobrenome].filter(Boolean).join(" ") ??
-      atletaObj?.usuario?.nome ??
-      null;
-
-    const atletaFoto =
-      atletaObj?.foto ??
-      atletaObj?.usuario?.foto ??
-      atletaObj?.fotoUrl ??
-      null;
-
-    const atletaIdFinal =
-      atletaObj?.atletaId ??
-      atletaObj?.id ??
-      t?.atletaId ??
-      null;
-
-    const atletaUsuarioIdFinal =
-      atletaObj?.usuarioId ??
-      atletaObj?.usuario?.id ??
-      t?.usuarioId ??
-      null;
-
-
-    return {
-      id: String(t?.id ?? ""),
-      titulo: t?.titulo ?? null,
-      dataTreino,
-      dataExpiracao: t?.dataExpiracao ?? t?.expiraEm ?? null,
-      treinoProgramadoId,
-      treinoProgramado: nomeProgramado
-        ? { id: String(treinoProgramadoId ?? treinoProgramadoObj?.id ?? ""), nome: String(nomeProgramado) }
-        : (treinoProgramadoObj?.id ? { id: String(treinoProgramadoObj.id), nome: treinoProgramadoObj?.nome ?? null } : null),
-      meuStatus: t?.meuStatus ?? t?.statusExecucao ?? t?.execucaoStatus ?? null,
-      status: t?.status ?? null,
-      execucaoStatus: t?.execucaoStatus ?? t?.statusExecucao ?? null,
-      submissaoTreinoId: t?.submissaoTreinoId ?? t?.submissao?.id ?? null,
-      submissaoFeita,
-      atleta: atletaNome || atletaIdFinal || atletaUsuarioIdFinal
-        ? {
-            atletaId: atletaIdFinal ? String(atletaIdFinal) : undefined,
-            usuarioId: atletaUsuarioIdFinal ? String(atletaUsuarioIdFinal) : undefined,
-            nome: atletaNome ? String(atletaNome) : null,
-            foto: atletaFoto ? String(atletaFoto) : null,
-          }
-        : null,
-
-    } as TreinoAgendadoItem;
-  }).filter((x) => x.id);
-}
 
 function formatDayPtBR(dayISO: string) {
   const [y, m, d] = dayISO.split("-").map((n) => Number(n));
@@ -815,8 +720,15 @@ async function agendarParaDiasSelecionadosTurma() {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-5xl max-h-[92dvh] rounded-2xl bg-white shadow-xl flex flex-col">
+    <div className="fixed inset-0 z-[100] bg-black/40">
+      <div className="
+        absolute inset-0
+        w-screen h-[100dvh]
+        max-w-none max-h-none
+        rounded-none
+        bg-white
+        flex flex-col
+      ">
         <div className="flex items-center justify-between border-b border-zinc-100 p-4">
           <div className="text-sm font-semibold text-zinc-900">
             {owner ? `${owner.tipo} · Gerenciar turmas` : "Gerenciar turmas"}
@@ -1206,263 +1118,56 @@ async function agendarParaDiasSelecionadosTurma() {
                           </div>
                         </div>
                       ) : (
-                        // =======================
-                        // ABA AGENDA DA TURMA
-                        // =======================
-                        <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-3">
-                          {/* Calendário */}
-                          <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden">
-                            <div className="flex items-center justify-between border-b border-zinc-100 p-3">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => setCursorMonth((d) => addMonths(d, -1))}
-                                  className="h-9 w-9 flex items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-                                  title="Mês anterior"
-                                >
-                                  <ChevronLeft className="h-5 w-5" />
-                                </button>
+                        <div className="min-h-0 flex-1 overflow-hidden">
+                          <AgendaTreinos
+                            open={open && abaDireita === "agenda" && !!selecionada}
+                            title={turmas.find((t) => t.id === selecionada)?.nome ?? "Turma"}
+                            fetchAgendados={async ({ monthISO }) => {
+                              const r = await axios.get(`${API.BASE_URL}/api/treinos/agendados`, {
+                                headers,
+                                params: { turmaId: selecionada, month: monthISO },
+                              });
+                              return r.data; // normalizeAgendadosPayload já é aplicado dentro do AgendaTreinos
+                            }}
 
-                                <div className="min-w-[160px] text-center font-extrabold text-zinc-900">
-                                  {(() => {
-                                    const d = cursorMonth;
-                                    const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-                                    return `${meses[d.getMonth()]} ${d.getFullYear()}`;
-                                  })()}
-                                </div>
+                            fetchProgramados={async () => {
+                              const orgUserId = owner?.usuarioId ?? owner?.id;
+                              const res = await axios.get(
+                                `${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`,
+                                {
+                                  headers,
+                                  params: {
+                                    vinculo: owner?.tipo === "Clube" ? "clube" : "escolinha",
+                                    id: orgUserId,
+                                    debug: "1",
+                                  },
+                                }
+                              );
+                              return res.data;
+                            }}
+                            onAgendar={async ({ selectedDays, treinoProgramadoId }) => {
+                              await Promise.all(
+                                selectedDays.map((day) =>
+                                  axios.post(
+                                    `${API.BASE_URL}/api/treinos/agendados`,
+                                    {
+                                      turmaId: selecionada,
+                                      treinoProgramadoId,
+                                      dataTreino: day,
+                                      autorId: String(owner?.id),
+                                      autorTipo: owner?.tipo === "Clube" ? "Clube" : "Escolinha",
+                                    },
+                                    { headers }
+                                  )
+                                )
+                              );
+                            }}
 
-                                <button
-                                  onClick={() => setCursorMonth((d) => addMonths(d, 1))}
-                                  className="h-9 w-9 flex items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-                                  title="Próximo mês"
-                                >
-                                  <ChevronRight className="h-5 w-5" />
-                                </button>
-                              </div>
-
-                              <div className="hidden sm:flex items-center gap-3 text-[11px] text-zinc-600">
-                                <span className="flex items-center gap-1">
-                                  <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-500" /> Concluído
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <span className="inline-block h-2.5 w-2.5 rounded bg-red-500" /> Perdido
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <span className="inline-block h-2.5 w-2.5 rounded bg-zinc-300" /> Pendente
-                                </span>
-                              </div>
-                            </div>
-
-                            {loadingCalendar ? (
-                              <div className="p-4 text-sm text-zinc-600">Carregando calendário…</div>
-                            ) : (
-                              <>
-                                <div className="grid grid-cols-7 gap-1 text-[10px] opacity-80 px-3 pt-3">
-                                  {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((w) => (
-                                    <div key={w} className="text-center">{w}</div>
-                                  ))}
-                                </div>
-
-                                {(() => {
-                                  const first = startOfMonth(cursorMonth);
-                                  const firstWeekday = (first.getDay() + 6) % 7;
-                                  const start = new Date(first);
-                                  start.setDate(first.getDate() - firstWeekday);
-
-                                  const daysGrid = Array.from({ length: 42 }, (_, i) => {
-                                    const d = new Date(start);
-                                    d.setDate(start.getDate() + i);
-                                    const inMonth = d.getMonth() === cursorMonth.getMonth();
-                                    return { date: d, key: toISODateOnly(d), inMonth };
-                                  });
-
-                                  const agendadosPorDia = new Map<string, TreinoAgendadoItem[]>();
-                                  for (const t of agendadosTurma) {
-                                    const k = dayKeyFromAny(t.dataTreino);
-                                    if (!k) continue;
-                                    const arr = agendadosPorDia.get(k) ?? [];
-                                    arr.push(t);
-                                    agendadosPorDia.set(k, arr);
-                                  }
-
-                                  return (
-                                    <div className="grid grid-cols-7 gap-1 p-3">
-                                      {daysGrid.map(({ date, key, inMonth }) => {
-                                        const items = agendadosPorDia.get(key) ?? [];
-                                        const hasTreino = items.length > 0;
-                                        const done = hasTreino && items.some((t) => isCompleted(t.meuStatus || t.execucaoStatus || t.status));
-                                        const lost = hasTreino && !done && items.some((t) => isLost(t));
-
-                                        const bg =
-                                          done ? "bg-emerald-50 border-emerald-200"
-                                          : lost ? "bg-red-50 border-red-200"
-                                          : "bg-white border-zinc-200";
-
-                                        const opacity = inMonth ? "opacity-100" : "opacity-40";
-                                        const selected = selectedDays.includes(key);
-                                        const past = isPastDayISO(key);
-
-                                        return (
-                                          <button
-                                            key={key}
-                                            onClick={() => toggleDay(key)}
-                                            className={[
-                                              "h-12 rounded-xl border text-left p-2 transition relative",
-                                              bg,
-                                              opacity,
-                                              selected ? "ring-2 ring-emerald-400" : "hover:bg-zinc-50",
-                                              past ? "opacity-70" : "",
-                                            ].join(" ")}
-                                          >
-                                            <div className="flex items-start justify-between gap-1">
-                                              <div className="text-sm font-extrabold">{date.getDate()}</div>
-                                              <div className="hidden sm:flex items-center gap-1">
-                                                {done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : null}
-                                                {lost ? <XCircle className="h-4 w-4 text-red-600" /> : null}
-                                              </div>
-                                            </div>
-                                            <div className="mt-1 text-[10px] opacity-80 truncate">
-                                              {hasTreino ? (items[0]?.treinoProgramado?.nome || items[0]?.titulo || "Treino") : "—"}
-                                              {items.length > 1 ? ` +${items.length - 1}` : ""}
-                                            </div>
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  );
-                                })()}
-                              </>
-                            )}
-                          </div>
-
-                          {/* Detalhes + Agendar */}
-                          <div className="rounded-xl border border-zinc-200 bg-white p-3 flex flex-col min-h-0">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <ClipboardList className="h-5 w-5 text-zinc-500" />
-                                <div className="font-extrabold text-zinc-900">Detalhes</div>
-                              </div>
-                              <button
-                                onClick={() => setDrawerOpen((v) => !v)}
-                                className="text-xs px-3 py-1 rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-                              >
-                                {drawerOpen ? "Recolher" : "Abrir"}
-                              </button>
-                            </div>
-
-                            {!drawerOpen ? null : selectedDays.length === 0 ? (
-                              <div className="text-sm text-zinc-600">
-                                Clique em um ou mais dias do calendário para ver/agendar treinos para a turma.
-                              </div>
-                            ) : (
-                              <div className="flex flex-col gap-3 min-h-0 flex-1">
-                                {!selectedDays.some(isPastDayISO) ? (
-                                  <div className="rounded-xl border border-zinc-200 bg-white p-3 flex-none">
-                                    <div className="text-sm font-bold mb-2">
-                                      Agendar para {selectedDays.length === 1 ? "1 dia" : `${selectedDays.length} dias`}
-                                    </div>
-
-                                    <label className="text-xs opacity-80">Treino programado</label>
-                                    <select
-                                      value={treinoProgramadoId}
-                                      onChange={(e) => setTreinoProgramadoId(e.target.value)}
-                                      className="w-full mt-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800"
-                                    >
-                                      <option value="">Selecionar...</option>
-                                      {treinosProgramados.map((t) => (
-                                        <option key={t.id} value={t.id}>
-                                          {t.nome}{t.codigo ? ` (${t.codigo})` : ""}
-                                        </option>
-                                      ))}
-                                    </select>
-
-                                    <button
-                                      onClick={agendarParaDiasSelecionadosTurma}
-                                      disabled={bloqueiaAgendarTurma || loadingProgramados || salvandoAgenda}
-                                      className="w-full mt-3 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60"
-                                    >
-                                      {bloqueiaAgendarTurma
-                                        ? "Remova alunos não vinculados"
-                                        : salvandoAgenda
-                                          ? "Agendando..."
-                                          : loadingProgramados
-                                            ? "Carregando..."
-                                            : "Agendar treino para a turma"}
-
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="rounded-xl border border-zinc-200 bg-white p-3 flex-none">
-                                    <div className="text-sm font-bold mb-1">Agendamento indisponível</div>
-                                    <div className="text-sm text-zinc-600">
-                                      Você selecionou pelo menos um dia no passado. Selecione apenas hoje ou datas futuras.
-                                    </div>
-                                  </div>
-                                )}
-
-                                <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3">
-                                  {selectedDays
-                                    .slice()
-                                    .sort((a, b) => a.localeCompare(b))
-                                    .map((day) => {
-                                      const itensDoDia = agendadosTurma.filter((t) => dayKeyFromAny(t.dataTreino) === day);
-                                      return (
-                                        <div key={day} className="rounded-xl border border-zinc-200 bg-white p-3">
-                                          <div className="flex items-center justify-between mb-2">
-                                            <div className="font-bold">{formatDayPtBR(day)}</div>
-                                            <div className="text-xs text-zinc-500">
-                                              {itensDoDia.length ? `${itensDoDia.length} treino(s)` : "Sem treino"}
-                                            </div>
-                                          </div>
-
-                                          {!itensDoDia.length ? (
-                                            <div className="text-sm text-zinc-600">Nenhum treino agendado para a turma neste dia.</div>
-                                          ) : (
-                                            <div className="space-y-2">
-                                              {itensDoDia.map((t) => {
-                                                const nome = t.treinoProgramado?.nome || t.titulo || "Treino";
-                                                const done = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
-                                                const lost = !done && isLost(t);
-
-                                                const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
-                                                const statusClass = done ? "text-emerald-600" : lost ? "text-red-600" : "text-zinc-600";
-
-                                                return (
-                                                  <div key={t.id} className="rounded-lg border border-zinc-200 p-3">
-                                                    <div className="flex items-start justify-between gap-3">
-                                                      <div className="min-w-0">
-
-                                                        <div className="font-bold truncate">{nome}</div>
-                                                        {t.atleta?.nome ? (
-                                                          <div className="text-xs text-zinc-700 mt-1">
-                                                            Atleta: <span className="font-semibold">{t.atleta.nome}</span>
-                                                          </div>
-                                                        ) : null}
-                                                        <div className="text-xs opacity-80 mt-1">
-                                                          Status: <span className={statusClass}>{statusText}</span>
-                                                        </div>
-
-                                                      </div>
-
-                                                      {done ? (
-                                                        <CheckCircle2 className="h-5 w-5 text-emerald-300" />
-                                                      ) : lost ? (
-                                                        <XCircle className="h-5 w-5 text-red-300" />
-                                                      ) : null}
-                                                    </div>
-                                                  </div>
-                                                );
-                                              })}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                          />
                         </div>
                       )}
+
+
                     </div>
                   </div>
                 </div>

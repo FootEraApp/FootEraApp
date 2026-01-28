@@ -1,3 +1,4 @@
+// client/src/pages/treino/treinos-instrutores
 import { useMemo, useEffect, useState, useRef, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -1965,12 +1966,15 @@ async function salvarProgressoSessao(sessaoId: string) {
         </div>
 
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             {isGestor ? (
-                <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full max-w-[620px]">
+              // ✅ Mobile: vira "scroll horizontal" (não espreme)
+              // ✅ SM+: continua normal sem scroll
+              <div className="w-full sm:max-w-[620px]">
+                <div className="flex gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:overflow-visible sm:pb-0">
                   <button
                     onClick={() => setAbaProfessor("criar")}
-                    className={`px-4 py-2 rounded-lg border text-sm ${
+                    className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
                       abaProfessor === "criar"
                         ? "bg-green-800 text-white border-green-900"
                         : "bg-white text-gray-800 border-gray-200"
@@ -1981,7 +1985,7 @@ async function salvarProgressoSessao(sessaoId: string) {
 
                   <button
                     onClick={() => setAbaProfessor("avaliar")}
-                    className={`px-4 py-2 rounded-lg border text-sm ${
+                    className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
                       abaProfessor === "avaliar"
                         ? "bg-green-800 text-white border-green-900"
                         : "bg-white text-gray-800 border-gray-200"
@@ -1992,7 +1996,7 @@ async function salvarProgressoSessao(sessaoId: string) {
 
                   <button
                     onClick={() => setAbaProfessor("sessoes")}
-                    className={`px-4 py-2 rounded-lg border text-sm ${
+                    className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
                       abaProfessor === "sessoes"
                         ? "bg-green-800 text-white border-green-900"
                         : "bg-white text-gray-800 border-gray-200"
@@ -2001,30 +2005,33 @@ async function salvarProgressoSessao(sessaoId: string) {
                     Treinos de Hoje
                   </button>
                 </div>
-              ) : (
-              <div className="text-lg font-semibold text-green-900">
-                Treinos
               </div>
+            ) : (
+              <div className="text-lg font-semibold text-green-900">Treinos</div>
             )}
 
+            {/* ✅ Ações: no mobile vão pra segunda linha e ocupam bem o espaço */}
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
               <Link
                 href="/perfil/GerenciarAtletas"
-                className="flex-shrink-0 inline-flex items-center justify-center px-3 py-2 rounded-full bg-white text-green-800 border border-green-200 shadow hover:bg-green-50"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center px-3 py-2 rounded-full bg-white text-green-800 border border-green-200 shadow hover:bg-green-50 text-xs sm:text-sm whitespace-nowrap"
                 title="Gerenciador de Carreira"
               >
                 Gerenciar Atletas
               </Link>
 
-            <Link
-              href="/treinos/elenco"
-              aria-label="Ir para o elenco (campo)"
-              title="Elenco (campo)"
-              className="flex-shrink-0 inline-flex items-center justify-center p-2.5 rounded-full bg-white text-green-800 border border-green-200 shadow hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600"
-            >
-              <SoccerFieldIcon className="w-5 h-5" />
-            </Link>
+              <Link
+                href="/treinos/elenco"
+                aria-label="Ir para o elenco (campo)"
+                title="Elenco (campo)"
+                className="flex-shrink-0 inline-flex items-center justify-center p-2.5 rounded-full bg-white text-green-800 border border-green-200 shadow hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600"
+              >
+                <SoccerFieldIcon className="w-5 h-5" />
+              </Link>
+            </div>
           </div>
         </div>
+
 
         <div className="space-y-6">
           {isGestor && abaProfessor === "avaliar" && (

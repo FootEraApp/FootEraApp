@@ -14,6 +14,7 @@ import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
 import TurmasManager from "../components/turmas/TurmasManager.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+import AgendaTreinos, { normalizeAgendadosPayload } from "@/components/agenda/AgendaTreinos";
 
 export type CategoriaBase =
   | "Sub-9"
@@ -154,53 +155,7 @@ function dayKeyFromAny(x: any) {
   return toISODateOnly(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
 }
 
-function normalizeAgendadosPayload(payload: any): TreinoAgendadoItem[] {
-  const arr = Array.isArray(payload) ? payload : (payload?.items ?? payload?.data ?? []);
-  if (!Array.isArray(arr)) return [];
 
-  return arr.map((t: any) => {
-    const treinoProgramadoObj = t?.treinoProgramado ?? t?.programado ?? null;
-
-    const nomeProgramado =
-      treinoProgramadoObj?.nome ??
-      treinoProgramadoObj?.titulo ??
-      t?.treinoProgramadoNome ??
-      t?.nomeTreinoProgramado ??
-      t?.titulo ??
-      t?.nome ??
-      null;
-
-    const treinoProgramadoId =
-      t?.treinoProgramadoId ??
-      treinoProgramadoObj?.id ??
-      null;
-
-    const dataTreino =
-      t?.dataTreino ??
-      t?.dataHora ??
-      t?.data ??
-      null;
-
-    const submissaoFeita = !!(t?.submissao?.feito ?? t?.submissaoFeita ?? false);
-
-    return {
-      id: String(t?.id ?? ""),
-      titulo: t?.titulo ?? null,
-      dataTreino,
-      dataExpiracao: t?.dataExpiracao ?? t?.expiraEm ?? null,
-      treinoProgramadoId,
-      treinoProgramado: nomeProgramado
-        ? { id: String(treinoProgramadoId ?? treinoProgramadoObj?.id ?? ""), nome: String(nomeProgramado) }
-        : (treinoProgramadoObj?.id ? { id: String(treinoProgramadoObj.id), nome: treinoProgramadoObj?.nome ?? null } : null),
-
-      meuStatus: t?.meuStatus ?? t?.statusExecucao ?? t?.execucaoStatus ?? null,
-      status: t?.status ?? null,
-      execucaoStatus: t?.execucaoStatus ?? t?.statusExecucao ?? null,
-      submissaoTreinoId: t?.submissaoTreinoId ?? t?.submissao?.id ?? null,
-      submissaoFeita,
-    } as TreinoAgendadoItem;
-  }).filter((x) => x.id);
-}
 
 function statusLabel(s?: string | null) {
   const v = String(s || "").toUpperCase();
@@ -1567,12 +1522,14 @@ async function salvarAvaliacao() {
         <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/50 p-0 sm:p-3">
           <div
             className="
-              w-full sm:max-w-6xl overflow-hidden
-              rounded-none sm:rounded-2xl
-              border-0 sm:border border-zinc-200
-              bg-white text-zinc-900 shadow-2xl
+              w-screen h-[100dvh]
+              max-w-none max-h-none
+              overflow-hidden
+              rounded-none
+              border-0
+              bg-white text-zinc-900
+              shadow-none
               flex flex-col
-              h-[100dvh] sm:h-[70vh] sm:max-h-[70vh]
             "
           >
             <div className="flex items-center justify-between border-b border-zinc-200 px-3 sm:px-4 py-2 sm:py-3">
@@ -1591,246 +1548,87 @@ async function salvarAvaliacao() {
               </button>
             </div>
 
-            <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr_380px] overflow-hidden">
-              <div className="p-3 sm:p-4 border-b xl:border-b-0 xl:border-r border-zinc-200 min-h-0 overflow-y-auto">
+              <AgendaTreinos
+                open={carreiraOpen && !!focado}
+                title={nomeCompletoAtleta(focado)}
+                fetchAgendados={async ({ monthISO }) => {
+                  // usa exatamente sua rota atual:
+                  const atletaId = focado!.id;
+                  const r = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas/${atletaId}/agendados`, {
+                    headers,
+                    params: { month: monthISO },
+                  });
+                  return r.data;
+                }}
+                fetchProgramados={async () => {
+                  // usa exatamente sua rota atual:
+                  const entidadeIdReal = String(tipoUsuarioIdEntidade || "").trim();
+                  const entidadeFallback = String(usuarioIdEntidade || "").trim();
+                  const idParaEnviar = entidadeIdReal || entidadeFallback;
 
-                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-2">
+                  const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`, {
+                    headers,
+                    params: {
+                      vinculo: tipo ? tipoParaVinculo(tipo) : undefined,
+                      id: idParaEnviar,
+                      tipoUsuarioId: entidadeIdReal || undefined,
+                      debug: "1",
+                    },
+                  });
+
+                  return res.data;
+                }}
+                onAgendar={async ({ selectedDays, treinoProgramadoId }) => {
+                  // mesma lógica atual, só que agora aqui
+                  const autorId = String(tipoUsuarioIdEntidade || "");
+                  const autorTipo = tipo ? autorTipoFromTela(tipo) : undefined;
+
+                  if (!autorId || !autorTipo) throw new Error("Autor inválido");
+
+                  await Promise.all(
+                    selectedDays.map((day) =>
+                      axios.post(
+                        `${API.BASE_URL}/api/treinos/agendados`,
+                        {
+                          atletaId: focado!.id,
+                          treinoProgramadoId,
+                          dataTreino: day,
+                          autorId,
+                          autorTipo,
+                        },
+                        { headers }
+                      )
+                    )
+                  );
+                }}
+                // se você quiser “pintar” submissões no calendário, passa aqui convertidas:
+                additionalItems={submissoes.map((s) => ({
+                  id: `sub_${s.id}`,
+                  titulo: s.titulo ?? "Treino",
+                  dataTreino: s.data,
+                  treinoProgramadoId: null,
+                  treinoProgramado: { id: "", nome: s.titulo ?? "Treino" },
+                  meuStatus: s.aprovado === true ? "COMPLETED" : "PENDENTE",
+                  status: null,
+                  execucaoStatus: null,
+                  submissaoTreinoId: s.tipo === "treino" ? s.id : null,
+                  submissaoFeita: true,
+                }))}
+                // aqui mantém o seu botão “Avaliar treino”
+                renderItemActions={(t) => {
+                  const done = String(t.meuStatus || t.execucaoStatus || t.status || "").toUpperCase() === "COMPLETED";
+                  if (!done || !t.submissaoTreinoId) return null;
+                  return (
                     <button
-                      onClick={() => setCursorMonth((d) => addMonths(d, -1))}
-                      className="h-9 w-9 sm:h-10 sm:w-10 flex items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-                      title="Mês anterior"
+                      onClick={() => abrirModalAvaliacao(String(t.submissaoTreinoId || ""))}
+                      className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
                     >
-                      <ChevronLeft className="h-5 w-5" />
+                      💬 Avaliar treino
                     </button>
+                  );
+                }}
+              />
 
-                    <div className="flex-1 text-center font-extrabold text-base sm:text-lg text-zinc-900">
-                      {monthLabel}
-                    </div>
-
-                    <button
-                      onClick={() => setCursorMonth((d) => addMonths(d, 1))}
-                      className="h-9 w-9 sm:h-10 sm:w-10 flex items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-                      title="Próximo mês"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-zinc-600">
-                    <span className="flex items-center gap-1">
-                      <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-500" /> Concluído
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="inline-block h-2.5 w-2.5 rounded bg-red-500" /> Perdido
-                    </span>
-                    <span className="flex items-center gap-1 col-span-2 sm:col-auto">
-                      <span className="inline-block h-2.5 w-2.5 rounded bg-zinc-300" /> Normal / Pendente
-                    </span>
-                  </div>
-                </div>
-
-                {loadingCalendar ? (
-                  <div className="p-4 text-sm opacity-80">Carregando calendário...</div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-7 gap-1 sm:gap-2 text-[10px] sm:text-xs opacity-80 mb-2 px-0.5 sm:px-1">
-                      {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((w) => (
-                        <div key={w} className="text-center">{w}</div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-1 sm:gap-2">
-                      {daysGrid.map(({ date, key, inMonth }) => {
-                        const items = agendadosPorDia.get(key) ?? [];
-                        const hasTreino = items.length > 0;
-                        const done = hasTreino && items.some((t) => isCompleted(t.meuStatus || t.execucaoStatus || t.status));
-                        const lost = hasTreino && !done && items.some((t) => isLost(t));
-                        const pending = hasTreino && !done && !lost;
-
-                        const bg =
-                          done ? "bg-emerald-50 border-emerald-200"
-                          : lost ? "bg-red-50 border-red-200"
-                          : "bg-white border-zinc-200";
-
-                        const opacity = inMonth ? "opacity-100" : "opacity-40";
-                        const selected = selectedDays.includes(key);
-                        const past = isPastDayISO(key);
-
-                        return (
-                          <button
-                            key={key}
-                            onClick={() => toggleDay(key)}
-                            className={[
-                              "h-12 sm:h-16 rounded-xl border text-left p-1.5 sm:p-2 transition relative",
-                              bg,
-                              opacity,
-                              selected ? "ring-2 ring-emerald-400" : "hover:bg-zinc-50",
-                              past ? "opacity-70" : "",
-                            ].join(" ")}
-                          >
-                            <div className="flex items-start justify-between gap-1">
-                              <div className="text-xs sm:text-sm font-extrabold">{date.getDate()}</div>
-
-                              <div className="hidden sm:flex items-center gap-1">
-                                {done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : null}
-                                {lost ? <XCircle className="h-4 w-4 text-red-600" /> : null}
-                              </div>
-                            </div>
-
-                            <div className="sm:hidden mt-1 flex items-center gap-1">
-                              {hasTreino ? (
-                                <>
-                                  <span className={`h-2 w-2 rounded-full ${done ? "bg-emerald-500" : lost ? "bg-red-500" : "bg-zinc-400"}`} />
-                                  {items.length > 1 ? (
-                                    <span className="text-[10px] text-zinc-600 font-semibold">+{items.length - 1}</span>
-                                  ) : (
-                                    <span className="text-[10px] text-zinc-500">treino</span>
-                                  )}
-                                </>
-                              ) : (
-                                <span className="text-[10px] text-zinc-400">—</span>
-                              )}
-                            </div>
-
-                            {hasTreino ? (
-                              <div className="hidden sm:block mt-1 text-[11px] opacity-90 truncate">
-                                {items[0]?.treinoProgramado?.nome || items[0]?.titulo || "Treino"}
-                                {items.length > 1 ? ` +${items.length - 1}` : ""}
-                              </div>
-                            ) : (
-                              <div className="hidden sm:block mt-1 text-[11px] opacity-60 truncate">Sem treino</div>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="p-3 sm:p-4 min-h-0 overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <ClipboardList className="h-5 w-5 text-zinc-500" />
-                    <h3 className="font-extrabold text-zinc-900">Detalhes</h3>
-                  </div>
-                  <button
-                    onClick={() => setDrawerOpen((v) => !v)}
-                    className="text-xs px-3 py-1 rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
-                  >
-                    {drawerOpen ? "Recolher" : "Abrir"}
-                  </button>
-                </div>
-
-                {!drawerOpen ? null : selectedDays.length === 0 ? (
-                  <div className="text-sm opacity-80">
-                    Clique em um ou mais dias do calendário para ver/agendar treinos.
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-4 min-h-0 flex-1">
-                    {!hasPastSelectedDay ? (
-                      <div className={["rounded-xl border border-zinc-200 bg-white flex-none", forceScrollDetails ? "p-2" : "p-3"].join(" ")}>
-                        <div className={["font-bold", forceScrollDetails ? "text-xs mb-1" : "text-sm mb-2"].join(" ")}>
-                          Agendar para {selectedDays.length === 1 ? "1 dia selecionado" : `${selectedDays.length} dias selecionados`}
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-xs opacity-80">Treino programado</label>
-                          <select
-                            value={treinoProgramadoId}
-                            onChange={(e) => setTreinoProgramadoId(e.target.value)}
-                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800"
-                          >
-                            <option value="">Selecionar...</option>
-                            {treinosProgramados.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.nome}
-                              {t.codigo ? ` (${t.codigo})` : ""}
-                              {t.autor?.nome ? ` — ${t.autor.tipo}: ${t.autor.nome}` : t.autor?.tipo ? ` — ${t.autor.tipo}` : ""}
-                            </option>
-                            ))}
-                          </select>
-
-                          <button
-                            onClick={agendarParaDiasSelecionados}
-                            disabled={loadingProgramados || salvandoAgenda}
-                            className="w-full mt-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 disabled:hover:bg-emerald-600 transition"
-                          >
-                            {salvandoAgenda ? "Agendando..." : loadingProgramados ? "Carregando..." : "Agendar treino nos dias selecionados"}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-zinc-200 bg-white p-3 flex-none">
-                        <div className="text-sm font-bold mb-1">Agendamento indisponível</div>
-                        <div className="text-sm opacity-80">
-                          Você selecionou pelo menos um dia no passado. Selecione apenas hoje ou datas futuras.
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
-
-                      {selectedDayItems.map(({ day, items }) => (
-                        <div key={day} className="rounded-xl border border-zinc-200 bg-white p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="font-bold">{formatDayPtBR(day)}</div>
-                            <div className="text-xs opacity-80">
-                              {items.length ? `${items.length} treino(s)` : "Sem treino"}
-                            </div>
-                          </div>
-
-                          {!items.length ? (
-                            <div className="text-sm opacity-80">Nenhum treino agendado neste dia.</div>
-                          ) : (
-                            <div className="space-y-2">
-                              {items.map((t) => {
-                                const nome = t.treinoProgramado?.nome || t.titulo || "Treino";
-                                const done = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
-                                const lost = !done && isLost(t);
-
-                                const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
-                                const statusClass = done ? "text-emerald-600" : lost ? "text-red-600" : "text-zinc-600";
-
-                                return (
-                                  <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-3">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0">
-                                        <div className="font-bold truncate">{nome}</div>
-
-                                        <div className="text-xs opacity-80 mt-1">
-                                          Status: <span className={statusClass}>{statusText}</span>
-                                        </div>
-
-                                        {done && !!t.submissaoTreinoId ? (
-                                          <button
-                                            onClick={() => abrirModalAvaliacao(String(t.submissaoTreinoId || ""))}
-                                            className="mt-2 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
-                                          >
-                                            💬 Avaliar treino
-                                          </button>
-                                        ) : null}
-                                      </div>
-
-                                      {done ? (
-                                        <CheckCircle2 className="h-5 w-5 text-green-300" />
-                                      ) : lost ? (
-                                        <XCircle className="h-5 w-5 text-red-300" />
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                </div>
-              </div>
             </div>
           </div>
         )}
