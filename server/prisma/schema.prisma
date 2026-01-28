@@ -139,9 +139,10 @@ model Assinatura {
 
 model Professor {
   id                  String               @id @default(uuid())
-  codigo              String               @unique
+  codigo              String?              
   cref                String?
   areaFormacao        String
+  dataNascimento      DateTime?
   escola              String?
   fotoUrl             String?
   nome                String
@@ -329,7 +330,7 @@ model Atleta {
 
 model TreinoProgramado {
   id           String                @id @default(uuid())
-  codigo       String                @unique
+  codigo       String?
   nome         String                @unique
   descricao    String?
   nivel        Nivel

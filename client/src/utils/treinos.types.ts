@@ -32,6 +32,7 @@ export type TreinoCreatePayload = {
   exercicios: (ExercicioDoBanco | ExercicioTemporario)[];
   pontuacao?: number;
   professoresIds?: string[];
+  imagemUrl?: string | null;
 };
 
 export type ExItemUI = {
