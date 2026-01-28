@@ -1,4 +1,4 @@
-// server/routes/professores
+// server/routes/professores.ts
 import express from "express";
 import multer from "multer";
 import {
@@ -13,7 +13,7 @@ import {
   desvincularAtletaDoProfessor,
   listarAtletasDoProfessor,
   listarProfessoresVinculados,
-  toggleProfessorParceiro
+  toggleProfessorParceiro,
 } from "../controllers/professoresController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 import { requireAdmin } from "../middlewares/adminGuard.js";
@@ -21,15 +21,16 @@ import { requireAdmin } from "../middlewares/adminGuard.js";
 const router = express.Router();
 const upload = multer({ dest: "upload/" });
 
-router.get("/vinculados", authenticateToken, listarProfessoresVinculados);
-router.get("/:professorId/atletas", listarAtletasDoProfessor);
-router.get("/:professorId/historico-atletas", listarHistoricoAtletasProfessor);
-router.post("/:professorId/desvincular-atleta", desvincularAtletaDoProfessor);
-router.put("/:id/vinculos", authenticateToken, salvarVinculoProfessor);
-router.post("/:id/vinculo", authenticateToken, salvarVinculoProfessor);
-router.get("/:id/vinculos", authenticateToken, listarVinculosProfessor);
+/**
+ * =========================
+ * Rotas especiais / listas
+ * =========================
+ */
 
-// ✅ marcar / desmarcar professor como parceiro FootEra
+// lista professores vinculados (clube/escolinha)
+router.get("/vinculados", authenticateToken, listarProfessoresVinculados);
+
+// marcar / desmarcar professor como parceiro FootEra (ADMIN)
 router.patch(
   "/:id/parceiro",
   authenticateToken,
@@ -37,11 +38,58 @@ router.patch(
   toggleProfessorParceiro
 );
 
-router.get("/:id", buscarProfessorPorId);
-router.post("/", upload.single("fotoUrl"), criarProfessor);
-router.patch("/:id", upload.single("fotoUrl"), editarProfessor);
-router.put("/:id", upload.single("fotoUrl"), editarProfessor);
-router.delete("/:id", excluirProfessor);
-router.get("/", listarProfessores);
+/**
+ * =========================
+ * Atletas do professor
+ * =========================
+ */
+
+// listar atletas do professor
+router.get("/:professorId/atletas", authenticateToken, listarAtletasDoProfessor);
+
+// histórico de atletas do professor
+router.get(
+  "/:professorId/historico-atletas",
+  authenticateToken,
+  listarHistoricoAtletasProfessor
+);
+
+// desvincular atleta do professor
+router.post(
+  "/:professorId/desvincular-atleta",
+  authenticateToken,
+  desvincularAtletaDoProfessor
+);
+
+router.get("/:id/vinculos", authenticateToken, listarVinculosProfessor);
+router.post("/:id/vinculo", authenticateToken, salvarVinculoProfessor);
+router.put("/:id/vinculos", authenticateToken, salvarVinculoProfessor);
+router.get("/:id", authenticateToken, buscarProfessorPorId);
+
+router.post(
+  "/",
+  authenticateToken,
+  requireAdmin,
+  upload.single("fotoUrl"),
+  criarProfessor
+);
+
+router.put(
+  "/:id",
+  authenticateToken,
+  requireAdmin,
+  upload.single("fotoUrl"),
+  editarProfessor
+);
+router.patch(
+  "/:id",
+  authenticateToken,
+  requireAdmin,
+  upload.single("fotoUrl"),
+  editarProfessor
+);
+
+router.delete("/:id", authenticateToken, requireAdmin, excluirProfessor);
+router.get("/", authenticateToken, listarProfessores);
 
 export default router;
