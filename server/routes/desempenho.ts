@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
+
 const prisma = new PrismaClient();
 const router = Router();
 
@@ -29,9 +30,11 @@ router.get("/atleta/:id/historico", async (req, res) => {
     ]);
 
     res.json({
-      page, pageSize,
+      page,
+      pageSize,
       total: totalDesafios + totalTreinos,
-      desafios, treinos,
+      desafios,
+      treinos,
     });
   } catch (e) {
     console.error(e);
@@ -42,69 +45,203 @@ router.get("/atleta/:id/historico", async (req, res) => {
 router.get("/atleta/:id", async (req, res) => {
   try {
     const atletaId = String(req.params.id);
-    const d7  = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const d7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const d30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const atleta = await prisma.atleta.findUnique({
       where: { id: atletaId },
-      select: { id: true, usuario: { select: { nome: true, foto: true } } },
+      select: {
+        id: true,
+        usuarioId: true,
+        usuario: { select: { nome: true, foto: true } },
+      },
     });
     if (!atleta) return res.status(404).json({ error: "Atleta não encontrado" });
 
-    const subs7 = await prisma.submissaoDesafio.findMany({
-      where: { atletaId, createdAt: { gte: d7 } },
-      include: {
-        _count: { select: { curtidas: true, comentarios: true } },
-        desafio: { select: { pontuacao: true } }, 
-      },
-    });
-    const curtidas7d    = subs7.reduce((s, x) => s + (x as any)._count.curtidas, 0);
-    const submissoes7d  = subs7.length;
-    const pontos7d      = subs7.reduce((s, x) => s + (x.desafio?.pontuacao ?? 0), 0);
-    const subs30 = await prisma.submissaoDesafio.findMany({
-      where: { atletaId, createdAt: { gte: d30 } },
-      include: {
-        _count: { select: { curtidas: true, comentarios: true } },
-        desafio: { select: { categoria: true } },  
+    // ===== 7 dias =====
+    const [subsDesafio7, subsTreino7, posts7] = await Promise.all([
+      prisma.submissaoDesafio.findMany({
+        where: { atletaId, createdAt: { gte: d7 } },
+        include: {
+          _count: { select: { curtidas: true, comentarios: true } },
+          desafio: { select: { pontuacao: true } },
+        },
+      }),
+      prisma.submissaoTreino.findMany({
+        where: { atletaId, criadoEm: { gte: d7 } },
+        include: {
+          _count: { select: { curtidas: true } }, // ✅ agora existe (depois da migração)
+        },
+      }),
+      prisma.postagem.findMany({
+        where: { usuarioId: atleta.usuarioId, dataCriacao: { gte: d7 } },
+        include: {
+          _count: { select: { curtidas: true, comentarios: true } },
+        },
+      }),
+    ]);
+
+    // ✅ Curtidas recebidas nos últimos 7 dias (pelo dia da curtida)
+    const curtidasRecebidas7 = await prisma.curtida.count({
+      where: {
+        createdAt: { gte: d7 },
+        OR: [
+          // curtidas em posts do usuário
+          { postagem: { usuarioId: atleta.usuarioId } },
+
+          // curtidas em submissões de desafio do atleta
+          { submissao: { atletaId } },
+
+          // curtidas em submissões de treino do atleta (se você já fez a migração)
+          { submissaoTreino: { atletaId } },
+        ],
       },
     });
 
-    const byDay = new Map<string, { dia: string; curtidas: number; comentarios: number; submissoes: number }>();
-    for (const s of subs30) {
-      const dia = new Date(s.createdAt).toLocaleDateString("pt-BR");
+    const curtidas7d = curtidasRecebidas7;
+
+    const comentariosRecebidos7 = await prisma.comentario.count({
+      where: {
+        dataCriacao: { gte: d7 },
+        OR: [
+          // comentários em posts do usuário
+          { postagem: { usuarioId: atleta.usuarioId } },
+
+          // comentários em submissões de desafio do atleta
+          { submissao: { atletaId } },
+        ],
+      },
+    });
+
+    const submissoes7d = subsDesafio7.length + subsTreino7.length;
+
+    // Pontos (7d): treino usa pontosCreditados; desafio conta só aprovado (ou use pontuacao do desafio)
+    const pontos7d =
+      subsTreino7.reduce((s, x) => s + Number(x.pontosCreditados ?? 0), 0) +
+      subsDesafio7.reduce((s, x) => {
+        const pts = Number(x.desafio?.pontuacao ?? 0);
+        return s + pts;
+      }, 0);
+
+    // ===== 30 dias =====
+    const [subsDesafio30, subsTreino30, posts30] = await Promise.all([
+      prisma.submissaoDesafio.findMany({
+        where: { atletaId, createdAt: { gte: d30 } },
+        include: { _count: { select: { curtidas: true, comentarios: true } } },
+      }),
+      prisma.submissaoTreino.findMany({
+        where: { atletaId, criadoEm: { gte: d30 } },
+        include: { _count: { select: { curtidas: true } } },
+      }),
+      prisma.postagem.findMany({
+        where: { usuarioId: atleta.usuarioId, dataCriacao: { gte: d30 } },
+        include: { _count: { select: { curtidas: true, comentarios: true } } },
+      }),
+    ]);
+
+    // ✅ Curtidas recebidas nos últimos 30 dias (pelo dia da curtida)
+    const curtidasRecebidas30 = await prisma.curtida.findMany({
+      where: {
+        createdAt: { gte: d30 },
+        OR: [
+          { postagem: { usuarioId: atleta.usuarioId } },
+          { submissao: { atletaId } },
+          { submissaoTreino: { atletaId } },
+        ],
+      },
+      select: { createdAt: true },
+    });
+
+    const comentariosRecebidos30 = await prisma.comentario.findMany({
+      where: {
+        dataCriacao: { gte: d30 },
+        OR: [
+          // comentários em posts do usuário
+          { postagem: { usuarioId: atleta.usuarioId } },
+
+          // comentários em submissões de desafio do atleta
+          { submissao: { atletaId } },
+        ],
+      },
+      select: { dataCriacao: true },
+    });
+
+    // ===== Comentários em SubmissãoTreino (via AvaliacaoTreinoComentario) =====
+    // (isso vira seus "comentarios" pro treino)
+    const comentariosTreino30 = await prisma.avaliacaoTreinoComentario.findMany({
+      where: {
+        avaliacaoTreino: {
+          submissaoTreino: { atletaId },
+        },
+        createdAt: { gte: d30 },
+      },
+      select: { createdAt: true },
+    });
+
+    // porDia30d: agrega tudo por dia
+    const byDay = new Map<
+      string,
+      { dia: string; curtidas: number; comentarios: number; submissoes: number }
+    >();
+
+    function addBucket(d: Date, add: { curtidas?: number; comentarios?: number; submissoes?: number }) {
+      const dia = new Date(d).toLocaleDateString("pt-BR");
       const bucket = byDay.get(dia) || { dia, curtidas: 0, comentarios: 0, submissoes: 0 };
-      bucket.submissoes += 1;
-      bucket.curtidas += (s as any)._count.curtidas;
-      bucket.comentarios += (s as any)._count.comentarios;
+      bucket.curtidas += Number(add.curtidas ?? 0);
+      bucket.comentarios += Number(add.comentarios ?? 0);
+      bucket.submissoes += Number(add.submissoes ?? 0);
       byDay.set(dia, bucket);
     }
 
-    const subTreino30 = await prisma.submissaoTreino.count({
-      where: { atletaId, criadoEm: { gte: d30 } },
+    for (const s of subsDesafio30) {
+      addBucket(s.createdAt, { submissoes: 1 });
+    }
+
+    for (const s of subsTreino30) {
+      addBucket(s.criadoEm, {
+        submissoes: 1,
+      });
+    }
+
+    for (const p of posts30) {
+      addBucket(p.dataCriacao, {});
+    }
+
+    // ✅ soma curtidas pelo dia em que a curtida aconteceu
+    for (const c of curtidasRecebidas30) {
+      addBucket(c.createdAt, { curtidas: 1 });
+    }
+
+    // ✅ soma comentários pelo dia em que o comentário aconteceu
+    for (const c of comentariosRecebidos30) {
+      addBucket(c.dataCriacao, { comentarios: 1 });
+    }
+
+    // adiciona comentários de treino por dia (cada comentario = +1)
+    for (const c of comentariosTreino30) {
+      addBucket(c.createdAt, { comentarios: 1 });
+    }
+
+    const porDia30d = Array.from(byDay.values()).sort((a, b) => {
+      const [da, ma, ya] = a.dia.split("/").map(Number);
+      const [db, mb, yb] = b.dia.split("/").map(Number);
+      return new Date(ya, ma - 1, da).getTime() - new Date(yb, mb - 1, db).getTime();
     });
 
-    const porTipo = [
-      { label: "Desafios", value: subs30.length },
-      { label: "Treinos", value: subTreino30 },
-    ];
+    // ✅ consistência 30d: quantos dias diferentes teve qualquer atividade (post ou submissão)
+    const consistencia30d = porDia30d.filter((d) => (d.curtidas + d.comentarios + d.submissoes) > 0).length;
 
-    const porCategoria = new Map<string, number>();
-    for (const s of subs30) {
-      const cats = Array.isArray(s.desafio?.categoria) ? s.desafio!.categoria : [];
-      for (const c of cats) porCategoria.set(c, (porCategoria.get(c) || 0) + 1);
-    }
-    const porCategoriaArr = Array.from(porCategoria, ([label, value]) => ({ label, value }));
+    const porTipo = [
+      { label: "Posts", value: posts30.length },
+      { label: "Desafios", value: subsDesafio30.length },
+      { label: "Treinos", value: subsTreino30.length },
+    ];
 
     res.json({
       atleta: { id: atleta.id, nome: atleta.usuario?.nome, foto: atleta.usuario?.foto },
-      kpis: { curtidas7d, submissoes7d, pontos7d },
-      porDia30d: Array.from(byDay.values()).sort((a, b) => {
-        const [da, ma, ya] = a.dia.split("/").map(Number);
-        const [db, mb, yb] = b.dia.split("/").map(Number);
-        return new Date(ya, ma - 1, da).getTime() - new Date(yb, mb - 1, db).getTime();
-      }),
+      kpis: { curtidas7d, submissoes7d, pontos7d, consistencia30d },
+      porDia30d,
       porTipo,
-      porCategoria: porCategoriaArr,
     });
   } catch (e) {
     console.error(e);
