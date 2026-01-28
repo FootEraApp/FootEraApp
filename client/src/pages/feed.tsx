@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   FaHeart,
   FaRegHeart,
@@ -6,6 +6,7 @@ import {
   FaShare,
   FaPaperPlane,
   FaTrash,
+  FaRetweet,
 } from "react-icons/fa";
 import {
   House,
@@ -20,7 +21,8 @@ import {
   PostagemComUsuario,
   deletarPost,
   repostPost,
-  deletarComentario
+  deletarComentario,
+  type RepostResponse,
 } from "../services/feedService.js";
 import { format } from "date-fns";
 import { Link, useLocation } from "wouter";
@@ -28,7 +30,6 @@ import Storage from "../../../server/utils/storage.js";
 import { API, APP } from "../config.js";
 import { publicImgUrl } from "../utils/publicUrl.js";
 import socket from "../services/socket.js";
-import { FaRetweet } from "react-icons/fa";
 import { http } from "../services/http.js";
 import { TreinosApi } from "../utils/treinosApi.js";
 import BottomNav from "@/components/layout/BottomNav.js";
@@ -639,10 +640,33 @@ function PaginaFeed(): JSX.Element {
 
   const handleRepost = async (postId: string) => {
     if (!userId) return alert("Sessão expirada. Faça login novamente.");
+
     const comentario = prompt("Adicionar um comentário (opcional):") ?? "";
+
     try {
-      const novo = await repostPost(postId, comentario);
-      setPosts((prev) => (prev.some((p) => p.id === novo.id) ? prev : [novo, ...prev]));
+      const resp: RepostResponse = await repostPost(postId, comentario);
+
+      // Se repostou: backend devolve o post novo em resp.post
+      if (resp.ok && resp.action === "repost" && resp.post) {
+        const novoPost = resp.post;
+
+        setPosts((prev) => (prev.some((p) => p.id === novoPost.id) ? prev : [novoPost, ...prev]));
+        return;
+      }
+
+      // Se desfez (unrepost): backend pode devolver só {id} ou nada
+      if (resp.ok && resp.action === "unrepost") {
+        // remove do feed o repost "wrapper" (o post que você criou ao repostar), se o backend mandar o id
+        if (resp.id) {
+          setPosts((prev) => prev.filter((p) => p.id !== resp.id));
+        }
+
+        // (opcional) aqui você também pode decrementar contador/local state, se quiser
+        return;
+      }
+
+      // fallback (caso backend responda diferente)
+      console.warn("Resposta inesperada no repost:", resp);
     } catch (e) {
       console.error(e);
       alert("Não foi possível repostar.");

@@ -3322,6 +3322,11 @@ export async function criarTreinoProgramado(
       });
     }
 
+    const objetivoFinal =
+      (typeof (body as any).objetivo === "string" && (body as any).objetivo.trim()) ||
+      (typeof (body as any).metas === "string" && (body as any).metas.trim()) ||
+      null;
+
     const treino = await prisma.treinoProgramado.create({
       data: {
         codigo: typeof body.codigo === "string" ? body.codigo.trim() : undefined,
@@ -3332,7 +3337,7 @@ export async function criarTreinoProgramado(
         categoria: categorias,
         dicas: Array.isArray(dicas) ? dicas : [],
         duracao: duracao != null ? Number(duracao) : null,
-        objetivo: objetivo ?? null,
+        objetivo: objetivoFinal,
         dataAgendada: whenDate,
         pontuacao: pontuacaoNum,
         imagemUrl: imagemUrl || null,
@@ -3361,12 +3366,63 @@ export async function criarTreinoProgramado(
       },
     });
 
-    const exsBanco = exercicios.filter((e) => e?.exercicioId || e?.id);
-    const exsTemp = (exercicios as any[]).filter(
-      (e) => !e.exercicioId && e.nome
-    );
+    // ✅ salvar exercícios do treino (oficiais + temporários)
+    const exsBody: any[] = Array.isArray(exercicios) ? exercicios : [];
 
-    syncTreinoProgramado(treino.id);
+    // 1) oficiais (catálogo): vem exercicioId ou id
+    const exsOficiais = exsBody.filter((e) => e?.exercicioId || e?.id);
+
+    // 2) temporários: não tem exercicioId/id mas tem nome
+    const exsTemporarios = exsBody.filter((e) => !e?.exercicioId && !e?.id && e?.nome);
+
+    await prisma.$transaction(async (tx) => {
+      // ✅ cria os vínculos oficiais
+      if (exsOficiais.length) {
+        await tx.treinoProgramadoExercicio.createMany({
+          data: exsOficiais.map((e: any, idx: number) => ({
+            treinoProgramadoId: treino.id,
+            exercicioId: String(e.exercicioId || e.id),
+            ordem: Number(e.ordem ?? idx + 1),
+            // ❗ no seu schema repeticoes é string obrigatória (não pode null)
+            repeticoes: String(e.repeticoes ?? e.repeticoesStr ?? e.reps ?? "1"),
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      // ✅ cria temporários (se você usa isso no schema)
+      for (let i = 0; i < exsTemporarios.length; i++) {
+        const e = exsTemporarios[i];
+        const nomeTemp = String(e.nome || "").trim();
+        if (!nomeTemp) continue;
+
+        const temp = await tx.exercicioTemporario.create({
+          data: {
+            treinoProgramadoId: treino.id,
+            codigo: null,
+            nome: nomeTemp,
+            descricao: e.descricao ?? null,
+            // ❗ obrigatório no seu schema (print mostrou erro "nivel is missing")
+            nivel: nivelEnum,
+            // se seu schema chama "categorias" (no update você usa categoriasNorm)
+            categorias: categorias ?? [],
+            videoDemonstrativoUrl: e.videoDemonstrativoUrl ?? e.videoUrl ?? null,
+          },
+          select: { id: true },
+        });
+
+        await tx.treinoProgramadoExercicio.create({
+          data: {
+            treinoProgramadoId: treino.id,
+            exercicioTemporarioId: temp.id,
+            ordem: Number(e.ordem ?? i + 1),
+            repeticoes: String(e.repeticoes ?? e.repeticoesStr ?? e.reps ?? "1"),
+          },
+        });
+      }
+    });
+
+    await syncTreinoProgramado(treino.id);
 
   try {
     const rowsIncluidos = await prisma.treinoProgramadoExercicio.findMany({
