@@ -267,6 +267,55 @@ function authHeaders() {
   return headers;
 }
 
+async function readApiError(res: Response): Promise<string> {
+  // tenta pegar o body em texto (serve pra JSON e pra string)
+  let raw = "";
+  try {
+    raw = await res.text();
+  } catch {
+    raw = "";
+  }
+
+  // tenta interpretar como JSON e extrair chaves comuns
+  try {
+    const j = raw ? JSON.parse(raw) : null;
+    const msg =
+      j?.message ||
+      j?.erro ||
+      j?.error ||
+      j?.details ||
+      j?.msg ||
+      j?.title ||
+      null;
+
+    if (msg) return String(msg);
+
+    // se vier { errors: [...] }
+    if (Array.isArray(j?.errors) && j.errors.length) {
+      const first = j.errors[0];
+      return String(first?.message || first?.msg || first || "Erro na API");
+    }
+  } catch {
+    // não era JSON, segue abaixo
+  }
+
+  // se for HTML, não mostra HTML pro usuário
+  if (raw && raw.trim().startsWith("<")) {
+    return `Erro na API (HTTP ${res.status}).`;
+  }
+
+  // fallback: texto cru ou status
+  return raw?.trim()
+    ? raw.trim()
+    : `Erro na API (HTTP ${res.status}).`;
+}
+
+async function assertOk(res: Response, fallbackMsg: string): Promise<Response> {
+  if (res.ok) return res;
+  const msg = await readApiError(res);
+  throw new Error(msg || fallbackMsg);
+}
+
 async function apiListarTreinosSalvos(
   ownerTipo: "professor" | "clube" | "escolinha",
   ownerId: string,
@@ -275,9 +324,11 @@ async function apiListarTreinosSalvos(
   const url = `${API.BASE_URL}/api/treinosSalvos?tipoUsuario=${encodeURIComponent(
     ownerTipo,
   )}&tipoUsuarioId=${encodeURIComponent(ownerId)}&includePublic=0`;
+
   const r = await fetch(url, { headers });
-  if (!r.ok) throw new Error("Falha ao listar treinos salvos");
-  const j = await r.json();
+  await assertOk(r, "Falha ao listar treinos salvos");
+
+  const j = await r.json().catch(() => null);
   const meus = Array.isArray(j?.meus) ? j.meus : [];
   return meus as Array<{
     id: string;
@@ -293,7 +344,7 @@ async function apiDeletarTreinoSalvo(id: string) {
     `${API.BASE_URL}/api/treinosSalvos/${encodeURIComponent(id)}`,
     { method: "DELETE", headers },
   );
-  if (!r.ok) throw new Error("Falha ao apagar treino salvo");
+  await assertOk(r, "Falha ao apagar treino salvo");
   return true;
 }
 
@@ -304,11 +355,9 @@ async function apiCriarTreinoSalvo(body: any) {
     headers,
     body: JSON.stringify(body),
   });
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(t || "Falha ao criar treino salvo");
-  }
-  return r.json();
+
+  await assertOk(r, "Falha ao criar treino salvo");
+  return r.json().catch(() => ({}));
 }
 
 async function tentarSalvarComoTreinoSalvo(
@@ -1611,12 +1660,12 @@ useEffect(() => {
       sessionStorage.getItem("token");
 
     if (!token) {
-      alert("Faça login novamente para criar uma turma.");
+      showToast("Faça login novamente para criar uma turma.", "error");
       return;
     }
 
     if (!novaTurmaNome || !novaTurmaNome.trim()) {
-      alert("Dê um nome para a turma.");
+      showToast("Dê um nome para a turma.", "error");
       return;
     }
 
@@ -1703,14 +1752,20 @@ useEffect(() => {
         body: JSON.stringify(payload),
       });
 
-      const data = await resp.json().catch(() => null);
+      let data: any = null;
+      try {
+        data = await resp.json();
+      } catch {
+        data = null;
+      }
 
       if (!resp.ok) {
-        alert(
+        const msg =
           data?.message ||
-            data?.erro ||
-            "Não foi possível criar a turma. Veja o console para mais detalhes.",
-        );
+          data?.erro ||
+          data?.error ||
+          "Não foi possível criar a turma.";
+        showToast(String(msg), "error");
         return;
       }
 
@@ -1726,13 +1781,13 @@ useEffect(() => {
         setElencoSelecionado(String(data.id));
       }
 
-      alert("Turma criada com sucesso!");
+      showToast("Turma criada com sucesso!", "success");
 
       setNovaTurmaNome("");
       setAtletasSelecionados([]);
     } catch (e) {
       console.error("[NovoTreino] erro ao criar turma", e);
-      alert("Erro inesperado ao criar a turma.");
+      showToast("Erro inesperado ao criar a turma.", "error");
     }
   }
 
@@ -2346,14 +2401,14 @@ const criarTreino = async () => {
       const atletaId = String(atletaIdLogado || "").trim();
       const token = (Storage as any).token;
       if (!atletaId || !token) {
-        alert("Sessão expirada. Faça login novamente.");
+        showToast("Sessão expirada. Faça login novamente.", "error");
         return;
       }
 
       const prazoSelecionadoRaw = (prazos[t.id] || "").trim();
 
       if (!prazoSelecionadoRaw) {
-        alert("Selecione o prazo para envio antes de agendar.");
+        showToast("Selecione o prazo para envio antes de agendar.", "info");
         return;
       }
 
@@ -2363,7 +2418,7 @@ const criarTreino = async () => {
       const quando = new Date(prazoComSegundos);
 
       if (isNaN(quando.getTime())) {
-        alert("Prazo inválido. Selecione novamente.");
+        showToast("Prazo inválido. Selecione novamente.", "error");
         return;
       }
 
@@ -2387,9 +2442,9 @@ const criarTreino = async () => {
       });
 
       if (!res.ok) {
-        const txt = await res.text();
-        console.error("Falha ao agendar treino:", res.status, txt);
-        alert("Erro ao agendar treino.");
+        const msg = await readApiError(res);
+        console.error("Falha ao agendar treino:", res.status, msg);
+        showToast(msg || "Erro ao agendar treino.", "error");
         return;
       }
 
@@ -2401,11 +2456,11 @@ const criarTreino = async () => {
       setIdsProgramadosBloqueados((prev) => new Set(prev).add(novo.treinoProgramadoId));
       setPrazos(({ [t.id]: _, ...rest }) => rest);
       
-      alert("Treino agendado com sucesso!");
+      showToast("Treino agendado com sucesso!", "success");
       navigate("/treinos");
     } catch (e) {
       console.error(e);
-      alert("Erro inesperado ao agendar treino.");
+      showToast("Erro inesperado ao agendar treino.", "error");
     }
   };
 
@@ -2870,7 +2925,7 @@ const criarTreino = async () => {
                                       URL.revokeObjectURL(localPreview);
                                     } catch (err: any) {
                                       console.error(err);
-                                      alert(err?.message || "Erro ao enviar vídeo");
+                                      showToast(err?.message || "Erro ao enviar vídeo", "error");
                                     } finally {
                                       e.currentTarget.value = "";
                                     }
@@ -3556,18 +3611,60 @@ const criarTreino = async () => {
 
 
       {toast && (
-        <div className="fixed bottom-20 inset-x-0 flex justify-center z-40 px-4">
+        <div className="fixed bottom-20 inset-x-0 flex justify-center z-50 px-4">
           <div
+            role="status"
             className={[
-              "max-w-md w-full px-4 py-3 rounded-full shadow-lg border text-sm sm:text-base bg-white",
+              "max-w-xl w-full rounded-2xl shadow-lg border bg-white overflow-hidden",
               toast.type === "success"
-                ? "border-green-500 text-green-900"
+                ? "border-green-300"
                 : toast.type === "error"
-                ? "border-red-500 text-red-900"
-                : "border-gray-400 text-gray-900",
+                ? "border-red-300"
+                : "border-gray-300",
             ].join(" ")}
           >
-            {toast.message}
+            <div className="flex items-start gap-3 p-4">
+              <div
+                className={[
+                  "mt-0.5 h-2.5 w-2.5 rounded-full shrink-0",
+                  toast.type === "success"
+                    ? "bg-green-600"
+                    : toast.type === "error"
+                    ? "bg-red-600"
+                    : "bg-gray-600",
+                ].join(" ")}
+              />
+              <div className="flex-1 min-w-0">
+                <div
+                  className={[
+                    "text-sm sm:text-base font-semibold",
+                    toast.type === "success"
+                      ? "text-green-900"
+                      : toast.type === "error"
+                      ? "text-red-900"
+                      : "text-gray-900",
+                  ].join(" ")}
+                >
+                  {toast.type === "success"
+                    ? "Sucesso"
+                    : toast.type === "error"
+                    ? "Atenção"
+                    : "Info"}
+                </div>
+
+                <div className="mt-1 text-sm sm:text-base text-gray-800 whitespace-pre-wrap break-words">
+                  {toast.message}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setToast(null)}
+                className="text-xs sm:text-sm text-gray-600 underline shrink-0"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}
