@@ -144,6 +144,32 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
     (reqAuthed as any).user = user;
   }
 
+    // =========================
+  // Presence heartbeat (lastSeenAt) com throttle
+  // =========================
+  try {
+    const THROTTLE_MS = 60_000; // 1 min
+    const key = userId;
+
+    (globalThis as any).__lastSeenMap ??= new Map<string, number>();
+    const m: Map<string, number> = (globalThis as any).__lastSeenMap;
+
+    const now = Date.now();
+    const prev = m.get(key) ?? 0;
+
+    if (now - prev > THROTTLE_MS) {
+      m.set(key, now);
+      prisma.usuario
+        .update({
+          where: { id: userId },
+          data: { lastSeenAt: new Date() },
+        })
+        .catch(() => {});
+    }
+  } catch {
+    // não quebra request por causa de presence
+  }
+
   return next();
 };
 

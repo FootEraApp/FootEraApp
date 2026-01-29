@@ -1996,15 +1996,15 @@ async function salvarProgressoSessao(sessaoId: string) {
     const tipo = String(usuario?.tipo ?? "").toLowerCase();
     const tipoUsuarioId = String(usuario?.tipoUsuarioId ?? "").trim();
 
-    const res = await fetch(`${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(treinoId)}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        // fallback caso seu backend não tenha req.user:
-        "x-tipo": tipo,
-        "x-tipoUsuarioId": tipoUsuarioId,
-      } as any,
-    });
+    const res = await fetch(
+      `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(treinoId)}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
     const js = await res.json().catch(() => ({}));
 

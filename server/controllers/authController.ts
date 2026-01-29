@@ -11,6 +11,21 @@ dotenv.config();
 
 const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
 
+export async function logout(req: any, res: any) {
+  const userId = req.userId;
+  if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+  // opcional: criar LogoutEvent (se você quiser histórico)
+  // await prisma.logoutEvent.create({ data: { usuarioId: userId } });
+
+  await prisma.usuario.update({
+    where: { id: userId },
+    data: { lastLogoutAt: new Date(), lastSeenAt: new Date() },
+  });
+
+  return res.json({ ok: true });
+}
+
 export async function me(req: AuthenticatedRequest, res: Response) {
   try {
     if (!req.userId) {
@@ -103,6 +118,15 @@ export async function login(req: Request, res: Response) {
       usuario.administrador?.id ??
       null;
 
+    await prisma.loginEvent.create({
+      data: { usuarioId: usuario.id },
+    });
+
+    await prisma.usuario.update({
+      where: { id: usuario.id },
+      data: { lastLoginAt: new Date(), lastSeenAt: new Date() },
+    });
+
     const token = jwt.sign(
       {
         id: usuario.id,
@@ -134,10 +158,6 @@ export async function login(req: Request, res: Response) {
     return res.status(500).json({ message: "Erro no servidor" });
   }
 }
-
-export const logout = async (_req: Request, res: Response) => {
-  res.json({ message: "Logout efetuado (JWT inválido do lado cliente)" });
-};
 
 export const validateToken = async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(" ")[1];
