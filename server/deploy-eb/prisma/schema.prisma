@@ -9,29 +9,36 @@ datasource db {
 }
 
 model Usuario {
-  id                       String              @id @default(uuid())
-  nomeDeUsuario            String              @unique
-  senhaHash                String
-  nome                     String
-  email                    String              @unique
-  foto                     String?
-  tipo                     TipoUsuario
-  cidade                   String?
-  estado                   String?
-  pais                     String?
-  bairro                   String?
-  cpf                      String?
-  dataNascimento           DateTime?
-  responsavelNome          String?
-  responsavelEmail         String?
-  responsavelTelefone      String?
-  configuracoesPrivacidade Json?
-  dataCriacao              DateTime            @default(now())
-  codigo                   String?
-  verified                 Boolean             @default(false)
-  EmailVerification        EmailVerification[]
-  assinatura               Assinatura?
-  administrador            Administrador?
+  id                        String      @id @default(uuid())
+  nomeDeUsuario             String      @unique
+  senhaHash                 String
+  nome                      String
+  email                     String      @unique
+  foto                      String?
+  tipo                      TipoUsuario
+  cidade                    String?
+  estado                    String?
+  pais                      String?
+  bairro                    String?
+  cpf                       String?
+  dataNascimento            DateTime?
+  responsavelNome           String?
+  responsavelEmail          String?
+  responsavelTelefone       String?
+  configuracoesPrivacidade  Json?
+  configuracoesNotificacoes Json?
+  dataCriacao               DateTime    @default(now())
+  codigo                    String?
+  verified                  Boolean     @default(false)
+
+  parceiro     Boolean   @default(false)
+  parceiroInfo Parceiro?
+
+  EmailVerification EmailVerification[]
+  assinatura        Assinatura?
+  administrador     Administrador?
+  tokenVersion      Int                 @default(0)
+  senhaAtualizadaEm DateTime?
 
   amigosDe               Amigo[]                   @relation("AmigoUsuario")
   amigos                 Amigo[]                   @relation("UsuarioAmigo")
@@ -83,6 +90,16 @@ model Usuario {
   AvaliacaoTreino        AvaliacaoTreino[]
 }
 
+model Parceiro {
+  id        String  @id @default(uuid())
+  usuarioId String  @unique
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+}
+
 model EmailVerification {
   id        String    @id @default(uuid())
   usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -122,12 +139,13 @@ model Assinatura {
 
 model Professor {
   id                  String               @id @default(uuid())
-  codigo              String               @unique
+  codigo              String?
   cref                String?
   areaFormacao        String
+  dataNascimento      DateTime?
   escola              String?
   fotoUrl             String?
-  nome                String               @unique
+  nome                String
   usuarioId           String?              @unique
   statusCref          StatusCref?
   qualificacoes       String[]
@@ -312,7 +330,7 @@ model Atleta {
 
 model TreinoProgramado {
   id           String                @id @default(uuid())
-  codigo       String                @unique
+  codigo       String?
   nome         String                @unique
   descricao    String?
   nivel        Nivel
@@ -465,20 +483,22 @@ model RelacaoTreinamento {
 }
 
 model AtletaObservado {
-  id           String     @id @default(uuid())
-  professorId  String?
-  escolinhaId  String?
-  clubeId      String?
-  atletaId     String
-  criadoEm     DateTime   @default(now())
-  atualizadoEm DateTime   @updatedAt
-  olheiroId    String?
-  ativo        Boolean    @default(true)
-  atleta       Atleta     @relation("ObservacaoAtleta", fields: [atletaId], references: [id], onDelete: Cascade)
-  clube        Clube?     @relation("ObservacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
-  escolinha    Escolinha? @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
-  olheiro      Olheiro?   @relation(fields: [olheiroId], references: [id], onDelete: SetNull)
+  id              String   @id @default(uuid())
+  professorId     String?
+  escolinhaId     String?
+  clubeId         String?
+  atletaId        String
+  criadoEm        DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+  olheiroId       String?
+  ativo           Boolean  @default(true)
+  notaInterna     String?
+  alertarMudancas Boolean  @default(false)
 
+  atleta    Atleta     @relation("ObservacaoAtleta", fields: [atletaId], references: [id], onDelete: Cascade)
+  clube     Clube?     @relation("ObservacaoClube", fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha Escolinha? @relation("ObservacaoEscolinha", fields: [escolinhaId], references: [id], onDelete: SetNull)
+  olheiro   Olheiro?   @relation(fields: [olheiroId], references: [id], onDelete: SetNull)
   professor Professor? @relation("ObservacaoProfessor", fields: [professorId], references: [id], onDelete: Cascade)
 
   TreinoRotinaAtribuicao TreinoRotinaAtribuicao[]
@@ -492,7 +512,7 @@ model AtletaObservado {
 
 model Postagem {
   id                String       @id @default(uuid())
-  conteudo          String       @unique
+  conteudo          String
   imagemUrl         String?
   videoUrl          String?
   tipoMidia         TipoMidia?
@@ -588,6 +608,7 @@ model Escolinha {
   AtletaHistoricoVinculo AtletaHistoricoVinculo[]
   ProfessorEscolinha     ProfessorEscolinha[]
   conquistas             ConquistaVinculo[]       @relation("ConquistaEscolinha")
+  indicacoes             Indicacao[]
 }
 
 model Comentario {
@@ -718,6 +739,7 @@ model SubmissaoTreino {
   duracaoSegundos      Int?
   repeticoes           Int?
   avaliacaoTreino      AvaliacaoTreino[]
+  curtidas             Curtida[]         @relation("Curtidas_SubmissaoTreino")
 
   @@unique([atletaId, treinoAgendadoId])
 }
@@ -887,18 +909,22 @@ model Feedback {
 }
 
 model Curtida {
-  id          String            @id @default(uuid())
-  usuarioId   String
-  postagemId  String?
-  createdAt   DateTime          @default(now())
-  submissaoId String?
-  postagem    Postagem?         @relation(fields: [postagemId], references: [id], onDelete: Cascade)
-  submissao   SubmissaoDesafio? @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
-  usuario     Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id                String            @id @default(uuid())
+  usuarioId         String
+  postagemId        String?
+  createdAt         DateTime          @default(now())
+  submissaoId       String?
+  submissaoTreinoId String?
+  postagem          Postagem?         @relation(fields: [postagemId], references: [id], onDelete: Cascade)
+  submissao         SubmissaoDesafio? @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
+  submissaoTreino   SubmissaoTreino?  @relation("Curtidas_SubmissaoTreino", fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
+  usuario           Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([usuarioId, postagemId], name: "usuario_postagem_unique")
   @@unique([usuarioId, submissaoId], name: "usuario_submissao_unique")
+  @@unique([usuarioId, submissaoTreinoId], name: "usuario_submissaoTreino_unique")
   @@index([submissaoId])
+  @@index([submissaoTreinoId])
 }
 
 model TreinoAgendado {
@@ -1205,20 +1231,28 @@ model InscricaoEvento {
 }
 
 model Indicacao {
-  id           String          @id @default(uuid())
-  olheiroId    String
-  atletaId     String
-  clubeId      String
+  id        String @id @default(uuid())
+  olheiroId String
+  atletaId  String
+
+  clubeId     String?
+  escolinhaId String?
+
   status       IndicacaoStatus @default(PENDENTE)
   criadoEm     DateTime        @default(now())
   atualizadoEm DateTime        @updatedAt
-  atleta       Atleta          @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  clube        Clube           @relation(fields: [clubeId], references: [id], onDelete: Cascade)
-  olheiro      Olheiro         @relation(fields: [olheiroId], references: [id], onDelete: Cascade)
 
-  @@index([olheiroId, status])
-  @@index([clubeId])
+  atleta    Atleta     @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  clube     Clube?     @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  escolinha Escolinha? @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
+  olheiro   Olheiro    @relation(fields: [olheiroId], references: [id], onDelete: Cascade)
+
+  @@unique([olheiroId, atletaId, clubeId])
+  @@unique([olheiroId, atletaId, escolinhaId])
+  @@index([olheiroId])
   @@index([atletaId])
+  @@index([clubeId])
+  @@index([escolinhaId])
 }
 
 model ListaOlheiro {

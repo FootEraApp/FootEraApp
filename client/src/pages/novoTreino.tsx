@@ -2273,16 +2273,20 @@ useEffect(() => {
       orgSelecionada && orgSelecionada !== MOSTRAR_TODOS ? String(orgSelecionada) : "";
 
     if (orgId) {
-      const org = orgsVinculadas.find((o) => String(o.id) === orgId);
+      const org = orgsVinculadas.find((o) => String(o.id) === String(orgId));
 
-      if (org?.tipo === "Clube") {
-        return { tipoUsuario: "Clube" as const, tipoUsuarioId: orgId };
-      }
-      if (org?.tipo === "Escolinha") {
-        return { tipoUsuario: "Escolinha" as const, tipoUsuarioId: orgId };
-      }
+      // mantém o tipo "clube/escolinha" se você quiser, mas o ID continua sendo do professor logado
+      const tipoUsuario =
+        org?.tipo === "Clube" ? ("Clube" as const) :
+        org?.tipo === "Escolinha" ? ("Escolinha" as const) :
+        ("Professor" as const);
 
-      return { tipoUsuario: "Clube" as const, tipoUsuarioId: orgId };
+      return {
+        tipoUsuario,
+        tipoUsuarioId: tipoUsuarioIdLogged, // ✅ SEMPRE o ID do professor logado
+        // se quiser guardar o orgId pra outra coisa:
+        // organizacaoId: orgId,
+      };
     }
 
     const normalized =
@@ -2585,6 +2589,15 @@ useEffect(() => {
       (payload as any).objetivo = (metas ?? "").trim() || null;
       // dono do treino
       (payload as any).tipoUsuario = tipoUsuarioNorm;              // "professor" | "clube" | "escolinha"
+
+      const tipoUsuarioIdProfessor =
+        (Storage as any).tipoUsuarioId ||
+        localStorage.getItem("tipoUsuarioId") ||
+        sessionStorage.getItem("tipoUsuarioId") ||
+        "";
+
+      (payload as any).tipoUsuarioId = String(tipoUsuarioIdProfessor);
+
       (payload as any).tipoUsuarioId = String(tipoUsuarioId);
       // atletas / elencos / colaboradores
       (payload as any).atletasIds = atletasSelecionados;
