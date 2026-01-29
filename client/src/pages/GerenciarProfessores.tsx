@@ -45,7 +45,9 @@ const GerenciarProfessores: React.FC = () => {
   const isAtletasPage =
     location === "/perfil/GerenciarAtletas" || location === "/perfil/gerenciarAtletas";
   const isProfessoresPage =
-    location === "/perfil/GerenciarProfessores" || location === "/perfil/gerenciarProfessores";
+    location.startsWith("/perfil/GerenciarProfessores") ||
+    location.startsWith("/perfil/gerenciarProfessores");
+
 
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -53,7 +55,14 @@ const GerenciarProfessores: React.FC = () => {
   const [tipo, setTipo] = useState<TipoEntidade>(null);
   const [usuarioIdEntidade, setUsuarioIdEntidade] = useState<string | null>(null);
   const [tipoUsuarioIdEntidade, setTipoUsuarioIdEntidade] = useState<string | null>(null);
-  const [aba, setAba] = useState<"professores" | "turmas">("professores");
+
+  const getTab = (): "professores" | "turmas" => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    return tab === "turmas" ? "turmas" : "professores";
+  };
+
+  const [aba, setAba] = useState<"professores" | "turmas">(() => getTab());
+
   const [q, setQ] = useState("");
   const [professores, setProfessores] = useState<ProfessorMin[]>([]);
   const [profLoading, setProfLoading] = useState(false);
@@ -66,11 +75,7 @@ const GerenciarProfessores: React.FC = () => {
   const [turmaSelecionadaId, setTurmaSelecionadaId] = useState<string | undefined>();
 
   useEffect(() => {
-    // se vier de /perfil/GerenciarProfessores?tab=turmas
-    const qs = location.includes("?") ? location.split("?")[1] : "";
-    const params = new URLSearchParams(qs);
-    const tab = params.get("tab");
-    if (tab === "turmas") setAba("turmas");
+    setAba(getTab());
   }, [location]);
 
 

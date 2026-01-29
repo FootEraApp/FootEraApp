@@ -3132,15 +3132,18 @@ export async function criarTreinoProgramado(
     const tokenUser =
       (req as any).user as { tipo?: string; tipoUsuarioId?: string } | undefined;
 
-    // prioridade: token -> header -> body
-    const tipoNorm = String(
-      tokenUser?.tipo ||
-        (req.headers["x-tipo"] as string) ||
-        tipoUsuario ||
-        ""
-    )
-      .toLowerCase()
-      .trim();
+  const tipoNormHeaderBody = String(
+    tokenUser?.tipo ||
+      (req.headers["x-tipo"] as string) ||
+      tipoUsuario ||
+      ""
+  )
+    .toLowerCase()
+    .trim();
+
+  // ✅ fonte de verdade: token (tipoStr). header/body só como fallback
+  const tipoNorm = (tipoStr || tipoNormHeaderBody).toLowerCase().trim();
+
 
     const tipoUsuarioIdFinal = String(
       tokenUser?.tipoUsuarioId ||
@@ -3258,9 +3261,6 @@ export async function criarTreinoProgramado(
       return res.status(400).json({ message: "dataAgendada inválida" });
     }
 
-    const professorCriadorId =
-      tipoStr === "professor" ? String(tipoUsuarioIdFinal).trim() : "";
-
     const body = req.body as any;
 
     // colaboradores
@@ -3333,6 +3333,37 @@ export async function criarTreinoProgramado(
       (typeof (body as any).metas === "string" && (body as any).metas.trim()) ||
       null;
 
+// ✅ se for professor, tipoUsuarioIdFinal pode vir como usuarioId
+let professorIdToConnect: string | null = null;
+
+if (tipoNorm === "professor") {
+  const prof = await prisma.professor.findFirst({
+    where: {
+      OR: [
+        { id: tipoUsuarioIdFinal },
+        { usuarioId: tipoUsuarioIdFinal },
+      ],
+    },
+    select: { id: true },
+  });
+
+  if (!prof?.id) {
+    return res.status(400).json({
+      code: "PROFESSOR_NOT_FOUND",
+      message:
+        "Não encontrei o professor do usuário logado (tipoUsuarioId inválido).",
+      recebida: tipoUsuarioIdFinal,
+    });
+  }
+
+  professorIdToConnect = prof.id;
+}
+
+// ✅ criadorProfessor deve ser o id REAL do professor
+const professorCriadorId =
+  tipoStr === "professor" ? (professorIdToConnect ?? "") : "";
+
+
     const treino = await prisma.treinoProgramado.create({
       data: {
         codigo: typeof body.codigo === "string" ? body.codigo.trim() : undefined,
@@ -3349,7 +3380,7 @@ export async function criarTreinoProgramado(
         imagemUrl: imagemUrl || null,
 
         ...(tipoNorm === "professor"
-          ? { Professor: { connect: { id: String(tipoUsuarioIdFinal) } } }
+          ? { Professor: { connect: { id: professorIdToConnect! } } }
           : {}),
         ...(tipoNorm === "clube"
           ? { clube: { connect: { id: String(tipoUsuarioIdFinal) } } }
