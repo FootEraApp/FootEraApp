@@ -13,7 +13,6 @@ import {
   Eye,
   UserPlus,
   Share2,
-  Trophy
 } from "lucide-react";
 import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
@@ -87,6 +86,44 @@ function normalizeTipo(t: any): string {
 
 const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
 
+const ONLINE_TTL_MS = 45_000; // tem que bater com o server/socket.ts
+
+function timeAgoPtBR(dateLike?: string | Date | null): string {
+  if (!dateLike) return "há algum tempo";
+
+  const d = typeof dateLike === "string" ? new Date(dateLike) : dateLike;
+  const t = d.getTime();
+  if (!t || Number.isNaN(t)) return "há algum tempo";
+
+  const diff = Date.now() - t;
+
+  const sec = Math.floor(diff / 1000);
+  if (sec < 5) return "agora";
+  if (sec < 60) return `há ${sec}s`;
+
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `há ${min} min`;
+
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `há ${hr}h`;
+
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `há ${day}d`;
+
+  const mo = Math.floor(day / 30);
+  if (mo < 12) return `há ${mo} mês${mo > 1 ? "es" : ""}`;
+
+  const yr = Math.floor(mo / 12);
+  return `há ${yr} ano${yr > 1 ? "s" : ""}`;
+}
+
+function computeOnline(lastSeenAt?: string | null): boolean {
+  if (!lastSeenAt) return false;
+  const ms = new Date(lastSeenAt).getTime();
+  if (!ms || Number.isNaN(ms)) return false;
+  return Date.now() - ms <= ONLINE_TTL_MS;
+}
+
 export default function ProfileHeader({
   perfilId,
   nome,
@@ -124,7 +161,8 @@ export default function ProfileHeader({
   const [perfilTipo, setPerfilTipo] = useState<string | null>(perfilTipoProp ?? null);
   const [perfilTipoId, setPerfilTipoId] = useState<string | null>(perfilTipoIdProp ?? null);
   const [checouVinculo, setChecouVinculo] = useState(false);
-
+  const [presenceOnline, setPresenceOnline] = useState<boolean | null>(null);
+  const [presenceLastSeenAt, setPresenceLastSeenAt] = useState<string | null>(null);
 
   const viewerTipo =
     (Storage as any).tipoSalvo ??
@@ -168,6 +206,56 @@ export default function ProfileHeader({
     text: string;
     onYes: () => Promise<void> | void;
   } | null>(null);
+
+  useEffect(() => {
+    // não faz sentido mostrar online "de você mesmo" (mas pode, se quiser)
+    // se você quiser também no próprio perfil, remova este if:
+    // if (isOwnProfile || isMe) return;
+
+    const token =
+      Storage.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
+
+    const usuarioAlvoId = String(perfilId || "").trim();
+    if (!token || !usuarioAlvoId) return;
+
+    let alive = true;
+
+    async function loadPresence() {
+      try {
+        const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(usuarioAlvoId)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!r.ok) return;
+
+        const data = await r.json().catch(() => null as any);
+        if (!alive || !data) return;
+
+        const seen =
+          data?.usuario?.lastSeenAt ??
+          data?.lastSeenAt ??
+          data?.last_seen_at ??
+          null;
+
+        const seenStr = seen ? new Date(seen).toISOString() : null;
+
+        setPresenceLastSeenAt(seenStr);
+        setPresenceOnline(computeOnline(seenStr));
+      } catch {}
+    }
+
+    loadPresence();
+
+    // atualiza a cada 20s pra "Online" virar "há 1 min" etc
+    const interval = setInterval(loadPresence, 20_000);
+
+    return () => {
+      alive = false;
+      clearInterval(interval);
+    };
+  }, [perfilId, isOwnProfile, isMe]);
 
   useEffect(() => {
     const onBadge = (e: Event) => {
@@ -1169,6 +1257,21 @@ const alvoUsuarioIdFavorito = isOwnProfile
     treinoBtnClass = "bg-amber-300 text-green-900";
   }
 
+  const onlineText = (() => {
+    if (presenceOnline === null && !presenceLastSeenAt) return null;
+
+    // se ainda não carregou, não mostra nada
+    if (presenceOnline === null && presenceLastSeenAt) {
+      // dá pra mostrar "..." se quiser
+      return "…";
+    }
+
+    if (presenceOnline) return "🟢 Online";
+
+    // offline
+    return `⚪ Online ${timeAgoPtBR(presenceLastSeenAt)}`;
+  })();
+
   return (
     <div className="footera-bg-green p-6 flex flex-col items-center relative">
       {isOwnProfile && (
@@ -1228,6 +1331,12 @@ const alvoUsuarioIdFavorito = isOwnProfile
       <h1 className="footera-text-cream text-2xl font-bold">
         {nome.toUpperCase()}
       </h1>
+
+      {onlineText && (
+        <div className="mt-1 text-xs font-semibold footera-text-cream/90">
+          {onlineText}
+        </div>
+      )}
 
       {(idade || posicao || time) && (
         <p className="footera-text-cream text-sm mb-1 text-center">

@@ -1596,13 +1596,54 @@ async function salvarAvaliacao() {
                 open={carreiraOpen && !!focado}
                 title={nomeCompletoAtleta(focado)}
                 fetchAgendados={async ({ monthISO }) => {
-                  // usa exatamente sua rota atual:
                   const atletaId = focado!.id;
-                  const r = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas/${atletaId}/agendados`, {
-                    headers,
-                    params: { month: monthISO },
-                  });
-                  return r.data;
+
+                  // monthISO vem tipo "2026-02"
+                  const [yy, mm] = monthISO.split("-").map(Number);
+                  const base = new Date(yy, (mm || 1) - 1, 1);
+
+                  const toMonthISO = (d: Date) => {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, "0");
+                    return `${y}-${m}`;
+                  };
+
+                  const prev = new Date(base.getFullYear(), base.getMonth() - 1, 1);
+                  const next = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+
+                  const months = [toMonthISO(prev), toMonthISO(base), toMonthISO(next)];
+
+                  const resps = await Promise.all(
+                    months.map((m) =>
+                      axios.get(`${API.BASE_URL}/api/gerenciar/atletas/${atletaId}/agendados`, {
+                        headers,
+                        params: { month: m },
+                      })
+                    )
+                  );
+
+                  // junta tudo em uma lista só, independente do formato (items/agendados)
+                  const merged: any[] = [];
+                  for (const r of resps) {
+                    const data = r.data;
+                    const arr =
+                      (Array.isArray(data?.items) && data.items) ||
+                      (Array.isArray(data?.agendados) && data.agendados) ||
+                      (Array.isArray(data) && data) ||
+                      [];
+                    merged.push(...arr);
+                  }
+
+                  // remove duplicados por id (se repetir entre meses)
+                  const byId = new Map<string, any>();
+                  for (const it of merged) {
+                    const id = String(it?.id || "");
+                    if (!id) continue;
+                    byId.set(id, it);
+                  }
+
+                  // devolve no mesmo “shape” mais comum
+                  return { items: Array.from(byId.values()) };
                 }}
                 fetchProgramados={async () => {
                   // usa exatamente sua rota atual:
