@@ -53,22 +53,26 @@ const GerenciarProfessores: React.FC = () => {
   const [tipo, setTipo] = useState<TipoEntidade>(null);
   const [usuarioIdEntidade, setUsuarioIdEntidade] = useState<string | null>(null);
   const [tipoUsuarioIdEntidade, setTipoUsuarioIdEntidade] = useState<string | null>(null);
-
   const [aba, setAba] = useState<"professores" | "turmas">("professores");
-
   const [q, setQ] = useState("");
   const [professores, setProfessores] = useState<ProfessorMin[]>([]);
   const [profLoading, setProfLoading] = useState(false);
   const [profError, setProfError] = useState<string | null>(null);
-
   const [turmas, setTurmas] = useState<TurmaItem[]>([]);
   const [turmasLoading, setTurmasLoading] = useState(false);
   const [turmasError, setTurmasError] = useState<string | null>(null);
-
   const [turmasOpen, setTurmasOpen] = useState(false);
   const [professorSelecionado, setProfessorSelecionado] = useState<string | undefined>();
-
   const [turmaSelecionadaId, setTurmaSelecionadaId] = useState<string | undefined>();
+
+  useEffect(() => {
+    // se vier de /perfil/GerenciarProfessores?tab=turmas
+    const qs = location.includes("?") ? location.split("?")[1] : "";
+    const params = new URLSearchParams(qs);
+    const tab = params.get("tab");
+    if (tab === "turmas") setAba("turmas");
+  }, [location]);
+
 
   const descobrirPerfil = async () => {
     try {
@@ -93,18 +97,20 @@ const GerenciarProfessores: React.FC = () => {
           ? "Professor"
           : null;
 
-      if (!normalizado || normalizado === "Professor") {
-        throw new Error("Apenas Clube ou Escolinha podem gerenciar professores e turmas nesta tela.");
+      if (!normalizado) {
+        throw new Error("Perfil inválido.");
       }
 
       const usuarioId = data?.usuario?.id ?? data?.usuarioId ?? Storage.usuarioId ?? null;
 
       let tipoId: string | null = null;
+
       if (perfilTipo === "Clube") {
         tipoId = (data?.clube && data.clube.id) || data?.clubeId || Storage.tipoUsuarioId || null;
       } else if (perfilTipo === "Escolinha") {
-        tipoId =
-          (data?.escolinha && data.escolinha.id) || data?.escolinhaId || Storage.tipoUsuarioId || null;
+        tipoId = (data?.escolinha && data.escolinha.id) || data?.escolinhaId || Storage.tipoUsuarioId || null;
+      } else if (perfilTipo === "Professor") {
+        tipoId = (data?.professor && data.professor.id) || data?.professorId || Storage.tipoUsuarioId || null;
       } else {
         tipoId = Storage.tipoUsuarioId ?? null;
       }
@@ -156,10 +162,38 @@ const GerenciarProfessores: React.FC = () => {
   };
 
   const carregarTurmas = async () => {
-    if (!tipoUsuarioIdEntidade || !tipo) return;
+    if (!tipo) return;
+
     try {
       setTurmasError(null);
       setTurmasLoading(true);
+
+      // ✅ MODO PROFESSOR: buscar turmas do professor (rota específica)
+      if (tipo === "Professor") {
+        const { data } = await axios.get(`${API.BASE_URL}/api/turmas/como-professor`, { headers });
+
+        const arr: any[] = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+
+        setTurmas(
+          arr.map((t) => ({
+            id: String(t.id),
+            nome: String(t.nome ?? t.titulo ?? "Turma"),
+            categoria: t.categoria ?? null,
+            professorIds: Array.isArray(t.professorIds) ? t.professorIds.map(String) : [],
+            professorNomes: Array.isArray(t.professorNomes) ? t.professorNomes : [],
+            professorNome:
+              t.professorNome ??
+              (Array.isArray(t.professorNomes) ? t.professorNomes.join(", ") : null) ??
+              null,
+            alunosCount: t.alunosCount ?? t._count?.membros ?? t.qtdAlunos ?? null,
+          }))
+        );
+
+        return;
+      }
+
+      // ✅ MODO CLUBE/ESCOLINHA: precisa do ownerId
+      if (!tipoUsuarioIdEntidade) return;
 
       const ownerTipo = tipo === "Escola" ? "Escolinha" : "Clube";
 
@@ -221,9 +255,13 @@ const GerenciarProfessores: React.FC = () => {
 
   type OwnerTurma = { tipo: "Clube" | "Escolinha"; id: string };
   const owner: OwnerTurma | undefined =
-    tipo && tipoUsuarioIdEntidade
+    tipo && tipo !== "Professor" && tipoUsuarioIdEntidade
       ? { tipo: tipo === "Escola" ? "Escolinha" : "Clube", id: tipoUsuarioIdEntidade }
       : undefined;
+
+  useEffect(() => {
+    if (tipo === "Professor" && aba === "professores") setAba("turmas");
+  }, [tipo, aba]);
 
   return (
     <div className="mx-auto w-full max-w-[1600px] px-3 sm:px-4 py-4 sm:py-6 pb-24">
@@ -256,7 +294,7 @@ const GerenciarProfessores: React.FC = () => {
             </p>
 
             {/* Toggle igual (Atletas/Professores/Turmas) */}
-            {tipo && tipo !== "Professor" && (
+            {tipo && (
               <div className="mt-2 inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
                 <button
                   type="button"
@@ -268,26 +306,28 @@ const GerenciarProfessores: React.FC = () => {
                   Atletas
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAba("professores");
-                    setLocation("/perfil/GerenciarProfessores");
-                  }}
-                  className={`px-3 py-1.5 rounded-lg ${
-                    isProfessoresPage && aba === "professores"
-                      ? "bg-emerald-600 text-white"
-                      : "text-zinc-700 hover:bg-zinc-50"
-                  }`}
-                >
-                  Professores
-                </button>
+                {tipo !== "Professor" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAba("professores");
+                      setLocation("/perfil/GerenciarProfessores");
+                    }}
+                    className={`px-3 py-1.5 rounded-lg ${
+                      isProfessoresPage && aba === "professores"
+                        ? "bg-emerald-600 text-white"
+                        : "text-zinc-700 hover:bg-zinc-50"
+                    }`}
+                  >
+                    Professores
+                  </button>
+                )}
 
                 <button
                   type="button"
                   onClick={() => {
                     setAba("turmas");
-                    setLocation("/perfil/GerenciarProfessores");
+                    setLocation("/perfil/GerenciarProfessores?tab=turmas");
                   }}
                   className={`px-3 py-1.5 rounded-lg ${
                     isProfessoresPage && aba === "turmas"
@@ -337,34 +377,37 @@ const GerenciarProfessores: React.FC = () => {
       </div>
 
       {/* Cards métricas (igual ao Atletas: só aparece no desktop) */}
-      <div className="mb-4 hidden sm:grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-zinc-600">
-            <Users className="h-4 w-4" /> Professores vinculados
+      {tipo !== "Professor" && (
+        <div className="mb-4 hidden sm:grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+            <div className="flex items-center gap-2 text-zinc-600">
+              <Users className="h-4 w-4" /> Professores vinculados
+            </div>
+            <div className="mt-2 text-2xl font-semibold">{metricas.totalProfessores}</div>
+            <div className="text-xs text-zinc-500">Professores associados a esta instituição</div>
           </div>
-          <div className="mt-2 text-2xl font-semibold">{metricas.totalProfessores}</div>
-          <div className="text-xs text-zinc-500">Professores associados a esta instituição</div>
-        </div>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-zinc-600">
-            <Layers className="h-4 w-4" /> Turmas cadastradas
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+            <div className="flex items-center gap-2 text-zinc-600">
+              <Layers className="h-4 w-4" /> Turmas cadastradas
+            </div>
+            <div className="mt-2 text-2xl font-semibold">{metricas.totalTurmas}</div>
+            <div className="text-xs text-zinc-500">Turmas ativas para treinos</div>
           </div>
-          <div className="mt-2 text-2xl font-semibold">{metricas.totalTurmas}</div>
-          <div className="text-xs text-zinc-500">Turmas ativas para treinos</div>
-        </div>
 
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-zinc-600">
-            <GraduationCap className="h-4 w-4" /> Alunos nas turmas
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+            <div className="flex items-center gap-2 text-zinc-600">
+              <GraduationCap className="h-4 w-4" /> Alunos nas turmas
+            </div>
+            <div className="mt-2 text-2xl font-semibold">{metricas.totalAlunos}</div>
+            <div className="text-xs text-zinc-500">Soma de atletas/alunos vinculados às turmas</div>
           </div>
-          <div className="mt-2 text-2xl font-semibold">{metricas.totalAlunos}</div>
-          <div className="text-xs text-zinc-500">Soma de atletas/alunos vinculados às turmas</div>
         </div>
-      </div>
+      )}
 
       {/* Busca (mesma “barra” do Atletas) */}
       <div className="mb-3 sm:mb-4 grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-12">
+        {aba === "professores" && (
         <div className="md:col-span-6">
           <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2">
             <SearchIcon className="h-4 w-4 text-zinc-500" />
@@ -376,6 +419,7 @@ const GerenciarProfessores: React.FC = () => {
             />
           </div>
         </div>
+        )}
 
         <div className="md:col-span-6 flex items-center justify-end">
           {/* espaço “vazio” pra ficar igual respiro do Atletas */}
@@ -519,7 +563,9 @@ const GerenciarProfessores: React.FC = () => {
                       </div>
                       <button
                         onClick={() => {
-                          setProfessorSelecionado(t.professorIds?.[0]);
+                          if (tipo === "Professor") setProfessorSelecionado(undefined);
+                          else setProfessorSelecionado(t.professorIds?.[0]);
+
                           setTurmaSelecionadaId(t.id);
                           setTurmasOpen(true);
                         }}
@@ -574,20 +620,18 @@ const GerenciarProfessores: React.FC = () => {
         </div>
       )}
 
-      {/* Modal Turmas */}
-      {owner && (
-        <TurmasManager
-          open={turmasOpen}
-          onClose={() => {
-            setTurmasOpen(false);
-            carregarTurmas();
-            carregarProfessores();
-          }}
-          owner={owner}
-          professorId={professorSelecionado}
-          initialTurmaId={turmaSelecionadaId} // ✅ ADD AQUI
-        />
-      )}
+      {/* Modal Turmas (owner OU professor) */}
+      <TurmasManager
+        open={turmasOpen}
+        onClose={() => {
+          setTurmasOpen(false);
+          carregarTurmas();
+          carregarProfessores();
+        }}
+        owner={owner} // undefined no modo professor
+        professorId={tipo === "Professor" ? (tipoUsuarioIdEntidade ?? undefined) : professorSelecionado}
+        initialTurmaId={turmaSelecionadaId}
+      />
 
       {/* BottomNav igual ao Atletas */}
       <BottomNav />

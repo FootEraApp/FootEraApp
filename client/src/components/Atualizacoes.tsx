@@ -60,6 +60,26 @@ export default function Atualizacoes() {
       {/* ===================== */}
       {/* ATUALIZAÇÕES 2026 */}
       {/* ===================== */}
+
+      <UpdateCard type="correcoes" title="🐞 Correções de bugs — ??/01/2026">
+        <ul className="list-disc list-inside space-y-1">
+          <li>Ajustes na exibição e filtragem de treinos para atletas, professores, clubes e escolinhas.</li>
+          <li>Correção na contagem e visualização de treinos realizados, utilizados e vinculados.</li>
+          <li>Melhorias no agendamento de treinos, exibindo apenas opções válidas conforme vínculos do usuário.</li>
+          <li>Correção de inconsistências no gerenciamento de atletas, turmas e quantidade de alunos vinculados.</li>
+          <li>Ajustes no fluxo de criação, edição e exclusão de treinos, garantindo permissões corretas.</li>
+          <li>Correções no carregamento e salvamento de dados ao editar treinos existentes.</li>
+          <li>Melhorias na exibição de imagens e fotos de perfil, com fallback automático para a logo da FootEra.</li>
+          <li>Ajustes na página Explorar, corrigindo buscas, filtros e resultados exibidos.</li>
+          <li>Correções no sistema de mensagens, exibindo corretamente conversas e últimas interações.</li>
+          <li>Ajustes no sistema de eventos, agendas e convocações de atletas.</li>
+          <li>Correções na exibição de conquistas, observados e informações de perfil.</li>
+          <li>Melhorias nas configurações de conta, assinatura e acesso a pagamentos.</li>
+          <li>Ajustes no controle de trial gratuito e ativação consciente do plano.</li>
+          <li>Correções visuais e funcionais em telas administrativas e de gerenciamento.</li>
+        </ul>
+      </UpdateCard>
+      
       <UpdateCard type="atualizacao" title="✨ Atualizações 2026">
         <p className="font-medium">
           Estamos preparando muitas novidades para este ano de{" "}
