@@ -22,7 +22,6 @@ import {
   montarExerciciosParaPayload,
   parseRepeticoesStr,
 } from "../utils/treinos.helpers.js";
-import axios from "axios";
 
 type ExItemUILocal = ExItemUI & {
   videoUrl?: string | null;
@@ -2208,21 +2207,21 @@ useEffect(() => {
   };
 
   const atualizarExercicio = (
-  index: number,
-  campo: keyof ExItemUILocal,
-  valor: any
-) => {
-  setExerciciosSelecionados((prev) => {
-    const copia = [...prev];
-    (copia[index] as any)[campo] = valor;
+    index: number,
+    campo: keyof ExItemUILocal,
+    valor: any
+  ) => {
+    setExerciciosSelecionados((prev) => {
+      const copia = [...prev];
+      (copia[index] as any)[campo] = valor;
 
-    if (campo === "ordem") {
-      const n = parseInt(String(valor), 10);
-      if (!isNaN(n)) copia[index].ordem = n;
-    }
-    return copia;
-  });
-};
+      if (campo === "ordem") {
+        const n = parseInt(String(valor), 10);
+        if (!isNaN(n)) copia[index].ordem = n;
+      }
+      return copia;
+    });
+  };
 
   const removerExercicio = (index: number) => {
     const novaLista = [...exerciciosSelecionados];
@@ -2468,22 +2467,6 @@ useEffect(() => {
         })) as any,
       );
 
-      // 🔥 normaliza pro formato que o backend geralmente valida
-      const exerciciosPayload = (Array.isArray(exerciciosRaw) ? exerciciosRaw : []).map(
-        (x: any, idx: number) => {
-          const exercicioId = String(
-            x.exercicioId ?? x.idCatalogo ?? x.id ?? ""
-          ).trim();
-
-          return {
-            exercicioId,                          // ✅ chave certa
-            ordem: Number(x.ordem ?? idx + 1),     // ✅ número
-            repeticoes: String(x.repeticoes ?? x.repeticoesStr ?? "1"), // ✅ string
-            observacao: x.observacao ?? null,
-          };
-        }
-      );
-
       const exerciciosValidos = exerciciosSelecionados.filter((x: any) => {
         const id = x?.exercicioId ?? x?.idCatalogo ?? x?.id;
         return !!id;
@@ -2495,35 +2478,12 @@ useEffect(() => {
         setExerciciosSelecionados(renumerado);
       }
 
-      const mapNivel = (s: string) =>
-        ({ Base: "Base", Avancado: "Avancado", Performance: "Performance" } as const)[
-          s
-        ] ?? "Base";
-
-      const mapTipoTreino = (s: string) =>
-        ({ Tecnico: "Tecnico", Fisico: "Fisico", Tatico: "Tatico", Mental: "Mental" } as const)[
-          s
-        ] ?? null;
-
-      const mapCategoria = (s: string) => {
-        const m = String(s || "").match(/sub[\s\-]?(\d{1,2})/i);
-        if (m) return `Sub${m[1]}`;
-        if (/^livre$/i.test(String(s))) return "Livre";
-        return s;
-      };
-
       const codigo =
         `${nome}`.trim()
           ? `${nome}`.toUpperCase().replace(/\s+/g, "-").slice(0, 24) +
             "-" +
             Date.now().toString(36)
           : "TP-" + Date.now().toString(36);
-
-      // (mantive como estava, mesmo que não seja usado)
-      const professorIdDoTreino =
-        tipoUsuarioNorm === "professor"
-          ? String(professorLogadoId || tipoUsuarioId)
-          : null;
 
       // ✅ só manda exercícios que têm id do banco
       const exValidos = exerciciosSelecionados.filter(
@@ -2561,28 +2521,108 @@ useEffect(() => {
         return;
       }
 
+      // ✅ 1) escolher uma data para salvar em dataAgendada
+      // prioridade: datasAgendamento[0] (se tiver) senão dataTreino
+      const dataAgendadaISO =
+        (datasAgendamento?.length ? datasAgendamento[0] : dataTreino)
+          ? new Date(
+              (datasAgendamento?.length ? datasAgendamento[0] : dataTreino) as any
+            ).toISOString()
+          : null;
+
+      // ✅ 2) normalizar exercícios (ACEITA catálogo e temporário)
+      const exerciciosNormalizados = (exerciciosSelecionados || [])
+        .map((e: any, idx: number) => {
+          const exercicioId =
+            e.exercicioId ?? e.idCatalogo ?? e.exercicio?.id ?? e.id ?? null;
+
+          const nomeTemp = typeof e.nome === "string" ? e.nome.trim() : "";
+
+          return {
+            ...e,
+            exercicioId: exercicioId ? String(exercicioId) : null,
+            nome: nomeTemp || e.nome, // mantém nome (útil p/ temporário)
+            ordem: e.ordem ?? idx + 1,
+            repeticoes:
+              e.repeticoes ??
+              e.repeticoesStr ??
+              e.repeticoesTexto ??
+              e.repeticoesString ??
+              null,
+          };
+        })
+        // mantém se for do catálogo (exercicioId) OU temporário (nome)
+        .filter((e: any) => !!e.exercicioId || (!!e.nome && String(e.nome).trim().length > 0));
+
+      // ✅ 3) montar payload (pode continuar usando seu helper)
       const payload = montarPayloadSomenteInfoEExercicios({
-        titulo: nome,
-        descricao,
-        nivel,
-        duracaoMinutos: duracao,
         tipoTreino,
+        // ⚠️ não manda imagemUrl aqui (dá erro TS no seu helper)
+        // imagemUrl: capaUrl || null,
+        dataAgendada: dataAgendadaISO,
+        exerciciosSelecionados: exerciciosNormalizados,
+
+        // esses campos podem existir no helper, mas a gente garante abaixo
+        titulo: nome,
+        nivel,
+        descricao,
+        duracaoMinutos: duracao,
         categoria: categorias,
         dicas,
-        exerciciosSelecionados: exerciciosValidos, // 🔥 OBRIGATÓRIO
-      });
+        pontuacao,
+        metas,
+      } as any);
 
+      // ✅ 4) GARANTIR nomes que o backend realmente usa
+      (payload as any).nome = String(nome || "").trim();
+      (payload as any).duracao = duracao != null ? Number(duracao) : null;     // backend espera "duracao"
+      (payload as any).dataAgendada = dataAgendadaISO;                         // backend lê dataAgendada
+      // ✅ pontuação real do topo (ex.: "43 pts")
+      const pontuacaoTopo =
+        Number.isFinite(Number(score?.total)) ? Math.max(0, Math.floor(Number(score.total))) : null;
+
+      (payload as any).pontuacao = pontuacaoTopo;
+      (payload as any).objetivo = (metas ?? "").trim() || null;
+      // dono do treino
+      (payload as any).tipoUsuario = tipoUsuarioNorm;              // "professor" | "clube" | "escolinha"
+      (payload as any).tipoUsuarioId = String(tipoUsuarioId);
+      // atletas / elencos / colaboradores
       (payload as any).atletasIds = atletasSelecionados;
       (payload as any).elencosIds = elencoSelecionado ? [elencoSelecionado] : [];
-      (payload as any).tipoUsuario = tipoUsuarioNorm;     // "professor" | "clube" | "escolinha"
-      (payload as any).tipoUsuarioId = String(tipoUsuarioId); // ✅ o dono real do treino
-      (payload as any).pontuacao = pontuacao ?? null;
-      (payload as any).metas = metas ?? null;
-      (payload as any).codigo = codigo; // se você quiser salvar o código que você gera
       (payload as any).colaboradoresProfessorIds = professoresIdsFinalSemEu;
-      // garante que a “Gaveta” receba exercícios válidos
-      (payload as any).exercicios = Array.isArray(exValidos) ? exValidos : [];
-      (payload as any).exercicios = (payload as any).exercicios.filter((e: any) => e?.exercicioId);
+
+      // código (se quiser persistir)
+      (payload as any).codigo = codigo;
+
+      // ✅ 5) EXERCÍCIOS: setar UMA ÚNICA VEZ, sempre normalizado com exercicioId
+      (payload as any).exercicios = exerciciosNormalizados.map((e: any, idx: number) => {
+        const repeticoesStr =
+          typeof e.repeticoes === "string"
+            ? e.repeticoes
+            : e.repeticoes != null
+            ? String(e.repeticoes)
+            : null;
+
+        // exercício do catálogo
+        if (e.exercicioId) {
+          return {
+            exercicioId: String(e.exercicioId),
+            ordem: Number(e.ordem ?? idx + 1),
+            repeticoes: repeticoesStr,
+            observacao: e.observacao ?? null,
+          };
+        }
+
+        // temporário
+        return {
+          nome: String(e.nome || "").trim(),
+          ordem: Number(e.ordem ?? idx + 1),
+          repeticoes: repeticoesStr,
+          observacao: e.observacao ?? null,
+        };
+      });
+
+      // ✅ 6) imagem: backend espera "imagemUrl"
       const capaFinal = capaUrl && String(capaUrl).startsWith("blob:") ? null : capaUrl;
       (payload as any).imagemUrl = capaFinal ? String(capaFinal) : null;
 
@@ -2591,16 +2631,6 @@ useEffect(() => {
         : await TreinosApi.criar(payload);
 
       const criado = resp?.data ?? resp;
-
-      const profsSelecionadosDetalhe = professoresIdsFinal.map((id) => {
-        const p = professores.find((x) => String(x.id) === String(id));
-        return {
-          id,
-          nome: p?.nome ?? "(não encontrado na lista carregada)",
-          codigo: p?.codigo ?? null,
-          cref: p?.cref ?? null,
-        };
-      });
 
       let qtdAgendados = 0;
       const treinoProgramadoId =
@@ -3719,7 +3749,6 @@ useEffect(() => {
             </StepCard>
           </>
         )}
-
 
         {etapa === 3 && (
           <StepCard title="Selecionar Atletas Vinculados">

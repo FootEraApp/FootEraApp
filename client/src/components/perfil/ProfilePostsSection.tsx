@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { publicImgUrl } from "../../utils/publicUrl.js";
-import { FaHeart, FaRegCommentDots } from "react-icons/fa";
-import { getFeedPosts, type PostagemComUsuario } from "../../services/feedService.js";
+import { FaHeart, FaRegCommentDots, FaRetweet, FaShare } from "react-icons/fa";
 import { APP, API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import axios from "axios";
 import { X } from "lucide-react";
+import { getFeedPosts, deletarComentario, compartilharPost, likePost, comentarPost, repostPost, type PostagemComUsuario } from "../../services/feedService.js";
 
 type ConquistaDB = {
   id: string;
@@ -151,6 +151,178 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [deletandoId, setDeletandoId] = useState<string | null>(null);
   const [conquistasById, setConquistasById] = useState<Record<string, ConquistaDB>>({});
+  const [comentandoPostId, setComentandoPostId] = useState<string | null>(null);
+  const [comentarioTexto, setComentarioTexto] = useState("");
+  const [repostandoId, setRepostandoId] = useState<string | null>(null);
+  const [curtindoId, setCurtindoId] = useState<string | null>(null);
+  const [comentariosModalAberto, setComentariosModalAberto] = useState(false);
+  const [postSelecionado, setPostSelecionado] = useState<PostagemComUsuario | null>(null);
+  const [comentarioTextoPorPost, setComentarioTextoPorPost] = useState<Record<string, string>>({});
+  const [repostsByMe, setRepostsByMe] = useState<Set<string>>(new Set());
+
+  const token =
+    (Storage as any)?.token ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    "";
+
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+  async function handleApagarComentario(comentarioId: string, postId: string) {
+    try {
+      await deletarComentario(comentarioId);
+
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id !== postId
+            ? p
+            : { ...p, comentarios: (p.comentarios || []).filter((c: any) => c.id !== comentarioId) }
+        )
+      );
+
+      setPostSelecionado((prev) => {
+        if (!prev || prev.id !== postId) return prev;
+        return {
+          ...prev,
+          comentarios: (prev.comentarios || []).filter((c: any) => c.id !== comentarioId),
+        };
+      });
+    } catch (e: any) {
+      alert(e?.message || "Não foi possível apagar o comentário.");
+    }
+  }
+
+  async function toggleCurtir(postId: string) {
+    try {
+      setCurtindoId(postId);
+
+      // seu backend "like" normalmente alterna (curtir/descurtir) no mesmo endpoint
+      await likePost(postId);
+
+      // atualiza o post na tela sem recarregar tudo
+      setPosts((prev) =>
+        prev.map((p) => {
+          if (p.id !== postId) return p;
+
+          const me = String(Storage.usuarioId || "").trim();
+          const curtidas = Array.isArray(p.curtidas) ? [...p.curtidas] : [];
+          const jaCurti = curtidas.some((c) => String(c.usuarioId) === me);
+
+          return {
+            ...p,
+            curtidas: jaCurti
+              ? curtidas.filter((c) => String(c.usuarioId) !== me)
+              : [...curtidas, { usuarioId: me }],
+          };
+        })
+      );
+    } catch (e: any) {
+      alert(e?.message || "Não foi possível curtir.");
+    } finally {
+      setCurtindoId(null);
+    }
+  }
+
+  async function enviarComentarioNoModal(postId: string) {
+    const txt = String(comentarioTextoPorPost[postId] || "").trim();
+    if (!txt) return;
+
+    try {
+      const novoComentario = await comentarPost(postId, txt);
+
+      setComentarioTextoPorPost((prev) => ({ ...prev, [postId]: "" }));
+
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId
+            ? { ...p, comentarios: [...(p.comentarios || []), novoComentario as any] }
+            : p
+        )
+      );
+
+      setPostSelecionado((prev) => {
+        if (!prev || prev.id !== postId) return prev;
+        return { ...prev, comentarios: [...(prev.comentarios || []), novoComentario as any] };
+      });
+    } catch (e: any) {
+      alert(e?.message || "Não foi possível comentar.");
+    }
+  }
+
+  async function repostar(post: PostagemComUsuario) {
+    const meId = String(Storage.usuarioId || "").trim();
+
+    // repost SEMPRE deve ser no ROOT (não no wrapper do repost)
+    const root = getRootPost(post);
+    const rootId = String(root?.id || post.id).trim();
+    const jaRepostei = repostsByMe.has(rootId);
+
+    try {
+      setRepostandoId(rootId);
+
+      const resp = await repostPost(rootId, ""); // backend toggle
+
+      // 1) atualiza o "set" (vermelhinho)
+      setRepostsByMe((prev) => {
+        const next = new Set(prev);
+        if (jaRepostei) next.delete(rootId);
+        else next.add(rootId);
+        return next;
+      });
+
+      // 2) atualiza contagem (+1/-1) em todos os cards que forem desse root
+      setPosts((prev) => {
+        const next = [...prev];
+
+        // se foi UNREPOST: remove o(s) repost wrapper(s) meus desse root do perfil
+        if (resp?.action === "unrepost") {
+          return next
+            .filter((p) => {
+              const anyP = p as any;
+              const dono = ownerIdOfPost(p, anyP);
+              const r = getRootPost(p);
+              const rid = String(r?.id || p.id).trim();
+
+              // remove apenas repost wrappers meus daquele root
+              if (dono === meId && p.repostOf && rid === rootId) return false;
+              return true;
+            })
+            .map((p) => {
+              const r = getRootPost(p);
+              const rid = String(r?.id || p.id).trim();
+              if (rid !== rootId) return p;
+
+              const base = Number(p.reposts ?? 0);
+              return { ...p, reposts: Math.max(0, base - 1) };
+            });
+        }
+
+        // se foi REPOST: incrementa +1 e (opcional) adiciona o novo repost no topo se vier do backend
+        const mapped = next.map((p) => {
+          const r = getRootPost(p);
+          const rid = String(r?.id || p.id).trim();
+          if (rid !== rootId) return p;
+
+          const base = Number(p.reposts ?? 0);
+          return { ...p, reposts: base + 1 };
+        });
+
+        // se backend retornar o post do repost, você pode inserir pra aparecer imediatamente no perfil
+        if (resp?.action === "repost" && resp?.post) {
+          const already = mapped.some((p) => String(p.id) === String(resp.post!.id));
+          if (!already) {
+            mapped.unshift(resp.post as any);
+          }
+        }
+
+        return mapped;
+      });
+    } catch (e: any) {
+      alert(e?.message || "Não foi possível repostar.");
+    } finally {
+      setRepostandoId(null);
+    }
+  }
 
   async function carregarConquista(conquistaId: string) {
     const id = String(conquistaId || "").trim();
@@ -243,6 +415,23 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         );
 
         if (!cancelled) setPosts(dados);
+
+        const meId = String(Storage.usuarioId || "").trim();
+        const s = new Set<string>();
+
+        for (const p of dados) {
+          const anyP = p as any;
+          const dono = ownerIdOfPost(p, anyP);
+
+          // se esse item é um repost e foi feito por mim, marco o ROOT como "repostado por mim"
+          if (p.repostOf && dono === meId) {
+            const root = getRootPost(p);
+            if (root?.id) s.add(String(root.id));
+          }
+        }
+
+        if (!cancelled) setRepostsByMe(s);
+
         const ids = new Set<string>();
         for (const p of dados) {
           const parsed = parseAchievement(p.conteudo || "");
@@ -284,8 +473,14 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
             const anyP = post as any;
             const dono = ownerIdOfPost(post, anyP);
             const me = String(Storage.usuarioId || "").trim();
+            const jaCurtiu = (post.curtidas || []).some((c: any) =>
+              String(c?.usuarioId ?? c?.userId ?? c?.id) === me
+            );
             const isMyProfile = String(usuarioId || "").trim() === me;
-
+            const root = getRootPost(post);
+            const rootId = String(root?.id || post.id).trim();
+            const jaRepostei = repostsByMe.has(rootId);
+            const repostCount = Number(post.reposts ?? root?.reposts ?? 0);
             const reposterId = String(
               anyP?.reposterId ??
                 anyP?.repostUserId ??
@@ -357,7 +552,6 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                         const root = getRootPost(post);     
                         const parentComment = parent ? cleanText(parent.conteudo) : "";
                         const rootText = cleanText(root.conteudo);
-
                         const rootAvatar =
                           publicImgUrl(root.usuario?.foto) || FALLBACK_AVATAR;
                         const rootImg = midiaImg(root.imagemUrl);
@@ -456,19 +650,152 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                   )}
                 </div>
 
-                <div className="flex items-center gap-4 text-gray-600 text-sm px-1">
-                  <div className="flex items-center gap-1">
-                    <FaHeart />
-                    <span>{curtidas.length}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <FaRegCommentDots />
-                    <span>{comentarios.length}</span>
+                <div className="flex items-center justify-between pt-2">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => toggleCurtir(post.id)}
+                      disabled={curtindoId === post.id}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-full border ${
+                        jaCurtiu ? "bg-red-50 border-red-200 text-red-600" : "bg-white border-gray-200 text-gray-700"
+                      }`}
+                    >
+                      <FaHeart className={jaCurtiu ? "opacity-100" : "opacity-60"} />
+                      <span>{(post.curtidas || []).length}</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setPostSelecionado(post);
+                        setComentariosModalAberto(true);
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 rounded-full border bg-white border-gray-200 text-gray-700"
+                    >
+                      <FaRegCommentDots />
+                      <span>{(post.comentarios || []).length}</span>
+                    </button>
+
+                    <button
+                      onClick={() => repostar(post)}
+                      disabled={repostandoId === rootId}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-full border ${
+                        jaRepostei
+                          ? "bg-red-50 border-red-200 text-red-600"
+                          : "bg-white border-gray-200 text-gray-700"
+                      }`}
+                      title={jaRepostei ? "Despublicar" : "Republicar"}
+                    >
+                      <FaRetweet className={jaRepostei ? "opacity-100" : "opacity-60"} />
+                      <span>{repostCount}</span>
+                    </button>
+
+                    <button
+                      onClick={() => compartilharPost(post.id)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-full border bg-white border-gray-200 text-gray-700"
+                    >
+                      <FaShare />
+                    </button>
                   </div>
                 </div>
               </div>
             );
           })}
+
+          {comentariosModalAberto && postSelecionado && (
+            <div className="fixed inset-0 z-50 bg-black/30 flex items-end sm:items-center justify-center">
+              <div className="bg-white w-full sm:w-[560px] rounded-t-2xl sm:rounded-2xl overflow-hidden">
+                <div className="px-4 py-3 border-b flex items-center justify-between">
+                  <h3 className="font-bold text-green-900">Comentários</h3>
+                  <button
+                    onClick={() => {
+                      setComentariosModalAberto(false);
+                      setPostSelecionado(null);
+                    }}
+                    className="p-2 rounded-full hover:bg-gray-100"
+                    aria-label="Fechar"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="max-h-[55vh] overflow-y-auto px-4 py-3 space-y-3">
+                  {(postSelecionado.comentarios || []).length === 0 && (
+                    <p className="text-sm text-gray-500">Seja o primeiro a comentar!</p>
+                  )}
+
+                  {(postSelecionado.comentarios || []).map((c: any) => {
+                    const isMine = String(c.usuarioId) === String(Storage.usuarioId);
+                    return (
+                      <div key={c.id} className="flex gap-3">
+                        <img
+                          src={publicImgUrl(c.usuario?.foto) || `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`}
+                          className="w-9 h-9 rounded-full object-cover"
+                          alt={c.usuario?.nome || "avatar"}
+                        />
+
+                        <div className="flex-1 bg-gray-50 border rounded-xl px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold text-gray-800">
+                              {c.usuario?.nome || "Usuário"}
+                            </span>
+
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] text-gray-500">
+                                {format(new Date(c.dataCriacao), "dd/MM, HH:mm")}
+                              </span>
+
+                              {isMine && (
+                                <button
+                                  onClick={() => handleApagarComentario(c.id, postSelecionado.id)}
+                                  className="text-gray-400 hover:text-red-600"
+                                  title="Apagar comentário"
+                                  aria-label="Apagar comentário"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          <p className="text-sm text-gray-800 mt-1">{c.conteudo}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="border-t bg-gray-50 px-3 py-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={comentarioTextoPorPost[postSelecionado.id] || ""}
+                      onChange={(e) =>
+                        setComentarioTextoPorPost((prev) => ({
+                          ...prev,
+                          [postSelecionado.id]: e.target.value,
+                        }))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          enviarComentarioNoModal(postSelecionado.id);
+                        }
+                      }}
+                      placeholder="Adicione um comentário..."
+                      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-600"
+                    />
+
+                    <button
+                      onClick={() => enviarComentarioNoModal(postSelecionado.id)}
+                      className="inline-flex items-center justify-center rounded-lg px-3 py-2 bg-green-700 text-white hover:bg-green-800"
+                      title="Enviar"
+                    >
+                      ➤
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
