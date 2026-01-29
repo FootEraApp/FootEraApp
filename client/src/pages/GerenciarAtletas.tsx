@@ -1054,7 +1054,7 @@ async function salvarAvaliacao() {
             <h1 className="text-xl font-semibold text-zinc-900">{tipo ?? "Institucional"} · Gerenciar Atletas</h1>
             <p className="text-sm text-zinc-500">Acompanhe e organize seus atletas vinculados na FootEra.</p>
 
-            {tipo && tipo !== "Professor" && (
+            {tipo && (
               <div className="mt-2 inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
                 <button
                   type="button"
@@ -1066,43 +1066,71 @@ async function salvarAvaliacao() {
                   Atletas
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setLocation("/perfil/GerenciarProfessores")}
-                  className={`px-3 py-1.5 rounded-lg ${
-                    isProfessoresPage ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
-                  }`}
-                >
-                  Professores
-                </button>
+                {tipo !== "Professor" ? (
+                  <button
+                    type="button"
+                    onClick={() => setLocation("/perfil/GerenciarProfessores")}
+                    className={`px-3 py-1.5 rounded-lg ${
+                      isProfessoresPage ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
+                    }`}
+                  >
+                    Professores
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setLocation("/perfil/GerenciarProfessores?tab=turmas")}
+                    className={`px-3 py-1.5 rounded-lg ${
+                      isProfessoresPage ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
+                    }`}
+                  >
+                    Turmas
+                  </button>
+                )}
               </div>
             )}
+
 
           </div>
         </div>
 
         <div className="flex w-full flex-wrap items-center justify-start sm:justify-end gap-2">
-          {tipo && tipo !== "Professor" && (
+          {tipo && (
             <>
-              <button
-                onClick={() => { setTurmasProfessorId(null); setTurmasOpen(true); }}
-                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
-              >
-                <CirclePlus className="h-4 w-4 shrink-0" />
-                <span className="whitespace-nowrap text-sm">Adicionar</span>
-                <span className="hidden sm:inline whitespace-nowrap">turma</span>
-              </button>
+              {tipo !== "Professor" && (
+                <>
+                  <button
+                    onClick={() => { setTurmasProfessorId(null); setTurmasOpen(true); }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+                  >
+                    <CirclePlus className="h-4 w-4 shrink-0" />
+                    <span className="whitespace-nowrap text-sm">Adicionar</span>
+                    <span className="hidden sm:inline whitespace-nowrap">turma</span>
+                  </button>
 
-              <button
-                onClick={() => { setTurmasProfessorId(null); setTurmasOpen(true); }}
-                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
-              >
-                <ListChecks className="h-4 w-4 shrink-0" />
-                <span className="whitespace-nowrap text-sm">Turmas</span>
-                <span className="hidden sm:inline whitespace-nowrap"> (admin)</span>
-              </button>
+                  <button
+                    onClick={() => { setTurmasProfessorId(null); setTurmasOpen(true); }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+                  >
+                    <ListChecks className="h-4 w-4 shrink-0" />
+                    <span className="whitespace-nowrap text-sm">Turmas</span>
+                    <span className="hidden sm:inline whitespace-nowrap"> (admin)</span>
+                  </button>
+                </>
+              )}
+
+              {tipo === "Professor" && (
+                <button
+                  onClick={() => setLocation("/perfil/GerenciarProfessores?tab=turmas")}
+                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+                >
+                  <ListChecks className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap text-sm">Turmas</span>
+                </button>
+              )}
             </>
           )}
+
         </div>
       </div>
 
@@ -1511,11 +1539,16 @@ async function salvarAvaliacao() {
       <TurmasManager
         open={turmasOpen}
         onClose={() => setTurmasOpen(false)}
-        owner={tipo && tipo !== "Professor" && tipoUsuarioIdEntidade ? {
-          tipo: tipo === "Escola" ? "Escolinha" : "Clube",
-          id: tipoUsuarioIdEntidade
-        } : undefined}
-        professorId={turmasProfessorId || undefined}
+        owner={
+          tipo && tipo !== "Professor" && tipoUsuarioIdEntidade
+            ? { tipo: tipo === "Escola" ? "Escolinha" : "Clube", id: tipoUsuarioIdEntidade }
+            : undefined
+        }
+        professorId={
+          tipo === "Professor"
+            ? (tipoUsuarioIdEntidade || undefined) // professor gerencia as turmas ligadas a ele
+            : (turmasProfessorId || undefined)
+        }
       />
 
       {carreiraOpen && focado && (
