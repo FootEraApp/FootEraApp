@@ -7,6 +7,7 @@ import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import Atualizacoes from "../components/Atualizacoes.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+import socket from "../services/socket.js";
 
 type FeedbackTipo = "sugestao" | "bug";
 
@@ -72,12 +73,20 @@ export default function ConfiguracoesPerfil() {
         setSenhaAtual("");
         setSenhaNova("");
 
-        // ✅ AQUI (logo após sucesso)
-        setTimeout(() => {
+        setTimeout(async () => {
+        try {
+          await fetch(`${API.BASE_URL}/api/auth/logout`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${Storage.token}` },
+          }).catch(() => {});
+        } finally {
+          try { socket?.disconnect(); } catch {}
           localStorage.clear();
           sessionStorage.clear();
           setLocation("/login");
-        }, 800);
+        }
+      }, 800);
+
       } catch (e: any) {
         setSegErr(e?.message || "Erro ao trocar senha.");
       } finally {
@@ -98,6 +107,10 @@ export default function ConfiguracoesPerfil() {
       if (!resp.ok) throw new Error(data?.message || "Erro ao encerrar sessões.");
       // ✅ força logout local
       localStorage.clear();
+      await fetch(`${API.BASE_URL}/api/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${Storage.token}` },
+      }).catch(() => {});
       sessionStorage.clear();
       setLocation("/login");
     } catch (e: any) {
@@ -107,10 +120,31 @@ export default function ConfiguracoesPerfil() {
     }
   }
 
-  function confirmarLogout() {
-    if (confirm("Tem certeza que deseja sair?")) {
-      localStorage.clear();
-      sessionStorage.clear();
+  async function confirmarLogout() {
+    const ok = confirm("Tem certeza que deseja sair?");
+    if (!ok) return;
+
+    try {
+      // 1) marca logout no backend (grava lastLogoutAt)
+      await fetch(`${API.BASE_URL}/api/auth/logout`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${Storage.token}`,
+        },
+      }).catch(() => {});
+    } finally {
+      // 2) desconecta socket (presença realtime)
+      try {
+        socket?.disconnect();
+      } catch {}
+
+      // 3) limpa tokens
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch {}
+
+      // 4) volta pro login
       setLocation("/login");
     }
   }

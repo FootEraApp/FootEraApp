@@ -1,6 +1,31 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 
+export async function getPresenca(req: any, res: any) {
+  const { id } = req.params;
+
+  const u = await prisma.usuario.findUnique({
+    where: { id },
+    select: { id: true, lastSeenAt: true, lastLoginAt: true, lastLogoutAt: true, nome: true, tipo: true },
+  });
+
+  if (!u) return res.status(404).json({ message: "Usuário não encontrado." });
+
+  const now = Date.now();
+  const lastSeen = u.lastSeenAt ? new Date(u.lastSeenAt).getTime() : 0;
+
+  // regra simples: online se teve atividade nos últimos 2 minutos
+  const ONLINE_WINDOW_MS = 2 * 60_000;
+  const isOnline = lastSeen && (now - lastSeen) <= ONLINE_WINDOW_MS;
+
+  return res.json({
+    usuarioId: u.id,
+    isOnline,
+    lastSeenAt: u.lastSeenAt,
+    lastLoginAt: u.lastLoginAt,
+    lastLogoutAt: u.lastLogoutAt,
+  });
+}
 
 export const getUsuarioPorId = async (req: Request, res: Response) => {
   const { id } = req.params;
