@@ -309,6 +309,12 @@ const GerenciarAtletas: React.FC = () => {
   const isAtletasPage = location === "/perfil/GerenciarAtletas" || location === "/perfil/gerenciarAtletas";
   const isProfessoresPage = location === "/perfil/GerenciarProfessores" || location === "/perfil/gerenciarProfessores";
 
+  const qs = location.includes("?") ? location.split("?")[1] : "";
+  const params = new URLSearchParams(qs);
+  const tab = params.get("tab");
+  const isTurmasTab = tab === "turmas";
+  const isTurmasPage = isProfessoresPage && isTurmasTab;
+
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
@@ -1056,6 +1062,7 @@ async function salvarAvaliacao() {
 
             {tipo && (
               <div className="mt-2 inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
+                {/* ATLETAS */}
                 <button
                   type="button"
                   onClick={() => setLocation("/perfil/GerenciarAtletas")}
@@ -1066,27 +1073,31 @@ async function salvarAvaliacao() {
                   Atletas
                 </button>
 
-                {tipo !== "Professor" ? (
+                {/* PROFESSORES (só Clube/Escola) */}
+                {tipo !== "Professor" && (
                   <button
                     type="button"
                     onClick={() => setLocation("/perfil/GerenciarProfessores")}
                     className={`px-3 py-1.5 rounded-lg ${
-                      isProfessoresPage ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
+                      isProfessoresPage && !isTurmasTab
+                        ? "bg-emerald-600 text-white"
+                        : "text-zinc-700 hover:bg-zinc-50"
                     }`}
                   >
                     Professores
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setLocation("/perfil/GerenciarProfessores?tab=turmas")}
-                    className={`px-3 py-1.5 rounded-lg ${
-                      isProfessoresPage ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
-                    }`}
-                  >
-                    Turmas
-                  </button>
                 )}
+
+                {/* TURMAS (Clube/Escola E Professor) */}
+                <button
+                  type="button"
+                  onClick={() => setLocation("/perfil/GerenciarProfessores?tab=turmas")}
+                  className={`px-3 py-1.5 rounded-lg ${
+                    isTurmasPage ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
+                  }`}
+                >
+                  Turmas
+                </button>
               </div>
             )}
 
