@@ -37,7 +37,7 @@ model Usuario {
   EmailVerification EmailVerification[]
   assinatura        Assinatura?
   administrador     Administrador?
-  tokenVersion      Int                 @default(0) // ✅ ADICIONE ISSO
+  tokenVersion      Int                 @default(0)
   senhaAtualizadaEm DateTime?
 
   amigosDe               Amigo[]                   @relation("AmigoUsuario")
@@ -139,7 +139,7 @@ model Assinatura {
 
 model Professor {
   id                  String               @id @default(uuid())
-  codigo              String?              
+  codigo              String?
   cref                String?
   areaFormacao        String
   dataNascimento      DateTime?
@@ -608,6 +608,7 @@ model Escolinha {
   AtletaHistoricoVinculo AtletaHistoricoVinculo[]
   ProfessorEscolinha     ProfessorEscolinha[]
   conquistas             ConquistaVinculo[]       @relation("ConquistaEscolinha")
+  indicacoes             Indicacao[]
 }
 
 model Comentario {
@@ -738,6 +739,7 @@ model SubmissaoTreino {
   duracaoSegundos      Int?
   repeticoes           Int?
   avaliacaoTreino      AvaliacaoTreino[]
+  curtidas             Curtida[]         @relation("Curtidas_SubmissaoTreino")
 
   @@unique([atletaId, treinoAgendadoId])
 }
@@ -907,18 +909,22 @@ model Feedback {
 }
 
 model Curtida {
-  id          String            @id @default(uuid())
-  usuarioId   String
-  postagemId  String?
-  createdAt   DateTime          @default(now())
-  submissaoId String?
-  postagem    Postagem?         @relation(fields: [postagemId], references: [id], onDelete: Cascade)
-  submissao   SubmissaoDesafio? @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
-  usuario     Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id                String            @id @default(uuid())
+  usuarioId         String
+  postagemId        String?
+  createdAt         DateTime          @default(now())
+  submissaoId       String?
+  submissaoTreinoId String?
+  postagem          Postagem?         @relation(fields: [postagemId], references: [id], onDelete: Cascade)
+  submissao         SubmissaoDesafio? @relation(fields: [submissaoId], references: [id], onDelete: Cascade)
+  submissaoTreino   SubmissaoTreino?  @relation("Curtidas_SubmissaoTreino", fields: [submissaoTreinoId], references: [id], onDelete: Cascade)
+  usuario           Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([usuarioId, postagemId], name: "usuario_postagem_unique")
   @@unique([usuarioId, submissaoId], name: "usuario_submissao_unique")
+  @@unique([usuarioId, submissaoTreinoId], name: "usuario_submissaoTreino_unique")
   @@index([submissaoId])
+  @@index([submissaoTreinoId])
 }
 
 model TreinoAgendado {
@@ -1225,20 +1231,28 @@ model InscricaoEvento {
 }
 
 model Indicacao {
-  id           String          @id @default(uuid())
-  olheiroId    String
-  atletaId     String
-  clubeId      String
+  id        String @id @default(uuid())
+  olheiroId String
+  atletaId  String
+
+  clubeId     String?
+  escolinhaId String?
+
   status       IndicacaoStatus @default(PENDENTE)
   criadoEm     DateTime        @default(now())
   atualizadoEm DateTime        @updatedAt
-  atleta       Atleta          @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  clube        Clube           @relation(fields: [clubeId], references: [id], onDelete: Cascade)
-  olheiro      Olheiro         @relation(fields: [olheiroId], references: [id], onDelete: Cascade)
 
-  @@index([olheiroId, status])
-  @@index([clubeId])
+  atleta    Atleta     @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  clube     Clube?     @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  escolinha Escolinha? @relation(fields: [escolinhaId], references: [id], onDelete: Cascade)
+  olheiro   Olheiro    @relation(fields: [olheiroId], references: [id], onDelete: Cascade)
+
+  @@unique([olheiroId, atletaId, clubeId])
+  @@unique([olheiroId, atletaId, escolinhaId])
+  @@index([olheiroId])
   @@index([atletaId])
+  @@index([clubeId])
+  @@index([escolinhaId])
 }
 
 model ListaOlheiro {
