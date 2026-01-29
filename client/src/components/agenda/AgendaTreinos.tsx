@@ -364,9 +364,32 @@ function normalizeProgramadosPayload(payload: any): {
   };
 }
 
-/** =========================
- * Hook (estado + lógica)
- * ========================= */
+async function fetchAgendados3Meses(
+  fetchAgendados: AgendaFetchAgendados,
+  cursorMonth: Date
+) {
+  const toMonthISO = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+
+  const base = startOfMonth(cursorMonth);
+  const prev = addMonths(base, -1);
+  const next = addMonths(base, 1);
+
+  const months = [
+    { monthDate: prev, monthISO: toMonthISO(prev) },
+    { monthDate: base, monthISO: toMonthISO(base) },
+    { monthDate: next, monthISO: toMonthISO(next) },
+  ];
+
+  const resps = await Promise.all(months.map((m) => fetchAgendados(m)));
+
+  // junta tudo e remove duplicados por id
+  const merged = resps.flatMap((p) => normalizeAgendadosPayload(p));
+  const byId = new Map<string, TreinoAgendadoItem>();
+  for (const it of merged) byId.set(String(it.id), it);
+
+  return Array.from(byId.values());
+}
+
 export function useAgendaTreinos({
   open,
   initialMonth,
@@ -424,19 +447,18 @@ export function useAgendaTreinos({
   useEffect(() => {
     if (!open) return;
 
-    const monthISO = `${cursorMonth.getFullYear()}-${pad2(cursorMonth.getMonth() + 1)}`;
-
     (async () => {
-      try {
-        setLoadingCalendar(true);
-        const payload = await fetchAgendados({ monthDate: cursorMonth, monthISO });
-        setAgendados(normalizeAgendadosPayload(payload));
-      } catch {
-        setAgendados([]);
-      } finally {
-        setLoadingCalendar(false);
-      }
-    })();
+    try {
+      setLoadingCalendar(true);
+      const list = await fetchAgendados3Meses(fetchAgendados, cursorMonth);
+      setAgendados(list);
+    } catch {
+      setAgendados([]);
+    } finally {
+      setLoadingCalendar(false);
+    }
+  })();
+
   }, [open, cursorMonth, fetchAgendados]);
 
   const monthLabel = useMemo(() => {
@@ -724,13 +746,10 @@ export default function AgendaTreinos({
     try {
       await onAgendar({ selectedDays, treinoProgramadoId });
 
-      const monthISO = `${cursorMonth.getFullYear()}-${pad2(cursorMonth.getMonth() + 1)}`;
-      const payload = await fetchAgendados({ monthDate: cursorMonth, monthISO });
-      setAgendados(normalizeAgendadosPayload(payload));
-
+      const list = await fetchAgendados3Meses(fetchAgendados, cursorMonth);
+      setAgendados(list);
       setSelectedDays([]);
       alert("Treino(s) agendado(s) com sucesso!");
-
       // depois de agendar, volta pra Agenda
       setAba("agenda");
     } catch (e: any) {

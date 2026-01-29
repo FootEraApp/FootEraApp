@@ -101,6 +101,7 @@ import statusRoutes from "./routes/status.js";
 import comentariosRoutes from "./routes/comentarios.js";
 import estatisticasRoutes from "./routes/estatisticas.js";
 import configuracoesPerfilRoutes from "./routes/configuracoesPerfil.js";
+import presencaRoutes from "./routes/presenca.js";
 
 import { handlePaymentWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
@@ -282,6 +283,7 @@ app.use("/api/notificacoes", authenticateToken, notificacoesRoutes);
 app.use("/api/perfil", authenticateToken, perfilRoutes);
 app.use("/api/pontuacao", authenticateToken, pontuacaoRoutes);
 app.use("/api/post", authenticateToken, postRoutes);
+app.use("/api/presenca", authenticateToken, presencaRoutes);
 app.use("/api/professores", authenticateToken, professorRoutes);
 app.use("/api/seguidores/mutuos", authenticateToken, rotaSeguidorMutuo);
 app.use("/api/seguidores", authenticateToken, seguirRoutes);

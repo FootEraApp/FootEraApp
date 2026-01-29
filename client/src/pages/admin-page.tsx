@@ -2721,7 +2721,15 @@ function fmt(n: number) {
   return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : String(n);
 }
 
-function LineChart({ data, w = 560, h = 140 }: { data: Array<{ bucket: string | Date; value: number }>; w?: number; h?: number }) {
+function LineChart({
+  data,
+  w = 560,
+  h = 140,
+}: {
+  data: Array<{ bucket: string | Date; value: number }>;
+  w?: number;
+  h?: number;
+}) {
   const vals = data.map((d) => num(d.value));
   const max = Math.max(1, ...vals);
   const stepX = (w - 20) / Math.max(1, data.length - 1);
@@ -2732,10 +2740,30 @@ function LineChart({ data, w = 560, h = 140 }: { data: Array<{ bucket: string | 
       return `${i === 0 ? "M" : "L"}${x},${y}`;
     })
     .join(" ");
+
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[160px]">
       <rect x="0" y="0" width={w} height={h} rx="8" className="fill-white" />
       <path d={path} className="stroke-green-700 fill-none" strokeWidth={2} />
+
+      {/* pontos + tooltip */}
+      {data.map((d, i) => {
+        const x = 10 + i * stepX;
+        const y = h - 12 - (vals[i] / max) * (h - 24);
+
+        const label =
+          typeof d.bucket === "string"
+            ? d.bucket
+            : new Date(d.bucket).toISOString().slice(0, 10);
+
+        return (
+          <g key={i}>
+            <circle cx={x} cy={y} r={4} className="fill-green-700">
+              <title>{`${label}: ${vals[i]}`}</title>
+            </circle>
+          </g>
+        );
+      })}
     </svg>
   );
 }
@@ -2914,6 +2942,8 @@ function AnalyticsPane() {
   const [convC, setConvC] = useState<any[]>([]);
   const [churn, setChurn] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loginSummary, setLoginSummary] = useState<any>(null);
+  const [activeByType, setActiveByType] = useState<any[]>([]);
 
   async function safeJson(url: string) {
     const r = await fetch(url, { headers: authHeaders() });
@@ -2926,17 +2956,23 @@ function AnalyticsPane() {
 
   async function loadAll() {
     setLoading(true);
+    const dTo = new Date(to);
+    const dFrom30 = new Date(dTo);
+    dFrom30.setDate(dTo.getDate() - 30);
+
+    const from30 = dFrom30.toISOString().slice(0,10);
+
     try {
       const q = (o: Record<string, string>) => new URLSearchParams(o).toString();
 
-      const [ov, au, es, cl, en] = await Promise.all([
+      const [ov, au, es, cl, en, ls, abt] = await Promise.all([
         safeJson(`${API.BASE_URL}/api/analises/overview?${q({ to })}`),
-        safeJson(
-          `${API.BASE_URL}/api/analises/users/active?${q({ from, to, granularity: "daily" })}`
-        ),
+        safeJson(`${API.BASE_URL}/api/analises/users/active?${q({ from, to, granularity: "daily" })}`),
         safeJson(`${API.BASE_URL}/api/analises/conversion/escolinha?${q({ from, to })}`),
         safeJson(`${API.BASE_URL}/api/analises/conversion/clube?${q({ from, to })}`),
         safeJson(`${API.BASE_URL}/api/analises/engagement/summary?${q({ from, to })}`),
+        safeJson(`${API.BASE_URL}/api/analises/logins/summary?${q({ from, to })}`),
+        safeJson(`${API.BASE_URL}/api/analises/users/active-by-type?${q({ from, to })}`),
       ]);
 
       setOverview(ov);
@@ -2946,6 +2982,8 @@ function AnalyticsPane() {
       setConvE(Array.isArray(es) ? es : []);
       setConvC(Array.isArray(cl) ? cl : []);
       setEngSummary(en);
+      setLoginSummary(ls);
+      setActiveByType(Array.isArray(abt) ? abt : []);
 
       const fromMonth = from.slice(0, 7);
       const toMonth = to.slice(0, 7);
@@ -3022,7 +3060,7 @@ function AnalyticsPane() {
         <Kpi
           title={
             <span className="inline-flex items-center gap-2">
-              DAU <InfoI text="Daily Active Users — usuários ativos nas últimas 24h." />
+              Usuários logados (24h) <InfoI text="DAU (Daily Active Users) — usuários logados nas últimas 24h." />
             </span>
           }
           value={fmt(num(overview?.DAU))}
@@ -3030,7 +3068,7 @@ function AnalyticsPane() {
         <Kpi
           title={
             <span className="inline-flex items-center gap-2">
-              WAU <InfoI text="Weekly Active Users — usuários ativos na janela de 7 dias." />
+              Usuários logados (7 dias) <InfoI text="WAU (Weekly Active Users) — usuários logados na janela de 7 dias." />
             </span>
           }
           value={fmt(num(overview?.WAU))}
@@ -3038,38 +3076,12 @@ function AnalyticsPane() {
         <Kpi
           title={
             <span className="inline-flex items-center gap-2">
-              MAU <InfoI text="Monthly Active Users — usuários ativos na janela de 30 dias." />
+              Usuários logados (30 dias) <InfoI text="MAU (Monthly Active Users) — usuários logados na janela de 30 dias." />
             </span>
           }
           value={fmt(num(overview?.MAU))}
         />
-        <Kpi
-          title={
-            <span className="inline-flex items-center gap-2">
-              Stickiness{" "}
-              <InfoI text="WAU/MAU — medida de frequência (quanto mais próximo de 1, melhor)." />
-            </span>
-          }
-          value={(overview?.stickiness ?? 0).toFixed(2)}
-        />
-        <Kpi
-          title={
-            <span className="inline-flex items-center gap-2">
-              D7{" "}
-              <InfoI text="Retenção em 7 dias — % de novos usuários que voltam após 7 dias." />
-            </span>
-          }
-          value={`${fmt(num(overview?.D7))}%`}
-        />
-        <Kpi
-          title={
-            <span className="inline-flex items-center gap-2">
-              D30{" "}
-              <InfoI text="Retenção em 30 dias — % de novos usuários que voltam após 30 dias." />
-            </span>
-          }
-          value={`${fmt(num(overview?.D30))}%`}
-        />
+
         <Kpi
           title={
             <span className="inline-flex items-center gap-2">
@@ -3081,8 +3093,8 @@ function AnalyticsPane() {
         <Kpi
           title={
             <span className="inline-flex items-center gap-2">
-              Média 7d{" "}
-              <InfoI text="Média de usuários ativos dos últimos 7 dias." />
+              Média usuários 7d{" "}
+              <InfoI text="Média de usuários logados dos últimos 7 dias." />
             </span>
           }
           value={Math.round(avg7)}
@@ -3097,22 +3109,13 @@ function AnalyticsPane() {
       </div>
 
       <div className="bg-white rounded shadow p-3">
-        <div className="font-semibold mb-2 flex items-center gap-2">
-          Usuários ativos por dia
-          <InfoI text="Contagem diária de usuários com pelo menos 1 evento de atividade." />
-        </div>
-        <LineChart data={activeSeries.map((r) => ({ bucket: r.bucket, value: r.active }))} />
-      </div>
-
-      <div className="bg-white rounded shadow p-3">
-        <div className="font-semibold mb-3">Engajamento no período</div>
+       <div className="font-semibold mb-3">Engajamento no período selecionado acima</div>
         <div className="grid md:grid-cols-4 gap-3">
           <Kpi title="Posts" value={fmt(num(engSummary?.posts))} />
           <Kpi title="Comentários" value={fmt(num(engSummary?.comments))} />
           <Kpi title="Curtidas" value={fmt(num(engSummary?.likes))} />
           <Kpi title="Mensagens" value={fmt(num(engSummary?.messages))} />
           <Kpi title="Sub. Treino" value={fmt(num(engSummary?.subTreino))} />
-          <Kpi title="Sub. Desafio" value={fmt(num(engSummary?.subDesafio))} />
           <Kpi
             title="Treinos agendados"
             value={fmt(num(engSummary?.treinosAgendados))}
@@ -3120,31 +3123,24 @@ function AnalyticsPane() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-white rounded shadow p-3">
-          <div className="font-semibold mb-2 flex items-center gap-2">
-            Conversão via Escolinha (semanal)
-            <InfoI text="Novos vínculos de atletas oriundos de Escolinhas por semana." />
-          </div>
-          <LineChart
-            data={(convE || []).map((r: any) => ({
-              bucket: r.bucket,
-              value: r.novosVinculos,
-            }))}
-          />
+      <div className="bg-white rounded shadow p-3">
+        <div className="font-semibold mb-2 flex items-center gap-2">
+          Logins únicos por tipo de usuário
+          <InfoI text="Quantidade de usuários diferentes que fizeram login no período, agrupados por tipo." />
         </div>
-        <div className="bg-white rounded shadow p-3">
-          <div className="font-semibold mb-2 flex items-center gap-2">
-            Conversão via Clube (semanal)
-            <InfoI text="Novos vínculos de atletas oriundos de Clubes por semana." />
+
+        {activeByType.length === 0 ? (
+          <div className="text-sm text-gray-500">Sem dados no período.</div>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-3">
+            {activeByType.map((r: any) => (
+              <div key={r.tipo} className="border rounded-lg p-3">
+                <div className="text-xs text-gray-500">{r.tipo}</div>
+                <div className="text-xl font-bold">{fmt(num(r.usuarios))}</div>
+              </div>
+            ))}
           </div>
-          <LineChart
-            data={(convC || []).map((r: any) => ({
-              bucket: r.bucket,
-              value: r.novosVinculos,
-            }))}
-          />
-        </div>
+        )}
       </div>
 
       <div className="bg-white rounded shadow p-3">
