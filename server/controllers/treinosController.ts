@@ -3010,20 +3010,20 @@ type AtletaComUsuarioEPontuacao = {
 
 const atletas = atletasRaw as unknown as AtletaComUsuarioEPontuacao[];
 
-const payload = atletas.map((a) => ({
-  id: a.id,
-  usuarioId: a.usuarioId,
-  atletaId: a.id,
-  nome: a.usuario?.nome ?? "Atleta",
-  foto: a.usuario?.foto ?? null,
-  idade: a.idade ?? null,
-  posicao: a.posicao ?? null,
-  categoria:
-    Array.isArray(a.categoria) && a.categoria.length
-      ? a.categoria[0]
-      : null,
-  pontuacao: a.pontuacao?.pontuacaoTotal ?? null,
-}));
+  const payload = atletas.map((a) => ({
+    id: a.id,
+    usuarioId: a.usuarioId,
+    atletaId: a.id,
+    nome: a.usuario?.nome ?? "Atleta",
+    foto: a.usuario?.foto ?? null,
+    idade: a.idade ?? null,
+    posicao: a.posicao ?? null,
+    categoria:
+      Array.isArray(a.categoria) && a.categoria.length
+        ? a.categoria[0]
+        : null,
+    pontuacao: a.pontuacao?.pontuacaoTotal ?? null,
+  }));
 
     return res.json(payload);
   } catch (e) {
@@ -3328,6 +3328,11 @@ export async function criarTreinoProgramado(
       });
     }
 
+    const objetivoFinal =
+      (typeof (body as any).objetivo === "string" && (body as any).objetivo.trim()) ||
+      (typeof (body as any).metas === "string" && (body as any).metas.trim()) ||
+      null;
+
     const treino = await prisma.treinoProgramado.create({
       data: {
         codigo: typeof body.codigo === "string" ? body.codigo.trim() : undefined,
@@ -3338,7 +3343,7 @@ export async function criarTreinoProgramado(
         categoria: categorias,
         dicas: Array.isArray(dicas) ? dicas : [],
         duracao: duracao != null ? Number(duracao) : null,
-        objetivo: objetivo ?? null,
+        objetivo: objetivoFinal,
         dataAgendada: whenDate,
         pontuacao: pontuacaoNum,
         imagemUrl: imagemUrl || null,
@@ -3378,52 +3383,31 @@ export async function criarTreinoProgramado(
       },
     });
 
-    // ✅ normaliza payload do front:
-    // - aceita e.exercicioId (padrão) OU e.id (quando o front manda "id")
-    // - decide se é do banco ou temporário
-    const exItems = Array.isArray(exercicios) ? exercicios : [];
+    /**
+     * ✅ salvar exercícios do treino (unificado e sem duplicar lógica)
+     * - oficiais: exercicioId ou id
+     * - temporários: sem id e com nome
+     * - promoção: temporário vira oficial se bater no BD por nome
+     * - herança de vídeo: aplica no temporário
+     * - repeticoes sempre string
+     */
+    const exItems: any[] = Array.isArray(exercicios) ? exercicios : [];
 
-    const exsBanco = exItems
-      .map((e: any, i: number) => ({
-        exercicioId: String(e?.exercicioId ?? e?.id ?? "").trim() || null,
-        repeticoes: String(e?.repeticoes ?? ""),
-        ordem: Number.isFinite(Number(e?.ordem)) ? Number(e.ordem) : i + 1,
-      }))
-      .filter((e: any) => !!e.exercicioId);
+    const exsOficiais = exItems.filter((e) => {
+      const id = String(e?.exercicioId ?? e?.id ?? "").trim();
+      return !!id;
+    });
 
-    const exsTemp = exItems
-      .map((e: any, i: number) => ({
-        nome: String(e?.nome ?? "").trim(),
-        descricao: e?.descricao ?? null,
-        repeticoes: String(e?.repeticoes ?? ""),
-        ordem: Number.isFinite(Number(e?.ordem)) ? Number(e.ordem) : i + 1,
-      }))
-      .filter((e: any) => (!!e.nome ? true : false))
-      // só temporário se NÃO veio id/exercicioId
-      .filter((e: any, idx: number) => {
-        const raw = exItems[idx];
-        const hasId = String(raw?.exercicioId ?? raw?.id ?? "").trim();
-        return !hasId;
-      });
+    const exsTemporarios = exItems.filter((e) => {
+      const id = String(e?.exercicioId ?? e?.id ?? "").trim();
+      const nomeTemp = String(e?.nome ?? "").trim();
+      return !id && !!nomeTemp;
+    });
 
-    if (exsBanco.length) {
-      await prisma.treinoProgramadoExercicio.createMany({
-        data: exsBanco.map((e: any) => ({
-          treinoProgramadoId: treino.id,
-          exercicioId: e.exercicioId,
-          repeticoes: e.repeticoes,
-          ordem: e.ordem,
-        })),
-        skipDuplicates: true,
-      });
-    }
-
-    syncTreinoProgramado(treino.id);
-
-    // ✅ tenta achar no BD um exercício "normal" com nome parecido
-    const promoverParaBancoSeBater = async (nomeTemp: string) => {
+    // match simples no BD
+    const promoverParaBancoSeBater = async (tx: any, nomeTemp: string) => {
       const nomeNorm = nomeTemp.trim();
-      const achado = await prisma.exercicio.findFirst({
+      const achado = await tx.exercicio.findFirst({
         where: {
           OR: [
             { nome: { equals: nomeNorm, mode: "insensitive" } },
@@ -3435,66 +3419,93 @@ export async function criarTreinoProgramado(
       return achado?.id ?? null;
     };
 
-    for (const [i, e] of exsTemp.entries()) {
-      const nomeTemp = String(e.nome ?? "").trim();
-      if (!nomeTemp) continue;
-
-      // ✅ se bate com exercício do BD, grava como exercicioId (e NÃO como temporário)
-      const exercicioBancoId = await promoverParaBancoSeBater(nomeTemp);
-      if (exercicioBancoId) {
-        await prisma.treinoProgramadoExercicio.create({
-          data: {
+    await prisma.$transaction(async (tx) => {
+      // 1) oficiais (createMany)
+      if (exsOficiais.length) {
+        await tx.treinoProgramadoExercicio.createMany({
+          data: exsOficiais.map((e: any, idx: number) => ({
             treinoProgramadoId: treino.id,
-            exercicioId: exercicioBancoId,
-            repeticoes: String(e.repeticoes ?? ""),
-            ordem: e.ordem ?? exsBanco.length + i + 1,
-          },
+            exercicioId: String(e.exercicioId ?? e.id).trim(),
+            ordem: Number.isFinite(Number(e.ordem)) ? Number(e.ordem) : idx + 1,
+            repeticoes: String(e.repeticoes ?? e.repeticoesStr ?? e.reps ?? "1"),
+          })),
+          skipDuplicates: true,
         });
-        continue;
       }
 
-      const videoHerdado = await herdarVideoParaTemporario(nomeTemp);
+      // 2) temporários (com promoção + herança)
+      for (let i = 0; i < exsTemporarios.length; i++) {
+        const e = exsTemporarios[i];
+        const nomeTemp = String(e?.nome ?? "").trim();
+        if (!nomeTemp) continue;
 
-      let temp = await prisma.exercicioTemporario.findFirst({
-        where: {
-          treinoProgramadoId: treino.id,
-          nome: { equals: nomeTemp, mode: "insensitive" },
-        },
-        select: { id: true, videoDemonstrativoUrl: true },
-      });
+        // ✅ se bater no BD, salva como oficial (e não cria temporário)
+        const exercicioBancoId = await promoverParaBancoSeBater(tx, nomeTemp);
+        if (exercicioBancoId) {
+          await tx.treinoProgramadoExercicio.create({
+            data: {
+              treinoProgramadoId: treino.id,
+              exercicioId: exercicioBancoId,
+              ordem: Number.isFinite(Number(e.ordem))
+                ? Number(e.ordem)
+                : exsOficiais.length + i + 1,
+              repeticoes: String(e.repeticoes ?? e.repeticoesStr ?? e.reps ?? "1"),
+            },
+          });
+          continue;
+        }
 
-      if (!temp) {
-        temp = await prisma.exercicioTemporario.create({
-          data: {
+        const videoHerdado = await herdarVideoParaTemporario(nomeTemp);
+
+        let temp = await tx.exercicioTemporario.findFirst({
+          where: {
             treinoProgramadoId: treino.id,
-            codigo: null,
-            nome: nomeTemp,
-            descricao: e.descricao ?? null,
-            nivel: nivelEnum,
-            categorias: categorias,
-            videoDemonstrativoUrl: videoHerdado ?? null,
+            nome: { equals: nomeTemp, mode: "insensitive" },
           },
           select: { id: true, videoDemonstrativoUrl: true },
         });
-      } else if (
-        (!temp.videoDemonstrativoUrl || temp.videoDemonstrativoUrl === "") &&
-        videoHerdado
-      ) {
-        await prisma.exercicioTemporario.update({
-          where: { id: temp.id },
-          data: { videoDemonstrativoUrl: videoHerdado },
+
+        if (!temp) {
+          temp = await tx.exercicioTemporario.create({
+            data: {
+              treinoProgramadoId: treino.id,
+              codigo: null,
+              nome: nomeTemp,
+              descricao: e.descricao ?? null,
+              nivel: nivelEnum,
+              categorias: categorias ?? [],
+              videoDemonstrativoUrl:
+                e.videoDemonstrativoUrl ?? e.videoUrl ?? videoHerdado ?? null,
+            },
+            select: { id: true, videoDemonstrativoUrl: true },
+          });
+        } else if (
+          (!temp.videoDemonstrativoUrl || temp.videoDemonstrativoUrl === "") &&
+          (e.videoDemonstrativoUrl ?? e.videoUrl ?? videoHerdado)
+        ) {
+          await tx.exercicioTemporario.update({
+            where: { id: temp.id },
+            data: {
+              videoDemonstrativoUrl:
+                e.videoDemonstrativoUrl ?? e.videoUrl ?? videoHerdado,
+            },
+          });
+        }
+
+        await tx.treinoProgramadoExercicio.create({
+          data: {
+            treinoProgramadoId: treino.id,
+            exercicioTemporarioId: temp.id,
+            ordem: Number.isFinite(Number(e.ordem))
+              ? Number(e.ordem)
+              : exsOficiais.length + i + 1,
+            repeticoes: String(e.repeticoes ?? e.repeticoesStr ?? e.reps ?? "1"),
+          },
         });
       }
+    });
 
-      await prisma.treinoProgramadoExercicio.create({
-        data: {
-          treinoProgramadoId: treino.id,
-          exercicioTemporarioId: temp.id,
-          repeticoes: String(e.repeticoes ?? ""),
-          ordem: e.ordem ?? exsBanco.length + i + 1,
-        },
-      });
-    }
+    await syncTreinoProgramado(treino.id);
 
     // recalcular estatísticas
     try {

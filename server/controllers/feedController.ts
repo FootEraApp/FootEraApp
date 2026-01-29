@@ -534,6 +534,7 @@ export async function repostPost(req: Request, res: Response) {
 
     const parentId = clicked.id;
 
+    // acha o root (pra contador)
     let rootId = clicked.id;
     let cursor: { repostOfId: string | null } | null = clicked;
 
@@ -549,12 +550,34 @@ export async function repostPost(req: Request, res: Response) {
       where: { id: rootId },
       select: { id: true },
     });
-    if (!rootExists) {
-      return res.status(404).json({ message: "Post original não encontrado" });
-    }
+    if (!rootExists) return res.status(404).json({ message: "Post original não encontrado" });
 
     const conteudoRepost = comentario ? comentario : "\u200B";
 
+    // ✅ NOVO: se já existe repost igual, vira "toggle" (desrepostar)
+    const existente = await prisma.postagem.findFirst({
+      where: {
+        usuarioId: userId,
+        repostOfId: parentId,
+        conteudo: conteudoRepost,
+      },
+      select: { id: true },
+    });
+
+    if (existente) {
+      await prisma.postagem.delete({ where: { id: existente.id } });
+
+      await prisma.postagem
+        .update({
+          where: { id: rootId },
+          data: { reposts: { decrement: 1 } },
+        })
+        .catch(() => {});
+
+      return res.json({ ok: true, action: "unrepost", id: existente.id });
+    }
+
+    // ✅ cria repost normalmente
     const novo = await prisma.postagem.create({
       data: {
         usuarioId: userId,
@@ -570,7 +593,7 @@ export async function repostPost(req: Request, res: Response) {
             usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
             curtidas: true,
             comentarios: { include: { usuario: { select: { nome: true, nomeDeUsuario: true, foto: true } } } },
-            repostOf: { 
+            repostOf: {
               include: {
                 usuario: { select: { id: true, nome: true, nomeDeUsuario: true, foto: true, tipo: true } },
                 curtidas: true,
@@ -588,7 +611,7 @@ export async function repostPost(req: Request, res: Response) {
     });
 
     getIO()?.emit("feed:novoPost", novo);
-    return res.json(novo);
+    return res.json({ ok: true, action: "repost", post: novo });
   } catch (e) {
     console.error("Erro ao repostar:", e);
     return res.status(500).json({ message: "Erro ao repostar" });
