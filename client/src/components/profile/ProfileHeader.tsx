@@ -163,6 +163,7 @@ export default function ProfileHeader({
   const [checouVinculo, setChecouVinculo] = useState(false);
   const [presenceOnline, setPresenceOnline] = useState<boolean | null>(null);
   const [presenceLastSeenAt, setPresenceLastSeenAt] = useState<string | null>(null);
+  const [presencePrivacyBlocked, setPresencePrivacyBlocked] = useState<boolean>(false);
 
   const viewerTipo =
     (Storage as any).tipoSalvo ??
@@ -208,10 +209,6 @@ export default function ProfileHeader({
   } | null>(null);
 
   useEffect(() => {
-    // não faz sentido mostrar online "de você mesmo" (mas pode, se quiser)
-    // se você quiser também no próprio perfil, remova este if:
-    // if (isOwnProfile || isMe) return;
-
     const token =
       Storage.token ||
       localStorage.getItem("token") ||
@@ -225,37 +222,39 @@ export default function ProfileHeader({
 
     async function loadPresence() {
       try {
-        const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(usuarioAlvoId)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const r = await fetch(
+          `${API.BASE_URL}/api/presenca/${encodeURIComponent(usuarioAlvoId)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
         if (!r.ok) return;
 
         const data = await r.json().catch(() => null as any);
         if (!alive || !data) return;
 
-        const seen =
-          data?.usuario?.lastSeenAt ??
-          data?.lastSeenAt ??
-          data?.last_seen_at ??
-          null;
+        const blocked = Boolean(data?.privacyBlocked);
+        setPresencePrivacyBlocked(blocked);
 
-        const seenStr = seen ? new Date(seen).toISOString() : null;
+        if (blocked) {
+          setPresenceOnline(null);
+          setPresenceLastSeenAt(null);
+          return;
+        }
 
-        setPresenceLastSeenAt(seenStr);
-        setPresenceOnline(computeOnline(seenStr));
+        setPresenceOnline(Boolean(data?.isOnline));
+        setPresenceLastSeenAt(data?.lastSeenAt ? new Date(data.lastSeenAt).toISOString() : null);
       } catch {}
     }
 
     loadPresence();
 
-    // atualiza a cada 20s pra "Online" virar "há 1 min" etc
+    // atualiza a cada 20s (só pra manter o “há X min” vivo e refletir online/offline)
     const interval = setInterval(loadPresence, 20_000);
 
     return () => {
       alive = false;
       clearInterval(interval);
     };
-  }, [perfilId, isOwnProfile, isMe]);
+  }, [perfilId]);
 
   useEffect(() => {
     const onBadge = (e: Event) => {
@@ -1258,18 +1257,22 @@ const alvoUsuarioIdFavorito = isOwnProfile
   }
 
   const onlineText = (() => {
+    // ✅ se bloqueou, não mostra pra ninguém
+    if (presencePrivacyBlocked) return null;
+
+    // se ainda não carregou
     if (presenceOnline === null && !presenceLastSeenAt) return null;
 
-    // se ainda não carregou, não mostra nada
-    if (presenceOnline === null && presenceLastSeenAt) {
-      // dá pra mostrar "..." se quiser
-      return "…";
+    // online agora
+    if (presenceOnline) {
+      return (isOwnProfile || isMe) ? "🟢 Você está online" : "🟢 Online";
     }
 
-    if (presenceOnline) return "🟢 Online";
+    // offline sem lastSeen
+    if (!presenceLastSeenAt) return "⚪ Offline";
 
-    // offline
-    return `⚪ Online ${timeAgoPtBR(presenceLastSeenAt)}`;
+    const ago = timeAgoPtBR(presenceLastSeenAt);
+    return ago === "agora" ? "🟢 Online" : `⚪ Online ${ago}`;
   })();
 
   return (
@@ -1332,12 +1335,6 @@ const alvoUsuarioIdFavorito = isOwnProfile
         {nome.toUpperCase()}
       </h1>
 
-      {onlineText && (
-        <div className="mt-1 text-xs font-semibold footera-text-cream/90">
-          {onlineText}
-        </div>
-      )}
-
       {(idade || posicao || time) && (
         <p className="footera-text-cream text-sm mb-1 text-center">
           {idade && `${idade} anos`}
@@ -1346,6 +1343,12 @@ const alvoUsuarioIdFavorito = isOwnProfile
           {posicao && time ? " • " : ""}
           {time}
         </p>
+      )}
+
+      {onlineText && (
+        <div className="text-white text-xs font-semibold mt-0.5 text-center">
+          {onlineText}
+        </div>
       )}
 
       <div className="w-full mt-4">

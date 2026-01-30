@@ -30,7 +30,9 @@ model Usuario {
   dataCriacao               DateTime    @default(now())
   codigo                    String?
   verified                  Boolean     @default(false)
-  lastSeenAt                DateTime?  // último “sinal de vida”
+  deletedAt                 DateTime?
+  deleteScheduledAt         DateTime?
+  lastSeenAt                DateTime?  
   lastLoginAt               DateTime?
   lastLogoutAt              DateTime?
   parceiro                  Boolean   @default(false)
@@ -90,6 +92,9 @@ model Usuario {
   notificacoesGeradas    Notificacao[]             @relation("NotificacaoActor")
   AvaliacaoTreino        AvaliacaoTreino[]
   LoginEvent             LoginEvent[]
+
+  @@index([deletedAt])
+  @@index([deleteScheduledAt])
 }
 
 model Parceiro {

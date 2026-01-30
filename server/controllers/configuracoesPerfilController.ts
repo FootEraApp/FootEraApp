@@ -7,10 +7,6 @@ function getUserId(req: Request): string | null {
   return r.userId || r.user?.id || r.usuarioId || null;
 }
 
-/** =========================
- *  PRIVACIDADE
- *  Guarda em Usuario.configuracoesPrivacidade (JSON)
- *  ========================= */
 export async function getPrivacidade(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -25,10 +21,13 @@ export async function getPrivacidade(req: Request, res: Response) {
       u?.configuracoesPrivacidade && typeof u.configuracoesPrivacidade === "object"
         ? u.configuracoesPrivacidade
         : {};
+
     return res.json({
       perfilVisivel: raw.perfilVisivel ?? true,
       permitirMensagens: raw.permitirMensagens ?? true,
       mostrarEmail: raw.mostrarEmail ?? false,
+      // ✅ FALTAVA ISSO:
+      mostrarOnline: raw.mostrarOnline ?? true,
     });
   } catch (err) {
     console.error("getPrivacidade erro:", err);
@@ -36,17 +35,20 @@ export async function getPrivacidade(req: Request, res: Response) {
   }
 }
 
+
 export async function patchPrivacidade(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Não autenticado." });
 
-    const { perfilVisivel, permitirMensagens, mostrarEmail } = (req.body || {}) as any;
+    const { perfilVisivel, permitirMensagens, mostrarEmail, mostrarOnline } = (req.body || {}) as any;
 
     const next = {
       perfilVisivel: typeof perfilVisivel === "boolean" ? perfilVisivel : undefined,
       permitirMensagens: typeof permitirMensagens === "boolean" ? permitirMensagens : undefined,
       mostrarEmail: typeof mostrarEmail === "boolean" ? mostrarEmail : undefined,
+      // ✅ novo:
+      mostrarOnline: typeof mostrarOnline === "boolean" ? mostrarOnline : undefined,
     };
 
     // merge com o que já existe
@@ -55,7 +57,11 @@ export async function patchPrivacidade(req: Request, res: Response) {
       select: { configuracoesPrivacidade: true },
     });
 
-    const current: any = u?.configuracoesPrivacidade || {};
+    const current: any =
+      u?.configuracoesPrivacidade && typeof u.configuracoesPrivacidade === "object"
+        ? u.configuracoesPrivacidade
+        : {};
+
     const merged = {
       ...current,
       ...Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined)),
@@ -70,6 +76,8 @@ export async function patchPrivacidade(req: Request, res: Response) {
       perfilVisivel: merged.perfilVisivel ?? true,
       permitirMensagens: merged.permitirMensagens ?? true,
       mostrarEmail: merged.mostrarEmail ?? false,
+      // ✅ novo:
+      mostrarOnline: merged.mostrarOnline ?? true,
     });
   } catch (err) {
     console.error("patchPrivacidade erro:", err);
@@ -77,10 +85,6 @@ export async function patchPrivacidade(req: Request, res: Response) {
   }
 }
 
-/** =========================
- *  NOTIFICAÇÕES
- *  Guarda em Usuario.configuracoesNotificacoes (JSON)
- *  ========================= */
 export async function getNotificacoes(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
