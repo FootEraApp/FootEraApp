@@ -1,10 +1,13 @@
 import { Router } from "express";
 import { authenticateToken } from "../middlewares/auth.js";
-import { getPresenca } from "../controllers/presencaController.js";
+import { getPresenca, pingPresenca } from "../controllers/presencaController.js";
 
-const r = Router();
-r.use(authenticateToken);
+const router = Router();
 
-r.get("/:id", getPresenca);
+// ver presença de qualquer usuário (pode deixar público se quiser, mas recomendo auth)
+router.get("/:id", authenticateToken, getPresenca);
 
-export default r;
+// atualiza presença do usuário logado
+router.post("/ping", authenticateToken, pingPresenca);
+
+export default router;

@@ -19,6 +19,7 @@ import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 import { authenticateToken } from "./middlewares/auth.js";
 import { limparTreinosSalvosExpirados } from "./controllers/treinosSalvosController.js";
 import { PrismaClient } from "@prisma/client";
+import { purgeDeletedAccounts } from "./jobs/purgeDeletedAccounts.js";
 
 import adminUsuariosRoutes from "./routes/adminUsuarios.js";
 import adminRoutes from "./routes/admin.js";
@@ -341,6 +342,15 @@ cron.schedule("0 4 * * *", async () => {
   await prisma.atletaHistoricoVinculo.deleteMany({
     where: { expiraEm: { lt: now } },
   });
+});
+
+cron.schedule("30 3 * * *", async () => {
+  try {
+    const n = await purgeDeletedAccounts();
+    console.log(`[purgeDeletedAccounts] removidos: ${n}`);
+  } catch (e) {
+    console.error("[purgeDeletedAccounts] erro", e);
+  }
 });
 
 cron.schedule("0 3 * * *", async () => {

@@ -2,13 +2,14 @@ import express from "express";
 import {
   getConfiguracoes,
   atualizarConfiguracoes,
-  excluirConta,
+  solicitarExclusaoConta
 } from "../controllers/configuracoesController.js";
+import { authenticateToken } from "../middlewares/auth.js";
 
 const router = express.Router();
 
 router.get("/", getConfiguracoes);
 router.patch("/", atualizarConfiguracoes);
-router.delete("/minha-conta", excluirConta);
+router.delete("/configuracoes/minha-conta", authenticateToken, solicitarExclusaoConta);
 
 export default router;
