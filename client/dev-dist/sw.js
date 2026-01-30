@@ -22,20 +22,18 @@ if (!self.define) {
   const singleRequire = (uri, parentUri) => {
     uri = new URL(uri + ".js", parentUri).href;
     return registry[uri] || (
-      
-        new Promise(resolve => {
-          if ("document" in self) {
-            const script = document.createElement("script");
-            script.src = uri;
-            script.onload = resolve;
-            document.head.appendChild(script);
-          } else {
-            nextDefineUri = uri;
-            importScripts(uri);
-            resolve();
-          }
-        })
-      
+      new Promise(resolve => {
+        if ("document" in self) {
+          const script = document.createElement("script");
+          script.src = uri;
+          script.onload = resolve;
+          document.head.appendChild(script);
+        } else {
+          nextDefineUri = uri;
+          importScripts(uri);
+          resolve();
+        }
+      })
       .then(() => {
         let promise = registry[uri];
         if (!promise) {
@@ -67,7 +65,12 @@ if (!self.define) {
     });
   };
 }
+
 define(['./workbox-487f81db'], (function (workbox) { 'use strict';
+
+  // ✅ Silencia logs do Workbox (debug)
+  try { workbox.setConfig({ debug: false }); } catch {}
+  self.__WB_DISABLE_DEV_LOGS = true;
 
   self.addEventListener('message', event => {
     if (event.data && event.data.type === 'SKIP_WAITING') {
@@ -80,31 +83,78 @@ define(['./workbox-487f81db'], (function (workbox) { 'use strict';
    * requests for URLs in the manifest.
    * See https://goo.gl/S9QRab
    */
-  workbox.precacheAndRoute([{
-    "url": "registerSW.js",
-    "revision": "3ca0b8505b4bec776b69afdba2768812"
-  }, {
-    "url": "index.html",
-    "revision": "0.qjjqvr5ii54"
-  }], {});
+  workbox.precacheAndRoute([
+    { "url": "registerSW.js", "revision": "3ca0b8505b4bec776b69afdba2768812" },
+    { "url": "index.html", "revision": "0.uf81sgd2es4" }
+  ], {});
   workbox.cleanupOutdatedCaches();
-  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
-    allowlist: [/^\/$/]
-  }));
-  workbox.registerRoute(ctx => ctx.request.mode === "navigate", new workbox.NetworkFirst({
-    "cacheName": "html-cache",
-    "networkTimeoutSeconds": 3,
-    plugins: [new workbox.ExpirationPlugin({
-      maxEntries: 10,
-      maxAgeSeconds: 60
-    })]
-  }), 'GET');
-  workbox.registerRoute(ctx => ctx.url.pathname.startsWith("/assets/"), new workbox.StaleWhileRevalidate({
-    "cacheName": "assets-cache",
-    plugins: [new workbox.ExpirationPlugin({
-      maxEntries: 400,
-      maxAgeSeconds: 31536000
-    })]
-  }), 'GET');
+
+  workbox.registerRoute(
+    new workbox.NavigationRoute(
+      workbox.createHandlerBoundToURL("index.html"),
+      { allowlist: [/^\/$/] }
+    )
+  );
+
+  // HTML
+  workbox.registerRoute(
+    ctx => ctx.request.mode === "navigate",
+    new workbox.NetworkFirst({
+      cacheName: "html-cache",
+      networkTimeoutSeconds: 3,
+      plugins: [
+        new workbox.ExpirationPlugin({
+          maxEntries: 10,
+          maxAgeSeconds: 60
+        })
+      ]
+    }),
+    "GET"
+  );
+
+  // ✅ Se uma imagem de /assets/... não existir (404), devolve fallback (200)
+  const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
+  const FALLBACK_TREINO = "/assets/usuarios/footera-logo-fundo-verde.png"; // pode ser o mesmo
+
+  workbox.registerRoute(
+    ({ request, url }) =>
+      request.destination === "image" &&
+      (url.pathname.startsWith("/assets/usuarios/") ||
+       url.pathname.startsWith("/assets/treinos/")),
+    async ({ event }) => {
+      try {
+        const res = await fetch(event.request);
+
+        // Se vier 404, troca por fallback (evita 404 no console)
+        if (res && res.status === 404) {
+          const u = new URL(event.request.url);
+          if (u.pathname.startsWith("/assets/treinos/")) return fetch(FALLBACK_TREINO);
+          return fetch(FALLBACK_AVATAR);
+        }
+
+        return res;
+      } catch {
+        const u = new URL(event.request.url);
+        if (u.pathname.startsWith("/assets/treinos/")) return fetch(FALLBACK_TREINO);
+        return fetch(FALLBACK_AVATAR);
+      }
+    },
+    "GET"
+  );
+
+  // Assets (geral)
+  workbox.registerRoute(
+    ctx => ctx.url.pathname.startsWith("/assets/"),
+    new workbox.StaleWhileRevalidate({
+      cacheName: "assets-cache",
+      plugins: [
+        new workbox.ExpirationPlugin({
+          maxEntries: 400,
+          maxAgeSeconds: 31536000
+        })
+      ]
+    }),
+    "GET"
+  );
 
 }));
