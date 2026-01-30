@@ -42,6 +42,7 @@ export default function ConfiguracoesPerfil() {
   const [showPrivacidadeModal, setShowPrivacidadeModal] = useState(false);
   const [showNotificacoesModal, setShowNotificacoesModal] = useState(false);
   const [showSegurancaModal, setShowSegurancaModal] = useState(false);
+  const [mostrarOnline, setMostrarOnline] = useState(true);
 
   const REQUIRED_PHRASE = "Excluir Conta Footera";
 
@@ -153,10 +154,14 @@ export default function ConfiguracoesPerfil() {
     const resp = await fetch(`${API.REST}/configuracoes-perfil/privacidade`, {
       headers: { Authorization: `Bearer ${Storage.token}` },
     });
-    const data = await resp.json();
-    setVisivel(!!data.perfilVisivel);
-    setMensagens(!!data.permitirMensagens);
-    setMostrarEmail(!!data.mostrarEmail);
+    const data = await resp.json().catch(() => ({}));
+
+    setVisivel(data?.perfilVisivel ?? true);
+    setMensagens(data?.permitirMensagens ?? true);
+    setMostrarEmail(data?.mostrarEmail ?? false);
+
+    // ✅ aqui:
+    setMostrarOnline(data?.mostrarOnline ?? true);
   }
 
   async function salvarPrivacidade(patch: any) {
@@ -198,7 +203,7 @@ export default function ConfiguracoesPerfil() {
 
     try {
       setDeleting(true);
-      const resp = await fetch(`${API.REST}/configuracoes/minha-conta`, {
+      const resp = await fetch(`${API.REST}/configuracoes/configuracoes/minha-conta`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -207,15 +212,16 @@ export default function ConfiguracoesPerfil() {
         body: JSON.stringify({ confirm: confirmText.trim() }),
       });
 
-      if (resp.status === 204) {
+      const data = await resp.json().catch(() => ({}));
+
+      if (resp.ok) {
         localStorage.clear();
         sessionStorage.clear();
-        alert("Conta excluída com sucesso.");
+        alert(data?.message || "Conta movida para lixeira por 30 dias.");
         setLocation("/login");
         return;
       }
 
-      const data = await resp.json().catch(() => ({}));
       setDeleteError(data?.message || "Não foi possível excluir a conta.");
     } catch {
       setDeleteError("Erro ao conectar com o servidor.");
@@ -423,7 +429,7 @@ export default function ConfiguracoesPerfil() {
             <p className="text-sm text-gray-700 mt-2">
               Para confirmar a exclusão permanente, digite exatamente{" "}
               <span className="font-semibold text-gray-900">"{REQUIRED_PHRASE}"</span> no campo abaixo
-              e clique em <span className="font-semibold">Excluir</span>.
+              e clique em <span className="font-semibold">Excluir</span>. Mas caso for necessario você tem 30 dias para restaurar a conta.
             </p>
 
             <form onSubmit={excluirConta} className="mt-4">
@@ -639,6 +645,17 @@ export default function ConfiguracoesPerfil() {
                   onCheckedChange={(v) => {
                     setMensagens(v);
                     salvarPrivacidade({ permitirMensagens: v });
+                  }}
+                />
+              </div>
+
+              <div className="flex justify-between items-center border-b pb-3">
+                <span className="font-medium">Mostrar Online / Último online</span>
+                <Switch
+                  checked={mostrarOnline}
+                  onCheckedChange={(v) => {
+                    setMostrarOnline(v);
+                    salvarPrivacidade({ mostrarOnline: v });
                   }}
                 />
               </div>

@@ -81,11 +81,18 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
   try {
     const dbUser = await prisma.usuario.findUnique({
       where: { id: userId },
-      select: { id: true, tokenVersion: true, tipo: true },
+      select: { id: true, tokenVersion: true, tipo: true, deletedAt: true },
     });
 
     if (!dbUser) {
       return res.status(401).json({ message: "Usuário inválido." });
+    }
+
+    if (dbUser.deletedAt) {
+      return res.status(401).json({
+        message: "Conta está na lixeira (em processo de exclusão).",
+        code: "ACCOUNT_DELETED",
+      });
     }
 
     const tokenV = Number(payload?.tokenVersion ?? 0);

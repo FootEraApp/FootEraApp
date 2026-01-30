@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import jwt from "jsonwebtoken";
 
+const REQUIRED_PHRASE = "Excluir Conta Footera";
 
 export const getConfiguracoes = async (req: Request, res: Response) => {
   try {
@@ -62,45 +63,30 @@ function extractUserId(req: Request): string | null {
   }
 }
 
-export const excluirConta = async (req: Request, res: Response) => {
-  try {
-    const userId = extractUserId(req);
-    if (!userId) return res.status(401).json({ message: "Não autenticado." });
+export async function solicitarExclusaoConta(req: Request, res: Response) {
+  const userId = req.userId; // vindo do authenticateToken
+  const { confirm } = req.body ?? {};
 
-    const { confirm } = (req.body || {}) as { confirm?: string };
-    const REQUIRED = "Excluir Conta Footera";
-    if (!confirm || confirm.trim() !== REQUIRED) {
-      return res.status(400).json({
-        message: `Confirmação inválida. Digite exatamente "${REQUIRED}".`,
-      });
-    }
-
-    const posts = await prisma.postagem.findMany({
-      where: { usuarioId: userId },
-      select: { id: true },
-    });
-    const postIds = posts.map((p) => p.id);
-
-    await prisma.$transaction(async (tx) => {
-      if (postIds.length) {
-        await tx.postagem.updateMany({
-          where: { repostOfId: { in: postIds } },
-          data: { repostOfId: null },
-        });
-      }
-      await tx.usuario.delete({ where: { id: userId } });
-    });
-
-    return res.status(204).send();
-  } catch (err: any) {
-    if (err?.code === "P2003") {
-      return res.status(409).json({
-        message:
-          "Não foi possível excluir a conta por vínculos pendentes. Ajuste onDelete/SetNull nas FKs ou apague dependências antes.",
-        err: String(err?.meta?.field_name || err),
-      });
-    }
-    console.error("excluirConta erro:", err);
-    return res.status(500).json({ message: "Não foi possível excluir a conta.", err: String(err) });
+  if (!userId) return res.status(401).json({ message: "Não autenticado." });
+  if ((confirm ?? "").trim() !== REQUIRED_PHRASE) {
+    return res.status(400).json({ message: `Digite exatamente "${REQUIRED_PHRASE}".` });
   }
-};
+
+  const now = new Date();
+  const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+  await prisma.usuario.update({
+    where: { id: userId },
+    data: {
+      deletedAt: now,
+      deleteScheduledAt: in30,
+      tokenVersion: { increment: 1 }, // derruba tokens antigos
+      lastLogoutAt: now,
+    },
+  });
+
+  return res.status(200).json({
+    message: "Conta movida para lixeira. Você tem 30 dias para reativar antes da exclusão definitiva.",
+    deleteScheduledAt: in30,
+  });
+}
