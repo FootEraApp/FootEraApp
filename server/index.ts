@@ -248,14 +248,12 @@ app.use("/api/ranking", rankingRoutes);
 app.use("/api/explorar", explorarRoutes);  
 app.use("/api/legal", legalRoutes);
 app.use("/api/catalogo", catalogoRoutes);
-
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminAdminsRoutes);
 app.use("/api/admin", metricsRoutes);
 app.use("/api/admin/usuarios", adminUsuariosRoutes);
 app.use("/api/admin/assinantes", adminAssinantesRoutes);
 app.use("/api/admin/moderacao", authenticateToken, requireAdmin, adminModeracaoRoutes);
-
 app.use("/api/analises", analisesRoutes);
 app.use("/api/assinaturas", assinaturasRoutes);
 app.use("/api/comentarios", comentariosRoutes);
@@ -323,10 +321,10 @@ app.use("/api/consentimento", authenticateToken, consentimentoRoutes);
 app.use("/api/jogos-elenco", jogosElencoRoutes);
 app.use("/api/treinar-juntos", treinarJuntosRoute);
 app.use("/api/sessoes-turma", sessoesTurmaRoutes);
+app.use("/api/feedback", feedbackRoutes);
+app.use("/api/status", statusRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
-app.use("/api/feedback", authenticateToken, feedbackRoutes);
-app.use("/api/status", statusRoutes);
 
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
