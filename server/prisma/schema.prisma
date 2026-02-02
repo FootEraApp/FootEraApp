@@ -42,6 +42,10 @@ model Usuario {
   administrador             Administrador?
   tokenVersion              Int                 @default(0)
   senhaAtualizadaEm         DateTime?
+  status                    AccountStatus @default(ATIVO)
+  blockedAt                 DateTime?
+  blockedReason             String?
+  reactivatedAt             DateTime?
 
   amigosDe               Amigo[]                   @relation("AmigoUsuario")
   amigos                 Amigo[]                   @relation("UsuarioAmigo")
@@ -2053,6 +2057,11 @@ model LoginEvent {
 
   @@index([usuarioId, createdAt])
   @@index([createdAt])
+}
+
+enum AccountStatus {
+  ATIVO
+  BLOQUEADO
 }
 
 enum ConvocacaoStatus {

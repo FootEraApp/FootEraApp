@@ -95,6 +95,41 @@ export async function login(req: Request, res: Response) {
         .json({ message: "Usuário sem senha configurada. Contate o suporte ou recrie o usuário." });
     }
 
+    // depois de buscar o usuário (usuario/dbUser)
+    if (usuario.deletedAt) {
+      // usa deleteScheduledAt se você tiver, senão calcula a partir do deletedAt
+      const now = Date.now();
+      const base = usuario.deleteScheduledAt
+        ? new Date(usuario.deleteScheduledAt).getTime()
+        : new Date(usuario.deletedAt).getTime() + 30 * 24 * 60 * 60 * 1000;
+
+      const msLeft = base - now;
+      const daysLeft = Math.max(0, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
+      const restoreAvailable = msLeft > 0;
+
+      return res.status(410).json({
+        ok: false,
+        code: "ACCOUNT_DELETED",
+        restoreAvailable,
+        daysLeft,
+        message: restoreAvailable
+          ? `Sua conta foi excluída. Caso queira recuperar, faltam ${daysLeft} dia(s).`
+          : "Sua conta foi excluída e o prazo de recuperação expirou.",
+      });
+    }
+
+    const status = String((usuario as any).status ?? "").toUpperCase();
+
+    if (status === "BLOQUEADO" || (usuario as any).blockedAt) {
+      return res.status(403).json({
+        ok: false,
+        code: "ACCOUNT_BLOCKED",
+        message:
+          "Sua conta foi bloqueada pelo admin. Se quiser saber mais informações clique abaixo.",
+        blockedReason: (usuario as any).blockedReason ?? null,
+      });
+    }
+
     const senhaCorreta = await bcrypt.compare(String(senha), usuario.senhaHash);
     if (!senhaCorreta) {
       return res.status(401).json({ message: "Senha incorreta" });
