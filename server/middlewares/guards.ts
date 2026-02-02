@@ -54,9 +54,10 @@ export function requireOrgSeat(getOrgId: (req: AuthenticatedRequest) => string |
   };
 }
 
-export function requireAdmin() {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if ((req as any).user?.isAdmin) return next();
-    return res.status(403).json({ error: "Apenas administradores" });
-  };
+export function requireAdmin(req: any, res: any, next: any) {
+  const user = req.authUser || req.user;
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ message: "Acesso restrito a administradores." });
+  }
+  next();
 }
