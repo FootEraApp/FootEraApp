@@ -33,6 +33,12 @@ interface Treinos {
 }
 
 type UsuarioTipo = "" | "atleta" | "escola" | "clube" | "professor" | "admin" | "olheiro";
+type StatusConta =
+  | "ATIVO"
+  | "BLOQUEADO"
+  | "ativo"
+  | "banido"
+  | "pendente";
 
 const tipoToServer: Record<UsuarioTipo, string> = {
   "": "",
@@ -57,6 +63,9 @@ interface UsuarioAdmin {
   ultimaAtividade?: string | null;
   ultimaAtividadeNome?: string | null;
   assinatura?: AssinaturaDTO | null; 
+  status?: StatusConta;
+  deletedAt?: string | null;
+  blockedReason?: string | null;
 }
 
 type PlanoAssinatura = "FREE" | "PRO" | "ELITE" | string;
@@ -77,7 +86,7 @@ interface UsuarioDetalhe extends UsuarioAdmin {
   endereco?: string | null;
   ultimaAtividade?: string | null;
   ultimaAtividadeNome?: string | null;
-  status?: "ativo" | "banido" | "pendente";
+  status?: StatusConta;
   contagens?: { posts?: number; comentarios?: number; seguidores?: number };
   camposCadastro?: Record<string, any>;
   posicaoCampo?: string | null;
@@ -162,7 +171,6 @@ type ModeracaoItem = {
   unidadeResultado?: string | null;
   tempoMs?: number | null;
   conteudoJson?: any;
-
   atleta: { id: string | null; nome: string; foto: string | null };
   desafio: { id: string | null; titulo: string; pontuacao: number };
 };
@@ -232,10 +240,8 @@ export default function AdminDashboard() {
   const [profPage, setProfPage] = useState(1);
   const profPageSize = 20;
   const [profTotal, setProfTotal] = useState(0);
-
   const [desafios, setDesafios] = useState<any[]>([]);
   const [configuracoes, setConfiguracoes] = useState<any>(null);
-
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
   const [carregandoUsuarios, setCarregandoUsuarios] = useState(false);
   const [q, setQ] = useState("");
@@ -253,11 +259,10 @@ export default function AdminDashboard() {
   const [detalheAberto, setDetalheAberto] = useState(false);
   const [userSelecionado, setUserSelecionado] = useState<UsuarioDetalhe | null>(null);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
-  const [acaoBusy, setAcaoBusy] = useState(false);
-
+  const [acaoBusyId, setAcaoBusyId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [erroUsuarios, setErroUsuarios] = useState<string>("");
   const [usersBase] = useState<string>(USERS_ENDPOINT);
-
   const [modPendentes, setModPendentes] = useState<ModeracaoItem[]>([]);
   const [modTotal, setModTotal] = useState(0);
   const [modPage, setModPage] = useState(1);
@@ -268,12 +273,16 @@ export default function AdminDashboard() {
   const [meId, setMeId] = useState<string | null>(null);
   const [canManageAdmins, setCanManageAdmins] = useState(false);
   const [adminNivel, setAdminNivel] = useState<number>(0);
-
   const [profDeleteModalOpen, setProfDeleteModalOpen] = useState(false);
   const [profToDelete, setProfToDelete] = useState<{ id: string; nome?: string } | null>(null);
   const [profDeleteBusy, setProfDeleteBusy] = useState(false);
   const [profDeleteErr, setProfDeleteErr] = useState<string>("");
 
+  function showToast(type: "success" | "error", msg: string) {
+    setToast({ type, msg });
+    window.clearTimeout((showToast as any)._t);
+    (showToast as any)._t = window.setTimeout(() => setToast(null), 3500);
+  }
 
 type AssinanteListItem = {
   id: string;
@@ -320,15 +329,136 @@ const [assErro, setAssErro] = useState<string>("");
 const [assinantes, setAssinantes] = useState<AssinanteListItem[]>([]);
 const [assTotal, setAssTotal] = useState(0);
 const [assOverview, setAssOverview] = useState<{ total: number; ativos: number; cancelados: number; porPlano: Record<string, {total:number; ativos:number}> } | null>(null);
-
 const [fbItems, setFbItems] = useState<FeedbackAdmin[]>([]);
 const [fbLoading, setFbLoading] = useState(false);
 const [fbError, setFbError] = useState<string | null>(null);
 const [fbTipo, setFbTipo] = useState<string>("");
 const [fbFrom, setFbFrom] = useState<string>("");
 const [fbOnlyUnread, setFbOnlyUnread] = useState(false);
-
 const [profParceiroBusyId, setProfParceiroBusyId] = useState<string | null>(null);
+
+ function safeJsonParse(txt: string) {
+    try {
+      return txt ? JSON.parse(txt) : null;
+    } catch {
+      return null;
+    }
+  }
+
+type AcaoConta = "bloquear" | "desbloquear" | "reativar" | "restaurar";
+
+async function bloquearOuReativarConta(
+  usuarioId: string,
+  acao: AcaoConta
+) {
+  setAcaoBusyId(usuarioId);
+
+  try {
+    let body: any = undefined;
+
+    if (acao === "bloquear") {
+      const motivo = prompt("Motivo do bloqueio? (opcional)") ?? "";
+      body = { motivo: String(motivo) };
+    }
+
+    const acaoToPath: Record<AcaoConta, string> = {
+      bloquear: "bloquear",
+      desbloquear: "reativar", // ✅ aqui é o fix
+      reativar: "reativar",
+      restaurar: "restaurar",
+    };
+
+    const url = `${API.BASE_URL}/api/admin/usuarios/${usuarioId}/${acaoToPath[acao]}`;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 30000);
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    }).finally(() => window.clearTimeout(timeout));
+
+    const txt = await resp.text().catch(() => "");
+    const data = safeJsonParse(txt);
+
+    if (!resp.ok) {
+      const msg = (data as any)?.message || txt || `Erro HTTP ${resp.status}`;
+      showToast("error", msg);
+      return;
+    }
+
+    const current =
+      usuarios.find((u) => u.id === usuarioId) ||
+      (userSelecionado?.id === usuarioId ? userSelecionado : null);
+
+    const nome = current?.nome ?? current?.nomeDeUsuario ?? "(sem nome)";
+    const email = current?.email ?? "";
+
+    const updated = (data as any)?.usuario?.id ? (data as any).usuario : ((data as any)?.id ? data : null);
+
+    if (updated?.id) {
+      setUsuarios((prev) =>
+        prev.map((u) => (u.id === updated.id ? { ...u, ...updated } : u))
+      );
+
+      setUserSelecionado((prev) =>
+        prev?.id === updated.id ? { ...prev, ...updated } : prev
+      );
+    } else {
+      // ✅ fallback robusto
+      setUsuarios((prev) =>
+        prev.map((u) =>
+          u.id === usuarioId
+            ? {
+                ...u,
+                status:
+                  acao === "bloquear" ? "BLOQUEADO" : "ATIVO",
+                blockedReason:
+                  acao === "bloquear"
+                    ? (body?.motivo?.trim() || "Bloqueado pelo administrador.")
+                    : null,
+                // ✅ restaurar/reativar limpam deletedAt
+                deletedAt: (acao === "restaurar" || acao === "reativar") ? null : u.deletedAt,
+              }
+            : u
+        )
+      );
+
+      setUserSelecionado((prev) =>
+        prev?.id === usuarioId
+          ? {
+              ...prev,
+              status: acao === "bloquear" ? "BLOQUEADO" : "ATIVO",
+              blockedReason:
+                acao === "bloquear"
+                  ? (body?.motivo?.trim() || "Bloqueado pelo administrador.")
+                  : null,
+              deletedAt: (acao === "restaurar" || acao === "reativar") ? null : prev.deletedAt,
+            }
+          : prev
+      );
+    }
+
+    showToast(
+      "success",
+      acao === "bloquear"
+        ? `Você bloqueou a conta de ${nome}${email ? ` (${email})` : ""}.`
+        : acao === "desbloquear"
+        ? `Você desbloqueou a conta de ${nome}${email ? ` (${email})` : ""}.`
+        : acao === "restaurar"
+        ? `Você restaurou a conta de ${nome}${email ? ` (${email})` : ""}.`
+        : `Você reativou a conta de ${nome}${email ? ` (${email})` : ""}.`
+    );
+  } catch (e: any) {
+    const msg =
+      e?.name === "AbortError"
+        ? "A requisição demorou demais e foi cancelada (timeout)."
+        : e?.message || "Falha ao executar ação.";
+    showToast("error", msg);
+  } finally {
+    setAcaoBusyId(null);
+  }
+}
 
 async function toggleParceiroProfessor(professorId: string, next: boolean) {
   setProfParceiroBusyId(professorId);
@@ -982,48 +1112,74 @@ async function confirmarExcluirProfessor() {
   }
 
   async function toggleCampo(id: string, campo: "verificado" | "destaque", valor: boolean) {
-    setAcaoBusy(true);
+    setAcaoBusyId(id);
     try {
-      await fetch(`${usersBase}/${id}`, {
+      const r = await fetch(`${usersBase}/${id}`, {
         method: "PATCH",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ [campo]: valor }),
       });
+
+      const txt = await r.text().catch(() => "");
+      if (!r.ok) {
+        showToast("error", txt || `Falha ao atualizar (HTTP ${r.status}).`);
+        return;
+      }
+
       setUserSelecionado((prev) => (prev ? { ...prev, [campo]: valor } : prev));
       setUsuarios((prev) => prev.map((u) => (u.id === id ? ({ ...u, [campo]: valor } as UsuarioAdmin) : u)));
     } finally {
-      setAcaoBusy(false);
+      setAcaoBusyId(null);
     }
   }
 
   async function banirOuDesbanir(id: string, banir: boolean) {
     const motivo = banir ? prompt("Motivo do banimento? (obrigatório)") : "";
     if (banir && !motivo) return;
-    setAcaoBusy(true);
+
+    setAcaoBusyId(id);
     try {
       const url = `${usersBase}/${id}/banir`;
       const opts = banir
         ? { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ motivo }) }
         : { method: "DELETE", headers: authHeaders() };
-      await fetch(url, opts as RequestInit);
-      setUserSelecionado((prev) => (prev ? { ...prev, status: banir ? "banido" : "ativo" } : prev));
+
+      const r = await fetch(url, opts as RequestInit);
+      const txt = await r.text().catch(() => "");
+      if (!r.ok) {
+        showToast("error", txt || `Erro ao ${banir ? "banir" : "desbanir"} (HTTP ${r.status}).`);
+        return;
+      }
+
+      setUserSelecionado((prev) => (prev ? { ...prev, status: banir ? "banido" : "ATIVO" } : prev));
+      setUsuarios((prev) =>
+        prev.map((u) => (u.id === id ? ({ ...u, status: banir ? "banido" : "ATIVO" } as any) : u))
+      );
     } finally {
-      setAcaoBusy(false);
+      setAcaoBusyId(null);
     }
   }
 
   async function removerConteudo(id: string, escopo: "posts" | "comentarios" | "todos") {
     if (!confirm(`Remover ${escopo} deste usuário? Essa ação é irreversível.`)) return;
-    setAcaoBusy(true);
+
+    setAcaoBusyId(id);
     try {
-      await fetch(`${usersBase}/${id}/remover-conteudo`, {
+      const r = await fetch(`${usersBase}/${id}/remover-conteudo`, {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ escopo }),
       });
-      alert("Conteúdo removido.");
+
+      const txt = await r.text().catch(() => "");
+      if (!r.ok) {
+        showToast("error", txt || `Erro ao remover conteúdo (HTTP ${r.status}).`);
+        return;
+      }
+
+      showToast("success", "Conteúdo removido.");
     } finally {
-      setAcaoBusy(false);
+      setAcaoBusyId(null);
     }
   }
 
@@ -1061,6 +1217,26 @@ async function confirmarExcluirProfessor() {
     const upd = await resp.json();
     setUserSelecionado(prev => prev ? ({ ...prev, assinatura: upd }) : prev);
     alert("Assinatura reativada.");
+  }
+
+  function daysBetween(a: Date, b: Date) {
+    const ms = Math.abs(a.getTime() - b.getTime());
+    return ms / (1000 * 60 * 60 * 24);
+  }
+
+  function getAccountAction(u: UsuarioAdmin) {
+    const status = String((u as any).status ?? "").toUpperCase();
+    const deletedAtRaw = (u as any).deletedAt as string | null | undefined;
+
+    if (deletedAtRaw) {
+      const deletedAt = new Date(deletedAtRaw);
+      const days = daysBetween(new Date(), deletedAt);
+      if (days <= 30) return "RESTORE" as const;   // restaurar
+      return "DELETED_EXPIRED" as const;           // passou 30 dias (você decide o que mostrar)
+    }
+
+    if (status === "BLOQUEADO") return "UNBLOCK" as const;
+    return "BLOCK" as const;
   }
 
   function formatDate(d?: string | null) {
@@ -1218,6 +1394,18 @@ async function confirmarExcluirProfessor() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
+      {toast && (
+        <div className="fixed top-4 right-4 z-[9999]">
+          <div
+            className={`px-4 py-3 rounded shadow text-white ${
+              toast.type === "success" ? "bg-green-700" : "bg-red-600"
+            }`}
+          >
+            {toast.msg}
+          </div>
+        </div>
+      )}
+
       <header className="flex justify-between items-center bg-green-900 text-white px-6 py-4 rounded">
         <h1 className="text-2xl font-bold">FOOTERA</h1>
         <button className="bg-red-600 px-4 py-2 rounded" onClick={handleLogout}>
@@ -1333,7 +1521,6 @@ async function confirmarExcluirProfessor() {
             </div>
 
             {erroUsuarios && <div className="mb-3 text-sm text-red-600">{erroUsuarios}</div>}
-
             {canManageAdmins && (
               <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded">
                 <div className="flex items-center justify-between">
@@ -1383,7 +1570,7 @@ async function confirmarExcluirProfessor() {
                                 <input
                                   type="checkbox"
                                   checked={!!u.verificado}
-                                  disabled={!isAdminBase || acaoBusy}
+                                  disabled={!isAdminBase || acaoBusyId === u.id}
                                   onChange={(e) => toggleCampo(u.id, "verificado", e.target.checked)}
                                   title={!isAdminBase ? "Requer permissão de admin" : ""}
                                 />
@@ -1394,7 +1581,7 @@ async function confirmarExcluirProfessor() {
                                 <input
                                   type="checkbox"
                                   checked={!!u.destaque}
-                                  disabled={!isAdminBase || acaoBusy}
+                                  disabled={!isAdminBase || acaoBusyId === u.id}
                                   onChange={(e) => toggleCampo(u.id, "destaque", e.target.checked)}
                                   title={!isAdminBase ? "Requer permissão de admin" : ""}
                                 />
@@ -1422,12 +1609,58 @@ async function confirmarExcluirProfessor() {
                             {fmtDate(u.assinatura?.renovaEm ?? null)}
                           </td>
                           <td className="px-3 py-2 text-right">
-
-
                           <div className="flex items-center gap-3 justify-end">
                             <button onClick={() => abrirDetalhes(u.id)} className="text-green-700 hover:underline">
                               Detalhes
                             </button>
+
+                            {(() => {
+                              const act = getAccountAction(u);
+
+                              if (act === "DELETED_EXPIRED") {
+                                return (
+                                  <span className="text-gray-400 text-xs" title="Conta apagada há mais de 30 dias">
+                                    Conta apagada
+                                  </span>
+                                );
+                              }
+
+                              if (act === "RESTORE") {
+                                return (
+                                  <button
+                                    onClick={() => bloquearOuReativarConta(u.id, "restaurar")}
+                                    className="text-green-700 hover:underline"
+                                    disabled={acaoBusyId === u.id}
+                                  >
+                                    {acaoBusyId === u.id ? "Processando..." : "Restaurar conta"}
+                                  </button>
+                                );
+                              }
+
+                              if (act === "UNBLOCK") {
+                                return (
+                                  <button
+                                    onClick={() => bloquearOuReativarConta(u.id, "desbloquear")}
+                                    className="text-green-700 hover:underline"
+                                    disabled={acaoBusyId === u.id}
+                                  >
+                                    {acaoBusyId === u.id ? "Processando..." : "Desbloquear conta"}
+                                  </button>
+                                );
+                              }
+
+                              // BLOCK
+                              return (
+                                <button
+                                  onClick={() => bloquearOuReativarConta(u.id, "bloquear")}
+                                  className="text-red-600 hover:underline"
+                                  title="Bloquear conta (impede login)"
+                                  disabled={acaoBusyId === u.id}
+                                >
+                                  {acaoBusyId === u.id ? "Processando..." : "Bloquear conta"}
+                                </button>
+                              );
+                            })()}
 
                             {canManageAdmins && String(u.tipo).toLowerCase() === "admin" && u.id !== meId && (
                               <button onClick={() => deletarAdmin(u.id)} className="text-red-600 hover:underline" title="Deletar este administrador">
@@ -2532,7 +2765,8 @@ async function confirmarExcluirProfessor() {
                           <input
                             type="checkbox"
                             checked={!!u.verificado}
-                            disabled={acaoBusy}
+                            disabled={acaoBusyId === u.id}
+
                             onChange={(e) => toggleCampo(u.id, "verificado", e.target.checked)}
                           />
                           Verificado
@@ -2541,7 +2775,8 @@ async function confirmarExcluirProfessor() {
                           <input
                             type="checkbox"
                             checked={!!u.destaque}
-                            disabled={acaoBusy}
+                            disabled={acaoBusyId === u.id}
+
                             onChange={(e) => toggleCampo(u.id, "destaque", e.target.checked)}
                           />
                           Destaque
@@ -2551,7 +2786,7 @@ async function confirmarExcluirProfessor() {
                       <div className="border-t pt-3 flex flex-wrap gap-2">
                         {u.status === "banido" ? (
                           <button
-                            disabled={!isAdminBase || acaoBusy}
+                            disabled={!isAdminBase || acaoBusyId === u.id}
                             onClick={() => banirOuDesbanir(u.id, false)}
                             className="px-3 py-2 rounded bg-yellow-500 text-white disabled:opacity-50"
                             title={!isAdminBase ? "Requer permissão de admin" : ""}
@@ -2560,7 +2795,7 @@ async function confirmarExcluirProfessor() {
                           </button>
                         ) : (
                           <button
-                            disabled={!isAdminBase || acaoBusy}
+                            disabled={!isAdminBase || acaoBusyId === u.id}
                             onClick={() => banirOuDesbanir(u.id, true)}
                             className="px-3 py-2 rounded bg-red-600 text-white disabled:opacity-50"
                             title={!isAdminBase ? "Requer permissão de admin" : ""}
@@ -2569,9 +2804,35 @@ async function confirmarExcluirProfessor() {
                           </button>
                         )}
 
+                        <div className="border-t pt-3 flex flex-wrap gap-2">
+                        {(() => {
+                          const status = String((u as any).status ?? "").toUpperCase();
+                          const deletada = !!(u as any).deletedAt;
+                          const precisaReativar = deletada || status === "BLOQUEADO";
+
+                          return precisaReativar ? (
+                            <button
+                              onClick={() => bloquearOuReativarConta(u.id, "reativar")}
+                              disabled={acaoBusyId === u.id}
+                              className="px-3 py-2 rounded bg-green-700 text-white disabled:opacity-50"
+                            >
+                              Reativar conta
+                            </button>
+                          ) : (
+                            <button
+                              disabled={acaoBusyId === u.id}
+                              onClick={() => bloquearOuReativarConta(u.id, "bloquear")}
+                              className="px-3 py-2 rounded bg-red-600 text-white disabled:opacity-50"
+                            >
+                              {acaoBusyId === u.id ? "Processando..." : "Bloquear conta"}
+                            </button>
+                          );
+                        })()}
+                      </div>
+
                         <div className="ml-auto flex gap-2">
                           <button
-                            disabled={!isAdminBase || acaoBusy}
+                            disabled={!isAdminBase || acaoBusyId === u.id}
                             onClick={() => removerConteudo(u.id, "posts")}
                             className="px-3 py-2 rounded bg-gray-200 disabled:opacity-50"
                             title={!isAdminBase ? "Requer permissão de admin" : ""}
@@ -2579,7 +2840,7 @@ async function confirmarExcluirProfessor() {
                             Remover posts
                           </button>
                           <button
-                            disabled={!isAdminBase || acaoBusy}
+                            disabled={!isAdminBase || acaoBusyId === u.id}
                             onClick={() => removerConteudo(u.id, "comentarios")}
                             className="px-3 py-2 rounded bg-gray-200 disabled:opacity-50"
                             title={!isAdminBase ? "Requer permissão de admin" : ""}
@@ -2587,7 +2848,7 @@ async function confirmarExcluirProfessor() {
                             Remover comentários
                           </button>
                           <button
-                            disabled={!isAdminBase || acaoBusy}
+                            disabled={!isAdminBase || acaoBusyId === u.id}
                             onClick={() => removerConteudo(u.id, "todos")}
                             className="px-3 py-2 rounded bg-gray-200 disabled:opacity-50"
                             title={!isAdminBase ? "Requer permissão de admin" : ""}

@@ -81,7 +81,15 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
   try {
     const dbUser = await prisma.usuario.findUnique({
       where: { id: userId },
-      select: { id: true, tokenVersion: true, tipo: true, deletedAt: true },
+      select: {
+        id: true,
+        tokenVersion: true,
+        tipo: true,
+        deletedAt: true,
+        status: true,
+        blockedAt: true,
+        blockedReason: true,
+      },
     });
 
     if (!dbUser) {
@@ -94,6 +102,15 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
         code: "ACCOUNT_DELETED",
       });
     }
+
+    const status = String((dbUser as any).status ?? "").toUpperCase();
+      if (status === "BLOQUEADO" || (dbUser as any).blockedAt) {
+        return res.status(403).json({
+          message: "Conta bloqueada.",
+          code: "ACCOUNT_BLOCKED",
+          blockedReason: (dbUser as any).blockedReason ?? null,
+        });
+      }
 
     const tokenV = Number(payload?.tokenVersion ?? 0);
     const dbV = Number(dbUser.tokenVersion ?? 0);
