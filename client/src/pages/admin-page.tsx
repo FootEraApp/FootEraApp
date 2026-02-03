@@ -1,4 +1,3 @@
-// client/src/pages/admin-page.tsx
 import React, { useEffect, useState, useMemo } from "react";
 import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
@@ -33,6 +32,12 @@ interface Treinos {
 }
 
 type UsuarioTipo = "" | "atleta" | "escola" | "clube" | "professor" | "admin" | "olheiro";
+type StatusConta =
+  | "ATIVO"
+  | "BLOQUEADO"
+  | "ativo"
+  | "banido"
+  | "pendente";
 
 const tipoToServer: Record<UsuarioTipo, string> = {
   "": "",
@@ -57,6 +62,9 @@ interface UsuarioAdmin {
   ultimaAtividade?: string | null;
   ultimaAtividadeNome?: string | null;
   assinatura?: AssinaturaDTO | null; 
+  status?: StatusConta;
+  deletedAt?: string | null;
+  blockedReason?: string | null;
 }
 
 type PlanoAssinatura = "FREE" | "PRO" | "ELITE" | string;
@@ -77,7 +85,7 @@ interface UsuarioDetalhe extends UsuarioAdmin {
   endereco?: string | null;
   ultimaAtividade?: string | null;
   ultimaAtividadeNome?: string | null;
-  status?: "ativo" | "banido" | "pendente";
+  status?: StatusConta;
   contagens?: { posts?: number; comentarios?: number; seguidores?: number };
   camposCadastro?: Record<string, any>;
   posicaoCampo?: string | null;
@@ -162,7 +170,6 @@ type ModeracaoItem = {
   unidadeResultado?: string | null;
   tempoMs?: number | null;
   conteudoJson?: any;
-
   atleta: { id: string | null; nome: string; foto: string | null };
   desafio: { id: string | null; titulo: string; pontuacao: number };
 };
@@ -232,10 +239,8 @@ export default function AdminDashboard() {
   const [profPage, setProfPage] = useState(1);
   const profPageSize = 20;
   const [profTotal, setProfTotal] = useState(0);
-
   const [desafios, setDesafios] = useState<any[]>([]);
   const [configuracoes, setConfiguracoes] = useState<any>(null);
-
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
   const [carregandoUsuarios, setCarregandoUsuarios] = useState(false);
   const [q, setQ] = useState("");
@@ -253,11 +258,10 @@ export default function AdminDashboard() {
   const [detalheAberto, setDetalheAberto] = useState(false);
   const [userSelecionado, setUserSelecionado] = useState<UsuarioDetalhe | null>(null);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
-  const [acaoBusy, setAcaoBusy] = useState(false);
-
+  const [acaoBusyId, setAcaoBusyId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [erroUsuarios, setErroUsuarios] = useState<string>("");
   const [usersBase] = useState<string>(USERS_ENDPOINT);
-
   const [modPendentes, setModPendentes] = useState<ModeracaoItem[]>([]);
   const [modTotal, setModTotal] = useState(0);
   const [modPage, setModPage] = useState(1);
@@ -268,12 +272,16 @@ export default function AdminDashboard() {
   const [meId, setMeId] = useState<string | null>(null);
   const [canManageAdmins, setCanManageAdmins] = useState(false);
   const [adminNivel, setAdminNivel] = useState<number>(0);
-
   const [profDeleteModalOpen, setProfDeleteModalOpen] = useState(false);
   const [profToDelete, setProfToDelete] = useState<{ id: string; nome?: string } | null>(null);
   const [profDeleteBusy, setProfDeleteBusy] = useState(false);
   const [profDeleteErr, setProfDeleteErr] = useState<string>("");
 
+  function showToast(type: "success" | "error", msg: string) {
+    setToast({ type, msg });
+    window.clearTimeout((showToast as any)._t);
+    (showToast as any)._t = window.setTimeout(() => setToast(null), 3500);
+  }
 
 type AssinanteListItem = {
   id: string;
@@ -320,20 +328,137 @@ const [assErro, setAssErro] = useState<string>("");
 const [assinantes, setAssinantes] = useState<AssinanteListItem[]>([]);
 const [assTotal, setAssTotal] = useState(0);
 const [assOverview, setAssOverview] = useState<{ total: number; ativos: number; cancelados: number; porPlano: Record<string, {total:number; ativos:number}> } | null>(null);
-
 const [fbItems, setFbItems] = useState<FeedbackAdmin[]>([]);
 const [fbLoading, setFbLoading] = useState(false);
 const [fbError, setFbError] = useState<string | null>(null);
 const [fbTipo, setFbTipo] = useState<string>("");
 const [fbFrom, setFbFrom] = useState<string>("");
 const [fbOnlyUnread, setFbOnlyUnread] = useState(false);
-
 const [profParceiroBusyId, setProfParceiroBusyId] = useState<string | null>(null);
+
+ function safeJsonParse(txt: string) {
+    try {
+      return txt ? JSON.parse(txt) : null;
+    } catch {
+      return null;
+    }
+  }
+
+type AcaoConta = "bloquear" | "desbloquear" | "reativar" | "restaurar";
+
+async function bloquearOuReativarConta(
+  usuarioId: string,
+  acao: AcaoConta
+) {
+  setAcaoBusyId(usuarioId);
+
+  try {
+    let body: any = undefined;
+
+    if (acao === "bloquear") {
+      const motivo = prompt("Motivo do bloqueio? (opcional)") ?? "";
+      body = { motivo: String(motivo) };
+    }
+
+    const acaoToPath: Record<AcaoConta, string> = {
+      bloquear: "bloquear",
+      desbloquear: "reativar",
+      reativar: "reativar",
+      restaurar: "restaurar",
+    };
+
+    const url = `${API.BASE_URL}/api/admin/usuarios/${usuarioId}/${acaoToPath[acao]}`;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 30000);
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    }).finally(() => window.clearTimeout(timeout));
+
+    const txt = await resp.text().catch(() => "");
+    const data = safeJsonParse(txt);
+
+    if (!resp.ok) {
+      const msg = (data as any)?.message || txt || `Erro HTTP ${resp.status}`;
+      showToast("error", msg);
+      return;
+    }
+
+    const current =
+      usuarios.find((u) => u.id === usuarioId) ||
+      (userSelecionado?.id === usuarioId ? userSelecionado : null);
+
+    const nome = current?.nome ?? current?.nomeDeUsuario ?? "(sem nome)";
+    const email = current?.email ?? "";
+
+    const updated = (data as any)?.usuario?.id ? (data as any).usuario : ((data as any)?.id ? data : null);
+
+    if (updated?.id) {
+      setUsuarios((prev) =>
+        prev.map((u) => (u.id === updated.id ? { ...u, ...updated } : u))
+      );
+
+      setUserSelecionado((prev) =>
+        prev?.id === updated.id ? { ...prev, ...updated } : prev
+      );
+    } else {
+      setUsuarios((prev) =>
+        prev.map((u) =>
+          u.id === usuarioId
+            ? {
+                ...u,
+                status:
+                  acao === "bloquear" ? "BLOQUEADO" : "ATIVO",
+                blockedReason:
+                  acao === "bloquear"
+                    ? (body?.motivo?.trim() || "Bloqueado pelo administrador.")
+                    : null,
+                deletedAt: (acao === "restaurar" || acao === "reativar") ? null : u.deletedAt,
+              }
+            : u
+        )
+      );
+
+      setUserSelecionado((prev) =>
+        prev?.id === usuarioId
+          ? {
+              ...prev,
+              status: acao === "bloquear" ? "BLOQUEADO" : "ATIVO",
+              blockedReason:
+                acao === "bloquear"
+                  ? (body?.motivo?.trim() || "Bloqueado pelo administrador.")
+                  : null,
+              deletedAt: (acao === "restaurar" || acao === "reativar") ? null : prev.deletedAt,
+            }
+          : prev
+      );
+    }
+
+    showToast(
+      "success",
+      acao === "bloquear"
+        ? `Você bloqueou a conta de ${nome}${email ? ` (${email})` : ""}.`
+        : acao === "desbloquear"
+        ? `Você desbloqueou a conta de ${nome}${email ? ` (${email})` : ""}.`
+        : acao === "restaurar"
+        ? `Você restaurou a conta de ${nome}${email ? ` (${email})` : ""}.`
+        : `Você reativou a conta de ${nome}${email ? ` (${email})` : ""}.`
+    );
+  } catch (e: any) {
+    const msg =
+      e?.name === "AbortError"
+        ? "A requisição demorou demais e foi cancelada (timeout)."
+        : e?.message || "Falha ao executar ação.";
+    showToast("error", msg);
+  } finally {
+    setAcaoBusyId(null);
+  }
+}
 
 async function toggleParceiroProfessor(professorId: string, next: boolean) {
   setProfParceiroBusyId(professorId);
-
-  // optimistic update
   setProfessores((prev) =>
     prev.map((p) =>
       p.id === professorId
@@ -351,7 +476,6 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
 
     const txt = await r.text().catch(() => "");
     if (!r.ok) {
-      // rollback se falhar
       setProfessores((prev) =>
         prev.map((p) =>
           p.id === professorId
@@ -362,11 +486,7 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
       alert(txt || `Erro ao atualizar parceiro (HTTP ${r.status}).`);
       return;
     }
-
-    // se quiser, dá pra usar a resposta do backend aqui
-    // const payload = txt ? JSON.parse(txt) : null;
   } catch (e: any) {
-    // rollback se falhar
     setProfessores((prev) =>
       prev.map((p) =>
         p.id === professorId
@@ -437,7 +557,6 @@ useEffect(() => {
       params.set("pageSize", String(profPageSize));
       if (profDebQ) params.set("q", profDebQ);
 
-      // ✅ padrão: aceita backend que retorna array direto OU { items, total, page }
       const r = await fetch(`${API.BASE_URL}/api/professores?${params.toString()}`, {
         headers: authHeaders(),
       });
@@ -945,8 +1064,6 @@ async function confirmarExcluirProfessor() {
 
     fecharModalExcluirProfessor();
     alert("Professor e conta vinculada foram excluídos!");
-
-    // ✅ recarrega página atual; se ficou vazia, volta 1 página
     const nextPage = professores.length <= 1 && profPage > 1 ? profPage - 1 : profPage;
     await carregarProfessores(nextPage);
 
@@ -982,48 +1099,74 @@ async function confirmarExcluirProfessor() {
   }
 
   async function toggleCampo(id: string, campo: "verificado" | "destaque", valor: boolean) {
-    setAcaoBusy(true);
+    setAcaoBusyId(id);
     try {
-      await fetch(`${usersBase}/${id}`, {
+      const r = await fetch(`${usersBase}/${id}`, {
         method: "PATCH",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ [campo]: valor }),
       });
+
+      const txt = await r.text().catch(() => "");
+      if (!r.ok) {
+        showToast("error", txt || `Falha ao atualizar (HTTP ${r.status}).`);
+        return;
+      }
+
       setUserSelecionado((prev) => (prev ? { ...prev, [campo]: valor } : prev));
       setUsuarios((prev) => prev.map((u) => (u.id === id ? ({ ...u, [campo]: valor } as UsuarioAdmin) : u)));
     } finally {
-      setAcaoBusy(false);
+      setAcaoBusyId(null);
     }
   }
 
   async function banirOuDesbanir(id: string, banir: boolean) {
     const motivo = banir ? prompt("Motivo do banimento? (obrigatório)") : "";
     if (banir && !motivo) return;
-    setAcaoBusy(true);
+
+    setAcaoBusyId(id);
     try {
       const url = `${usersBase}/${id}/banir`;
       const opts = banir
         ? { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ motivo }) }
         : { method: "DELETE", headers: authHeaders() };
-      await fetch(url, opts as RequestInit);
-      setUserSelecionado((prev) => (prev ? { ...prev, status: banir ? "banido" : "ativo" } : prev));
+
+      const r = await fetch(url, opts as RequestInit);
+      const txt = await r.text().catch(() => "");
+      if (!r.ok) {
+        showToast("error", txt || `Erro ao ${banir ? "banir" : "desbanir"} (HTTP ${r.status}).`);
+        return;
+      }
+
+      setUserSelecionado((prev) => (prev ? { ...prev, status: banir ? "banido" : "ATIVO" } : prev));
+      setUsuarios((prev) =>
+        prev.map((u) => (u.id === id ? ({ ...u, status: banir ? "banido" : "ATIVO" } as any) : u))
+      );
     } finally {
-      setAcaoBusy(false);
+      setAcaoBusyId(null);
     }
   }
 
   async function removerConteudo(id: string, escopo: "posts" | "comentarios" | "todos") {
     if (!confirm(`Remover ${escopo} deste usuário? Essa ação é irreversível.`)) return;
-    setAcaoBusy(true);
+
+    setAcaoBusyId(id);
     try {
-      await fetch(`${usersBase}/${id}/remover-conteudo`, {
+      const r = await fetch(`${usersBase}/${id}/remover-conteudo`, {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ escopo }),
       });
-      alert("Conteúdo removido.");
+
+      const txt = await r.text().catch(() => "");
+      if (!r.ok) {
+        showToast("error", txt || `Erro ao remover conteúdo (HTTP ${r.status}).`);
+        return;
+      }
+
+      showToast("success", "Conteúdo removido.");
     } finally {
-      setAcaoBusy(false);
+      setAcaoBusyId(null);
     }
   }
 
@@ -1063,6 +1206,26 @@ async function confirmarExcluirProfessor() {
     alert("Assinatura reativada.");
   }
 
+  function daysBetween(a: Date, b: Date) {
+    const ms = Math.abs(a.getTime() - b.getTime());
+    return ms / (1000 * 60 * 60 * 24);
+  }
+
+  function getAccountAction(u: UsuarioAdmin) {
+    const status = String((u as any).status ?? "").toUpperCase();
+    const deletedAtRaw = (u as any).deletedAt as string | null | undefined;
+
+    if (deletedAtRaw) {
+      const deletedAt = new Date(deletedAtRaw);
+      const days = daysBetween(new Date(), deletedAt);
+      if (days <= 30) return "RESTORE" as const;  
+      return "DELETED_EXPIRED" as const;         
+    }
+
+    if (status === "BLOQUEADO") return "UNBLOCK" as const;
+    return "BLOCK" as const;
+  }
+
   function formatDate(d?: string | null) {
     const v = d ?? (d as any)?.createdAt ?? (d as any)?.criado_em;
     if (!v) return "-";
@@ -1095,19 +1258,11 @@ async function confirmarExcluirProfessor() {
   const rotulo = { pendente: "pendentes", aprovado: "aprovados", invalido: "inválidos", todos: "registros" }[modStatus];
   const ver = Number(dados.totalVerificados || 0);
   const nver = Number(dados.totalNaoVerificados || 0);
-  
-  // =====================
-  // Helpers p/ busca
-  // =====================
   const normStr = (v: any) => String(v ?? "").toLowerCase().trim();
-
   const itemHasCategoria = (item: any, cat: string) => {
     if (!cat) return true;
     const alvo = normStr(cat);
-
     const raw = item?.categoria ?? item?.categorias ?? item?.Categoria ?? null;
-
-    // aceita string, array, etc.
     const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
     if (list.length === 0) return false;
 
@@ -1117,13 +1272,11 @@ async function confirmarExcluirProfessor() {
   const matchesText = (item: any, qtxt: string) => {
     if (!qtxt) return true;
     const q = normStr(qtxt);
-
     const nome = normStr(item?.nome ?? item?.titulo);
     const codigo = normStr(item?.codigo);
     const nivel = normStr(item?.nivel ?? item?.dificuldade);
     const desc = normStr(item?.descricao ?? item?.resumo);
 
-    // procura em nome/código/nível/descrição
     return (
       nome.includes(q) ||
       codigo.includes(q) ||
@@ -1132,9 +1285,6 @@ async function confirmarExcluirProfessor() {
     );
   };
 
-  // =====================
-  // Listas filtradas
-  // =====================
   const treinosFiltrados = useMemo(() => {
     return (Array.isArray(treinos) ? treinos : []).filter((t: any) => {
       if (!matchesText(t, trDebQ)) return false;
@@ -1151,38 +1301,6 @@ async function confirmarExcluirProfessor() {
     });
   }, [exercicios, exDebQ, exCat]);
 
-  // =====================
-  // Categorias disponíveis (para o SELECT)
-  // =====================
-  const treinosCats = useMemo(() => {
-    const set = new Set<string>();
-    treinos.forEach((t: any) => {
-      const raw = t?.categoria ?? t?.categorias ?? null;
-      const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
-      arr.forEach((c: any) => {
-        const s = String(c ?? "").trim();
-        if (s) set.add(s);
-      });
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [treinos]);
-
-  const exerciciosCats = useMemo(() => {
-    const set = new Set<string>();
-    exercicios.forEach((ex: any) => {
-      const raw = ex?.categoria ?? ex?.categorias ?? null;
-      const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
-      arr.forEach((c: any) => {
-        const s = String(c ?? "").trim();
-        if (s) set.add(s);
-      });
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [exercicios]);
-
-  // =====================
-  // Ordenação (aplica DEPOIS de filtrar)
-  // =====================
   const treinosOrdenados = [...treinosFiltrados].sort((a: any, b: any) => {
     const ra = Number(a.realizadoCount ?? a.realizados ?? 0);
     const rb = Number(b.realizadoCount ?? b.realizados ?? 0);
@@ -1218,6 +1336,18 @@ async function confirmarExcluirProfessor() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
+      {toast && (
+        <div className="fixed top-4 right-4 z-[9999]">
+          <div
+            className={`px-4 py-3 rounded shadow text-white ${
+              toast.type === "success" ? "bg-green-700" : "bg-red-600"
+            }`}
+          >
+            {toast.msg}
+          </div>
+        </div>
+      )}
+
       <header className="flex justify-between items-center bg-green-900 text-white px-6 py-4 rounded">
         <h1 className="text-2xl font-bold">FOOTERA</h1>
         <button className="bg-red-600 px-4 py-2 rounded" onClick={handleLogout}>
@@ -1333,7 +1463,6 @@ async function confirmarExcluirProfessor() {
             </div>
 
             {erroUsuarios && <div className="mb-3 text-sm text-red-600">{erroUsuarios}</div>}
-
             {canManageAdmins && (
               <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded">
                 <div className="flex items-center justify-between">
@@ -1383,7 +1512,7 @@ async function confirmarExcluirProfessor() {
                                 <input
                                   type="checkbox"
                                   checked={!!u.verificado}
-                                  disabled={!isAdminBase || acaoBusy}
+                                  disabled={!isAdminBase || acaoBusyId === u.id}
                                   onChange={(e) => toggleCampo(u.id, "verificado", e.target.checked)}
                                   title={!isAdminBase ? "Requer permissão de admin" : ""}
                                 />
@@ -1394,7 +1523,7 @@ async function confirmarExcluirProfessor() {
                                 <input
                                   type="checkbox"
                                   checked={!!u.destaque}
-                                  disabled={!isAdminBase || acaoBusy}
+                                  disabled={!isAdminBase || acaoBusyId === u.id}
                                   onChange={(e) => toggleCampo(u.id, "destaque", e.target.checked)}
                                   title={!isAdminBase ? "Requer permissão de admin" : ""}
                                 />
@@ -1422,12 +1551,57 @@ async function confirmarExcluirProfessor() {
                             {fmtDate(u.assinatura?.renovaEm ?? null)}
                           </td>
                           <td className="px-3 py-2 text-right">
-
-
                           <div className="flex items-center gap-3 justify-end">
                             <button onClick={() => abrirDetalhes(u.id)} className="text-green-700 hover:underline">
                               Detalhes
                             </button>
+
+                            {(() => {
+                              const act = getAccountAction(u);
+
+                              if (act === "DELETED_EXPIRED") {
+                                return (
+                                  <span className="text-gray-400 text-xs" title="Conta apagada há mais de 30 dias">
+                                    Conta apagada
+                                  </span>
+                                );
+                              }
+
+                              if (act === "RESTORE") {
+                                return (
+                                  <button
+                                    onClick={() => bloquearOuReativarConta(u.id, "restaurar")}
+                                    className="text-green-700 hover:underline"
+                                    disabled={acaoBusyId === u.id}
+                                  >
+                                    {acaoBusyId === u.id ? "Processando..." : "Restaurar conta"}
+                                  </button>
+                                );
+                              }
+
+                              if (act === "UNBLOCK") {
+                                return (
+                                  <button
+                                    onClick={() => bloquearOuReativarConta(u.id, "desbloquear")}
+                                    className="text-green-700 hover:underline"
+                                    disabled={acaoBusyId === u.id}
+                                  >
+                                    {acaoBusyId === u.id ? "Processando..." : "Desbloquear conta"}
+                                  </button>
+                                );
+                              }
+
+                              return (
+                                <button
+                                  onClick={() => bloquearOuReativarConta(u.id, "bloquear")}
+                                  className="text-red-600 hover:underline"
+                                  title="Bloquear conta (impede login)"
+                                  disabled={acaoBusyId === u.id}
+                                >
+                                  {acaoBusyId === u.id ? "Processando..." : "Bloquear conta"}
+                                </button>
+                              );
+                            })()}
 
                             {canManageAdmins && String(u.tipo).toLowerCase() === "admin" && u.id !== meId && (
                               <button onClick={() => deletarAdmin(u.id)} className="text-red-600 hover:underline" title="Deletar este administrador">
@@ -1482,7 +1656,6 @@ async function confirmarExcluirProfessor() {
               </button>
             </div>
 
-            {/* Barra de pesquisa - Exercícios */}
             <div className="flex flex-wrap gap-2 items-center mb-4">
               <input
                 value={exQ}
@@ -1572,7 +1745,6 @@ async function confirmarExcluirProfessor() {
               </button>
             </div>
 
-            {/* Barra de pesquisa - Treinos */}
             <div className="flex flex-wrap gap-2 items-center mb-4">
               <input
                 value={trQ}
@@ -1730,7 +1902,6 @@ async function confirmarExcluirProfessor() {
                     </div>
 
                     <div className="flex gap-3 items-center">
-                      {/* ✅ Toggle Parceiro */}
                       <label className="flex items-center gap-2 text-sm select-none">
                         <input
                           type="checkbox"
@@ -1738,8 +1909,6 @@ async function confirmarExcluirProfessor() {
                           disabled={parceiroBusy}
                           onChange={(e) => {
                             const next = e.target.checked;
-
-                            // opcional: confirmar ao ativar/desativar
                             const ok = confirm(
                               next
                                 ? `Marcar "${nome}" como Parceiro FootEra?`
@@ -1753,7 +1922,6 @@ async function confirmarExcluirProfessor() {
                         Parceiro FootEra
                       </label>
 
-                      {/* Badge opcional */}
                       {parceiro ? (
                         <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800 border border-green-200">
                           Parceiro
@@ -2532,7 +2700,8 @@ async function confirmarExcluirProfessor() {
                           <input
                             type="checkbox"
                             checked={!!u.verificado}
-                            disabled={acaoBusy}
+                            disabled={acaoBusyId === u.id}
+
                             onChange={(e) => toggleCampo(u.id, "verificado", e.target.checked)}
                           />
                           Verificado
@@ -2541,7 +2710,8 @@ async function confirmarExcluirProfessor() {
                           <input
                             type="checkbox"
                             checked={!!u.destaque}
-                            disabled={acaoBusy}
+                            disabled={acaoBusyId === u.id}
+
                             onChange={(e) => toggleCampo(u.id, "destaque", e.target.checked)}
                           />
                           Destaque
@@ -2551,7 +2721,7 @@ async function confirmarExcluirProfessor() {
                       <div className="border-t pt-3 flex flex-wrap gap-2">
                         {u.status === "banido" ? (
                           <button
-                            disabled={!isAdminBase || acaoBusy}
+                            disabled={!isAdminBase || acaoBusyId === u.id}
                             onClick={() => banirOuDesbanir(u.id, false)}
                             className="px-3 py-2 rounded bg-yellow-500 text-white disabled:opacity-50"
                             title={!isAdminBase ? "Requer permissão de admin" : ""}
@@ -2560,7 +2730,7 @@ async function confirmarExcluirProfessor() {
                           </button>
                         ) : (
                           <button
-                            disabled={!isAdminBase || acaoBusy}
+                            disabled={!isAdminBase || acaoBusyId === u.id}
                             onClick={() => banirOuDesbanir(u.id, true)}
                             className="px-3 py-2 rounded bg-red-600 text-white disabled:opacity-50"
                             title={!isAdminBase ? "Requer permissão de admin" : ""}
@@ -2569,9 +2739,35 @@ async function confirmarExcluirProfessor() {
                           </button>
                         )}
 
+                        <div className="border-t pt-3 flex flex-wrap gap-2">
+                        {(() => {
+                          const status = String((u as any).status ?? "").toUpperCase();
+                          const deletada = !!(u as any).deletedAt;
+                          const precisaReativar = deletada || status === "BLOQUEADO";
+
+                          return precisaReativar ? (
+                            <button
+                              onClick={() => bloquearOuReativarConta(u.id, "reativar")}
+                              disabled={acaoBusyId === u.id}
+                              className="px-3 py-2 rounded bg-green-700 text-white disabled:opacity-50"
+                            >
+                              Reativar conta
+                            </button>
+                          ) : (
+                            <button
+                              disabled={acaoBusyId === u.id}
+                              onClick={() => bloquearOuReativarConta(u.id, "bloquear")}
+                              className="px-3 py-2 rounded bg-red-600 text-white disabled:opacity-50"
+                            >
+                              {acaoBusyId === u.id ? "Processando..." : "Bloquear conta"}
+                            </button>
+                          );
+                        })()}
+                      </div>
+
                         <div className="ml-auto flex gap-2">
                           <button
-                            disabled={!isAdminBase || acaoBusy}
+                            disabled={!isAdminBase || acaoBusyId === u.id}
                             onClick={() => removerConteudo(u.id, "posts")}
                             className="px-3 py-2 rounded bg-gray-200 disabled:opacity-50"
                             title={!isAdminBase ? "Requer permissão de admin" : ""}
@@ -2579,7 +2775,7 @@ async function confirmarExcluirProfessor() {
                             Remover posts
                           </button>
                           <button
-                            disabled={!isAdminBase || acaoBusy}
+                            disabled={!isAdminBase || acaoBusyId === u.id}
                             onClick={() => removerConteudo(u.id, "comentarios")}
                             className="px-3 py-2 rounded bg-gray-200 disabled:opacity-50"
                             title={!isAdminBase ? "Requer permissão de admin" : ""}
@@ -2587,7 +2783,7 @@ async function confirmarExcluirProfessor() {
                             Remover comentários
                           </button>
                           <button
-                            disabled={!isAdminBase || acaoBusy}
+                            disabled={!isAdminBase || acaoBusyId === u.id}
                             onClick={() => removerConteudo(u.id, "todos")}
                             className="px-3 py-2 rounded bg-gray-200 disabled:opacity-50"
                             title={!isAdminBase ? "Requer permissão de admin" : ""}
@@ -2721,7 +2917,15 @@ function fmt(n: number) {
   return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : String(n);
 }
 
-function LineChart({ data, w = 560, h = 140 }: { data: Array<{ bucket: string | Date; value: number }>; w?: number; h?: number }) {
+function LineChart({
+  data,
+  w = 560,
+  h = 140,
+}: {
+  data: Array<{ bucket: string | Date; value: number }>;
+  w?: number;
+  h?: number;
+}) {
   const vals = data.map((d) => num(d.value));
   const max = Math.max(1, ...vals);
   const stepX = (w - 20) / Math.max(1, data.length - 1);
@@ -2732,10 +2936,29 @@ function LineChart({ data, w = 560, h = 140 }: { data: Array<{ bucket: string | 
       return `${i === 0 ? "M" : "L"}${x},${y}`;
     })
     .join(" ");
+
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[160px]">
       <rect x="0" y="0" width={w} height={h} rx="8" className="fill-white" />
       <path d={path} className="stroke-green-700 fill-none" strokeWidth={2} />
+
+      {data.map((d, i) => {
+        const x = 10 + i * stepX;
+        const y = h - 12 - (vals[i] / max) * (h - 24);
+
+        const label =
+          typeof d.bucket === "string"
+            ? d.bucket
+            : new Date(d.bucket).toISOString().slice(0, 10);
+
+        return (
+          <g key={i}>
+            <circle cx={x} cy={y} r={4} className="fill-green-700">
+              <title>{`${label}: ${vals[i]}`}</title>
+            </circle>
+          </g>
+        );
+      })}
     </svg>
   );
 }
@@ -2914,6 +3137,8 @@ function AnalyticsPane() {
   const [convC, setConvC] = useState<any[]>([]);
   const [churn, setChurn] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loginSummary, setLoginSummary] = useState<any>(null);
+  const [activeByType, setActiveByType] = useState<any[]>([]);
 
   async function safeJson(url: string) {
     const r = await fetch(url, { headers: authHeaders() });
@@ -2926,17 +3151,23 @@ function AnalyticsPane() {
 
   async function loadAll() {
     setLoading(true);
+    const dTo = new Date(to);
+    const dFrom30 = new Date(dTo);
+    dFrom30.setDate(dTo.getDate() - 30);
+
+    const from30 = dFrom30.toISOString().slice(0,10);
+
     try {
       const q = (o: Record<string, string>) => new URLSearchParams(o).toString();
 
-      const [ov, au, es, cl, en] = await Promise.all([
+      const [ov, au, es, cl, en, ls, abt] = await Promise.all([
         safeJson(`${API.BASE_URL}/api/analises/overview?${q({ to })}`),
-        safeJson(
-          `${API.BASE_URL}/api/analises/users/active?${q({ from, to, granularity: "daily" })}`
-        ),
+        safeJson(`${API.BASE_URL}/api/analises/users/active?${q({ from, to, granularity: "daily" })}`),
         safeJson(`${API.BASE_URL}/api/analises/conversion/escolinha?${q({ from, to })}`),
         safeJson(`${API.BASE_URL}/api/analises/conversion/clube?${q({ from, to })}`),
         safeJson(`${API.BASE_URL}/api/analises/engagement/summary?${q({ from, to })}`),
+        safeJson(`${API.BASE_URL}/api/analises/logins/summary?${q({ from, to })}`),
+        safeJson(`${API.BASE_URL}/api/analises/users/active-by-type?${q({ from, to })}`),
       ]);
 
       setOverview(ov);
@@ -2946,6 +3177,8 @@ function AnalyticsPane() {
       setConvE(Array.isArray(es) ? es : []);
       setConvC(Array.isArray(cl) ? cl : []);
       setEngSummary(en);
+      setLoginSummary(ls);
+      setActiveByType(Array.isArray(abt) ? abt : []);
 
       const fromMonth = from.slice(0, 7);
       const toMonth = to.slice(0, 7);
@@ -3022,7 +3255,7 @@ function AnalyticsPane() {
         <Kpi
           title={
             <span className="inline-flex items-center gap-2">
-              DAU <InfoI text="Daily Active Users — usuários ativos nas últimas 24h." />
+              Usuários logados (24h) <InfoI text="DAU (Daily Active Users) — usuários logados nas últimas 24h." />
             </span>
           }
           value={fmt(num(overview?.DAU))}
@@ -3030,7 +3263,7 @@ function AnalyticsPane() {
         <Kpi
           title={
             <span className="inline-flex items-center gap-2">
-              WAU <InfoI text="Weekly Active Users — usuários ativos na janela de 7 dias." />
+              Usuários logados (7 dias) <InfoI text="WAU (Weekly Active Users) — usuários logados na janela de 7 dias." />
             </span>
           }
           value={fmt(num(overview?.WAU))}
@@ -3038,38 +3271,12 @@ function AnalyticsPane() {
         <Kpi
           title={
             <span className="inline-flex items-center gap-2">
-              MAU <InfoI text="Monthly Active Users — usuários ativos na janela de 30 dias." />
+              Usuários logados (30 dias) <InfoI text="MAU (Monthly Active Users) — usuários logados na janela de 30 dias." />
             </span>
           }
           value={fmt(num(overview?.MAU))}
         />
-        <Kpi
-          title={
-            <span className="inline-flex items-center gap-2">
-              Stickiness{" "}
-              <InfoI text="WAU/MAU — medida de frequência (quanto mais próximo de 1, melhor)." />
-            </span>
-          }
-          value={(overview?.stickiness ?? 0).toFixed(2)}
-        />
-        <Kpi
-          title={
-            <span className="inline-flex items-center gap-2">
-              D7{" "}
-              <InfoI text="Retenção em 7 dias — % de novos usuários que voltam após 7 dias." />
-            </span>
-          }
-          value={`${fmt(num(overview?.D7))}%`}
-        />
-        <Kpi
-          title={
-            <span className="inline-flex items-center gap-2">
-              D30{" "}
-              <InfoI text="Retenção em 30 dias — % de novos usuários que voltam após 30 dias." />
-            </span>
-          }
-          value={`${fmt(num(overview?.D30))}%`}
-        />
+
         <Kpi
           title={
             <span className="inline-flex items-center gap-2">
@@ -3081,8 +3288,8 @@ function AnalyticsPane() {
         <Kpi
           title={
             <span className="inline-flex items-center gap-2">
-              Média 7d{" "}
-              <InfoI text="Média de usuários ativos dos últimos 7 dias." />
+              Média usuários 7d{" "}
+              <InfoI text="Média de usuários logados dos últimos 7 dias." />
             </span>
           }
           value={Math.round(avg7)}
@@ -3097,22 +3304,13 @@ function AnalyticsPane() {
       </div>
 
       <div className="bg-white rounded shadow p-3">
-        <div className="font-semibold mb-2 flex items-center gap-2">
-          Usuários ativos por dia
-          <InfoI text="Contagem diária de usuários com pelo menos 1 evento de atividade." />
-        </div>
-        <LineChart data={activeSeries.map((r) => ({ bucket: r.bucket, value: r.active }))} />
-      </div>
-
-      <div className="bg-white rounded shadow p-3">
-        <div className="font-semibold mb-3">Engajamento no período</div>
+       <div className="font-semibold mb-3">Engajamento no período selecionado acima</div>
         <div className="grid md:grid-cols-4 gap-3">
           <Kpi title="Posts" value={fmt(num(engSummary?.posts))} />
           <Kpi title="Comentários" value={fmt(num(engSummary?.comments))} />
           <Kpi title="Curtidas" value={fmt(num(engSummary?.likes))} />
           <Kpi title="Mensagens" value={fmt(num(engSummary?.messages))} />
           <Kpi title="Sub. Treino" value={fmt(num(engSummary?.subTreino))} />
-          <Kpi title="Sub. Desafio" value={fmt(num(engSummary?.subDesafio))} />
           <Kpi
             title="Treinos agendados"
             value={fmt(num(engSummary?.treinosAgendados))}
@@ -3120,31 +3318,24 @@ function AnalyticsPane() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-white rounded shadow p-3">
-          <div className="font-semibold mb-2 flex items-center gap-2">
-            Conversão via Escolinha (semanal)
-            <InfoI text="Novos vínculos de atletas oriundos de Escolinhas por semana." />
-          </div>
-          <LineChart
-            data={(convE || []).map((r: any) => ({
-              bucket: r.bucket,
-              value: r.novosVinculos,
-            }))}
-          />
+      <div className="bg-white rounded shadow p-3">
+        <div className="font-semibold mb-2 flex items-center gap-2">
+          Logins únicos por tipo de usuário
+          <InfoI text="Quantidade de usuários diferentes que fizeram login no período, agrupados por tipo." />
         </div>
-        <div className="bg-white rounded shadow p-3">
-          <div className="font-semibold mb-2 flex items-center gap-2">
-            Conversão via Clube (semanal)
-            <InfoI text="Novos vínculos de atletas oriundos de Clubes por semana." />
+
+        {activeByType.length === 0 ? (
+          <div className="text-sm text-gray-500">Sem dados no período.</div>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-3">
+            {activeByType.map((r: any) => (
+              <div key={r.tipo} className="border rounded-lg p-3">
+                <div className="text-xs text-gray-500">{r.tipo}</div>
+                <div className="text-xl font-bold">{fmt(num(r.usuarios))}</div>
+              </div>
+            ))}
           </div>
-          <LineChart
-            data={(convC || []).map((r: any) => ({
-              bucket: r.bucket,
-              value: r.novosVinculos,
-            }))}
-          />
-        </div>
+        )}
       </div>
 
       <div className="bg-white rounded shadow p-3">

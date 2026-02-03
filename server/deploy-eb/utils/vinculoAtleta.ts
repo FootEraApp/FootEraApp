@@ -1,4 +1,3 @@
-// server/utils/vinculoAtleta.ts
 export type VinculoContext =
   | { tipo: "direto"; professorId: string }
   | { tipo: "escolinha"; escolinhaId: string; nome?: string | null }

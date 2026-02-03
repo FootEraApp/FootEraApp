@@ -1,20 +1,16 @@
-// client/src/pages/admin/treinos/create.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import { API } from "../../../config.js";
 
 function getReturnTo(): string {
-  // 1) prioridade: query ?returnTo=
   const qs = new URLSearchParams(window.location.search);
   const fromQuery = qs.get("returnTo");
   if (fromQuery) return fromQuery;
 
-  // 2) fallback: sessionStorage (setado pela página anterior)
   const stored = sessionStorage.getItem("treino_returnTo");
   if (stored) return stored;
 
-  // 3) default: admin
   return "/admin";
 }
 
@@ -23,7 +19,6 @@ function getToken() {
 }
 
 type ProfessorMin = { id: string; nome: string; codigo?: string | null; cref?: string | null };
-
 type ExercicioMin = {
   id: string;
   nome: string;
@@ -32,26 +27,20 @@ type ExercicioMin = {
   nivel?: string | null;
   categorias?: string[] | null;
   categoria?: string[] | string | null;
-  videoUrl?: string | null; // fallback antigo
-  thumbUrl?: string | null; // se você tiver
-  // backend real costuma vir assim:
+  videoUrl?: string | null;
+  thumbUrl?: string | null;
   videoDemonstrativoUrl?: string | null;
 };
-
 type ExLinha = {
-  exercicioId: string; // exercício existente
+  exercicioId: string; 
   ordem: number;
   customVideoPosterUrl?: string | null;
-  // banco só tem "repeticoes" string, então a gente monta com series/reps
   repeticoes: string;
-  // UI (não vai pro backend por enquanto)
   series?: string;
   reps?: string;
-  // linha personalizada (frontend)
   isCustom?: boolean;
   customTitulo?: string;
   customDesc?: string;
-  // vídeo do custom (apenas UI)
   customVideoFile?: File | null;
   customVideoPreviewUrl?: string | null;
 };
@@ -134,7 +123,6 @@ function getVideoUrlFromEx(ex: ExercicioMin | null | undefined) {
 
 function parseSeriesRepsFromRepeticoes(repeticoes: string) {
   const raw = String(repeticoes || "").trim();
-  // tenta detectar "3x12"
   const m = raw.match(/^\s*(\d+)\s*[xX]\s*(\d+)\s*$/);
   if (m) return { series: m[1], reps: m[2] };
   return { series: "", reps: "" };
@@ -145,12 +133,11 @@ function buildRepeticoes(series: string, reps: string) {
   const r = String(reps || "").trim();
   if (!s && !r) return "";
   if (s && r) return `${s}x${r}`;
-  return ""; // não salva parcial
+  return ""; 
 }
 
 function getThumbUrlFromEx(ex: ExercicioMin | null | undefined) {
-  if (!ex) return "";
-  // use o campo que você tiver no backend (thumbUrl, imagemUrl, etc.)
+  if (!ex) return ""
   return String((ex as any).thumbUrl || (ex as any).capaUrl || (ex as any).imagemUrl || "").trim();
 }
 
@@ -170,7 +157,6 @@ async function gerarPosterDoVideo(file: File): Promise<string> {
       video.onerror = () => reject(new Error("Falha ao carregar metadata do vídeo"));
     });
 
-    // tenta pegar um frame bem no início
     const target = Math.min(0.2, (video.duration || 1) * 0.05);
     video.currentTime = target;
 
@@ -193,7 +179,6 @@ async function gerarPosterDoVideo(file: File): Promise<string> {
   }
 }
 
-/** Modal simples pra vídeo (igual sua 2ª foto) */
 function VideoModal({
   open,
   title,
@@ -271,8 +256,6 @@ export default function CriarOuEditarTreino() {
   useEffect(() => {
     const rt = getReturnTo();
     setReturnTo(rt);
-
-    // limpa pra não “vazar” pro próximo fluxo
     sessionStorage.removeItem("treino_returnTo");
   }, []);
 
@@ -300,12 +283,10 @@ export default function CriarOuEditarTreino() {
     setVideoTitle("");
   };
 
-  // ====== Pts
   const pts = useMemo(() => {
     return Math.max(0, linhas.filter((l) => l.exercicioId || l.isCustom).length * 3);
   }, [linhas]);
 
-  // ====== Load (edit + listas)
   useEffect(() => {
     const token = getToken();
     const headers: HeadersInit = {
@@ -412,7 +393,6 @@ export default function CriarOuEditarTreino() {
   const limparProgresso = () => {
     if (!confirm("Tem certeza que deseja limpar o progresso deste formulário?")) return;
 
-    // limpa previews de vídeo de custom
     setLinhas((prev) => {
       prev.forEach((l) => {
         if (l.customVideoPreviewUrl) URL.revokeObjectURL(l.customVideoPreviewUrl);
@@ -435,7 +415,6 @@ export default function CriarOuEditarTreino() {
     setNiveisSelecionados([]);
   };
 
-  // ====== Exercícios actions
   const adicionarLinhaPersonalizada = () => {
     setLinhas((prev) => [
       ...prev,
@@ -457,7 +436,6 @@ export default function CriarOuEditarTreino() {
 
   const adicionarExercicioExistente = (exercicioId: string) => {
     setLinhas((prev) => {
-      // se já existe, não adiciona de novo
       if (prev.some((l) => !l.isCustom && l.exercicioId === exercicioId)) {
         return prev;
       }
@@ -499,7 +477,6 @@ export default function CriarOuEditarTreino() {
   };
 
   const onUploadVideoCustom = async (idx: number, file: File | null) => {
-    // 1) limpa preview/poster antigos
     setLinhas((prev) => {
       const next = [...prev];
       const cur = next[idx];
@@ -517,7 +494,6 @@ export default function CriarOuEditarTreino() {
 
     if (!file) return;
 
-    // 2) cria previewUrl + poster
     const previewUrl = URL.createObjectURL(file);
 
     let poster: string | null = null;
@@ -600,31 +576,16 @@ export default function CriarOuEditarTreino() {
       nome: titulo,
       descricao,
       nivel: nivelTreino,
-
-      // ✅ agora vai salvar
       tipoTreino,
       duracao: duracaoMin,
-
-      // ✅ “Professor (principal)” vai pro backend como dono se você quiser:
-      // Mas cuidado: se quem criou é Clube/Escolinha e você quer manter dono = Clube/Escolinha,
-      // NÃO mande professorId como dono. Use professorId só como criadorProfessorId.
-      //
-      // A regra ideal é:
-      // - dono real = (tipoUsuario/tipoUsuarioId) do usuário logado
-      // - professor principal = criadorProfessorId (select)
       tipoUsuario,
       tipoUsuarioId,
       criadorProfessorId: professorId,
-
       professoresColabIds,
-
       ...(catsSelecionadas.length ? { categoria: catsSelecionadas } : {}),
-
       exercicios: exerciciosOficiais.map((l, i) => ({
         exercicioId: l.exercicioId,
         ordem: Number(l.ordem ?? i + 1),
-
-        // ✅ manda séries e reps separadas (controller monta "2x10")
         series: String(l.series ?? ""),
         repeticoes: String(l.reps ?? ""),
       })),
@@ -635,20 +596,16 @@ export default function CriarOuEditarTreino() {
 
     try {
       const formData = new FormData();
-
-      // manda o JSON do treino dentro do form-data
       formData.append("payload", JSON.stringify(payload));
 
-      // manda o arquivo da capa
       if (capaFile) {
-        formData.append("imagem", capaFile); // 👈 TEM QUE SER "imagem"
+        formData.append("imagem", capaFile);
       }
 
       const res = await fetch(url, {
         method: id ? "PUT" : "POST",
         headers: {
           Authorization: `Bearer ${token}`,
-          // ❌ NÃO setar Content-Type aqui
         },
         body: formData,
       });
@@ -666,11 +623,8 @@ export default function CriarOuEditarTreino() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Modal de vídeo */}
       <VideoModal open={videoOpen} title={videoTitle} src={videoSrc} onClose={closeVideo} />
-
       <div className="mx-auto max-w-5xl px-4 py-6">
-        {/* Top stepper bar */}
         <div className="sticky top-0 z-20 -mx-4 mb-6 bg-gray-50/80 px-4 pb-3 pt-2 backdrop-blur">
           <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
             <div className="flex items-center justify-between gap-3">
@@ -703,7 +657,6 @@ export default function CriarOuEditarTreino() {
           </div>
         </div>
 
-        {/* Header */}
         <div className="mb-6">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -724,7 +677,6 @@ export default function CriarOuEditarTreino() {
           </div>
         </div>
 
-        {/* Step content */}
         {step === 1 ? (
           <Card title="Informações Básicas">
             <div className="space-y-4">
@@ -813,7 +765,6 @@ export default function CriarOuEditarTreino() {
                 </div>
               </div>
 
-              {/* Professores colaboradores */}
               <div>
                 <label className="block text-sm font-semibold text-gray-800">
                   Professores realizadores (colaboradores)
@@ -857,7 +808,6 @@ export default function CriarOuEditarTreino() {
                 </div>
               </div>
 
-              {/* Capa */}
               <div>
                 <label className="block text-sm font-semibold text-gray-800">Capa do Treino (opcional)</label>
 
@@ -905,7 +855,6 @@ export default function CriarOuEditarTreino() {
           </Card>
         ) : (
           <div className="space-y-6">
-            {/* Exercícios Selecionados */}
             <Card title="Exercícios Selecionados">
               {linhas.length === 0 ? (
                 <p className="text-sm text-gray-600">Nenhum exercício adicionado ainda.</p>
@@ -924,13 +873,10 @@ export default function CriarOuEditarTreino() {
                     return (
                       <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-3">
                         <div className="flex flex-col gap-4 md:flex-row md:items-start">
-                          {/* Thumb / vídeo */}
                           <div className="w-full md:w-[180px]">
                             <div className="relative h-[110px] w-full overflow-hidden rounded-xl bg-gray-100">
-                              {/* ===== EXISTENTE (do banco) ===== */}
                               {!isCustom && exVideo ? (
                                 <>
-                                  {/* tenta usar thumbUrl primeiro */}
                                   {getThumbUrlFromEx(ex) ? (
                                     <img
                                       src={getThumbUrlFromEx(ex)}
@@ -938,7 +884,6 @@ export default function CriarOuEditarTreino() {
                                       className="absolute inset-0 h-full w-full object-cover"
                                     />
                                   ) : (
-                                    // fallback: usa o próprio vídeo como “capa”
                                     <video
                                       src={exVideo}
                                       muted
@@ -961,7 +906,6 @@ export default function CriarOuEditarTreino() {
                                 </>
                               ) : null}
 
-                              {/* ===== CUSTOM (upload) ===== */}
                               {isCustom && l.customVideoPreviewUrl ? (
                                 <>
                                   {l.customVideoPosterUrl ? (
@@ -993,7 +937,6 @@ export default function CriarOuEditarTreino() {
                                 </>
                               ) : null}
 
-                              {/* ===== SEM VÍDEO ===== */}
                               {!exVideo && !(isCustom && l.customVideoPreviewUrl) ? (
                                 <div className="grid h-full w-full place-items-center text-sm text-gray-600">
                                   sem vídeo
@@ -1001,7 +944,6 @@ export default function CriarOuEditarTreino() {
                               ) : null}
                             </div>
 
-                            {/* Upload/remove vídeo (apenas para custom) */}
                             {isCustom && (
                               <div className="mt-2 flex items-center gap-3">
                                 <label className="inline-flex cursor-pointer items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50">
@@ -1025,11 +967,9 @@ export default function CriarOuEditarTreino() {
                             )}
                           </div>
 
-                          {/* Conteúdo */}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                {/* Título + badge nível */}
                                 <div className="flex flex-wrap items-center gap-2">
                                   <div className="truncate text-base font-extrabold text-gray-900">
                                     {isCustom
@@ -1046,7 +986,6 @@ export default function CriarOuEditarTreino() {
                                   )}
                                 </div>
 
-{/* Campos do custom: Nome + Descrição (igual ao print 1) */}
                                 {isCustom && (
                                   <div className="mt-3">
                                     <input
@@ -1058,7 +997,6 @@ export default function CriarOuEditarTreino() {
                                   </div>
                                 )}
 
-                                {/* Descrição */}
                                 <div className="mt-1">
                                   {isCustom ? (
                                     <textarea
@@ -1083,7 +1021,6 @@ export default function CriarOuEditarTreino() {
                               </button>
                             </div>
 
-                            {/* Séries / Repetições (igual print 1) */}
                             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                               <div>
                                 <label className="block text-xs font-semibold text-gray-700">Séries</label>
@@ -1105,9 +1042,6 @@ export default function CriarOuEditarTreino() {
                                 />
                               </div>
                             </div>
-
-                            {/* Se quiser mostrar o valor final que vai pro banco (debug): */}
-                            {/* <div className="mt-2 text-xs text-gray-500">Salvando como: {l.repeticoes || "-"}</div> */}
                           </div>
                         </div>
                       </div>
@@ -1127,10 +1061,8 @@ export default function CriarOuEditarTreino() {
               </div>
             </Card>
 
-            {/* Exercícios Disponíveis */}
             <Card title="Exercícios Disponíveis">
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                {/* Busca */}
                 <div className="lg:col-span-3">
                   <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div className="flex-1">
@@ -1149,7 +1081,6 @@ export default function CriarOuEditarTreino() {
                   </div>
                 </div>
 
-                {/* Categorias */}
                 <div className="rounded-2xl border border-gray-200 bg-white p-4">
                   <div className="mb-2 text-sm font-bold text-gray-900">Categorias</div>
                   <div className="max-h-48 overflow-auto pr-2">
@@ -1197,7 +1128,6 @@ export default function CriarOuEditarTreino() {
                   </p>
                 </div>
 
-                {/* Ações filtros */}
                 <div className="flex items-start justify-end lg:col-span-1">
                   <button
                     type="button"
@@ -1212,7 +1142,6 @@ export default function CriarOuEditarTreino() {
                   </button>
                 </div>
 
-                {/* Lista cards */}
                 <div className="lg:col-span-3">
                   <div className="max-h-[520px] overflow-auto rounded-2xl border border-gray-200 bg-white">
                     {exerciciosFiltrados.length === 0 ? (
@@ -1229,7 +1158,6 @@ export default function CriarOuEditarTreino() {
                             <div key={ex.id} className="p-4">
                               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                                 <div className="flex gap-4">
-                                  {/* Thumb com play -> abre modal */}
                                   <div className="relative grid h-24 w-40 place-items-center overflow-hidden rounded-2xl bg-black/90 text-white">
                                     {exVideo ? (
                                       <button
@@ -1303,7 +1231,6 @@ export default function CriarOuEditarTreino() {
                 </div>
                 </Card>
 
-                {/* Rodapé ações */}
                 <div className="flex flex-col-reverse gap-3 md:flex-row md:items-center md:justify-between">
                   <button
                     type="button"

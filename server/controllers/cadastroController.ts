@@ -1,4 +1,3 @@
-// server/controllers/cadastroController
 import { Request, Response } from "express";
 import { TipoUsuario, Nivel, StatusCref } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -6,7 +5,6 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { sendEmailVerification } from "../utils/mailer.js";
 import { prisma } from "../prisma.js";
-
 
 const FRONTEND_URL = (process.env.WEB_BASE_URL || "http://localhost:5173").replace(/\/+$/, "");
 
@@ -17,7 +15,6 @@ const API_BASE_URL = (
 ).replace(/\/+$/, "");
 
 const JWT_SECRET: jwt.Secret = (process.env.JWT_SECRET || "defaultsecret");
-const JWT_VERIFY_TTL = process.env.JWT_VERIFY_TTL || "2d";
 
 function addHours(d: Date, h: number) {
   return new Date(d.getTime() + h * 60 * 60 * 1000);

@@ -81,45 +81,73 @@ type ChatTarget = { tipo: "usuario"; usuario: Usuario } | { tipo: "grupo"; grupo
 export default function PaginaMensagens() {
   const [, navigate] = useLocation();
   const [showSidebar, setShowSidebar] = useState(false);
-
   const usuarioId: string | null = Storage.usuarioId;
   const token: string = Storage.token || "";
-
   const [usuariosMutuos, setUsuariosMutuos] = useState<Usuario[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [alvo, setAlvo] = useState<ChatTarget | null>(null);
   const [isAtleta, setIsAtleta] = useState(
     String(Storage?.tipoSalvo ?? "").toLowerCase() === "atleta"
   );
-
   const [searchTerm, setSearchTerm] = useState("");
-
   const [unreadByUser, setUnreadByUser] = useState<Record<string, number>>({});
   const totalUnread = Object.values(unreadByUser).reduce((a, b) => a + b, 0);
   const fetchPrivSeqRef = useRef(0);
   const fetchGrupoSeqRef = useRef(0);
 
-  const fetchUnreadByUser = async () => {
-  try {
-    const r = await fetch(`${API.BASE_URL}/api/mensagem/unread-by-user`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!r.ok) return;
-    const arr: { userId: string; count: number }[] = await r.json();
-    const map = Object.fromEntries(arr.map(x => [x.userId, x.count]));
-    setUnreadByUser(map);
-  } catch {}
-};
+  type PresencaUI = {
+    isOnline: boolean | null;
+    lastSeenAt: string | null;
+    privacyBlocked: boolean;
+  };
 
-const markReadFromUser = async (otherId: string) => {
-  try {
-    await fetch(`${API.BASE_URL}/api/mensagem/mark-read/${otherId}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  } catch {}
-  setUnreadByUser(prev => ({ ...prev, [otherId]: 0 }));
-};
+  const [presencas, setPresencas] = useState<Record<string, PresencaUI>>({});
+
+  const fetchPresencaUsuario = async (userId: string, force = false) => {
+    if (!token) return;
+    if (!force && presencas[userId]) return;
+
+    try {
+      const res = await fetch(`${API.BASE_URL}/api/presenca/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) return;
+
+      const data = await res.json();
+
+      setPresencas(prev => ({
+        ...prev,
+        [userId]: {
+          isOnline: data?.isOnline ?? null,
+          lastSeenAt: data?.lastSeenAt ?? null,
+          privacyBlocked: !!data?.privacyBlocked,
+        },
+      }));
+    } catch {}
+  };
+
+  const fetchUnreadByUser = async () => {
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/mensagem/unread-by-user`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) return;
+      const arr: { userId: string; count: number }[] = await r.json();
+      const map = Object.fromEntries(arr.map(x => [x.userId, x.count]));
+      setUnreadByUser(map);
+    } catch {}
+  };
+
+  const markReadFromUser = async (otherId: string) => {
+    try {
+      await fetch(`${API.BASE_URL}/api/mensagem/mark-read/${otherId}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {}
+    setUnreadByUser(prev => ({ ...prev, [otherId]: 0 }));
+  };
 
   const lastGroupRef = useRef<string | null>(null);
 
@@ -384,16 +412,32 @@ const markReadFromUser = async (otherId: string) => {
   };
 
   async function toDataUrlWithAuth(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error(`Imagem ${url} -> ${res.status}`);
-  const blob = await res.blob();
-  return await new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result));
-    r.onerror = reject;
-    r.readAsDataURL(blob);
-  });
-}
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`Imagem ${url} -> ${res.status}`);
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  }
+
+  function formatLastSeen(lastSeenAt?: string | null) {
+    if (!lastSeenAt) return "Offline";
+
+    const diff = Date.now() - new Date(lastSeenAt).getTime();
+    const min = Math.floor(diff / 60000);
+
+    if (min < 1) return "Agora";
+    if (min < 60) return `há ${min} min`;
+
+    const h = Math.floor(min / 60);
+    if (h < 24) return `há ${h}h`;
+
+    const d = Math.floor(h / 24);
+    return `há ${d}d`;
+  }
 
   const SidebarContent = () => {
     const term = searchTerm.trim().toLowerCase();
@@ -518,21 +562,35 @@ const markReadFromUser = async (otherId: string) => {
                 data-testid="usuario-list-item"
               >
                 <Avatar src={u.foto} name={u.nome} className="w-12 h-12" />
-                <div className="flex flex-col flex-1 min-w-0">
-                  <span className="font-medium text-sm truncate">
-                    {u.nome}
-                  </span>
-                  {(() => {
-                    const prev = lastMsgByUser[u.id] || "";
-                    return prev ? (
-                      <span className="text-xs text-gray-500 truncate">
-                        {prev}
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <span className="font-medium text-sm truncate">
+                        {u.nome}
                       </span>
-                    ) : (
-                      <span className="text-xs text-gray-400">&nbsp;</span>
-                    );
-                  })()}
-                </div>
+
+                      {(() => {
+                        const p = presencas[u.id];
+                        if (!p || p.privacyBlocked) return null;
+
+                        const label = p.isOnline ? "Online" : formatLastSeen(p.lastSeenAt);
+
+                        return (
+                          <span className="shrink-0 flex items-center gap-1 text-[11px] text-gray-500">
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                p.isOnline ? "bg-green-500" : "bg-red-500"
+                              }`}
+                            />
+                            <span>{label}</span>
+                          </span>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="text-xs text-gray-500 truncate">
+                      {lastMsgByUser[u.id] || "Sem mensagens por enquanto"}
+                    </div>
+                  </div>
 
                 {unread > 0 && (
                   <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-green-700 text-white shrink-0">
@@ -551,87 +609,117 @@ const markReadFromUser = async (otherId: string) => {
     if (!isAtleta) return;
     if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
 
-  try {
-    const base = (meuCardDados ?? await getMeuPerfilEBonus());
-    if (!base) { alert("Não consegui montar seu card agora."); return; }
+    try {
+      const base = (meuCardDados ?? await getMeuPerfilEBonus());
+      if (!base) { alert("Não consegui montar seu card agora."); return; }
 
-    const payload = {
-      kind: "card-shield",
-      atleta: {
-        atletaId: base.atletaId ?? "",
-        nome: base.nome,
-        foto: base.foto ?? null,  
-        posicao: base.posicao ?? null,
-        idade: null
-      },
-      ovr: base.ovr, perf: base.perf, disc: base.disc, resp: base.resp,
-      size: { w: 300, h: 420 }, goldenMinOVR: 88
+      const payload = {
+        kind: "card-shield",
+        atleta: {
+          atletaId: base.atletaId ?? "",
+          nome: base.nome,
+          foto: base.foto ?? null,  
+          posicao: base.posicao ?? null,
+          idade: null
+        },
+        ovr: base.ovr, perf: base.perf, disc: base.disc, resp: base.resp,
+        size: { w: 300, h: 420 }, goldenMinOVR: 88
+      };
+      const encoded = "CARD_JSON:" + btoa(encodeURIComponent(JSON.stringify(payload)));
+
+      const clientMsgId = genClientId();
+
+      setMensagensPrivadas(prev => [
+        ...prev,
+        {
+          id: clientMsgId,
+          clientMsgId,
+          pending: true,
+          criadaEm: new Date().toISOString(),
+          conteudo: encoded,
+          deId: usuarioId!, 
+          paraId: alvo.usuario.id,
+          tipo: "CARD",
+        }
+      ]);
+
+      setLastMsgByUser(prev => ({
+        ...prev,
+        [alvo.usuario.id]: formatPreviewFromMsg({ tipo: "CARD", conteudo: encoded }),
+      }));
+
+      const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ paraId: alvo.usuario.id, tipo: "CARD", conteudo: encoded, clientMsgId }),
+      });
+
+      let fotoData = base.foto; 
+      if (fotoData && !fotoData.startsWith("data:")) {
+        try {
+          const resolvedUrl = publicImgUrl(fotoData) ?? fotoData;
+          fotoData = await toDataUrlWithAuth(resolvedUrl);
+        } catch {
+          fotoData = null; 
+        }
+      }
+
+      setMeuCardDados({ ...base, foto: fotoData });
+
+      await new Promise<void>(r => requestAnimationFrame(() => r()));
+
+      const node = cardRef.current;
+      if (!node) { alert("Falha ao preparar o card para captura."); return; }
+
+      const dataUrl = await htmlToImage.toPng(node, {
+        cacheBust: false,
+        pixelRatio: 2,
+        imagePlaceholder: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+      });
+
+      if (resp.ok) {
+        const saved: Mensagem = await resp.json();
+        reconcilePrivadaByClientId(saved);
+      } else {
+        console.error("POST /api/mensagem (CARD) falhou:", resp.status, await resp.text());
+        alert("Não consegui enviar o card agora.");
+        setMensagensPrivadas(prev => prev.filter(m => m.clientMsgId !== clientMsgId));
+      }
+    } catch (err) {
+      console.error("Falha ao compartilhar card:", err);
+      alert("Não foi possível compartilhar seu card agora.");
+    }
+  };
+
+  useEffect(() => {
+    if (!token) return;
+
+    const tick = () => {
+      usuariosMutuos.forEach(u => {
+        fetch(`${API.BASE_URL}/api/presenca/${u.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then(r => (r.ok ? r.json() : null))
+          .then(data => {
+            if (!data) return;
+
+            setPresencas(prev => ({
+              ...prev,
+              [u.id]: {
+                isOnline: data?.isOnline ?? null,
+                lastSeenAt: data?.lastSeenAt ?? null,
+                privacyBlocked: !!data?.privacyBlocked,
+              },
+            }));
+          })
+          .catch(() => {});
+      });
     };
-    const encoded = "CARD_JSON:" + btoa(encodeURIComponent(JSON.stringify(payload)));
 
-    const clientMsgId = genClientId();
-
-    setMensagensPrivadas(prev => [
-      ...prev,
-      {
-        id: clientMsgId,
-        clientMsgId,
-        pending: true,
-        criadaEm: new Date().toISOString(),
-        conteudo: encoded,
-        deId: usuarioId!, 
-        paraId: alvo.usuario.id,
-        tipo: "CARD",
-      }
-    ]);
-
-    setLastMsgByUser(prev => ({
-      ...prev,
-      [alvo.usuario.id]: formatPreviewFromMsg({ tipo: "CARD", conteudo: encoded }),
-    }));
-
-    const resp = await fetch(`${API.BASE_URL}/api/mensagem`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ paraId: alvo.usuario.id, tipo: "CARD", conteudo: encoded, clientMsgId }),
-    });
-
-    let fotoData = base.foto; 
-    if (fotoData && !fotoData.startsWith("data:")) {
-      try {
-        const resolvedUrl = publicImgUrl(fotoData) ?? fotoData;
-        fotoData = await toDataUrlWithAuth(resolvedUrl);
-      } catch {
-        fotoData = null; 
-      }
-    }
-
-    setMeuCardDados({ ...base, foto: fotoData });
-
-    await new Promise<void>(r => requestAnimationFrame(() => r()));
-
-    const node = cardRef.current;
-    if (!node) { alert("Falha ao preparar o card para captura."); return; }
-
-    const dataUrl = await htmlToImage.toPng(node, {
-      cacheBust: false,
-      pixelRatio: 2,
-      imagePlaceholder: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
-    });
-
-    if (resp.ok) {
-      const saved: Mensagem = await resp.json();
-      reconcilePrivadaByClientId(saved);
-    } else {
-      console.error("POST /api/mensagem (CARD) falhou:", resp.status, await resp.text());
-      alert("Não consegui enviar o card agora.");
-      setMensagensPrivadas(prev => prev.filter(m => m.clientMsgId !== clientMsgId));
-    }
-  } catch (err) {
-    console.error("Falha ao compartilhar card:", err);
-    alert("Não foi possível compartilhar seu card agora.");
-  }
-};
+    tick(); 
+    const i = setInterval(tick, 30_000);
+    return () => clearInterval(i);
+  }, [token, usuariosMutuos]);
 
   useEffect(() => {
     if (!alvo || alvo.tipo !== "usuario" || !usuarioId) return;
@@ -934,31 +1022,37 @@ const markReadFromUser = async (otherId: string) => {
     } catch {}
   }, [usuariosMutuos, token]);
 
-useEffect(() => {
-  try {
-    const raw = localStorage.getItem("mensagens_last_target");
-    if (!raw) return;
-    const last = JSON.parse(raw) as { tipo: "usuario" | "grupo"; id: string };
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("mensagens_last_target");
+      if (!raw) return;
+      const last = JSON.parse(raw) as { tipo: "usuario" | "grupo"; id: string };
 
-    if (last.tipo === "usuario") {
-      const u = usuariosMutuos.find(x => x.id === last.id);
-      if (u) { setAlvo({ tipo: "usuario", usuario: u }); return; }
-      (async () => {
-        const r = await fetch(`${API.BASE_URL}/api/usuarios/${last.id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (r.ok) {
-          const usuario: Usuario = await r.json();
-          setUsuariosMutuos(prev => prev.some(p => p.id === usuario.id) ? prev : [usuario, ...prev]);
-          setAlvo({ tipo: "usuario", usuario });
-        }
-      })();
-    } else {
-      const g = grupos.find(x => x.id === last.id);
-      if (g) setAlvo({ tipo: "grupo", grupo: g });
-    }
-  } catch {}
-}, [usuariosMutuos, grupos, token]);
+      if (last.tipo === "usuario") {
+        const u = usuariosMutuos.find(x => x.id === last.id);
+        if (u) { setAlvo({ tipo: "usuario", usuario: u }); return; }
+        (async () => {
+          const r = await fetch(`${API.BASE_URL}/api/usuarios/${last.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (r.ok) {
+            const usuario: Usuario = await r.json();
+            setUsuariosMutuos(prev => prev.some(p => p.id === usuario.id) ? prev : [usuario, ...prev]);
+            setAlvo({ tipo: "usuario", usuario });
+          }
+        })();
+      } else {
+        const g = grupos.find(x => x.id === last.id);
+        if (g) setAlvo({ tipo: "grupo", grupo: g });
+      }
+    } catch {}
+  }, [usuariosMutuos, grupos, token]);
+
+  useEffect(() => {
+    usuariosMutuos.forEach(u => {
+      fetchPresencaUsuario(u.id);
+    });
+  }, [usuariosMutuos, token]);
 
   async function carregarMensagensPrivadas(otherId: string, append: boolean) {
   const mySeq = ++fetchPrivSeqRef.current;
@@ -1533,37 +1627,35 @@ function stripConvocacaoTag(text: string) {
 
     return (
       <div className="h-screen flex flex-col bg-transparent">
+        <header className="sticky top-0 z-10 bg-green-900 text-white">
+          <div className="relative h-14 flex items-center justify-center px-4">
+            <Link
+              href="/perfil"
+              aria-label="Voltar para perfil"
+              className="absolute left-3 inline-flex h-10 w-10 items-center justify-center
+                rounded-full bg-white/10 text-white hover:bg-white/20
+                focus:outline-none focus:ring-2 focus:ring-white/30"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
 
-<header className="sticky top-0 z-10 bg-green-900 text-white">
-  <div className="relative h-14 flex items-center justify-center px-4">
-    <Link
-      href="/perfil"
-      aria-label="Voltar para perfil"
-      className="absolute left-3 inline-flex h-10 w-10 items-center justify-center
-        rounded-full bg-white/10 text-white hover:bg-white/20
-        focus:outline-none focus:ring-2 focus:ring-white/30"
-    >
-      <ArrowLeft className="h-5 w-5" />
-    </Link>
+            <button
+              onClick={() => setShowSidebar(true)}
+              className="md:hidden absolute right-3 p-2 rounded-full hover:bg-white/10"
+              title="Conversas"
+            >
+              <Users size={18} />
+            </button>
 
-    <button
-      onClick={() => setShowSidebar(true)}
-      className="md:hidden absolute right-3 p-2 rounded-full hover:bg-white/10"
-      title="Conversas"
-    >
-      <Users size={18} />
-    </button>
-
-    <h1 className="text-base font-semibold truncate">
-      {alvo?.tipo === "usuario"
-        ? alvo.usuario.nome
-        : alvo?.tipo === "grupo"
-        ? alvo.grupo.nome
-        : "Conversas"}
-    </h1>
-  </div>
-</header>
-
+            <h1 className="text-base font-semibold truncate">
+              {alvo?.tipo === "usuario"
+                ? alvo.usuario.nome
+                : alvo?.tipo === "grupo"
+                ? alvo.grupo.nome
+                : "Conversas"}
+            </h1>
+          </div>
+        </header>
 
       <div className="flex flex-1 min-h-0">
         <aside className="hidden md:block w-80 border-r bg-white">

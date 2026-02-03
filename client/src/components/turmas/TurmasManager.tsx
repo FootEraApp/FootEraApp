@@ -1,5 +1,4 @@
-// client/src/components/turmas/TurmasManager
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
   X,
@@ -77,35 +76,23 @@ export default function TurmasManager({
 
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
-
   const [deletandoTurma, setDeletandoTurma] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmDeleteStep, setConfirmDeleteStep] = useState<1 | 2>(1);
-
   const [turmas, setTurmas] = useState<TurmaMin[]>([]);
   const [profs, setProfs] = useState<ProfessorMin[]>([]);
   const [alunos, setAlunos] = useState<AtletaMin[]>([]);
-
   const [filtroProf, setFiltroProf] = useState<string>(professorId || "");
   const [selecionada, setSelecionada] = useState<string>("");
-
-  // ✅ seleção separada (não depende de "checked" dentro dos objetos)
   const [profSelecionados, setProfSelecionados] = useState<string[]>([]);
   const [alunosSelecionados, setAlunosSelecionados] = useState<string[]>([]);
   const [dirtyProf, setDirtyProf] = useState(false);
   const [dirtyAlunos, setDirtyAlunos] = useState(false);
-
   const [filtroAluno, setFiltroAluno] = useState("");
   const [leftCollapsed, setLeftCollapsed] = useState(false);
-
-  // =======================
-  // ABA DIREITA: "membros" | "agenda"
-  // =======================
   const [abaDireita, setAbaDireita] = useState<"membros" | "agenda">("membros");
-
   const [turmaAlunos, setTurmaAlunos] = useState<TurmaAluno[]>([]);
   const [naoVinculadosUsuarioIds, setNaoVinculadosUsuarioIds] = useState<string[]>([]);
-
   const [novoNome, setNovoNome] = useState("");
   const [novoCategoria, setNovoCategoria] = useState<
     "" | "Sub-9" | "Sub-11" | "Sub-13" | "Sub-15" | "Sub-17" | "Sub-20" | "Livre"
@@ -120,32 +107,100 @@ export default function TurmasManager({
 
   useEffect(() => {
     if (!open) return;
-    // reset quando abrir
     setAbaDireita("membros");
     setLeftCollapsed(false);
     setConfirmDeleteOpen(false);
     setConfirmDeleteStep(1);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
 
+    (async () => {
+      setLoading(true);
+      try {
+        if (!owner) {
+          setProfs([]);
+          setAlunos([]);
 
-// Carregar dados iniciais (owner OU professor) + abrir turma automaticamente
-useEffect(() => {
-  if (!open) return;
+          const lista = await carregarTurmas(undefined, filtroProf);
+          const tid = String(initialTurmaId ?? "").trim();
+          let alvoId: string | undefined;
 
-  (async () => {
-    setLoading(true);
-    try {
-      // =========================
-      // MODO PROFESSOR (sem owner)
-      // =========================
-      if (!owner) {
-        setProfs([]);
-        setAlunos([]);
+          if (tid) {
+            alvoId = lista.find((t) => t.id === tid)?.id;
+          }
 
-        const lista = await carregarTurmas(undefined, filtroProf);
+          if (!alvoId && lista.length > 0) {
+            alvoId = lista[0].id;
+          }
 
-        // tenta abrir a turma vinda da tela anterior
+          if (alvoId && alvoId !== selecionada) {
+            await abrirTurma(alvoId);
+          }
+          return;
+        }
+
+        const orgUserId = owner.usuarioId ?? owner.id;
+        const resP = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, {
+          headers,
+          params: {
+            vinculo: owner.tipo === "Clube" ? "clube" : "escolinha",
+            id: orgUserId,
+            limit: 200,
+          },
+        });
+
+        let lp = (resP.data?.professores || resP.data || []) as any[];
+
+        if (!lp.length) {
+          const resAlt = await axios.get(`${API.BASE_URL}/api/professores`, {
+            headers,
+            params: {
+              organizacaoId: owner.id,
+              clubeId: owner.id,
+              tipoUsuarioId: owner.id,
+            },
+          });
+          lp = (resAlt.data?.professores || resAlt.data?.items || resAlt.data || []) as any[];
+        }
+
+        setProfs(
+          lp.map((p) => ({
+            id: String(p.id),
+            nome: p.nome ?? p.usuario?.nome ?? "Professor",
+          }))
+        );
+
+        const resA = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, {
+          headers,
+          params: {
+            vinculo: owner.tipo === "Clube" ? "clube" : "escolinha",
+            id: orgUserId,
+            order: "nome_asc",
+            limit: 1000,
+          },
+        });
+
+        const la = (resA.data?.atletas || []) as any[];
+
+        setAlunos(
+          la.map((a) => {
+            const usuarioId = String(a.usuarioId ?? a.usuario?.id ?? a.id);
+            const nome = String(a.nome ?? a.usuario?.nome ?? "").trim();
+            const sobrenome = String(a.sobrenome ?? a.usuario?.sobrenome ?? "").trim();
+            const nomeCompleto =
+              [nome, sobrenome].filter(Boolean).join(" ").trim() || "Atleta";
+
+            return {
+              usuarioId,
+              nome: nomeCompleto,
+              sobrenome: sobrenome || undefined,
+            };
+          })
+        );
+
+        const lista = await carregarTurmas(owner, filtroProf);
         const tid = String(initialTurmaId ?? "").trim();
 
         let alvoId: string | undefined;
@@ -154,7 +209,6 @@ useEffect(() => {
           alvoId = lista.find((t) => t.id === tid)?.id;
         }
 
-        // fallback: primeira turma
         if (!alvoId && lista.length > 0) {
           alvoId = lista[0].id;
         }
@@ -162,111 +216,20 @@ useEffect(() => {
         if (alvoId && alvoId !== selecionada) {
           await abrirTurma(alvoId);
         }
-
-        return;
+      } finally {
+        setLoading(false);
       }
+    })();
 
-      // =========================
-      // MODO OWNER (Clube/Escolinha)
-      // =========================
-      const orgUserId = owner.usuarioId ?? owner.id;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, owner?.id, initialTurmaId]);
 
-      // 1) Professores do owner
-      const resP = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, {
-        headers,
-        params: {
-          vinculo: owner.tipo === "Clube" ? "clube" : "escolinha",
-          id: orgUserId,
-          limit: 200,
-        },
-      });
-
-      let lp = (resP.data?.professores || resP.data || []) as any[];
-
-      if (!lp.length) {
-        const resAlt = await axios.get(`${API.BASE_URL}/api/professores`, {
-          headers,
-          params: {
-            organizacaoId: owner.id,
-            clubeId: owner.id,
-            tipoUsuarioId: owner.id,
-          },
-        });
-        lp = (resAlt.data?.professores || resAlt.data?.items || resAlt.data || []) as any[];
-      }
-
-      setProfs(
-        lp.map((p) => ({
-          id: String(p.id),
-          nome: p.nome ?? p.usuario?.nome ?? "Professor",
-        }))
-      );
-
-      // 2) Atletas vinculados
-      const resA = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, {
-        headers,
-        params: {
-          vinculo: owner.tipo === "Clube" ? "clube" : "escolinha",
-          id: orgUserId,
-          order: "nome_asc",
-          limit: 1000,
-        },
-      });
-
-      const la = (resA.data?.atletas || []) as any[];
-
-      setAlunos(
-        la.map((a) => {
-          const usuarioId = String(a.usuarioId ?? a.usuario?.id ?? a.id);
-          const nome = String(a.nome ?? a.usuario?.nome ?? "").trim();
-          const sobrenome = String(a.sobrenome ?? a.usuario?.sobrenome ?? "").trim();
-          const nomeCompleto =
-            [nome, sobrenome].filter(Boolean).join(" ").trim() || "Atleta";
-
-          return {
-            usuarioId,
-            nome: nomeCompleto,
-            sobrenome: sobrenome || undefined,
-          };
-        })
-      );
-
-      // 3) Turmas
-      const lista = await carregarTurmas(owner, filtroProf);
-
-      const tid = String(initialTurmaId ?? "").trim();
-
-      let alvoId: string | undefined;
-
-      if (tid) {
-        alvoId = lista.find((t) => t.id === tid)?.id;
-      }
-
-      if (!alvoId && lista.length > 0) {
-        alvoId = lista[0].id;
-      }
-
-      if (alvoId && alvoId !== selecionada) {
-        await abrirTurma(alvoId);
-      }
-    } finally {
-      setLoading(false);
-    }
-  })();
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [open, owner?.id, initialTurmaId]);
-
-
-  // recarregar lista de turmas ao mudar filtro professor
   useEffect(() => {
     if (!open) return;
-    void carregarTurmas(owner, filtroProf); // owner pode ser undefined e tá ok
+    void carregarTurmas(owner, filtroProf); 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, owner?.id, filtroProf]);
 
-
-  // colapsar esquerda ao abrir agenda
   useEffect(() => {
     if (abaDireita === "agenda") setLeftCollapsed(true);
   }, [abaDireita]);
@@ -308,14 +271,11 @@ useEffect(() => {
     return filtradas;
   };
 
-
   const onFiltrarProf = async (prof: string) => {
     setFiltroProf(prof);
-    await carregarTurmas(owner, prof); // funciona com owner OU professor
+    await carregarTurmas(owner, prof);
   };
 
-
-  // ✅ abre turma: pré-seleciona professores e alunos já vinculados
   const abrirTurma = async (id: string) => {
     setSelecionada(id);
 
@@ -327,7 +287,6 @@ useEffect(() => {
 
     const res = await axios.get(`${API.BASE_URL}/api/turmas/${id}/alunos`, { headers });
 
-    // ✅ no modo professor, preencher lista "alunos" com os disponíveis vindos do backend
     if (!owner && Array.isArray(res.data?.disponiveis)) {
       const disponiveis = res.data.disponiveis as any[];
 
@@ -341,11 +300,10 @@ useEffect(() => {
     }
 
     const usuarioIds: string[] = Array.isArray(res.data?.usuarioIds)
-      ? res.data.usuarioIds.map(String) // ✅ só membros da turma
+      ? res.data.usuarioIds.map(String) 
       : Array.isArray(res.data?.alunos)
         ? res.data.alunos.filter((x: any) => x?.inTurma).map((x: any) => String(x.usuarioId)).filter(Boolean)
         : [];
-
 
     const alunosTurma: TurmaAluno[] = Array.isArray(res.data?.alunos)
       ? res.data.alunos
@@ -379,12 +337,10 @@ useEffect(() => {
           .map((x) => x.usuarioId);
 
     setNaoVinculadosUsuarioIds(naoVinc);
-
     setAlunosSelecionados(usuarioIds);
     setDirtyAlunos(false);
   };
 
-  // ✅ salva separado: só salva o que foi alterado
   const salvarMembros = async () => {
     if (!selecionada) return;
     setSalvando(true);
@@ -487,7 +443,6 @@ useEffect(() => {
     }
   };
 
-  // ✅ filtro aplicado nas duas listas
   const termoAluno = filtroAluno.trim().toLowerCase();
   const setSel = useMemo(() => new Set(alunosSelecionados.map(String)), [alunosSelecionados]);
 
@@ -554,7 +509,6 @@ useEffect(() => {
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 overscroll-contain">
           <div className={`grid grid-cols-1 gap-4 ${leftCollapsed ? "md:grid-cols-1" : "md:grid-cols-3"}`}>
-            {/* Coluna esquerda */}
             <div className={`${leftCollapsed ? "hidden" : "md:col-span-1"} flex flex-col gap-3`}>
               <div className="rounded-xl border border-zinc-200 bg-white p-3">
                 <div className="mb-2 text-sm font-medium text-zinc-900 flex items-center gap-2">
@@ -609,7 +563,6 @@ useEffect(() => {
                 )}
               </div>
 
-              {/* Criar turma só no modo owner */}
               {owner ? (
                 <div className="rounded-xl border border-zinc-200 bg-white p-3">
                   <div className="mb-2 text-sm font-semibold text-zinc-900 flex items-center gap-2">
@@ -665,7 +618,6 @@ useEffect(() => {
               ) : null}
             </div>
 
-            {/* Coluna direita */}
             <div className={leftCollapsed ? "md:col-span-3" : "md:col-span-2"}>
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-xs text-zinc-500">{leftCollapsed ? "Painel recolhido" : "Painel aberto"}</div>
@@ -748,7 +700,6 @@ useEffect(() => {
                     <div className="p-3">
                       {abaDireita === "membros" ? (
                         <div className="flex flex-col gap-4">
-                          {/* Professores */}
                           <div className="rounded-xl border border-zinc-200 bg-white">
                             <div className="border-b border-zinc-100 p-3 text-sm font-semibold text-zinc-900 flex items-center gap-2">
                               <User className="h-4 w-4" /> Professores da turma
@@ -787,7 +738,6 @@ useEffect(() => {
                             </div>
                           </div>
 
-                          {/* Alunos */}
                           <div className="rounded-xl border border-zinc-200 bg-white flex flex-col max-h-[70dvh]">
                             <div className="border-b border-zinc-100 p-3 flex-none">
                               <div className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
@@ -819,7 +769,6 @@ useEffect(() => {
                                 </div>
                               ) : null}
 
-                              {/* ✅ LISTA 1: NA TURMA */}
                               <div className="rounded-xl border border-emerald-100 bg-emerald-50/40">
                                 <div className="flex items-center justify-between px-3 py-2 border-b border-emerald-100">
                                   <div className="text-xs font-semibold text-emerald-900">
@@ -875,7 +824,6 @@ useEffect(() => {
                                 )}
                               </div>
 
-                              {/* ✅ LISTA 2: FORA DA TURMA */}
                               <div className="rounded-xl border border-zinc-200 bg-white">
                                 <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-100">
                                   <div className="text-xs font-semibold text-zinc-900">
@@ -928,11 +876,10 @@ useEffect(() => {
                               return r.data;
                             }}
                             fetchProgramados={async () => {
-                            // Se não tem owner (modo professor), pega treinos visíveis do professor
                             if (!owner) {
                               const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`, {
                                 headers,
-                                params: { vinculo: "professor", debug: "1" }, // ajuste conforme sua API
+                                params: { vinculo: "professor", debug: "1" }, 
                               });
                               return res.data;
                             }
@@ -985,14 +932,10 @@ useEffect(() => {
                 </div>
               )}
             </div>
-            {/* fim col direita */}
           </div>
         </div>
       </div>
-
-      {/* =======================
-          MODAL: CONFIRMAR EXCLUSÃO DA TURMA
-         ======================= */}
+      
       {confirmDeleteOpen ? (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-zinc-200 overflow-hidden">

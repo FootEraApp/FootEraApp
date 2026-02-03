@@ -11,6 +11,18 @@ dotenv.config();
 
 const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
 
+export async function logout(req: any, res: any) {
+  const userId = req.userId;
+  if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+  await prisma.usuario.update({
+    where: { id: userId },
+    data: { lastLogoutAt: new Date(), lastSeenAt: new Date() },
+  });
+
+  return res.json({ ok: true });
+}
+
 export async function me(req: AuthenticatedRequest, res: Response) {
   try {
     if (!req.userId) {
@@ -80,6 +92,39 @@ export async function login(req: Request, res: Response) {
         .json({ message: "Usuário sem senha configurada. Contate o suporte ou recrie o usuário." });
     }
 
+    if (usuario.deletedAt) {
+      const now = Date.now();
+      const base = usuario.deleteScheduledAt
+        ? new Date(usuario.deleteScheduledAt).getTime()
+        : new Date(usuario.deletedAt).getTime() + 30 * 24 * 60 * 60 * 1000;
+
+      const msLeft = base - now;
+      const daysLeft = Math.max(0, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
+      const restoreAvailable = msLeft > 0;
+
+      return res.status(410).json({
+        ok: false,
+        code: "ACCOUNT_DELETED",
+        restoreAvailable,
+        daysLeft,
+        message: restoreAvailable
+          ? `Sua conta foi excluída. Caso queira recuperar, faltam ${daysLeft} dia(s).`
+          : "Sua conta foi excluída e o prazo de recuperação expirou.",
+      });
+    }
+
+    const status = String((usuario as any).status ?? "").toUpperCase();
+
+    if (status === "BLOQUEADO" || (usuario as any).blockedAt) {
+      return res.status(403).json({
+        ok: false,
+        code: "ACCOUNT_BLOCKED",
+        message:
+          "Sua conta foi bloqueada pelo admin. Se quiser saber mais informações clique abaixo.",
+        blockedReason: (usuario as any).blockedReason ?? null,
+      });
+    }
+
     const senhaCorreta = await bcrypt.compare(String(senha), usuario.senhaHash);
     if (!senhaCorreta) {
       return res.status(401).json({ message: "Senha incorreta" });
@@ -103,11 +148,20 @@ export async function login(req: Request, res: Response) {
       usuario.administrador?.id ??
       null;
 
+    await prisma.loginEvent.create({
+      data: { usuarioId: usuario.id },
+    });
+
+    await prisma.usuario.update({
+      where: { id: usuario.id },
+      data: { lastLoginAt: new Date(), lastSeenAt: new Date() },
+    });
+
     const token = jwt.sign(
       {
         id: usuario.id,
         tipo: usuario.tipo,
-        tokenVersion: usuario.tokenVersion ?? 0, // ✅ aqui
+        tokenVersion: usuario.tokenVersion ?? 0, 
       },
       JWT_SECRET,
       { expiresIn: "7d" }
@@ -134,10 +188,6 @@ export async function login(req: Request, res: Response) {
     return res.status(500).json({ message: "Erro no servidor" });
   }
 }
-
-export const logout = async (_req: Request, res: Response) => {
-  res.json({ message: "Logout efetuado (JWT inválido do lado cliente)" });
-};
 
 export const validateToken = async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(" ")[1];

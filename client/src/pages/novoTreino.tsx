@@ -1,4 +1,3 @@
-// client/src/pages/novoTreino
 import { useEffect, useMemo, useRef, useState, ReactNode, memo, type UIEvent } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -36,15 +35,13 @@ type PontuacaoDetalhe = {
   exCount: number;
 };
 
-// ✅ Tipagem mínima do exercício selecionado (adapte nomes se os seus forem diferentes)
 type ExercicioSelecionadoUI = {
-  exercicioId?: string;      // preferencial
-  id?: string;               // fallback (se sua UI usa "id")
+  exercicioId?: string;     
+  id?: string;             
   ordem?: number | null;
   repeticoes?: string | number | null;
 };
 
-// ✅ helper: converte repetição pra string SEMPRE
 function toRepeticoesStr(v: any): string {
   if (v === null || v === undefined) return "";
   if (typeof v === "string") return v.trim();
@@ -53,15 +50,14 @@ function toRepeticoesStr(v: any): string {
 }
 
 export function montarPayloadSomenteInfoEExercicios(params: {
-  // infos básicas
   titulo: string;
   descricao: string;
-  nivel: any; // Nivel enum/string
+  nivel: any; 
   duracaoMinutos: number | null;
-  tipoTreino?: string | null; // se existir no seu backend
+  tipoTreino?: string | null; 
   metas?: string | null;
   pontuacao?: number | null;
-  categoria?: any[]; // Categoria[]
+  categoria?: any[]; 
   dicas?: string[];
   exerciciosSelecionados: ExercicioSelecionadoUI[];
   atletasIds?: string[];
@@ -82,7 +78,6 @@ export function montarPayloadSomenteInfoEExercicios(params: {
     exerciciosSelecionados,
   } = params;
 
-  // ✅ normaliza exercícios
   const exercicios = (exerciciosSelecionados ?? [])
     .map((it, idx) => {
       const rawId = it.exercicioId ?? it.id ?? "";
@@ -96,7 +91,6 @@ export function montarPayloadSomenteInfoEExercicios(params: {
         descansoSeg: (it as any).descansoSeg ?? null,
       };
     })
-    // ✅ remove linhas inválidas (sem exercicioId)
     .filter((x) => !!x.exercicioId);
 
     const payload: any = {
@@ -104,11 +98,8 @@ export function montarPayloadSomenteInfoEExercicios(params: {
       descricao: (descricao ?? "").trim() || null,
       nivel,
       duracao: duracaoMinutos === null ? null : Number(duracaoMinutos),
-
-      // ✅ no seu schema essas duas normalmente NÃO são opcionais
       categoria: Array.isArray(categoria) ? categoria : [],
       dicas: Array.isArray(dicas) ? dicas.filter(Boolean) : [],
-
       exercicios,
       atletasIds: Array.isArray(params.atletasIds) ? params.atletasIds : [],
       elencosIds: Array.isArray(params.elencosIds) ? params.elencosIds : [],
@@ -325,7 +316,6 @@ async function uploadImagemCapa(file: File): Promise<string> {
   if (!token) throw new Error("Sem token");
 
   const fd = new FormData();
-  // seu endpoint atual espera "foto"
   fd.append("foto", file);
 
   const base = (API as any)?.BASE_URL || "http://localhost:3001";
@@ -398,7 +388,6 @@ function authHeaders() {
 }
 
 async function readApiError(res: Response): Promise<string> {
-  // tenta pegar o body em texto (serve pra JSON e pra string)
   let raw = "";
   try {
     raw = await res.text();
@@ -406,7 +395,6 @@ async function readApiError(res: Response): Promise<string> {
     raw = "";
   }
 
-  // tenta interpretar como JSON e extrair chaves comuns
   try {
     const j = raw ? JSON.parse(raw) : null;
     const msg =
@@ -420,21 +408,17 @@ async function readApiError(res: Response): Promise<string> {
 
     if (msg) return String(msg);
 
-    // se vier { errors: [...] }
     if (Array.isArray(j?.errors) && j.errors.length) {
       const first = j.errors[0];
       return String(first?.message || first?.msg || first || "Erro na API");
     }
   } catch {
-    // não era JSON, segue abaixo
   }
 
-  // se for HTML, não mostra HTML pro usuário
   if (raw && raw.trim().startsWith("<")) {
     return `Erro na API (HTTP ${res.status}).`;
   }
 
-  // fallback: texto cru ou status
   return raw?.trim()
     ? raw.trim()
     : `Erro na API (HTTP ${res.status}).`;
@@ -675,28 +659,6 @@ function StepCard({
   );
 }
 
-function useInView<T extends Element>(options?: IntersectionObserverInit) {
-  const ref = useRef<T | null>(null);
-  const [inView, setInView] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    const obs = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        setInView(true);
-        obs.disconnect(); // carrega uma vez e pronto
-      }
-    }, options);
-
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [options]);
-
-  return { ref, inView };
-}
-
 const VideoThumb = memo(function VideoThumb({
   src,
   onClick,
@@ -711,7 +673,6 @@ const VideoThumb = memo(function VideoThumb({
       className="relative w-full h-44 sm:h-28 rounded overflow-hidden bg-black"
       title="Ver vídeo"
     >
-      {/* thumbnail fake */}
       <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
         <Play className="w-10 h-10 text-white opacity-90" />
       </div>
@@ -724,7 +685,6 @@ export default function NovoTreino() {
   const opcoesNiveis = ["Base", "Avancado", "Performance"] as const;
   type NivelTreino = (typeof opcoesNiveis)[number];
 
-  // helpers de querystring (wouter)
   const getQueryParam = (search: string, key: string) => {
     const sp = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
     return (sp.get(key) || "").trim();
@@ -766,15 +726,14 @@ export default function NovoTreino() {
   const [prazos, setPrazos] = useState<Record<string, string>>({});
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<Exercicio[]>([]);
   const [treinosDisponiveis, setTreinosDisponiveis] = useState<TreinoProgramado[]>([]);
-  const [capaPreview, setCapaPreview] = useState<string>(""); // blob pra preview
-  const [capaUrl, setCapaUrl] = useState<string>("");         // url final (backend)
+  const [capaPreview, setCapaPreview] = useState<string>("");
+  const [capaUrl, setCapaUrl] = useState<string>("");        
   const [editProgramadoId, setEditProgramadoId] = useState<string>("");
 
   type AbaTreinosAtleta = "meu_professor" | "footera";
   const [abaTreinosAtleta, setAbaTreinosAtleta] = useState<AbaTreinosAtleta>("meu_professor");
   const [treinosFootera, setTreinosFootera] = useState<TreinoProgramado[]>([]);
   const [professorVinculadoIds, setProfessorVinculadoIds] = useState<string[]>([]);
-
   const [atletasVinculados, setAtletasVinculados] = useState<AtletaVinculado[]>([]);
   const [atletasSelecionados, setAtletasSelecionados] = useState<string[]>([]);
   const [elencos, setElencos] = useState<Elenco[]>([]);
@@ -1124,14 +1083,12 @@ useEffect(() => {
     setIsFreePlan(ehFree);
   }, []);
 
-  const [loadingEdit, setLoadingEdit] = useState(false);
-
-useEffect(() => {
-  if (!toast) return;
-  const ms = toast.type === "error" ? 9000 : 4000; // erro fica mais tempo
-  const id = setTimeout(() => setToast(null), ms);
-  return () => clearTimeout(id);
-}, [toast]);
+  useEffect(() => {
+    if (!toast) return;
+    const ms = toast.type === "error" ? 9000 : 4000; 
+    const id = setTimeout(() => setToast(null), ms);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   useEffect(() => {
     if (dataTreino) {
@@ -1156,7 +1113,6 @@ useEffect(() => {
     }
   }, [datasAgendamento]);
 
-  // ✅ wouter -> location é STRING (path atual)
   const routeStr = typeof location === "string" ? location : String((location as any)?.href ?? "");
   const MOSTRAR_TODOS = "__todos__";
 
@@ -1432,10 +1388,9 @@ useEffect(() => {
 
       const headers = { Authorization: `Bearer ${token}` };
 
-      // tenta pegar os vínculos do Atleta em endpoints comuns do seu projeto
       const tries = [
         `${API.BASE_URL}/api/atletas/${encodeURIComponent(atletaId)}`,
-        `${API.BASE_URL}/api/perfil/${encodeURIComponent(atletaId)}`, // se no seu projeto perfil/:id também traz relacoes
+        `${API.BASE_URL}/api/perfil/${encodeURIComponent(atletaId)}`, 
       ];
 
       let data: any = null;
@@ -1455,7 +1410,7 @@ useEffect(() => {
       const profIds = Array.from(
         new Set(
           (Array.isArray(rels) ? rels : [])
-            .filter((x: any) => x?.ativo !== false) // ativo=true ou undefined
+            .filter((x: any) => x?.ativo !== false)
             .map((x: any) => String(x?.professorId ?? x?.professor?.id ?? "").trim())
             .filter((id: string) => id && id !== "undefined" && id !== "null"),
         ),
@@ -1956,7 +1911,6 @@ useEffect(() => {
     const token = getToken();
     const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-    // tenta endpoints comuns do seu projeto
     const tries = [
       `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(id)}`,
       `${API.BASE_URL}/api/treinosprogramados/${encodeURIComponent(id)}`,
@@ -1974,9 +1928,7 @@ useEffect(() => {
 
     if (!data) throw new Error("Não foi possível carregar o treino para editar.");
 
-    // normaliza o payload vindo do backend (vários formatos possíveis)
     const t = data?.data ?? data;
-
     const pid =
       t?.treinoProgramadoId ??
       t?.programadoId ??
@@ -1994,17 +1946,9 @@ useEffect(() => {
         : "Base")
     );
     setDuracao(Number(t.duracao ?? 60) || 60);
-
-    // tipoTreino pode vir null
     setTipoTreino(String(t.tipoTreino ?? "Tecnico") || "Tecnico");
-
-    // objetivo pode estar dentro de conteudo
     setObjetivo(String(t.objetivo ?? t?.conteudo?.objetivo ?? ""));
-
-    // capa
     setCapaUrl(String(t.imagemUrl ?? t.capaUrl ?? t.capa ?? t.foto ?? ""));
-
-    // categorias (pode vir string[] / Categoria[])
     const cats = t.categoria ?? t.categorias ?? [];
     setCategorias(Array.isArray(cats) ? cats.map(String) : cats ? [String(cats)] : []);
 
@@ -2024,15 +1968,12 @@ useEffect(() => {
 
     setProfessoresSelecionados(Array.isArray(profIds) ? profIds.map(String) : []);
 
-    // atletas selecionados (se seu treino programado guarda isso)
     const atIds = t.atletasIds ?? t.atletaIds ?? [];
     if (Array.isArray(atIds)) setAtletasSelecionados(atIds.map(String));
 
-    // datas agendamento (se existir)
     const datas = t.datasAgendamento ?? t.datas ?? [];
     if (Array.isArray(datas) && datas.length) setDatasAgendamento(datas.map(String));
 
-    // exercícios
     const exs = t.exercicios ?? t.exs ?? t.conteudo?.exercicios ?? [];
     const exUi: ExItemUILocal[] = (Array.isArray(exs) ? exs : []).map((ex: any, idx: number) => ({
       idCatalogo: ex.exercicioId ?? ex.idCatalogo ?? ex.id ?? null,
@@ -2264,7 +2205,6 @@ useEffect(() => {
 
   useEffect(() => {
     setPageEx(1);
-    // opcional: volta o scroll pro topo ao mudar filtro
     if (listRef.current) listRef.current.scrollTop = 0;
   }, [filtroEx, filtroCategorias, filtroNiveis]);
 
@@ -2279,7 +2219,6 @@ useEffect(() => {
     const el = e.currentTarget;
     const faltando = el.scrollHeight - el.scrollTop - el.clientHeight;
 
-    // quando faltar ~250px pra chegar no fim, carrega mais 25
     if (faltando < 250 && temMaisExercicios) {
       setPageEx((p) => p + 1);
     }
@@ -2370,7 +2309,6 @@ useEffect(() => {
     if (orgId) {
       const org = orgsVinculadas.find((o) => String(o.id) === String(orgId));
 
-      // mantém o tipo "clube/escolinha" se você quiser, mas o ID continua sendo do professor logado
       const tipoUsuario =
         org?.tipo === "Clube" ? ("Clube" as const) :
         org?.tipo === "Escolinha" ? ("Escolinha" as const) :
@@ -2378,9 +2316,7 @@ useEffect(() => {
 
       return {
         tipoUsuario,
-        tipoUsuarioId: tipoUsuarioIdLogged, // ✅ SEMPRE o ID do professor logado
-        // se quiser guardar o orgId pra outra coisa:
-        // organizacaoId: orgId,
+        tipoUsuarioId: tipoUsuarioIdLogged,
       };
     }
 
@@ -2519,9 +2455,6 @@ useEffect(() => {
     setSalvando(true);
 
     try {
-      // ✅ limpa erro antigo (se você quiser manter, pode remover)
-      // setToast(null);
-
       const { tipoUsuario, tipoUsuarioId } = getDono();
       const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
 
@@ -2544,18 +2477,18 @@ useEffect(() => {
           "Erro: não foi possível determinar o dono do treino (Professor/Clube/Escolinha).",
           "error",
         );
-        return; // ✅ fica na página
+        return; 
       }
 
       if (!isDono(tipoUsuarioNormRaw)) {
         showToast("Erro: tipo de usuário inválido.", "error");
-        return; // ✅ fica na página
+        return; 
       }
       const tipoUsuarioNorm: DonoLiteral = tipoUsuarioNormRaw;
 
       if (!usuarioId) {
         showToast("Erro: usuário não autenticado.", "error");
-        return; // ✅ fica na página
+        return; 
       }
 
       const exerciciosRaw = montarExerciciosParaPayload(
@@ -2572,7 +2505,6 @@ useEffect(() => {
       });
 
       if (exerciciosValidos.length !== exerciciosSelecionados.length) {
-        // remove linhas vazias e renumera
         const renumerado = exerciciosValidos.map((x: any, i: number) => ({ ...x, ordem: i + 1 }));
         setExerciciosSelecionados(renumerado);
       }
@@ -2584,7 +2516,6 @@ useEffect(() => {
             Date.now().toString(36)
           : "TP-" + Date.now().toString(36);
 
-      // ✅ só manda exercícios que têm id do banco
       const exValidos = exerciciosSelecionados.filter(
         (ex: any) => ex?.exercicioId || ex?.idCatalogo || ex?.id
       );
@@ -2593,7 +2524,6 @@ useEffect(() => {
         return;
       }
 
-      // ✅ valida duplicados
       const vistosId = new Set<string>();
       const vistosNome = new Set<string>();
       const duplicados: string[] = [];
@@ -2620,8 +2550,6 @@ useEffect(() => {
         return;
       }
 
-      // ✅ 1) escolher uma data para salvar em dataAgendada
-      // prioridade: datasAgendamento[0] (se tiver) senão dataTreino
       const dataAgendadaISO =
         (datasAgendamento?.length ? datasAgendamento[0] : dataTreino)
           ? new Date(
@@ -2629,7 +2557,6 @@ useEffect(() => {
             ).toISOString()
           : null;
 
-      // ✅ 2) normalizar exercícios (ACEITA catálogo e temporário)
       const exerciciosNormalizados = (exerciciosSelecionados || [])
         .map((e: any, idx: number) => {
           const exercicioId =
@@ -2640,7 +2567,7 @@ useEffect(() => {
           return {
             ...e,
             exercicioId: exercicioId ? String(exercicioId) : null,
-            nome: nomeTemp || e.nome, // mantém nome (útil p/ temporário)
+            nome: nomeTemp || e.nome,
             ordem: e.ordem ?? idx + 1,
             repeticoes:
               e.repeticoes ??
@@ -2650,18 +2577,12 @@ useEffect(() => {
               null,
           };
         })
-        // mantém se for do catálogo (exercicioId) OU temporário (nome)
         .filter((e: any) => !!e.exercicioId || (!!e.nome && String(e.nome).trim().length > 0));
 
-      // ✅ 3) montar payload (pode continuar usando seu helper)
       const payload = montarPayloadSomenteInfoEExercicios({
         tipoTreino,
-        // ⚠️ não manda imagemUrl aqui (dá erro TS no seu helper)
-        // imagemUrl: capaUrl || null,
         dataAgendada: dataAgendadaISO,
         exerciciosSelecionados: exerciciosNormalizados,
-
-        // esses campos podem existir no helper, mas a gente garante abaixo
         titulo: nome,
         nivel,
         descricao,
@@ -2672,27 +2593,20 @@ useEffect(() => {
         metas,
       } as any);
 
-      // ✅ 4) GARANTIR nomes que o backend realmente usa
-      (payload as any).nome = String(nome || "").trim();
-      (payload as any).duracao = duracao != null ? Number(duracao) : null;     // backend espera "duracao"
-      (payload as any).dataAgendada = dataAgendadaISO;                         // backend lê dataAgendada
-      // ✅ pontuação real do topo (ex.: "43 pts")
-      const pontuacaoTopo =
-        Number.isFinite(Number(score?.total)) ? Math.max(0, Math.floor(Number(score.total))) : null;
-
-      (payload as any).pontuacao = pontuacaoTopo;
-      (payload as any).objetivo = (metas ?? "").trim() || null;
-      // dono do treino
-      (payload as any).tipoUsuario = tipoUsuarioNorm;              // "professor" | "clube" | "escolinha"
-
+      const pontuacaoTopo = Number.isFinite(Number(score?.total)) ? Math.max(0, Math.floor(Number(score.total))) : null;
+      
       const tipoUsuarioIdProfessor =
         (Storage as any).tipoUsuarioId ||
         localStorage.getItem("tipoUsuarioId") ||
         sessionStorage.getItem("tipoUsuarioId") ||
         "";
-
+      (payload as any).nome = String(nome || "").trim();
+      (payload as any).duracao = duracao != null ? Number(duracao) : null;    
+      (payload as any).dataAgendada = dataAgendadaISO; 
+      (payload as any).pontuacao = pontuacaoTopo;
+      (payload as any).objetivo = (metas ?? "").trim() || null;
+      (payload as any).tipoUsuario = tipoUsuarioNorm;            
       (payload as any).tipoUsuarioId = String(tipoUsuarioIdProfessor);
-
       (payload as any).tipoUsuarioId = String(tipoUsuarioId);
 
       // ✅ define se o treino é "Footera" (público/parceiro) ou normal
@@ -2710,11 +2624,7 @@ useEffect(() => {
       (payload as any).atletasIds = atletasSelecionados;
       (payload as any).elencosIds = elencoSelecionado ? [elencoSelecionado] : [];
       (payload as any).colaboradoresProfessorIds = professoresIdsFinalSemEu;
-
-      // código (se quiser persistir)
       (payload as any).codigo = codigo;
-
-      // ✅ 5) EXERCÍCIOS: setar UMA ÚNICA VEZ, sempre normalizado com exercicioId
       (payload as any).exercicios = exerciciosNormalizados.map((e: any, idx: number) => {
         const repeticoesStr =
           typeof e.repeticoes === "string"
@@ -2723,7 +2633,6 @@ useEffect(() => {
             ? String(e.repeticoes)
             : null;
 
-        // exercício do catálogo
         if (e.exercicioId) {
           return {
             exercicioId: String(e.exercicioId),
@@ -2733,7 +2642,6 @@ useEffect(() => {
           };
         }
 
-        // temporário
         return {
           nome: String(e.nome || "").trim(),
           ordem: Number(e.ordem ?? idx + 1),
@@ -2742,7 +2650,6 @@ useEffect(() => {
         };
       });
 
-      // ✅ 6) imagem: backend espera "imagemUrl"
       const capaFinal = capaUrl && String(capaUrl).startsWith("blob:") ? null : capaUrl;
       (payload as any).imagemUrl = capaFinal ? String(capaFinal) : null;
 
@@ -2783,7 +2690,6 @@ useEffect(() => {
         );
       }
 
-      // ✅ tenta salvar na gaveta (não bloqueia sucesso)
       const resultadoSalvar = await tentarSalvarComoTreinoSalvo(payload, score.total);
 
       const atletasDoTreino = atletasVinculados.filter((a) =>
@@ -2841,11 +2747,8 @@ useEffect(() => {
       }
 
       showToast(msgPrincipal + extra, "success");
-
-      // ✅ aqui pode limpar e voltar pra /treinos (SUCESSO)
       sessionStorage.removeItem(SAVE_KEY);
       sessionStorage.removeItem(RESTORE_FLAG_KEY);
-
       setEtapa(1);
       setCompletedUntil(1);
       setNome("");
@@ -2869,7 +2772,6 @@ useEffect(() => {
     } catch (e: any) {
       console.error("Falha inesperada ao criar treino:", e?.response?.data || e);
 
-      // ✅ pega mensagem em vários formatos (axios/fetch/string)
       const msgErro =
         e?.response?.data?.error ||
         e?.response?.data?.message ||
@@ -2877,11 +2779,8 @@ useEffect(() => {
         (typeof e === "string" ? e : "") ||
         "Erro inesperado ao criar treino.";
 
-      // ✅ mostra o erro e NÃO navega
       showToast(msgErro, "error");
 
-      // ✅ mantém o state + sessionStorage para usuário corrigir e tentar de novo
-      // (não remove SAVE_KEY / RESTORE_FLAG_KEY)
     } finally {
       setSalvando(false);
     }
@@ -2965,7 +2864,6 @@ useEffect(() => {
     );
 
   if (usuario.tipo === "atleta") {
-    // 1) lista “Meu professor”: filtra pelos professores vinculados
     const treinosMeuProfessorBrutos =
       professorVinculadoIds.length === 0
         ? []
@@ -2976,7 +2874,6 @@ useEffect(() => {
             return professorVinculadoIds.some((pid) => todos.has(String(pid)));
           });
 
-    // 2) aplica bloqueio (já agendados) em ambas
     const treinosMeuProfessor = treinosMeuProfessorBrutos.filter(
       (t) => !idsProgramadosBloqueados.has(t.id),
     );
@@ -3003,8 +2900,6 @@ useEffect(() => {
         </Link>
 
         <h2 className="text-lg font-bold mb-3">Treinos Disponíveis</h2>
-
-        {/* Abas */}
         <div className="flex gap-2 mb-4">
           <button
             type="button"
@@ -3033,7 +2928,6 @@ useEffect(() => {
           </button>
         </div>
 
-        {/* Mensagens vazias específicas */}
         {listaAtiva.length === 0 ? (
           <div className="text-gray-600 bg-white border rounded-xl p-4">
             {abaTreinosAtleta === "meu_professor" ? (
@@ -3443,7 +3337,6 @@ useEffect(() => {
                 Capa do Treino (opcional)
               </label>
 
-              {/* Preview */}
               { (capaPreview || capaUrl) ? (
                 <div className="mb-2">
                   <img
@@ -3466,11 +3359,9 @@ useEffect(() => {
                     accept="image/*"
                     className="hidden"
                     onChange={async (e) => {
-                      const input = e.currentTarget; // ✅ salva antes do await
+                      const input = e.currentTarget; 
                       const file = input.files?.[0];
                       if (!file) return;
-
-                      // preview local
                       if (capaPreview?.startsWith("blob:")) URL.revokeObjectURL(capaPreview);
                       const local = URL.createObjectURL(file);
                       setCapaPreview(local);
@@ -3479,14 +3370,13 @@ useEffect(() => {
                         const urlFinal = await uploadImagemCapa(file);
                         setCapaUrl(urlFinal);
 
-                        // quando tiver urlFinal, pode soltar o blob
                         URL.revokeObjectURL(local);
                         setCapaPreview("");
                       } catch (err: any) {
                         console.error(err);
                         alert(err?.message || "Erro ao enviar imagem");
                       } finally {
-                        if (input) input.value = ""; // ✅ não quebra
+                        if (input) input.value = ""; 
                       }
                     }}
                   />
@@ -3595,7 +3485,7 @@ useEffect(() => {
                                   accept="video/*"
                                   className="hidden"
                                   onChange={async (e) => {
-                                    const input = e.currentTarget; // ✅
+                                    const input = e.currentTarget; 
                                     const file = input.files?.[0];
                                     if (!file) return;
 
@@ -3613,7 +3503,7 @@ useEffect(() => {
                                       console.error(err);
                                       showToast(err?.message || "Erro ao enviar vídeo", "error");
                                     } finally {
-                                      if (input) input.value = ""; // ✅
+                                      if (input) input.value = "";
                                     }
                                   }}
                                 />
@@ -3982,7 +3872,6 @@ useEffect(() => {
                         loading="lazy"
                         onError={(e) => {
                           const img = e.currentTarget;
-                          // evita loop infinito caso o fallback também falhe
                           if (img.src !== AVATAR_FALLBACK) img.src = AVATAR_FALLBACK;
                         }}
                       />
@@ -4247,57 +4136,52 @@ useEffect(() => {
         )}
       </div>
 
-{/* ActionBar flutuante (acima da navbar) */}
-<div className="fixed top-0 left-0 right-0 z-40 px-4 pt-2">
-  <div className="max-w-3xl mx-auto">
-    <div className="bg-white/95 backdrop-blur border border-gray-200 shadow-lg rounded-2xl p-2 sm:p-3 flex items-center gap-2">
-      {/* Voltar */}
-      <button
-        type="button"
-        onClick={() => {
-          if (etapa === 1) navigate("/treinos");
-          else goTo(etapa - 1);
-        }}
-        className="px-3 sm:px-4 py-2 rounded-xl bg-gray-200 text-gray-900 shrink-0"
-      >
-        Voltar
-      </button>
+      <div className="fixed top-0 left-0 right-0 z-40 px-4 pt-2">
+        <div className="max-w-3xl mx-auto">
+          <div className="bg-white/95 backdrop-blur border border-gray-200 shadow-lg rounded-2xl p-2 sm:p-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (etapa === 1) navigate("/treinos");
+                else goTo(etapa - 1);
+              }}
+              className="px-3 sm:px-4 py-2 rounded-xl bg-gray-200 text-gray-900 shrink-0"
+            >
+              Voltar
+            </button>
 
-      {/* Stepper no meio (a barra de cima) */}
-      <div className="flex-1 min-w-0">
-        <div className="overflow-x-auto">
-          <div className="min-w-max">
-            <Stepper steps={steps} current={etapa} onJump={goTo} completedUntil={completedUntil} />
+            <div className="flex-1 min-w-0">
+              <div className="overflow-x-auto">
+                <div className="min-w-max">
+                  <Stepper steps={steps} current={etapa} onJump={goTo} completedUntil={completedUntil} />
+                </div>
+              </div>
+            </div>
+
+            {etapa < 3 ? (
+              <button
+                type="button"
+                onClick={() => goTo(etapa + 1)}
+                className="px-3 sm:px-4 py-2 rounded-xl bg-green-800 text-white shrink-0"
+              >
+                Próximo
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={criarTreino}
+                disabled={salvando}
+                className={[
+                  "px-3 sm:px-4 py-2 rounded-xl bg-green-800 text-white shrink-0",
+                  salvando ? "opacity-60 cursor-not-allowed" : "",
+                ].join(" ")}
+              >
+                {salvando ? "Salvando..." : "Salvar"}
+              </button>
+            )}
           </div>
         </div>
       </div>
-
-      {/* Próximo / Salvar */}
-      {etapa < 3 ? (
-        <button
-          type="button"
-          onClick={() => goTo(etapa + 1)}
-          className="px-3 sm:px-4 py-2 rounded-xl bg-green-800 text-white shrink-0"
-        >
-          Próximo
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={criarTreino}
-          disabled={salvando}
-          className={[
-            "px-3 sm:px-4 py-2 rounded-xl bg-green-800 text-white shrink-0",
-            salvando ? "opacity-60 cursor-not-allowed" : "",
-          ].join(" ")}
-        >
-          {salvando ? "Salvando..." : "Salvar"}
-        </button>
-      )}
-    </div>
-  </div>
-</div>
-
 
       {toast && (
         <div className="fixed bottom-20 inset-x-0 flex justify-center z-50 px-4">

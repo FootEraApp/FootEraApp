@@ -20,9 +20,9 @@ const DEFAULT_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
 function readPrivacidadeFlags(config: any) {
   const c = (config && typeof config === "object") ? config : {};
   return {
-    perfilVisivel: c.perfilVisivel !== false,         // default true
-    mostrarEmail: c.mostrarEmail === true,            // default false
-    permitirMensagens: c.permitirMensagens !== false, // default true
+    perfilVisivel: c.perfilVisivel !== false,         
+    mostrarEmail: c.mostrarEmail === true,            
+    permitirMensagens: c.permitirMensagens !== false, 
   };
 }
 
@@ -876,7 +876,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         email: true,
         foto: true,
         nomeDeUsuario: true,
-        configuracoesPrivacidade: true, // ✅ NOVO
+        configuracoesPrivacidade: true,
       },
     });
 
@@ -1108,7 +1108,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       usuario: {
         id: usuario.id,
         nome: usuario.nome,
-        email: (isOwnProfile || isAdmin || priv.mostrarEmail) ? usuario.email : null, // ✅
+        email: (isOwnProfile || isAdmin || priv.mostrarEmail) ? usuario.email : null,
         foto: withDefaultImg(usuario.foto),
       },
       dadosEspecificos,

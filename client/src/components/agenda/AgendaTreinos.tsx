@@ -1,4 +1,3 @@
-// client/src/components/agenda/AgendaTreinos.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
@@ -11,9 +10,6 @@ import axios from "axios";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 
-/** =========================
- * Types
- * ========================= */
 export type TreinoAgendadoItem = {
   id: string;
   titulo: string | null;
@@ -80,13 +76,13 @@ export type TreinoProgramadoItem = {
 
 export type AgendaFetchAgendados = (args: {
   monthDate: Date;
-  monthISO: string; // YYYY-MM
+  monthISO: string;
 }) => Promise<any>;
 
 export type AgendaFetchProgramados = () => Promise<any>;
 
 export type AgendaOnAgendar = (args: {
-  selectedDays: string[]; // YYYY-MM-DD
+  selectedDays: string[]; 
   treinoProgramadoId: string;
 }) => Promise<void>;
 
@@ -96,26 +92,13 @@ export type AgendaTreinosProps = {
   open: boolean;
   title: string;
   fetchAgendados: AgendaFetchAgendados;
-
-  /**
-   * Pode retornar:
-   * - { items: [...] } -> "Seus treinos"
-   * - { meus: [...], footera: [...] }
-   * - { items: [...], footera: [...] }
-   * - [...] -> "Seus treinos"
-   */
   fetchProgramados: AgendaFetchProgramados;
-
   onAgendar: AgendaOnAgendar;
-
   additionalItems?: TreinoAgendadoItem[];
   renderItemActions?: AgendaRenderItemActions;
   initialMonth?: Date;
 };
 
-/** =========================
- * Helpers (iguais aos seus)
- * ========================= */
 function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
 }
@@ -296,9 +279,6 @@ function formatDayPtBR(dayISO: string) {
   });
 }
 
-/** =========================
- * Programados: separar "Seus" x "FootEra"
- * ========================= */
 function normalizeProgramadosPayload(payload: any): {
   meus: TreinoProgramadoItem[];
   footera: TreinoProgramadoItem[];
@@ -343,8 +323,6 @@ function normalizeProgramadosPayload(payload: any): {
       : undefined,
   });
 
-
-  // ✅ quando vier { items: [...] }, isso é "Seus treinos"
   const meusRaw = Array.isArray(payload?.items)
     ? payload.items
     : Array.isArray(payload)
@@ -357,16 +335,36 @@ function normalizeProgramadosPayload(payload: any): {
             ? payload.data
             : [];
 
-  // ✅ FootEra NÃO vem daqui (vem da outra API). Mantém vazio.
   return {
     meus: (Array.isArray(meusRaw) ? meusRaw : []).map(mapItem).filter((i) => i.id),
     footera: [],
   };
 }
 
-/** =========================
- * Hook (estado + lógica)
- * ========================= */
+async function fetchAgendados3Meses(
+  fetchAgendados: AgendaFetchAgendados,
+  cursorMonth: Date
+) {
+  const toMonthISO = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+
+  const base = startOfMonth(cursorMonth);
+  const prev = addMonths(base, -1);
+  const next = addMonths(base, 1);
+
+  const months = [
+    { monthDate: prev, monthISO: toMonthISO(prev) },
+    { monthDate: base, monthISO: toMonthISO(base) },
+    { monthDate: next, monthISO: toMonthISO(next) },
+  ];
+
+  const resps = await Promise.all(months.map((m) => fetchAgendados(m)));
+  const merged = resps.flatMap((p) => normalizeAgendadosPayload(p));
+  const byId = new Map<string, TreinoAgendadoItem>();
+  for (const it of merged) byId.set(String(it.id), it);
+
+  return Array.from(byId.values());
+}
+
 export function useAgendaTreinos({
   open,
   initialMonth,
@@ -383,14 +381,11 @@ export function useAgendaTreinos({
   const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [agendados, setAgendados] = useState<TreinoAgendadoItem[]>([]);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
-
   const [loadingProgramados, setLoadingProgramados] = useState(false);
   const [treinosMeus, setTreinosMeus] = useState<TreinoProgramadoItem[]>([]);
   const [treinosFootera, setTreinosFootera] = useState<TreinoProgramadoItem[]>([]);
-  
   const [treinoProgramadoId, setTreinoProgramadoId] = useState<string>("");
 
-  // reset quando abrir
   useEffect(() => {
     if (!open) return;
     setSelectedDays([]);
@@ -398,7 +393,6 @@ export function useAgendaTreinos({
     setCursorMonth(startOfMonth(initialMonth ?? new Date()));
   }, [open, initialMonth]);
 
-  // carregar programados ao abrir
   useEffect(() => {
     if (!open) return;
 
@@ -406,10 +400,8 @@ export function useAgendaTreinos({
       try {
         setLoadingProgramados(true);
         const payload = await fetchProgramados();
-
         const { meus } = normalizeProgramadosPayload(payload);
 
-        // ✅ aqui é só "meus"
         setTreinosMeus(meus);
       } catch {
         setTreinosMeus([]);
@@ -419,24 +411,21 @@ export function useAgendaTreinos({
     })();
   }, [open, fetchProgramados]);
 
-
-  // carregar agendados ao abrir + troca de mês
   useEffect(() => {
     if (!open) return;
 
-    const monthISO = `${cursorMonth.getFullYear()}-${pad2(cursorMonth.getMonth() + 1)}`;
-
     (async () => {
-      try {
-        setLoadingCalendar(true);
-        const payload = await fetchAgendados({ monthDate: cursorMonth, monthISO });
-        setAgendados(normalizeAgendadosPayload(payload));
-      } catch {
-        setAgendados([]);
-      } finally {
-        setLoadingCalendar(false);
-      }
-    })();
+    try {
+      setLoadingCalendar(true);
+      const list = await fetchAgendados3Meses(fetchAgendados, cursorMonth);
+      setAgendados(list);
+    } catch {
+      setAgendados([]);
+    } finally {
+      setLoadingCalendar(false);
+    }
+  })();
+
   }, [open, cursorMonth, fetchAgendados]);
 
   const monthLabel = useMemo(() => {
@@ -450,7 +439,7 @@ export function useAgendaTreinos({
 
   const daysGrid = useMemo(() => {
     const first = startOfMonth(cursorMonth);
-    const firstWeekday = (first.getDay() + 6) % 7; // seg=0
+    const firstWeekday = (first.getDay() + 6) % 7;
     const start = new Date(first);
     start.setDate(first.getDate() - firstWeekday);
 
@@ -519,9 +508,6 @@ export function useAgendaTreinos({
   };
 }
 
-/** =========================
- * Componente (UI)
- * ========================= */
 export default function AgendaTreinos({
   open,
   title,
@@ -533,14 +519,9 @@ export default function AgendaTreinos({
   initialMonth,
 }: AgendaTreinosProps) {
   const [salvandoAgenda, setSalvandoAgenda] = useState(false);
-
-  // ✅ ABAS GRANDES (ganhar espaço)
   const [aba, setAba] = useState<"agenda" | "agendar">("agenda");
-
-  // Dentro de AGENDAR: Seus treinos vs FootEra
   const [abaTreinos, setAbaTreinos] = useState<"meus" | "footera">("meus");
   const [buscaTreino, setBuscaTreino] = useState("");
-
   const [footeraLoaded, setFooteraLoaded] = useState(false);
 
   // 🔒 PRO gate (bloqueia aba FootEra para não assinantes)
@@ -643,7 +624,6 @@ export default function AgendaTreinos({
     additionalItems,
   });
 
-  // reset ao abrir
   useEffect(() => {
     if (!open) return;
     setAba("agenda");
@@ -696,8 +676,6 @@ export default function AgendaTreinos({
               );
 
         const base = apiBase.replace(/\/+$/, "");
-
-        // ✅ se por algum motivo não vier http, força backend local no dev
         const finalBase =
           base.startsWith("http://") || base.startsWith("https://")
             ? base
@@ -705,12 +683,10 @@ export default function AgendaTreinos({
 
         const url = `${finalBase}/api/treinos/publicos-professores-parceiros`;
 
-
         const res = await axios.get(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        // ✅ seu backend manda { items: [...], debug: {...} }
         const raw = Array.isArray(res.data?.items)
           ? res.data.items
           : Array.isArray(res.data)
@@ -761,16 +737,10 @@ export default function AgendaTreinos({
           }))
           .filter((x: TreinoProgramadoItem) => Boolean(x?.id));
 
-
-        // ✅ salva cache + estado
         parceirosCacheRef.current = parceiros;
-
-        // 🔥 substitui a lista FootEra pelos parceiros
         setTreinosFootera(parceiros);
-
         setFooteraLoaded(true);
       } catch (e) {
-        // ✅ não zera: mantém o último que carregou
         if (parceirosCacheRef.current?.length) {
           setTreinosFootera(parceirosCacheRef.current);
         }
@@ -778,8 +748,6 @@ export default function AgendaTreinos({
     })();
   }, [open, abaTreinos, footeraLoaded]);
 
-
-  // se selecionar dias, fica natural ir pra agenda
   useEffect(() => {
     if (!open) return;
     if (selectedDays.length) setAba("agenda");
@@ -806,14 +774,10 @@ export default function AgendaTreinos({
     try {
       await onAgendar({ selectedDays, treinoProgramadoId });
 
-      const monthISO = `${cursorMonth.getFullYear()}-${pad2(cursorMonth.getMonth() + 1)}`;
-      const payload = await fetchAgendados({ monthDate: cursorMonth, monthISO });
-      setAgendados(normalizeAgendadosPayload(payload));
-
+      const list = await fetchAgendados3Meses(fetchAgendados, cursorMonth);
+      setAgendados(list);
       setSelectedDays([]);
       alert("Treino(s) agendado(s) com sucesso!");
-
-      // depois de agendar, volta pra Agenda
       setAba("agenda");
     } catch (e: any) {
       const msg =
@@ -851,10 +815,8 @@ export default function AgendaTreinos({
 
   return (
     <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-      {/* HEADER ABAS GRANDES */}
       <div className="p-3 sm:p-4 border-b border-zinc-200 bg-white flex items-center justify-between gap-2">
         <div className="font-extrabold text-zinc-900">{title}</div>
-
         <div className="inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
           <button
             type="button"
@@ -879,13 +841,8 @@ export default function AgendaTreinos({
         </div>
       </div>
 
-      {/* CONTEÚDO */}
       {aba === "agenda" ? (
-        // =========================
-        // ABA 1: AGENDA (CALENDÁRIO + DETALHES)
-        // =========================
         <div className="flex-1 min-h-0 overflow-hidden grid grid-rows-[minmax(0,1fr)_minmax(260px,0.9fr)] lg:grid-rows-1 lg:grid-cols-[minmax(0,1fr)_420px]">
-          {/* CALENDÁRIO */}
           <div className="p-3 sm:p-4 border-b border-zinc-200 lg:border-b-0 lg:border-r lg:border-zinc-200 min-h-0 overflow-hidden">
             <div className="h-full overflow-y-auto">
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1027,7 +984,6 @@ export default function AgendaTreinos({
             </div>
           </div>
 
-          {/* DETALHES (embaixo) */}
           <div className="p-3 sm:p-4 min-h-0 overflow-y-auto">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -1048,7 +1004,6 @@ export default function AgendaTreinos({
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                {/* aviso de dia passado */}
                 {hasPastSelectedDay ? (
                   <div className="rounded-xl border border-zinc-200 bg-white p-3 flex-none">
                     <div className="text-sm font-bold mb-1">Atenção</div>
@@ -1119,9 +1074,6 @@ export default function AgendaTreinos({
           </div>
         </div>
       ) : (
-        // =========================
-        // ABA 2: AGENDAR (selecionar treino + botão)
-        // =========================
         <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4">
           {selectedDays.length === 0 ? (
             <div className="rounded-xl border border-zinc-200 bg-white p-4">
@@ -1149,7 +1101,6 @@ export default function AgendaTreinos({
                 </div>
               </div>
 
-              {/* Sub-abas */}
               <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden">
                 <div className="p-2 border-b border-zinc-100 flex items-center justify-between gap-2">
                   <div className="inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
@@ -1186,7 +1137,6 @@ export default function AgendaTreinos({
                   </div>
                 </div>
 
-                {/* Busca */}
                 <div className="p-3 border-b border-zinc-100">
                   <input
                     value={buscaTreino}

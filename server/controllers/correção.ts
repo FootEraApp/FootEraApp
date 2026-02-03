@@ -1,37 +1,17 @@
 import {
-  PrismaClient,
-  PosicaoCampo,
   Categoria,
   TipoTreino,
-  TreinoStatus,
-  TipoMidia,
   TreinoAgendadoStatus,
   Nivel,
-  Prisma
 } from "@prisma/client";
 import { getIO } from "../socket.js";
-import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
-import { sanitizeText, basicModerationFails } from "../utils/moderation.js";
-import {
-  onExercicioIncluidoNoTreino,
-  onTreinoFeitoPorAlunoFromSubmissao,
-} from "../services/statsService.js";
 import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
 import { can } from "server/services/entitlements.js";
 import { requireUsage, planLimitFor } from "server/lib/usage.js";
-import { sendLimitInfo } from "server/lib/limitInfo.js";
-import { UPGRADE_HINT_BY_CAP } from "server/lib/upgradeHints.js";
-import { audit } from "server/services/audit.js";
-import {
-  enforceFeatureLimit,
-  type FeatureLimitError,
-} from "server/utils/featureLimit.js";
 import jwt from "jsonwebtoken";
-import { startOfMonth, addMonths } from "date-fns";
 import { recalcularEstatisticaExercicios } from "server/services/estatisticasExercicio.service.js";
 import { prisma } from "../prisma.js";
 
-type Request = ExpressRequest;
 type Response = ExpressResponse;
 
 const JWT_SECRET: jwt.Secret = (process.env.JWT_SECRET || "defaultsecret");
@@ -42,62 +22,6 @@ type AuthenticatedRequest = ExpressRequest & {
   user?: any;
   auth?: any;
 };
-
-async function recomputeFeitosTreino(treinoProgramadoId: string) {
-  const rows = await prisma.submissaoTreino.findMany({
-    where: {
-      aprovado: true,
-      treinoAgendado: {
-        is: { treinoProgramadoId },
-      },
-    },
-    select: {
-      treinoAgendadoId: true,
-      criadoEm: true,
-    },
-  });
-
-  const uniq = new Set<string>();
-  let ultimo: Date | null = null;
-
-  for (const r of rows) {
-    if (!r.treinoAgendadoId) continue;
-    uniq.add(r.treinoAgendadoId);
-    if (r.criadoEm && (!ultimo || r.criadoEm > ultimo)) {
-      ultimo = r.criadoEm;
-    }
-  }
-
-  const total = uniq.size;
-
-  await prisma.estatisticaTreino.upsert({
-    where: { treinoId: treinoProgramadoId },
-    create: {
-      treinoId: treinoProgramadoId,
-      realizacoes: total,
-      ultimoRealizadoEm: ultimo,
-    },
-    update: {
-      ultimoRealizadoEm: ultimo,
-    },
-  });
-
-  return total;
-}
-
-async function recomputeInclusoesExercicio(exercicioId: string) {
-  const total = await prisma.treinoProgramadoExercicio.count({
-    where: { exercicioId },
-  });
-
-  await prisma.estatisticaExercicio.upsert({
-    where: { exercicioId },
-    create: { exercicioId, inclusoesEmTreinos: total },
-    update: { inclusoesEmTreinos: total },
-  });
-
-  return total;
-}
 
 function parseDateInput(raw: any): Date {
   let s = String(raw ?? "").trim();
@@ -115,20 +39,6 @@ function parseDateInput(raw: any): Date {
   return new Date(s);
 }
 
-function parseDateOnlySafe(raw: any): Date {
-  const s = String(raw ?? "").trim();
-  if (!s) return new Date(NaN);
-
-  const datePart = /^\d{4}-\d{2}-\d{2}T/.test(s) ? s.slice(0, 10) : s;
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
-    const [y, m, d] = datePart.split("-").map(Number);
-    return new Date(y, (m || 1) - 1, d || 1, 12, 0, 0, 0);
-  }
-
-  return new Date(s);
-}
-
 function getUserFromReq(req: AuthenticatedRequest) {
   const anyReq = req as any;
 
@@ -140,15 +50,6 @@ function getUserFromReq(req: AuthenticatedRequest) {
     null
   );
 }
-
-function startOfDay(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-}
-function endOfDay(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0);
-}
-
-const FAIR_USE_TURMA_MES = 30;
 
 type CanKey = Parameters<typeof can>[1];
 
@@ -212,22 +113,6 @@ function syncTreinoProgramado(treinoProgramadoId: string) {
   io.to("treinos:programados").emit("treinos:sync", { treinoProgramadoId });
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 export async function criarTreinoProgramado(
   req: AuthenticatedRequest,
   res: Response
@@ -289,8 +174,6 @@ export async function criarTreinoProgramado(
       descricao,
       nivel,
       exercicios,
-      usuarioId,
-      categoria,
       tipoTreino,
       objetivo,
       duracao,
@@ -308,7 +191,6 @@ export async function criarTreinoProgramado(
       return res.status(400).json({ message: "Nivel inválido" });
     }
     const nivelEnum = nivel as Nivel;
-
     const usuarioIdToken = req.userId || user?.id;
 
     if (!nome || !nivel || !Array.isArray(exercicios) || !tipoUsuarioId || !usuarioIdToken) {
@@ -325,8 +207,6 @@ export async function criarTreinoProgramado(
     let categorias: Categoria[] = [];
 
     const catRaw = req.body?.categoria;
-
-    // ✅ categoria agora é opcional: se vier vazia, segue com []
     const categoriaVazia =
       catRaw == null ||
       catRaw === "" ||
@@ -404,9 +284,6 @@ export async function criarTreinoProgramado(
         return res.status(400).json({ message: "dataAgendada inválida" });
       }
 
-    const professorLogadoId =
-      tipoStr === "professor" ? String(tipoUsuarioId).trim() : "";
-
     const body = req.body as any;
 
     const professorCriadorId =
@@ -455,9 +332,7 @@ export async function criarTreinoProgramado(
       }
     }
 
-    // ✅ bloqueia nome duplicado antes de tentar criar (evita 500)
     const nomeTrim = String(nome || "").trim();
-
     const jaExisteNome = await prisma.treinoProgramado.findFirst({
       where: {
         nome: { equals: nomeTrim, mode: "insensitive" },
@@ -471,7 +346,6 @@ export async function criarTreinoProgramado(
         message: 'Esse nome já está sendo utilizado. Troque o título do treino e tente novamente.',
       });
     }
-
 
     const treino = await prisma.treinoProgramado.create({
       data: {
@@ -522,34 +396,29 @@ export async function criarTreinoProgramado(
       },
     });
 
-// ✅ normaliza payload do front:
-// - aceita e.exercicioId (padrão) OU e.id (quando o front manda "id")
-// - decide se é do banco ou temporário
-const exItems = Array.isArray(exercicios) ? exercicios : [];
+    const exItems = Array.isArray(exercicios) ? exercicios : [];
 
-const exsBanco = exItems
-  .map((e: any, i: number) => ({
-    exercicioId: String(e?.exercicioId ?? e?.id ?? "").trim() || null,
-    repeticoes: String(e?.repeticoes ?? ""),
-    ordem: Number.isFinite(Number(e?.ordem)) ? Number(e.ordem) : i + 1,
-  }))
-  .filter((e: any) => !!e.exercicioId);
+    const exsBanco = exItems
+      .map((e: any, i: number) => ({
+        exercicioId: String(e?.exercicioId ?? e?.id ?? "").trim() || null,
+        repeticoes: String(e?.repeticoes ?? ""),
+        ordem: Number.isFinite(Number(e?.ordem)) ? Number(e.ordem) : i + 1,
+      }))
+      .filter((e: any) => !!e.exercicioId);
 
-const exsTemp = exItems
-  .map((e: any, i: number) => ({
-    nome: String(e?.nome ?? "").trim(),
-    descricao: e?.descricao ?? null,
-    repeticoes: String(e?.repeticoes ?? ""),
-    ordem: Number.isFinite(Number(e?.ordem)) ? Number(e.ordem) : i + 1,
-  }))
-  .filter((e: any) => !e.nome ? false : true)
-  // só temporário se NÃO veio id/exercicioId
-  .filter((e: any, idx: number) => {
-    const raw = exItems[idx];
-    const hasId = String(raw?.exercicioId ?? raw?.id ?? "").trim();
-    return !hasId;
-  });
-
+    const exsTemp = exItems
+      .map((e: any, i: number) => ({
+        nome: String(e?.nome ?? "").trim(),
+        descricao: e?.descricao ?? null,
+        repeticoes: String(e?.repeticoes ?? ""),
+        ordem: Number.isFinite(Number(e?.ordem)) ? Number(e.ordem) : i + 1,
+      }))
+      .filter((e: any) => !e.nome ? false : true)
+      .filter((e: any, idx: number) => {
+        const raw = exItems[idx];
+        const hasId = String(raw?.exercicioId ?? raw?.id ?? "").trim();
+        return !hasId;
+      });
 
     if (exsBanco.length) {
       await prisma.treinoProgramadoExercicio.createMany({
@@ -563,51 +432,39 @@ const exsTemp = exItems
       });
     }
 
-
     syncTreinoProgramado(treino.id);
 
-// ✅ Tenta achar no BD um exercício "normal" com nome parecido,
-// e se achar, salva como exercício do BD em vez de temporário.
-const promoverParaBancoSeBater = async (nomeTemp: string) => {
-  const nomeNorm = nomeTemp.trim();
+    const promoverParaBancoSeBater = async (nomeTemp: string) => {
+      const nomeNorm = nomeTemp.trim();
+      const achado = await prisma.exercicio.findFirst({
+        where: {
+          OR: [
+            { nome: { equals: nomeNorm, mode: "insensitive" } },
+            { nome: { contains: nomeNorm, mode: "insensitive" } },
+          ],
+        },
+        select: { id: true },
+      });
 
-  // match simples e seguro (sem fuzzy pesado):
-  // 1) equals insensitive
-  // 2) contains insensitive
-  const achado = await prisma.exercicio.findFirst({
-    where: {
-      OR: [
-        { nome: { equals: nomeNorm, mode: "insensitive" } },
-        { nome: { contains: nomeNorm, mode: "insensitive" } },
-      ],
-    },
-    select: { id: true },
-  });
+      return achado?.id ?? null;
+    };
 
-  return achado?.id ?? null;
-};
+    for (const [i, e] of exsTemp.entries()) {
+      const nomeTemp = String(e.nome ?? "").trim();
+      if (!nomeTemp) continue;
 
-
-for (const [i, e] of exsTemp.entries()) {
-  const nomeTemp = String(e.nome ?? "").trim();
-  if (!nomeTemp) continue;
-
-  // ✅ se bate com exercício do BD, grava como exercicioId (e NÃO como temporário)
-  const exercicioBancoId = await promoverParaBancoSeBater(nomeTemp);
-  if (exercicioBancoId) {
-    await prisma.treinoProgramadoExercicio.create({
-      data: {
-        treinoProgramadoId: treino.id,
-        exercicioId: exercicioBancoId,
-        repeticoes: String(e.repeticoes ?? ""),
-        ordem: e.ordem ?? exsBanco.length + i + 1,
-      },
-    });
-    continue;
-  }
-
-  // ... segue fluxo de temporário (abaixo)
-
+      const exercicioBancoId = await promoverParaBancoSeBater(nomeTemp);
+      if (exercicioBancoId) {
+        await prisma.treinoProgramadoExercicio.create({
+          data: {
+            treinoProgramadoId: treino.id,
+            exercicioId: exercicioBancoId,
+            repeticoes: String(e.repeticoes ?? ""),
+            ordem: e.ordem ?? exsBanco.length + i + 1,
+          },
+        });
+        continue;
+      }
 
     const videoHerdado = await herdarVideoParaTemporario(nomeTemp);
 
@@ -649,25 +506,25 @@ for (const [i, e] of exsTemp.entries()) {
     });
   }
 
-  try {
-    const rowsIncluidos = await prisma.treinoProgramadoExercicio.findMany({
-      where: {
-        treinoProgramadoId: treino.id,
-        exercicioId: { not: null },
-      },
-      select: { exercicioId: true },
-    });
+    try {
+      const rowsIncluidos = await prisma.treinoProgramadoExercicio.findMany({
+        where: {
+          treinoProgramadoId: treino.id,
+          exercicioId: { not: null },
+        },
+        select: { exercicioId: true },
+      });
 
-    const exercicioIdsIncluidos = Array.from(
-      new Set(rowsIncluidos.map((r) => r.exercicioId!).filter(Boolean))
-    );
+      const exercicioIdsIncluidos = Array.from(
+        new Set(rowsIncluidos.map((r) => r.exercicioId!).filter(Boolean))
+      );
 
-    if (exercicioIdsIncluidos.length) {
-      await recalcularEstatisticaExercicios(exercicioIdsIncluidos);
+      if (exercicioIdsIncluidos.length) {
+        await recalcularEstatisticaExercicios(exercicioIdsIncluidos);
+      }
+    } catch (e) {
+      console.warn("[criarTreinoProgramado] Falha ao recalcular estatísticas de exercícios:", e);
     }
-  } catch (e) {
-    console.warn("[criarTreinoProgramado] Falha ao recalcular estatísticas de exercícios:", e);
-  }
 
     const atletasFromElencos = elencosIds.length
       ? await prisma.atletaElenco.findMany({
@@ -729,7 +586,6 @@ for (const [i, e] of exsTemp.entries()) {
 
     return res.status(201).json(treino);
   } catch (err: any) {
-    // ✅ Prisma Unique Constraint
     if (err?.code === "P2002") {
       const target = err?.meta?.target;
       const fields = Array.isArray(target) ? target : [target].filter(Boolean);
@@ -748,7 +604,6 @@ for (const [i, e] of exsTemp.entries()) {
         });
       }
 
-      // fallback genérico
       return res.status(409).json({
         code: "DUPLICADO",
         message: "Já existe um treino com dados únicos repetidos (nome/código).",

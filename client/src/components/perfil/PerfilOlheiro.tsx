@@ -1,4 +1,3 @@
-//client/src/components/perfil/PerfilOlheiro
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -218,7 +217,6 @@ export default function PerfilOlheiro({ idDaUrl }: Props) {
     }
 
 async function fetchObservados() {
-  // ✅ pega o id do olheiro com prioridade correta
   const ownerId =
     (isOwn ? Storage.tipoUsuarioId : data?.olheiro?.id) ??
     data?.olheiro?.id ??
@@ -237,8 +235,8 @@ async function fetchObservados() {
         headers,
         params: {
           incluirPontuacao: 1,
-          ownerId,          // ✅ IMPORTANTÍSSIMO
-          tipo: "olheiro",  // ✅ IMPORTANTÍSSIMO
+          ownerId,         
+          tipo: "olheiro", 
         },
       }
     );
@@ -319,7 +317,6 @@ async function fetchObservados() {
 async function salvarNota(atletaId: string) {
   const texto = notes[atletaId]?.texto ?? "";
 
-  // marca como salvando
   setNotes(p => {
     const prev = p[atletaId] ?? { texto: "", saving: false, dirty: false };
     return { ...p, [atletaId]: { ...prev, saving: true } };

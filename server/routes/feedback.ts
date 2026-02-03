@@ -4,6 +4,7 @@ import * as ctrl from "../controllers/feedbackController.js";
 
 const r = Router();
 
+r.post("/blocked", ctrl.createBlockedSupport);
 r.post("/", authenticateToken, ctrl.create);
 r.get("/me", authenticateToken, ctrl.listMine);
 r.get("/", authenticateToken, ctrl.listAll);
