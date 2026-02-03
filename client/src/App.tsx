@@ -1,4 +1,3 @@
-// src/App.tsx
 import { AppRoutes } from "./routes.js";
 import { UserProvider } from "./context/UserContext.js";
 import { usePresencePing } from "@/hooks/usePresencePing";

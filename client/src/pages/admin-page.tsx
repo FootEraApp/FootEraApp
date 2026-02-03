@@ -1,4 +1,3 @@
-// client/src/pages/admin-page.tsx
 import React, { useEffect, useState, useMemo } from "react";
 import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
@@ -363,7 +362,7 @@ async function bloquearOuReativarConta(
 
     const acaoToPath: Record<AcaoConta, string> = {
       bloquear: "bloquear",
-      desbloquear: "reativar", // ✅ aqui é o fix
+      desbloquear: "reativar",
       reativar: "reativar",
       restaurar: "restaurar",
     };
@@ -405,7 +404,6 @@ async function bloquearOuReativarConta(
         prev?.id === updated.id ? { ...prev, ...updated } : prev
       );
     } else {
-      // ✅ fallback robusto
       setUsuarios((prev) =>
         prev.map((u) =>
           u.id === usuarioId
@@ -417,7 +415,6 @@ async function bloquearOuReativarConta(
                   acao === "bloquear"
                     ? (body?.motivo?.trim() || "Bloqueado pelo administrador.")
                     : null,
-                // ✅ restaurar/reativar limpam deletedAt
                 deletedAt: (acao === "restaurar" || acao === "reativar") ? null : u.deletedAt,
               }
             : u
@@ -462,8 +459,6 @@ async function bloquearOuReativarConta(
 
 async function toggleParceiroProfessor(professorId: string, next: boolean) {
   setProfParceiroBusyId(professorId);
-
-  // optimistic update
   setProfessores((prev) =>
     prev.map((p) =>
       p.id === professorId
@@ -481,7 +476,6 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
 
     const txt = await r.text().catch(() => "");
     if (!r.ok) {
-      // rollback se falhar
       setProfessores((prev) =>
         prev.map((p) =>
           p.id === professorId
@@ -492,11 +486,7 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
       alert(txt || `Erro ao atualizar parceiro (HTTP ${r.status}).`);
       return;
     }
-
-    // se quiser, dá pra usar a resposta do backend aqui
-    // const payload = txt ? JSON.parse(txt) : null;
   } catch (e: any) {
-    // rollback se falhar
     setProfessores((prev) =>
       prev.map((p) =>
         p.id === professorId
@@ -567,7 +557,6 @@ useEffect(() => {
       params.set("pageSize", String(profPageSize));
       if (profDebQ) params.set("q", profDebQ);
 
-      // ✅ padrão: aceita backend que retorna array direto OU { items, total, page }
       const r = await fetch(`${API.BASE_URL}/api/professores?${params.toString()}`, {
         headers: authHeaders(),
       });
@@ -1075,8 +1064,6 @@ async function confirmarExcluirProfessor() {
 
     fecharModalExcluirProfessor();
     alert("Professor e conta vinculada foram excluídos!");
-
-    // ✅ recarrega página atual; se ficou vazia, volta 1 página
     const nextPage = professores.length <= 1 && profPage > 1 ? profPage - 1 : profPage;
     await carregarProfessores(nextPage);
 
@@ -1231,8 +1218,8 @@ async function confirmarExcluirProfessor() {
     if (deletedAtRaw) {
       const deletedAt = new Date(deletedAtRaw);
       const days = daysBetween(new Date(), deletedAt);
-      if (days <= 30) return "RESTORE" as const;   // restaurar
-      return "DELETED_EXPIRED" as const;           // passou 30 dias (você decide o que mostrar)
+      if (days <= 30) return "RESTORE" as const;  
+      return "DELETED_EXPIRED" as const;         
     }
 
     if (status === "BLOQUEADO") return "UNBLOCK" as const;
@@ -1271,19 +1258,11 @@ async function confirmarExcluirProfessor() {
   const rotulo = { pendente: "pendentes", aprovado: "aprovados", invalido: "inválidos", todos: "registros" }[modStatus];
   const ver = Number(dados.totalVerificados || 0);
   const nver = Number(dados.totalNaoVerificados || 0);
-  
-  // =====================
-  // Helpers p/ busca
-  // =====================
   const normStr = (v: any) => String(v ?? "").toLowerCase().trim();
-
   const itemHasCategoria = (item: any, cat: string) => {
     if (!cat) return true;
     const alvo = normStr(cat);
-
     const raw = item?.categoria ?? item?.categorias ?? item?.Categoria ?? null;
-
-    // aceita string, array, etc.
     const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
     if (list.length === 0) return false;
 
@@ -1293,13 +1272,11 @@ async function confirmarExcluirProfessor() {
   const matchesText = (item: any, qtxt: string) => {
     if (!qtxt) return true;
     const q = normStr(qtxt);
-
     const nome = normStr(item?.nome ?? item?.titulo);
     const codigo = normStr(item?.codigo);
     const nivel = normStr(item?.nivel ?? item?.dificuldade);
     const desc = normStr(item?.descricao ?? item?.resumo);
 
-    // procura em nome/código/nível/descrição
     return (
       nome.includes(q) ||
       codigo.includes(q) ||
@@ -1308,9 +1285,6 @@ async function confirmarExcluirProfessor() {
     );
   };
 
-  // =====================
-  // Listas filtradas
-  // =====================
   const treinosFiltrados = useMemo(() => {
     return (Array.isArray(treinos) ? treinos : []).filter((t: any) => {
       if (!matchesText(t, trDebQ)) return false;
@@ -1327,38 +1301,6 @@ async function confirmarExcluirProfessor() {
     });
   }, [exercicios, exDebQ, exCat]);
 
-  // =====================
-  // Categorias disponíveis (para o SELECT)
-  // =====================
-  const treinosCats = useMemo(() => {
-    const set = new Set<string>();
-    treinos.forEach((t: any) => {
-      const raw = t?.categoria ?? t?.categorias ?? null;
-      const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
-      arr.forEach((c: any) => {
-        const s = String(c ?? "").trim();
-        if (s) set.add(s);
-      });
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [treinos]);
-
-  const exerciciosCats = useMemo(() => {
-    const set = new Set<string>();
-    exercicios.forEach((ex: any) => {
-      const raw = ex?.categoria ?? ex?.categorias ?? null;
-      const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
-      arr.forEach((c: any) => {
-        const s = String(c ?? "").trim();
-        if (s) set.add(s);
-      });
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [exercicios]);
-
-  // =====================
-  // Ordenação (aplica DEPOIS de filtrar)
-  // =====================
   const treinosOrdenados = [...treinosFiltrados].sort((a: any, b: any) => {
     const ra = Number(a.realizadoCount ?? a.realizados ?? 0);
     const rb = Number(b.realizadoCount ?? b.realizados ?? 0);
@@ -1649,7 +1591,6 @@ async function confirmarExcluirProfessor() {
                                 );
                               }
 
-                              // BLOCK
                               return (
                                 <button
                                   onClick={() => bloquearOuReativarConta(u.id, "bloquear")}
@@ -1715,7 +1656,6 @@ async function confirmarExcluirProfessor() {
               </button>
             </div>
 
-            {/* Barra de pesquisa - Exercícios */}
             <div className="flex flex-wrap gap-2 items-center mb-4">
               <input
                 value={exQ}
@@ -1805,7 +1745,6 @@ async function confirmarExcluirProfessor() {
               </button>
             </div>
 
-            {/* Barra de pesquisa - Treinos */}
             <div className="flex flex-wrap gap-2 items-center mb-4">
               <input
                 value={trQ}
@@ -1963,7 +1902,6 @@ async function confirmarExcluirProfessor() {
                     </div>
 
                     <div className="flex gap-3 items-center">
-                      {/* ✅ Toggle Parceiro */}
                       <label className="flex items-center gap-2 text-sm select-none">
                         <input
                           type="checkbox"
@@ -1971,8 +1909,6 @@ async function confirmarExcluirProfessor() {
                           disabled={parceiroBusy}
                           onChange={(e) => {
                             const next = e.target.checked;
-
-                            // opcional: confirmar ao ativar/desativar
                             const ok = confirm(
                               next
                                 ? `Marcar "${nome}" como Parceiro FootEra?`
@@ -1986,7 +1922,6 @@ async function confirmarExcluirProfessor() {
                         Parceiro FootEra
                       </label>
 
-                      {/* Badge opcional */}
                       {parceiro ? (
                         <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800 border border-green-200">
                           Parceiro
@@ -3007,7 +2942,6 @@ function LineChart({
       <rect x="0" y="0" width={w} height={h} rx="8" className="fill-white" />
       <path d={path} className="stroke-green-700 fill-none" strokeWidth={2} />
 
-      {/* pontos + tooltip */}
       {data.map((d, i) => {
         const x = 10 + i * stepX;
         const y = h - 12 - (vals[i] / max) * (h - 24);

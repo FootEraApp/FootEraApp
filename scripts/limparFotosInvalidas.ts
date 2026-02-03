@@ -4,7 +4,6 @@ import { sanitizeMediaPath } from "../server/utils/mediaSanitizer.js";
 async function main() {
   let changes = 0;
 
-  // 1) Usuario.foto
   const usuarios = await prisma.usuario.findMany({ select: { id: true, foto: true } });
   for (const u of usuarios) {
     const fixed = sanitizeMediaPath(u.foto);
@@ -14,7 +13,6 @@ async function main() {
     }
   }
 
-  // 2) Atleta.foto
   const atletas = await prisma.atleta.findMany({ select: { id: true, foto: true } });
   for (const a of atletas) {
     const fixed = sanitizeMediaPath(a.foto);
@@ -24,7 +22,6 @@ async function main() {
     }
   }
 
-  // 3) Professor.fotoUrl
   const professores = await prisma.professor.findMany({ select: { id: true, fotoUrl: true } });
   for (const p of professores) {
     const fixed = sanitizeMediaPath(p.fotoUrl);
@@ -34,7 +31,6 @@ async function main() {
     }
   }
 
-  // 4) Administrador.fotoUrl (se existir no schema)
   if (prisma.administrador) {
     const admins = await prisma.administrador.findMany({ select: { id: true, fotoUrl: true } as any });
     for (const a of admins as any[]) {
@@ -46,7 +42,6 @@ async function main() {
     }
   }
 
-  // 5) Olheiro.fotoUrl
   const olheiros = await prisma.olheiro.findMany({ select: { id: true, fotoUrl: true } });
   for (const o of olheiros) {
     const fixed = sanitizeMediaPath(o.fotoUrl);
@@ -56,7 +51,6 @@ async function main() {
     }
   }
 
-  // 6) Clube.logo
   const clubes = await prisma.clube.findMany({ select: { id: true, logo: true } });
   for (const c of clubes) {
     const fixed = sanitizeMediaPath(c.logo);
@@ -66,7 +60,6 @@ async function main() {
     }
   }
 
-  // 7) Escolinha.logo
   const escolinhas = await prisma.escolinha.findMany({ select: { id: true, logo: true } });
   for (const e of escolinhas) {
     const fixed = sanitizeMediaPath(e.logo);
@@ -76,7 +69,6 @@ async function main() {
     }
   }
 
-  // 8) TreinoProgramado.imagemUrl
   const treinos = await prisma.treinoProgramado.findMany({ select: { id: true, imagemUrl: true } });
   for (const t of treinos) {
     const fixed = sanitizeMediaPath(t.imagemUrl);
@@ -86,7 +78,6 @@ async function main() {
     }
   }
 
-  // 9) AtividadeRecente.imagemUrl (se existir)
   if (prisma.atividadeRecente) {
     const atividades = await prisma.atividadeRecente.findMany({ select: { id: true, imagemUrl: true } as any });
     for (const a of atividades as any[]) {
@@ -98,7 +89,6 @@ async function main() {
     }
   }
 
-  // 10) Postagem.imagemUrl (se existir)
   if (prisma.postagem) {
     const posts = await prisma.postagem.findMany({ select: { id: true, imagemUrl: true } as any });
     for (const p of posts as any[]) {

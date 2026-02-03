@@ -15,9 +15,6 @@ export async function logout(req: any, res: any) {
   const userId = req.userId;
   if (!userId) return res.status(401).json({ message: "Não autenticado." });
 
-  // opcional: criar LogoutEvent (se você quiser histórico)
-  // await prisma.logoutEvent.create({ data: { usuarioId: userId } });
-
   await prisma.usuario.update({
     where: { id: userId },
     data: { lastLogoutAt: new Date(), lastSeenAt: new Date() },
@@ -95,9 +92,7 @@ export async function login(req: Request, res: Response) {
         .json({ message: "Usuário sem senha configurada. Contate o suporte ou recrie o usuário." });
     }
 
-    // depois de buscar o usuário (usuario/dbUser)
     if (usuario.deletedAt) {
-      // usa deleteScheduledAt se você tiver, senão calcula a partir do deletedAt
       const now = Date.now();
       const base = usuario.deleteScheduledAt
         ? new Date(usuario.deleteScheduledAt).getTime()
@@ -166,7 +161,7 @@ export async function login(req: Request, res: Response) {
       {
         id: usuario.id,
         tipo: usuario.tipo,
-        tokenVersion: usuario.tokenVersion ?? 0, // ✅ aqui
+        tokenVersion: usuario.tokenVersion ?? 0, 
       },
       JWT_SECRET,
       { expiresIn: "7d" }

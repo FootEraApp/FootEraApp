@@ -195,11 +195,8 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
   async function toggleCurtir(postId: string) {
     try {
       setCurtindoId(postId);
-
-      // seu backend "like" normalmente alterna (curtir/descurtir) no mesmo endpoint
       await likePost(postId);
 
-      // atualiza o post na tela sem recarregar tudo
       setPosts((prev) =>
         prev.map((p) => {
           if (p.id !== postId) return p;
@@ -251,8 +248,6 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
 
   async function repostar(post: PostagemComUsuario) {
     const meId = String(Storage.usuarioId || "").trim();
-
-    // repost SEMPRE deve ser no ROOT (não no wrapper do repost)
     const root = getRootPost(post);
     const rootId = String(root?.id || post.id).trim();
     const jaRepostei = repostsByMe.has(rootId);
@@ -260,9 +255,8 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
     try {
       setRepostandoId(rootId);
 
-      const resp = await repostPost(rootId, ""); // backend toggle
+      const resp = await repostPost(rootId, ""); 
 
-      // 1) atualiza o "set" (vermelhinho)
       setRepostsByMe((prev) => {
         const next = new Set(prev);
         if (jaRepostei) next.delete(rootId);
@@ -270,11 +264,8 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         return next;
       });
 
-      // 2) atualiza contagem (+1/-1) em todos os cards que forem desse root
       setPosts((prev) => {
         const next = [...prev];
-
-        // se foi UNREPOST: remove o(s) repost wrapper(s) meus desse root do perfil
         if (resp?.action === "unrepost") {
           return next
             .filter((p) => {
@@ -283,7 +274,6 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
               const r = getRootPost(p);
               const rid = String(r?.id || p.id).trim();
 
-              // remove apenas repost wrappers meus daquele root
               if (dono === meId && p.repostOf && rid === rootId) return false;
               return true;
             })
@@ -297,7 +287,6 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
             });
         }
 
-        // se foi REPOST: incrementa +1 e (opcional) adiciona o novo repost no topo se vier do backend
         const mapped = next.map((p) => {
           const r = getRootPost(p);
           const rid = String(r?.id || p.id).trim();
@@ -307,7 +296,6 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
           return { ...p, reposts: base + 1 };
         });
 
-        // se backend retornar o post do repost, você pode inserir pra aparecer imediatamente no perfil
         if (resp?.action === "repost" && resp?.post) {
           const already = mapped.some((p) => String(p.id) === String(resp.post!.id));
           if (!already) {
@@ -423,7 +411,6 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
           const anyP = p as any;
           const dono = ownerIdOfPost(p, anyP);
 
-          // se esse item é um repost e foi feito por mim, marco o ROOT como "repostado por mim"
           if (p.repostOf && dono === meId) {
             const root = getRootPost(p);
             if (root?.id) s.add(String(root.id));

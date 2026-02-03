@@ -16,7 +16,7 @@ router.post(
 );
 
 router.get("/me", authenticateToken, requireAdmin, (req, res) => {
-  const user = (req as any).authUser; // ✅ muda aqui
+  const user = (req as any).authUser;
   return res.json({
     id: user.id,
     email: user.email,

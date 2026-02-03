@@ -1,4 +1,3 @@
-// client/src/components/perfil/PerfilEscola
 import { useEffect, useState } from "react";
 import axios from "axios";
 import {
@@ -59,7 +58,7 @@ type PayloadEscola = {
 };
 
 type AtletaItem = {
-  id: string; // (pode ser usuarioId/atletaId dependendo do backend)
+  id: string; 
   usuarioId: string;
   nome: string;
   foto?: string | null;
@@ -70,8 +69,8 @@ type AtletaItem = {
   observadoEm?: string;
   categoria?: string | null;
   pontuacao?: number | null;
-  observadoId?: string;        // id do registro AtletaObservado (se backend já envia)
-  atletaId?: string;           // se backend também enviar
+  observadoId?: string;      
+  atletaId?: string;       
   notaInterna?: string | null;
   alertarMudancas?: boolean | null;
 };
@@ -232,7 +231,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
       const next = { ...prev };
 
       for (const a of observados) {
-        const key = String(a.observadoId ?? a.atletaId ?? a.id); // ✅ chave única
+        const key = String(a.observadoId ?? a.atletaId ?? a.id);
         if (!next[key]) {
           next[key] = {
             nota: typeof a.notaInterna === "string" ? a.notaInterna : "",
@@ -356,14 +355,12 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             params: {
               tipoUsuarioId: tipoId,
               incluirPontuacao: 1,
-              incluirNotas: 1, // ✅ IMPORTANTE
+              incluirNotas: 1, 
             },
           }
         );
 
         const arr = Array.isArray(lista) ? lista : [];
-
-        // ✅ garante defaults pra UI não ficar "undefined"
         const normalizados = arr.map((a: any) => ({
           ...a,
           notaInterna: typeof a.notaInterna === "string" ? a.notaInterna : "",
@@ -451,8 +448,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
 
     const key = String(a.observadoId ?? a.atletaId ?? a.id);
     const draft = obsDraft[key] ?? { nota: "", alertar: false };
-
-    // ✅ id que vai na URL (o mais correto é observadoId; senão usa atletaId/id)
     const idParaPatch = String(a.observadoId ?? a.atletaId ?? a.id);
 
     setObsSaving((p) => ({ ...p, [key]: true }));
@@ -464,15 +459,12 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         {
           notaInterna: draft.nota,
           alertarMudancas: draft.alertar,
-
-          // ✅ você já usa isso no GET; manter aqui ajuda o backend a validar owner
           tipo: "Escolinha",
           tipoUsuarioId: escolinhaId,
         },
         { headers }
       );
 
-      // ✅ otimista: atualiza na lista sem precisar refetch
       setObservados((prev) => {
         if (!Array.isArray(prev)) return prev;
         return prev.map((x) => {
@@ -542,7 +534,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         };
       });
 
-      // ✅ filtra só hoje pra frente + ✅ ordena do mais próximo pro mais distante
       const filtradosOrdenados = normalizados
         .filter((e) => {
           const raw = e.dataEvento || e.inicio;
@@ -554,7 +545,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
         .sort((a, b) => {
           const da = new Date(a.dataEvento || a.inicio || 0).getTime();
           const db = new Date(b.dataEvento || b.inicio || 0).getTime();
-          return da - db; // ✅ mais próximo primeiro
+          return da - db; 
         })
 
       setEventos(filtradosOrdenados);
@@ -955,7 +946,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                     .sort((a, b) => {
                       const da = new Date(a.dataEvento || a.inicio || 0).getTime();
                       const db = new Date(b.dataEvento || b.inicio || 0).getTime();
-                      return da - db; // ✅ mais próximo primeiro
+                      return da - db;
                     })
                     .slice(0, 8)
                     .map((e) => {
@@ -1120,7 +1111,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                           key={key}
                           className="rounded-2xl border border-green-100 p-3 bg-white"
                         >
-                          {/* header do atleta */}
                           <div className="flex items-center gap-3">
                             <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
 
@@ -1141,7 +1131,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                             </Link>
                           </div>
 
-                          {/* nota interna */}
                           <div className="mt-3">
                             <div className="text-xs font-semibold text-green-900 mb-1">
                               Nota interna
@@ -1160,7 +1149,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                             />
                           </div>
 
-                          {/* checkbox */}
                           <label className="mt-3 flex items-start gap-2 text-sm text-green-900">
                             <input
                               type="checkbox"
@@ -1178,7 +1166,6 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                             </span>
                           </label>
 
-                          {/* botão salvar + mensagem */}
                           <div className="mt-3 flex items-center gap-3">
                             <button
                               type="button"

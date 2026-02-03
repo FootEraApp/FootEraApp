@@ -183,12 +183,11 @@ export async function createBlockedSupport(req: any, res: Response) {
       return res.status(400).json({ message: "Mensagem não pode estar vazia." });
     }
 
-    // tenta achar o usuário (opcional, mas melhor pra vincular)
     const u = await prisma.usuario.findFirst({
       where: {
         OR: [
           { nomeDeUsuario: userTrim },
-          { email: userTrim }, // se você quiser permitir digitar email
+          { email: userTrim }, 
         ],
       },
       select: { id: true, nomeDeUsuario: true },

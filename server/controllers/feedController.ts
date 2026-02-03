@@ -534,7 +534,6 @@ export async function repostPost(req: Request, res: Response) {
 
     const parentId = clicked.id;
 
-    // acha o root (pra contador)
     let rootId = clicked.id;
     let cursor: { repostOfId: string | null } | null = clicked;
 
@@ -554,7 +553,6 @@ export async function repostPost(req: Request, res: Response) {
 
     const conteudoRepost = comentario ? comentario : "\u200B";
 
-    // ✅ NOVO: se já existe repost igual, vira "toggle" (desrepostar)
     const existente = await prisma.postagem.findFirst({
       where: {
         usuarioId: userId,
@@ -577,7 +575,6 @@ export async function repostPost(req: Request, res: Response) {
       return res.json({ ok: true, action: "unrepost", id: existente.id });
     }
 
-    // ✅ cria repost normalmente
     const novo = await prisma.postagem.create({
       data: {
         usuarioId: userId,
