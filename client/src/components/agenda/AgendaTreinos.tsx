@@ -542,7 +542,74 @@ export default function AgendaTreinos({
   const [buscaTreino, setBuscaTreino] = useState("");
 
   const [footeraLoaded, setFooteraLoaded] = useState(false);
+
+  // 🔒 PRO gate (bloqueia aba FootEra para não assinantes)
+  const [proLoading, setProLoading] = useState(false);
+  const [isPro, setIsPro] = useState(true); // default true pra não piscar bloqueio antes de checar
+  const [proGateChecked, setProGateChecked] = useState(false);
+
   const parceirosCacheRef = useRef<TreinoProgramadoItem[]>([]);
+
+  async function checkIsPro() {
+    const token =
+      (Storage as any)?.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
+
+    const usuarioId =
+      (Storage as any)?.usuarioId ||
+      localStorage.getItem("usuarioId") ||
+      sessionStorage.getItem("usuarioId") ||
+      "";
+
+    if (!token || !usuarioId) {
+      setIsPro(false);
+      setProGateChecked(true);
+      return false;
+    }
+
+    try {
+      setProLoading(true);
+
+      const apiBase =
+        typeof API === "string"
+          ? API
+          : String(
+              (API as any)?.BASE_URL ??
+                (API as any)?.baseUrl ??
+                (API as any)?.base ??
+                (API as any)?.url ??
+                (API as any)?.API_BASE ??
+                ""
+            );
+
+      const base = apiBase.replace(/\/+$/, "");
+      const finalBase =
+        base.startsWith("http://") || base.startsWith("https://")
+          ? base
+          : "http://localhost:3001";
+
+      const url = `${finalBase}/api/usuarios/${usuarioId}/assinatura`;
+
+      const res = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const ok = Boolean(res.data?.isPro);
+      setIsPro(ok);
+      setProGateChecked(true);
+      return ok;
+    } catch (e) {
+      // se falhar, trava por segurança
+      setIsPro(false);
+      setProGateChecked(true);
+      return false;
+    } finally {
+      setProLoading(false);
+    }
+  }
+
 
   const {
     cursorMonth,
@@ -583,7 +650,22 @@ export default function AgendaTreinos({
     setAbaTreinos("meus");
     setBuscaTreino("");
     setFooteraLoaded(false);
+
+    setProGateChecked(false);
+    setIsPro(true);
   }, [open]);
+
+  // ✅ checar assinatura quando entrar na aba FootEra
+  useEffect(() => {
+    if (!open) return;
+    if (abaTreinos !== "footera") return;
+
+    // só checa uma vez por abertura (evita spam)
+    if (proGateChecked) return;
+
+    checkIsPro();
+  }, [open, abaTreinos, proGateChecked]);
+
 
   // ✅ buscar treinos dos professores parceiros SOMENTE quando clicar na aba FootEra
   useEffect(() => {
@@ -1115,122 +1197,200 @@ export default function AgendaTreinos({
                 </div>
 
                 {/* Lista */}
-                <div className="p-3 space-y-2 max-h-[52vh] overflow-y-auto">
-                  {loadingProgramados ? (
-                    <div className="text-sm text-zinc-600">Carregando treinos...</div>
-                  ) : treinosDaAba.length === 0 ? (
-                    <div className="text-sm text-zinc-500">
-                      Nenhum treino encontrado nessa aba.
-                    </div>
-                  ) : (
-                    treinosDaAba.map((t) => {
-                      const selected = String(t.id) === String(treinoProgramadoId);
-                      return (
-                        <div
-                          key={t.id}
-                          className={[
-                            "rounded-xl border transition overflow-hidden",
-                            selected ? "border-emerald-300 bg-emerald-50" : "border-zinc-200 bg-white hover:bg-zinc-50",
-                          ].join(" ")}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => setTreinoProgramadoId(String(t.id))}
-                            className="w-full text-left p-3"
+                <div className="relative">
+                  {/* Conteúdo normal (travado quando não for PRO) */}
+                  <div
+                    className={[
+                      "p-3 space-y-2 max-h-[52vh] overflow-y-auto",
+                      abaTreinos === "footera" && proGateChecked && !isPro
+                        ? "pointer-events-none select-none blur-[1px]"
+                        : "",
+                    ].join(" ")}
+                  >
+                    {loadingProgramados ? (
+                      <div className="text-sm text-zinc-600">Carregando treinos...</div>
+                    ) : treinosDaAba.length === 0 ? (
+                      <div className="text-sm text-zinc-500">
+                        Nenhum treino encontrado nessa aba.
+                      </div>
+                    ) : (
+                      treinosDaAba.map((t) => {
+                        const selected = String(t.id) === String(treinoProgramadoId);
+                        return (
+                          <div
+                            key={t.id}
+                            className={[
+                              "rounded-xl border transition overflow-hidden",
+                              selected
+                                ? "border-emerald-300 bg-emerald-50"
+                                : "border-zinc-200 bg-white hover:bg-zinc-50",
+                            ].join(" ")}
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="font-extrabold text-zinc-900 truncate">
-                                  {t.nome}{" "}
-                                  {t.codigo ? (
-                                    <span className="text-xs text-zinc-500">({t.codigo})</span>
+                            <button
+                              type="button"
+                              onClick={() => setTreinoProgramadoId(String(t.id))}
+                              className="w-full text-left p-3"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="font-extrabold text-zinc-900 truncate">
+                                    {t.nome}{" "}
+                                    {t.codigo ? (
+                                      <span className="text-xs text-zinc-500">({t.codigo})</span>
+                                    ) : null}
+                                  </div>
+
+                                  {t.autor?.nome ? (
+                                    <div className="text-xs text-zinc-600 mt-1 truncate">
+                                      {t.autor.tipo}:{" "}
+                                      <span className="font-semibold">{t.autor.nome}</span>
+                                    </div>
+                                  ) : t.autor?.tipo ? (
+                                    <div className="text-xs text-zinc-600 mt-1 truncate">
+                                      Autor: <span className="font-semibold">{t.autor.tipo}</span>
+                                    </div>
+                                  ) : null}
+
+                                  {t.descricao ? (
+                                    <div className="text-[11px] text-zinc-500 mt-1 line-clamp-2">
+                                      {t.descricao}
+                                    </div>
                                   ) : null}
                                 </div>
 
-                                {t.autor?.nome ? (
-                                  <div className="text-xs text-zinc-600 mt-1 truncate">
-                                    {t.autor.tipo}: <span className="font-semibold">{t.autor.nome}</span>
-                                  </div>
-                                ) : t.autor?.tipo ? (
-                                  <div className="text-xs text-zinc-600 mt-1 truncate">
-                                    Autor: <span className="font-semibold">{t.autor.tipo}</span>
-                                  </div>
-                                ) : null}
-
-                                {t.descricao ? (
-                                  <div className="text-[11px] text-zinc-500 mt-1 line-clamp-2">
-                                    {t.descricao}
-                                  </div>
-                                ) : null}
+                                <span
+                                  className={[
+                                    "h-4 w-4 rounded-full border flex-none mt-0.5",
+                                    selected
+                                      ? "bg-emerald-600 border-emerald-600"
+                                      : "bg-white border-zinc-300",
+                                  ].join(" ")}
+                                />
                               </div>
+                            </button>
 
-                              <span
-                                className={[
-                                  "h-4 w-4 rounded-full border flex-none mt-0.5",
-                                  selected ? "bg-emerald-600 border-emerald-600" : "bg-white border-zinc-300",
-                                ].join(" ")}
-                              />
-                            </div>
-                          </button>
+                            {selected ? (
+                              <div className="border-t border-emerald-200 bg-white">
+                                <div className="px-3 py-2 text-xs font-extrabold text-zinc-800 flex items-center justify-between">
+                                  <span>Exercícios</span>
+                                  <span className="text-zinc-500 font-semibold">
+                                    {(t.exercicios?.length ?? 0)} item(ns)
+                                  </span>
+                                </div>
 
-                          {/* ✅ GAVETA */}
-                          {selected ? (
-                            <div className="border-t border-emerald-200 bg-white">
-                              <div className="px-3 py-2 text-xs font-extrabold text-zinc-800 flex items-center justify-between">
-                                <span>Exercícios</span>
-                                <span className="text-zinc-500 font-semibold">
-                                  {(t.exercicios?.length ?? 0)} item(ns)
-                                </span>
-                              </div>
+                                <div className="px-3 pb-3 space-y-2">
+                                  {(t.exercicios?.length ?? 0) === 0 ? (
+                                    <div className="text-sm text-zinc-500">
+                                      Este treino não possui exercícios.
+                                    </div>
+                                  ) : (
+                                    (t.exercicios ?? [])
+                                      .slice()
+                                      .sort((a, b) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0))
+                                      .map((ex) => (
+                                        <div
+                                          key={ex.id}
+                                          className="rounded-lg border border-zinc-200 bg-white p-2"
+                                        >
+                                          <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                              <div className="text-sm font-bold text-zinc-900 truncate">
+                                                {typeof ex.ordem === "number"
+                                                  ? `${ex.ordem}. `
+                                                  : ""}
+                                                {ex.exercicio?.nome ?? "Exercício"}
+                                                {ex.exercicio?.codigo ? (
+                                                  <span className="text-xs text-zinc-500">
+                                                    {" "}
+                                                    ({ex.exercicio.codigo})
+                                                  </span>
+                                                ) : null}
+                                              </div>
 
-                              <div className="px-3 pb-3 space-y-2">
-                                {(t.exercicios?.length ?? 0) === 0 ? (
-                                  <div className="text-sm text-zinc-500">Este treino não possui exercícios.</div>
-                                ) : (
-                                  (t.exercicios ?? [])
-                                    .slice()
-                                    .sort((a, b) => (Number(a.ordem ?? 0) - Number(b.ordem ?? 0)))
-                                    .map((ex) => (
-                                      <div
-                                        key={ex.id}
-                                        className="rounded-lg border border-zinc-200 bg-white p-2"
-                                      >
-                                        <div className="flex items-start justify-between gap-2">
-                                          <div className="min-w-0">
-                                            <div className="text-sm font-bold text-zinc-900 truncate">
-                                              {typeof ex.ordem === "number" ? `${ex.ordem}. ` : ""}
-                                              {ex.exercicio?.nome ?? "Exercício"}
-                                              {ex.exercicio?.codigo ? (
-                                                <span className="text-xs text-zinc-500"> ({ex.exercicio.codigo})</span>
+                                              {ex.repeticoes ? (
+                                                <div className="text-xs text-zinc-600 mt-0.5">
+                                                  Repetições:{" "}
+                                                  <span className="font-semibold">{ex.repeticoes}</span>
+                                                </div>
                                               ) : null}
                                             </div>
 
-                                            {ex.repeticoes ? (
-                                              <div className="text-xs text-zinc-600 mt-0.5">
-                                                Repetições: <span className="font-semibold">{ex.repeticoes}</span>
-                                              </div>
+                                            {ex.exercicio?.videoUrl ? (
+                                              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 flex-none">
+                                                VÍDEO
+                                              </span>
                                             ) : null}
                                           </div>
-
-                                          {/* só um “badge” simples se tem vídeo */}
-                                          {ex.exercicio?.videoUrl ? (
-                                            <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 flex-none">
-                                              VÍDEO
-                                            </span>
-                                          ) : null}
                                         </div>
-                                      </div>
-                                    ))
-                                )}
+                                      ))
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      );
+                            ) : null}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
 
-                    })
-                  )}
+                  {/* 🔒 Overlay PRO (somente na aba FootEra) */}
+                  {abaTreinos === "footera" && proGateChecked && !isPro ? (
+                    <div className="absolute inset-0 z-50 flex items-center justify-center p-4">
+                      <div className="absolute inset-0 bg-black/30 rounded-xl" />
+                      <div className="relative z-10 w-[min(520px,92%)] rounded-2xl bg-white p-5 shadow-xl border">
+                        <div className="flex items-start gap-3">
+                          <div className="h-10 w-10 rounded-full bg-emerald-50 flex items-center justify-center">
+                            <span className="text-emerald-600 font-extrabold">PRO</span>
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="text-lg font-extrabold text-zinc-900">
+                              Conteúdo exclusivo para assinantes
+                            </h3>
+                            <p className="text-sm text-zinc-600 mt-1">
+                              Para agendar treinos de <b>professores parceiros</b> na aba{" "}
+                              <b>FootEra</b>, você precisa de um plano ativo.
+                            </p>
+
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-extrabold hover:bg-emerald-700"
+                                onClick={() => {
+                                  window.location.href = "/assinatura";
+                                }}
+                              >
+                                Ver planos
+                              </button>
+
+                              <button
+                                type="button"
+                                className="px-4 py-2 rounded-lg border text-zinc-700 font-bold hover:bg-zinc-50"
+                                onClick={() => setAbaTreinos("meus")}
+                              >
+                                Voltar
+                              </button>
+                            </div>
+
+                            <p className="text-xs text-zinc-500 mt-3">
+                              Se você já assinou, tente sair e entrar novamente.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Loading do PRO (se quiser) */}
+                  {abaTreinos === "footera" && !proGateChecked && proLoading ? (
+                    <div className="absolute inset-0 z-40 flex items-center justify-center p-4">
+                      <div className="absolute inset-0 bg-white/60 rounded-xl" />
+                      <div className="relative z-10 text-sm font-bold text-zinc-700">
+                        Verificando assinatura...
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
+
 
                 {/* Ação */}
                 <div className="p-3 border-t border-zinc-100">
