@@ -25,9 +25,7 @@ function buildDescricao(base, group, tier) {
         return base;
     return `${base}\n\n${extra.join(" • ")}`;
 }
-// helper: se você não setar meta manualmente em algum item, tenta inferir do código
 function inferMetaFromCodigo(codigo) {
-    // pega último número do código (ath_train_25 => 25)
     const m = String(codigo).match(/_(\d+)(?:$|_)/);
     if (!m)
         return null;
@@ -119,7 +117,6 @@ async function seedConquistasCatalog() {
     for (const a of achievements)
         uniqueByCodigo.set(a.id, a);
     const finalList = Array.from(uniqueByCodigo.values());
-    // ✅ UPSERT: atualiza se já existir
     for (const a of finalList) {
         const metaFinal = a.meta ?? inferMetaFromCodigo(a.id);
         await prisma.conquista.upsert({

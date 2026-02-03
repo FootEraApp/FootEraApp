@@ -1,4 +1,3 @@
-// client/src/components/Atualizações
 import React, { useState } from "react";
 
 type UpdateType = "atualizacao" | "correcoes";
@@ -13,7 +12,7 @@ function UpdateCard({
   children: React.ReactNode;
 }) {
   const isCorrecoes = type === "correcoes";
-  const [open, setOpen] = useState(!isCorrecoes); // correções começam fechadas
+  const [open, setOpen] = useState(!isCorrecoes); 
 
   return (
     <div
@@ -21,7 +20,6 @@ function UpdateCard({
         isCorrecoes ? "border-amber-300" : "border-gray-200"
       }`}
     >
-      {/* Header */}
       <button
         type="button"
         onClick={() => isCorrecoes && setOpen((v) => !v)}
@@ -44,7 +42,6 @@ function UpdateCard({
         )}
       </button>
 
-      {/* Conteúdo */}
       {open && (
         <div className="px-4 pb-4 text-sm text-gray-800 space-y-2">
           {children}
@@ -57,9 +54,6 @@ function UpdateCard({
 export default function Atualizacoes() {
   return (
     <div className="space-y-4 text-sm text-gray-800">
-      {/* ===================== */}
-      {/* ATUALIZAÇÕES 2026 */}
-      {/* ===================== */}
 
       <UpdateCard type="correcoes" title="🐞 Correções de bugs — ??/01/2026">
         <ul className="list-disc list-inside space-y-1">
@@ -148,9 +142,6 @@ export default function Atualizacoes() {
         </p>
       </UpdateCard>
 
-      {/* ===================== */}
-      {/* CORREÇÕES DE BUGS */}
-      {/* ===================== */}
       <UpdateCard
         type="correcoes"
         title="🐞 Correções de bugs — 19/01/2026"
@@ -163,9 +154,6 @@ export default function Atualizacoes() {
         </ul>
       </UpdateCard>
 
-      {/* ===================== */}
-      {/* LANÇAMENTO FOOTERA */}
-      {/* ===================== */}
       <UpdateCard type="atualizacao" title="🚀 Lançamento da FootEra">
         <p>
           Bem-vindo(a) à primeira versão oficial da plataforma{" "}

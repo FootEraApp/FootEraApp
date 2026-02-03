@@ -1,20 +1,15 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
-import { StatusCref } from "@prisma/client"; // ✅ ADICIONE ISSO
+import { StatusCref } from "@prisma/client"; 
 import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
 
 function normalizeStatusCref(v: any): StatusCref {
   const raw = String(v ?? "").trim();
-
-  // valores reais do enum no Prisma (ex: "ATIVO", "INATIVO" ou "Ativo", "Inativo")
   const values = Object.values(StatusCref) as string[];
-
-  // tenta match case-insensitive
   const upper = raw.toUpperCase();
   const found = values.find((x) => String(x).toUpperCase() === upper);
   if (found) return found as StatusCref;
 
-  // fallback seguro: tenta achar algo "ATIV"
   const ativo = values.find((x) => String(x).toUpperCase().includes("ATIV"));
   return (ativo ?? values[0]) as StatusCref;
 }
@@ -26,23 +21,18 @@ function parseStringArray(v: any): string[] {
     const t = v.trim();
     if (!t) return [];
 
-    // se veio JSON stringify
     if ((t.startsWith("[") && t.endsWith("]")) || (t.startsWith("{") && t.endsWith("}"))) {
       try {
         const parsed = JSON.parse(t);
         if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String);
       } catch {}
     }
-
-    // fallback: um item só
     return [t];
   }
-
   return [];
 }
 
 function makeCodigoProfessor() {
-  // exemplo simples: PRF-ABC123
   const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
   return `PRF-${rand}`;
 }
@@ -76,7 +66,6 @@ export const listarAtletasDoProfessor = async (req: Request, res: Response) => {
       .sort((a, b) =>
         String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"),
       );
-
     return res.json(atletas);
   } catch (error) {
     console.error("Erro ao listar atletas do professor:", error);
@@ -128,27 +117,15 @@ export const buscarProfessorPorId = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * ✅ LISTAR PROFESSORES (AGORA: SOMENTE VIA RelacaoTreinamento quando houver filtro de org/owner)
- *
- * Aceita:
- * - /api/professores?organizacaoId=<id>
- * - /api/professores?ownerTipo=Clube&ownerId=<id>
- * - /api/professores?ownerTipo=Escolinha&ownerId=<id>
- *
- * Sem filtro: lista todos (comportamento antigo mantido).
- */
 export const listarProfessores = async (req: Request, res: Response) => {
   try {
     const organizacaoIdRaw = typeof req.query.organizacaoId === "string" ? req.query.organizacaoId : "";
     const ownerTipoRaw = typeof req.query.ownerTipo === "string" ? req.query.ownerTipo : "";
     const ownerIdRaw = typeof req.query.ownerId === "string" ? req.query.ownerId : "";
-
     const organizacaoId = organizacaoIdRaw.trim();
     const ownerTipo = ownerTipoRaw.trim();
     const ownerId = ownerIdRaw.trim();
 
-    // 🔹 se vier ownerTipo/ownerId, prioriza
     if (ownerId && ownerTipo) {
       const tipoNorm = ownerTipo.toLowerCase();
       if (tipoNorm !== "clube" && tipoNorm !== "escolinha") {
@@ -159,7 +136,7 @@ export const listarProfessores = async (req: Request, res: Response) => {
         where: {
           ativo: true,
           encerradoEm: null,
-          atletaId: null, // vínculo professor<->org
+          atletaId: null,
           professorId: { not: null },
           ...(tipoNorm === "clube" ? { clubeId: ownerId } : { escolinhaId: ownerId }),
         },
@@ -178,14 +155,12 @@ export const listarProfessores = async (req: Request, res: Response) => {
         include: { usuario: true },
       });
 
-      // mantém a ordenação estável
       const byId = new Map(professores.map((p) => [p.id, p]));
       const ordered = professorIds.map((id) => byId.get(id)).filter(Boolean);
 
       return res.json(ordered);
     }
 
-    // 🔹 se vier organizacaoId (id pode ser de clube ou escolinha)
     if (organizacaoId) {
       const { tipo, id } = await resolveOrganizacao(organizacaoId);
       if (!id || !tipo) return res.json([]);
@@ -219,7 +194,6 @@ export const listarProfessores = async (req: Request, res: Response) => {
       return res.json(ordered);
     }
 
-    // 🔸 sem filtro: comportamento antigo (lista todos)
     const professores = await prisma.professor.findMany({
       include: { usuario: true },
     });
@@ -241,16 +215,10 @@ export const criarProfessor = async (req: Request, res: Response) => {
 
     const qualificacoes = parseStringArray(req.body.qualificacoes);
     const certificacoes = parseStringArray(req.body.certificacoes);
-
     const statusCref = normalizeStatusCref(req.body.statusCref);
-
     const data: any = {
-      // ✅ se não vier codigo, gera
       codigo: (codigo && String(codigo).trim()) ? String(codigo).trim() : makeCodigoProfessor(),
-
-      // ✅ cref opcional
       cref: (cref && String(cref).trim()) ? String(cref).trim() : null,
-
       nome: String(nome).trim(),
       areaFormacao: areaFormacao ? String(areaFormacao).trim() : null,
       statusCref,
@@ -259,7 +227,6 @@ export const criarProfessor = async (req: Request, res: Response) => {
       fotoUrl: req.file?.filename ? `/upload/${req.file.filename}` : null,
     };
 
-    // ✅ dataNascimento opcional
     if (dataNascimento) {
       const d = new Date(String(dataNascimento));
       if (!Number.isNaN(d.getTime())) data.dataNascimento = d;
@@ -289,25 +256,16 @@ export const editarProfessor = async (req: Request, res: Response) => {
 
   try {
     const { codigo, cref, nome, areaFormacao, usuarioId, dataNascimento } = req.body;
-
     const qualificacoes = parseStringArray(req.body["qualificacoes[]"] ?? req.body.qualificacoes);
     const certificacoes = parseStringArray(req.body["certificacoes[]"] ?? req.body.certificacoes);
-
     const data: any = {
-      // ✅ codigo continua existindo no banco, mas no admin você não precisa mandar.
-      // se mandar, atualiza; se não mandar, não mexe.
       ...(codigo !== undefined ? { codigo: String(codigo).trim() } : {}),
-
-      // ✅ cref opcional: se vier vazio, seta null
       ...(cref !== undefined ? { cref: String(cref).trim() || null } : {}),
-
       ...(nome !== undefined ? { nome: String(nome).trim() } : {}),
       ...(areaFormacao !== undefined ? { areaFormacao: String(areaFormacao).trim() || null } : {}),
-
       ...(req.body.statusCref !== undefined
         ? { statusCref: normalizeStatusCref(req.body.statusCref) }
         : {}),
-
       qualificacoes,
       certificacoes,
     };
@@ -327,7 +285,6 @@ export const editarProfessor = async (req: Request, res: Response) => {
       where: { id },
       data,
     });
-
     return res.json(professorAtualizado);
   } catch (error: any) {
     console.error("Erro ao editar professor:", error);
@@ -421,7 +378,6 @@ export const listarVinculosProfessor = async (req: Request, res: Response) => {
   try {
     const { id: professorId } = req.params;
 
-    // ✅ agora: vínculos do professor vêm da RelacaoTreinamento (professor<->org, atletaId null)
     const rels = await prisma.relacaoTreinamento.findMany({
       where: {
         professorId,
@@ -438,7 +394,6 @@ export const listarVinculosProfessor = async (req: Request, res: Response) => {
 
     const clubeIds = Array.from(new Set(rels.map((r) => r.clubeId).filter(Boolean) as string[]));
     const escolinhaIds = Array.from(new Set(rels.map((r) => r.escolinhaId).filter(Boolean) as string[]));
-
     const [clubes, escolinhas] = await Promise.all([
       clubeIds.length
         ? prisma.clube.findMany({ where: { id: { in: clubeIds } }, select: { id: true, nome: true } })
@@ -450,7 +405,6 @@ export const listarVinculosProfessor = async (req: Request, res: Response) => {
 
     const clubeById = new Map(clubes.map((c) => [c.id, c]));
     const escolinhaById = new Map(escolinhas.map((e) => [e.id, e]));
-
     const out: Array<{ id: string; nome: string; tipo: "Escolinha" | "Clube" }> = [];
 
     for (const r of rels) {
@@ -464,7 +418,6 @@ export const listarVinculosProfessor = async (req: Request, res: Response) => {
       }
     }
 
-    // dedupe final
     const seen = new Set<string>();
     const unique = out.filter((x) => {
       const k = `${x.tipo}:${x.id}`;
@@ -483,17 +436,12 @@ export const listarVinculosProfessor = async (req: Request, res: Response) => {
 export const salvarVinculoProfessor = async (req: Request, res: Response) => {
   try {
     const { id: professorId } = req.params;
-
     const body = req.body || {};
-    const orgId: string | null =
-      body.organizacaoId ?? body.idOrganizacao ?? body.organizacao ?? null;
-
+    const orgId: string | null = body.organizacaoId ?? body.idOrganizacao ?? body.organizacao ?? null;
     const { tipo, id } = await resolveOrganizacao(orgId);
 
-    // 🔸 se removeu vínculo
     if (!id || !tipo) {
       await prisma.$transaction(async (tx) => {
-        // mantém como estava (você ainda usa esses campos)
         await tx.professor.update({
           where: { id: professorId },
           data: { escolinhaId: null, clubeId: null, organizacaoId: null },
@@ -676,10 +624,6 @@ export const desvincularAtletaDoProfessor = async (req: Request, res: Response) 
   }
 };
 
-/**
- * ✅ LISTAR PROFESSORES VINCULADOS (AGORA: SOMENTE VIA RelacaoTreinamento)
- * /api/professores/vinculados?tipo=clube|escolinha&tipoUsuarioId=<id>
- */
 export const listarProfessoresVinculados = async (req: Request, res: Response) => {
   try {
     const tipo = String(req.query.tipo || "").toLowerCase();
@@ -744,7 +688,6 @@ export const toggleProfessorParceiro = async (req: Request, res: Response) => {
   }
 
   try {
-    // 🔎 busca professor + usuário
     const professor = await prisma.professor.findUnique({
       where: { id: professorId },
       select: {
@@ -765,21 +708,18 @@ export const toggleProfessorParceiro = async (req: Request, res: Response) => {
     const usuarioId = professor.usuarioId;
 
     await prisma.$transaction(async (tx) => {
-      // 🔁 atualiza flag rápida
       await tx.usuario.update({
         where: { id: usuarioId },
         data: { parceiro },
       });
 
       if (parceiro) {
-        // ✅ cria registro parceiro se não existir
         await tx.parceiro.upsert({
           where: { usuarioId },
           create: { usuarioId },
           update: { ativo: true },
         });
       } else {
-        // ❌ desativa parceiro (mantém histórico)
         await tx.parceiro.updateMany({
           where: { usuarioId },
           data: { ativo: false },

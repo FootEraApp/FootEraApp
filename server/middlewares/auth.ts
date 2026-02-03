@@ -77,7 +77,6 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
     return res.status(401).json({ message: "Invalid token payload" });
   }
 
-  // ✅ tokenVersion: invalida tokens antigos quando "encerrar sessões" é acionado
   try {
     const dbUser = await prisma.usuario.findUnique({
       where: { id: userId },
@@ -129,7 +128,6 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
   const reqAuthed = req as AuthenticatedRequest;
   reqAuthed.userId = userId;
 
-  // mantém seu resolveUserContext
   try {
     const ctx = await resolveUserContext(userId);
 
@@ -168,11 +166,8 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
     (reqAuthed as any).user = user;
   }
 
-    // =========================
-  // Presence heartbeat (lastSeenAt) com throttle
-  // =========================
   try {
-    const THROTTLE_MS = 60_000; // 1 min
+    const THROTTLE_MS = 60_000; 
     const key = userId;
 
     (globalThis as any).__lastSeenMap ??= new Map<string, number>();
@@ -191,7 +186,6 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
         .catch(() => {});
     }
   } catch {
-    // não quebra request por causa de presence
   }
 
   return next();

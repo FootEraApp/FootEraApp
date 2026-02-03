@@ -57,7 +57,6 @@ export const TreinosApi = {
   },
 
   atualizar(id: string, payload: Partial<TreinoCreatePayload>) {
-    // ✅ aqui já é o “PUT” certo
     return axios.put(`${API.BASE_URL}/api/treinos/programados/${id}`, payload, {
       headers: auth(),
     });

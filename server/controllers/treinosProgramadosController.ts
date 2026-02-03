@@ -18,11 +18,8 @@ function ownerWhereFrom(tipoUsuario?: string, tipoUsuarioId?: string) {
 }
 
 function assertOwnerIdsFromBodyOrReq(body: any) {
-  // prioridade: tipoUsuario/tipoUsuarioId (mais correto pra todos os tipos)
   const dono = normalizarTipoUsuario(body?.tipoUsuario);
   const donoId = String(body?.tipoUsuarioId ?? "").trim();
-
-  // fallback: professorId antigo
   const professorId = String(body?.professorId ?? "").trim();
 
   if (dono && donoId) {
@@ -31,7 +28,6 @@ function assertOwnerIdsFromBodyOrReq(body: any) {
     return { dono, professorId: null, clubeId: null, escolinhaId: donoId };
   }
 
-  // compat: se ainda vier professorId sem tipoUsuario
   if (professorId) {
     return { dono: "Professor" as const, professorId, clubeId: null, escolinhaId: null };
   }
@@ -40,7 +36,6 @@ function assertOwnerIdsFromBodyOrReq(body: any) {
 }
 
 async function mustBeOwner(req: Request, treinoId: string) {
-  // tenta pegar de várias fontes (token > headers/query > body)
   const tipoRaw = String(
     (req as any).user?.tipo ??
       req.headers["x-tipo"] ??
@@ -59,7 +54,6 @@ async function mustBeOwner(req: Request, treinoId: string) {
       ""
   ).trim();
 
-  // ADMIN PODE TUDO
   const isAdmin =
     tipoRaw === "admin" || tipoRaw === "administrador" || tipoRaw === "adm";
 
@@ -72,8 +66,6 @@ async function mustBeOwner(req: Request, treinoId: string) {
       return { ok: false as const, status: 404, message: "Treino não encontrado." };
     return { ok: true as const, treino, status: 200, message: "ok" };
   }
-
-  console.log("[mustBeOwner]", { tipoRaw, tipoUsuarioId, treinoId });
 
   const treino = await prisma.treinoProgramado.findUnique({
     where: { id: treinoId },
@@ -147,7 +139,7 @@ function stripAccents(s: string) {
 
 function normTipoTreino(v?: string): TipoTreino | null {
   const s0 = String(v || "").trim().toLowerCase();
-  const s = stripAccents(s0); // "técnico" -> "tecnico"
+  const s = stripAccents(s0);
 
   if (s.startsWith("tec")) return "Tecnico";
   if (s.startsWith("fis")) return "Fisico";
@@ -218,7 +210,6 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Todos os exercícios devem possuir 'exercicioId'." });
     }
 
-    // ✅ dono vem do front (Professor principal)
     const owner = assertOwnerIdsFromBodyOrReq(req.body);
     if (!owner) {
       return res.status(400).json({
@@ -236,7 +227,6 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       if (!profOk) return res.status(400).json({ message: "Professor principal inválido." });
     }
 
-        // ✅ limites só fazem sentido para professor (ajuste se quiser também para clube/escolinha)
     if (owner.dono === "Professor") {
       const pid = owner.professorId!;
 
@@ -276,7 +266,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
     const itens = (exercicios as any[]).map((e: any, i: number) => ({
       exercicioId: String(e.exercicioId ?? e.id ?? "").trim(),
       ordem: Number(e.ordem ?? i + 1),
-      repeticoes: toRepeticoes(e.series ?? e.serie, e.repeticoes), // <- aqui
+      repeticoes: toRepeticoes(e.series ?? e.serie, e.repeticoes), 
     }));
 
     if (owner.dono === "Professor") {
@@ -307,24 +297,18 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       ? (req.body as any).professoresColabIds
       : [];
 
-    // dono pode ser professor (ou não). se for professor, entra como "base" para lista de profs
     const donoProfessorId = owner.dono === "Professor" ? owner.professorId : null;
-
     const allProfIds = Array.from(
       new Set([...(donoProfessorId ? [donoProfessorId] : []), ...colabs])
     )
       .map((x) => String(x).trim())
       .filter(Boolean);
 
-    // lista final de colaboradores (sem duplicar o dono)
     const colabProfIds = allProfIds.filter((pid) => pid !== owner.professorId);
-
     const uploadedPath =
       req.file?.filename ? `/upload/${req.file.filename}` : null;
 
-    // prioridade: arquivo enviado; senão mantém imagemUrl vinda do body
     const imagemFinal = uploadedPath ?? (imagemUrl ? String(imagemUrl) : null);
-
     const treinoCriado = await prisma.treinoProgramado.create({
       data: {
         nome,
@@ -341,12 +325,9 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         pontuacao: pontuacao != null ? Number(pontuacao) : null,
         expiraEm: expiraEm ? new Date(expiraEm) : null,
         naoExpira: Boolean(naoExpira),
-        // DONO REAL (apenas um)
         ...(owner.professorId ? { Professor: { connect: { id: owner.professorId } } } : {}),
         ...(owner.clubeId ? { clube: { connect: { id: owner.clubeId } } } : {}),
         ...(owner.escolinhaId ? { escolinha: { connect: { id: owner.escolinhaId } } } : {}),
-
-        // se você quiser manter criadorProfessor como “criador humano”, ok:
         ...(criadorProfessorIdNorm
           ? { criadorProfessor: { connect: { id: criadorProfessorIdNorm } } }
           : owner.dono === "Professor"
@@ -523,7 +504,7 @@ export async function updateTreino(req: Request, res: Response) {
     const itens = (exercicios as any[]).map((e: any, i: number) => ({
       exercicioId: String(e.exercicioId ?? e.id ?? "").trim(),
       ordem: Number(e.ordem ?? i + 1),
-      repeticoes: toRepeticoes(e.series ?? e.serie, e.repeticoes), // <- aqui
+      repeticoes: toRepeticoes(e.series ?? e.serie, e.repeticoes), 
     }));
 
     const antigos = await prisma.treinoProgramadoExercicio.findMany({
@@ -537,8 +518,6 @@ export async function updateTreino(req: Request, res: Response) {
     const uploadedPath =
       req.file?.filename ? `/upload/${req.file.filename}` : null;
 
-    // se veio arquivo, SEMPRE substitui
-    // se não veio, respeita o que vier no body (ou não altera se undefined)
     const imagemPatch =
       uploadedPath ? { imagemUrl: uploadedPath }
       : (imagemUrl !== undefined ? { imagemUrl: imagemUrl ? String(imagemUrl) : null } : {});
@@ -636,32 +615,22 @@ export const getAllTreinos = async (req: Request, res: Response) => {
   try {
     const {
       professorId,
-      ownerTipo,          // "Professor" | "Clube" | "Escolinha"
-      apenasCriador,      // "1" para forçar somente treinos do professor
+      ownerTipo,        
+      apenasCriador,     
       order = "desc",
       limit,
     } = req.query as Record<string, string | undefined>;
 
     const dono = normalizarTipoUsuario(ownerTipo);
-
-    const take = limit ? Math.max(1, Math.min(Number(limit), 50)) : undefined;
-    const orderBy = { createdAt: order === "asc" ? ("asc" as const) : ("desc" as const) };
-
     const where: any = {};
 
-    // ✅ CASO 1: PERFIL PROFESSOR (somente treinos do professor dono)
-    // - passa ownerTipo=Professor (ou apenasCriador=1)
-    // - e professorId=<id do professor>
     if ((apenasCriador === "1" || dono === "Professor") && professorId) {
       where.professorId = String(professorId);
       where.clubeId = null;
       where.escolinhaId = null;
     }
-    // ✅ CASO 2: outras telas podem filtrar por professorId sem restringir dono
     else if (professorId) {
       where.professorId = String(professorId);
-      // aqui NÃO forçamos clubeId/escolinhaId = null
-      // pois você pode querer incluir treinos do “ecossistema” do professor
     }
 
     const onlyMine = String((req.query?.onlyMine ?? "")).toLowerCase() === "true";
@@ -675,10 +644,10 @@ export const getAllTreinos = async (req: Request, res: Response) => {
       orderBy: { createdAt: "desc" },
       include: {
         criadorProfessor: { include: { usuario: true } },
-        Professor: { include: { usuario: true } }, // se existir relação professor dono
+        Professor: { include: { usuario: true } }, 
         clube: true,
         escolinha: true,
-        professores: { // join de colaboradores
+        professores: { 
           include: { professor: { include: { usuario: true } } },
         },
         exercicios: { include: { exercicio: true } },

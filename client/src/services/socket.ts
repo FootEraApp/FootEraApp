@@ -12,10 +12,7 @@ const socket = io(API.BASE_URL, {
 });
 
 socket.on("connect", () => {
-  // ping inicial
   socket.emit("presence:ping");
-
-  // ping contínuo
   const t = setInterval(() => socket.emit("presence:ping"), 25_000);
   (socket as any).__presenceTimer = t;
 });

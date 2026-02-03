@@ -87,7 +87,7 @@ type PayloadProfessor = {
 
 type AtletaItem = {
   id: string;
-  observadoId?: string | null; // ✅ vem do backend
+  observadoId?: string | null;
   usuarioId?: string | null;
   atletaId?: string | null;
   nome: string;
@@ -100,7 +100,7 @@ type AtletaItem = {
   categoria?: string | null;
   pontuacao?: number | null;
   notaInterna?: string | null;
-  alertarMudancas?: boolean | null; // ✅ nome real no backend
+  alertarMudancas?: boolean | null;
 };
 
 type SolicitacaoItem = {
@@ -284,19 +284,15 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     if (!rawToken) return;
 
     const h = { Authorization: `Bearer ${rawToken}` };
-
-    // ✅ sempre o professor DO PERFIL (ou o logado)
     const profId = String(data?.professor?.id ?? Storage.tipoUsuarioId ?? "").trim();
     if (!profId) return;
 
     try {
-      // ✅ IMPORTANTE: o backend tem que entender isso como "somente professor"
-      // se não tiver esse filtro ainda, veja o passo 2 abaixo (backend).
       const r = await axios.get(`${API.BASE_URL}/api/treinosprogramados`, {
         headers: h,
         params: {
           professorId: profId,
-          ownerTipo: "Professor", // ✅ garante que não pega clube/escolinha (vamos implementar no backend)
+          ownerTipo: "Professor", 
           order: "desc",
           limit: 6,
         },
@@ -494,8 +490,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         const arr = Array.isArray(lista) ? lista : [];
         if (!cancel.v) {
           setObservados(arr);
-
-          // ✅ inicializa nota/checkbox sem sobrescrever o que o usuário já digitou
           setNotaPorAtleta((prev) => {
             const next = { ...prev };
             for (const a of arr) {
@@ -504,7 +498,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
             }
             return next;
           });
-
           setNotificarPorAtleta((prev) => {
             const next = { ...prev };
             for (const a of arr) {
@@ -615,17 +608,11 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     if (!rawToken) return;
 
     const key = String(alvoUsuarioId);
-
-    // ✅ pega o registro observado atual (pra ter observadoId / atletaId)
     const item = (observados ?? []).find((x) => String(x.usuarioId ?? x.atletaId ?? x.id) === key);
-
-    // ✅ preferir observadoId (update por id do AtletaObservado é mais certo)
     const idParaPatch =
       String(item?.observadoId ?? "").trim() ||
       String(item?.atletaId ?? "").trim() ||
       key;
-
-    // ✅ esses 2 ajudam o controller (caso req.user não tenha tipo/tipoUsuarioId certo)
     const ownerId =
       Storage.tipoUsuarioId ||
       localStorage.getItem("tipoUsuarioId") ||
@@ -641,17 +628,16 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
       setSalvandoNota((p) => ({ ...p, [key]: true }));
 
       await axios.patch(
-        `${API.BASE_URL}/api/observados/${encodeURIComponent(idParaPatch)}`, // ✅ rota que existe
+        `${API.BASE_URL}/api/observados/${encodeURIComponent(idParaPatch)}`, 
         {
-          ownerId,              // ✅ opcional, mas ajuda
-          tipo,                 // ✅ opcional, mas ajuda
+          ownerId,              
+          tipo,                 
           notaInterna: notaPorAtleta[key] ?? "",
-          alertarMudancas: !!notificarPorAtleta[key], // ✅ nome correto no backend
+          alertarMudancas: !!notificarPorAtleta[key],
         },
         { headers }
       );
 
-      // ✅ refletir no array observados também
       setObservados((prev) =>
         (prev ?? []).map((a) => {
           const k = String(a.usuarioId ?? a.atletaId ?? a.id);
@@ -1102,7 +1088,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
                           key={key}
                           className="rounded-xl border border-green-100 p-3"
                         >
-                          {/* Linha de cima (igual estava antes) */}
                           <div className="flex items-center gap-3">
                             <Avatar foto={a.foto ?? null} alt={a.nome} className="w-10 h-10" />
 
@@ -1128,7 +1113,6 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
                             </Link>
                           </div>
 
-                          {/* ✅ AQUI ENTRA O BLOCO DA NOTA INTERNA (logo abaixo da linha de cima) */}
                           {canEdit ? (
                             <div className="mt-3 w-full">
                               <div className="text-xs text-green-900/70 mb-1">Nota interna</div>

@@ -646,7 +646,6 @@ function PaginaFeed(): JSX.Element {
     try {
       const resp: RepostResponse = await repostPost(postId, comentario);
 
-      // Se repostou: backend devolve o post novo em resp.post
       if (resp.ok && resp.action === "repost" && resp.post) {
         const novoPost = resp.post;
 
@@ -654,18 +653,13 @@ function PaginaFeed(): JSX.Element {
         return;
       }
 
-      // Se desfez (unrepost): backend pode devolver só {id} ou nada
       if (resp.ok && resp.action === "unrepost") {
-        // remove do feed o repost "wrapper" (o post que você criou ao repostar), se o backend mandar o id
         if (resp.id) {
           setPosts((prev) => prev.filter((p) => p.id !== resp.id));
         }
-
-        // (opcional) aqui você também pode decrementar contador/local state, se quiser
         return;
       }
 
-      // fallback (caso backend responda diferente)
       console.warn("Resposta inesperada no repost:", resp);
     } catch (e) {
       console.error(e);

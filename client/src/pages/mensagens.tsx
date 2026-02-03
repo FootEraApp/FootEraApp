@@ -563,7 +563,6 @@ export default function PaginaMensagens() {
               >
                 <Avatar src={u.foto} name={u.nome} className="w-12 h-12" />
                   <div className="flex flex-col flex-1 min-w-0">
-                    {/* LINHA 1: Nome + Status ao lado */}
                     <div className="flex items-center justify-between gap-2 min-w-0">
                       <span className="font-medium text-sm truncate">
                         {u.nome}
@@ -588,7 +587,6 @@ export default function PaginaMensagens() {
                       })()}
                     </div>
 
-                    {/* LINHA 2: Última mensagem (preview) */}
                     <div className="text-xs text-gray-500 truncate">
                       {lastMsgByUser[u.id] || "Sem mensagens por enquanto"}
                     </div>
@@ -698,7 +696,6 @@ export default function PaginaMensagens() {
 
     const tick = () => {
       usuariosMutuos.forEach(u => {
-        // força refetch mesmo já tendo cache
         fetch(`${API.BASE_URL}/api/presenca/${u.id}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
@@ -719,7 +716,7 @@ export default function PaginaMensagens() {
       });
     };
 
-    tick(); // já atualiza na hora
+    tick(); 
     const i = setInterval(tick, 30_000);
     return () => clearInterval(i);
   }, [token, usuariosMutuos]);

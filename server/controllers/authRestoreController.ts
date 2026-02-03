@@ -6,7 +6,6 @@ import { prisma } from "../prisma.js";
 const SECRET = process.env.JWT_SECRET || "footera_secret";
 
 export async function restaurarConta(req: Request, res: Response) {
-  // ✅ aceita nomeDeUsuario (seu front manda isso)
   const { nomeDeUsuario, email, senha } = req.body ?? {};
 
   if ((!nomeDeUsuario && !email) || !senha) {
@@ -16,7 +15,6 @@ export async function restaurarConta(req: Request, res: Response) {
     });
   }
 
-  // ✅ busca por nomeDeUsuario (prioridade), senão por email
   const usuario = await prisma.usuario.findFirst({
     where: nomeDeUsuario
       ? { nomeDeUsuario: String(nomeDeUsuario).trim() }
@@ -41,7 +39,6 @@ export async function restaurarConta(req: Request, res: Response) {
     return res.status(400).json({ ok: false, message: "Sua conta não está na lixeira." });
   }
 
-  // ✅ prazo igual ao login: deleteScheduledAt OU deletedAt + 30d
   const now = Date.now();
   const base = usuario.deleteScheduledAt
     ? new Date(usuario.deleteScheduledAt).getTime()
@@ -61,7 +58,6 @@ export async function restaurarConta(req: Request, res: Response) {
     return res.status(401).json({ ok: false, message: "Senha inválida." });
   }
 
-  // ✅ restaura + derruba sessões antigas
   const updated = await prisma.usuario.update({
     where: { id: usuario.id },
     data: {
@@ -73,7 +69,6 @@ export async function restaurarConta(req: Request, res: Response) {
     select: { id: true, tipo: true, tokenVersion: true, nomeDeUsuario: true },
   });
 
-  // ✅ token novo (opcional, mas útil pro auto-login)
   const token = jwt.sign(
     { id: updated.id, tipo: updated.tipo, tokenVersion: updated.tokenVersion },
     SECRET,
