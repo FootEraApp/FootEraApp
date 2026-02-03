@@ -3127,6 +3127,7 @@ export async function criarTreinoProgramado(
       elencosIds = [],
       pontuacao,
       imagemUrl,
+      parceiro,
     } = req.body as any;
 
     const tokenUser =
@@ -3162,6 +3163,28 @@ export async function criarTreinoProgramado(
       (req as any).user?.id ||
       (req as any).user?.usuarioId ||
       "";
+
+    // ✅ fonte de verdade do parceiro: Usuario.parceiro
+    const usuarioDb = await prisma.usuario.findUnique({
+      where: { id: String(usuarioIdToken) },
+      select: { parceiro: true },
+    });
+
+    const usuarioEhParceiro = Boolean(usuarioDb?.parceiro);
+
+    const parceiroSolicitado = Boolean(parceiro);
+
+    if (parceiroSolicitado && !usuarioEhParceiro) {
+      return res.status(403).json({
+        code: "FORBIDDEN",
+        message: "Apenas usuários parceiros podem publicar treinos como parceiros.",
+      });
+    }
+
+    // ✅ só professor pode criar treino parceiro (se você quiser essa regra)
+    const parceiroFinal =
+      tipoNorm === "professor" ? parceiroSolicitado : false;
+
 
     if (
       !nome ||
@@ -3378,6 +3401,7 @@ const professorCriadorId =
         dataAgendada: whenDate,
         pontuacao: pontuacaoNum,
         imagemUrl: imagemUrl || null,
+        parceiro: parceiroFinal,
 
         ...(tipoNorm === "professor"
           ? { Professor: { connect: { id: professorIdToConnect! } } }
