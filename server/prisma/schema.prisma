@@ -88,6 +88,9 @@ model Usuario {
   notificacoes           Notificacao[]             @relation("NotificacaoUsuario")
   notificacoesGeradas    Notificacao[]             @relation("NotificacaoActor")
   AvaliacaoTreino        AvaliacaoTreino[]
+
+  metodologiasCriadas   Metodologia[]          @relation("MetodologiaCriador")
+  metodologiasAssinadas MetodologiaAssinante[]
 }
 
 model Parceiro {
@@ -177,6 +180,7 @@ model Professor {
   escolinhaId                 String?
   Clube                       Clube?                   @relation(fields: [clubeId], references: [id])
   clubeId                     String?
+  Metodologia                 Metodologia[]
 
   @@index([organizacaoId])
 }
@@ -329,12 +333,12 @@ model Atleta {
 }
 
 model TreinoProgramado {
-  id           String                @id @default(uuid())
+  id           String      @id @default(uuid())
   codigo       String?
-  nome         String                @unique
+  nome         String      @unique
   descricao    String?
   nivel        Nivel
-  createdAt    DateTime              @default(now())
+  createdAt    DateTime    @default(now())
   dataAgendada DateTime?
   categoria    Categoria[]
   dicas        String[]
@@ -344,11 +348,15 @@ model TreinoProgramado {
   expiraEm     DateTime?
   imagemUrl    String?
   metas        String?
-  naoExpira    Boolean               @default(false)
+  naoExpira    Boolean     @default(false)
   pontuacao    Int?
   tipoTreino   TipoTreino?
   objetivo     String?
-  temporarios  ExercicioTemporario[]
+
+  parceiro    Boolean @default(false)
+  metodologia Boolean @default(false)
+
+  temporarios ExercicioTemporario[]
 
   criadorProfessorId String?
   criadorProfessor   Professor? @relation("TreinoProgramadoCriador", fields: [criadorProfessorId], references: [id], onDelete: SetNull)
@@ -361,6 +369,7 @@ model TreinoProgramado {
   treinoAgendado           TreinoAgendado[]
   TreinoProgramadoRecebido TreinoProgramadoRecebido[]
   realizados               TreinoRealizado[]
+  metodologiaItens         MetodologiaItem[]
   EstatisticaTreino        EstatisticaTreino[]
   TreinoProfessorUso       TreinoProfessorUso[]
   TreinoRotinaItem         TreinoRotinaItem[]
@@ -428,6 +437,115 @@ model ExercicioTemporario {
   SessaoTreinoTurmaExercicio SessaoTreinoTurmaExercicio[]
 
   @@index([treinoProgramadoId])
+}
+
+model Metodologia {
+  id         String      @id @default(uuid())
+  titulo     String
+  descricao  String?
+  capaUrl    String?
+  nivel      Nivel?
+  categorias Categoria[] @default([])
+  ativo      Boolean     @default(true)
+
+  // quem criou
+  criadorUsuarioId String
+  criadorUsuario   Usuario @relation("MetodologiaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+
+  // opcional: vincular ao "tipo de criador" (professor/clube/escolinha) se quiser
+  professorId String?
+  clubeId     String?
+  escolinhaId String?
+
+  professor Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
+  clube     Clube?     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
+  escolinha Escolinha? @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
+
+  // estrutura (semanas/aulas)
+  totalSemanas Int? // ex: 6
+
+  // agregados / vitrine
+  totalAssinantes Int    @default(0)
+  mediaAvaliacao  Float? // ex: 4.8 (opcional)
+  totalReviews    Int    @default(0)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  itens      MetodologiaItem[]
+  assinantes MetodologiaAssinante[]
+
+  @@index([criadorUsuarioId])
+  @@index([professorId])
+  @@index([clubeId])
+  @@index([escolinhaId])
+  @@index([ativo])
+}
+
+model MetodologiaItem {
+  id            String      @id @default(uuid())
+  metodologiaId String
+  metodologia   Metodologia @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+
+  // organização como a UI: Semana 1..N e ordem dentro da semana
+  semana Int
+  ordem  Int
+
+  titulo    String
+  descricao String?
+  tipo      MetodologiaConteudoTipo @default(TREINO)
+
+  // se for VIDEO
+  videoUrl   String?
+  thumbUrl   String?
+  duracaoMin Int?
+
+  // se for TREINO
+  treinoProgramadoId String?
+  treinoProgramado   TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id], onDelete: SetNull)
+
+  // gamificação
+  pontos Int? // ex: +5 pts por aula
+
+  publicado Boolean @default(true)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  // garante ordem única por semana
+  @@unique([metodologiaId, semana, ordem])
+  @@index([metodologiaId])
+  @@index([treinoProgramadoId])
+  @@index([semana])
+}
+
+model MetodologiaAssinante {
+  id            String @id @default(uuid())
+  metodologiaId String
+  usuarioId     String
+
+  metodologia Metodologia @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  status MetodologiaAssinaturaStatus @default(ATIVA)
+
+  iniciouEm  DateTime  @default(now())
+  cancelouEm DateTime?
+  concluiuEm DateTime?
+
+  // progresso / UI
+  aulasConcluidas Int @default(0)
+  pontosGanhos    Int @default(0)
+
+  // opcional: salvar IDs dos itens concluídos, último item visto, etc.
+  progresso Json?
+
+  lastAccessAt DateTime?
+
+  @@unique([metodologiaId, usuarioId])
+  @@index([usuarioId])
+  @@index([metodologiaId])
+  @@index([status])
 }
 
 model DesafioOficial {
@@ -609,6 +727,7 @@ model Escolinha {
   ProfessorEscolinha     ProfessorEscolinha[]
   conquistas             ConquistaVinculo[]       @relation("ConquistaEscolinha")
   indicacoes             Indicacao[]
+  Metodologia            Metodologia[]
 }
 
 model Comentario {
@@ -670,6 +789,7 @@ model Clube {
   AtletaHistoricoVinculo AtletaHistoricoVinculo[]
   ProfessorClube         ProfessorClube[]
   conquistas             ConquistaVinculo[]       @relation("ConquistaClube")
+  Metodologia            Metodologia[]
 }
 
 model SolicitacaoVinculo {
@@ -2292,4 +2412,15 @@ enum ConquistaTipo {
   SOCIAL
   PERFIL
   ORGANIZACAO
+}
+
+enum MetodologiaConteudoTipo {
+  TREINO
+  VIDEO
+}
+
+enum MetodologiaAssinaturaStatus {
+  ATIVA
+  CANCELADA
+  CONCLUIDA
 }
