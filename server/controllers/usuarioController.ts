@@ -1,5 +1,7 @@
+// server/controllers/usuarioController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
+import { AssinaturaStatus } from "@prisma/client";
 
 
 export const getUsuarioPorId = async (req: Request, res: Response) => {
@@ -81,6 +83,182 @@ export const getUsuarioChallenges = async (req: Request, res: Response) => {
     return res.json([...pending, ...completed]);
   } catch (error) {
     console.error("Erro ao buscar desafios do usuário:", error);
+    return res.status(500).json({ error: "Erro interno do servidor" });
+  }
+};
+
+// GET /api/usuarios/:id/parceiro
+export const getUsuarioParceiro = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    // 👇 IMPORTANTE:
+    // authenticateToken precisa colocar o usuário do token em req.user (ou semelhante)
+    // Vou tentar cobrir os nomes mais comuns.
+    const authUserId =
+      (req as any).user?.id ||
+      (req as any).userId ||
+      (req as any).usuarioId ||
+      null;
+
+    const authUserTipo =
+      (req as any).user?.tipo ||
+      (req as any).tipo ||
+      null;
+
+    // 🔒 Segurança: só deixa consultar seu próprio ID
+    // (ou admin, se você quiser permitir)
+    const isAdmin = authUserTipo === "Admin" || authUserTipo === "ADMIN";
+
+    if (!authUserId) {
+      return res.status(401).json({ error: "Não autenticado" });
+    }
+
+    if (authUserId !== id && !isAdmin) {
+      return res.status(403).json({ error: "Sem permissão para consultar este usuário" });
+    }
+
+    const usuario = await prisma.usuario.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        parceiro: true,
+        parceiroInfo: {
+          select: {
+            id: true,
+            // coloque aqui campos que você quiser retornar do Parceiro
+            // ex: status: true, plano: true, etc (depende do seu model Parceiro)
+          },
+        },
+      },
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ error: "Usuário não encontrado" });
+    }
+
+    return res.json({
+      id: usuario.id,
+      parceiro: usuario.parceiro,
+      parceiroInfo: usuario.parceiroInfo ?? null,
+    });
+  } catch (error) {
+    console.error("Erro ao verificar parceiro:", error);
+    return res.status(500).json({ error: "Erro interno do servidor" });
+  }
+};
+
+// GET /api/usuarios/:id/assinatura
+export const getUsuarioAssinatura = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const authUserId =
+      (req as any).user?.id ||
+      (req as any).userId ||
+      (req as any).usuarioId ||
+      null;
+
+    const authUserTipo =
+      (req as any).user?.tipo ||
+      (req as any).tipo ||
+      null;
+
+    const isAdmin =
+      authUserTipo === "Admin" ||
+      authUserTipo === "ADMIN" ||
+      authUserTipo === "administrador" ||
+      authUserTipo === "ADMINISTRADOR";
+
+    if (!authUserId) {
+      return res.status(401).json({ error: "Não autenticado" });
+    }
+
+    // 🔒 Segurança: só pode consultar a própria assinatura (ou admin)
+    if (authUserId !== id && !isAdmin) {
+      return res
+        .status(403)
+        .json({ error: "Sem permissão para consultar este usuário" });
+    }
+
+    const assinatura = await prisma.assinatura.findUnique({
+      where: { usuarioId: id },
+      select: {
+        id: true,
+        usuarioId: true,
+        plano: true,
+        periodicidade: true,
+        startsAt: true,
+        renovaEm: true,
+        canceledAt: true,
+        ativo: true,
+        status: true,
+        trialStartsAt: true,
+        trialEndsAt: true,
+        bloqueadoEm: true,
+      },
+    });
+
+    // Sem assinatura => não é PRO
+    if (!assinatura) {
+      return res.json({
+        hasAssinatura: false,
+        isPro: false,
+        reason: "NO_SUBSCRIPTION",
+        assinatura: null,
+      });
+    }
+
+    const now = new Date();
+
+    // Bloqueio administrativo => não PRO
+    if (assinatura.bloqueadoEm) {
+      return res.json({
+        hasAssinatura: true,
+        isPro: false,
+        reason: "BLOCKED",
+        assinatura,
+      });
+    }
+
+    // Cancelada/inativa => não PRO
+    if (!assinatura.ativo) {
+      return res.json({
+        hasAssinatura: true,
+        isPro: false,
+        reason: "INACTIVE",
+        assinatura,
+      });
+    }
+
+    // ✅ Regras de validade:
+    const renovaEmOk =
+      assinatura.renovaEm && new Date(assinatura.renovaEm) > now;
+
+    const trialOk =
+      assinatura.status === "TRIAL" &&
+      (
+        // se tiver trialEndsAt, respeita
+        (assinatura.trialEndsAt && new Date(assinatura.trialEndsAt) > now)
+        // se não tiver trialEndsAt, cai pro renovaEm (se você usa renovaEm no trial)
+        || (!assinatura.trialEndsAt && renovaEmOk)
+      );
+
+    const ativaOk =
+      assinatura.status === "ATIVA" && renovaEmOk;
+
+    // ✅ PRO se ATIVA válida ou TRIAL válido
+    const isPro = Boolean(ativaOk || trialOk);
+
+
+    return res.json({
+      hasAssinatura: true,
+      isPro,
+      reason: isPro ? "OK" : "EXPIRED_OR_NOT_ACTIVE",
+      assinatura,
+    });
+  } catch (error) {
+    console.error("Erro ao buscar assinatura do usuário:", error);
     return res.status(500).json({ error: "Erro interno do servidor" });
   }
 };

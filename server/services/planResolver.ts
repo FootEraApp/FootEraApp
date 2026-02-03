@@ -1,3 +1,4 @@
+// server/services/planResolve
 import { PrismaClient, TipoUsuario } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -10,6 +11,7 @@ export interface UserPayload {
   tipoUsuarioId?: string | null;
   plano?: PlanoName | null;  
   isAdmin?: boolean;
+  parceiro: boolean;
 }
 
 function asPlano(p?: string | null): PlanoName {
@@ -72,5 +74,6 @@ export async function resolveUserContext(userId: string): Promise<UserPayload> {
     tipoUsuarioId: null,
     plano,
     isAdmin: !!usuario.administrador,
+    parceiro: usuario.parceiro,
   };
 }
