@@ -747,8 +747,8 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                       const titulo =
                         a?.titulo ?? a?.nome ?? a?.treino?.nome ?? a?.desafio?.nome ?? "Atividade";
                       const dataWire =
-                        a?.criadoEm ??                 // ✅ vem do seu backend (AtividadeUI)
-                        a?.data ??                     // ✅ vem do mapGrupoToAtividade
+                        a?.criadoEm ??                
+                        a?.data ??                   
                         a?.dataRealizada ??
                         a?.dataConclusao ??
                         a?.dataFim ??

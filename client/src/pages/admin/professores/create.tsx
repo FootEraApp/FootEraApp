@@ -12,16 +12,11 @@ type StatusCrefUI = "ATIVO" | "INATIVO";
 
 export default function CriarOuEditarProfessor() {
   const [id, setId] = useState<string | null>(null);
-
   const [cref, setCref] = useState("");
   const [nome, setNome] = useState("");
-
-  // ✅ novo campo
   const [dataNascimento, setDataNascimento] = useState<string>("");
-
   const [areaFormacao, setAreaFormacao] = useState("");
   const [statusCref, setStatusCref] = useState<StatusCrefUI>("ATIVO");
-
   const [qualificacoes, setQualificacoes] = useState<string[]>([]);
   const [certificacoes, setCertificacoes] = useState<string[]>([]);
   const [qualificacaoAtual, setQualificacaoAtual] = useState("");
@@ -44,7 +39,6 @@ export default function CriarOuEditarProfessor() {
         setCref(data.cref || "");
         setNome(data.nome || "");
 
-        // ✅ se vier DateTime do backend, tenta converter pra yyyy-mm-dd
         if (data.dataNascimento) {
           const d = new Date(data.dataNascimento);
           if (!Number.isNaN(d.getTime())) {
@@ -58,11 +52,8 @@ export default function CriarOuEditarProfessor() {
         }
 
         setAreaFormacao(data.areaFormacao || "");
-
-        // ✅ normaliza (aceita "Ativo"/"Inativo", "ATIVO"/"INATIVO")
         const sc = String(data.statusCref || "ATIVO").toUpperCase();
         setStatusCref(sc === "INATIVO" ? "INATIVO" : "ATIVO");
-
         setQualificacoes(Array.isArray(data.qualificacoes) ? data.qualificacoes : []);
         setCertificacoes(Array.isArray(data.certificacoes) ? data.certificacoes : []);
       })
@@ -79,20 +70,14 @@ export default function CriarOuEditarProfessor() {
 
     const formData = new FormData();
 
-    // ✅ CREF opcional (só envia se tiver)
     if (cref.trim()) formData.append("cref", cref.trim());
 
     formData.append("nome", nome.trim());
 
-    // ✅ data nascimento opcional
     if (dataNascimento) formData.append("dataNascimento", dataNascimento);
-
     if (areaFormacao.trim()) formData.append("areaFormacao", areaFormacao.trim());
 
-    // ✅ agora bate com ENUM do Prisma
     formData.append("statusCref", statusCref);
-
-    // ✅ manda como JSON (o backend vai parsear)
     formData.append("qualificacoes", JSON.stringify(qualificacoes));
     formData.append("certificacoes", JSON.stringify(certificacoes));
 
@@ -170,7 +155,6 @@ export default function CriarOuEditarProfessor() {
         <option value="INATIVO">Inativo</option>
       </select>
 
-      {/* ✅ NOVO: data nascimento antes da área */}
       <label className="text-green-800">Data de Nascimento</label>
       <input
         type="date"

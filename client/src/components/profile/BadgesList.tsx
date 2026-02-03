@@ -172,12 +172,9 @@ export function BadgesList({
         });
         if (cancelled) return;
 
-        const ownerTipo = r.data?.ownerTipo; // "Atleta"|"Professor"|"Clube"|"Escolinha"
+        const ownerTipo = r.data?.ownerTipo;
         const entityLabel = entityLabelFromOwnerTipo(ownerTipo);
-
         const earnedRaw = Array.isArray(r.data?.earned) ? r.data.earned : [];
-
-        // ✅ pega só conquistas realmente concluídas
         const onlyDone = earnedRaw.filter((e: any) => Boolean(e?.concluida));
 
         setEarned(

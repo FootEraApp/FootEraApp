@@ -83,12 +83,37 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
   try {
     dbUser = await prisma.usuario.findUnique({
       where: { id: userId },
-      select: { id: true, tokenVersion: true, tipo: true, parceiro: true },
+      select: {
+        id: true,
+        tokenVersion: true,
+        tipo: true,
+        deletedAt: true,
+        status: true,
+        blockedAt: true,
+        blockedReason: true,
+        parceiro: true,
+      },
     });
 
     if (!dbUser) {
       return res.status(401).json({ message: "Usuário inválido." });
     }
+
+    if (dbUser.deletedAt) {
+      return res.status(401).json({
+        message: "Conta está na lixeira (em processo de exclusão).",
+        code: "ACCOUNT_DELETED",
+      });
+    }
+
+    const status = String((dbUser as any).status ?? "").toUpperCase();
+      if (status === "BLOQUEADO" || (dbUser as any).blockedAt) {
+        return res.status(403).json({
+          message: "Conta bloqueada.",
+          code: "ACCOUNT_BLOCKED",
+          blockedReason: (dbUser as any).blockedReason ?? null,
+        });
+      }
 
     const tokenV = Number(payload?.tokenVersion ?? 0);
     const dbV = Number(dbUser.tokenVersion ?? 0);
@@ -110,7 +135,6 @@ const parceiro = Boolean(dbUser?.parceiro);
   const reqAuthed = req as AuthenticatedRequest;
   reqAuthed.userId = userId;
 
-  // mantém seu resolveUserContext
   try {
     const ctx = await resolveUserContext(userId);
 
@@ -151,6 +175,28 @@ const parceiro = Boolean(dbUser?.parceiro);
 
     reqAuthed.authUser = user;
     (reqAuthed as any).user = user;
+  }
+
+  try {
+    const THROTTLE_MS = 60_000; 
+    const key = userId;
+
+    (globalThis as any).__lastSeenMap ??= new Map<string, number>();
+    const m: Map<string, number> = (globalThis as any).__lastSeenMap;
+
+    const now = Date.now();
+    const prev = m.get(key) ?? 0;
+
+    if (now - prev > THROTTLE_MS) {
+      m.set(key, now);
+      prisma.usuario
+        .update({
+          where: { id: userId },
+          data: { lastSeenAt: new Date() },
+        })
+        .catch(() => {});
+    }
+  } catch {
   }
 
   return next();

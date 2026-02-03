@@ -1,4 +1,3 @@
-// server/controllers/atletaObservadoController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 
@@ -26,30 +25,6 @@ function buildOwnerWhere(tipoRaw: string | undefined, ownerId: string): OwnerWhe
       { olheiroId: ownerId },
     ],
   };
-}
-
-function buildOwnerCreate(tipoRaw: string | undefined, ownerId: string) {
-  const tipo = String(tipoRaw || "").toLowerCase();
-
-  if (tipo === "professor") {
-    return { professor: { connect: { id: ownerId } } };
-  }
-
-  if (tipo === "clube") {
-    return { clube: { connect: { id: ownerId } } };
-  }
-
-  if (tipo === "escola" || tipo === "escolinha") {
-    return { escolinha: { connect: { id: ownerId } } };
-  }
-
-  if (tipo === "olheiro") {
-    return { olheiro: { connect: { id: ownerId } } };
-  }
-
-  throw new Error(
-    `buildOwnerCreate: tipo de owner inválido ou ausente (tipoRaw="${tipoRaw}", ownerId="${ownerId}")`
-  );
 }
 
 export async function statusObservacao(req: Request, res: Response) {
@@ -342,8 +317,6 @@ export async function atualizarObservado(req: Request, res: Response) {
     }
 
     const ownerWhere = buildOwnerWhere(tipoRaw, ownerId);
-
-    // 1) tenta atualizar como se fosse o ID do registro AtletaObservado
     const byId = await prisma.atletaObservado.findFirst({
       where: { id: idParamRaw, ...ownerWhere },
       select: { id: true },
@@ -361,7 +334,6 @@ export async function atualizarObservado(req: Request, res: Response) {
       return res.json({ ok: true, mode: "by_observado_id" });
     }
 
-    // 2) fallback: tenta atualizar por atletaId (se o param era atletaId mesmo)
     const result = await prisma.atletaObservado.updateMany({
       where: {
         atletaId: idParamRaw,

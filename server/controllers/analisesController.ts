@@ -1,6 +1,17 @@
 import type { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function addDays(d: Date, n: number) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+function endExclusiveOfDay(d: Date) {
+  return addDays(startOfDay(d), 1);
+}
 
 function assertAdmin(req: Request) {
   const me: any = (req as any).me;
@@ -13,19 +24,18 @@ function assertAdmin(req: Request) {
   }
 }
 
-function parseDate(v?: string, fallback?: Date) {
+function parseISODateLocal(v?: string, fallback?: Date) {
   if (!v) return fallback ?? new Date();
-  const d = new Date(v);
-  return isNaN(+d) ? (fallback ?? new Date()) : d;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const [y, m, d] = v.split("-").map(Number);
+    return new Date(y, m - 1, d); 
+  }
+
+  const dt = new Date(v);
+  return isNaN(+dt) ? (fallback ?? new Date()) : dt;
 }
-function startOfDay(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-function addDays(d: Date, n: number) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
+
 function monthBounds(isoYYYYMM: string) {
   const [y, m] = isoYYYYMM.split("-").map(Number);
   const start = new Date(y, m - 1, 1);
@@ -36,65 +46,45 @@ function monthBounds(isoYYYYMM: string) {
 export async function overview(req: Request, res: Response) {
   try {
     assertAdmin(req);
-    const to = parseDate(String(req.query.to) || undefined, new Date());
-    const toFloor = startOfDay(to);
-    const from30 = addDays(toFloor, -30);
-    const from7 = addDays(toFloor, -7);
-    const from1 = addDays(toFloor, -1);
+
+    const to = parseISODateLocal(String(req.query.to) || undefined, new Date());
+    const end = endExclusiveOfDay(to);
+    const from30 = addDays(end, -30);
+    const from7  = addDays(end, -7);
+    const from24h = new Date(end);
+    from24h.setHours(from24h.getHours() - 24);
 
     const [dau, wau, mau, novos30] = await Promise.all([
-      prisma.$queryRaw<{ c: bigint }[]>`
-        SELECT COUNT(DISTINCT "usuarioId")::bigint AS c
-        FROM "AtividadeRecente" 
-        WHERE "createdAt" >= ${from1} AND "createdAt" < ${toFloor};
-      `,
-      prisma.$queryRaw<{ c: bigint }[]>`
-        SELECT COUNT(DISTINCT "usuarioId")::bigint AS c
-        FROM "AtividadeRecente" 
-        WHERE "createdAt" >= ${from7} AND "createdAt" < ${toFloor};
-      `,
-      prisma.$queryRaw<{ c: bigint }[]>`
-        SELECT COUNT(DISTINCT "usuarioId")::bigint AS c
-        FROM "AtividadeRecente" 
-        WHERE "createdAt" >= ${from30} AND "createdAt" < ${toFloor};
-      `,
-      prisma.usuario.count({ where: { dataCriacao: { gte: from30, lt: toFloor } } }),
+      prisma.loginEvent.findMany({
+        where: { createdAt: { gte: from24h, lt: end } },
+        select: { usuarioId: true },
+        distinct: ["usuarioId"],
+      }).then(r => r.length),
+
+      prisma.loginEvent.findMany({
+        where: { createdAt: { gte: from7, lt: end } },
+        select: { usuarioId: true },
+        distinct: ["usuarioId"],
+      }).then(r => r.length),
+
+      prisma.loginEvent.findMany({
+        where: { createdAt: { gte: from30, lt: end } },
+        select: { usuarioId: true },
+        distinct: ["usuarioId"],
+      }).then(r => r.length),
+
+      prisma.usuario.count({ where: { dataCriacao: { gte: from30, lt: end } } }),
     ]);
 
-    const d7 = await prisma.$queryRaw<{ retained: bigint }[]>`
-      SELECT COUNT(DISTINCT u.id)::bigint AS retained
-      FROM "Usuario" u
-      LEFT JOIN "AtividadeRecente" a
-        ON a."usuarioId" = u.id
-       AND a."createdAt" >= (u."dataCriacao" + interval '7 days')
-       AND a."createdAt" <  (u."dataCriacao" + interval '14 days')
-      WHERE u."dataCriacao" >= ${from30} AND u."dataCriacao" < ${toFloor}
-        AND a."createdAt" IS NOT NULL;
-    `;
-    const d30 = await prisma.$queryRaw<{ retained: bigint }[]>`
-      SELECT COUNT(DISTINCT u.id)::bigint AS retained
-      FROM "Usuario" u
-      LEFT JOIN "AtividadeRecente" a
-        ON a."usuarioId" = u.id
-       AND a."createdAt" >= (u."dataCriacao" + interval '30 days')
-       AND a."createdAt" <  (u."dataCriacao" + interval '37 days')
-      WHERE u."dataCriacao" >= ${from30} AND u."dataCriacao" < ${toFloor}
-        AND a."createdAt" IS NOT NULL;
-    `;
+    const stickiness = mau ? +(wau / mau).toFixed(3) : 0;
 
-    const wauNum = Number(wau[0]?.c ?? 0n);
-    const mauNum = Number(mau[0]?.c ?? 0n);
-    const stickiness = mauNum ? +(wauNum / mauNum).toFixed(3) : 0;
-
-    res.json({
-      DAU: Number(dau[0]?.c ?? 0n),
-      WAU: wauNum,
-      MAU: mauNum,
+    return res.json({
+      DAU: dau,
+      WAU: wau,
+      MAU: mau,
       stickiness,
-      novos30d: Number(novos30 || 0),
-      D7: Number(d7[0]?.retained ?? 0n),
-      D30: Number(d30[0]?.retained ?? 0n),
-      range: { from: from30.toISOString(), to: toFloor.toISOString() },
+      novos30d: novos30,
+      range: { from: from30.toISOString(), to: end.toISOString() },
     });
   } catch (e: any) {
     res.status(e.status || 500).send(e.message || "Erro no overview");
@@ -104,8 +94,12 @@ export async function overview(req: Request, res: Response) {
 export async function activeUsersSeries(req: Request, res: Response) {
   try {
     assertAdmin(req);
-    const from = parseDate(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
-    const to = parseDate(String(req.query.to) || undefined, startOfDay(new Date()));
+
+    const fromIn = parseISODateLocal(String(req.query.from) || undefined, addDays(new Date(), -30));
+    const toIn   = parseISODateLocal(String(req.query.to) || undefined, new Date());
+    const from = startOfDay(fromIn);
+    const to = endExclusiveOfDay(toIn);
+
     const gran = String(req.query.granularity || "day")
       .replace("daily", "day")
       .replace("weekly", "week")
@@ -114,13 +108,13 @@ export async function activeUsersSeries(req: Request, res: Response) {
     const rows = await prisma.$queryRawUnsafe<{ bucket: Date; active: number }[]>(`
       SELECT date_trunc('${gran}', "createdAt") AS bucket,
              COUNT(DISTINCT "usuarioId")::int   AS active
-      FROM "AtividadeRecente"
+      FROM "LoginEvent"
       WHERE "createdAt" >= $1 AND "createdAt" < $2
       GROUP BY bucket
       ORDER BY bucket
     `, from, to);
 
-    res.json(rows);
+    return res.json(rows);
   } catch (e: any) {
     res.status(e.status || 500).send(e.message || "Erro na série de ativos");
   }
@@ -129,8 +123,8 @@ export async function activeUsersSeries(req: Request, res: Response) {
 export async function engagementSummary(req: Request, res: Response) {
   try {
     assertAdmin(req);
-    const from = parseDate(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
-    const to = parseDate(String(req.query.to) || undefined, startOfDay(new Date()));
+    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
+    const to = parseISODateLocal(String(req.query.to) || undefined, startOfDay(new Date()));
 
     const [posts, comments, likes, msgs, subTreino, subDesafio, treinosAgendados, treinosRealizados] = await Promise.all([
       prisma.postagem.count({ where: { dataCriacao: { gte: from, lt: to } } }),
@@ -140,12 +134,42 @@ export async function engagementSummary(req: Request, res: Response) {
       prisma.submissaoTreino.count({ where: { criadoEm:{ gte: from, lt: to } } }),
       prisma.submissaoDesafio.count({ where:{ createdAt:{ gte: from, lt: to } } }),
       prisma.treinoAgendado.count({ where: { dataTreino: { gte: from, lt: to } } }),
-      prisma.treinoRealizado.count({ where: { } }).catch(() => 0),
+      prisma.treinoRealizado.count({ where: { createdAt: { gte: from, lt: to } } })
     ]);
 
     res.json({ posts, comments, likes, messages: msgs, subTreino, subDesafio, treinosAgendados, treinosRealizados });
   } catch (e: any) {
     res.status(e.status || 500).send(e.message || "Erro no resumo de engajamento");
+  }
+}
+
+export async function loginsSummary(req: Request, res: Response) {
+  try {
+    assertAdmin(req);
+
+    const fromStr = String(req.query.from || "").trim();
+    const toStr = String(req.query.to || "").trim();
+    if (!fromStr || !toStr) return res.status(400).send("Informe from=YYYY-MM-DD&to=YYYY-MM-DD");
+
+    const start = startOfDay(new Date(fromStr));
+    const end = new Date(toStr);
+    end.setHours(23, 59, 59, 999);
+
+    const [total, uniqueUsers] = await Promise.all([
+      prisma.loginEvent.count({ where: { createdAt: { gte: start, lte: end } } }),
+      prisma.loginEvent.findMany({
+        where: { createdAt: { gte: start, lte: end } },
+        select: { usuarioId: true },
+        distinct: ["usuarioId"],
+      }),
+    ]);
+
+    return res.json({
+      totalLogins: total,
+      uniqueUsers: uniqueUsers.length,
+    });
+  } catch (e: any) {
+    return res.status(e.status || 500).send(e.message || "Erro no resumo de logins");
   }
 }
 
@@ -155,8 +179,8 @@ export async function engagementSeries(req: Request, res: Response) {
     const metric = String(req.query.metric || "posts");
     const gran = String(req.query.granularity || "daily")
       .replace("daily", "day").replace("weekly","week").replace("monthly","month");
-    const from = parseDate(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
-    const to = parseDate(String(req.query.to) || undefined, startOfDay(new Date()));
+    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
+    const to = parseISODateLocal(String(req.query.to) || undefined, startOfDay(new Date()));
 
     const cfg: Record<string, { table: string; col: string; }> = {
       posts: { table: `"Postagem"`, col: `"dataCriacao"` },
@@ -187,8 +211,8 @@ export async function engagementSeries(req: Request, res: Response) {
 export async function convEscolinha(req: Request, res: Response) {
   try {
     assertAdmin(req);
-    const from = parseDate(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -60));
-    const to = parseDate(String(req.query.to) || undefined, startOfDay(new Date()));
+    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -60));
+    const to = parseISODateLocal(String(req.query.to) || undefined, startOfDay(new Date()));
 
     const rows = await prisma.$queryRaw<{ bucket: Date; novosVinculos: number }[]>`
       SELECT date_trunc('week', "criadoEm") AS bucket,
@@ -207,8 +231,8 @@ export async function convEscolinha(req: Request, res: Response) {
 export async function convClube(req: Request, res: Response) {
   try {
     assertAdmin(req);
-    const from = parseDate(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -60));
-    const to = parseDate(String(req.query.to) || undefined, startOfDay(new Date()));
+    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -60));
+    const to = parseISODateLocal(String(req.query.to) || undefined, startOfDay(new Date()));
 
     const rows = await prisma.$queryRaw<{ bucket: Date; novosVinculos: number }[]>`
       SELECT date_trunc('week', "criadoEm") AS bucket,
@@ -227,8 +251,8 @@ export async function convClube(req: Request, res: Response) {
 export async function invitesSummary(req: Request, res: Response) {
   try {
     assertAdmin(req);
-    const from = parseDate(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -60));
-    const to = parseDate(String(req.query.to) || undefined, startOfDay(new Date()));
+    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -60));
+    const to = parseISODateLocal(String(req.query.to) || undefined, startOfDay(new Date()));
 
     const rows = await prisma.$queryRaw<{ status: string | null; total: number }[]>`
       SELECT COALESCE(status, 'indefinido') AS status, COUNT(*)::int AS total
@@ -245,19 +269,65 @@ export async function invitesSummary(req: Request, res: Response) {
 export async function activityByUf(req: Request, res: Response) {
   try {
     assertAdmin(req);
-    const from = parseDate(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
-    const to = parseDate(String(req.query.to) || undefined, startOfDay(new Date()));
+    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
+    const to = parseISODateLocal(String(req.query.to) || undefined, startOfDay(new Date()));
 
     const rows = await prisma.$queryRaw<{ uf: string | null; ativos: number }[]>`
-      SELECT u."estado" AS uf, COUNT(DISTINCT ar."usuarioId")::int AS ativos
-      FROM "AtividadeRecente" ar
-      JOIN "Usuario" u ON u.id = ar."usuarioId"
-      WHERE ar."createdAt" >= ${from} AND ar."createdAt" < ${to}
+      SELECT u."estado" AS uf, COUNT(DISTINCT le."usuarioId")::int AS ativos
+      FROM "LoginEvent" le
+      JOIN "Usuario" u ON u.id = le."usuarioId"
+      WHERE le."createdAt" >= ${from} AND le."createdAt" < ${to}
       GROUP BY u."estado" ORDER BY ativos DESC;
     `;
     res.json(rows);
   } catch (e: any) {
     res.status(e.status || 500).send(e.message || "Erro no heatmap por UF");
+  }
+}
+
+export async function newUsersSeries(req: Request, res: Response) {
+  try {
+    assertAdmin(req);
+    const from = parseISODateLocal(String(req.query.from) || undefined, addDays(startOfDay(new Date()), -30));
+    const to = parseISODateLocal(String(req.query.to) || undefined, startOfDay(new Date()));
+
+    const rows = await prisma.$queryRaw<{ bucket: Date; novos: number }[]>`
+      SELECT date_trunc('day', "dataCriacao") AS bucket,
+             COUNT(*)::int AS novos
+      FROM "Usuario"
+      WHERE "dataCriacao" >= ${from} AND "dataCriacao" < ${to}
+      GROUP BY bucket ORDER BY bucket;
+    `;
+
+    res.json(rows);
+  } catch (e: any) {
+    res.status(e.status || 500).send(e.message || "Erro na série de usuários novos");
+  }
+}
+
+export async function activeByUserType(req: Request, res: Response) {
+  try {
+    assertAdmin(req);
+
+    const fromIn = parseISODateLocal(String(req.query.from) || undefined, addDays(new Date(), -30));
+    const toIn   = parseISODateLocal(String(req.query.to) || undefined, new Date());
+
+    const from = startOfDay(fromIn);
+    const to = endExclusiveOfDay(toIn);
+
+    const rows = await prisma.$queryRaw<{ tipo: string; usuarios: number }[]>`
+      SELECT u."tipo"::text AS tipo,
+             COUNT(DISTINCT le."usuarioId")::int AS usuarios
+      FROM "LoginEvent" le
+      JOIN "Usuario" u ON u.id = le."usuarioId"
+      WHERE le."createdAt" >= ${from} AND le."createdAt" < ${to}
+      GROUP BY u."tipo"
+      ORDER BY usuarios DESC;
+    `;
+
+    return res.json(rows);
+  } catch (e: any) {
+    res.status(e.status || 500).send(e.message || "Erro por tipo de usuário");
   }
 }
 

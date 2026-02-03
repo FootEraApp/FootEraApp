@@ -30,7 +30,6 @@ router.post("/", async (req, res) => {
       return res.status(401).json({ error: "Não autenticado como olheiro." });
     }
 
-    // ✅ AQUI é onde entra o seu trecho do "tipo"
     const tipo = getTipoUsuarioFromReq(req);
     if (tipo && tipo.toLowerCase() !== "olheiro") {
       return res.status(403).json({ error: "Apenas olheiro pode criar indicação." });
@@ -42,7 +41,6 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Informe atletaId." });
     }
 
-    // exatamente 1 destino
     const hasClube = Boolean(clubeId);
     const hasEscolinha = Boolean(escolinhaId);
 
@@ -59,8 +57,6 @@ router.post("/", async (req, res) => {
 
     if (!olheiro) return res.status(404).json({ error: "Olheiro não encontrado." });
     if (!atleta) return res.status(404).json({ error: "Atleta não encontrado." });
-
-    // ✅ Clube
     if (hasClube) {
       const clube = await prisma.clube.findUnique({
         where: { id: String(clubeId) },
@@ -85,7 +81,6 @@ router.post("/", async (req, res) => {
       return res.status(201).json(created);
     }
 
-    // ✅ Escolinha
     const escolinha = await prisma.escolinha.findUnique({
       where: { id: String(escolinhaId) },
     });

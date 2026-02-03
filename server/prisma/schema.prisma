@@ -30,15 +30,22 @@ model Usuario {
   dataCriacao               DateTime    @default(now())
   codigo                    String?
   verified                  Boolean     @default(false)
-
-  parceiro     Boolean   @default(false)
-  parceiroInfo Parceiro?
-
-  EmailVerification EmailVerification[]
-  assinatura        Assinatura?
-  administrador     Administrador?
-  tokenVersion      Int                 @default(0)
-  senhaAtualizadaEm DateTime?
+  deletedAt                 DateTime?
+  deleteScheduledAt         DateTime?
+  lastSeenAt                DateTime?  
+  lastLoginAt               DateTime?
+  lastLogoutAt              DateTime?
+  parceiro                  Boolean   @default(false)
+  parceiroInfo              Parceiro?
+  EmailVerification         EmailVerification[]
+  assinatura                Assinatura?
+  administrador             Administrador?
+  tokenVersion              Int                 @default(0)
+  senhaAtualizadaEm         DateTime?
+  status                    AccountStatus @default(ATIVO)
+  blockedAt                 DateTime?
+  blockedReason             String?
+  reactivatedAt             DateTime?
 
   amigosDe               Amigo[]                   @relation("AmigoUsuario")
   amigos                 Amigo[]                   @relation("UsuarioAmigo")
@@ -91,6 +98,11 @@ model Usuario {
 
   metodologiasCriadas   Metodologia[]          @relation("MetodologiaCriador")
   metodologiasAssinadas MetodologiaAssinante[]
+  
+  LoginEvent             LoginEvent[]
+
+  @@index([deletedAt])
+  @@index([deleteScheduledAt])
 }
 
 model Parceiro {
@@ -2156,6 +2168,21 @@ model ConquistaVinculo {
   @@index([clubeId])
   @@index([escolinhaId])
   @@index([concluida, conquistadoEm])
+}
+
+model LoginEvent {
+  id        String   @id @default(uuid())
+  usuarioId String
+  createdAt DateTime @default(now())
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, createdAt])
+  @@index([createdAt])
+}
+
+enum AccountStatus {
+  ATIVO
+  BLOQUEADO
 }
 
 enum ConvocacaoStatus {
