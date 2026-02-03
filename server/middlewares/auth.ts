@@ -1,3 +1,4 @@
+// server/middlewares/auth
 import { RequestHandler, Request } from "express";
 import jwt from "jsonwebtoken";
 import { TipoUsuario } from "@prisma/client";
@@ -78,10 +79,11 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
   }
 
   // ✅ tokenVersion: invalida tokens antigos quando "encerrar sessões" é acionado
+  let dbUser: { id: string; tokenVersion: number; tipo: TipoUsuario; parceiro: boolean } | null = null;
   try {
-    const dbUser = await prisma.usuario.findUnique({
+    dbUser = await prisma.usuario.findUnique({
       where: { id: userId },
-      select: { id: true, tokenVersion: true, tipo: true },
+      select: { id: true, tokenVersion: true, tipo: true, parceiro: true },
     });
 
     if (!dbUser) {
@@ -102,6 +104,9 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
     return res.status(401).json({ message: "Sessão inválida." });
   }
 
+const parceiro = Boolean(dbUser?.parceiro);
+
+
   const reqAuthed = req as AuthenticatedRequest;
   reqAuthed.userId = userId;
 
@@ -115,7 +120,9 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
       tipoUsuarioId: ctx.tipoUsuarioId ?? null,
       plano: ((ctx.plano as PlanoName) ?? "FREE") as PlanoName,
       isAdmin: !!ctx.isAdmin,
+      parceiro,
     };
+
 
     reqAuthed.authUser = user;
     (reqAuthed as any).user = user;
@@ -138,7 +145,9 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
       tipoUsuarioId: null,
       plano: "FREE" as PlanoName,
       isAdmin: tipoRaw === "admin",
+      parceiro,
     };
+
 
     reqAuthed.authUser = user;
     (reqAuthed as any).user = user;
