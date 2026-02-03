@@ -794,6 +794,17 @@ export default function NovoTreino() {
   const [metas, setMetas] = useState<string>("");
   const [dicas, setDicas] = useState<string[]>([]);
 
+  const [isParceiro, setIsParceiro] = useState<boolean>(false);
+
+  // ✅ Treino Footera (público/parceiro)
+  const [treinoFootera, setTreinoFootera] = useState<boolean>(false);
+
+  // ✅ Só professor parceiro pode publicar como "Footera"
+  const podePublicarFootera = useMemo(() => {
+    return Boolean(isParceiro);
+  }, [isParceiro]);
+
+
   const [filtroEx, setFiltroEx] = useState("");
   const [filtroCategorias, setFiltroCategorias] = useState<string[]>([]);
   const [filtroNiveis, setFiltroNiveis] = useState<string[]>([]);
@@ -893,6 +904,84 @@ export default function NovoTreino() {
         ""
     ).trim();
   }, []);
+
+useEffect(() => {
+  let cancel = false;
+
+  (async () => {
+    try {
+      const tipo = String(
+        (Storage as any).tipoSalvo ??
+          localStorage.getItem("tipoUsuario") ??
+          sessionStorage.getItem("tipoUsuario") ??
+          ""
+      )
+        .trim()
+        .toLowerCase();
+
+      // só faz sentido para professor
+      if (tipo !== "professor") {
+        if (!cancel) setIsParceiro(false);
+        return;
+      }
+
+      const token = getToken();
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+      // rota que você mostrou no print (GET /api/professores)
+      const r = await fetch(`${API.BASE_URL}/api/professores`, { headers });
+      if (!r.ok) throw new Error(await r.text());
+
+      const j = await r.json().catch(() => null);
+      const arr = Array.isArray(j) ? j : (j?.items ?? j?.data ?? []);
+
+      // acha o professor logado no retorno
+      const me = (arr || []).find((p: any) => String(p?.id) === String(professorLogadoId));
+
+      // tenta ler o flag em chaves comuns
+      const parceiro =
+        Boolean(
+          me?.parceiro ??
+            me?.isParceiro ??
+            me?.usuario?.parceiro ??
+            me?.usuario?.isParceiro ??
+            me?.perfil?.parceiro ??
+            false
+        );
+
+      if (cancel) return;
+
+      // seta state local
+      setIsParceiro(parceiro);
+
+      // persiste para o seu useMemo "podePublicarFootera" funcionar
+      try {
+        (Storage as any).parceiro = parceiro;
+      } catch {}
+      localStorage.setItem("parceiro", String(parceiro));
+      sessionStorage.setItem("parceiro", String(parceiro));
+
+      // se o cara deixou de ser parceiro, garante que o toggle não fica ligado
+      if (!parceiro) setTreinoFootera(false);
+    } catch (e) {
+      console.warn("[NovoTreino] falha ao verificar parceiro:", e);
+      if (!cancel) {
+        setIsParceiro(false);
+        try {
+          (Storage as any).parceiro = false;
+        } catch {}
+        localStorage.setItem("parceiro", "false");
+        sessionStorage.setItem("parceiro", "false");
+        setTreinoFootera(false);
+      }
+    }
+  })();
+
+  return () => {
+    cancel = true;
+  };
+}, [professorLogadoId]);
+
 
   useEffect(() => {
   let cancel = false;
@@ -1623,6 +1712,7 @@ useEffect(() => {
               : []
           );
           setCapaUrl(saved.capaUrl ?? "");
+          setTreinoFootera(Boolean(saved.treinoFootera ?? false));
         }
       }
 
@@ -1842,7 +1932,8 @@ useEffect(() => {
       atletasSelecionados,
       datasAgendamento,
       professoresSelecionados,
-      capaUrl
+      capaUrl,
+      treinoFootera,
     });
   }, [
     etapa,
@@ -1858,6 +1949,7 @@ useEffect(() => {
     atletasSelecionados,
     datasAgendamento,
     professoresSelecionados,
+    treinoFootera,
   ]);
 
   async function carregarTreinoParaEdicao(id: string) {
@@ -1915,6 +2007,9 @@ useEffect(() => {
     // categorias (pode vir string[] / Categoria[])
     const cats = t.categoria ?? t.categorias ?? [];
     setCategorias(Array.isArray(cats) ? cats.map(String) : cats ? [String(cats)] : []);
+
+    // ✅ se vier do backend como publico/parceiro
+    setTreinoFootera(Boolean(t.publico ?? t.parceiro ?? t.isFootera ?? false));
 
     // professores colaboradores (pode vir professoresIds, colaboradores, criadores etc)
     const profIds =
@@ -2599,6 +2694,18 @@ useEffect(() => {
       (payload as any).tipoUsuarioId = String(tipoUsuarioIdProfessor);
 
       (payload as any).tipoUsuarioId = String(tipoUsuarioId);
+
+      // ✅ define se o treino é "Footera" (público/parceiro) ou normal
+      // (o backend pode usar "publico" e/ou "parceiro" — mandamos ambos pra garantir)
+      // ✅ segurança extra: se não é parceiro, força false
+      const treinoFooteraFinal = isParceiro ? Boolean(treinoFootera) : false;
+      if (!isParceiro && treinoFootera) setTreinoFootera(false);
+
+      (payload as any).publico = treinoFooteraFinal;
+      (payload as any).parceiro = treinoFooteraFinal;
+      (payload as any).isFootera = treinoFooteraFinal; // extra (se você quiser tratar)
+
+
       // atletas / elencos / colaboradores
       (payload as any).atletasIds = atletasSelecionados;
       (payload as any).elencosIds = elencoSelecionado ? [elencoSelecionado] : [];
@@ -2755,6 +2862,7 @@ useEffect(() => {
       setProfessoresSelecionados([]);
       setCapaUrl("");
       setCapaPreview("");
+      setTreinoFootera(false);
       setTimeout(() => {
         navigate("/treinos");
       }, 500);
@@ -3089,6 +3197,7 @@ useEffect(() => {
                 setCapaPreview("");
                 sessionStorage.removeItem(SAVE_KEY);
                 sessionStorage.removeItem(RESTORE_FLAG_KEY);
+                setTreinoFootera(false);
               }
             }}
             className="text-sm text-red-700 underline justify-self-end col-start-3"
@@ -3145,6 +3254,54 @@ useEffect(() => {
 
         {etapa === 1 && (
           <StepCard title="Informações Básicas">
+
+        {/* ✅ Tipo de publicação — só aparece para professor parceiro */}
+        {isParceiro && (
+          <div className="mt-2">
+            <label className="block text-sm text-gray-700 mb-2">
+              Publicação do treino
+            </label>
+
+            <button
+              type="button"
+              onClick={() => setTreinoFootera((v) => !v)}
+              className={[
+                "w-full flex items-center justify-between gap-3 rounded-2xl border p-3 text-left transition",
+                treinoFootera
+                  ? "border-green-700 bg-green-50"
+                  : "border-gray-200 bg-white hover:bg-gray-50",
+              ].join(" ")}
+              title="Marque para publicar como Footera (público/parceiro)"
+            >
+              <div className="min-w-0">
+                <div className="font-semibold text-sm">
+                  {treinoFootera ? "✅ Treino Footera (público)" : "Treino normal (privado)"}
+                </div>
+                <div className="text-xs text-gray-600 mt-0.5">
+                  {treinoFootera
+                    ? "Aparece para atletas na aba Professores Footera."
+                    : "Aparece apenas no contexto normal do dono/vínculos."}
+                </div>
+              </div>
+
+              {/* Switch visual */}
+              <span
+                className={[
+                  "relative inline-flex h-7 w-12 items-center rounded-full border transition",
+                  treinoFootera ? "bg-green-700 border-green-700" : "bg-gray-200 border-gray-300",
+                ].join(" ")}
+              >
+                <span
+                  className={[
+                    "inline-block h-5 w-5 transform rounded-full bg-white shadow transition",
+                    treinoFootera ? "translate-x-6" : "translate-x-1",
+                  ].join(" ")}
+                />
+              </span>
+            </button>
+          </div>
+        )}
+
             <label className="block text-sm text-gray-700 mb-1">
               Título do Treino
             </label>

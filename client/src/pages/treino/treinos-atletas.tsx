@@ -1,3 +1,4 @@
+// client/src/pages/treino/treinos-atletas.tsx
 import React, { useEffect, useRef, useState, type SVGProps } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -117,6 +118,73 @@ type MinhasSubTreino = {
   treinoProgramadoId: string | null;
   aprovado: boolean | null;
 };
+
+type MetodologiaCatalogo = {
+  id: string;
+  titulo: string;
+  descricao?: string | null;
+
+  // opcional: badge tipo "+10 pts"
+  pontosBadge?: string | null;
+
+  // opcional: texto embaixo (ex: "+10 pts por semana")
+  pontosPorSemanaLabel?: string | null;
+
+  // opcional: tags/categorias pra filtrar
+  categorias?: string[]; // ex: ["Goleiros", "Base"]
+
+  // opcional: se já está assinada
+  assinada?: boolean;
+
+  // opcional: logo/thumbnail
+  logoUrl?: string | null;
+};
+
+function MetodologiaCard({
+  item,
+  onAssinar,
+}: {
+  item: MetodologiaCatalogo;
+  onAssinar?: (id: string) => void;
+}) {
+  return (
+    <div className="bg-white rounded-2xl border shadow-sm p-4 flex flex-col justify-between">
+      <div>
+        <div className="flex items-start justify-between gap-3">
+          <h4 className="text-base font-semibold text-green-900 line-clamp-2">
+            {item.titulo}
+          </h4>
+
+          {!!item.pontosBadge && (
+            <span className="text-xs px-2 py-1 rounded-full border bg-amber-50 text-amber-800 font-semibold shrink-0">
+              {item.pontosBadge}
+            </span>
+          )}
+        </div>
+
+        {!!item.descricao && (
+          <p className="text-sm text-gray-600 mt-2 line-clamp-3">
+            {item.descricao}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-4 flex items-center justify-between text-sm gap-2">
+        <span className="text-gray-600 line-clamp-1">
+          {item.pontosPorSemanaLabel || ""}
+        </span>
+
+        <button
+          type="button"
+          onClick={() => onAssinar?.(item.id)}
+          className="px-4 py-2 rounded-xl bg-green-800 text-white font-semibold hover:bg-green-900 shrink-0"
+        >
+          {item.assinada ? "ACESSAR →" : "ASSINAR →"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const now = new Date();
 const hoje = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -456,6 +524,44 @@ function abrirMidiaExercicioDireto(
 
   const [eventosAtleta, setEventosAtleta] = useState<EventoAtleta[]>([]);
   const [agendaAberta, setAgendaAberta] = useState(false);
+
+  type MainTab = "hoje" | "treinos" | "metodologias";
+  const [mainTab, setMainTab] = useState<MainTab>("treinos");
+
+  const [buscaMetodologia, setBuscaMetodologia] = useState("");
+
+  // chips escolhidos (começa vazio)
+  const [filtrosMetodologia, setFiltrosMetodologia] = useState<string[]>([]);
+  const [filtroAtivo, setFiltroAtivo] = useState<string | null>(null);
+
+  // dropdown do “Adicionar filtro”
+  const [addFiltroOpen, setAddFiltroOpen] = useState(false);
+
+  const FILTROS_FIXOS = ["Goleiros", "Linhas", "Base", "Avançado", "Mentalidade"];
+
+
+function adicionarFiltroMetodologia(label: string) {
+  setFiltrosMetodologia((prev) => {
+    if (prev.includes(label)) return prev;
+    return [...prev, label];
+  });
+
+  // opcional: já ativa o filtro escolhido
+  setFiltroAtivo(label);
+  setAddFiltroOpen(false);
+}
+
+function removerFiltroMetodologia(label: string) {
+  setFiltrosMetodologia((prev) => prev.filter((x) => x !== label));
+  setFiltroAtivo((cur) => (cur === label ? null : cur));
+}
+
+
+
+  const [metodologias, setMetodologias] = useState<MetodologiaCatalogo[]>([]);
+  const [metodologiasLoading, setMetodologiasLoading] = useState(false);
+  const [metodologiasErro, setMetodologiasErro] = useState<string | null>(null);
+
 
   const stripRef = useRef<HTMLDivElement | null>(null);
 
@@ -994,6 +1100,23 @@ function abrirMidiaExercicioDireto(
     };
   }, [fullscreenId, statusPorTreino]);
 
+  useEffect(() => {
+    if (!addFiltroOpen) return;
+
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+
+      // fecha quando clicar fora de um botão/menu
+      const isInside = t.closest?.("[data-filtro-menu='1']");
+      if (!isInside) setAddFiltroOpen(false);
+    };
+
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [addFiltroOpen]);
+
+
   async function iniciar(id: string) {
     try {
       const nowMs = Date.now();
@@ -1228,16 +1351,55 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
 
 
   return (
-    <div className="min-h-screen bg-neutral-50 pb-24 overflow-hidden">
-      <div className="mx-auto w-full max-w-3xl lg:max-w-4xl px-3 sm:px-4 overflow-hidden">
-        <div className="max-w-3xl mx-auto px-4 pt-3">
+    <div className="min-h-screen bg-neutral-50 pb-24 overflow-x-hidden">
+      <div className="w-full px-3 sm:px-4 lg:px-8">
+        <div className="pt-3">
           <HealthBanner />
         </div>
 
+
         <div className="sticky top-0 z-20 -mx-3 sm:mx-0 bg-neutral-50/90 backdrop-blur px-3 sm:px-0 pt-3 pb-3">
           <div className="flex items-center justify-between gap-2">
-            <div className="text-lg font-semibold text-green-900">Treinos</div>
+            {/* Abas principais */}
+            <div className="flex items-center gap-2 bg-white border rounded-xl p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setMainTab("hoje")}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
+                  mainTab === "hoje"
+                    ? "bg-green-800 text-white"
+                    : "text-green-900 hover:bg-green-50"
+                }`}
+              >
+                Hoje
+              </button>
 
+              <button
+                type="button"
+                onClick={() => setMainTab("treinos")}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
+                  mainTab === "treinos"
+                    ? "bg-green-800 text-white"
+                    : "text-green-900 hover:bg-green-50"
+                }`}
+              >
+                Treinos
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMainTab("metodologias")}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
+                  mainTab === "metodologias"
+                    ? "bg-green-800 text-white"
+                    : "text-green-900 hover:bg-green-50"
+                }`}
+              >
+                Metodologias
+              </button>
+            </div>
+
+            {/* Botão elenco (fica igual) */}
             {canVerElenco && (
               <Link
                 href="/treinos/elenco"
@@ -1248,374 +1410,563 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
               </Link>
             )}
           </div>
+
+
         </div>
 
-        <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
-            <h3 className="text-lg font-semibold">Meus Treinos</h3>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                className="bg-green-800 text-white px-4 py-2 rounded-lg text-sm"
-                onClick={() => navigate("/treinos/novo")}
-              >
-                Agendar novo treino
-              </button>
 
-              <button
-                className="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm"
-                onClick={() => navigate("/treinos/livre/novo")}
-              >
-                Registrar treino livre
-              </button>
 
-              <button
-                className="bg-white border border-emerald-300 text-emerald-800 px-4 py-2 rounded-lg text-sm"
-                onClick={() => navigate("/treinos/livre/historico")}
-              >
-                Histórico de treinos livres
-              </button>
-            </div>
-          </div>
+        {mainTab === "hoje" && (
+          <>
+            <div className="mt-4 mb-2 flex justify-center">
+              <div className="w-full max-w-4xl bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
+                <button
+                  onClick={() => setAgendaAberta((v) => !v)}
+                  className="w-full flex items-center justify-between px-2 py-2 text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <CalendarClock className="w-5 h-5 text-green-800" />
+                    <h3 className="text-lg font-semibold text-green-900">
+                      Minha Agenda
+                    </h3>
+                  </div>
 
-          {tiles.length > 0 && (
-            <div
-              ref={stripRef}
-              className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory"
-            >
-              {tiles.map((tl) => {
-                const isMissed = tl.isMissed;
+                  {agendaAberta ? (
+                    <ChevronUp className="w-5 h-5 text-gray-600" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-gray-600" />
+                  )}
+                </button>
 
-                return (
-                  <button
-                    id={`tile-${tl.id}`}
-                    key={tl.id}
-                    onClick={() => {
-                      setExpandedId((prev) => (prev === tl.id ? null : tl.id));
-                      setFullscreenId(tl.id);
-                      setMenuOpen(false);
-                    }}
-                    className={`snap-center shrink-0 min-w-[180px] max-w-[220px] text-left rounded-xl border px-3 py-2 ${
-                      tl.statusClass
-                    } ${tl.borderClass} ${
-                      isMissed ? "opacity-80" : "hover:opacity-95"
-                    }`}
-                    title={tl.titulo}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`inline-block h-2.5 w-2.5 rounded-full ${tl.dotClass}`}
-                        />
-                        <span className="font-semibold text-sm">
-                          {tl.date
-                            ? tl.date.toLocaleDateString("pt-BR", {
-                                day: "2-digit",
-                                month: "short",
-                              })
-                            : "Sem data"}
-                        </span>
+                {agendaAberta && (
+                  <div className="mt-3 border-t pt-3 max-h-[260px] overflow-y-auto">
+                    {agendaItems.length === 0 ? (
+                      <p className="text-gray-500 text-sm">
+                        Nenhum item na agenda.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {agendaItems.map((item) => {
+                          if (item.origem === "treino") {
+                            const treino = treinosAgendados.find(
+                              (t) => t.id === item.id
+                            );
+                            if (!treino) return null;
 
-                        {tl.isToday && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/70 border">
-                            Hoje
-                          </span>
-                        )}
-                      </div>
+                            const d = getDataExibicaoTreino(treino);
+                            const isHoje = d ? sameDay(d, hoje) : false;
+                            const diaStr = d
+                              ? String(d.getDate()).padStart(2, "0")
+                              : "—";
+                            const subtitulo = d
+                              ? d.toLocaleDateString("pt-BR", {
+                                  weekday: "short",
+                                  month: "short",
+                                })
+                              : "Sem data";
 
-                      {expandedId === tl.id ? (
-                        <ChevronUp className="w-4 h-4 opacity-70" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4 opacity-70" />
-                      )}
-                    </div>
+                            const criadorLabel = getCriadorLabel(treino);
 
-                    <div className="mt-1 text-sm line-clamp-2">
-                      {tl.titulo}
-                    </div>
-                    <div className="mt-1 text-[11px] opacity-80">
-                      {tl.label}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                            const st = (statusPorTreino[treino.id]?.status ??
+                              treino.meuStatus) as TreinoStatus | undefined;
 
-        <div className="mt-4 mb-2 flex justify-center">
-          <div className="w-full max-w-4xl bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
-            <button
-              onClick={() => setAgendaAberta((v) => !v)}
-              className="w-full flex items-center justify-between px-2 py-2 text-left"
-            >
-              <div className="flex items-center gap-2">
-                <CalendarClock className="w-5 h-5 text-green-800" />
-                <h3 className="text-lg font-semibold text-green-900">
-                  Minha Agenda
-                </h3>
-              </div>
+                            const submittedAgendado =
+                              (treino.submissao?.aprovados ?? 0) > 0 ||
+                              treino.submissao?.feito === true ||
+                              idsAgendadosSubmetidos.has(treino.id);
 
-              {agendaAberta ? (
-                <ChevronUp className="w-5 h-5 text-gray-600" />
-              ) : (
-                <ChevronDown className="w-5 h-5 text-gray-600" />
-              )}
-            </button>
+                            const diaPassou = d ? endOfDay(d) < now : false;
+                            const expiradoBackend =
+                              (st as string) === "EXPIRED" ||
+                              (treino as any).execucaoStatus === "EXPIRED";
 
-            {agendaAberta && (
-              <div className="mt-3 border-t pt-3 max-h-[260px] overflow-y-auto">
-                {agendaItems.length === 0 ? (
-                  <p className="text-gray-500 text-sm">
-                    Nenhum item na agenda.
-                  </p>
-                ) : (
-                  <ul className="space-y-2">
-                    {agendaItems.map((item) => {
-                      if (item.origem === "treino") {
-                        const treino = treinosAgendados.find(
-                          (t) => t.id === item.id
-                        );
-                        if (!treino) return null;
+                            const isMissedTreino =
+                              !submittedAgendado &&
+                              (diaPassou || expiradoBackend) &&
+                              st !== "COMPLETED";
 
-                        const d = getDataExibicaoTreino(treino);
-                        const isHoje = d ? sameDay(d, hoje) : false;
-                        const diaStr = d
-                          ? String(d.getDate()).padStart(2, "0")
-                          : "—";
-                        const subtitulo = d
-                          ? d.toLocaleDateString("pt-BR", {
-                              weekday: "short",
-                              month: "short",
-                            })
-                          : "Sem data";
+                            let circleClass =
+                              "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-gray-50 border-gray-300 text-gray-800";
+                            let titleClass =
+                              "font-medium truncate text-gray-900";
 
-                        const criadorLabel = getCriadorLabel(treino);
+                            if (submittedAgendado || st === "COMPLETED") {
+                              circleClass =
+                                "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-emerald-50 border-emerald-300 text-emerald-800";
+                              titleClass =
+                                "font-medium truncate text-emerald-800";
+                            } else if (isMissedTreino) {
+                              circleClass =
+                                "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-red-50 border-red-300 text-red-700";
+                              titleClass =
+                                "font-medium truncate text-red-700";
+                            } else if (isHoje) {
+                              circleClass += " ring-2 ring-gray-300";
+                            }
 
-                        const st = (statusPorTreino[treino.id]?.status ??
-                          treino.meuStatus) as TreinoStatus | undefined;
+                            return (
+                              <li
+                                key={`treino-${treino.id}`}
+                                className="py-1.5"
+                              >
+                                <button
+                                  onClick={() => {
+                                    if (isMissedTreino) return;
+                                    setFullscreenId(treino.id);
+                                    setMenuOpen(false);
+                                  }}
+                                  aria-label="Abrir treino"
+                                  aria-disabled={isMissedTreino}
+                                  className={`w-full flex items-center justify-between gap-3 text-left ${
+                                    isMissedTreino
+                                      ? "opacity-60 cursor-not-allowed"
+                                      : ""
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className={circleClass}>{diaStr}</div>
 
-                        const submittedAgendado =
-                          (treino.submissao?.aprovados ?? 0) > 0 ||
-                          treino.submissao?.feito === true ||
-                          idsAgendadosSubmetidos.has(treino.id);
-
-                        const diaPassou = d ? endOfDay(d) < now : false;
-                        const expiradoBackend =
-                          (st as string) === "EXPIRED" ||
-                          (treino as any).execucaoStatus === "EXPIRED";
-
-                        const isMissedTreino =
-                          !submittedAgendado &&
-                          (diaPassou || expiradoBackend) &&
-                          st !== "COMPLETED";
-
-                        let circleClass =
-                          "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-gray-50 border-gray-300 text-gray-800";
-                        let titleClass =
-                          "font-medium truncate text-gray-900";
-
-                        if (submittedAgendado || st === "COMPLETED") {
-                          circleClass =
-                            "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-emerald-50 border-emerald-300 text-emerald-800";
-                          titleClass =
-                            "font-medium truncate text-emerald-800";
-                        } else if (isMissedTreino) {
-                          circleClass =
-                            "flex items-center justify-center rounded-full border h-10 w-10 text-sm font-bold shrink-0 bg-red-50 border-red-300 text-red-700";
-                          titleClass =
-                            "font-medium truncate text-red-700";
-                        } else if (isHoje) {
-                          circleClass += " ring-2 ring-gray-300";
-                        }
-
-                        return (
-                          <li
-                            key={`treino-${treino.id}`}
-                            className="py-1.5"
-                          >
-                            <button
-                              onClick={() => {
-                                if (isMissedTreino) return;
-                                setFullscreenId(treino.id);
-                                setMenuOpen(false);
-                              }}
-                              aria-label="Abrir treino"
-                              aria-disabled={isMissedTreino}
-                              className={`w-full flex items-center justify-between gap-3 text-left ${
-                                isMissedTreino
-                                  ? "opacity-60 cursor-not-allowed"
-                                  : ""
-                              }`}
-                            >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className={circleClass}>{diaStr}</div>
-
-                                <div className="min-w-0">
-                                  <div className={titleClass}>
-                                    {treino.titulo}
+                                    <div className="min-w-0">
+                                      <div className={titleClass}>
+                                        {treino.titulo}
+                                      </div>
+                                      <div className="text-[11px] text-gray-500">
+                                        TREINO • {subtitulo}
+                                        {criadorLabel
+                                          ? ` • ${criadorLabel}`
+                                          : ""}
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="text-[11px] text-gray-500">
-                                    TREINO • {subtitulo}
-                                    {criadorLabel
-                                      ? ` • ${criadorLabel}`
-                                      : ""}
+
+                                  <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+                                </button>
+                              </li>
+                            );
+                          }
+
+                          const dateStr = item.inicio
+                            ? new Date(item.inicio).toLocaleString("pt-BR", {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              })
+                            : "Sem data";
+
+                          const icon =
+                            item.tipo === "TREINO" ? (
+                              <Volleyball className="w-4 h-4 text-green-700" />
+                            ) : item.tipo === "DESAFIO" ? (
+                              <StarIcon className="w-4 h-4 text-amber-600" />
+                            ) : (
+                              <CalendarClock className="w-4 h-4 text-blue-700" />
+                            );
+
+                          return (
+                            <li
+                              key={`${item.origem}-${item.id}`}
+                              className="flex items-center justify-between bg-neutral-50 border rounded-lg px-3 py-2 hover:bg-neutral-100"
+                            >
+                              <div className="flex items-center gap-2">
+                                {icon}
+                                <div>
+                                  <div className="text-sm font-medium">
+                                    {item.titulo}
+                                  </div>
+                                  <div className="text-xs text-gray-600">
+                                    {item.tipo} • {dateStr}
                                   </div>
                                 </div>
                               </div>
 
-                              <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
-                            </button>
-                          </li>
-                        );
-                      }
+                              {item.origem === "desafio" && (
+                                <Link
+                                  href={`/desafios/${item.id}`}
+                                  className="text-green-700 text-xs sm:text-sm"
+                                >
+                                  Ver
+                                </Link>
+                              )}
 
-                      const dateStr = item.inicio
-                        ? new Date(item.inicio).toLocaleString("pt-BR", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          })
-                        : "Sem data";
-
-                      const icon =
-                        item.tipo === "TREINO" ? (
-                          <Volleyball className="w-4 h-4 text-green-700" />
-                        ) : item.tipo === "DESAFIO" ? (
-                          <StarIcon className="w-4 h-4 text-amber-600" />
-                        ) : (
-                          <CalendarClock className="w-4 h-4 text-blue-700" />
-                        );
-
-                      return (
-                        <li
-                          key={`${item.origem}-${item.id}`}
-                          className="flex items-center justify-between bg-neutral-50 border rounded-lg px-3 py-2 hover:bg-neutral-100"
-                        >
-                          <div className="flex items-center gap-2">
-                            {icon}
-                            <div>
-                              <div className="text-sm font-medium">
-                                {item.titulo}
-                              </div>
-                              <div className="text-xs text-gray-600">
-                                {item.tipo} • {dateStr}
-                              </div>
-                            </div>
-                          </div>
-
-                          {item.origem === "desafio" && (
-                            <Link
-                              href={`/desafios/${item.id}`}
-                              className="text-green-700 text-xs sm:text-sm"
-                            >
-                              Ver
-                            </Link>
-                          )}
-
-                          {item.origem === "evento" && (
-                            <Link
-                              href={`/eventos/${item.id}`}
-                              className="text-green-700 text-xs sm:text-sm"
-                            >
-                              Ver evento
-                            </Link>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
+                              {item.origem === "evento" && (
+                                <Link
+                                  href={`/eventos/${item.id}`}
+                                  className="text-green-700 text-xs sm:text-sm"
+                                >
+                                  Ver evento
+                                </Link>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
-
-        {FLAGS.DESAFIOS_ENABLED && (
-          <div
-            className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mt-6"
-            style={{
-              maxHeight: DESAFIOS_MAX_PX,
-              overflowY: "auto",
-            }}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-semibold">Desafios</h3>
-
-              <div className="ml-3 shrink-0 [&>div]:mb-0 [&>div>div:first-child]:hidden">
-                <WeeklyChecker weeks={semanasDesafio} />
-              </div>
             </div>
+          </>
+        )}
 
-            {desafios.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {desafios.map((desafio) => (
-                  <div
-                    key={desafio.id}
-                    className="bg-white p-4 rounded-xl shadow-sm border border-yellow-300/60 mb-3"
-                  >
-                    <h4 className="font-bold text-yellow-700 text-lg mb-1">
-                      <Link
-                        href={`/desafios/${desafio.id}`}
-                        className="hover:underline"
-                      >
-                        {desafio.titulo}
-                      </Link>
-                    </h4>
+        {mainTab === "treinos" && (
+          <>
+                <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mb-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
+                    <h3 className="text-lg font-semibold">Meus Treinos</h3>
 
-                    <p className="text-sm text-gray-600 mb-2">
-                      {desafio.descricao}
-                    </p>
-
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-                      <span>Nível: {desafio.nivel}</span>
-                      <span className="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs">
-                        {desafio.pontuacao} pts
-                      </span>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-3 gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
-                        onClick={() =>
-                          navigate(`/submissao?desafioId=${desafio.id}`)
-                        }
-                        className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-800 hover:bg-green-900 text-white"
-                        title="Fazer Submissão"
+                        className="bg-green-800 text-white px-4 py-2 rounded-lg text-sm"
+                        onClick={() => navigate("/treinos/novo")}
                       >
-                        <span className="sm:hidden">Submeter</span>
-                        <span className="hidden sm:inline">
-                          Fazer Submissão
-                        </span>
+                        Agendar novo treino
                       </button>
 
                       <button
-                        onClick={() =>
-                          navigate(`/desafios/${desafio.id}`)
-                        }
-                        className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white border border-green-300 text-green-800 hover:bg-green-50"
-                        title="Ver desafio"
+                        className="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm"
+                        onClick={() => navigate("/treinos/livre/novo")}
                       >
-                        Ver desafio
+                        Registrar treino livre
                       </button>
 
                       <button
-                        onClick={() => abrirModalCompartilhar(desafio.id)}
-                        className="w-full inline-flex items-center justify-center gap-1 text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white"
-                        title="Compartilhar"
+                        className="bg-white border border-emerald-300 text-emerald-800 px-4 py-2 rounded-lg text-sm"
+                        onClick={() => navigate("/treinos/livre/historico")}
                       >
-                        <Share2 className="w-4 h-4" />
-                        <span className="truncate">Compartilhar</span>
+                        Histórico de treinos livres
                       </button>
                     </div>
                   </div>
-                ))}
+
+                  {tiles.length > 0 && (
+                    <div
+                      ref={stripRef}
+                      className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory"
+                    >
+                      {tiles.map((tl) => {
+                        const isMissed = tl.isMissed;
+
+                        return (
+                          <button
+                            id={`tile-${tl.id}`}
+                            key={tl.id}
+                            onClick={() => {
+                              setExpandedId((prev) => (prev === tl.id ? null : tl.id));
+                              setFullscreenId(tl.id);
+                              setMenuOpen(false);
+                            }}
+                            className={`snap-center shrink-0 min-w-[180px] max-w-[220px] text-left rounded-xl border px-3 py-2 ${
+                              tl.statusClass
+                            } ${tl.borderClass} ${
+                              isMissed ? "opacity-80" : "hover:opacity-95"
+                            }`}
+                            title={tl.titulo}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`inline-block h-2.5 w-2.5 rounded-full ${tl.dotClass}`}
+                                />
+                                <span className="font-semibold text-sm">
+                                  {tl.date
+                                    ? tl.date.toLocaleDateString("pt-BR", {
+                                        day: "2-digit",
+                                        month: "short",
+                                      })
+                                    : "Sem data"}
+                                </span>
+
+                                {tl.isToday && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/70 border">
+                                    Hoje
+                                  </span>
+                                )}
+                              </div>
+
+                              {expandedId === tl.id ? (
+                                <ChevronUp className="w-4 h-4 opacity-70" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 opacity-70" />
+                              )}
+                            </div>
+
+                            <div className="mt-1 text-sm line-clamp-2">
+                              {tl.titulo}
+                            </div>
+                            <div className="mt-1 text-[11px] opacity-80">
+                              {tl.label}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {FLAGS.DESAFIOS_ENABLED && (
+                  <div
+                    className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mt-6"
+                    style={{
+                      maxHeight: DESAFIOS_MAX_PX,
+                      overflowY: "auto",
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-semibold">Desafios</h3>
+
+                      <div className="ml-3 shrink-0 [&>div]:mb-0 [&>div>div:first-child]:hidden">
+                        <WeeklyChecker weeks={semanasDesafio} />
+                      </div>
+                    </div>
+
+                    {desafios.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {desafios.map((desafio) => (
+                          <div
+                            key={desafio.id}
+                            className="bg-white p-4 rounded-xl shadow-sm border border-yellow-300/60 mb-3"
+                          >
+                            <h4 className="font-bold text-yellow-700 text-lg mb-1">
+                              <Link
+                                href={`/desafios/${desafio.id}`}
+                                className="hover:underline"
+                              >
+                                {desafio.titulo}
+                              </Link>
+                            </h4>
+
+                            <p className="text-sm text-gray-600 mb-2">
+                              {desafio.descricao}
+                            </p>
+
+                            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                              <span>Nível: {desafio.nivel}</span>
+                              <span className="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs">
+                                {desafio.pontuacao} pts
+                              </span>
+                            </div>
+
+                            <div className="mt-3 grid grid-cols-3 gap-2">
+                              <button
+                                onClick={() =>
+                                  navigate(`/submissao?desafioId=${desafio.id}`)
+                                }
+                                className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-800 hover:bg-green-900 text-white"
+                                title="Fazer Submissão"
+                              >
+                                <span className="sm:hidden">Submeter</span>
+                                <span className="hidden sm:inline">
+                                  Fazer Submissão
+                                </span>
+                              </button>
+
+                              <button
+                                onClick={() =>
+                                  navigate(`/desafios/${desafio.id}`)
+                                }
+                                className="w-full whitespace-nowrap text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-white border border-green-300 text-green-800 hover:bg-green-50"
+                                title="Ver desafio"
+                              >
+                                Ver desafio
+                              </button>
+
+                              <button
+                                onClick={() => abrirModalCompartilhar(desafio.id)}
+                                className="w-full inline-flex items-center justify-center gap-1 text-[11px] sm:text-sm px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white"
+                                title="Compartilhar"
+                              >
+                                <Share2 className="w-4 h-4" />
+                                <span className="truncate">Compartilhar</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500">
+                        Nenhum desafio disponível no momento.
+                      </p>
+                    )}
+                  </div>
+                )}
+          </>
+        )}
+
+        {/* METODOLOGIAS */}
+        {mainTab === "metodologias" && (
+          <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mt-4 space-y-4">
+            {/* HEADER */}
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-lg font-semibold">Metodologias</h3>
+
+              <button
+                type="button"
+                onClick={() => navigate("/treinos/Minhas-Metodologias")}
+                className="shrink-0 inline-flex items-center gap-2 bg-green-800 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow hover:bg-green-900"
+              >
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/15">
+                  👤
+                </span>
+                Minha metodologia
+              </button>
+            </div>
+
+            {/* BUSCA + PONTOS */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex-1 flex items-center gap-2 border rounded-xl px-3 py-2 bg-white">
+                <span className="text-gray-500">🔍</span>
+                <input
+                  value={buscaMetodologia}
+                  onChange={(e) => setBuscaMetodologia(e.target.value)}
+                  placeholder="Buscar metodologias..."
+                  className="w-full outline-none text-sm"
+                />
               </div>
-            ) : (
-              <p className="text-gray-500">
-                Nenhum desafio disponível no momento.
-              </p>
-            )}
+
+              <span className="shrink-0 text-xs px-3 py-1 rounded-full border bg-amber-50 text-amber-800 font-semibold">
+                +32 pts
+              </span>
+            </div>
+
+            {/* FILTROS */}
+
+            <div data-filtro-menu="1" className="flex flex-wrap items-center gap-2">
+              {filtrosMetodologia.map((filtro) => {
+                const ativo = filtroAtivo === filtro;
+
+                return (
+                  <div
+                    key={filtro}
+                    className={`inline-flex items-center rounded-full border overflow-hidden ${
+                      ativo
+                        ? "bg-green-800 text-white border-green-800"
+                        : "bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setFiltroAtivo(ativo ? null : filtro)}
+                      className="px-3 py-1.5 text-sm"
+                    >
+                      {filtro}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => removerFiltroMetodologia(filtro)}
+                      className={`px-2 py-1.5 text-sm border-l ${
+                        ativo ? "border-white/30" : "border-gray-200"
+                      }`}
+                      title="Remover filtro"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setAddFiltroOpen((v) => !v)}
+                  className="px-3 py-1.5 rounded-full text-sm border bg-white hover:bg-gray-50 flex items-center gap-1"
+                >
+                  ➕ Adicionar filtro
+                  <ChevronDown className={`w-4 h-4 transition ${addFiltroOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {addFiltroOpen && (
+                  <div className="absolute left-0 mt-2 w-56 bg-white border rounded-xl shadow-lg z-50 overflow-hidden">
+                    {FILTROS_FIXOS.filter((f) => !filtrosMetodologia.includes(f)).length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-gray-500">
+                        Todos os filtros já foram adicionados.
+                      </div>
+                    ) : (
+                      FILTROS_FIXOS
+                        .filter((f) => !filtrosMetodologia.includes(f))
+                        .map((f) => (
+                          <button
+                            key={f}
+                            type="button"
+                            onClick={() => adicionarFiltroMetodologia(f)}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                          >
+                            {f}
+                          </button>
+                        ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-full text-sm border bg-white hover:bg-gray-50"
+                onClick={() => alert("Em breve")}
+              >
+                •••
+              </button>
+            </div>
+
+
+
+{/* CATÁLOGO (vem do backend) */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+  {metodologiasLoading && (
+    <div className="col-span-full text-sm text-gray-600">
+      Carregando metodologias...
+    </div>
+  )}
+
+  {!metodologiasLoading && metodologiasErro && (
+    <div className="col-span-full text-sm text-red-600">
+      {metodologiasErro}
+    </div>
+  )}
+
+  {!metodologiasLoading && !metodologiasErro && metodologias.length === 0 && (
+    <div className="col-span-full text-sm text-gray-600">
+      Nenhuma metodologia encontrada.
+    </div>
+  )}
+
+{!metodologiasLoading &&
+  !metodologiasErro &&
+  metodologias
+    .filter((m) => {
+      const q = buscaMetodologia.trim().toLowerCase();
+      if (!q) return true;
+
+      const t = (m.titulo || "").toLowerCase();
+      const d = (m.descricao || "").toLowerCase();
+
+      return t.includes(q) || d.includes(q);
+    })
+    .filter((m) => {
+      if (!filtroAtivo) return true;
+
+      const cats = m.categorias || [];
+      return cats.some(
+        (c) =>
+          String(c).toLowerCase() ===
+          String(filtroAtivo).toLowerCase()
+      );
+    })
+    .map((m) => (
+      <MetodologiaCard
+        key={m.id}
+        item={m}
+        onAssinar={(id) => alert(`Assinar metodologia: ${id}`)}
+      />
+    ))}
+
+</div>
+
           </div>
         )}
+
+
+
       </div>
 
       {fullscreenId && (

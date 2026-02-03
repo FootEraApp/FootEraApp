@@ -58,7 +58,8 @@ import PaginaJogosElenco from "./pages/jogos-elenco.js";
 import PaginaGerenciarProfessores from "./pages/GerenciarProfessores.js"
 import PaginaConvocarEvento from "./pages/eventos/convocar.js";
 import PaginaVerificarEmail from "./pages/verificar-email.js";
-
+import CriarMetodologia from "./pages/metodologias/create.js";
+import MinhasMetodologias from "./pages/metodologias/minhas.js";
 
 export function AppRoutes() {
   return (
@@ -173,6 +174,9 @@ export function AppRoutes() {
       <Route path="/treinos/novo"><PaginaNovoTreino /></Route>
       <Route path="/treinos/unico"><Private><PaginaTreinoUnico /></Private></Route>
       <Route path="/treinos"><Private><PaginaTreinos /></Private></Route>
+
+      <Route path="/treinos/Criar-Metodologia"><CriarMetodologia/></Route>
+      <Route path="/treinos/Minhas-Metodologias"><MinhasMetodologias/></Route>
 
       <Route path="/perfil/pontuacao"><Private><PaginaPontuacaoPerfil /></Private></Route>
       <Route path="/perfil/:id/pontuacao"><Private><PaginaPontuacaoDePerfil /></Private></Route>
