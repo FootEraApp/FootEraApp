@@ -1,4 +1,3 @@
-// client/src/pages/GerenciarProfessores
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import axios from "axios";
@@ -140,7 +139,6 @@ const GerenciarProfessores: React.FC = () => {
       setProfError(null);
       setProfLoading(true);
 
-      // Mantém sua fonte atual (api/professores)
       const { data } = await axios.get(`${API.BASE_URL}/api/professores`, {
         headers,
         params: { organizacaoId: tipoUsuarioIdEntidade, search: q.trim() || undefined },
@@ -173,7 +171,6 @@ const GerenciarProfessores: React.FC = () => {
       setTurmasError(null);
       setTurmasLoading(true);
 
-      // ✅ MODO PROFESSOR: buscar turmas do professor (rota específica)
       if (tipo === "Professor") {
         const { data } = await axios.get(`${API.BASE_URL}/api/turmas/como-professor`, { headers });
 
@@ -197,11 +194,9 @@ const GerenciarProfessores: React.FC = () => {
         return;
       }
 
-      // ✅ MODO CLUBE/ESCOLINHA: precisa do ownerId
       if (!tipoUsuarioIdEntidade) return;
 
       const ownerTipo = tipo === "Escola" ? "Escolinha" : "Clube";
-
       const { data } = await axios.get(`${API.BASE_URL}/api/turmas`, {
         headers,
         params: { ownerTipo, ownerId: tipoUsuarioIdEntidade },
@@ -270,7 +265,6 @@ const GerenciarProfessores: React.FC = () => {
 
   return (
     <div className="mx-auto w-full max-w-[1600px] px-3 sm:px-4 py-4 sm:py-6 pb-24">
-      {/* Voltar (igual ao GerenciarAtletas) */}
       <div className="mb-3">
         <Link
           href="/perfil"
@@ -283,7 +277,6 @@ const GerenciarProfessores: React.FC = () => {
         </Link>
       </div>
 
-      {/* Header (igual) */}
       <div className="mb-4 sm:mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-emerald-600/10 p-3 text-emerald-700">
@@ -298,7 +291,6 @@ const GerenciarProfessores: React.FC = () => {
               Organize professores, turmas e a relação com atletas do clube/escolinha.
             </p>
 
-            {/* Toggle igual (Atletas/Professores/Turmas) */}
             {tipo && (
               <div className="mt-2 inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
                 <button
@@ -347,7 +339,6 @@ const GerenciarProfessores: React.FC = () => {
           </div>
         </div>
 
-        {/* Ações topo (mesmo estilo do Atletas) */}
         <div className="flex w-full flex-wrap items-center justify-start sm:justify-end gap-2">
           {owner && (
             <>
@@ -381,7 +372,6 @@ const GerenciarProfessores: React.FC = () => {
         </div>
       </div>
 
-      {/* Cards métricas (igual ao Atletas: só aparece no desktop) */}
       {tipo !== "Professor" && (
         <div className="mb-4 hidden sm:grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="rounded-2xl border border-zinc-200 bg-white p-4">
@@ -410,7 +400,6 @@ const GerenciarProfessores: React.FC = () => {
         </div>
       )}
 
-      {/* Busca (mesma “barra” do Atletas) */}
       <div className="mb-3 sm:mb-4 grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-12">
         {aba === "professores" && (
         <div className="md:col-span-6">
@@ -427,11 +416,9 @@ const GerenciarProfessores: React.FC = () => {
         )}
 
         <div className="md:col-span-6 flex items-center justify-end">
-          {/* espaço “vazio” pra ficar igual respiro do Atletas */}
         </div>
       </div>
 
-      {/* Conteúdo */}
       {aba === "professores" ? (
         <div className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
           <div className="flex items-center justify-between border-b border-zinc-100 p-4">
@@ -625,7 +612,6 @@ const GerenciarProfessores: React.FC = () => {
         </div>
       )}
 
-      {/* Modal Turmas (owner OU professor) */}
       <TurmasManager
         open={turmasOpen}
         onClose={() => {
@@ -633,12 +619,10 @@ const GerenciarProfessores: React.FC = () => {
           carregarTurmas();
           carregarProfessores();
         }}
-        owner={owner} // undefined no modo professor
+        owner={owner} 
         professorId={tipo === "Professor" ? (tipoUsuarioIdEntidade ?? undefined) : professorSelecionado}
         initialTurmaId={turmaSelecionadaId}
       />
-
-      {/* BottomNav igual ao Atletas */}
       <BottomNav />
     </div>
   );

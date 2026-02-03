@@ -10,7 +10,6 @@ function addDays(d: Date, n: number) {
   return x;
 }
 function endExclusiveOfDay(d: Date) {
-  // início do próximo dia (exclusivo)
   return addDays(startOfDay(d), 1);
 }
 
@@ -28,13 +27,11 @@ function assertAdmin(req: Request) {
 function parseISODateLocal(v?: string, fallback?: Date) {
   if (!v) return fallback ?? new Date();
 
-  // aceita YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
     const [y, m, d] = v.split("-").map(Number);
-    return new Date(y, m - 1, d); // LOCAL (00:00 local)
+    return new Date(y, m - 1, d); 
   }
 
-  // fallback (se vier ISO completo)
   const dt = new Date(v);
   return isNaN(+dt) ? (fallback ?? new Date()) : dt;
 }
@@ -51,11 +48,7 @@ export async function overview(req: Request, res: Response) {
     assertAdmin(req);
 
     const to = parseISODateLocal(String(req.query.to) || undefined, new Date());
-
-    // Janela "até o fim do dia selecionado" (exclusivo no dia seguinte)
     const end = endExclusiveOfDay(to);
-
-    // Rolling windows a partir de "end"
     const from30 = addDays(end, -30);
     const from7  = addDays(end, -7);
     const from24h = new Date(end);

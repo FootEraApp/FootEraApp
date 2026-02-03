@@ -26,7 +26,6 @@ export async function getPrivacidade(req: Request, res: Response) {
       perfilVisivel: raw.perfilVisivel ?? true,
       permitirMensagens: raw.permitirMensagens ?? true,
       mostrarEmail: raw.mostrarEmail ?? false,
-      // ✅ FALTAVA ISSO:
       mostrarOnline: raw.mostrarOnline ?? true,
     });
   } catch (err) {
@@ -35,23 +34,19 @@ export async function getPrivacidade(req: Request, res: Response) {
   }
 }
 
-
 export async function patchPrivacidade(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Não autenticado." });
 
     const { perfilVisivel, permitirMensagens, mostrarEmail, mostrarOnline } = (req.body || {}) as any;
-
     const next = {
       perfilVisivel: typeof perfilVisivel === "boolean" ? perfilVisivel : undefined,
       permitirMensagens: typeof permitirMensagens === "boolean" ? permitirMensagens : undefined,
       mostrarEmail: typeof mostrarEmail === "boolean" ? mostrarEmail : undefined,
-      // ✅ novo:
       mostrarOnline: typeof mostrarOnline === "boolean" ? mostrarOnline : undefined,
     };
 
-    // merge com o que já existe
     const u = await prisma.usuario.findUnique({
       where: { id: userId },
       select: { configuracoesPrivacidade: true },
@@ -76,7 +71,6 @@ export async function patchPrivacidade(req: Request, res: Response) {
       perfilVisivel: merged.perfilVisivel ?? true,
       permitirMensagens: merged.permitirMensagens ?? true,
       mostrarEmail: merged.mostrarEmail ?? false,
-      // ✅ novo:
       mostrarOnline: merged.mostrarOnline ?? true,
     });
   } catch (err) {
@@ -150,11 +144,6 @@ export async function patchNotificacoes(req: Request, res: Response) {
   }
 }
 
-/** =========================
- *  SEGURANÇA: trocar senha
- *  PUT /seguranca/senha
- *  body: { senhaAtual, senhaNova }
- *  ========================= */
 export async function trocarSenha(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -185,7 +174,6 @@ export async function trocarSenha(req: Request, res: Response) {
 
     const novoHash = await bcrypt.hash(senhaNova, 10);
 
-    // ✅ troca senha e derruba sessões antigas
     await prisma.usuario.update({
       where: { id: userId },
       data: {
@@ -218,9 +206,9 @@ export async function encerrarSessoes(req: Request, res: Response) {
     await prisma.usuario.update({
       where: { id: userId },
       data: {
-        tokenVersion: (u?.tokenVersion ?? 0) + 1, // invalida tokens antigos
-        lastLogoutAt: now,                         // ✅ salva logout
-        lastSeenAt: now,                           // ✅ opcional (recomendo)
+        tokenVersion: (u?.tokenVersion ?? 0) + 1,
+        lastLogoutAt: now,                        
+        lastSeenAt: now,                          
       },
     });
 

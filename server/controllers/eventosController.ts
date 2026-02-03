@@ -368,27 +368,6 @@ function mapEventoToAgendaItem(ev: any) {
   };
 }
 
-function jsonHasAnyId(value: any, ids: Set<string>): boolean {
-  if (value == null) return false;
-
-  // string/number direto
-  if (typeof value === "string" || typeof value === "number") {
-    return ids.has(String(value));
-  }
-
-  // array
-  if (Array.isArray(value)) {
-    return value.some((v) => jsonHasAnyId(v, ids));
-  }
-
-  // objeto
-  if (typeof value === "object") {
-    return Object.values(value).some((v) => jsonHasAnyId(v, ids));
-  }
-
-  return false;
-}
-
 export async function minhaAgenda(req: any, res: Response) {
   try {
     const { alvoId, from, to } = req.query as {
@@ -445,7 +424,6 @@ export async function minhaAgenda(req: any, res: Response) {
 
       if (toDate) convWhere.evento.dataEvento.lte = toDate;
 
-      // opcional: filtrar por clube quando vier alvoId (se seu Evento tem clubeId)
       if (alvoId) {
         const clube = await prisma.clube.findUnique({
           where: { id: String(alvoId) },
@@ -476,7 +454,6 @@ export async function minhaAgenda(req: any, res: Response) {
       return res.json(items);
     }
 
-    // ✅ Para clube/escolinha/admin continua como antes (eventos ABERTOS)
     const eventos = await prisma.evento.findMany({
       where,
       orderBy: { dataEvento: "asc" },

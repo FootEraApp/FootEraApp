@@ -87,13 +87,10 @@ export async function listAdminUsers(req: Request, res: Response) {
         foto: resolveFoto(u),
         criadoEm,
         verificado: (u as any).verified ?? false,
-
-        // ✅ ADICIONE ISSO
         status: (u as any).status ?? "ATIVO",
         blockedAt: (u as any).blockedAt ?? null,
         blockedReason: (u as any).blockedReason ?? null,
         deletedAt: (u as any).deletedAt ?? null,
-
         ultimaAtividade: null as string | null,
         ultimaAtividadeNome: null as string | null,
       };

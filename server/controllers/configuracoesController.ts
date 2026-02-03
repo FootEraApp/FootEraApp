@@ -64,7 +64,7 @@ function extractUserId(req: Request): string | null {
 }
 
 export async function solicitarExclusaoConta(req: Request, res: Response) {
-  const userId = req.userId; // vindo do authenticateToken
+  const userId = req.userId; 
   const { confirm } = req.body ?? {};
 
   if (!userId) return res.status(401).json({ message: "Não autenticado." });
@@ -80,7 +80,7 @@ export async function solicitarExclusaoConta(req: Request, res: Response) {
     data: {
       deletedAt: now,
       deleteScheduledAt: in30,
-      tokenVersion: { increment: 1 }, // derruba tokens antigos
+      tokenVersion: { increment: 1 },
       lastLogoutAt: now,
     },
   });

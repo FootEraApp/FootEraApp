@@ -1,32 +1,27 @@
-// server/middlewares/treinoProgramadoGuard.ts
 import { Request, Response, NextFunction } from "express";
 import { prisma } from "../prisma.js";
 
 export async function requireAdminOrTreinoOwner(req: Request, res: Response, next: NextFunction) {
   try {
-    const user = (req as any).user; // vindo do authenticateToken
+    const user = (req as any).user;
     const usuarioId = user?.id || user?.usuarioId;
     const tipo = String(user?.tipo || "").toLowerCase();
 
     if (!usuarioId) return res.status(401).json({ message: "Não autenticado." });
-
-    // ✅ admin sempre pode
     if (tipo === "admin" || tipo === "administrador") return next();
 
     const treinoId = req.params.id;
     if (!treinoId) return res.status(400).json({ message: "Treino inválido." });
 
-    // pega treino + colaboradores
     const treino = await prisma.treinoProgramado.findUnique({
       where: { id: treinoId },
       include: {
-        professores: { select: { professorId: true } }, // tabela join (se existir)
+        professores: { select: { professorId: true } }, 
       },
     });
 
     if (!treino) return res.status(404).json({ message: "Treino não encontrado." });
 
-    // descobre a “entidade” do usuário logado (professor/clube/escolinha)
     const u = await prisma.usuario.findUnique({
       where: { id: usuarioId },
       select: {

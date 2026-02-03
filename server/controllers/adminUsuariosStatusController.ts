@@ -27,11 +27,10 @@ export async function bloquearUsuario(req: Request, res: Response) {
       status: "BLOQUEADO",
       blockedAt: new Date(),
       blockedReason: motivo?.trim() || "Bloqueado pelo administrador.",
-      tokenVersion: { increment: 1 }, // ✅ derruba sessão imediatamente
+      tokenVersion: { increment: 1 },
     },
   });
 
-  // ✅ IMPORTANTE: devolver os campos que o frontend precisa
   return res.json({ ok: true, usuario: pickUserAdminFields(updated) });
 }
 
@@ -49,7 +48,7 @@ export async function reativarUsuario(req: Request, res: Response) {
       blockedReason: null,
       deletedAt: null,
       reactivatedAt: new Date(),
-      tokenVersion: { increment: 1 }, // ✅ garante sessão nova pós-reativar
+      tokenVersion: { increment: 1 }, 
     },
   });
 

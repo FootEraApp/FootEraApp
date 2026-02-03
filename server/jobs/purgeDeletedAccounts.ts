@@ -1,4 +1,3 @@
-// server/jobs/purgeDeletedAccounts.ts
 import { prisma } from "../prisma.js";
 
 export async function purgeDeletedAccounts() {
@@ -10,7 +9,7 @@ export async function purgeDeletedAccounts() {
       deleteScheduledAt: { lte: now },
     },
     select: { id: true },
-    take: 200, // evita pancada se acumular
+    take: 200, 
   });
 
   for (const u of users) {

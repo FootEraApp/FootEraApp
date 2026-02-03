@@ -1,4 +1,3 @@
-// server/middlewares/adminGuard
 import type { Request, Response, NextFunction } from "express";
 import { PrismaClient, TipoUsuario } from "@prisma/client";
 

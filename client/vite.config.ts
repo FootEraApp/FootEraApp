@@ -11,17 +11,12 @@ export default defineConfig({
       strategies: "injectManifest",
       srcDir: "src",
       filename: "sw.ts",
-
-      // importante: a gente registra via "virtual:pwa-register"
       injectRegister: null,
-
       registerType: "autoUpdate",
-
       devOptions: {
         enabled: true,
         type: "module",
       },
-
       manifest: {
         name: "FootEra",
         short_name: "FootEra",

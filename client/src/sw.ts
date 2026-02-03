@@ -8,19 +8,14 @@ import { createHandlerBoundToURL } from "workbox-precaching";
 
 declare let self: ServiceWorkerGlobalScope;
 
-// ✅ silencia logs do workbox no console
 (self as any).__WB_DISABLE_DEV_LOGS = true;
 
-// precache (injectManifest injeta __WB_MANIFEST)
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
-
-// SPA navigation -> index.html (usa handler do workbox, melhor que fetch direto)
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL("/index.html"))
 );
 
-// HTML (fallback)
 registerRoute(
   ({ request }) => request.mode === "navigate",
   new NetworkFirst({
@@ -33,11 +28,6 @@ registerRoute(
 const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
 const FALLBACK_TREINO = "/assets/usuarios/footera-logo-fundo-verde.png";
 
-// ✅ imagens com fallback
-// Observação importante:
-// - isso evita quebrar a UI
-// - mas NÃO tem como “adivinhar” que a imagem não existe sem tentar buscar
-// - então pode continuar aparecendo 404 no DevTools (Network) se a URL realmente não existe
 registerRoute(
   ({ request, url }) =>
     request.destination === "image" &&
@@ -69,7 +59,6 @@ registerRoute(
   "GET"
 );
 
-// assets geral
 registerRoute(
   ({ url }) => url.pathname.startsWith("/assets/"),
   new StaleWhileRevalidate({

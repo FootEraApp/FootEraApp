@@ -1,11 +1,9 @@
-// client/src/pages/login
 import { useState, useEffect, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import axios from "axios";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import MaintenanceScreen from "../components/MaintenanceScreen";
-
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -148,7 +146,6 @@ export default function PaginaLogin() {
         const resp = await axios.post(url, { nomeDeUsuario, senha });
         const data = resp.data ?? {};
 
-        // ✅ precisa verificar e-mail
         if (data?.ok === false && data?.needVerification) {
           setNeedVerify(true);
           setEmailDestino(data.emailDestino ?? null);
@@ -156,7 +153,6 @@ export default function PaginaLogin() {
           return;
         }
 
-        // ✅ conta reativada (opcional)
         if (data?.notice === "ACCOUNT_REACTIVATED") {
           alert(data?.noticeMessage ?? "Sua conta foi reativada por um administrador.");
         }
@@ -170,10 +166,8 @@ export default function PaginaLogin() {
           throw new Error("Resposta inválida do servidor (token/usuarioId ausente).");
         }
 
-        // ✅ escolher onde persistir
         const store = lembrarDeMim ? localStorage : sessionStorage;
 
-        // limpa ambos para não misturar sessões antigas
         [
           "token",
           "usuarioId",
@@ -187,13 +181,11 @@ export default function PaginaLogin() {
           sessionStorage.removeItem(k);
         });
 
-        // ✅ salvar só no storage escolhido
         store.setItem("token", token);
         store.setItem("usuarioId", usuarioId);
 
         if (usuarioNome) store.setItem("nomeUsuario", usuarioNome);
 
-        // ✅ tipo do usuário (padronizado)
         const rawTipo = String(usuario.tipo ?? data.tipo ?? "").toLowerCase();
         const isAdmin =
           String(usuario.tipo ?? data.tipo ?? "").toLowerCase() === "admin";
@@ -212,7 +204,6 @@ export default function PaginaLogin() {
         store.setItem("tipoUsuario", tipoPadrao);
         store.setItem("usuarioTipoRaw", rawTipo);
 
-        // ✅ tipoUsuarioId (entidade vinculada)
         const tipoUsuarioId =
           data.tipoUsuarioId ||
           data?.olheiro?.id ||
@@ -224,18 +215,15 @@ export default function PaginaLogin() {
 
         if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
 
-        // ✅ plano (se vier do backend)
         const plano = String(usuario.plano ?? data.plano ?? "FREE");
         store.setItem("plano", plano);
 
-        // ✅ redireciona
         navigate(isAdmin ? "/admin" : "/feed");
       } catch (err: any) {
         console.error("Erro no login:", err.response?.status, err.response?.data || err.message);
 
         const data = err.response?.data;
 
-        // ✅ conta bloqueada (se o backend mandar)
         if (data?.code === "ACCOUNT_BLOCKED") {
           setBlockedInfo({
             message:
@@ -247,7 +235,6 @@ export default function PaginaLogin() {
           return;
         }
 
-        // ✅ conta na lixeira
         if (data?.code === "ACCOUNT_DELETED") {
           setDeletedInfo({
             daysLeft: Number(data?.daysLeft ?? 0),
@@ -260,10 +247,8 @@ export default function PaginaLogin() {
           return;
         }
 
-        // ✅ precisa verificar email
         setNeedVerify(!!data?.needVerification);
         setEmailDestino(data?.emailDestino ?? null);
-
         setErro(data?.message || "Nome de usuário ou senha inválidos.");
       }
     };
@@ -272,7 +257,6 @@ export default function PaginaLogin() {
       try {
         setRecoverLoading(true);
 
-        // 1) restaura conta
         const r = await axios.post(`${API.BASE_URL}/api/auth/restaurar-conta`, {
           nomeDeUsuario,
           senha: recoverSenha,
@@ -282,7 +266,6 @@ export default function PaginaLogin() {
           throw new Error(r.data?.message ?? "Não foi possível restaurar.");
         }
 
-        // 2) loga automaticamente usando a mesma senha
         const loginResp = await axios.post(`${API.BASE_URL}/api/auth/login`, {
           nomeDeUsuario,
           senha: recoverSenha,
