@@ -76,10 +76,6 @@ export default function ConfiguracoesPerfil() {
 
         setTimeout(async () => {
         try {
-          await fetch(`${API.BASE_URL}/api/auth/logout`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${Storage.token}` },
-          }).catch(() => {});
         } finally {
           try { socket?.disconnect(); } catch {}
           localStorage.clear();
@@ -99,24 +95,29 @@ export default function ConfiguracoesPerfil() {
     setSegErr(null);
     setSegMsg(null);
     setSegLoading(true);
+
+    // ✅ captura o token ANTES de qualquer coisa
+    const token = Storage.token;
+
     try {
+      // 1) encerra sessões no backend (provavelmente incrementa tokenVersion)
       const resp = await fetch(`${API.REST}/configuracoes-perfil/seguranca/encerrar-sessoes`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${Storage.token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
+
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data?.message || "Erro ao encerrar sessões.");
-      // ✅ força logout local
-      localStorage.clear();
-      await fetch(`${API.BASE_URL}/api/auth/logout`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${Storage.token}` },
-      }).catch(() => {});
-      sessionStorage.clear();
-      setLocation("/login");
+
+      // ✅ NÃO chame /api/auth/logout aqui (o token pode já estar inválido)
+      // ✅ apenas finalize localmente
+
     } catch (e: any) {
       setSegErr(e?.message || "Erro ao encerrar sessões.");
     } finally {
+      try { socket?.disconnect(); } catch {}
+      try { localStorage.clear(); sessionStorage.clear(); } catch {}
+      setLocation("/login");
       setSegLoading(false);
     }
   }
@@ -125,27 +126,15 @@ export default function ConfiguracoesPerfil() {
     const ok = confirm("Tem certeza que deseja sair?");
     if (!ok) return;
 
+    const token = Storage.token;
+
     try {
-      // 1) marca logout no backend (grava lastLogoutAt)
-      await fetch(`${API.BASE_URL}/api/auth/logout`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${Storage.token}`,
-        },
-      }).catch(() => {});
+      if (token) {
+        
+      }
     } finally {
-      // 2) desconecta socket (presença realtime)
-      try {
-        socket?.disconnect();
-      } catch {}
-
-      // 3) limpa tokens
-      try {
-        localStorage.clear();
-        sessionStorage.clear();
-      } catch {}
-
-      // 4) volta pro login
+      try { socket?.disconnect(); } catch {}
+      try { localStorage.clear(); sessionStorage.clear(); } catch {}
       setLocation("/login");
     }
   }
