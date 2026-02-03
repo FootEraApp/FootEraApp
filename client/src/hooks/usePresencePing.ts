@@ -1,4 +1,3 @@
-// client/src/hooks/usePresencePing.ts
 import { useEffect, useRef } from "react";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
@@ -15,8 +14,6 @@ export function usePresencePing() {
 
     const token = getToken();
     if (!token) return;
-
-    // evita double-start no StrictMode (DEV)
     if (startedRef.current) return;
     startedRef.current = true;
 
@@ -34,20 +31,16 @@ export function usePresencePing() {
           },
         });
       } catch {
-        // silêncio mesmo
       }
     }
 
-    // 🔹 ping imediato
     ping();
 
-    // 🔹 heartbeat
     const interval = setInterval(() => {
       if (!alive) return;
       ping();
     }, 25_000);
 
-    // 🔹 quando volta pro app
     const onFocus = () => ping();
     const onVis = () => {
       if (document.visibilityState === "visible") ping();
@@ -63,7 +56,6 @@ export function usePresencePing() {
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [
-    // 👇 isso força reativar quando o token aparece após login
     Storage.token,
     localStorage.getItem("token"),
     sessionStorage.getItem("token"),

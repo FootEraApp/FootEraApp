@@ -27,9 +27,7 @@ type NotificacaoItem = {
   link?: string | null;
   createdAt?: string | null;
   lida?: boolean | null;
-
-  // ✅ novos campos vindos do backend
-  tipo?: string | null; // ex: "FOLLOW" | "FOLLOW_REMOVED" | ...
+  tipo?: string | null;
   actorId?: string | null;
   actor?: {
     id: string;
@@ -225,19 +223,14 @@ export default function PaginaNotificacoes() {
         }
 
         const json = await r.json();
-
-        // 1️⃣ normaliza os itens
         const items: NotificacaoItem[] = Array.isArray(json?.items)
           ? json.items
           : [];
 
-        // 2️⃣ joga na tela
         setNotificacoes(items);
 
-        // 3️⃣ identifica as não-lidas
         const naoLidas = items.filter((x) => x?.lida === false);
 
-        // 4️⃣ marca no backend como lidas (fire-and-forget)
         for (const it of naoLidas) {
           fetch(
             `${API.BASE_URL}/api/notificacoes/${encodeURIComponent(it.id)}/lida`,
@@ -248,7 +241,6 @@ export default function PaginaNotificacoes() {
           ).catch(() => {});
         }
 
-        // 5️⃣ 🔴 É EXATAMENTE AQUI QUE ENTRA 🔴
         if (naoLidas.length) {
           setNotificacoes((prev) =>
             prev.map((n) => ({ ...n, lida: true }))

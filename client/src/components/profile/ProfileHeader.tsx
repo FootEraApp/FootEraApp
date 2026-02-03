@@ -1,4 +1,3 @@
-// client/src/components/profile/ProfileHeader
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
@@ -71,13 +70,9 @@ function normalizeTipo(t: any): string {
     .trim()
     .toLowerCase();
 
-  // remove acentos
   const noAccents = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-  // pega só a primeira “palavra” (ex.: "Professor Pro" -> "professor")
   const first = noAccents.split(/\s+/)[0] || "";
 
-  // mapeia variações comuns
   if (first === "escola") return "escolinha";
   if (first === "coach") return "professor";
 
@@ -85,8 +80,7 @@ function normalizeTipo(t: any): string {
 }
 
 const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
-
-const ONLINE_TTL_MS = 45_000; // tem que bater com o server/socket.ts
+const ONLINE_TTL_MS = 45_000; 
 
 function timeAgoPtBR(dateLike?: string | Date | null): string {
   if (!dateLike) return "há algum tempo";
@@ -173,25 +167,17 @@ export default function ProfileHeader({
     sessionStorage.getItem("tipoUsuario") ??
     "";
 
-  // -------------------- REGRA GLOBAL DO VÍNCULO (reutilizável) --------------------
   const viewerTipoNorm = normalizeTipo(viewerTipo);
   const alvoTipoNormGlobal = normalizeTipo(perfilTipo || perfilTipoProp);
-
   const tiposComVinculo = new Set(["atleta", "professor", "clube", "escolinha"]);
-
   const viewerPodeVinculo = tiposComVinculo.has(viewerTipoNorm);
   const alvoPodeVinculo = tiposComVinculo.has(alvoTipoNormGlobal);
 
-  // ❌ Regra: Atleta NÃO pode vínculo com Atleta
   const atletaComAtleta =
     viewerTipoNorm === "atleta" && alvoTipoNormGlobal === "atleta";
 
   const podeChecarVinculo =
     viewerPodeVinculo && alvoPodeVinculo && !atletaComAtleta;
-
-
-  // -------------------------------------------------------------------------------
-
 
   const viewerCanObserve = /olheiro|professor|clube|escolinha/i.test(String(viewerTipo));
   const obsKey = Storage.usuarioId && alvoAtletaId ? `obs_${Storage.usuarioId}_${alvoAtletaId}` : null;
@@ -223,16 +209,14 @@ export default function ProfileHeader({
     const usuarioAlvoId = String(perfilId || "").trim();
     if (!token || !usuarioAlvoId) return;
 
-    // ✅ se ainda não checou vínculos, espera
     if (!isOwnProfile && !isMe) {
       const aguardando = (!checouVinculo) || (!checouMutuoFollow);
       if (aguardando) return;
 
-      // ✅ se não pode ver, zera e não chama API
       if (!podeVerPresenca) {
         setPresenceOnline(null);
         setPresenceLastSeenAt(null);
-        setPresencePrivacyBlocked(true); // força esconder
+        setPresencePrivacyBlocked(true);
         return;
       }
     }
@@ -439,14 +423,11 @@ useEffect(() => {
 
   if (!token || !usuarioAlvoId) return;
 
-  // sempre reseta ao trocar de perfil / regras
   setChecouVinculo(false);
   setTemVinculoTreino(false);
 
-  // espera os tipos existirem
   if (!alvoTipoNormGlobal || !viewerTipoNorm) return;
 
-  // se não pode checar (regra), finaliza carregamento
   if (!podeChecarVinculo) {
     setTemVinculoTreino(false);
     setChecouVinculo(true);
@@ -1330,18 +1311,11 @@ const alvoUsuarioIdFavorito = isOwnProfile
   }
 
   const onlineText = (() => {
-    // ✅ se bloqueou, não mostra pra ninguém
     if (presencePrivacyBlocked) return null;
-
-    // se ainda não carregou
     if (presenceOnline === null && !presenceLastSeenAt) return null;
-
-    // online agora
     if (presenceOnline) {
       return (isOwnProfile || isMe) ? "🟢 Você está online" : "🟢 Online";
     }
-
-    // offline sem lastSeen
     if (!presenceLastSeenAt) return "🔴 Offline";
 
     const ago = timeAgoPtBR(presenceLastSeenAt);

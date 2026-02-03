@@ -1,4 +1,3 @@
-// client/src/pages/configuracoesPerfil
 import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
@@ -96,11 +95,9 @@ export default function ConfiguracoesPerfil() {
     setSegMsg(null);
     setSegLoading(true);
 
-    // ✅ captura o token ANTES de qualquer coisa
     const token = Storage.token;
 
     try {
-      // 1) encerra sessões no backend (provavelmente incrementa tokenVersion)
       const resp = await fetch(`${API.REST}/configuracoes-perfil/seguranca/encerrar-sessoes`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -108,10 +105,6 @@ export default function ConfiguracoesPerfil() {
 
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data?.message || "Erro ao encerrar sessões.");
-
-      // ✅ NÃO chame /api/auth/logout aqui (o token pode já estar inválido)
-      // ✅ apenas finalize localmente
-
     } catch (e: any) {
       setSegErr(e?.message || "Erro ao encerrar sessões.");
     } finally {
@@ -148,8 +141,6 @@ export default function ConfiguracoesPerfil() {
     setVisivel(data?.perfilVisivel ?? true);
     setMensagens(data?.permitirMensagens ?? true);
     setMostrarEmail(data?.mostrarEmail ?? false);
-
-    // ✅ aqui:
     setMostrarOnline(data?.mostrarOnline ?? true);
   }
 
@@ -596,7 +587,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       )}
 
-      {/* ================= PRIVACIDADE ================= */}
       {showPrivacidadeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
@@ -664,7 +654,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       )}
 
-      {/* ================= NOTIFICAÇÕES ================= */}
       {showNotificacoesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
@@ -732,7 +721,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       )}
 
-      {/* ================= SEGURANÇA ================= */}
       {showSegurancaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
@@ -754,7 +742,6 @@ export default function ConfiguracoesPerfil() {
             <div className="rounded-lg border border-gray-200 p-4 text-sm text-gray-700 space-y-3">
             <div className="font-semibold">Ações</div>
 
-            {/* ===== Trocar senha ===== */}
             <div className="rounded-md border border-gray-200 p-3">
               <div className="font-medium flex items-center gap-2">🔒 Trocar senha</div>
 
@@ -809,7 +796,6 @@ export default function ConfiguracoesPerfil() {
               </div>
             </div>
 
-            {/* ===== Encerrar sessões ===== */}
             <button
               type="button"
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 text-left"

@@ -1,5 +1,4 @@
-// client/src/pages/verificar-email.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Link, useLocation } from "wouter";
 import { API } from "../config.js";
@@ -58,7 +57,6 @@ export default function PaginaVerificarEmail() {
     }
   };
 
-  // countdown após sucesso
   useEffect(() => {
     if (status !== "success") return;
     const t = setInterval(() => setCountdown((c) => c - 1), 1000);
@@ -71,7 +69,6 @@ export default function PaginaVerificarEmail() {
     }
   }, [status, countdown, setLocation]);
 
-  // estilos por status
   const badge = (() => {
     if (status === "success")
       return {
@@ -100,7 +97,6 @@ export default function PaginaVerificarEmail() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen">
-      {/* Lado esquerdo (igual vibe do login) */}
       <div className="md:w-1/2 bg-green-800 text-white flex flex-col items-center p-6 md:p-10">
         <div className="w-full max-w-[680px]">
           <div className="flex items-center gap-3 md:flex-col md:gap-2">
@@ -136,9 +132,7 @@ export default function PaginaVerificarEmail() {
         </div>
       </div>
 
-      {/* Lado direito (tema claro igual login) */}
       <div className="relative md:w-1/2 bg-cream flex justify-center items-center p-6 md:p-10">
-        {/* watermark suave */}
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -z-0">
           <div
             aria-hidden

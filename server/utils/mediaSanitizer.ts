@@ -1,19 +1,11 @@
-// server/utils/mediaSanitizer.ts
 import path from "path";
 import fs from "fs";
-import { UPLOADS_ROOT } from "./uploads.js"; // <- backend (não é o uploader do client)
+import { UPLOADS_ROOT } from "./uploads.js";
 
 function isHttpUrl(s: string) {
   return /^https?:\/\//i.test(s);
 }
 
-/**
- * Aceita:
- * - http/https
- * - /uploads/... (se existir em UPLOADS_ROOT)
- * - /assets/...  (se existir em client/public) [DEV/monorepo]
- * Caso contrário retorna null.
- */
 export function sanitizeMediaPath(input?: string | null): string | null {
   const v = (input ?? "").trim();
   if (!v) return null;

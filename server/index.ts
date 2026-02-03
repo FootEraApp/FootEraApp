@@ -176,8 +176,6 @@ const corsConfig: cors.CorsOptions = {
     "X-Requested-With",
     "Accept",
     "Origin",
-
-    // ✅ seus headers customizados
     "x-tipo-usuario",
     "x-tipo-usuario-id",
     "x-user-id",

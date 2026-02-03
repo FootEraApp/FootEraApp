@@ -1,10 +1,9 @@
-// client/src/pages/GerenciarAtletas
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {CirclePlus } from "lucide-react";
 import axios from "axios";
 import {
-  Users, Search, Filter, ChevronRight, ChevronLeft, CheckCircle2, XCircle, ClipboardList, ChevronDown, ArrowUpAZ, ArrowDownZA,
+  Users, Search, Filter, ChevronRight, ArrowUpAZ, ArrowDownZA,
   Shield, Activity, Trophy, Loader2, X, CalendarClock, ListChecks,
 } from "lucide-react";
 import {
@@ -1062,7 +1061,6 @@ async function salvarAvaliacao() {
 
             {tipo && (
               <div className="mt-2 inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
-                {/* ATLETAS */}
                 <button
                   type="button"
                   onClick={() => setLocation("/perfil/GerenciarAtletas")}
@@ -1073,7 +1071,6 @@ async function salvarAvaliacao() {
                   Atletas
                 </button>
 
-                {/* PROFESSORES (só Clube/Escola) */}
                 {tipo !== "Professor" && (
                   <button
                     type="button"
@@ -1088,7 +1085,6 @@ async function salvarAvaliacao() {
                   </button>
                 )}
 
-                {/* TURMAS (Clube/Escola E Professor) */}
                 <button
                   type="button"
                   onClick={() => setLocation("/perfil/GerenciarProfessores?tab=turmas")}
@@ -1557,7 +1553,7 @@ async function salvarAvaliacao() {
         }
         professorId={
           tipo === "Professor"
-            ? (tipoUsuarioIdEntidade || undefined) // professor gerencia as turmas ligadas a ele
+            ? (tipoUsuarioIdEntidade || undefined) 
             : (turmasProfessorId || undefined)
         }
       />
@@ -1597,8 +1593,6 @@ async function salvarAvaliacao() {
                 title={nomeCompletoAtleta(focado)}
                 fetchAgendados={async ({ monthISO }) => {
                   const atletaId = focado!.id;
-
-                  // monthISO vem tipo "2026-02"
                   const [yy, mm] = monthISO.split("-").map(Number);
                   const base = new Date(yy, (mm || 1) - 1, 1);
 
@@ -1622,7 +1616,6 @@ async function salvarAvaliacao() {
                     )
                   );
 
-                  // junta tudo em uma lista só, independente do formato (items/agendados)
                   const merged: any[] = [];
                   for (const r of resps) {
                     const data = r.data;
@@ -1634,7 +1627,6 @@ async function salvarAvaliacao() {
                     merged.push(...arr);
                   }
 
-                  // remove duplicados por id (se repetir entre meses)
                   const byId = new Map<string, any>();
                   for (const it of merged) {
                     const id = String(it?.id || "");
@@ -1642,11 +1634,9 @@ async function salvarAvaliacao() {
                     byId.set(id, it);
                   }
 
-                  // devolve no mesmo “shape” mais comum
                   return { items: Array.from(byId.values()) };
                 }}
                 fetchProgramados={async () => {
-                  // usa exatamente sua rota atual:
                   const entidadeIdReal = String(tipoUsuarioIdEntidade || "").trim();
                   const entidadeFallback = String(usuarioIdEntidade || "").trim();
                   const idParaEnviar = entidadeIdReal || entidadeFallback;
@@ -1664,7 +1654,6 @@ async function salvarAvaliacao() {
                   return res.data;
                 }}
                 onAgendar={async ({ selectedDays, treinoProgramadoId }) => {
-                  // mesma lógica atual, só que agora aqui
                   const autorId = String(tipoUsuarioIdEntidade || "");
                   const autorTipo = tipo ? autorTipoFromTela(tipo) : undefined;
 
@@ -1686,7 +1675,6 @@ async function salvarAvaliacao() {
                     )
                   );
                 }}
-                // se você quiser “pintar” submissões no calendário, passa aqui convertidas:
                 additionalItems={submissoes.map((s) => ({
                   id: `sub_${s.id}`,
                   titulo: s.titulo ?? "Treino",
@@ -1699,7 +1687,6 @@ async function salvarAvaliacao() {
                   submissaoTreinoId: s.tipo === "treino" ? s.id : null,
                   submissaoFeita: true,
                 }))}
-                // aqui mantém o seu botão “Avaliar treino”
                 renderItemActions={(t) => {
                   const done = String(t.meuStatus || t.execucaoStatus || t.status || "").toUpperCase() === "COMPLETED";
                   if (!done || !t.submissaoTreinoId) return null;

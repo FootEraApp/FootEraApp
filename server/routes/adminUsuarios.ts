@@ -7,13 +7,11 @@ import {
   bloquearUsuario,
   reativarUsuario,
 } from "../controllers/adminUsuariosStatusController.js";
-
-import { authenticateToken } from "../middlewares/auth.js";   // ✅ ADD
+import { authenticateToken } from "../middlewares/auth.js"; 
 import { requireAdmin } from "../middlewares/guards.js";
 
 const router = Router();
 
-// ✅ ordem correta: autentica -> depois valida admin
 router.use(authenticateToken, requireAdmin);
 
 router.post("/:id/bloquear", bloquearUsuario);

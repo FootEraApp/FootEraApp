@@ -1,9 +1,7 @@
-// server/controllers/turmasController
 import type { Request, Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import type { TurmaUsuario, Usuario as UsuarioModel, Atleta as AtletaModel } from "@prisma/client";
 import { prisma } from "../prisma.js";
-
 
 function uniqById<T extends { id: string }>(arr: T[]) {
   const map = new Map<string, T>();
@@ -13,39 +11,11 @@ function uniqById<T extends { id: string }>(arr: T[]) {
   return Array.from(map.values());
 }
 
-const REL_USUARIO = [
-  "alunos","usuarios","membros","participantes",
-  "usuariosTurma","alunosTurma","membrosTurma","participantesTurma"
-];
-const REL_ATLETA  = [
-  "atletas","jogadores","membros","participantes",
-  "atletasTurma","jogadoresTurma","membrosTurma","participantesTurma"
-];
-
-type AlunoTurmaDTO = {
-  id: string;
-  usuarioId: string;
-  nome: string;
-  foto: string | null;
-  usuario?: {
-    id: string;
-    nome: string;
-    foto: string | null;
-  };
-};
-
-type TurmaUsuarioComUsuario = TurmaUsuario & {
-  usuario: Pick<UsuarioModel, "id" | "nome" | "foto"> | null;
-};
-
 export async function getAlunosTurma(req: Request, res: Response) {
   const { id } = req.params;
 
   try {
-    // ✅ usuário logado (quando existir)
     const usuarioLogadoId = String((req as any).userId || (req as any).userCtx?.id || "").trim();
-
-    // 1) Turma existe?
     const turma = await prisma.turma.findUnique({
       where: { id },
       select: { id: true, clubeId: true, escolinhaId: true },
@@ -55,7 +25,6 @@ export async function getAlunosTurma(req: Request, res: Response) {
       return res.status(404).json({ error: "Turma não encontrada" });
     }
 
-    // 2) Fonte OFICIAL: TurmaUsuario (membros)
     const membros = await prisma.turmaUsuario.findMany({
       where: { turmaId: id },
       include: {
@@ -65,7 +34,6 @@ export async function getAlunosTurma(req: Request, res: Response) {
 
     const usuarioIdsFromVinculo = membros.map((m) => m.usuarioId).filter(Boolean);
 
-    // 3) Legacy (se existir)
     let usuarioIdsFromTurmaLegacy: string[] = [];
     try {
       const cols = await prisma.$queryRaw<{ column_name: string }[]>`
@@ -115,14 +83,10 @@ export async function getAlunosTurma(req: Request, res: Response) {
       console.warn("[turmas] legacy check ignorado:", legacyErr);
     }
 
-    // ✅ ids DA TURMA (somente membros)
     const usuarioIdsTurma = Array.from(
       new Set([...usuarioIdsFromVinculo, ...usuarioIdsFromTurmaLegacy].map(String))
     ).filter(Boolean);
 
-    // =========================================================
-    // ✅ NOVO: se for professor logado, buscar "disponíveis"
-    // =========================================================
     let disponiveis: Array<{
       atletaId: string | null;
       usuarioId: string;
@@ -146,8 +110,6 @@ export async function getAlunosTurma(req: Request, res: Response) {
     }
 
     if (professorIdLogado) {
-      // ⚠️ Ajuste aqui se seu schema tiver outro nome/estrutura
-      // A ideia: pegar atletas com RelacaoTreinamento ativa para esse professor
       const rels = await prisma.relacaoTreinamento.findMany({
         where: {
           professorId: professorIdLogado,
@@ -170,7 +132,6 @@ export async function getAlunosTurma(req: Request, res: Response) {
         .map((r) => r.atleta)
         .filter((a): a is NonNullable<typeof a> => Boolean(a?.usuarioId));
 
-      // dedupe por usuarioId
       const map = new Map<string, typeof base[number]>();
       for (const a of base) map.set(String(a.usuarioId), a);
 
@@ -179,12 +140,9 @@ export async function getAlunosTurma(req: Request, res: Response) {
         usuarioId: String(a.usuarioId),
         id: String(a.id),
         posicao: (a.posicao as any) ?? null,
-
-        // ✅ aqui, no modo professor, consideramos "vinculado"
         vinculado: true,
         vinculoTipo: "RELACAO_PROFESSOR",
         vinculoProfessorId: professorIdLogado,
-
         usuario: {
           id: String(a.usuario?.id ?? a.usuarioId),
           nome: String(a.usuario?.nome ?? "Atleta"),
@@ -193,19 +151,10 @@ export async function getAlunosTurma(req: Request, res: Response) {
       }));
     }
 
-    // =========================================================
-    // ✅ Agora monta "alunos" como união: turma + disponiveis
-    // (mas sem marcar todos como selecionados)
-    // =========================================================
     const usuarioIdsTodos = Array.from(
       new Set([...usuarioIdsTurma, ...disponiveis.map((d) => d.usuarioId)].map(String))
     ).filter(Boolean);
 
-    // ---------------------------------------------------------
-    // Sua lógica de "vinculado ao dono da turma" só faz sentido
-    // quando existe clubeId/escolinhaId na turma.
-    // No modo professor puro, não vamos bloquear por isso.
-    // ---------------------------------------------------------
     const ownerClubeId = turma.clubeId ? String(turma.clubeId) : null;
     const ownerEscolinhaId = turma.escolinhaId ? String(turma.escolinhaId) : null;
 
@@ -224,18 +173,16 @@ export async function getAlunosTurma(req: Request, res: Response) {
 
     const vinculoByUsuarioId = new Map<string, VinculoInfo>();
 
-    // ✅ se NÃO tem owner (clube/escolinha), e temos disponiveis, não bloqueia.
     if (!ownerClubeId && !ownerEscolinhaId) {
       for (const uid of usuarioIdsTodos) {
         const isDisponivel = disponiveis.some((d) => d.usuarioId === uid);
         vinculoByUsuarioId.set(uid, {
-          vinculado: isDisponivel, // true se vem do vínculo do professor
+          vinculado: isDisponivel, 
           tipo: isDisponivel ? "RELACAO_PROFESSOR" : "NENHUM",
           professorId: isDisponivel ? professorIdLogado : null,
         });
       }
     } else {
-      // ✅ mantém sua lógica atual (instituição)
       const professorIdsDaInstituicao = new Set<string>();
 
       const profsDiretos = await prisma.professor.findMany({
@@ -340,7 +287,6 @@ export async function getAlunosTurma(req: Request, res: Response) {
       }
     }
 
-    // 5) Carrega atletas p/ mapear atletaId/posicao (para TODOS)
     const atletas = usuarioIdsTodos.length
       ? await prisma.atleta.findMany({
           where: { usuarioId: { in: usuarioIdsTodos } },
@@ -352,7 +298,6 @@ export async function getAlunosTurma(req: Request, res: Response) {
       atletas.map((a) => [String(a.usuarioId), { atletaId: String(a.id), posicao: (a.posicao as any) ?? null }])
     );
 
-    // 6) Carrega usuários p/ nome/foto
     const usuarios = usuarioIdsTodos.length
       ? await prisma.usuario.findMany({
           where: { id: { in: usuarioIdsTodos } },
@@ -362,7 +307,6 @@ export async function getAlunosTurma(req: Request, res: Response) {
 
     const usuarioById = new Map(usuarios.map((u) => [String(u.id), u]));
 
-    // 7) Monta "alunos" no formato do front
     const alunos = usuarioIdsTodos.map((usuarioId) => {
       const atletaInfo = atletaByUsuarioId.get(usuarioId) ?? null;
       const u = usuarioById.get(usuarioId) ?? null;
@@ -378,14 +322,10 @@ export async function getAlunosTurma(req: Request, res: Response) {
         usuarioId,
         id: atletaInfo?.atletaId ?? usuarioId,
         posicao: atletaInfo?.posicao ?? null,
-
         vinculado: vinc.vinculado,
         vinculoTipo: vinc.tipo,
         vinculoProfessorId: vinc.professorId ?? null,
-
-        // ✅ ajuda o front: saber se já é membro da turma
         inTurma: usuarioIdsTurma.includes(usuarioId),
-
         usuario: {
           id: u?.id ?? usuarioId,
           nome: u?.nome ?? "Atleta",
@@ -394,7 +334,6 @@ export async function getAlunosTurma(req: Request, res: Response) {
       };
     });
 
-    // ✅ só bloqueia quando tem instituição; no modo professor puro fica vazio
     const naoVinculadosUsuarioIds =
       ownerClubeId || ownerEscolinhaId
         ? alunos.filter((a) => a.inTurma && !a.vinculado).map((a) => a.usuarioId)
@@ -402,12 +341,9 @@ export async function getAlunosTurma(req: Request, res: Response) {
 
     return res.json({
       alunos,
-      // ✅ membros da turma (selecionados)
       usuarioIds: usuarioIdsTurma,
       atletaIds: alunos.filter((a) => a.inTurma).map((a) => a.atletaId).filter(Boolean),
       naoVinculadosUsuarioIds,
-
-      // ✅ extra: lista “fora da turma” no modo professor
       disponiveis,
       usuarioIdsTodos,
     });
@@ -560,14 +496,12 @@ export async function listarTurmasComoProfessor(
   res: Response
 ) {
   try {
-    // ✅ usuário logado (JWT)
     const usuarioId = String((req as any).userId || "").trim();
 
     if (!usuarioId) {
       return res.status(401).json({ message: "Não autenticado" });
     }
 
-    // ✅ acha o Professor vinculado a esse usuário
     const professor = await prisma.professor.findFirst({
       where: { usuarioId },
       select: { id: true },
@@ -600,10 +534,7 @@ export async function listarTurmasComoProfessor(
         .map((tp) => tp?.professor ?? null)
         .filter((p): p is { id: string; nome: string } => Boolean(p?.id));
 
-      // usa sua util uniqById se já existir no arquivo
       const profs = uniqById(profsRaw);
-
-      // owner (clube/escolinha) vem do próprio registro
       const ownerTipo = t.clubeId ? "Clube" : t.escolinhaId ? "Escolinha" : null;
       const ownerId = t.clubeId ?? t.escolinhaId ?? null;
 
