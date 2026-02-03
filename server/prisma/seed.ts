@@ -12,8 +12,10 @@ import {
   PosicaoCampo,
 } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { sanitizeMediaPath } from '../utils/mediaSanitizer.js';
 
 const prisma = new PrismaClient();
+const m = (p?: string | null) => sanitizeMediaPath(p);
 
 function daysAgo(n: number) {
   const d = new Date();
@@ -95,7 +97,7 @@ async function main() {
       cidade: 'São Paulo',
       estado: 'SP',
       pais: 'Brasil',
-      foto: '/assets/usuarios/clube-footera.png',
+      foto: m('/assets/usuarios/clube-footera.png'),
       clube: {
         create: {
           nome: "Clube FootEra FC",

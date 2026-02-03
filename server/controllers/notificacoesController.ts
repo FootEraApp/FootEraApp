@@ -48,7 +48,7 @@ export async function listarMinhasNotificacoes(req: AuthenticatedRequest, res: R
       if (t.includes("event")) return prefs.notifEventos;
       if (t.includes("market") || t.includes("promo")) return prefs.notifMarketing;
 
-      return true; // se não tiver tipo claro, não some com a notificação
+      return true; 
     });
 
     return res.json({ items: filtered });
@@ -90,12 +90,7 @@ export async function getBadge(req: AuthenticatedRequest, res: Response) {
     ]);
     const solicitacoesCount = prefs.notifTreinos ? pendSolic : 0;
     const mensagensCount = prefs.notifMensagens ? unreadMsgs : 0;
-
-    // totalNotifs (notificacoes gerais) você pode manter,
-    // ou zerar também se você tiver tipos e quiser respeitar.
-    // Por segurança, aqui vou manter "notificacoes" como está:
     const notificacoesCount = totalNotifs;
-
     const totalNotificacoes = notificacoesCount + solicitacoesCount;
 
     return res.json({

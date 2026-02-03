@@ -96,10 +96,8 @@ async function getSubscriptionReadOnly(usuarioId: string) {
   const now = new Date();
   let a = await prisma.assinatura.findUnique({ where: { usuarioId } });
 
-  // ✅ NÃO CRIA NADA AUTOMATICAMENTE
   if (!a) return null;
 
-  // (Opcional) Se quiser manter a regra de bloquear trial expirado automaticamente:
   if ((a as any).status === "TRIAL" && (a as any).trialEndsAt && now > (a as any).trialEndsAt) {
     a = await prisma.assinatura.update({
       where: { usuarioId },
@@ -368,7 +366,6 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
 
     const a = await prisma.assinatura.findUnique({ where: { usuarioId } });
 
-    // ✅ já está ativa ou em trial -> não cria de novo
     if (a?.status === "ATIVA") {
       return res.status(400).json({ code: "ALREADY_ACTIVE", message: "Você já possui assinatura ativa." });
     }
@@ -376,7 +373,6 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
       return res.status(400).json({ code: "TRIAL_ALREADY_ACTIVE", message: "Seu trial já está ativo." });
     }
 
-    // ✅ se você quer impedir “2º trial” pra sempre:
     if ((a as any)?.trialStartsAt) {
       return res.status(400).json({ code: "TRIAL_ALREADY_USED", message: "Você já utilizou o mês grátis." });
     }

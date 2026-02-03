@@ -1,10 +1,9 @@
-// client/src/pages/GerenciarAtletas
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {CirclePlus } from "lucide-react";
 import axios from "axios";
 import {
-  Users, Search, Filter, ChevronRight, ChevronLeft, CheckCircle2, XCircle, ClipboardList, ChevronDown, ArrowUpAZ, ArrowDownZA,
+  Users, Search, Filter, ChevronRight, ArrowUpAZ, ArrowDownZA,
   Shield, Activity, Trophy, Loader2, X, CalendarClock, ListChecks,
 } from "lucide-react";
 import {
@@ -1062,7 +1061,6 @@ async function salvarAvaliacao() {
 
             {tipo && (
               <div className="mt-2 inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
-                {/* ATLETAS */}
                 <button
                   type="button"
                   onClick={() => setLocation("/perfil/GerenciarAtletas")}
@@ -1073,7 +1071,6 @@ async function salvarAvaliacao() {
                   Atletas
                 </button>
 
-                {/* PROFESSORES (só Clube/Escola) */}
                 {tipo !== "Professor" && (
                   <button
                     type="button"
@@ -1088,7 +1085,6 @@ async function salvarAvaliacao() {
                   </button>
                 )}
 
-                {/* TURMAS (Clube/Escola E Professor) */}
                 <button
                   type="button"
                   onClick={() => setLocation("/perfil/GerenciarProfessores?tab=turmas")}
@@ -1557,7 +1553,7 @@ async function salvarAvaliacao() {
         }
         professorId={
           tipo === "Professor"
-            ? (tipoUsuarioIdEntidade || undefined) // professor gerencia as turmas ligadas a ele
+            ? (tipoUsuarioIdEntidade || undefined) 
             : (turmasProfessorId || undefined)
         }
       />
@@ -1596,16 +1592,51 @@ async function salvarAvaliacao() {
                 open={carreiraOpen && !!focado}
                 title={nomeCompletoAtleta(focado)}
                 fetchAgendados={async ({ monthISO }) => {
-                  // usa exatamente sua rota atual:
                   const atletaId = focado!.id;
-                  const r = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas/${atletaId}/agendados`, {
-                    headers,
-                    params: { month: monthISO },
-                  });
-                  return r.data;
+                  const [yy, mm] = monthISO.split("-").map(Number);
+                  const base = new Date(yy, (mm || 1) - 1, 1);
+
+                  const toMonthISO = (d: Date) => {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, "0");
+                    return `${y}-${m}`;
+                  };
+
+                  const prev = new Date(base.getFullYear(), base.getMonth() - 1, 1);
+                  const next = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+
+                  const months = [toMonthISO(prev), toMonthISO(base), toMonthISO(next)];
+
+                  const resps = await Promise.all(
+                    months.map((m) =>
+                      axios.get(`${API.BASE_URL}/api/gerenciar/atletas/${atletaId}/agendados`, {
+                        headers,
+                        params: { month: m },
+                      })
+                    )
+                  );
+
+                  const merged: any[] = [];
+                  for (const r of resps) {
+                    const data = r.data;
+                    const arr =
+                      (Array.isArray(data?.items) && data.items) ||
+                      (Array.isArray(data?.agendados) && data.agendados) ||
+                      (Array.isArray(data) && data) ||
+                      [];
+                    merged.push(...arr);
+                  }
+
+                  const byId = new Map<string, any>();
+                  for (const it of merged) {
+                    const id = String(it?.id || "");
+                    if (!id) continue;
+                    byId.set(id, it);
+                  }
+
+                  return { items: Array.from(byId.values()) };
                 }}
                 fetchProgramados={async () => {
-                  // usa exatamente sua rota atual:
                   const entidadeIdReal = String(tipoUsuarioIdEntidade || "").trim();
                   const entidadeFallback = String(usuarioIdEntidade || "").trim();
                   const idParaEnviar = entidadeIdReal || entidadeFallback;
@@ -1623,7 +1654,6 @@ async function salvarAvaliacao() {
                   return res.data;
                 }}
                 onAgendar={async ({ selectedDays, treinoProgramadoId }) => {
-                  // mesma lógica atual, só que agora aqui
                   const autorId = String(tipoUsuarioIdEntidade || "");
                   const autorTipo = tipo ? autorTipoFromTela(tipo) : undefined;
 
@@ -1645,7 +1675,6 @@ async function salvarAvaliacao() {
                     )
                   );
                 }}
-                // se você quiser “pintar” submissões no calendário, passa aqui convertidas:
                 additionalItems={submissoes.map((s) => ({
                   id: `sub_${s.id}`,
                   titulo: s.titulo ?? "Treino",
@@ -1658,7 +1687,6 @@ async function salvarAvaliacao() {
                   submissaoTreinoId: s.tipo === "treino" ? s.id : null,
                   submissaoFeita: true,
                 }))}
-                // aqui mantém o seu botão “Avaliar treino”
                 renderItemActions={(t) => {
                   const done = String(t.meuStatus || t.execucaoStatus || t.status || "").toUpperCase() === "COMPLETED";
                   if (!done || !t.submissaoTreinoId) return null;

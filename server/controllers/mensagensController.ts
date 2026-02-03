@@ -14,15 +14,14 @@ const AD_EVERY_N = 10;
 function readPrivacidade(raw: any) {
   const c = raw && typeof raw === "object" ? raw : {};
   return {
-    // defaults
-    permitirMensagens: c.permitirMensagens !== false, // default true
+    permitirMensagens: c.permitirMensagens !== false, 
   };
 }
 
 function readNotificacoes(raw: any) {
   const c = raw && typeof raw === "object" ? raw : {};
   return {
-    notifMensagens: c.notifMensagens !== false, // default true
+    notifMensagens: c.notifMensagens !== false, 
   };
 }
 
@@ -212,14 +211,12 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
 
     const destNotif = readNotificacoes((destinatario as any).configuracoesNotificacoes);
 
-    // ✅ só cria registro de notificacao se o usuário quer notif de mensagens
     if (destNotif.notifMensagens) {
       try {
         await prisma.notificacao.create({
           data: {
             usuarioId: paraId,
             actorId: deId,
-            // ajuste esses campos se seu model tiver nomes diferentes
             tipo: "MENSAGEM",
             titulo: "Nova mensagem",
             mensagem: "Você recebeu uma nova mensagem.",
@@ -227,11 +224,9 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
           } as any,
         });
       } catch (e) {
-        // se seu model notificacao não tem esses campos, não derruba o envio da mensagem
         console.warn("[enviarMensagem] falha ao criar notificacao:", e);
       }
 
-      // ✅ atualiza badge via socket (agora emitindo no room certo)
       await recomputeAndEmitBadge(paraId);
     }
 

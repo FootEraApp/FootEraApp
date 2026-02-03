@@ -19,6 +19,7 @@ import { startExpiredTrainingsJob } from "./jobs/expiredTrainings.js";
 import { authenticateToken } from "./middlewares/auth.js";
 import { limparTreinosSalvosExpirados } from "./controllers/treinosSalvosController.js";
 import { PrismaClient } from "@prisma/client";
+import { purgeDeletedAccounts } from "./jobs/purgeDeletedAccounts.js";
 
 import adminUsuariosRoutes from "./routes/adminUsuarios.js";
 import adminRoutes from "./routes/admin.js";
@@ -101,6 +102,7 @@ import statusRoutes from "./routes/status.js";
 import comentariosRoutes from "./routes/comentarios.js";
 import estatisticasRoutes from "./routes/estatisticas.js";
 import configuracoesPerfilRoutes from "./routes/configuracoesPerfil.js";
+import presencaRoutes from "./routes/presenca.js";
 
 import { handlePaymentWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
@@ -174,8 +176,6 @@ const corsConfig: cors.CorsOptions = {
     "X-Requested-With",
     "Accept",
     "Origin",
-
-    // ✅ seus headers customizados
     "x-tipo-usuario",
     "x-tipo-usuario-id",
     "x-user-id",
@@ -246,14 +246,12 @@ app.use("/api/ranking", rankingRoutes);
 app.use("/api/explorar", explorarRoutes);  
 app.use("/api/legal", legalRoutes);
 app.use("/api/catalogo", catalogoRoutes);
-
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminAdminsRoutes);
 app.use("/api/admin", metricsRoutes);
 app.use("/api/admin/usuarios", adminUsuariosRoutes);
 app.use("/api/admin/assinantes", adminAssinantesRoutes);
 app.use("/api/admin/moderacao", authenticateToken, requireAdmin, adminModeracaoRoutes);
-
 app.use("/api/analises", analisesRoutes);
 app.use("/api/assinaturas", assinaturasRoutes);
 app.use("/api/comentarios", comentariosRoutes);
@@ -282,9 +280,10 @@ app.use("/api/notificacoes", authenticateToken, notificacoesRoutes);
 app.use("/api/perfil", authenticateToken, perfilRoutes);
 app.use("/api/pontuacao", authenticateToken, pontuacaoRoutes);
 app.use("/api/post", authenticateToken, postRoutes);
+app.use("/api/presenca", authenticateToken, presencaRoutes);
 app.use("/api/professores", authenticateToken, professorRoutes);
-app.use("/api/seguidores/mutuos", authenticateToken, rotaSeguidorMutuo);
-app.use("/api/seguidores", authenticateToken, seguirRoutes);
+app.use("/api/seguidores/mutuos", rotaSeguidorMutuo);
+app.use("/api/seguidores", seguirRoutes);
 app.use("/api/usuarios", authenticateToken, usuarioRoutes);
 app.use("/api/solicitacoes-treino", authenticateToken, solicitacaoTreinoRoutes);
 app.use("/api/submissoes", authenticateToken, submissoesRoutes);
@@ -320,10 +319,10 @@ app.use("/api/consentimento", authenticateToken, consentimentoRoutes);
 app.use("/api/jogos-elenco", jogosElencoRoutes);
 app.use("/api/treinar-juntos", treinarJuntosRoute);
 app.use("/api/sessoes-turma", sessoesTurmaRoutes);
+app.use("/api/feedback", feedbackRoutes);
+app.use("/api/status", statusRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
-app.use("/api/feedback", authenticateToken, feedbackRoutes);
-app.use("/api/status", statusRoutes);
 
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
@@ -339,6 +338,15 @@ cron.schedule("0 4 * * *", async () => {
   await prisma.atletaHistoricoVinculo.deleteMany({
     where: { expiraEm: { lt: now } },
   });
+});
+
+cron.schedule("30 3 * * *", async () => {
+  try {
+    const n = await purgeDeletedAccounts();
+    console.log(`[purgeDeletedAccounts] removidos: ${n}`);
+  } catch (e) {
+    console.error("[purgeDeletedAccounts] erro", e);
+  }
 });
 
 cron.schedule("0 3 * * *", async () => {

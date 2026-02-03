@@ -78,7 +78,7 @@ export default function IndicarParaClube() {
           setDestinos([]);
         }
       }, 350),
-    [tipoDestino] // headers é estável o suficiente; se preferir pode incluir JSON.stringify(headers)
+    [tipoDestino]
   );
 
   useEffect(() => {
@@ -124,7 +124,6 @@ export default function IndicarParaClube() {
         </button>
       </div>
 
-      {/* Toggle Clube / Escolinha */}
       <div className="flex gap-2 mb-3">
         <button
           type="button"

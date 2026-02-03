@@ -5,6 +5,7 @@ import {
   getUsuarioChallenges,
   getUsuarioParceiro,
   getUsuarioAssinatura,
+  getPresenca,
 } from "../controllers/usuarioController.js";
 import { authenticateToken } from "server/middlewares/auth.js";
 import { listAdminUsers } from "server/controllers/adminUsersController.js";
@@ -12,9 +13,9 @@ import { listAdminUsers } from "server/controllers/adminUsersController.js";
 const router = Router();
 
 router.get("/", authenticateToken, listAdminUsers);
-
 router.get("/:id", getUsuarioPorId);
 router.get("/:id/challenges", authenticateToken, getUsuarioChallenges);
+router.get("/:id/presenca", authenticateToken, getPresenca);
 
 router.get("/:id/parceiro", authenticateToken, getUsuarioParceiro);
 router.get("/:id/assinatura", getUsuarioAssinatura);

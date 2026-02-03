@@ -1,4 +1,3 @@
-// client/src/components/profile/ProfileHeader
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import {
@@ -13,7 +12,6 @@ import {
   Eye,
   UserPlus,
   Share2,
-  Trophy
 } from "lucide-react";
 import { Button } from "../ui/button.js";
 import { API } from "../../config.js";
@@ -72,13 +70,9 @@ function normalizeTipo(t: any): string {
     .trim()
     .toLowerCase();
 
-  // remove acentos
   const noAccents = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-  // pega só a primeira “palavra” (ex.: "Professor Pro" -> "professor")
   const first = noAccents.split(/\s+/)[0] || "";
 
-  // mapeia variações comuns
   if (first === "escola") return "escolinha";
   if (first === "coach") return "professor";
 
@@ -86,6 +80,43 @@ function normalizeTipo(t: any): string {
 }
 
 const FALLBACK_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
+const ONLINE_TTL_MS = 45_000; 
+
+function timeAgoPtBR(dateLike?: string | Date | null): string {
+  if (!dateLike) return "há algum tempo";
+
+  const d = typeof dateLike === "string" ? new Date(dateLike) : dateLike;
+  const t = d.getTime();
+  if (!t || Number.isNaN(t)) return "há algum tempo";
+
+  const diff = Date.now() - t;
+
+  const sec = Math.floor(diff / 1000);
+  if (sec < 5) return "agora";
+  if (sec < 60) return `há ${sec}s`;
+
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `há ${min} min`;
+
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `há ${hr}h`;
+
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `há ${day}d`;
+
+  const mo = Math.floor(day / 30);
+  if (mo < 12) return `há ${mo} mês${mo > 1 ? "es" : ""}`;
+
+  const yr = Math.floor(mo / 12);
+  return `há ${yr} ano${yr > 1 ? "s" : ""}`;
+}
+
+function computeOnline(lastSeenAt?: string | null): boolean {
+  if (!lastSeenAt) return false;
+  const ms = new Date(lastSeenAt).getTime();
+  if (!ms || Number.isNaN(ms)) return false;
+  return Date.now() - ms <= ONLINE_TTL_MS;
+}
 
 export default function ProfileHeader({
   perfilId,
@@ -124,33 +155,29 @@ export default function ProfileHeader({
   const [perfilTipo, setPerfilTipo] = useState<string | null>(perfilTipoProp ?? null);
   const [perfilTipoId, setPerfilTipoId] = useState<string | null>(perfilTipoIdProp ?? null);
   const [checouVinculo, setChecouVinculo] = useState(false);
-
-
+  const [presenceOnline, setPresenceOnline] = useState<boolean | null>(null);
+  const [presenceLastSeenAt, setPresenceLastSeenAt] = useState<string | null>(null);
+  const [presencePrivacyBlocked, setPresencePrivacyBlocked] = useState<boolean>(false);
+  const [isMutuoFollow, setIsMutuoFollow] = useState<boolean>(false);
+  const [checouMutuoFollow, setChecouMutuoFollow] = useState<boolean>(false);
+  
   const viewerTipo =
     (Storage as any).tipoSalvo ??
     localStorage.getItem("tipoUsuario") ??
     sessionStorage.getItem("tipoUsuario") ??
     "";
 
-  // -------------------- REGRA GLOBAL DO VÍNCULO (reutilizável) --------------------
   const viewerTipoNorm = normalizeTipo(viewerTipo);
   const alvoTipoNormGlobal = normalizeTipo(perfilTipo || perfilTipoProp);
-
   const tiposComVinculo = new Set(["atleta", "professor", "clube", "escolinha"]);
-
   const viewerPodeVinculo = tiposComVinculo.has(viewerTipoNorm);
   const alvoPodeVinculo = tiposComVinculo.has(alvoTipoNormGlobal);
 
-  // ❌ Regra: Atleta NÃO pode vínculo com Atleta
   const atletaComAtleta =
     viewerTipoNorm === "atleta" && alvoTipoNormGlobal === "atleta";
 
   const podeChecarVinculo =
     viewerPodeVinculo && alvoPodeVinculo && !atletaComAtleta;
-
-
-  // -------------------------------------------------------------------------------
-
 
   const viewerCanObserve = /olheiro|professor|clube|escolinha/i.test(String(viewerTipo));
   const obsKey = Storage.usuarioId && alvoAtletaId ? `obs_${Storage.usuarioId}_${alvoAtletaId}` : null;
@@ -168,6 +195,76 @@ export default function ProfileHeader({
     text: string;
     onYes: () => Promise<void> | void;
   } | null>(null);
+
+  const podeVerPresenca =
+  isOwnProfile || isMe || temVinculoTreino || isMutuoFollow;
+
+  useEffect(() => {
+    const token =
+      Storage.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
+
+    const usuarioAlvoId = String(perfilId || "").trim();
+    if (!token || !usuarioAlvoId) return;
+
+    if (!isOwnProfile && !isMe) {
+      const aguardando = (!checouVinculo) || (!checouMutuoFollow);
+      if (aguardando) return;
+
+      if (!podeVerPresenca) {
+        setPresenceOnline(null);
+        setPresenceLastSeenAt(null);
+        setPresencePrivacyBlocked(true);
+        return;
+      }
+    }
+
+    let alive = true;
+
+    async function loadPresence() {
+      try {
+        const r = await fetch(
+          `${API.BASE_URL}/api/presenca/${encodeURIComponent(usuarioAlvoId)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!r.ok) return;
+
+        const data = await r.json().catch(() => null as any);
+        if (!alive || !data) return;
+
+        const blocked = Boolean(data?.privacyBlocked);
+        setPresencePrivacyBlocked(blocked);
+
+        if (blocked) {
+          setPresenceOnline(null);
+          setPresenceLastSeenAt(null);
+          return;
+        }
+
+        setPresenceOnline(Boolean(data?.isOnline));
+        setPresenceLastSeenAt(
+          data?.lastSeenAt ? new Date(data.lastSeenAt).toISOString() : null
+        );
+      } catch {}
+    }
+
+    loadPresence();
+    const interval = setInterval(loadPresence, 20_000);
+
+    return () => {
+      alive = false;
+      clearInterval(interval);
+    };
+  }, [
+    perfilId,
+    isOwnProfile,
+    isMe,
+    podeVerPresenca,
+    checouVinculo,
+    checouMutuoFollow,
+  ]);
 
   useEffect(() => {
     const onBadge = (e: Event) => {
@@ -261,7 +358,58 @@ export default function ProfileHeader({
     setChecouVinculo(false);
   }, [perfilId]);
 
-  
+  useEffect(() => {
+    setPresenceOnline(null);
+    setPresenceLastSeenAt(null);
+    setPresencePrivacyBlocked(false);
+  }, [perfilId]);
+
+  useEffect(() => {
+    if (isOwnProfile || isMe) {
+      setIsMutuoFollow(true);
+      setChecouMutuoFollow(true);
+      return;
+  }
+
+  const token =
+    Storage.token ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    "";
+
+  const alvoId = String(perfilId || "").trim();
+  if (!token || !alvoId) return;
+
+  let alive = true;
+  setChecouMutuoFollow(false);
+
+  (async () => {
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!alive) return;
+
+      const arr = r.ok ? await r.json().catch(() => []) : [];
+      const ids = (Array.isArray(arr) ? arr : [])
+        .map((x: any) => String(x?.id ?? x?.usuarioId ?? x).trim())
+        .filter(Boolean);
+
+      setIsMutuoFollow(ids.includes(alvoId));
+      setChecouMutuoFollow(true);
+    } catch {
+      if (!alive) return;
+      setIsMutuoFollow(false);
+      setChecouMutuoFollow(true);
+    }
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [perfilId, isOwnProfile, isMe]);
+
 useEffect(() => {
   if (isOwnProfile || isMe) return;
 
@@ -275,14 +423,11 @@ useEffect(() => {
 
   if (!token || !usuarioAlvoId) return;
 
-  // sempre reseta ao trocar de perfil / regras
   setChecouVinculo(false);
   setTemVinculoTreino(false);
 
-  // espera os tipos existirem
   if (!alvoTipoNormGlobal || !viewerTipoNorm) return;
 
-  // se não pode checar (regra), finaliza carregamento
   if (!podeChecarVinculo) {
     setTemVinculoTreino(false);
     setChecouVinculo(true);
@@ -334,8 +479,6 @@ useEffect(() => {
   alvoTipoNormGlobal,
   podeChecarVinculo,
 ]);
-
-
 
   useEffect(() => {
     if (!isOwnProfile) return;
@@ -555,8 +698,6 @@ useEffect(() => {
           data?.usuario?.usuarioId ??
           ""
         ).trim();
-
-
 
         const performance = Number(data.performance) || 0;
         const disciplina = Number(data.disciplina) || 0;
@@ -1169,6 +1310,18 @@ const alvoUsuarioIdFavorito = isOwnProfile
     treinoBtnClass = "bg-amber-300 text-green-900";
   }
 
+  const onlineText = (() => {
+    if (presencePrivacyBlocked) return null;
+    if (presenceOnline === null && !presenceLastSeenAt) return null;
+    if (presenceOnline) {
+      return (isOwnProfile || isMe) ? "🟢 Você está online" : "🟢 Online";
+    }
+    if (!presenceLastSeenAt) return "🔴 Offline";
+
+    const ago = timeAgoPtBR(presenceLastSeenAt);
+    return ago === "agora" ? "🟢 Online" : `⚪ Online ${ago}`;
+  })();
+
   return (
     <div className="footera-bg-green p-6 flex flex-col items-center relative">
       {isOwnProfile && (
@@ -1237,6 +1390,12 @@ const alvoUsuarioIdFavorito = isOwnProfile
           {posicao && time ? " • " : ""}
           {time}
         </p>
+      )}
+
+      {onlineText && (
+        <div className="text-white text-xs font-semibold mt-0.5 text-center">
+          {onlineText}
+        </div>
       )}
 
       <div className="w-full mt-4">
