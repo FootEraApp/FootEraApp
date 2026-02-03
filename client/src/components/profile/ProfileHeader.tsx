@@ -164,7 +164,9 @@ export default function ProfileHeader({
   const [presenceOnline, setPresenceOnline] = useState<boolean | null>(null);
   const [presenceLastSeenAt, setPresenceLastSeenAt] = useState<string | null>(null);
   const [presencePrivacyBlocked, setPresencePrivacyBlocked] = useState<boolean>(false);
-
+  const [isMutuoFollow, setIsMutuoFollow] = useState<boolean>(false);
+  const [checouMutuoFollow, setChecouMutuoFollow] = useState<boolean>(false);
+  
   const viewerTipo =
     (Storage as any).tipoSalvo ??
     localStorage.getItem("tipoUsuario") ??
@@ -208,6 +210,9 @@ export default function ProfileHeader({
     onYes: () => Promise<void> | void;
   } | null>(null);
 
+  const podeVerPresenca =
+  isOwnProfile || isMe || temVinculoTreino || isMutuoFollow;
+
   useEffect(() => {
     const token =
       Storage.token ||
@@ -217,6 +222,20 @@ export default function ProfileHeader({
 
     const usuarioAlvoId = String(perfilId || "").trim();
     if (!token || !usuarioAlvoId) return;
+
+    // ✅ se ainda não checou vínculos, espera
+    if (!isOwnProfile && !isMe) {
+      const aguardando = (!checouVinculo) || (!checouMutuoFollow);
+      if (aguardando) return;
+
+      // ✅ se não pode ver, zera e não chama API
+      if (!podeVerPresenca) {
+        setPresenceOnline(null);
+        setPresenceLastSeenAt(null);
+        setPresencePrivacyBlocked(true); // força esconder
+        return;
+      }
+    }
 
     let alive = true;
 
@@ -241,20 +260,27 @@ export default function ProfileHeader({
         }
 
         setPresenceOnline(Boolean(data?.isOnline));
-        setPresenceLastSeenAt(data?.lastSeenAt ? new Date(data.lastSeenAt).toISOString() : null);
+        setPresenceLastSeenAt(
+          data?.lastSeenAt ? new Date(data.lastSeenAt).toISOString() : null
+        );
       } catch {}
     }
 
     loadPresence();
-
-    // atualiza a cada 20s (só pra manter o “há X min” vivo e refletir online/offline)
     const interval = setInterval(loadPresence, 20_000);
 
     return () => {
       alive = false;
       clearInterval(interval);
     };
-  }, [perfilId]);
+  }, [
+    perfilId,
+    isOwnProfile,
+    isMe,
+    podeVerPresenca,
+    checouVinculo,
+    checouMutuoFollow,
+  ]);
 
   useEffect(() => {
     const onBadge = (e: Event) => {
@@ -348,7 +374,58 @@ export default function ProfileHeader({
     setChecouVinculo(false);
   }, [perfilId]);
 
-  
+  useEffect(() => {
+    setPresenceOnline(null);
+    setPresenceLastSeenAt(null);
+    setPresencePrivacyBlocked(false);
+  }, [perfilId]);
+
+  useEffect(() => {
+    if (isOwnProfile || isMe) {
+      setIsMutuoFollow(true);
+      setChecouMutuoFollow(true);
+      return;
+  }
+
+  const token =
+    Storage.token ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    "";
+
+  const alvoId = String(perfilId || "").trim();
+  if (!token || !alvoId) return;
+
+  let alive = true;
+  setChecouMutuoFollow(false);
+
+  (async () => {
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!alive) return;
+
+      const arr = r.ok ? await r.json().catch(() => []) : [];
+      const ids = (Array.isArray(arr) ? arr : [])
+        .map((x: any) => String(x?.id ?? x?.usuarioId ?? x).trim())
+        .filter(Boolean);
+
+      setIsMutuoFollow(ids.includes(alvoId));
+      setChecouMutuoFollow(true);
+    } catch {
+      if (!alive) return;
+      setIsMutuoFollow(false);
+      setChecouMutuoFollow(true);
+    }
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [perfilId, isOwnProfile, isMe]);
+
 useEffect(() => {
   if (isOwnProfile || isMe) return;
 
@@ -421,8 +498,6 @@ useEffect(() => {
   alvoTipoNormGlobal,
   podeChecarVinculo,
 ]);
-
-
 
   useEffect(() => {
     if (!isOwnProfile) return;
@@ -642,8 +717,6 @@ useEffect(() => {
           data?.usuario?.usuarioId ??
           ""
         ).trim();
-
-
 
         const performance = Number(data.performance) || 0;
         const disciplina = Number(data.disciplina) || 0;
@@ -1269,7 +1342,7 @@ const alvoUsuarioIdFavorito = isOwnProfile
     }
 
     // offline sem lastSeen
-    if (!presenceLastSeenAt) return "⚪ Offline";
+    if (!presenceLastSeenAt) return "🔴 Offline";
 
     const ago = timeAgoPtBR(presenceLastSeenAt);
     return ago === "agora" ? "🟢 Online" : `⚪ Online ${ago}`;

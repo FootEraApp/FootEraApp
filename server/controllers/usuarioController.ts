@@ -15,7 +15,7 @@ export async function getPresenca(req: any, res: any) {
   const lastSeen = u.lastSeenAt ? new Date(u.lastSeenAt).getTime() : 0;
 
   // regra simples: online se teve atividade nos últimos 2 minutos
-  const ONLINE_WINDOW_MS = 2 * 60_000;
+  const ONLINE_WINDOW_MS = 45_000;
   const isOnline = lastSeen && (now - lastSeen) <= ONLINE_WINDOW_MS;
 
   return res.json({
