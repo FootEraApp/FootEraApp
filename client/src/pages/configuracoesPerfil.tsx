@@ -1,4 +1,3 @@
-// client/src/pages/configuracoesPerfil
 import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
@@ -7,6 +6,7 @@ import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import Atualizacoes from "../components/Atualizacoes.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+import socket from "../services/socket.js";
 
 type FeedbackTipo = "sugestao" | "bug";
 
@@ -41,6 +41,7 @@ export default function ConfiguracoesPerfil() {
   const [showPrivacidadeModal, setShowPrivacidadeModal] = useState(false);
   const [showNotificacoesModal, setShowNotificacoesModal] = useState(false);
   const [showSegurancaModal, setShowSegurancaModal] = useState(false);
+  const [mostrarOnline, setMostrarOnline] = useState(true);
 
   const REQUIRED_PHRASE = "Excluir Conta Footera";
 
@@ -72,12 +73,16 @@ export default function ConfiguracoesPerfil() {
         setSenhaAtual("");
         setSenhaNova("");
 
-        // ✅ AQUI (logo após sucesso)
-        setTimeout(() => {
+        setTimeout(async () => {
+        try {
+        } finally {
+          try { socket?.disconnect(); } catch {}
           localStorage.clear();
           sessionStorage.clear();
           setLocation("/login");
-        }, 800);
+        }
+      }, 800);
+
       } catch (e: any) {
         setSegErr(e?.message || "Erro ao trocar senha.");
       } finally {
@@ -89,28 +94,40 @@ export default function ConfiguracoesPerfil() {
     setSegErr(null);
     setSegMsg(null);
     setSegLoading(true);
+
+    const token = Storage.token;
+
     try {
       const resp = await fetch(`${API.REST}/configuracoes-perfil/seguranca/encerrar-sessoes`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${Storage.token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
+
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data?.message || "Erro ao encerrar sessões.");
-      // ✅ força logout local
-      localStorage.clear();
-      sessionStorage.clear();
-      setLocation("/login");
     } catch (e: any) {
       setSegErr(e?.message || "Erro ao encerrar sessões.");
     } finally {
+      try { socket?.disconnect(); } catch {}
+      try { localStorage.clear(); sessionStorage.clear(); } catch {}
+      setLocation("/login");
       setSegLoading(false);
     }
   }
 
-  function confirmarLogout() {
-    if (confirm("Tem certeza que deseja sair?")) {
-      localStorage.clear();
-      sessionStorage.clear();
+  async function confirmarLogout() {
+    const ok = confirm("Tem certeza que deseja sair?");
+    if (!ok) return;
+
+    const token = Storage.token;
+
+    try {
+      if (token) {
+        
+      }
+    } finally {
+      try { socket?.disconnect(); } catch {}
+      try { localStorage.clear(); sessionStorage.clear(); } catch {}
       setLocation("/login");
     }
   }
@@ -119,10 +136,12 @@ export default function ConfiguracoesPerfil() {
     const resp = await fetch(`${API.REST}/configuracoes-perfil/privacidade`, {
       headers: { Authorization: `Bearer ${Storage.token}` },
     });
-    const data = await resp.json();
-    setVisivel(!!data.perfilVisivel);
-    setMensagens(!!data.permitirMensagens);
-    setMostrarEmail(!!data.mostrarEmail);
+    const data = await resp.json().catch(() => ({}));
+
+    setVisivel(data?.perfilVisivel ?? true);
+    setMensagens(data?.permitirMensagens ?? true);
+    setMostrarEmail(data?.mostrarEmail ?? false);
+    setMostrarOnline(data?.mostrarOnline ?? true);
   }
 
   async function salvarPrivacidade(patch: any) {
@@ -164,7 +183,7 @@ export default function ConfiguracoesPerfil() {
 
     try {
       setDeleting(true);
-      const resp = await fetch(`${API.REST}/configuracoes/minha-conta`, {
+      const resp = await fetch(`${API.REST}/configuracoes/configuracoes/minha-conta`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -173,15 +192,16 @@ export default function ConfiguracoesPerfil() {
         body: JSON.stringify({ confirm: confirmText.trim() }),
       });
 
-      if (resp.status === 204) {
+      const data = await resp.json().catch(() => ({}));
+
+      if (resp.ok) {
         localStorage.clear();
         sessionStorage.clear();
-        alert("Conta excluída com sucesso.");
+        alert(data?.message || "Conta movida para lixeira por 30 dias.");
         setLocation("/login");
         return;
       }
 
-      const data = await resp.json().catch(() => ({}));
       setDeleteError(data?.message || "Não foi possível excluir a conta.");
     } catch {
       setDeleteError("Erro ao conectar com o servidor.");
@@ -389,7 +409,7 @@ export default function ConfiguracoesPerfil() {
             <p className="text-sm text-gray-700 mt-2">
               Para confirmar a exclusão permanente, digite exatamente{" "}
               <span className="font-semibold text-gray-900">"{REQUIRED_PHRASE}"</span> no campo abaixo
-              e clique em <span className="font-semibold">Excluir</span>.
+              e clique em <span className="font-semibold">Excluir</span>. Mas caso for necessario você tem 30 dias para restaurar a conta.
             </p>
 
             <form onSubmit={excluirConta} className="mt-4">
@@ -567,7 +587,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       )}
 
-      {/* ================= PRIVACIDADE ================= */}
       {showPrivacidadeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
@@ -609,6 +628,17 @@ export default function ConfiguracoesPerfil() {
                 />
               </div>
 
+              <div className="flex justify-between items-center border-b pb-3">
+                <span className="font-medium">Mostrar Online / Último online</span>
+                <Switch
+                  checked={mostrarOnline}
+                  onCheckedChange={(v) => {
+                    setMostrarOnline(v);
+                    salvarPrivacidade({ mostrarOnline: v });
+                  }}
+                />
+              </div>
+
               <div className="flex justify-between items-center">
                 <span className="font-medium">Mostrar E-mail no Perfil</span>
                 <Switch
@@ -624,7 +654,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       )}
 
-      {/* ================= NOTIFICAÇÕES ================= */}
       {showNotificacoesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
@@ -692,7 +721,6 @@ export default function ConfiguracoesPerfil() {
         </div>
       )}
 
-      {/* ================= SEGURANÇA ================= */}
       {showSegurancaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
@@ -714,7 +742,6 @@ export default function ConfiguracoesPerfil() {
             <div className="rounded-lg border border-gray-200 p-4 text-sm text-gray-700 space-y-3">
             <div className="font-semibold">Ações</div>
 
-            {/* ===== Trocar senha ===== */}
             <div className="rounded-md border border-gray-200 p-3">
               <div className="font-medium flex items-center gap-2">🔒 Trocar senha</div>
 
@@ -769,7 +796,6 @@ export default function ConfiguracoesPerfil() {
               </div>
             </div>
 
-            {/* ===== Encerrar sessões ===== */}
             <button
               type="button"
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 text-left"

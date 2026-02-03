@@ -1,11 +1,9 @@
-// client/src/pages/login
 import { useState, useEffect, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import axios from "axios";
 import { API } from "../config.js";
 import Storage from "../../../server/utils/storage.js";
 import MaintenanceScreen from "../components/MaintenanceScreen";
-
 
 type SvgProps = ComponentPropsWithoutRef<"svg">;
 
@@ -90,9 +88,26 @@ export default function PaginaLogin() {
   const [emailDestino, setEmailDestino] = useState<string | null>(null);
   const [sendingResend, setSendingResend] = useState(false);
   const [infoAberto, setInfoAberto] = useState(false);
-
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceChecked, setMaintenanceChecked] = useState(false);
+    const [deletedInfo, setDeletedInfo] = useState<{
+    daysLeft: number;
+    restoreAvailable: boolean;
+    message: string;
+  } | null>(null);
+
+  const [showRecover, setShowRecover] = useState(false);
+  const [recoverSenha, setRecoverSenha] = useState("");
+  const [mostrarRecoverSenha, setMostrarRecoverSenha] = useState(false);
+  const [recoverLoading, setRecoverLoading] = useState(false);
+  const [blockedInfo, setBlockedInfo] = useState<{
+    message: string;
+    reason?: string | null;
+  } | null>(null);
+
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [supportMsg, setSupportMsg] = useState("");
+  const [supportSending, setSupportSending] = useState(false);
 
   async function handleResend() {
     try {
@@ -109,115 +124,220 @@ export default function PaginaLogin() {
     }
   }
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErro("");
-    if (!nomeDeUsuario || !senha) {
-      setErro("Por favor, preencha todos os campos.");
-      return;
-    }
-    try {
-      const url = `${API.BASE_URL}/api/auth/login`;
-      const resp = await axios.post(url, { nomeDeUsuario, senha });
-      const data = resp.data ?? {};
+    const handleLogin = async (e: React.FormEvent) => {
+      e.preventDefault();
 
-      if (data?.ok === false && data?.needVerification) {
-        setNeedVerify(true);
-        setEmailDestino(data.emailDestino ?? null);
-        setErro(
-          data.message ??
-            "Verifique seu e-mail para concluir o cadastro."
-        );
+      setErro("");
+      setDeletedInfo(null);
+      setBlockedInfo(null);
+      setNeedVerify(false);
+      setEmailDestino(null);
+      setShowRecover(false);
+      setRecoverSenha("");
+      setMostrarRecoverSenha(false);
+
+      if (!nomeDeUsuario || !senha) {
+        setErro("Por favor, preencha todos os campos.");
         return;
       }
 
-      const usuario = data.usuario ?? {};
-      const usuarioId = usuario.id ?? data.id ?? "";
-      const usuarioNome = usuario.nomeDeUsuario ?? data.nomeDeUsuario ?? "";
-      const rawTipo = String(usuario.tipo ?? data.tipo ?? "").toLowerCase();
-      const isAdmin =
-        usuario.tipo === "Admin" ||
-        String(usuario.tipo).toLowerCase() === "admin";
-      const token = data.token;
+      try {
+        const url = `${API.BASE_URL}/api/auth/login`;
+        const resp = await axios.post(url, { nomeDeUsuario, senha });
+        const data = resp.data ?? {};
 
-      const plano =
-        usuario.plano ??
-        data.plano ??
-        "FREE";
+        if (data?.ok === false && data?.needVerification) {
+          setNeedVerify(true);
+          setEmailDestino(data.emailDestino ?? null);
+          setErro(data.message ?? "Verifique seu e-mail para concluir o cadastro.");
+          return;
+        }
 
-      if (!token || !usuarioId)
-        throw new Error("Resposta inválida do servidor");
+        if (data?.notice === "ACCOUNT_REACTIVATED") {
+          alert(data?.noticeMessage ?? "Sua conta foi reativada por um administrador.");
+        }
 
-      const store = lembrarDeMim ? localStorage : sessionStorage;
+        const usuario = data.usuario ?? {};
+        const usuarioId: string = String(usuario.id ?? data.id ?? "");
+        const usuarioNome: string = String(usuario.nomeDeUsuario ?? data.nomeDeUsuario ?? "");
+        const token: string = String(data.token ?? "");
 
-      [
-        "token",
-        "usuarioId",
-        "nomeUsuario",
-        "tipoUsuario",
-        "usuarioTipoRaw",
-        "tipoUsuarioId",
-        "plano",
-      ].forEach((k) => {
-        localStorage.removeItem(k);
-        sessionStorage.removeItem(k);
-      });
+        if (!token || !usuarioId) {
+          throw new Error("Resposta inválida do servidor (token/usuarioId ausente).");
+        }
 
-      sessionStorage.setItem("token", token);
-      localStorage.setItem("token", token);
+        const store = lembrarDeMim ? localStorage : sessionStorage;
 
-      sessionStorage.setItem("usuarioId", usuarioId);
-      localStorage.setItem("usuarioId", usuarioId);
+        [
+          "token",
+          "usuarioId",
+          "nomeUsuario",
+          "tipoUsuario",
+          "usuarioTipoRaw",
+          "tipoUsuarioId",
+          "plano",
+        ].forEach((k) => {
+          localStorage.removeItem(k);
+          sessionStorage.removeItem(k);
+        });
 
-      if (usuarioNome) {
-        sessionStorage.setItem("nomeUsuario", usuarioNome);
-        localStorage.setItem("nomeUsuario", usuarioNome);
+        store.setItem("token", token);
+        store.setItem("usuarioId", usuarioId);
+
+        if (usuarioNome) store.setItem("nomeUsuario", usuarioNome);
+
+        const rawTipo = String(usuario.tipo ?? data.tipo ?? "").toLowerCase();
+        const isAdmin =
+          String(usuario.tipo ?? data.tipo ?? "").toLowerCase() === "admin";
+
+        const mapTipo: Record<string, string> = {
+          admin: "admin",
+          atleta: "atleta",
+          professor: "professor",
+          clube: "clube",
+          escolinha: "escolinha",
+          escola: "escola",
+          olheiro: "olheiro",
+        };
+
+        const tipoPadrao = isAdmin ? "admin" : mapTipo[rawTipo] ?? "atleta";
+        store.setItem("tipoUsuario", tipoPadrao);
+        store.setItem("usuarioTipoRaw", rawTipo);
+
+        const tipoUsuarioId =
+          data.tipoUsuarioId ||
+          data?.olheiro?.id ||
+          data?.professor?.id ||
+          data?.clube?.id ||
+          data?.escolinha?.id ||
+          data?.atleta?.id ||
+          null;
+
+        if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
+
+        const plano = String(usuario.plano ?? data.plano ?? "FREE");
+        store.setItem("plano", plano);
+
+        navigate(isAdmin ? "/admin" : "/feed");
+      } catch (err: any) {
+        console.error("Erro no login:", err.response?.status, err.response?.data || err.message);
+
+        const data = err.response?.data;
+
+        if (data?.code === "ACCOUNT_BLOCKED") {
+          setBlockedInfo({
+            message:
+              data?.message ||
+              "Sua conta foi bloqueada pelo admin. Se quiser saber mais informações clique abaixo.",
+            reason: data?.blockedReason ?? null,
+          });
+          setErro("");
+          return;
+        }
+
+        if (data?.code === "ACCOUNT_DELETED") {
+          setDeletedInfo({
+            daysLeft: Number(data?.daysLeft ?? 0),
+            restoreAvailable: !!data?.restoreAvailable,
+            message:
+              data?.message ??
+              "Sua conta foi excluída. Caso queira recuperar, verifique o prazo.",
+          });
+          setErro("");
+          return;
+        }
+
+        setNeedVerify(!!data?.needVerification);
+        setEmailDestino(data?.emailDestino ?? null);
+        setErro(data?.message || "Nome de usuário ou senha inválidos.");
       }
+    };
 
-      const tipoServer = (usuario.tipo || data.tipo || "").toLowerCase();
-      sessionStorage.setItem("tipoUsuario", tipoServer);
-      localStorage.setItem("tipoUsuario", tipoServer);
+    async function handleRecover() {
+      try {
+        setRecoverLoading(true);
 
-      const map: Record<string, string> = {
-        admin: "admin",
-        atleta: "atleta",
-        professor: "professor",
-        clube: "clube",
-        escolinha: "escolinha",
-        escola: "escola",
-        olheiro: "olheiro",
-      };
-      const tipoPadrao = isAdmin ? "admin" : map[rawTipo] ?? "atleta";
-      store.setItem("tipoUsuario", tipoPadrao);
-      store.setItem("usuarioTipoRaw", rawTipo);
+        const r = await axios.post(`${API.BASE_URL}/api/auth/restaurar-conta`, {
+          nomeDeUsuario,
+          senha: recoverSenha,
+        });
 
-      const tipoUsuarioId =
-        data.tipoUsuarioId ||
-        data?.olheiro?.id ||
-        data?.professor?.id ||
-        data?.clube?.id ||
-        data?.escolinha?.id ||
-        data?.atleta?.id ||
-        null;
-      if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
+        if (!r.data?.ok) {
+          throw new Error(r.data?.message ?? "Não foi possível restaurar.");
+        }
 
-      store.setItem("plano", String(plano));
-      sessionStorage.setItem("plano", String(plano));
-      localStorage.setItem("plano", String(plano));
+        const loginResp = await axios.post(`${API.BASE_URL}/api/auth/login`, {
+          nomeDeUsuario,
+          senha: recoverSenha,
+        });
 
-      navigate(isAdmin ? "/admin" : "/feed");
-    } catch (err: any) {
-      console.error(
-        "Erro no login:",
-        err.response?.status,
-        err.response?.data || err.message
-      );
-      const data = err.response?.data;
-      setNeedVerify(!!data?.needVerification);
-      setEmailDestino(data?.emailDestino ?? null);
-      setErro(data?.message || "Nome de usuário ou senha inválidos.");
+        const data = loginResp.data ?? {};
+        const token = String(data.token ?? "");
+        const usuarioId = String(data.usuario?.id ?? data.id ?? "");
+
+        if (!token || !usuarioId) {
+          alert("Conta restaurada! Agora faça login.");
+          setShowRecover(false);
+          setRecoverSenha("");
+          setMostrarRecoverSenha(false);
+          return;
+        }
+
+        const store = lembrarDeMim ? localStorage : sessionStorage;
+
+        ["token", "usuarioId", "nomeUsuario", "tipoUsuario", "usuarioTipoRaw", "tipoUsuarioId", "plano"].forEach((k) => {
+          localStorage.removeItem(k);
+          sessionStorage.removeItem(k);
+        });
+
+        store.setItem("token", token);
+        store.setItem("usuarioId", usuarioId);
+
+        const usuarioNome = String(data.usuario?.nomeDeUsuario ?? data.nomeDeUsuario ?? "");
+        if (usuarioNome) store.setItem("nomeUsuario", usuarioNome);
+
+        const rawTipo = String(data.usuario?.tipo ?? data.tipo ?? "").toLowerCase();
+        const isAdmin = rawTipo === "admin";
+
+        const mapTipo: Record<string, string> = {
+          admin: "admin",
+          atleta: "atleta",
+          professor: "professor",
+          clube: "clube",
+          escolinha: "escolinha",
+          escola: "escola",
+          olheiro: "olheiro",
+        };
+
+        store.setItem("tipoUsuario", isAdmin ? "admin" : (mapTipo[rawTipo] ?? "atleta"));
+        store.setItem("usuarioTipoRaw", rawTipo);
+
+        const tipoUsuarioId =
+          data.tipoUsuarioId ||
+          data?.olheiro?.id ||
+          data?.professor?.id ||
+          data?.clube?.id ||
+          data?.escolinha?.id ||
+          data?.atleta?.id ||
+          null;
+
+        if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
+
+        const plano = String(data.usuario?.plano ?? data.plano ?? "FREE");
+        store.setItem("plano", plano);
+
+        alert("Conta restaurada com sucesso!");
+        setShowRecover(false);
+        setRecoverSenha("");
+        setDeletedInfo(null);
+
+        navigate(isAdmin ? "/admin" : "/feed");
+      } catch (e: any) {
+        alert(e?.response?.data?.message ?? e?.message ?? "Não foi possível recuperar.");
+      } finally {
+        setRecoverLoading(false);
+      }
     }
-  };
 
   useEffect(() => {
     if (isE2E) return;
@@ -426,6 +546,111 @@ export default function PaginaLogin() {
 
             {erro && <p className="text-sm text-red-500 mb-3">{erro}</p>}
 
+            {deletedInfo && (
+              <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                <div className="font-medium">Sua conta foi excluída</div>
+                <div className="mt-1">{deletedInfo.message}</div>
+
+                {deletedInfo.restoreAvailable ? (
+                  <>
+                    {!showRecover ? (
+                      <div className="mt-3 flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowRecover(true)}
+                          className="w-full rounded-lg bg-red-600 hover:bg-red-700 text-white py-2 font-medium"
+                        >
+                          Recuperar conta
+                        </button>
+
+                        <div className="text-xs text-red-800/80">
+                          Você tem {deletedInfo.daysLeft} dia(s) restantes para recuperar.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-xl border border-red-200 bg-white p-3 text-left">
+                        <div className="text-sm font-semibold mb-1">Confirmar recuperação</div>
+                        <div className="text-xs text-gray-600 mb-3">
+                          Digite sua senha para restaurar a conta.
+                        </div>
+
+                        <label className="block text-sm font-medium mb-1">Senha</label>
+                          <div className="relative">
+                            <input
+                              type={mostrarRecoverSenha ? "text" : "password"}
+                              className="w-full border border-gray-300 rounded px-3 py-2 pr-10"
+                              placeholder="Digite sua senha"
+                              value={recoverSenha}
+                              onChange={(e) => setRecoverSenha(e.target.value)}
+                            />
+                            <button
+                              type="button"
+                              className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
+                              onClick={() => setMostrarRecoverSenha((v) => !v)}
+                              onMouseDown={(e) => e.preventDefault()}
+                              aria-label={mostrarRecoverSenha ? "Ocultar senha" : "Mostrar senha"}
+                              title={mostrarRecoverSenha ? "Ocultar senha" : "Mostrar senha"}
+                            >
+                              {mostrarRecoverSenha ? <EyeOffIcon /> : <EyeIcon />}
+                            </button>
+                          </div>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowRecover(false);
+                              setRecoverSenha("");
+                              setMostrarRecoverSenha(false);
+                            }}
+                            className="flex-1 rounded-lg border border-gray-300 py-2 text-sm"
+                            disabled={recoverLoading}
+                          >
+                            Cancelar
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleRecover}
+                            disabled={recoverLoading || !recoverSenha || !nomeDeUsuario}
+                            className="flex-1 rounded-lg bg-red-600 hover:bg-red-700 text-white py-2 text-sm font-medium disabled:opacity-60"
+                          >
+                            {recoverLoading ? "Recuperando..." : "Recuperar"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="mt-2 text-xs text-red-800/80">
+                    O prazo de recuperação expirou. Entre em contato com o suporte.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {blockedInfo && (
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <div className="font-medium">Sua conta foi bloqueada</div>
+                <div className="mt-1">{blockedInfo.message}</div>
+
+                {blockedInfo.reason ? (
+                  <div className="mt-2 text-xs text-amber-800/80">
+                    Motivo: {blockedInfo.reason}
+                  </div>
+                ) : null}
+
+                <div className="mt-3 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSupportOpen(true)}
+                    className="w-full rounded-lg bg-amber-600 hover:bg-amber-700 text-white py-2 font-medium"
+                  >
+                    Quero saber mais / Falar com suporte
+                  </button>
+                </div>
+              </div>
+            )}
+
             {needVerify && (
               <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
                 <div className="mb-2">
@@ -462,12 +687,116 @@ export default function PaginaLogin() {
             </a>
           </form>
 
-          <p className="text-center text-sm text-gray-600 mt-4">
-            Não tem uma conta?{" "}
+          <div className="text-center text-sm text-gray-600 mt-4">
+            <span>Não tem uma conta? </span>
             <a href="/cadastro" className="text-green-700 underline">
               Cadastre-se
             </a>
-          </p>
+
+            {showRecover && (
+              <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 text-left">
+                <div className="text-sm font-semibold mb-1">Recuperar conta</div>
+                <div className="text-xs text-gray-600 mb-3">
+                  Confirme sua senha para restaurar sua conta.
+                </div>
+
+                <label className="block text-sm font-medium mb-1">Senha</label>
+                <input
+                  type="password"
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                  placeholder="Digite sua senha"
+                  value={recoverSenha}
+                  onChange={(e) => setRecoverSenha(e.target.value)}
+                />
+
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRecover(false);
+                      setRecoverSenha("");
+                      setMostrarRecoverSenha(false);
+                    }}
+                    className="flex-1 rounded-lg border border-gray-300 py-2 text-sm"
+                    disabled={recoverLoading}
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleRecover}
+                    disabled={recoverLoading || !recoverSenha || !nomeDeUsuario}
+                    className="flex-1 rounded-lg bg-green-900 hover:bg-green-800 text-white py-2 text-sm font-medium disabled:opacity-60"
+                  >
+                    {recoverLoading ? "Recuperando..." : "Recuperar"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {supportOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center">
+                <div
+                  className="absolute inset-0 bg-black/40"
+                  onClick={() => setSupportOpen(false)}
+                />
+                <div className="relative bg-white w-full max-w-lg rounded-xl shadow-lg p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-semibold">Falar com suporte</div>
+                    <button onClick={() => setSupportOpen(false)} className="text-gray-600">
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="text-xs text-gray-600 mb-2">
+                    Explique o que aconteceu. Vamos enviar isso para o admin/suporte.
+                  </div>
+
+                  <textarea
+                    className="w-full border rounded p-2 text-sm"
+                    rows={4}
+                    value={supportMsg}
+                    onChange={(e) => setSupportMsg(e.target.value)}
+                    placeholder="Digite sua mensagem…"
+                  />
+
+                  <div className="mt-3 flex gap-2 justify-end">
+                    <button
+                      className="px-4 py-2 rounded bg-gray-200"
+                      onClick={() => setSupportOpen(false)}
+                      disabled={supportSending}
+                    >
+                      Cancelar
+                    </button>
+
+                    <button
+                      className="px-4 py-2 rounded bg-green-900 text-white disabled:opacity-60"
+                      disabled={supportSending || !supportMsg.trim()}
+                      onClick={async () => {
+                        try {
+                          setSupportSending(true);
+                          await axios.post(`${API.BASE_URL}/api/feedback/blocked`, {
+                            nomeDeUsuario,
+                            mensagem: supportMsg,
+                          });
+                          alert("Mensagem enviada! Aguarde o retorno do suporte.");
+                          setSupportOpen(false);
+                          setSupportMsg("");
+                        } catch (e: any) {
+                          alert(e?.response?.data?.message ?? "Não foi possível enviar agora.");
+                        } finally {
+                          setSupportSending(false);
+                        }
+                      }}
+                    >
+                      {supportSending ? "Enviando..." : "Enviar"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

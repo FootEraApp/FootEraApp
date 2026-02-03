@@ -1,13 +1,22 @@
 import { Router } from "express";
 import { adminDashboard, loginAdmin } from "../controllers/adminController.js";
-import { adminAuth } from "server/middlewares/admin-auth.js";
+import { authenticateToken } from "../middlewares/auth.js";
+import { requireAdmin } from "../middlewares/guards.js";
+import { adminRestaurarConta } from "../controllers/adminRestoreController.js";
 
 const router = Router();
 
 router.post("/login", loginAdmin);
 
-router.get("/me", adminAuth, (req, res) => {
-  const user = (req as any).user;
+router.post(
+  "/usuarios/:id/restaurar",
+  authenticateToken,
+  requireAdmin,
+  adminRestaurarConta
+);
+
+router.get("/me", authenticateToken, requireAdmin, (req, res) => {
+  const user = (req as any).authUser;
   return res.json({
     id: user.id,
     email: user.email,
@@ -17,6 +26,7 @@ router.get("/me", adminAuth, (req, res) => {
     canManageAdmins: true,
   });
 });
-router.get("/", adminAuth, adminDashboard);
+
+router.get("/", authenticateToken, requireAdmin, adminDashboard);
 
 export default router;

@@ -2,7 +2,6 @@ import type { Response } from "express";
 import { prisma } from "../prisma.js";
 import type { AuthenticatedRequest, AuthUser } from "../middlewares/auth.js";
 
-
 function assertAdmin(req: AuthenticatedRequest) {
   const u: AuthUser | undefined = req.authUser;
 
@@ -164,5 +163,49 @@ export async function marcarComoLido(req: AuthenticatedRequest, res: Response) {
     return res
       .status(status)
       .json({ message: err?.message || "Erro ao atualizar feedback." });
+  }
+}
+
+export async function createBlockedSupport(req: any, res: Response) {
+  try {
+    const { nomeDeUsuario, mensagem } = (req.body || {}) as {
+      nomeDeUsuario?: string;
+      mensagem?: string;
+    };
+
+    const userTrim = String(nomeDeUsuario || "").trim();
+    const msgTrim = String(mensagem || "").trim();
+
+    if (!userTrim) {
+      return res.status(400).json({ message: "Informe o nome de usuário." });
+    }
+    if (!msgTrim) {
+      return res.status(400).json({ message: "Mensagem não pode estar vazia." });
+    }
+
+    const u = await prisma.usuario.findFirst({
+      where: {
+        OR: [
+          { nomeDeUsuario: userTrim },
+          { email: userTrim }, 
+        ],
+      },
+      select: { id: true, nomeDeUsuario: true },
+    });
+
+    if (!u?.id) return res.status(404).json({ message: "Usuário não encontrado." });
+
+    const feedback = await prisma.feedback.create({
+      data: {
+        usuarioId: u.id,
+        tipo: "outro",
+        mensagem: `[SUPORTE_BLOQUEIO] @${userTrim}: ${msgTrim}`,
+      },
+    });
+
+    return res.status(201).json({ ok: true, id: feedback.id });
+  } catch (err: any) {
+    console.error("Erro ao criar feedback (blocked):", err);
+    return res.status(500).json({ message: "Erro ao enviar solicitação." });
   }
 }

@@ -1,17 +1,15 @@
 import { Request, Response, RequestHandler } from "express";
 import {  NotificacaoTipo } from "@prisma/client";
-import { recomputeAndEmitBadge } from "./notificacoesController.js"; // ajuste o caminho se necessário
+import { recomputeAndEmitBadge } from "./notificacoesController.js"; 
 import { prisma } from "../prisma.js";
-
 
 interface AuthenticatedRequest extends Request {
   userId: string;
 }
 
-// helper: cria notificação + atualiza badge
 async function criarNotifEAtualizarBadge(params: {
-  usuarioId: string;            // quem RECEBE a notificação
-  actorId?: string | null;      // quem GEROU a ação
+  usuarioId: string;            
+  actorId?: string | null;     
   tipo: NotificacaoTipo;
   titulo: string;
   mensagem: string;
@@ -31,11 +29,9 @@ async function criarNotifEAtualizarBadge(params: {
     },
   });
 
-  // badge/socket (se você usa)
   try {
     await recomputeAndEmitBadge(usuarioId);
   } catch {
-    // se não tiver socket ligado, não quebra
   }
 }
 
@@ -50,31 +46,26 @@ export const seguirUsuario: RequestHandler = async (req: any, res) => {
     return res.status(400).json({ message: "Não é permitido seguir a si mesmo." });
   }
 
-  // pega username do seguidor (pra mensagem)
   const seguidor = await prisma.usuario.findUnique({
     where: { id: seguidorUsuarioId },
     select: { id: true, nomeDeUsuario: true },
   });
   if (!seguidor) return res.status(401).json({ message: "Não autenticado." });
 
-  // valida se o seguido existe
   const seguido = await prisma.usuario.findUnique({
     where: { id: seguidoUsuarioId },
     select: { id: true, nomeDeUsuario: true },
   });
   if (!seguido) return res.status(404).json({ message: "Usuário a ser seguido não encontrado." });
 
-  // com @@unique([seguidorUsuarioId, seguidoUsuarioId]) dá pra fazer upsert
   try {
     await prisma.seguidor.create({
       data: { seguidorUsuarioId, seguidoUsuarioId },
     });
   } catch (e: any) {
-    // se já existe, retorna 409 (ou 200 se preferir "idempotente")
     return res.status(409).json({ message: "Você já segue este usuário." });
   }
 
-  // ✅ notificação para quem foi seguido
   await criarNotifEAtualizarBadge({
     usuarioId: seguidoUsuarioId,
     actorId: seguidorUsuarioId,
@@ -99,7 +90,6 @@ export const deixarDeSeguir: RequestHandler = async (req: any, res) => {
     return res.status(400).json({ message: "Operação inválida." });
   }
 
-  // pega usernames pra msg (opcional)
   const [seguidor, seguido] = await Promise.all([
     prisma.usuario.findUnique({
       where: { id: seguidorUsuarioId },
@@ -119,8 +109,6 @@ export const deixarDeSeguir: RequestHandler = async (req: any, res) => {
     return res.status(404).json({ message: "Relação de follow não encontrada." });
   }
 
-  // (opcional) notificação para quem foi deixado de seguir
-  // se você NÃO quer notificar unfollow, pode remover isso.
   if (seguido && seguidor) {
     await criarNotifEAtualizarBadge({
       usuarioId: seguidoUsuarioId,
@@ -131,17 +119,9 @@ export const deixarDeSeguir: RequestHandler = async (req: any, res) => {
       link: `/perfil/${seguidorUsuarioId}`,
     });
   }
-
   return res.sendStatus(204);
 };
 
-/**
- * ✅ NOVO: "remover seguidor" (tirar dos seus seguidores)
- * Isso implementa seu botão "Tirar de seus seguidos" (bloquear o follow dela em você).
- *
- * Endpoint sugerido:
- * DELETE /api/seguir/seguidores/:seguidorUsuarioId
- */
 export const removerSeguidor: RequestHandler = async (req: any, res) => {
   const meuUsuarioId = req.userId!;
   const seguidorUsuarioId = String(req.params?.seguidorUsuarioId || "").trim();
@@ -153,7 +133,6 @@ export const removerSeguidor: RequestHandler = async (req: any, res) => {
     return res.status(400).json({ message: "Operação inválida." });
   }
 
-  // remove a relação "seguidor -> eu"
   const del = await prisma.seguidor.deleteMany({
     where: { seguidorUsuarioId, seguidoUsuarioId: meuUsuarioId },
   });
@@ -162,7 +141,6 @@ export const removerSeguidor: RequestHandler = async (req: any, res) => {
     return res.status(404).json({ message: "Esse usuário não te segue." });
   }
 
-  // notifica quem foi removido (✅ sua regra: “resposta aparece como notificação pra pessoa”)
   const eu = await prisma.usuario.findUnique({
     where: { id: meuUsuarioId },
     select: { nomeDeUsuario: true },
@@ -178,7 +156,6 @@ export const removerSeguidor: RequestHandler = async (req: any, res) => {
       link: `/perfil/${meuUsuarioId}`,
     });
   }
-
   return res.json({ ok: true });
 };
 

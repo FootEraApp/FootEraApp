@@ -1,8 +1,6 @@
-//server/controllers/solicitacaoTreinoController
 import { Response, Request } from "express";
 import { prisma } from "../prisma.js";
 import { resolveClubeId, resolveEscolinhaId } from "../services/formadores.service.js";
-
 
 const getBase = (req: Request) =>
   process.env.API_BASE_URL || `${req.protocol}://${req.get("host")}`;

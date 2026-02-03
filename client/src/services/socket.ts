@@ -1,10 +1,25 @@
 import { io } from "socket.io-client";
 import { API } from "../config.js";
-import Storage from "../../../server/utils/storage.js";
+
+const token =
+  localStorage.getItem("token") ||
+  sessionStorage.getItem("token") ||
+  "";
 
 const socket = io(API.BASE_URL, {
-  auth: { token: Storage.token || localStorage.getItem("token") },
+  auth: { token },
   transports: ["websocket"],
+});
+
+socket.on("connect", () => {
+  socket.emit("presence:ping");
+  const t = setInterval(() => socket.emit("presence:ping"), 25_000);
+  (socket as any).__presenceTimer = t;
+});
+
+socket.on("disconnect", () => {
+  const t = (socket as any).__presenceTimer;
+  if (t) clearInterval(t);
 });
 
 export default socket;

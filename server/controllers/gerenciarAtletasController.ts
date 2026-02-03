@@ -1,8 +1,6 @@
-// server/controllers/gerenciarAtletasController
 import { Prisma, Categoria, AvaliacaoAutorTipo } from "@prisma/client";
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
-
 
 const CATEGORIA_ORDER: Categoria[] = ["Sub9", "Sub11", "Sub13", "Sub15", "Sub17", "Sub20", "Livre"];
 
@@ -207,31 +205,29 @@ export const gerenciarAtletasController = {
         },
       });
 
-// --- ATIVOS RECENTEMENTE (1 query só) ---
-const since = new Date();
-since.setDate(since.getDate() - 14);
+      const since = new Date();
+      since.setDate(since.getDate() - 14);
 
-const usuarioIds = atletas
-  .map((a) => a.usuarioId)
-  .filter((x): x is string => typeof x === "string" && x.length > 0);
+      const usuarioIds = atletas
+        .map((a) => a.usuarioId)
+        .filter((x): x is string => typeof x === "string" && x.length > 0);
 
-const ativosSet = new Set<string>();
+      const ativosSet = new Set<string>();
 
-if (usuarioIds.length) {
-  const rows = await prisma.atividadeRecente.findMany({
-    where: {
-      usuarioId: { in: usuarioIds },
-      createdAt: { gte: since },
-    },
-    select: { usuarioId: true },
-    distinct: ["usuarioId"],
-  });
+      if (usuarioIds.length) {
+        const rows = await prisma.atividadeRecente.findMany({
+          where: {
+            usuarioId: { in: usuarioIds },
+            createdAt: { gte: since },
+          },
+          select: { usuarioId: true },
+          distinct: ["usuarioId"],
+        });
 
-  for (const r of rows) {
-    if (r.usuarioId) ativosSet.add(r.usuarioId);
-  }
-}
-
+        for (const r of rows) {
+          if (r.usuarioId) ativosSet.add(r.usuarioId);
+        }
+      }
 
       let elencoIds: string[] = [];
       if (vinculo === "clube" && entidadeId) {
@@ -325,15 +321,6 @@ if (usuarioIds.length) {
         vinculo === "clube"
           ? ({ clubeId: entidadeId } as Prisma.ProfessorWhereInput)
           : ({ escolinhaId: entidadeId } as Prisma.ProfessorWhereInput);
-
-      const searchWhere: Prisma.ProfessorWhereInput =
-        search
-          ? {
-              OR: [
-                { nome: { contains: search, mode: Prisma.QueryMode.insensitive } },
-              ],
-            }
-          : {};
 
       const turmasDoOwner = await prisma.turma.findMany({
         where: ownerWhere,
@@ -705,14 +692,12 @@ if (usuarioIds.length) {
         objetivo: true,
         expiraEm: true,
         naoExpira: true,
-
         exercicios: {
           orderBy: { ordem: "asc" as const },
           select: {
             id: true,
             ordem: true,
             repeticoes: true,
-
             exercicioId: true,
             exercicio: {
               select: {
@@ -725,7 +710,6 @@ if (usuarioIds.length) {
                 videoDemonstrativoUrl: true,
               },
             },
-
             exercicioTemporarioId: true,
             exercicioTemporario: {
               select: {
@@ -741,7 +725,6 @@ if (usuarioIds.length) {
           },
         },
       } as const;
-
 
       const treinos = await prisma.treinoProgramado.findMany({
         where: { OR: orWhere.length ? orWhere : [{ id: "__never__" }] },
@@ -778,7 +761,6 @@ if (usuarioIds.length) {
 
       const seen = new Set<string>();
       const professorIdsBeforeNormalize = [...professorIds];
-
       const items = treinos
         .filter((t) => {
           if (seen.has(t.id)) return false;
@@ -787,7 +769,6 @@ if (usuarioIds.length) {
         })
         .map((t) => {
           const professorAutorId = t.professorId ?? t.criadorProfessorId ?? null;
-
           const autor =
             professorAutorId
               ? { tipo: "Professor" as const, id: professorAutorId, nome: profNomeMap.get(professorAutorId) ?? null }
@@ -810,7 +791,6 @@ if (usuarioIds.length) {
 
           // @ts-ignore (se o TS reclamar do select condicional)
           const exercicios = (t.exercicios || []).map((te: any) => {
-            // pode vir exercicio OU exercicioTemporario
             const ex = te.exercicio
               ? {
                   tipo: "catalogo" as const,
@@ -847,8 +827,6 @@ if (usuarioIds.length) {
 
           return {
             ...base,
-
-            // ====== extras do treino ======
             // @ts-ignore
             imagemUrl: (t as any).imagemUrl ?? null,
             // @ts-ignore
@@ -869,11 +847,8 @@ if (usuarioIds.length) {
             expiraEm: (t as any).expiraEm ?? null,
             // @ts-ignore
             naoExpira: (t as any).naoExpira ?? false,
-
-            // ====== conteúdo ======
             exercicios,
           };
-
         });
 
       if (debug) {
@@ -988,7 +963,6 @@ if (usuarioIds.length) {
       const totalTreinosMes = treinosMes + desafiosMes;
       const concluidosMes = treinosMes;
       const desafiosFeitosMes = desafiosMes;
-
       const fourWeeksAgo = new Date();
       fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
 

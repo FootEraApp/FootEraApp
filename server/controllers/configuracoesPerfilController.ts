@@ -7,10 +7,6 @@ function getUserId(req: Request): string | null {
   return r.userId || r.user?.id || r.usuarioId || null;
 }
 
-/** =========================
- *  PRIVACIDADE
- *  Guarda em Usuario.configuracoesPrivacidade (JSON)
- *  ========================= */
 export async function getPrivacidade(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -25,10 +21,12 @@ export async function getPrivacidade(req: Request, res: Response) {
       u?.configuracoesPrivacidade && typeof u.configuracoesPrivacidade === "object"
         ? u.configuracoesPrivacidade
         : {};
+
     return res.json({
       perfilVisivel: raw.perfilVisivel ?? true,
       permitirMensagens: raw.permitirMensagens ?? true,
       mostrarEmail: raw.mostrarEmail ?? false,
+      mostrarOnline: raw.mostrarOnline ?? true,
     });
   } catch (err) {
     console.error("getPrivacidade erro:", err);
@@ -41,21 +39,24 @@ export async function patchPrivacidade(req: Request, res: Response) {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Não autenticado." });
 
-    const { perfilVisivel, permitirMensagens, mostrarEmail } = (req.body || {}) as any;
-
+    const { perfilVisivel, permitirMensagens, mostrarEmail, mostrarOnline } = (req.body || {}) as any;
     const next = {
       perfilVisivel: typeof perfilVisivel === "boolean" ? perfilVisivel : undefined,
       permitirMensagens: typeof permitirMensagens === "boolean" ? permitirMensagens : undefined,
       mostrarEmail: typeof mostrarEmail === "boolean" ? mostrarEmail : undefined,
+      mostrarOnline: typeof mostrarOnline === "boolean" ? mostrarOnline : undefined,
     };
 
-    // merge com o que já existe
     const u = await prisma.usuario.findUnique({
       where: { id: userId },
       select: { configuracoesPrivacidade: true },
     });
 
-    const current: any = u?.configuracoesPrivacidade || {};
+    const current: any =
+      u?.configuracoesPrivacidade && typeof u.configuracoesPrivacidade === "object"
+        ? u.configuracoesPrivacidade
+        : {};
+
     const merged = {
       ...current,
       ...Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined)),
@@ -70,6 +71,7 @@ export async function patchPrivacidade(req: Request, res: Response) {
       perfilVisivel: merged.perfilVisivel ?? true,
       permitirMensagens: merged.permitirMensagens ?? true,
       mostrarEmail: merged.mostrarEmail ?? false,
+      mostrarOnline: merged.mostrarOnline ?? true,
     });
   } catch (err) {
     console.error("patchPrivacidade erro:", err);
@@ -77,10 +79,6 @@ export async function patchPrivacidade(req: Request, res: Response) {
   }
 }
 
-/** =========================
- *  NOTIFICAÇÕES
- *  Guarda em Usuario.configuracoesNotificacoes (JSON)
- *  ========================= */
 export async function getNotificacoes(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -146,11 +144,6 @@ export async function patchNotificacoes(req: Request, res: Response) {
   }
 }
 
-/** =========================
- *  SEGURANÇA: trocar senha
- *  PUT /seguranca/senha
- *  body: { senhaAtual, senhaNova }
- *  ========================= */
 export async function trocarSenha(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -181,12 +174,13 @@ export async function trocarSenha(req: Request, res: Response) {
 
     const novoHash = await bcrypt.hash(senhaNova, 10);
 
-    // ✅ troca senha e derruba sessões antigas
     await prisma.usuario.update({
       where: { id: userId },
       data: {
         senhaHash: novoHash,
         tokenVersion: (u.tokenVersion ?? 0) + 1,
+        lastLogoutAt: new Date(),
+        lastSeenAt: new Date(),
       },
     });
 
@@ -197,11 +191,6 @@ export async function trocarSenha(req: Request, res: Response) {
   }
 }
 
-/** =========================
- *  SEGURANÇA: encerrar sessões
- *  POST /seguranca/encerrar-sessoes
- *  incrementa tokenVersion -> invalida qualquer token antigo
- *  ========================= */
 export async function encerrarSessoes(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -212,9 +201,15 @@ export async function encerrarSessoes(req: Request, res: Response) {
       select: { tokenVersion: true },
     });
 
+    const now = new Date();
+
     await prisma.usuario.update({
       where: { id: userId },
-      data: { tokenVersion: (u?.tokenVersion ?? 0) + 1 },
+      data: {
+        tokenVersion: (u?.tokenVersion ?? 0) + 1,
+        lastLogoutAt: now,                        
+        lastSeenAt: now,                          
+      },
     });
 
     return res.json({ ok: true, message: "Sessões encerradas. Faça login novamente." });

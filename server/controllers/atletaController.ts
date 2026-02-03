@@ -185,7 +185,6 @@ export async function vinculosBasic(req: Request, res: Response) {
       return res.status(400).json({ error: "id inválido" });
     }
 
-    // ✅ aceita atleta.id OU usuarioId
     const atleta = await prisma.atleta.findFirst({
       where: { OR: [{ id: raw }, { usuarioId: raw }] },
       select: { id: true, clubeId: true, escolinhaId: true },
@@ -195,7 +194,6 @@ export async function vinculosBasic(req: Request, res: Response) {
       return res.json({ professores: [], clube: null, escolinha: null });
     }
 
-    // ✅ pega vínculos ativos
     const rels = await prisma.relacaoTreinamento.findMany({
       where: {
         atletaId: atleta.id,
@@ -210,7 +208,6 @@ export async function vinculosBasic(req: Request, res: Response) {
       orderBy: { criadoEm: "desc" },
     });
 
-    // ✅ monta lista de professores (sem duplicar)
     const profMap = new Map<string, { id: string; nome: string }>();
     for (const r of rels) {
       if (r.professor?.id) {
@@ -221,8 +218,6 @@ export async function vinculosBasic(req: Request, res: Response) {
       }
     }
     const professores = Array.from(profMap.values());
-
-    // ✅ clube/escolinha: pega o primeiro encontrado (mais recente)
     const clube = rels.find((r) => r.clube)?.clube ?? null;
     const escolinha = rels.find((r) => r.escolinha)?.escolinha ?? null;
 

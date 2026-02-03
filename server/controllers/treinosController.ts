@@ -4080,61 +4080,83 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
   }
 }
 
-export const deletarTreinoProgramado = async (req: AuthenticatedRequest, res: Response) => {
-  const treinoProgramadoIdAlvo = req.params.id;
-  const totalAgendadosAtivos = await prisma.treinoAgendado.count({
-    where: {
-      treinoProgramadoId: treinoProgramadoIdAlvo,
-      status: TreinoAgendadoStatus.AGENDADO,
-    },
-  });
-
-  if (totalAgendadosAtivos > 0) {
-    return res.status(409).json({
-      message: "Não é possível excluir: há atletas com este treino agendado.",
-      totalAgendadosAtivos,
-    });
-  }
-
-  const { id } = req.params;
-
-  const exRows = await prisma.treinoProgramadoExercicio.findMany({
-    where: { treinoProgramadoId: id },
-    select: { exercicioId: true },
-  });
-  const exerciciosAfetados = [...new Set(exRows.map(x => x.exercicioId).filter(Boolean) as string[])];
-
+export const deletarTreinoProgramado = async (req: any, res: any) => {
   try {
+    const { id } = req.params;
+    const usuarioId = req.userId;
+
+    if (!usuarioId) return res.status(401).json({ message: "Não autenticado." });
+
+    const treino = await prisma.treinoProgramado.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        professorId: true,
+        clubeId: true,
+        escolinhaId: true,
+      },
+    });
+
+    if (!treino) return res.status(404).json({ message: "Treino não encontrado." });
+
+    // ✅ TODO: coloque aqui sua regra real de permissão
+    // Exemplo (se você tiver req.tipo / req.tipoUsuarioId):
+    // if (!ehDonoDoTreino(req, treino)) return res.status(403).json({ message: "Sem permissão." });
+
     await prisma.$transaction(async (tx) => {
-      const ags = await tx.treinoAgendado.findMany({
-        where: { treinoProgramadoId: id },
+      const now = new Date();
+
+      // 1) pegar agendamentos futuros desse treino (somente futuros)
+      const futuros = await tx.treinoAgendado.findMany({
+        where: {
+          treinoProgramadoId: id,
+          dataTreino: { gte: now },
+        },
         select: { id: true },
       });
-      const agIds = ags.map((a) => a.id);
 
-      if (agIds.length) {
+      const futurosIds = futuros.map((a) => a.id);
+
+      // 2) apagar submissões relacionadas a agendamentos futuros
+      if (futurosIds.length) {
         await tx.submissaoTreino.deleteMany({
-          where: { treinoAgendadoId: { in: agIds } },
+          where: { treinoAgendadoId: { in: futurosIds } },
         });
 
-        await tx.atividadeRecente.deleteMany({
-          where: { id: { in: agIds } },
+        // 3) apagar os agendamentos futuros
+        await tx.treinoAgendado.deleteMany({
+          where: { id: { in: futurosIds } },
         });
       }
 
-      await tx.treinoAgendado.deleteMany({ where: { treinoProgramadoId: id } });
-      await tx.treinoProgramadoExercicio.deleteMany({ where: { treinoProgramadoId: id } });
+      // 4) apagar atividades recentes relacionadas ao treino programado
+      // (⚠️ sem treinoAgendadoId porque não existe no seu schema)
+      await tx.atividadeRecente.deleteMany({
+        where: { id: id },
+      });
+
+      // 5) apagar tabelas de vínculo do treino programado
+      await tx.treinoProgramadoExercicio.deleteMany({
+        where: { treinoProgramadoId: id },
+      });
+
+      await tx.exercicioTemporario.deleteMany({
+        where: { treinoProgramadoId: id },
+      });
+
+      // 6) por último: deletar o treino programado
+      // OBS: isso só vai funcionar se NÃO existir FK obrigatória apontando pra ele
+      // a partir de registros passados. Se existir, a gente muda pra "arquivar".
       await tx.treinoProgramado.delete({ where: { id } });
     });
-    for (const exId of exerciciosAfetados) {
-      await recomputeInclusoesExercicio(exId);
-    }
 
-    return res.status(200).json({ message: "Treino excluído." });
-  } 
-  catch (e: any) {
-    console.error(e);
-    return res.status(500).json({ message: "Erro ao excluir treino.", error: e.message });
+    return res.json({
+      ok: true,
+      message: "Treino excluído. Agendamentos futuros e submissões relacionadas foram removidos.",
+    });
+  } catch (e: any) {
+    console.error("deletarTreinoProgramado erro:", e);
+    return res.status(500).json({ message: e?.message || "Erro ao excluir treino." });
   }
 };
 

@@ -1,4 +1,3 @@
-// client/src/components/perfil/PerfilClube
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
@@ -252,7 +251,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
         );
 
         const earnedArr = Array.isArray(resp?.earned) ? resp.earned : [];
-        if (!cancel) setConquistasCount(earnedArr.length); // agora vai ser 2
+        if (!cancel) setConquistasCount(earnedArr.length); 
       } catch {
         if (!cancel) setConquistasCount(0);
       }
@@ -517,19 +516,16 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
 
       const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
 
-      // ✅ data de hoje (zerada)
       const hoje = new Date();
       hoje.setHours(0, 0, 0, 0);
 
       const mapped: EventoPreview[] = (arr ?? [])
-        // ✅ FILTRO PRINCIPAL: só eventos de hoje pra frente
         .filter((ev: any) => {
           if (!ev?.dataEvento) return false;
           const dataEv = new Date(ev.dataEvento);
           dataEv.setHours(0, 0, 0, 0);
           return dataEv >= hoje;
         })
-        // (opcional) ordenar por data mais próxima
         .sort(
           (a: any, b: any) =>
             new Date(a.dataEvento).getTime() - new Date(b.dataEvento).getTime()
