@@ -191,6 +191,8 @@ export async function trocarSenha(req: Request, res: Response) {
       data: {
         senhaHash: novoHash,
         tokenVersion: (u.tokenVersion ?? 0) + 1,
+        lastLogoutAt: new Date(),
+        lastSeenAt: new Date(),
       },
     });
 
@@ -201,11 +203,6 @@ export async function trocarSenha(req: Request, res: Response) {
   }
 }
 
-/** =========================
- *  SEGURANÇA: encerrar sessões
- *  POST /seguranca/encerrar-sessoes
- *  incrementa tokenVersion -> invalida qualquer token antigo
- *  ========================= */
 export async function encerrarSessoes(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -216,9 +213,15 @@ export async function encerrarSessoes(req: Request, res: Response) {
       select: { tokenVersion: true },
     });
 
+    const now = new Date();
+
     await prisma.usuario.update({
       where: { id: userId },
-      data: { tokenVersion: (u?.tokenVersion ?? 0) + 1 },
+      data: {
+        tokenVersion: (u?.tokenVersion ?? 0) + 1, // invalida tokens antigos
+        lastLogoutAt: now,                         // ✅ salva logout
+        lastSeenAt: now,                           // ✅ opcional (recomendo)
+      },
     });
 
     return res.json({ ok: true, message: "Sessões encerradas. Faça login novamente." });
