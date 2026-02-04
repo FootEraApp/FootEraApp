@@ -459,12 +459,8 @@ model Metodologia {
   nivel      Nivel?
   categorias Categoria[] @default([])
   ativo      Boolean     @default(true)
-
-  // quem criou
   criadorUsuarioId String
   criadorUsuario   Usuario @relation("MetodologiaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
-
-  // opcional: vincular ao "tipo de criador" (professor/clube/escolinha) se quiser
   professorId String?
   clubeId     String?
   escolinhaId String?
@@ -473,12 +469,10 @@ model Metodologia {
   clube     Clube?     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha Escolinha? @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
 
-  // estrutura (semanas/aulas)
-  totalSemanas Int? // ex: 6
+  totalSemanas Int? 
 
-  // agregados / vitrine
   totalAssinantes Int    @default(0)
-  mediaAvaliacao  Float? // ex: 4.8 (opcional)
+  mediaAvaliacao  Float? 
   totalReviews    Int    @default(0)
 
   criadoEm     DateTime @default(now())
@@ -499,7 +493,6 @@ model MetodologiaItem {
   metodologiaId String
   metodologia   Metodologia @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
 
-  // organização como a UI: Semana 1..N e ordem dentro da semana
   semana Int
   ordem  Int
 
@@ -507,24 +500,17 @@ model MetodologiaItem {
   descricao String?
   tipo      MetodologiaConteudoTipo @default(TREINO)
 
-  // se for VIDEO
   videoUrl   String?
   thumbUrl   String?
   duracaoMin Int?
-
-  // se for TREINO
   treinoProgramadoId String?
   treinoProgramado   TreinoProgramado? @relation(fields: [treinoProgramadoId], references: [id], onDelete: SetNull)
-
-  // gamificação
-  pontos Int? // ex: +5 pts por aula
-
+  pontos Int? 
   publicado Boolean @default(true)
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  // garante ordem única por semana
   @@unique([metodologiaId, semana, ordem])
   @@index([metodologiaId])
   @@index([treinoProgramadoId])
@@ -544,12 +530,8 @@ model MetodologiaAssinante {
   iniciouEm  DateTime  @default(now())
   cancelouEm DateTime?
   concluiuEm DateTime?
-
-  // progresso / UI
   aulasConcluidas Int @default(0)
   pontosGanhos    Int @default(0)
-
-  // opcional: salvar IDs dos itens concluídos, último item visto, etc.
   progresso Json?
 
   lastAccessAt DateTime?
@@ -2224,10 +2206,11 @@ enum MetodoPagamento {
 }
 
 enum AssinaturaStatus {
+  SEM_ASSINATURA
   TRIAL
   ATIVA
   BLOQUEADA
-  CANCELADA
+  CANCELADA  
 }
 
 enum TipoCupom {
