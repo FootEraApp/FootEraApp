@@ -1389,7 +1389,6 @@ async function confirmarExcluirProfessor() {
             <div className="grid md:grid-cols-4 gap-4 mb-6">
               <Card title="Total de Usuários" icon="👥" value={dados?.totalUsuarios ?? 0} />
               <Card title="Treinos Cadastrados" icon="🏋️" value={dados?.totalTreinos ?? 0} />
-              <Card title="Desafios Ativos" icon="🏆" value={dados?.totalDesafios ?? 0} />
               <Card title="Posts Criados" icon="✍️" value={dados?.totalPostsCriados ?? 0} />
             </div>
 

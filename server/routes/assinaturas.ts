@@ -4,9 +4,11 @@ import * as ctrl from "../controllers/assinaturasController.js";
 
 const r = Router();
 
-r.get("/:usuarioId", authenticateToken, ctrl.getByUsuario);
-r.patch("/:usuarioId", authenticateToken, ctrl.updatePlano);
-r.post("/:usuarioId/cancelar", authenticateToken, ctrl.cancelar);
-r.post("/:usuarioId/reativar", authenticateToken, ctrl.reativar);
+r.use(authenticateToken);
+
+r.get("/:usuarioId", ctrl.getByUsuario);
+r.patch("/:usuarioId", ctrl.updatePlano);
+r.post("/:usuarioId/cancelar", ctrl.cancelar);
+r.post("/:usuarioId/reativar", ctrl.reativar);
 
 export default r;

@@ -1,5 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
-import { CreditCard, Landmark, QrCode, ArrowLeft, BadgeCheck, Gift, XCircle } from "lucide-react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import {
+  ArrowLeft,
+  BadgeCheck,
+  CreditCard,
+  Gift,
+  Landmark,
+  QrCode,
+  XCircle,
+  CheckCircle2,
+  Layers,
+  BookOpen,
+  Sparkles,
+  Receipt,
+} from "lucide-react";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
 import { Link } from "wouter";
@@ -15,14 +28,17 @@ type Plan = {
   benefits: string[];
 };
 
+type AssinaturaStatus = "TRIAL" | "ATIVA" | "BLOQUEADA" | "CANCELADA" | "PENDENTE" | string;
+
 type Assinatura = {
   id: string;
   usuarioId: string;
   plano: string;
+  planoId: string | null;
   periodicidade?: Periodicidade;
   startsAt: string;
   renovaEm?: string | null;
-  status?: "TRIAL" | "ATIVA" | "BLOQUEADA" | string;
+  status?: AssinaturaStatus;
   trialStartsAt?: string | null;
   trialEndsAt?: string | null;
   metodoPreferido?: MetodoPagamento | null;
@@ -54,78 +70,609 @@ type BillingState = {
   precisaEscolherPagamento: boolean;
   metodoPreferido: MetodoPagamento | null;
   bloqueado: boolean;
+  trialJaUsado?: boolean; 
 };
 
-function diasRestantes(renovaEm?: string | null) {
-  if (!renovaEm) return null;
-  const d = new Date(renovaEm).getTime();
-  const hoje = Date.now();
-  const diff = d - hoje;
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+function PagamentoModal({
+  open,
+  onClose,
+  method,
+  setMethod,
+  pagador,
+  setPagador,
+  cartao,
+  setCartao,
+  total,
+  mostrarMsgTrial,
+  bloquearCheckoutPorTrial,
+  canFinalize,
+  checkoutError,
+  onFinalize,
+  pixQrUrl,
+  pixCopiaECola,
+  boletoLinha,
+  boletoPdf,
+  sanitizeEmail,
+  sanitizeCpf,
+  sanitizePhone,
+  sanitizeCardNumber,
+  sanitizeCvv,
+  formatValidade,
+  onlyNameChars,
+  brl,
+}: {
+  open: boolean;
+  onClose: () => void;
+
+  method: MetodoPagamento;
+  setMethod: (m: MetodoPagamento) => void;
+
+  pagador: Pagador;
+  setPagador: React.Dispatch<React.SetStateAction<Pagador>>;
+
+  cartao: Cartao;
+  setCartao: React.Dispatch<React.SetStateAction<Cartao>>;
+
+  total: number;
+  mostrarMsgTrial: boolean;
+  bloquearCheckoutPorTrial: boolean;
+  polling: boolean;
+  canFinalize: boolean;
+  checkoutError: string | null;
+  onFinalize: () => void;
+
+  pixQrUrl: string | null;
+  pixCopiaECola: string | null;
+  setPixCopiaECola: React.Dispatch<React.SetStateAction<string | null>>;
+
+  boletoLinha: string | null;
+  boletoPdf: string | null;
+
+  sanitizeEmail: (v: string) => string;
+  sanitizeCpf: (v: string) => string;
+  sanitizePhone: (v: string) => string;
+  sanitizeCardNumber: (v: string) => string;
+  sanitizeCvv: (v: string) => string;
+  formatValidade: (v: string) => string;
+  onlyNameChars: (v: string) => string;
+  brl: (n: number | string) => string;
+}) {
+  if (!open) return null;
+  return (
+  <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center">
+    <div
+      className="absolute inset-0 bg-black/40"
+      onMouseDown={onClose}
+      role="presentation"
+    />
+
+    <div
+      className="relative w-full sm:max-w-xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border max-h-[85vh] overflow-y-auto"
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="sticky top-0 z-10 bg-white border-b px-4 py-3 flex items-center justify-between">
+        <div className="font-semibold">Pagamento</div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-9 w-9 inline-flex items-center justify-center rounded-full hover:bg-gray-100"
+          aria-label="Fechar"
+          title="Fechar"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="p-4">
+        {bloquearCheckoutPorTrial ? (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+            <div className="font-semibold">Seu mês grátis está ativo ✅</div>
+            <div className="mt-1">
+              Quando faltar 7 dias, você poderá escolher a forma de pagamento.
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="mb-2">
+              <div className="font-semibold mb-2">Método de pagamento</div>
+              <div className="flex flex-wrap gap-3">
+                <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="PIX"?"bg-green-50 border-green-300":""}`}>
+                  <input type="radio" className="hidden" checked={method==="PIX"} onChange={() => setMethod("PIX")} />
+                  PIX
+                </label>
+                <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="CREDITO"?"bg-green-50 border-green-300":""}`}>
+                  <input type="radio" className="hidden" checked={method==="CREDITO"} onChange={() => setMethod("CREDITO")} />
+                  Crédito
+                </label>
+                <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="DEBITO"?"bg-green-50 border-green-300":""}`}>
+                  <input type="radio" className="hidden" checked={method==="DEBITO"} onChange={() => setMethod("DEBITO")} />
+                  Débito
+                </label>
+                <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="BOLETO"?"bg-green-50 border-green-300":""}`}>
+                  <input type="radio" className="hidden" checked={method==="BOLETO"} onChange={() => setMethod("BOLETO")} />
+                  Boleto
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-4 p-4 rounded-lg border bg-transparent">
+              {method === "PIX" && (
+                <div>
+                  <div className="font-semibold mb-2">Pagar com PIX</div>
+
+                  {mostrarMsgTrial && (
+                    <p className="text-xs text-emerald-700 mt-1">
+                      Seu mês grátis está ativo. A cobrança só começa após o fim do trial.
+                    </p>
+                  )}
+
+                  <p className="text-sm text-gray-700 mb-3">
+                    Total: <b>{brl(total)}</b>. Clique em <b>Finalizar</b> para gerar o QR Code e o “copia e cola”.
+                  </p>
+
+                  {pixQrUrl && (
+                    <div className="mb-3">
+                      <img src={pixQrUrl} alt="QR Code PIX" className="w-56 border rounded-lg" />
+                    </div>
+                  )}
+
+                  {pixCopiaECola && (
+                    <div className="mb-2">
+                      <div className="text-xs text-gray-600 mb-1">Copia e cola:</div>
+                      <textarea className="w-full border rounded-lg p-2 text-xs" rows={3} readOnly value={pixCopiaECola} />
+                      <div className="flex justify-end">
+                        <button
+                          className="mt-2 px-3 py-2 border rounded-lg"
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(pixCopiaECola);
+                            alert("Código PIX copiado!");
+                          }}
+                        >
+                          Copiar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid gap-2 sm:grid-cols-2 mt-3">
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Seu nome completo"
+                      value={pagador.nome}
+                      onChange={(e) => setPagador((p) => ({ ...p, nome: e.target.value }))}
+                    />
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="E-mail do titular"
+                      value={pagador.email}
+                      onChange={(e) => setPagador((p) => ({ ...p, email: sanitizeEmail(e.target.value) }))}
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {(method === "CREDITO" || method === "DEBITO") && (
+                <div>
+                  <div className="font-semibold mb-2">
+                    Pagar com {method === "CREDITO" ? "Cartão de Crédito" : "Cartão de Débito"}
+                  </div>
+
+                  <p className="text-sm text-gray-700 mb-3">
+                    Total: <b>{brl(total)}</b>
+                  </p>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Nome do titular"
+                      value={pagador.nome}
+                      onChange={(e) => setPagador((p) => ({ ...p, nome: onlyNameChars(e.target.value) }))}
+                      autoComplete="name"
+                    />
+
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="E-mail do titular"
+                      value={pagador.email}
+                      onChange={(e) => setPagador((p) => ({ ...p, email: sanitizeEmail(e.target.value) }))}
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                    />
+
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="CPF (opcional)"
+                      value={pagador.cpf || ""}
+                      onChange={(e) => setPagador((p) => ({ ...p, cpf: sanitizeCpf(e.target.value) }))}
+                      inputMode="numeric"
+                      maxLength={11}
+                    />
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Telefone (opcional)"
+                      value={pagador.telefone || ""}
+                      onChange={(e) => setPagador((p) => ({ ...p, telefone: sanitizePhone(e.target.value) }))}
+                      inputMode="numeric"
+                      maxLength={11}
+                    />
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-2 mt-3">
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Número do cartão"
+                      value={cartao.numero}
+                      onChange={(e) => setCartao((c) => ({ ...c, numero: sanitizeCardNumber(e.target.value) }))}
+                      inputMode="numeric"
+                      autoComplete="cc-number"
+                    />
+
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Nome impresso no cartão"
+                      value={cartao.nomeImpresso}
+                      onChange={(e) => setCartao((c) => ({ ...c, nomeImpresso: onlyNameChars(e.target.value) }))}
+                      autoComplete="name"
+                    />
+
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Validade (MM/AA)"
+                      value={cartao.validade}
+                      onChange={(e) => setCartao((c) => ({ ...c, validade: formatValidade(e.target.value) }))}
+                      inputMode="numeric"
+                      autoComplete="cc-exp"
+                      maxLength={5}
+                    />
+
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="CVV"
+                      value={cartao.cvv}
+                      onChange={(e) => setCartao((c) => ({ ...c, cvv: sanitizeCvv(e.target.value) }))}
+                      inputMode="numeric"
+                      autoComplete="cc-csc"
+                      maxLength={4}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {method === "BOLETO" && (
+                <div>
+                  <div className="font-semibold mb-2">Pagar com Boleto</div>
+
+                  <p className="text-sm text-gray-700 mb-3">
+                    Total: <b>{brl(total)}</b>
+                  </p>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Seu nome completo"
+                      value={pagador.nome}
+                      onChange={(e) => setPagador((p) => ({ ...p, nome: e.target.value }))}
+                    />
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="E-mail do titular"
+                      value={pagador.email}
+                      onChange={(e) => setPagador((p) => ({ ...p, email: sanitizeEmail(e.target.value) }))}
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                    />
+
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="CPF"
+                      value={pagador.cpf || ""}
+                      onChange={(e) => setPagador((p) => ({ ...p, cpf: sanitizeCpf(e.target.value) }))}
+                      inputMode="numeric"
+                      maxLength={11}
+                    />
+                  </div>
+
+                  {boletoLinha && (
+                    <div className="mt-3">
+                      <div className="text-xs text-gray-600 mb-1">Linha digitável:</div>
+                      <input className="w-full border rounded-lg p-2 text-sm" readOnly value={boletoLinha} />
+                    </div>
+                  )}
+                  {boletoPdf && (
+                    <div className="mt-2">
+                      <a className="text-green-800 underline" href={boletoPdf} target="_blank" rel="noreferrer">
+                        Abrir boleto (PDF)
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border-t pt-3 mt-4">
+              <div className="text-sm text-gray-600">
+                Total: <b className="text-gray-900">{brl(total)}</b>
+                {mostrarMsgTrial ? (
+                  <span className="block text-xs text-emerald-700">
+                    Trial ativo. Você só paga se escolher pagar agora.
+                  </span>
+                ) : null}
+              </div>
+
+              <button
+                onClick={onFinalize}
+                className="px-4 py-2 rounded-lg bg-green-800 text-white disabled:opacity-60"
+                disabled={!canFinalize}
+                title={checkoutError ?? ""}
+              >
+                Finalizar pagamento
+              </button>
+            </div>
+
+            {checkoutError ? (
+              <div className="mt-2 text-xs text-red-700">
+                {checkoutError}
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
 }
 
 function brl(n: number | string) {
   const v = typeof n === "string" ? Number(n) : n;
-  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const safe = Number.isFinite(v) ? v : 0;
+  return safe.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-function computeRenovaEm(
-  assinatura: Assinatura | null,
-  pagamentos: Pagamento[]
-): string | null {
-  if (!assinatura) return null;
-
-  const aprovadosMesmoPlano = pagamentos
-    .filter((p) => p.status === "APROVADO" && p.plano === assinatura.plano);
-
-  if (aprovadosMesmoPlano.length === 0) return null;
-
-  const last = aprovadosMesmoPlano.sort(
-    (a, b) =>
-      new Date(b.pagoEm || b.criadoEm).getTime() -
-      new Date(a.pagoEm || a.criadoEm).getTime()
-  )[0];
-
-  const baseDate = new Date(last.pagoEm || last.criadoEm);
-  const meses = last.periodicidade === "Mensal" ? 1 : 12;
-  const d = new Date(baseDate);
-  d.setMonth(d.getMonth() + meses);
-  return d.toISOString();
+function diasRestantesIso(dateIso?: string | null) {
+  if (!dateIso) return null;
+  const d = new Date(dateIso).getTime();
+  const diff = d - Date.now();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-const roleToDefaultPlan: Record<string, string> = {
-  Atleta: "ATLETA_PRO",
-  Olheiro: "OLHEIRO_PRO",
-  Professor: "PROFESSOR_PRO",
-  Escolinha: "ESCOLINHA_PRO",
-  Clube: "ESCOLINHA_PRO",
-  Admin: "ATLETA_PRO",
+function toTs(iso?: string | null) {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+function formatDateBR(iso?: string | null) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("pt-BR");
+}
+
+type RoleUI = "Atleta" | "Olheiro" | "Professor" | "Organizações";
+
+function normalizeTipo(raw?: unknown) {
+  return String(raw ?? "").trim().toLowerCase();
+}
+
+function planId(role: RoleUI, tier: "PRO" | "LEARNING" | "PLUS") {
+  const r =
+    role === "Atleta"
+      ? "ATLETA"
+      : role === "Olheiro"
+      ? "OLHEIRO"
+      : role === "Professor"
+      ? "PROFESSOR"
+      : "ORGANIZACOES";
+  return `${r}_${tier}`;
+}
+
+const storageRoleToUIRole: Record<string, RoleUI> = {
+  atleta: "Atleta",
+  olheiro: "Olheiro",
+  professor: "Professor",
+  escolinha: "Organizações",
+  clube: "Organizações",
+  organizacoes: "Organizações",
+  organizações: "Organizações",
+  admin: "Atleta",
 };
 
+const METODOLOGIAS = [
+  { id: "METH_POSICIONAL", nome: "Treino Posicional", desc: "Rotinas por função: posição, leitura de jogo e tomada de decisão." },
+  { id: "METH_FORCA", nome: "Força & Explosão", desc: "Potência, aceleração, saltos e prevenção." },
+  { id: "METH_TECNICA", nome: "Técnica Individual", desc: "Domínio, passe, condução, finalização e 1v1." },
+  { id: "METH_TATICO", nome: "Tático", desc: "Organização, linhas, compactação e ajustes por cenário." },
+  { id: "METH_MENTAL", nome: "Mentalidade", desc: "Foco, consistência, rotina e performance." },
+];
+
+const FALLBACK_PLANS: Record<string, Plan> = {
+  ATLETA_PRO: {
+    id: "ATLETA_PRO",
+    title: "Atleta Pro",
+    monthly: 19.9,
+    annual: 199,
+    benefits: ["Sem anúncios no app", "Treinos e desafios ilimitados (fair-use)", "Biblioteca pessoal ilimitada (fair-use)", "Agendamento pessoal"],
+  },
+  ATLETA_LEARNING: {
+    id: "ATLETA_LEARNING",
+    title: "Atleta Learning",
+    monthly: 14.9,
+    annual: 149,
+    benefits: ["Acesso ilimitado a metodologias", "Rotinas e trilhas por método", "Conteúdos e sugestões guiadas"],
+  },
+  ATLETA_PLUS: {
+    id: "ATLETA_PLUS",
+    title: "Atleta Plus",
+    monthly: 29.9,
+    annual: 299,
+    benefits: ["Tudo do Pro", "Tudo do Learning", "Pacote completo"],
+  },
+  OLHEIRO_PRO: {
+    id: "OLHEIRO_PRO",
+    title: "Olheiro Pro",
+    monthly: 24.9,
+    annual: 249,
+    benefits: ["Sem anúncios", "Ferramentas Pro do olheiro", "Mais limites operacionais"],
+  },
+  PROFESSOR_PRO: {
+    id: "PROFESSOR_PRO",
+    title: "Professor Pro",
+    monthly: 39.9,
+    annual: 399,
+    benefits: ["Sem anúncios", "Recursos Pro de treino", "Mais limites operacionais"],
+  },
+  PROFESSOR_LEARNING: {
+    id: "PROFESSOR_LEARNING",
+    title: "Professor Learning",
+    monthly: 29.9,
+    annual: 299,
+    benefits: ["Metodologias ilimitadas", "Trilhas e conteúdos por método"],
+  },
+  PROFESSOR_PLUS: {
+    id: "PROFESSOR_PLUS",
+    title: "Professor Plus",
+    monthly: 59.9,
+    annual: 599,
+    benefits: ["Tudo do Pro", "Tudo do Learning", "Pacote completo"],
+  },
+  ORGANIZACOES_PRO: { 
+    id: "ORGANIZACOES_PRO", 
+    title: "Organizações Pro",
+    monthly: 79.9,
+    annual: 799,
+    benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional"],
+  },
+  ORGANIZACOES_LEARNING: { 
+    id: "ORGANIZACOES_LEARNING", 
+    title: "Organizações Learning",
+    monthly: 59.9,
+    annual: 599,
+    benefits: ["Metodologias ilimitadas", "Trilhas/rotinas por método"],
+  },
+  ORGANIZACOES_PLUS: { 
+    id: "ORGANIZACOES_PLUS", 
+    title: "Organizações Plus",
+    monthly: 109.9,
+    annual: 1099,
+    benefits: ["Tudo do Pro", "Tudo do Learning", "Pacote completo"],
+  },
+
+  METH_POSICIONAL: { id: "METH_POSICIONAL", title: "Treino Posicional", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Posicional"] },
+  METH_FORCA: { id: "METH_FORCA", title: "Força & Explosão", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Força & Explosão"] },
+  METH_TECNICA: { id: "METH_TECNICA", title: "Técnica Individual", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Técnica Individual"] },
+  METH_TATICO: { id: "METH_TATICO", title: "Tático", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Tático"] },
+  METH_MENTAL: { id: "METH_MENTAL", title: "Mentalidade", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Mentalidade"] },
+};
+
+type CartItem = {
+  planoId: string;
+  periodicidade: Periodicidade;
+  label: string;
+  price: number;
+  categoria: "PRO" | "LEARNING" | "PLUS" | "METODOLOGIA";
+};
+
+function uniqueCart(items: CartItem[]) {
+  const map = new Map<string, CartItem>();
+  for (const it of items) {
+    const key = `${it.planoId}::${it.periodicidade}`;
+    map.set(key, it);
+  }
+  return Array.from(map.values());
+}
+
+const LS_KEY = "footera:pagamentos:selecao:v1";
+
+type PersistState = {
+  roleSelected: RoleUI;
+  periodPro: Periodicidade;
+  periodLearning: Periodicidade;
+  periodPlus: Periodicidade;
+  pickPro: boolean;
+  pickLearning: boolean;
+  pickPlus: boolean;
+  pickMetods: Record<string, boolean>;
+  cupomInput: string;
+  method: MetodoPagamento;
+};
+
+function readPersist(): PersistState | null {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function writePersist(s: PersistState) {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(s));
+  } catch {}
+}
+
 export default function PagamentosPage() {
+  const tipo = Storage.tipoSalvo; 
+  const [tipoBackend, setTipoBackend] = useState<string | null>(null);
+
+  const roleUI: RoleUI = useMemo(() => {
+    const key = normalizeTipo(tipoBackend ?? tipo);
+    return storageRoleToUIRole[key] ?? "Atleta";
+  }, [tipoBackend, tipo]);
+
+  const [roleSelected, setRoleSelected] = useState<RoleUI>(roleUI);
+
+  useEffect(() => {
+    if (hadPersistRef.current) return;
+
+    setRoleSelected(roleUI);
+  }, [roleUI]);
+
+
   const token = Storage.token;
-  const tipo = Storage.tipoSalvo;
 
   const [loading, setLoading] = useState(true);
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [assinatura, setAssinatura] = useState<Assinatura | null>(null);
+  const [apiPlans, setApiPlans] = useState<Plan[]>([]);
+  const [assinaturaSingle, setAssinaturaSingle] = useState<Assinatura | null>(null);
+  const [assinaturas, setAssinaturas] = useState<Assinatura[]>([]);
   const [pagamentos, setPagamentos] = useState<Pagamento[]>([]);
-  const [cupomInput, setCupomInput] = useState("");
-  const [cupomPreview, setCupomPreview] = useState<{ total: number, base: number, desconto: number, codigo: string, tipo: string } | null>(null);
   const [billingState, setBillingState] = useState<BillingState | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<string>("");
-  const [period, setPeriod] = useState<Periodicidade>("Mensal");
+  const [openPagamentoModal, setOpenPagamentoModal] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
+  const hadPersistRef = useRef(false);
+  const isOlheiro = roleSelected === "Olheiro";
+  const allowLearning = !isOlheiro;
+  const allowPlus = !isOlheiro;
+  const allowMetodologias = !isOlheiro;
+
+  const [periodPro, setPeriodPro] = useState<Periodicidade>("Mensal");
+  const [periodLearning, setPeriodLearning] = useState<Periodicidade>("Mensal");
+  const [periodPlus, setPeriodPlus] = useState<Periodicidade>("Mensal");
+  const [pickPro, setPickPro] = useState(false);
+  const [pickLearning, setPickLearning] = useState(false);
+  const [pickPlus, setPickPlus] = useState(false);
+  const [pickMetods, setPickMetods] = useState<Record<string, boolean>>({});
+
+  const [cupomInput, setCupomInput] = useState("");
+  const [cupomPreview, setCupomPreview] = useState<{ total: number; base: number; desconto: number; codigo: string; tipo: string } | null>(null);
+
   const [method, setMethod] = useState<MetodoPagamento>("PIX");
-  const [giftCode, setGiftCode] = useState("");
+  const [pagador, setPagador] = useState<Pagador>({ nome: "", email: "", cpf: "", telefone: "" });
+  const [cartao, setCartao] = useState<Cartao>({ numero: "", nomeImpresso: "", validade: "", cvv: "" });
 
   const [pixCopiaECola, setPixCopiaECola] = useState<string | null>(null);
   const [pixQrUrl, setPixQrUrl] = useState<string | null>(null);
-
   const [boletoLinha, setBoletoLinha] = useState<string | null>(null);
   const [boletoPdf, setBoletoPdf] = useState<string | null>(null);
-
-  const [pagador, setPagador] = useState<Pagador>({ nome: "", email: "", cpf: "", telefone: "" });
-  const [cartao, setCartao] = useState<Cartao>({ numero: "", nomeImpresso: "", validade: "", cvv: "" });
 
   const [pendingPaymentId, setPendingPaymentId] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
@@ -135,89 +682,265 @@ export default function PagamentosPage() {
     [token]
   );
 
-  type RoleKey = keyof typeof roleToDefaultPlan;
+  useEffect(() => {
+    if (roleSelected === "Olheiro") {
+      setPickPro(true);
+      setPickLearning(false);
+      setPickPlus(false);
+      setPickMetods({});
+      setPeriodPro("Mensal");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roleSelected]);
 
   useEffect(() => {
     setCupomPreview(null);
-  }, [selectedPlan, period]);
+  }, [cupomInput, pickPro, pickLearning, pickPlus, periodPro, periodLearning, periodPlus, pickMetods, roleSelected]);
+
+  function findApiPlan(planoId: string) {
+    return apiPlans.find((p) => p.id === planoId);
+  }
+
+  function getPlan(planoId: string): Plan | undefined {
+    const pApi = findApiPlan(planoId);
+    if (pApi && ((pApi.monthly ?? 0) > 0 || (pApi.annual ?? 0) > 0)) return pApi;
+
+    const pFallback = FALLBACK_PLANS[planoId];
+    if (pFallback) return pFallback;
+
+    if (pApi) return pApi;
+    return undefined;
+  }
+
+  function getPrice(planoId: string, periodicidade: Periodicidade) {
+    const p = getPlan(planoId);
+    if (!p) return 0;
+    if (periodicidade === "Mensal") return p.monthly ?? 0;
+    return p.annual ?? 0;
+  }
+
+  function annualOk(planoId: string) {
+    const p = getPlan(planoId);
+    return !!p?.annual && (p.annual as number) > 0;
+  }
+
+  function buildCart(): CartItem[] {
+    const items: CartItem[] = [];
+
+    if (isOlheiro) {
+      const id = planId(roleSelected, "PRO"); 
+      const price = getPrice(id, periodPro);
+      items.push({
+        planoId: id,
+        periodicidade: periodPro,
+        label: `${roleSelected} Pro`,
+        price,
+        categoria: "PRO",
+      });
+
+      return uniqueCart(items);
+    }
+
+    if (pickPro) {
+      const id = planId(roleSelected, "PRO");
+      const price = getPrice(id, periodPro);
+      items.push({ planoId: id, periodicidade: periodPro, label: `${roleSelected} Pro`, price, categoria: "PRO" });
+    }
+
+    if (pickLearning) {
+      const id = planId(roleSelected, "LEARNING");
+      const price = getPrice(id, periodLearning);
+      items.push({ planoId: id, periodicidade: periodLearning, label: `${roleSelected} Learning`, price, categoria: "LEARNING" });
+    }
+
+    if (pickPlus) {
+      const id = planId(roleSelected, "PLUS");
+      const price = getPrice(id, periodPlus);
+      items.push({ planoId: id, periodicidade: periodPlus, label: `${roleSelected} Plus`, price, categoria: "PLUS" });
+    }
+
+    Object.entries(pickMetods).forEach(([methId, checked]) => {
+      if (!checked) return;
+      const label = `Metodologia: ${METODOLOGIAS.find((m) => m.id === methId)?.nome ?? methId}`;
+      const price = getPrice(methId, "Anual");
+      items.push({ planoId: methId, periodicidade: "Anual", label, price, categoria: "METODOLOGIA" });
+    });
+
+    return uniqueCart(items);
+  }
+
+  const cart = useMemo(
+    () => buildCart(),
+    [pickPro, pickLearning, pickPlus, pickMetods, roleSelected, periodPro, periodLearning, periodPlus, apiPlans]
+  );
+
+  const cartTotalBase = useMemo(() => cart.reduce((s, it) => s + (it.price || 0), 0), [cart]);
+
+  function totalComCupomLocal() {
+    return cupomPreview ? cupomPreview.total : cartTotalBase;
+  }
+
+  const statusAssinatura = billingState?.status ?? assinaturaSingle?.status ?? "SEM_ASSINATURA";
+  const nowTs = Date.now();
+
+  const normStatus = (s?: unknown) => String(s ?? "").toUpperCase();
+
+  const assinaturasAtivasDeVerdade = useMemo(() => {
+    return (assinaturas || []).filter((a) => {
+      const st = normStatus(a.status);
+      return (st === "ATIVA" || st === "TRIAL") && a.ativo === true;
+    });
+  }, [assinaturas]);
+
+  const canceladasComAcesso = useMemo(() => {
+    return (assinaturas || []).filter((a) => {
+      const st = normStatus(a.status);
+      if (st !== "CANCELADA") return false;
+
+      const renovaTs = toTs(a.renovaEm);
+      return renovaTs != null && renovaTs > nowTs;
+    });
+  }, [assinaturas, nowTs]);
+
+  const canceladaComAcessoMaisProxima = useMemo(() => {
+    const arr = [...canceladasComAcesso];
+    arr.sort((a, b) => (toTs(a.renovaEm) ?? Infinity) - (toTs(b.renovaEm) ?? Infinity));
+    return arr[0] ?? null;
+  }, [canceladasComAcesso]);
+
+  const canceladasFinalizadas = useMemo(() => {
+    return (assinaturas || []).filter((a) => {
+      const st = normStatus(a.status);
+      if (st !== "CANCELADA") return false;
+
+      const renovaTs = toTs(a.renovaEm);
+      if (renovaTs == null) return true;
+      return renovaTs <= nowTs;
+    });
+  }, [assinaturas, nowTs]);
+
+  const showCanceladoUI =
+    canceladasFinalizadas.length > 0 &&
+    assinaturasAtivasDeVerdade.length === 0 &&
+    canceladasComAcesso.length === 0;
+
+  const hasTrialFlag =
+  Boolean(billingState?.trialAtivo) || String(statusAssinatura).toUpperCase() === "TRIAL";
+
+  const trialAtivoAgora =
+    hasTrialFlag &&
+    !showCanceladoUI; 
+
+  const bloquearCheckoutPorTrial =
+    trialAtivoAgora &&
+    (billingState?.diasRestantes ?? 0) > 7;
+
+  const isTrial = trialAtivoAgora;
+  const isBloqueada = billingState?.bloqueado || statusAssinatura === "BLOQUEADA";
+  
+  const trialJaUsado = Boolean(billingState?.trialJaUsado)
+    || assinaturas.some((a) => Boolean(a.trialStartsAt || a.trialEndsAt))
+    || Boolean(assinaturaSingle?.trialStartsAt || assinaturaSingle?.trialEndsAt);
+
+  const trialDisponivel = !trialAtivoAgora && !trialJaUsado && !isBloqueada;
+
+  async function loadMe() {
+    const me = await fetch(`${API.BASE_URL}/api/billing/me`, { headers });
+    const data = await me.json();
+
+    const arr = Array.isArray(data.assinaturas)
+      ? data.assinaturas
+      : (data.assinatura ? [data.assinatura] : []);
+
+    const dedup = Array.from(
+      new Map<string, Assinatura>(
+        arr.map((a: Assinatura) => [a.id, a])
+      ).values()
+    );
+
+    setTipoBackend(data.tipoUsuario ?? null)
+    setAssinaturaSingle(data.assinatura || null);
+    setAssinaturas(dedup);
+    setPagamentos(data.pagamentos || []);
+    setBillingState(data.billingState || null);
+
+    if (data.billingState?.metodoPreferido) setMethod(data.billingState.metodoPreferido);
+  }
 
   useEffect(() => {
     (async () => {
+      const saved = readPersist();
+      hadPersistRef.current = !!saved;
+
+      if (saved) {
+        setRoleSelected(saved.roleSelected);
+        setPeriodPro(saved.periodPro);
+        setPeriodLearning(saved.periodLearning);
+        setPeriodPlus(saved.periodPlus);
+        setPickPro(saved.pickPro);
+        setPickLearning(saved.pickLearning);
+        setPickPlus(saved.pickPlus);
+        setPickMetods(saved.pickMetods || {});
+        setCupomInput(saved.cupomInput || "");
+        setMethod(saved.method || "PIX");
+      } else {
+        setPickPro(true);
+        setPickLearning(false);
+        setPickPlus(false);
+        setPickMetods({});
+      }
+      setHydrated(true);
+
       try {
         const cat = await fetch(`${API.BASE_URL}/api/billing/plans`, { headers });
-        const { plans: apiPlans } = await cat.json();
-        setPlans(apiPlans);
+        const json = await cat.json().catch(() => ({}));
+        setApiPlans(json?.plans || []);
 
-        const initialPlan: string =
-          (typeof tipo === "string" && (tipo as RoleKey) in roleToDefaultPlan)
-            ? roleToDefaultPlan[tipo as RoleKey]
-            : (apiPlans?.[0]?.id ?? "ATLETA_PRO");
-
-        setSelectedPlan(initialPlan);
-        if (initialPlan === "ESCOLINHA_PRO") setPeriod("Mensal");
-
-        const me = await fetch(`${API.BASE_URL}/api/billing/me`, { headers });
-        const data = await me.json();
-        setAssinatura(data.assinatura || null);
-        setPagamentos(data.pagamentos || []);
-        setBillingState(data.billingState || null);
-
-        if (data.billingState?.metodoPreferido) {
-          setMethod(data.billingState.metodoPreferido);
-        }
+        await loadMe();
       } catch (e) {
         console.error(e);
       } finally {
         setLoading(false);
       }
     })();
-  }, [headers, tipo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headers]);
 
-  const currentPlanPrice = useMemo(() => {
-    const p = plans.find((p) => p.id === selectedPlan);
-    if (!p) return 0;
-    if (selectedPlan === "ESCOLINHA_PRO") return p.monthly;
-    return period === "Mensal" ? p.monthly : p.annual ?? p.monthly;
-  }, [plans, selectedPlan, period]);
+  useEffect(() => {
+    if (!hydrated) return;
 
-  const selectedObj = useMemo(
-    () => plans.find((p) => p.id === selectedPlan),
-    [plans, selectedPlan]
-  );
-
-  async function previewCoupon() {
-    if (!cupomInput) return;
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/billing/coupon/apply`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ codigo: cupomInput.trim(), planoId: selectedPlan, periodicidade: period })
-      });
-      if (!r.ok) {
-        const e = await r.json();
-        alert(e.message || "Cupom inválido");
-        setCupomPreview(null);
-        return;
-      }
-      const data = await r.json();
-      setCupomPreview({
-        total: data.total,
-        base: data.base,
-        desconto: data.desconto,
-        codigo: data.cupom.codigo,
-        tipo: data.cupom.tipo
-      });
-    } catch {
-      alert("Erro ao validar cupom");
-    }
-  }
-
-  function totalComCupom() {
-    const base = currentPlanPrice;
-    return cupomPreview ? cupomPreview.total : base;
-  }
+    writePersist({
+      roleSelected,
+      periodPro,
+      periodLearning,
+      periodPlus,
+      pickPro,
+      pickLearning,
+      pickPlus,
+      pickMetods,
+      cupomInput,
+      method,
+    });
+  }, [
+    hydrated,
+    roleSelected,
+    periodPro,
+    periodLearning,
+    periodPlus,
+    pickPro,
+    pickLearning,
+    pickPlus,
+    pickMetods,
+    cupomInput,
+    method,
+  ]);
 
   function validarCamposAntesDoCheckout(): string | null {
+    if (cart.length === 0) return "Selecione pelo menos uma assinatura/metodologia.";
+
+    const zero = cart.find((c) => !c.price || c.price <= 0);
+    if (zero) return `O item "${zero.label}" está sem preço (R$ 0,00). Ajuste o fallback ou crie o plano no backend.`;
+
     if (method === "PIX") {
       if (!pagador.nome || !pagador.email) return "Informe seu nome e e-mail para gerar o PIX.";
     }
@@ -225,29 +948,118 @@ export default function PagamentosPage() {
       if (!pagador.nome || !pagador.email || !pagador.cpf) return "Informe nome, e-mail e CPF para gerar o boleto.";
     }
     if (method === "CREDITO" || method === "DEBITO") {
-      if (!pagador.nome || !pagador.email) return "Informe nome e e-mail do titular.";
-      if (!cartao.numero || !cartao.nomeImpresso || !cartao.validade || !cartao.cvv) return "Preencha todos os dados do cartão.";
+      if (!pagador.nome || !pagador.email) return "Informe nome e e-mail do titular para finalizar o pagamento.";
+      if (!cartao.numero || !cartao.nomeImpresso || !cartao.validade || !cartao.cvv) return "Preencha todos os dados do cartão para finalizar o pagamento.";
     }
+    if (pagador.nome && !isValidName(pagador.nome)) return "Nome inválido (não use números).";
+    if (pagador.email && !isValidEmail(pagador.email)) return "E-mail inválido.";
+
+    if (method === "BOLETO") {
+      if (!pagador.cpf || sanitizeCpf(pagador.cpf).length !== 11) return "CPF inválido (11 dígitos).";
+    }
+
+    if (method === "CREDITO" || method === "DEBITO") {
+      const parsedVal = parseValidade(cartao.validade);
+      if (!parsedVal) return "Validade inválida (use MM/AA).";
+
+      const STRICT_NEXT_MONTH = false; 
+      if (!isValidadeNaoExpirada(cartao.validade, { strictNextMonth: STRICT_NEXT_MONTH })) {
+        const min = validadeMinimaHoje({ strictNextMonth: STRICT_NEXT_MONTH });
+        const minTxt = `${String(min.mm).padStart(2, "0")}/${String(min.yy).padStart(2, "0")}`;
+        return `Cartão vencido. Validade mínima: ${minTxt}.`;
+      }
+      if (sanitizeCardNumber(cartao.numero).length < 13) return "Número do cartão parece inválido.";
+      if (sanitizeCvv(cartao.cvv).length < 3) return "CVV inválido.";
+    }
+
     return null;
   }
 
+  const checkoutError = useMemo(() => {
+    if (bloquearCheckoutPorTrial) return "Trial ativo (aguarde faltar 7 dias).";
+    return validarCamposAntesDoCheckout();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    bloquearCheckoutPorTrial,
+    cart,
+    method,
+    pagador.nome,
+    pagador.email,
+    pagador.cpf,
+    pagador.telefone,
+    cartao.numero,
+    cartao.nomeImpresso,
+    cartao.validade,
+    cartao.cvv,
+  ]);
+
+  const canFinalize = !polling && !checkoutError;
+
+  async function previewCoupon() {
+    if (!cupomInput) return;
+
+    const item = cart[0];
+
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/billing/coupon/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          codigo: cupomInput.trim(),
+          items: cart.map((c) => ({ planoId: c.planoId, periodicidade: c.periodicidade })),
+        }),
+      });
+
+      if (!r.ok) {
+        const e = await r.json();
+        alert(e.message || "Cupom inválido");
+        setCupomPreview(null);
+        return;
+      }
+
+      const data = await r.json();
+      setCupomPreview({
+        total: data.total,
+        base: data.base,
+        desconto: data.desconto,
+        codigo: data.cupom.codigo,
+        tipo: data.cupom.tipo,
+      });
+    } catch {
+      alert("Erro ao validar cupom");
+    }
+  }
+
   async function startTrial() {
+    if (trialAtivoAgora) {
+      alert("Seu mês grátis já está ativo ✅");
+      return;
+    }
+
+    if (trialJaUsado) {
+      alert("Você já usou o mês grátis nesta conta.");
+      return;
+    }
+
+    if (isBloqueada) {
+      alert("Sua conta está bloqueada. Finalize um pagamento para liberar.");
+      return;
+    }
+
+    const principal = cart.find((c) => c.categoria !== "METODOLOGIA");
+    if (!principal) {
+      alert("Selecione um plano principal (Pro/Learning/Plus) para iniciar o mês grátis.");
+      return;
+    }
+
     try {
       const r = await fetch(`${API.BASE_URL}/api/billing/start-trial`, {
         method: "POST",
         headers,
-        body: JSON.stringify({
-          planoId: selectedPlan,
-          periodicidade: period,
-        }),
+        body: JSON.stringify({ planoId: principal.planoId, periodicidade: principal.periodicidade }),
       });
 
-      const data = await r.json();
-
-      if (billingState?.trialAtivo || statusAssinatura === "TRIAL") {
-        alert("Seu mês grátis já está ativo ✅");
-        return;
-      }
+      const data = await r.json().catch(() => ({}));
 
       if (!r.ok) {
         alert(data.message || "Erro ao iniciar mês grátis");
@@ -255,167 +1067,10 @@ export default function PagamentosPage() {
       }
 
       alert("🎉 Mês grátis iniciado com sucesso!");
-      await reloadMe();
+      await loadMe();
     } catch (e) {
       console.error(e);
       alert("Erro ao iniciar mês grátis");
-    }
-  }
-
-  async function startCheckout() {
-    if (billingState?.trialAtivo && billingState?.diasRestantes != null && billingState.diasRestantes > 7) {
-      alert(
-        `Seu mês grátis está ativo. Você poderá escolher a forma de pagamento quando faltarem 7 dias para terminar.\n\nDias restantes: ${billingState.diasRestantes}`
-      );
-      return;
-    }
-
-    const err = validarCamposAntesDoCheckout();
-    if (err) return alert(err);
-
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/billing/checkout`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          planoId: selectedPlan,
-          periodicidade: period,
-          metodo: method,
-          cupom: cupomInput || null,
-          pagador,
-          cartao,
-        }),
-      });
-      const data = await r.json();
-      if (!r.ok) {
-      if (r.status === 403 && data.code === "TRIAL_ACTIVE") {
-        alert(data.message || "Trial ativo. Volte quando faltarem 7 dias.");
-        await reloadMe();
-        return;
-      }
-
-      alert(data.message || "Erro ao iniciar pagamento");
-      return;
-    }
-
-      setPixCopiaECola(null);
-      setPixQrUrl(null);
-      setBoletoLinha(null);
-      setBoletoPdf(null);
-
-      if (data.pix?.copiaECola || data.pix?.qrCodeUrl) {
-        setPendingPaymentId(data.pagamento?.id || null);
-        setPixCopiaECola(data.pix?.copiaECola || null);
-        setPixQrUrl(data.pix?.qrCodeUrl || null);
-        if (data.pagamento?.id) pollPaymentStatus(data.pagamento.id);
-        return;
-      }
-
-      if (data.boleto?.pdfUrl || data.boleto?.linhaDigitavel) {
-        setPendingPaymentId(data.pagamento?.id || null);
-        setBoletoLinha(data.boleto?.linhaDigitavel || null);
-        setBoletoPdf(data.boleto?.pdfUrl || null);
-        if (data.pagamento?.id) pollPaymentStatus(data.pagamento.id);
-        return;
-      }
-
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
-        return;
-      }
-
-      if (data.status === "APROVADO") {
-        alert(
-          data.freeTrial
-            ? "Assinatura ativada com sucesso! Seu primeiro mês é gratuito. 🎉"
-            : "Assinatura ativada com sucesso!"
-        );
-        reloadMe();
-        return;
-      }
-
-      alert(data.message || "Pagamento iniciado.");
-    } catch (e) {
-      console.error(e);
-      alert("Erro ao iniciar pagamento");
-    }
-  }
-
-  async function redeemGift() {
-    if (!giftCode) return alert("Informe o código do presente");
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/billing/gift/redeem`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ codigo: giftCode.trim(), planoId: selectedPlan, periodicidade: period })
-      });
-      const data = await r.json();
-      if (!r.ok) {
-        alert(data.message || "Erro ao resgatar presente");
-        return;
-      }
-      alert("Presente resgatado! Assinatura ativada.");
-      setGiftCode("");
-      reloadMe();
-    } catch {
-      alert("Erro ao resgatar presente");
-    }
-  }
-
-  async function cancelSub() {
-    if (!confirm("Tem certeza que deseja cancelar sua assinatura?")) return;
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/billing/cancel`, { method: "POST", headers });
-      const data = await r.json();
-      if (!r.ok) return alert(data.message || "Erro ao cancelar");
-      alert("Assinatura cancelada.");
-      reloadMe();
-    } catch {
-      alert("Erro ao cancelar");
-    }
-  }
-
-  async function salvarMetodoPreferido() {
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/billing/preferred-method`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ metodoFinal: method }),
-      });
-      const data = await r.json();
-      if (!r.ok) return alert(data.message || "Erro ao salvar método");
-      alert("Método de pagamento salvo! ✅");
-      await reloadMe();
-    } catch {
-      alert("Erro ao salvar método preferido");
-    }
-  }
-
-  async function switchPlan(novoPlano: string) {
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/billing/switch-plan`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ novoPlano })
-      });
-      const data = await r.json();
-      if (!r.ok) return alert(data.message || "Erro ao trocar plano");
-      alert("Plano alterado!");
-      reloadMe();
-    } catch {
-      alert("Erro ao trocar plano");
-    }
-  }
-
-  async function reloadMe() {
-    const me = await fetch(`${API.BASE_URL}/api/billing/me`, { headers });
-    const data = await me.json();
-    setAssinatura(data.assinatura || null);
-    setPagamentos(data.pagamentos || []);
-    setBillingState(data.billingState || null);
-
-    if (data.billingState?.metodoPreferido) {
-      setMethod(data.billingState.metodoPreferido);
     }
   }
 
@@ -432,9 +1087,9 @@ export default function PagamentosPage() {
 
         const pago = (data.pagamentos || []).find((p: Pagamento) => p.id === pagamentoId);
         const status = data.billingState?.status ?? data.assinatura?.status;
-        const isAtiva = status === "ATIVA";
+        const isAtivaNow = status === "ATIVA";
 
-        if (pago?.status === "APROVADO" || isAtiva) {
+        if (pago?.status === "APROVADO" || isAtivaNow) {
           alert("Pagamento aprovado! Assinatura ativada 🎉");
           setPixCopiaECola(null);
           setPixQrUrl(null);
@@ -442,7 +1097,8 @@ export default function PagamentosPage() {
           setBoletoPdf(null);
           setPendingPaymentId(null);
           setPolling(false);
-          await reloadMe();
+          await loadMe();
+          localStorage.removeItem(LS_KEY);
           return;
         }
 
@@ -453,74 +1109,300 @@ export default function PagamentosPage() {
     }
   }
 
-  if (loading) {
-    return <div className="p-6">Carregando pagamentos...</div>;
+  async function startCheckout() {
+    if (bloquearCheckoutPorTrial) {
+      alert(
+        `Seu mês grátis está ativo. Você poderá escolher a forma de pagamento quando faltarem 7 dias para terminar.\n\nDias restantes: ${billingState?.diasRestantes}`
+      );
+      return;
+    }
+
+    const err = validarCamposAntesDoCheckout();
+    if (err) return alert(err);
+
+    setPixCopiaECola(null);
+    setPixQrUrl(null);
+    setBoletoLinha(null);
+    setBoletoPdf(null);
+    setPendingPaymentId(null);
+
+    try {
+      const bundlePayload = {
+        items: cart.map((c) => ({ planoId: c.planoId, periodicidade: c.periodicidade })),
+        metodo: method,
+        cupom: cupomInput || null,
+        pagador,
+        cartao,
+      };
+
+      const rBundle = await fetch(`${API.BASE_URL}/api/billing/checkout-bundle`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(bundlePayload),
+      });
+
+      if (rBundle.ok) {
+        const data = await rBundle.json();
+
+        if (data.pix?.copiaECola || data.pix?.qrCodeUrl) {
+          setPendingPaymentId(data.pagamento?.id || null);
+          setPixCopiaECola(data.pix?.copiaECola || null);
+          setPixQrUrl(data.pix?.qrCodeUrl || null);
+          if (data.pagamento?.id) pollPaymentStatus(data.pagamento.id);
+          return;
+        }
+
+        if (data.boleto?.pdfUrl || data.boleto?.linhaDigitavel) {
+          setPendingPaymentId(data.pagamento?.id || null);
+          setBoletoLinha(data.boleto?.linhaDigitavel || null);
+          setBoletoPdf(data.boleto?.pdfUrl || null);
+          if (data.pagamento?.id) pollPaymentStatus(data.pagamento.id);
+          return;
+        }
+
+        if (data.checkoutUrl) {
+          window.location.href = data.checkoutUrl;
+          return;
+        }
+
+        alert(data.message || "Pagamento iniciado.");
+        await loadMe();
+        return;
+      }
+
+      if ((method === "PIX" || method === "BOLETO") && cart.length > 1) {
+        alert(
+          "Para PIX/Boleto com múltiplos itens, você precisa do endpoint /checkout-bundle no backend (1 cobrança só)."
+        );
+        return;
+      }
+
+      for (const item of cart) {
+        const r = await fetch(`${API.BASE_URL}/api/billing/checkout`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            planoId: item.planoId,
+            periodicidade: item.periodicidade,
+            metodo: method,
+            cupom: cart.length === 1 ? cupomInput || null : null,
+            pagador,
+            cartao,
+          }),
+        });
+
+        const data = await r.json();
+
+        if (!r.ok) {
+          if (r.status === 403 && data.code === "TRIAL_ACTIVE") {
+            alert(data.message || "Trial ativo. Volte quando faltarem 7 dias.");
+            await loadMe();
+            return;
+          }
+          alert(data.message || `Erro ao iniciar pagamento (${item.label})`);
+          return;
+        }
+
+        if (data.pix?.copiaECola || data.pix?.qrCodeUrl) {
+          setPendingPaymentId(data.pagamento?.id || null);
+          setPixCopiaECola(data.pix?.copiaECola || null);
+          setPixQrUrl(data.pix?.qrCodeUrl || null);
+          if (data.pagamento?.id) pollPaymentStatus(data.pagamento.id);
+          return;
+        }
+
+        if (data.boleto?.pdfUrl || data.boleto?.linhaDigitavel) {
+          setPendingPaymentId(data.pagamento?.id || null);
+          setBoletoLinha(data.boleto?.linhaDigitavel || null);
+          setBoletoPdf(data.boleto?.pdfUrl || null);
+          if (data.pagamento?.id) pollPaymentStatus(data.pagamento.id);
+          return;
+        }
+
+        if (data.checkoutUrl) {
+          window.location.href = data.checkoutUrl;
+          return;
+        }
+      }
+
+      alert("Pagamento(s) iniciado(s). Atualizando status...");
+      await loadMe();
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao iniciar pagamento");
+    }
   }
 
-  const renovaEm = computeRenovaEm(assinatura, pagamentos);
-  const dias = diasRestantes(renovaEm);
-  const aviso =
-    dias !== null && dias >= 0 && dias <= 7
-      ? `Sua assinatura vence em ${dias} dia${dias === 1 ? "" : "s"}.`
-      : dias !== null && dias < 0
-      ? "Sua assinatura está vencida. Renove para continuar com os benefícios."
-      : null;
+  async function cancelSub(planoId?: string) {
+    if (!confirm("Tem certeza que deseja cancelar essa assinatura?")) return;
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/billing/cancel`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ planoId: planoId || null }),
+      } as any);
 
-  const p = selectedObj;
-  const total = totalComCupom();
-  const statusAssinatura = billingState?.status ?? assinatura?.status ?? "SEM_ASSINATURA";
-  const semAssinatura = statusAssinatura === "SEM_ASSINATURA";
-  const isTrial = billingState?.trialAtivo || statusAssinatura === "TRIAL";
-  const isAtiva = statusAssinatura === "ATIVA";
-  const isBloqueada = billingState?.bloqueado || statusAssinatura === "BLOQUEADA";
-  const mostrarMsgTrial = Boolean(billingState?.trialAtivo) && !isBloqueada;
-  const bloquearCheckoutPorTrial =
-    Boolean(billingState?.trialAtivo) &&
-    billingState?.diasRestantes != null &&
-    billingState.diasRestantes > 7;
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) return alert(data.message || "Erro ao cancelar");
+      alert("Assinatura cancelada.");
+      await loadMe();
+    } catch {
+      alert("Erro ao cancelar");
+    }
+  }
 
-  const anualDisponivel =
-    selectedPlan !== "ESCOLINHA_PRO" &&
-    !!selectedObj?.annual &&
-    (selectedObj.annual as number) > 0;
+  async function salvarMetodoPreferido() {
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/billing/preferred-method`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ metodoFinal: method }),
+      });
+      const data = await r.json();
+      if (!r.ok) return alert(data.message || "Erro ao salvar método");
+      alert("Método de pagamento salvo! ✅");
+      await loadMe();
+    } catch {
+      alert("Erro ao salvar método preferido");
+    }
+  }
+
+  if (loading) return <div className="p-6">Carregando pagamentos...</div>;
+
+  const trialEndsAt = billingState?.trialEndsAt ?? assinaturaSingle?.trialEndsAt ?? null;
+  const diasTrial = diasRestantesIso(trialEndsAt);
+
+  const mostrarMsgTrial = trialAtivoAgora && !isBloqueada;
+  const proId = planId(roleSelected, "PRO");
+  const learningId = planId(roleSelected, "LEARNING");
+  const plusId = planId(roleSelected, "PLUS");
+  const proPlan = getPlan(proId);
+  const learningPlan = getPlan(learningId);
+  const plusPlan = getPlan(plusId);
+
+  function onlyDigits(v: string) {
+    return (v || "").replace(/\D+/g, "");
+  }
+
+  function onlyNameChars(v: string) {
+    return (v || "").replace(/[^A-Za-zÀ-ÿ' -]+/g, "");
+  }
+
+  function sanitizeEmail(v: string) {
+    return (v || "").replace(/\s+/g, "");
+  }
+
+  function formatValidade(v: string) {
+    const d = onlyDigits(v).slice(0, 4);
+    if (d.length <= 2) return d;
+
+    const mm = d.slice(0, 2);
+    const aa = d.slice(2);
+
+    const mmNum = Number(mm);
+    if (mm.length === 2 && (mmNum < 1 || mmNum > 12)) {
+      return mm.slice(0, 1);
+    }
+
+    return `${mm}/${aa}`;
+  }
+
+  function validadeMinimaHoje(opts?: { strictNextMonth?: boolean }) {
+    const strictNextMonth = !!opts?.strictNextMonth;
+
+    const now = new Date();
+    let mm = now.getMonth() + 1; 
+    let yy = now.getFullYear() % 100; 
+
+    if (strictNextMonth) {
+      mm += 1;
+      if (mm === 13) {
+        mm = 1;
+        yy = (yy + 1) % 100;
+      }
+    }
+
+    return { mm, yy };
+  }
+
+  function parseValidade(mmAA: string): { mm: number; yy: number } | null {
+    const m = /^(\d{2})\/(\d{2})$/.exec(mmAA);
+    if (!m) return null;
+    const mm = Number(m[1]);
+    const yy = Number(m[2]);
+    if (!Number.isFinite(mm) || !Number.isFinite(yy)) return null;
+    if (mm < 1 || mm > 12) return null;
+    return { mm, yy };
+  }
+
+  function isValidadeNaoExpirada(mmAA: string, opts?: { strictNextMonth?: boolean }) {
+    const parsed = parseValidade(mmAA);
+    if (!parsed) return false;
+
+    const min = validadeMinimaHoje({ strictNextMonth: opts?.strictNextMonth });
+
+    if (parsed.yy > min.yy) return true;
+    if (parsed.yy < min.yy) return false;
+    return parsed.mm >= min.mm;
+  }
+
+  function sanitizeCpf(v: string) {
+    return onlyDigits(v).slice(0, 11);
+  }
+
+  function sanitizePhone(v: string) {
+    return onlyDigits(v).slice(0, 11); 
+  }
+
+  function sanitizeCardNumber(v: string) {
+    return onlyDigits(v).slice(0, 19);
+  }
+
+  function sanitizeCvv(v: string) {
+    return onlyDigits(v).slice(0, 4);
+  }
+
+  function isValidEmail(email: string) {
+    const re = /^[A-Za-z][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+    return re.test(email);
+  }
+
+  function isValidName(name: string) {
+    const re = /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ' -]*$/;
+    return re.test(name.trim());
+  }
+
+  function isValidValidade(mmAA: string) {
+    const parsed = parseValidade(mmAA);
+    if (!parsed) return false;
+    const STRICT_NEXT_MONTH = false;
+
+    return isValidadeNaoExpirada(mmAA, { strictNextMonth: STRICT_NEXT_MONTH });
+  }
 
   return (
-    <div className="max-w-5xl mx-auto p-4 md:p-8">
+    <div className="max-w-6xl mx-auto p-4 md:p-8">
       <Link
-                href="/perfil"
-                aria-label="Voltar para perfil"
-                title="Voltar para perfil"
-                className="inline-flex h-10 w-10 items-center justify-center
-                  rounded-full border border-green-800 bg-white text-green-900
-                  shadow-sm hover:bg-green-50 focus:outline-none
-                  focus:ring-2 focus:ring-green-700/30 mt-2 ml-2"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Link>
-      <h1 className="text-2xl md:text-3xl font-bold mb-2">Assinaturas & Pagamentos</h1>
-      <p className="text-sm text-gray-600 mb-6">
-        Bem-vindo(a)! Aqui você escolhe seu plano, aplica cupons e acompanha o histórico.
-      </p>
+        href="/perfil"
+        aria-label="Voltar para perfil"
+        title="Voltar para perfil"
+        className="inline-flex h-10 w-10 items-center justify-center
+          rounded-full border border-green-800 bg-white text-green-900
+          shadow-sm hover:bg-green-50 focus:outline-none
+          focus:ring-2 focus:ring-green-700/30 mt-2"
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </Link>
 
-      {aviso && (
-        <div
-          className={`mb-4 text-sm font-medium rounded-md px-3 py-2 ${
-            dias! < 0 ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-800"
-          }`}
-        >
-          {aviso}
-        </div>
-      )}
-      {billingState?.bloqueado && (
-        <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
-          Sua conta está <b>bloqueada</b>. Para liberar, finalize um pagamento aprovado.
-        </div>
-      )}
+      <h1 className="text-2xl md:text-3xl font-bold mt-3">Assinaturas & Pagamentos</h1>
+      <p className="text-sm text-gray-600 mb-6">
+        Escolha <b>uma ou mais</b> assinaturas/metodologias. Você pode combinar como quiser: Pro, Learning, Plus e metodologias avulsas.
+      </p>
 
       <div className="mb-6 rounded-lg border bg-emerald-50 text-emerald-900 p-3 text-sm">
         <ul className="list-disc pl-4 space-y-1">
           <li>Rede social aberta: posts/DMs ilimitados para todos. Vídeos ≤ 60s.</li>
-          <li>Vinculação do atleta com 1 escolinha e 1 professor é sempre grátis.</li>
+          <li>Vinculação do atleta com 1 organização e 1 professor é sempre grátis.</li>
           <li>Limites valem para dados operacionais (treinos, templates, agendamentos), não para posts/DMs.</li>
         </ul>
       </div>
@@ -528,182 +1410,505 @@ export default function PagamentosPage() {
       <section className="mb-8 p-4 border rounded-xl bg-white shadow-sm">
         <div className="flex items-center gap-2 mb-2">
           <BadgeCheck className="w-5 h-5" />
-          <h2 className="font-semibold text-lg">Sua assinatura</h2>
+          <h2 className="font-semibold text-lg">Suas assinaturas ativas</h2>
         </div>
-        {isAtiva ? (
-          <div className="flex flex-col gap-2">
-            <span className="text-green-700 font-semibold">ATIVA</span>
-            <div>Plano: <b>{assinatura?.plano}</b></div>
-            <div>Início: {assinatura?.startsAt ? new Date(assinatura.startsAt).toLocaleDateString() : "—"}</div>
 
-            <div className="flex flex-wrap gap-2 mt-2">
-              <button
-                onClick={cancelSub}
-                disabled={polling}
-                className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-2 disabled:opacity-60"
-              >
-                <XCircle className="w-4 h-4" /> Cancelar
-              </button>
+        {isBloqueada && (
+          <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+            Sua conta está <b>bloqueada</b>. Para liberar, finalize um pagamento aprovado.
+          </div>
+        )}
+
+        {canceladaComAcessoMaisProxima && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <div className="font-semibold">
+              Você cancelou. Permanece ativa até{" "}
+              <b>{formatDateBR(canceladaComAcessoMaisProxima.renovaEm) ?? "—"}</b>.
+            </div>
+            <div className="mt-1 text-xs text-amber-900/80">
+              Até essa data você continua com acesso normalmente.
             </div>
           </div>
-        ) : isTrial ? (
-          <div className="flex flex-col gap-2">
-            <span className="text-emerald-700 font-semibold">TRIAL (mês grátis)</span>
-            <div>Plano: <b>{assinatura?.plano ?? "—"}</b></div>
+        )}
 
-            {billingState?.trialEndsAt && (
-              <div>
-                Termina em: {new Date(billingState.trialEndsAt).toLocaleDateString()}{" "}
-                {billingState?.diasRestantes != null ? `(faltam ${billingState.diasRestantes} dia(s))` : ""}
+        {assinaturasAtivasDeVerdade.length === 0 ? (
+          <div className="text-gray-700">
+            Você ainda não possui assinatura ativa.
+
+            {showCanceladoUI && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                <div className="font-semibold">Sua assinatura foi cancelada.</div>
+                <div className="mt-1">
+                  Para voltar a ter acesso, escolha um plano abaixo e finalize um novo pagamento.
+                </div>
               </div>
             )}
 
-            <div className="text-sm text-gray-600">
-              Durante o trial não é necessário pagar. Quando faltarem 7 dias, você poderá escolher o método.
-            </div>
-          </div>
-        ) : isBloqueada ? (
-          <div className="flex flex-col gap-2">
-            <span className="text-red-700 font-semibold">BLOQUEADA</span>
-            <div>Plano atual: <b>{assinatura?.plano ?? "—"}</b></div>
-            <div className="mt-2 text-sm text-red-800">
-              Sua assinatura está bloqueada. Para liberar, faça um pagamento aprovado.
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                className="px-3 py-2 rounded-lg bg-green-800 text-white disabled:opacity-60"
-                onClick={startCheckout}
-                disabled={polling}
-              >
-                Reativar agora
-              </button>
-            </div>
-          </div>
-        ) : semAssinatura ? (
-          <div className="flex flex-col gap-3">
-            <div className="text-gray-700">
-              Você ainda não possui uma assinatura.
-            </div>
+            {trialAtivoAgora ? (
+              <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                Seu mês grátis já está ativo ✅
+              </div>
+            ) : trialJaUsado ? (
+              <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                Você já usou o mês grátis nesta conta.
+              </div>
+            ) : (
+              <div className="mt-3">
+                <button
+                  onClick={startTrial}
+                  disabled={polling || !trialDisponivel}
+                  className="px-4 py-2 rounded-lg bg-green-800 text-white font-semibold disabled:opacity-60"
+                >
+                  🎁 Começar mês grátis (1x por conta)
+                </button>
 
-            <button
-              onClick={startTrial}
-              disabled={polling}
-              className="px-4 py-2 rounded-lg bg-green-800 text-white font-semibold disabled:opacity-60"
-            >
-              🎁 Começar mês grátis
-            </button>
-
-            <p className="text-xs text-gray-500">
-              O trial começa agora e dura 30 dias. Não é necessário pagamento neste momento.
-            </p>
+                <p className="text-xs text-gray-500 mt-2">
+                  Recomendado usar o trial em um plano principal (Pro/Learning/Plus).
+                </p>
+              </div>
+            )}
           </div>
         ) : (
-          <div className="text-gray-700">Você não possui assinatura ativa.</div>
+          <div className="mt-3 space-y-3">
+            {assinaturasAtivasDeVerdade.map((a) => {
+              const s = String(a.status ?? "—").toUpperCase();
+              const isA = s === "ATIVA";
+              const isT = s === "TRIAL";
+              const ends = a.trialEndsAt ?? null;
+
+              return (
+                <div
+                  key={a.id}
+                  className="rounded-lg border p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
+                >
+                  <div>
+                    <div className="font-semibold">{a.plano}</div>
+                    <div className="text-sm text-gray-600">
+                      Status:{" "}
+                      <span
+                        className={
+                          isA
+                            ? "text-emerald-700 font-semibold"
+                            : isT
+                            ? "text-green-700 font-semibold"
+                            : "text-gray-700"
+                        }
+                      >
+                        {s}
+                      </span>
+                      {a.periodicidade ? ` · ${a.periodicidade}` : ""}
+                    </div>
+
+                    {isT && ends && (
+                      <div className="text-xs text-gray-600 mt-1">
+                        Trial termina em {formatDateBR(ends) ?? "—"}{" "}
+                        {diasRestantesIso(ends) != null
+                          ? `(faltam ${diasRestantesIso(ends)} dia(s))`
+                          : ""}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => cancelSub(a.planoId ?? undefined)}
+                      disabled={polling}
+                      className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-2 disabled:opacity-60"
+                    >
+                      <XCircle className="w-4 h-4" /> Cancelar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {billingState?.precisaEscolherPagamento && !billingState?.bloqueado && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <div className="font-semibold">Seu mês grátis está acabando!</div>
+                <div className="mt-1">
+                  Faltam <b>{billingState?.diasRestantes ?? "—"}</b> dia(s). Escolha uma forma de
+                  pagamento para evitar bloqueio.
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setOpenPagamentoModal(true)}
+                    className="px-3 py-2 rounded-lg border border-amber-300 bg-white text-amber-900 disabled:opacity-60"
+                    disabled={polling}
+                  >
+                    Pagar agora
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {isTrial && trialEndsAt && (
+          <div className="mt-3 text-sm text-gray-700">
+            <div className="font-semibold text-emerald-800">Trial ativo ✅</div>
+            <div className="text-gray-600">
+              Termina em <b>{formatDateBR(trialEndsAt) ?? "—"}</b>{" "}
+              {diasTrial != null ? `(faltam ${diasTrial} dia(s))` : ""}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              Durante o trial, você só precisa pagar quando faltarem 7 dias.
+            </div>
+          </div>
         )}
       </section>
 
+      <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <Layers className="w-5 h-5" />
+          <h2 className="font-semibold text-lg">Tipo de assinatura</h2>
+        </div>
+
+        <p className="text-sm text-gray-600 mb-3">
+          As assinaturas Pro/Learning/Plus mudam conforme o tipo de usuário. Metodologias são independentes.
+        </p>
+
+        <div className="flex flex-wrap gap-2">
+          {(["Atleta", "Olheiro", "Professor", "Organizações"] as RoleUI[]).map((r) => {
+            const disabled = r !== roleUI;
+
+            return (
+              <button
+                key={r}
+                disabled={disabled}
+                onClick={() => setRoleSelected(r)}
+                className={`px-3 py-2 rounded-lg border text-sm font-semibold ${
+                  roleSelected === r ? "bg-green-700 text-white border-green-700" : "bg-white text-gray-800"
+                } ${disabled ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-50"}`}
+                title={disabled ? "Seu tipo de conta não permite trocar" : ""}
+              >
+                {r}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-emerald-700" />
+            <h2 className="font-semibold text-lg">Plano Pro</h2>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={isOlheiro ? true : pickPro}
+              onChange={(e) => {
+                if (isOlheiro) return; 
+                setPickPro(e.target.checked);
+              }}
+            />
+            Selecionar
+          </label>
+        </div>
+
+        <p className="text-sm text-gray-600 mt-2">
+          Para quem quer usar o app no máximo: mais capacidade operacional, recursos “Pro” e experiência sem anúncios.
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-3 items-center">
+          <span className="text-sm font-semibold text-gray-800">Periodicidade:</span>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="radio" checked={periodPro === "Mensal"} onChange={() => setPeriodPro("Mensal")} />
+            Mensal ({brl(proPlan?.monthly ?? 0)})
+          </label>
+          <label className={`flex items-center gap-2 text-sm ${annualOk(proId) ? "" : "opacity-50"}`}>
+            <input
+              type="radio"
+              checked={periodPro === "Anual"}
+              onChange={() => setPeriodPro("Anual")}
+              disabled={!annualOk(proId)}
+            />
+            Anual ({brl(proPlan?.annual ?? 0)})
+          </label>
+        </div>
+
+        <div className="mt-3 grid md:grid-cols-2 gap-3">
+          <div className="rounded-lg border p-3 bg-gray-50">
+            <div className="text-sm font-semibold mb-2">Inclui</div>
+            <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+              {(proPlan?.benefits?.length ? proPlan.benefits : []).map((b, i) => <li key={i}>{b}</li>)}
+            </ul>
+          </div>
+
+          <div className="rounded-lg border p-3">
+            <div className="text-sm font-semibold mb-2">Recomendado para</div>
+            <p className="text-sm text-gray-700">Usuários que querem usar o sistema no dia a dia com recursos premium.</p>
+            <div className="mt-2 text-xs text-gray-500">
+              ID do plano: <b>{proId}</b>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {allowLearning && (
+      <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-indigo-700" />
+            <h2 className="font-semibold text-lg">Plano Learning</h2>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input type="checkbox" checked={pickLearning} onChange={(e) => setPickLearning(e.target.checked)} />
+            Selecionar
+          </label>
+        </div>
+
+        <p className="text-sm text-gray-600 mt-2">
+          Para quem quer acesso <b>ilimitado</b> a diferentes metodologias.
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-3 items-center">
+          <span className="text-sm font-semibold text-gray-800">Periodicidade:</span>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="radio" checked={periodLearning === "Mensal"} onChange={() => setPeriodLearning("Mensal")} />
+            Mensal ({brl(learningPlan?.monthly ?? 0)})
+          </label>
+          <label className={`flex items-center gap-2 text-sm ${annualOk(learningId) ? "" : "opacity-50"}`}>
+            <input
+              type="radio"
+              checked={periodLearning === "Anual"}
+              onChange={() => setPeriodLearning("Anual")}
+              disabled={!annualOk(learningId)}
+            />
+            Anual ({brl(learningPlan?.annual ?? 0)})
+          </label>
+        </div>
+
+        <div className="mt-3 grid md:grid-cols-2 gap-3">
+          <div className="rounded-lg border p-3 bg-gray-50">
+            <div className="text-sm font-semibold mb-2">Inclui</div>
+            <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+              {(learningPlan?.benefits?.length ? learningPlan.benefits : []).map((b, i) => <li key={i}>{b}</li>)}
+            </ul>
+          </div>
+
+          <div className="rounded-lg border p-3">
+            <div className="text-sm font-semibold mb-2">Recomendado para</div>
+            <p className="text-sm text-gray-700">Quem quer alternar entre vários “caminhos” (metodologias).</p>
+            <div className="mt-2 text-xs text-gray-500">
+              ID do plano: <b>{learningId}</b>
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {allowPlus && (
+      <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-fuchsia-700" />
+            <h2 className="font-semibold text-lg">Plano Plus</h2>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input type="checkbox" checked={pickPlus} onChange={(e) => setPickPlus(e.target.checked)} />
+            Selecionar
+          </label>
+        </div>
+
+        <p className="text-sm text-gray-600 mt-2">
+          A junção de tudo: <b>PRO + Learning</b>.
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-3 items-center">
+          <span className="text-sm font-semibold text-gray-800">Periodicidade:</span>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="radio" checked={periodPlus === "Mensal"} onChange={() => setPeriodPlus("Mensal")} />
+            Mensal ({brl(plusPlan?.monthly ?? 0)})
+          </label>
+          <label className={`flex items-center gap-2 text-sm ${annualOk(plusId) ? "" : "opacity-50"}`}>
+            <input
+              type="radio"
+              checked={periodPlus === "Anual"}
+              onChange={() => setPeriodPlus("Anual")}
+              disabled={!annualOk(plusId)}
+            />
+            Anual ({brl(plusPlan?.annual ?? 0)})
+          </label>
+        </div>
+
+        <div className="mt-3 grid md:grid-cols-2 gap-3">
+          <div className="rounded-lg border p-3 bg-gray-50">
+            <div className="text-sm font-semibold mb-2">Inclui</div>
+            <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
+              {(plusPlan?.benefits?.length ? plusPlan.benefits : []).map((b, i) => <li key={i}>{b}</li>)}
+            </ul>
+          </div>
+
+          <div className="rounded-lg border p-3">
+            <div className="text-sm font-semibold mb-2">Recomendado para</div>
+            <p className="text-sm text-gray-700">Quem quer o pacote completo sem escolher entre Pro e metodologias.</p>
+            <div className="mt-2 text-xs text-gray-500">
+              ID do plano: <b>{plusId}</b>
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {allowMetodologias && (
+      <section className="mb-8 p-4 border rounded-xl bg-white shadow-sm">
+        <div className="flex items-center gap-2 mb-2">
+          <Receipt className="w-5 h-5 text-amber-700" />
+          <h2 className="font-semibold text-lg">Metodologias avulsas</h2>
+        </div>
+
+        <p className="text-sm text-gray-600 mb-3">
+          Pague <b>por metodologia</b>. Você escolhe uma ou mais e paga um valor anual por cada uma.
+        </p>
+
+        <div className="grid md:grid-cols-2 gap-3">
+          {METODOLOGIAS.map((m) => {
+            const plan = getPlan(m.id);
+            const preco = (plan?.annual ?? 0) as number;
+
+            return (
+              <label key={m.id} className="rounded-lg border p-3 flex gap-3 cursor-pointer hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={!!pickMetods[m.id]}
+                  onChange={(e) => setPickMetods((prev) => ({ ...prev, [m.id]: e.target.checked }))}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <div className="font-semibold">{m.nome}</div>
+                  <div className="text-sm text-gray-600">{m.desc}</div>
+                  <div className="text-sm text-gray-800 mt-2">
+                    <b>Anual único:</b> {brl(preco)}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    ID: <b>{m.id}</b>
+                  </div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </section>
+      )}
+
+      <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
+        <div className="flex items-center gap-2 mb-2">
+          <Layers className="w-5 h-5" />
+          <h2 className="font-semibold text-lg">Resumo do que você escolheu</h2>
+        </div>
+
+        {cart.length === 0 ? (
+          <div className="text-sm text-gray-600">Selecione um ou mais planos/metodologias acima para montar seu pagamento.</div>
+        ) : (
+          <div className="mt-2">
+            <div className="space-y-2">
+              {cart.map((it) => (
+                <div key={`${it.planoId}-${it.periodicidade}`} className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <div className="font-semibold">{it.label}</div>
+                    <div className="text-xs text-gray-600">
+                      {it.planoId} · {it.periodicidade}
+                    </div>
+                  </div>
+                  <div className="font-semibold">{brl(it.price)}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between border-t pt-3">
+              <div className="text-sm text-gray-600">
+                Total: <b className="text-gray-900">{brl(totalComCupomLocal())}</b>
+                {mostrarMsgTrial ? (
+                  <span className="block text-xs text-emerald-700">
+                    Trial ativo: a cobrança pode começar só após o fim do mês grátis (conforme regra do backend).
+                  </span>
+                ) : null}
+              </div>
+
+              {trialAtivoAgora ? (
+                  <div className="px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 text-sm font-semibold">
+                    ✅ Mês grátis já está ativo
+                  </div>
+                ) : trialJaUsado ? (
+                  <div className="px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-700 text-sm font-semibold">
+                    Você já usou o mês grátis
+                  </div>
+                ) : (
+                  <button
+                    onClick={startTrial}
+                    className="px-3 py-2 rounded-lg border border-green-800 text-green-900 font-semibold hover:bg-green-50 disabled:opacity-60"
+                    disabled={polling || !trialDisponivel}
+                    title="Inicia o mês grátis (1x por conta) em um plano principal (Pro/Learning/Plus)"
+                  >
+                    🎁 Usar mês grátis
+                  </button>
+                )}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <Gift className="w-5 h-5" />
+          <h2 className="font-semibold text-lg">Cupom</h2>
+        </div>
+
+        <p className="text-sm text-gray-600 mb-3">
+          No momento, cupom funciona por item (se o carrinho tiver 1 item).
+        </p>
+
+        <div className="flex gap-2">
+          <input
+            value={cupomInput}
+            onChange={(e) => setCupomInput(e.target.value)}
+            placeholder="Digite seu cupom"
+            className="flex-1 border rounded-md px-3 py-2"
+          />
+          <button onClick={previewCoupon} className="px-3 py-2 border rounded-md">
+            Validar
+          </button>
+        </div>
+
+        {cupomPreview && (
+          <div className="mt-2 text-sm">
+            <div>Preço base: <b>{brl(cupomPreview.base)}</b></div>
+            <div>Desconto: <b>- {brl(cupomPreview.desconto)}</b></div>
+            <div>Total: <b>{brl(cupomPreview.total)}</b></div>
+            <div className="text-gray-600">Cupom "{cupomPreview.codigo}" ({cupomPreview.tipo})</div>
+          </div>
+        )}
+      </section>
+
+      {!openPagamentoModal && (
       <section className="mb-8 p-4 border rounded-xl bg-white shadow-sm">
         <div className="flex items-center gap-2 mb-4">
           <CreditCard className="w-5 h-5" />
-          <h2 className="font-semibold text-lg">Escolher plano</h2>
+          <h2 className="font-semibold text-lg">Pagamento</h2>
         </div>
 
-        <div className="flex flex-wrap gap-3 mb-4">
-          {plans.map((pl) => (
-            <button
-              key={pl.id}
-              onClick={() => {
-                setSelectedPlan(pl.id);
-
-                const hasAnnual = pl.id !== "ESCOLINHA_PRO" && !!pl.annual && pl.annual > 0;
-                if (!hasAnnual) setPeriod("Mensal");
-              }}
-              className={`px-3 py-2 rounded-lg border ${selectedPlan === pl.id ? "bg-green-700 text-white border-green-600" : "bg-white text-gray-800"}`}
-            >
-              {pl.title}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-3 mb-4">
-          <label className="flex items-center gap-2">
-            <input type="radio" checked={period === "Mensal"} onChange={() => setPeriod("Mensal")} />
-            Mensal ({brl(selectedObj?.monthly ?? 0)})
-          </label>
-
-          {anualDisponivel ? (
-            <label className="flex items-center gap-2">
-              <input type="radio" checked={period === "Anual"} onChange={() => setPeriod("Anual")} />
-              Anual ({brl(selectedObj?.annual ?? 0)})
-            </label>
-          ) : (
-            selectedPlan === "ESCOLINHA_PRO" && (
-              <span className="text-sm text-gray-500">* Plano da organização é apenas mensal.</span>
-            )
-          )}
-        </div>
-
-        {p && (
-          <ul className="list-disc pl-6 text-sm text-gray-700 mb-4">
-            {p.benefits.map((b, i) => <li key={i}>{b}</li>)}
-          </ul>
-        )}
-
-        <div className="mb-4 p-3 border rounded-lg bg-transparent">
-          <div className="flex items-center gap-2 mb-2">
-            <Gift className="w-4 h-4" />
-            <b>Cupom / Presente</b>
-          </div>
-          <div className="flex gap-2">
-            <input
-              value={cupomInput}
-              onChange={e => setCupomInput(e.target.value)}
-              placeholder="Digite seu cupom"
-              className="flex-1 border rounded-md px-3 py-2"
-            />
-            <button onClick={previewCoupon} className="px-3 py-2 border rounded-md">
-              Validar
-            </button>
-          </div>
-          {cupomPreview && (
-            <div className="mt-2 text-sm">
-              <div>Preço base: <b>{brl(cupomPreview.base)}</b></div>
-              <div>Desconto: <b>- {brl(cupomPreview.desconto)}</b></div>
-              <div>Total: <b>{brl(cupomPreview.total)}</b></div>
-              <div className="text-gray-600">Cupom "{cupomPreview.codigo}" ({cupomPreview.tipo})</div>
+        {(canceladaComAcessoMaisProxima || showCanceladoUI) && (
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            <div className="font-semibold">
+              {canceladaComAcessoMaisProxima
+                ? `Você cancelou sua assinatura. Ela permanece ativa até ${formatDateBR(canceladaComAcessoMaisProxima.renovaEm) ?? "breve"}.`
+                : "Sua assinatura foi cancelada."}
             </div>
-          )}
-        </div>
-
-        {billingState?.precisaEscolherPagamento && !billingState?.bloqueado && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            <div className="font-semibold">Seu mês grátis está acabando!</div>
             <div className="mt-1">
-              Faltam <b>{billingState.diasRestantes}</b> dia(s). Escolha uma forma de pagamento para evitar bloqueio.
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                onClick={salvarMetodoPreferido}
-                className="px-3 py-2 rounded-lg bg-amber-700 text-white disabled:opacity-60"
-                disabled={polling}
-              >
-                Escolher forma de pagamento
-              </button>
-
-              <button
-                onClick={startCheckout}
-                className="px-3 py-2 rounded-lg border border-amber-300 bg-white text-amber-900 disabled:opacity-60"
-                disabled={polling}
-              >
-                Pagar agora
-              </button>
+              {canceladaComAcessoMaisProxima
+                ? "Até essa data você continua com acesso. Depois disso, para voltar, escolha um plano e finalize um novo pagamento."
+                : "Para voltar a ter acesso, escolha um plano e finalize o pagamento novamente."}
             </div>
           </div>
         )}
-
         {bloquearCheckoutPorTrial ? (
-          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
             <div className="font-semibold">Seu mês grátis está ativo ✅</div>
             <div className="mt-1">
               Faltam <b>{billingState?.diasRestantes}</b> dias para terminar.
@@ -712,279 +1917,272 @@ export default function PagamentosPage() {
           </div>
         ) : (
           <>
-        <div className="mb-2">
-          <div className="font-semibold mb-2">Método de pagamento</div>
-          <div className="flex flex-wrap gap-3">
-            <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="PIX"?"bg-green-50 border-green-300":""}`}>
-              <input type="radio" className="hidden" checked={method==="PIX"} onChange={() => setMethod("PIX")} />
-              <QrCode className="w-4 h-4" /> PIX
-            </label>
-            <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="CREDITO"?"bg-green-50 border-green-300":""}`}>
-              <input type="radio" className="hidden" checked={method==="CREDITO"} onChange={() => setMethod("CREDITO")} />
-              <CreditCard className="w-4 h-4" /> Cartão de Crédito
-            </label>
-            <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="DEBITO"?"bg-green-50 border-green-300":""}`}>
-              <input type="radio" className="hidden" checked={method==="DEBITO"} onChange={() => setMethod("DEBITO")} />
-              <CreditCard className="w-4 h-4" /> Cartão de Débito
-            </label>
-            <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="BOLETO"?"bg-green-50 border-green-300":""}`}>
-              <input type="radio" className="hidden" checked={method==="BOLETO"} onChange={() => setMethod("BOLETO")} />
-              <Landmark className="w-4 h-4" /> Boleto
-            </label>
-          </div>
-        </div>
+            <div className="mb-2">
+              <div className="font-semibold mb-2">Método de pagamento</div>
+              <div className="flex flex-wrap gap-3">
+                <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="PIX"?"bg-green-50 border-green-300":""}`}>
+                  <input type="radio" className="hidden" checked={method==="PIX"} onChange={() => setMethod("PIX")} />
+                  <QrCode className="w-4 h-4" /> PIX
+                </label>
+                <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="CREDITO"?"bg-green-50 border-green-300":""}`}>
+                  <input type="radio" className="hidden" checked={method==="CREDITO"} onChange={() => setMethod("CREDITO")} />
+                  <CreditCard className="w-4 h-4" /> Cartão de Crédito
+                </label>
+                <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="DEBITO"?"bg-green-50 border-green-300":""}`}>
+                  <input type="radio" className="hidden" checked={method==="DEBITO"} onChange={() => setMethod("DEBITO")} />
+                  <CreditCard className="w-4 h-4" /> Cartão de Débito
+                </label>
+                <label className={`px-3 py-2 border rounded-lg cursor-pointer flex items-center gap-2 ${method==="BOLETO"?"bg-green-50 border-green-300":""}`}>
+                  <input type="radio" className="hidden" checked={method==="BOLETO"} onChange={() => setMethod("BOLETO")} />
+                  <Landmark className="w-4 h-4" /> Boleto
+                </label>
+              </div>
+            </div>
 
-        <div className="mt-4 p-4 rounded-lg border bg-transparent">
-          {method === "PIX" && (
-            <div>
-              <div className="font-semibold mb-2">Pagar com PIX</div>
-              {mostrarMsgTrial && (
-                <p className="text-xs text-emerald-700 mt-1">
-                  Seu mês grátis está ativo. A cobrança só começa após o fim do trial.
-                </p>
-              )}
+            <div className="mt-4 p-4 rounded-lg border bg-transparent">
+              {method === "PIX" && (
+                <div>
+                  <div className="font-semibold mb-2">Pagar com PIX</div>
+                  {mostrarMsgTrial && (
+                    <p className="text-xs text-emerald-700 mt-1">
+                      Seu mês grátis está ativo. A cobrança só começa após o fim do trial.
+                    </p>
+                  )}
 
-              <p className="text-sm text-gray-700 mb-3">
-                Valor: <b>{brl(total)}</b>. Clique em <b>Assinar agora</b> para gerar o QR Code e o código “copia e cola”.
-              </p>
+                  <p className="text-sm text-gray-700 mb-3">
+                    Total: <b>{brl(totalComCupomLocal())}</b>. Clique em <b>Finalizar</b> para gerar o QR Code e o código “copia e cola”.
+                  </p>
 
-              {pixQrUrl && (
-                <div className="mb-3">
-                  <img src={pixQrUrl} alt="QR Code PIX" className="w-56 border rounded-lg" />
-                </div>
-              )}
-              {pixCopiaECola && (
-                <div className="mb-2">
-                  <div className="text-xs text-gray-600 mb-1">Copia e cola:</div>
-                  <textarea className="w-full border rounded-lg p-2 text-xs" rows={3} readOnly value={pixCopiaECola} />
-                  <div className="flex justify-end">
-                    <button
-                      className="mt-2 px-3 py-2 border rounded-lg"
-                      onClick={async () => {
-                        await navigator.clipboard.writeText(pixCopiaECola);
-                        alert("Código PIX copiado!");
-                      }}
-                    >
-                      Copiar
-                    </button>
+                  {pixQrUrl && (
+                    <div className="mb-3">
+                      <img src={pixQrUrl} alt="QR Code PIX" className="w-56 border rounded-lg" />
+                    </div>
+                  )}
+                  {pixCopiaECola && (
+                    <div className="mb-2">
+                      <div className="text-xs text-gray-600 mb-1">Copia e cola:</div>
+                      <textarea className="w-full border rounded-lg p-2 text-xs" rows={3} readOnly value={pixCopiaECola} />
+                      <div className="flex justify-end">
+                        <button
+                          className="mt-2 px-3 py-2 border rounded-lg"
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(pixCopiaECola);
+                            alert("Código PIX copiado!");
+                          }}
+                        >
+                          Copiar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid gap-2 sm:grid-cols-2 mt-3">
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Seu nome completo"
+                      value={pagador.nome}
+                      onChange={(e) => setPagador({ ...pagador, nome: e.target.value })}
+                    />
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="E-mail do titular"
+                      value={pagador.email}
+                      onChange={(e) =>
+                        setPagador((p) => ({ ...p, email: sanitizeEmail(e.target.value) }))
+                      }
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      pattern="^[A-Za-z][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+                    />
+
                   </div>
                 </div>
               )}
 
-              <div className="grid gap-2 sm:grid-cols-2 mt-3">
-                <input
-                  className="border rounded-md px-3 py-2"
-                  placeholder="Seu nome completo"
-                  value={pagador.nome}
-                  onChange={e => setPagador({ ...pagador, nome: e.target.value })}
-                />
-                <input
-                  className="border rounded-md px-3 py-2"
-                  placeholder="Seu e-mail"
-                  value={pagador.email}
-                  onChange={e => setPagador({ ...pagador, email: e.target.value })}
-                />
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Após o pagamento, seu status será verificado automaticamente.
-              </p>
-            </div>
-          )}
+              {(method === "CREDITO" || method === "DEBITO") && (
+                <div>
+                  <div className="font-semibold mb-2">
+                    Pagar com {method === "CREDITO" ? "Cartão de Crédito" : "Cartão de Débito"}
+                  </div>
 
-          {(method === "CREDITO" || method === "DEBITO") && (
-            <div>
-              <div className="font-semibold mb-2">
-                Pagar com {method === "CREDITO" ? "Cartão de Crédito" : "Cartão de Débito"}
-              </div>
+                  <p className="text-sm text-gray-700 mb-3">
+                    Total: <b>{brl(totalComCupomLocal())}</b>
+                  </p>
 
-              {mostrarMsgTrial && (
-                <p className="text-xs text-emerald-700 mt-1">
-                  Seu mês grátis está ativo. A cobrança só começa após o fim do trial.
-                </p>
-              )}
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Nome do titular"
+                      value={pagador.nome}
+                      onChange={(e) =>
+                        setPagador((p) => ({ ...p, nome: onlyNameChars(e.target.value) }))
+                      }
+                      autoComplete="name"
+                    />
 
-              <p className="text-sm text-gray-700 mb-3">
-                Valor: <b>{brl(total)}</b>
-              </p>
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="E-mail do titular"
+                      value={pagador.email}
+                      onChange={(e) =>
+                        setPagador((p) => ({ ...p, email: sanitizeEmail(e.target.value) }))
+                      }
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      pattern="^[A-Za-z][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+                    />
 
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input
-                  className="border rounded-md px-3 py-2"
-                  placeholder="Nome do titular"
-                  value={pagador.nome}
-                  onChange={e => setPagador({ ...pagador, nome: e.target.value })}
-                />
-                <input
-                  className="border rounded-md px-3 py-2"
-                  placeholder="E-mail do titular"
-                  value={pagador.email}
-                  onChange={e => setPagador({ ...pagador, email: e.target.value })}
-                />
-                <input
-                  className="border rounded-md px-3 py-2"
-                  placeholder="CPF (opcional)"
-                  value={pagador.cpf || ""}
-                  onChange={e => setPagador({ ...pagador, cpf: e.target.value })}
-                />
-                <input
-                  className="border rounded-md px-3 py-2"
-                  placeholder="Telefone (opcional)"
-                  value={pagador.telefone || ""}
-                  onChange={e => setPagador({ ...pagador, telefone: e.target.value })}
-                />
-              </div>
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="CPF (opcional)"
+                      value={pagador.cpf || ""}
+                      onChange={(e) => setPagador((p) => ({ ...p, cpf: sanitizeCpf(e.target.value) }))}
+                      inputMode="numeric"
+                      maxLength={11}
+                    />
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Telefone (opcional)"
+                      value={pagador.telefone || ""}
+                      onChange={(e) => setPagador((p) => ({ ...p, telefone: sanitizePhone(e.target.value) }))}
+                      inputMode="numeric"
+                      maxLength={11}
+                    />
+                  </div>
 
-              <div className="grid gap-2 sm:grid-cols-2 mt-3">
-                <input
-                  className="border rounded-md px-3 py-2"
-                  placeholder="Número do cartão"
-                  value={cartao.numero}
-                  onChange={e => setCartao({ ...cartao, numero: e.target.value })}
-                  inputMode="numeric"
-                />
-                <input
-                  className="border rounded-md px-3 py-2"
-                  placeholder="Nome impresso no cartão"
-                  value={cartao.nomeImpresso}
-                  onChange={e => setCartao({ ...cartao, nomeImpresso: e.target.value })}
-                />
-                <input
-                  className="border rounded-md px-3 py-2"
-                  placeholder="Validade (MM/AA)"
-                  value={cartao.validade}
-                  onChange={e => setCartao({ ...cartao, validade: e.target.value })}
-                />
-                <input
-                  className="border rounded-md px-3 py-2"
-                  placeholder="CVV"
-                  value={cartao.cvv}
-                  onChange={e => setCartao({ ...cartao, cvv: e.target.value })}
-                  inputMode="numeric"
-                />
-              </div>
+                  <div className="grid gap-2 sm:grid-cols-2 mt-3">
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Número do cartão"
+                      value={cartao.numero}
+                      onChange={(e) => setCartao((c) => ({ ...c, numero: sanitizeCardNumber(e.target.value) }))}
+                      inputMode="numeric"
+                      autoComplete="cc-number"
+                    />
 
-              <p className="text-xs text-gray-500 mt-2">
-                Continuaremos para a página de confirmação do pagamento (simulada).
-              </p>
-            </div>
-          )}
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Nome impresso no cartão"
+                      value={cartao.nomeImpresso}
+                      onChange={(e) => setCartao((c) => ({ ...c, nomeImpresso: onlyNameChars(e.target.value) }))}
+                      autoComplete="name"
+                    />
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Validade (MM/AA)"
+                      value={cartao.validade}
+                      onChange={(e) => setCartao((c) => ({ ...c, validade: formatValidade(e.target.value) }))}
+                      inputMode="numeric"
+                      autoComplete="cc-exp"
+                      maxLength={5}
+                    />
 
-          {method === "BOLETO" && (
-            <div>
-              <div className="font-semibold mb-2">Pagar com Boleto</div>
-
-              {mostrarMsgTrial && (
-                <p className="text-xs text-emerald-700 mt-1">
-                  Seu mês grátis está ativo. A cobrança só começa após o fim do trial.
-                </p>
-              )}
-
-              <p className="text-sm text-gray-700 mb-3">
-                Valor: <b>{brl(total)}</b>
-              </p>
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input
-                  className="border rounded-md px-3 py-2"
-                  placeholder="Seu nome completo"
-                  value={pagador.nome}
-                  onChange={e => setPagador({ ...pagador, nome: e.target.value })}
-                />
-                <input
-                  className="border rounded-md px-3 py-2"
-                  placeholder="Seu e-mail"
-                  value={pagador.email}
-                  onChange={e => setPagador({ ...pagador, email: e.target.value })}
-                />
-                <input
-                  className="border rounded-md px-3 py-2 sm:col-span-2"
-                  placeholder="CPF"
-                  value={pagador.cpf || ""}
-                  onChange={e => setPagador({ ...pagador, cpf: e.target.value })}
-                />
-              </div>
-
-              {boletoLinha && (
-                <div className="mt-3">
-                  <div className="text-xs text-gray-600 mb-1">Linha digitável:</div>
-                  <input className="w-full border rounded-lg p-2 text-sm" readOnly value={boletoLinha} />
-                  <div className="flex justify-end">
-                    <button
-                      className="mt-2 px-3 py-2 border rounded-lg"
-                      onClick={async () => {
-                        await navigator.clipboard.writeText(boletoLinha);
-                        alert("Linha digitável copiada!");
-                      }}
-                    >
-                      Copiar
-                    </button>
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="CVV"
+                      value={cartao.cvv}
+                      onChange={(e) => setCartao((c) => ({ ...c, cvv: sanitizeCvv(e.target.value) }))}
+                      inputMode="numeric"
+                      autoComplete="cc-csc"
+                      maxLength={4}
+                    />
                   </div>
                 </div>
               )}
-              {boletoPdf && (
-                <div className="mt-2">
-                  <a className="text-green-800 underline" href={boletoPdf} target="_blank" rel="noreferrer">
-                    Abrir boleto (PDF)
-                  </a>
+
+              {method === "BOLETO" && (
+                <div>
+                  <div className="font-semibold mb-2">Pagar com Boleto</div>
+
+                  <p className="text-sm text-gray-700 mb-3">
+                    Total: <b>{brl(totalComCupomLocal())}</b>
+                  </p>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="Seu nome completo"
+                      value={pagador.nome}
+                      onChange={(e) => setPagador({ ...pagador, nome: e.target.value })}
+                    />
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="E-mail do titular"
+                      value={pagador.email}
+                      onChange={(e) =>
+                        setPagador((p) => ({ ...p, email: sanitizeEmail(e.target.value) }))
+                      }
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      pattern="^[A-Za-z][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"
+                    />
+
+                    <input
+                      className="border rounded-md px-3 py-2"
+                      placeholder="CPF"
+                      value={pagador.cpf || ""}
+                      onChange={(e) => setPagador((p) => ({ ...p, cpf: sanitizeCpf(e.target.value) }))}
+                      inputMode="numeric"
+                      maxLength={11}
+                    />
+                  </div>
+
+                  {boletoLinha && (
+                    <div className="mt-3">
+                      <div className="text-xs text-gray-600 mb-1">Linha digitável:</div>
+                      <input className="w-full border rounded-lg p-2 text-sm" readOnly value={boletoLinha} />
+                    </div>
+                  )}
+                  {boletoPdf && (
+                    <div className="mt-2">
+                      <a className="text-green-800 underline" href={boletoPdf} target="_blank" rel="noreferrer">
+                        Abrir boleto (PDF)
+                      </a>
+                    </div>
+                  )}
                 </div>
               )}
-
-              <p className="text-xs text-gray-500 mt-2">
-                O status será atualizado automaticamente após a compensação.
-              </p>
             </div>
-          )}
-        </div>
 
-        <div className="flex items-center justify-between border-t pt-3 mt-4">
-          <div className="text-sm text-gray-600">
-            Total a pagar: <b className="text-gray-900">{brl(total)}</b>
+            <div className="flex items-center justify-between border-t pt-3 mt-4">
+              <div className="text-sm text-gray-600">
+                Total: <b className="text-gray-900">{brl(totalComCupomLocal())}</b>
+                {mostrarMsgTrial ? (
+                  <span className="block text-xs text-emerald-700">
+                    Trial ativo. Você só paga se escolher pagar agora.
+                  </span>
+                ) : null}
+              </div>
 
-            {mostrarMsgTrial ? (
-              <span className="block text-xs text-emerald-700">
-                Seu mês grátis está ativo. Você só paga se escolher pagar agora.
-              </span>
-            ) : null}
-          </div>
-
-          <button
-            onClick={startCheckout}
-            className="px-4 py-2 rounded-lg bg-green-800 text-white disabled:opacity-60"
-            disabled={polling}
-          >
-            Assinar agora
-          </button>
-        </div>
-      </>
-     )}
+              <button
+                onClick={startCheckout}
+                className="px-4 py-2 ml-2 rounded-lg bg-green-800 text-white disabled:opacity-60"
+                disabled={!canFinalize}
+                title={checkoutError ?? ""}
+              >
+                Finalizar pagamento
+              </button>
+                {checkoutError ? (
+                  <div className="mt-2 ml-2 text-xs text-red-700">
+                    {checkoutError}
+                  </div>
+                ) : null}
+            </div>
+            <p className="mt-2 text-sm text-green-700 ">OBS: Depois que você apertar em finalizar pagamento ele irá verificar seus dados, caso não for PIX, e te enviará para a página do mercado pago, para o pagamento ser realmente efetuado, não se pode pular a próxima etapa se não, não irá ser realizado o pagamento.</p>
+          </>
+        )}
       </section>
-
-      <section className="mb-8 p-4 border rounded-xl bg-white shadow-sm">
-        <div className="flex items-center gap-2 mb-2">
-          <Gift className="w-5 h-5" />
-          <h2 className="font-semibold text-lg">Resgatar presente</h2>
-        </div>
-        <div className="flex gap-2">
-          <input
-            value={giftCode}
-            onChange={e => setGiftCode(e.target.value)}
-            placeholder="Código do presente"
-            className="flex-1 border rounded-md px-3 py-2"
-          />
-          <button onClick={redeemGift} className="px-3 py-2 border rounded-md">
-            Resgatar
-          </button>
-        </div>
-        <p className="text-xs text-gray-500 mt-2">
-          Se alguém comprou uma assinatura para você, digite o código recebido por e-mail/mensagem.
-        </p>
-      </section>
+      )}
 
       <section className="mb-8 p-4 border rounded-xl bg-white shadow-sm">
         <div className="flex items-center gap-2 mb-3">
           <BadgeCheck className="w-5 h-5" />
           <h2 className="font-semibold text-lg">Histórico</h2>
         </div>
+
         {pagamentos.length === 0 ? (
           <div className="text-gray-600">Você ainda não possui pagamentos.</div>
         ) : (
@@ -1001,18 +2199,24 @@ export default function PagamentosPage() {
                 </tr>
               </thead>
               <tbody>
-                {pagamentos.map(pg => (
+                {pagamentos.map((pg) => (
                   <tr key={pg.id} className="border-b">
                     <td className="py-2">{new Date(pg.criadoEm).toLocaleString()}</td>
                     <td className="py-2">{pg.plano}</td>
                     <td className="py-2">{pg.periodicidade}</td>
                     <td className="py-2">{pg.metodo}</td>
                     <td className="py-2">
-                      <span className={
-                        pg.status === "APROVADO" ? "text-emerald-700" :
-                        pg.status === "PENDENTE" ? "text-amber-700" :
-                        pg.status === "FALHOU" ? "text-red-700" : "text-gray-700"
-                      }>
+                      <span
+                        className={
+                          pg.status === "APROVADO"
+                            ? "text-emerald-700"
+                            : pg.status === "PENDENTE"
+                            ? "text-amber-700"
+                            : pg.status === "FALHOU"
+                            ? "text-red-700"
+                            : "text-gray-700"
+                        }
+                      >
                         {pg.status}
                       </span>
                     </td>
@@ -1024,6 +2228,36 @@ export default function PagamentosPage() {
           </div>
         )}
       </section>
+      <PagamentoModal
+        open={openPagamentoModal}
+        onClose={() => setOpenPagamentoModal(false)}
+        method={method}
+        setMethod={setMethod}
+        pagador={pagador}
+        setPagador={setPagador}
+        cartao={cartao}
+        setCartao={setCartao}
+        total={totalComCupomLocal()}
+        mostrarMsgTrial={mostrarMsgTrial}
+        bloquearCheckoutPorTrial={bloquearCheckoutPorTrial}
+        polling={polling}
+        canFinalize={canFinalize}
+        checkoutError={checkoutError}
+        onFinalize={startCheckout}
+        pixQrUrl={pixQrUrl}
+        pixCopiaECola={pixCopiaECola}
+        setPixCopiaECola={setPixCopiaECola}
+        boletoLinha={boletoLinha}
+        boletoPdf={boletoPdf}
+        sanitizeEmail={sanitizeEmail}
+        sanitizeCpf={sanitizeCpf}
+        sanitizePhone={sanitizePhone}
+        sanitizeCardNumber={sanitizeCardNumber}
+        sanitizeCvv={sanitizeCvv}
+        formatValidade={formatValidade}
+        onlyNameChars={onlyNameChars}
+        brl={brl}
+      />
     </div>
   );
 }
