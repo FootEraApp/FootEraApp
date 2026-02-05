@@ -1,5 +1,4 @@
 import { PrismaClient } from "@prisma/client";
-
 const prisma = new PrismaClient();
 
 export async function recalcularEstatisticaExercicios(exercicioIds: string[]) {
@@ -19,7 +18,7 @@ export async function recalcularEstatisticaExercicios(exercicioIds: string[]) {
       FROM "TreinoProgramadoExercicio" tpe
       JOIN "TreinoProgramado" tp ON tp."id" = tpe."treinoProgramadoId"
       WHERE tpe."exercicioId" IS NOT NULL
-        AND tpe."exercicioId" = ANY(${ids}::uuid[])
+        AND tpe."exercicioId"::uuid = ANY(${ids}::uuid[])
       GROUP BY tpe."exercicioId"
     )
     INSERT INTO "EstatisticaExercicio" ("exercicioId", "inclusoesEmTreinos", "ultimoIncluidoEm")

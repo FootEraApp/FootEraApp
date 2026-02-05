@@ -114,9 +114,8 @@ export function montarPayloadSomenteInfoEExercicios(params: {
     }
     if (metas !== undefined) payload.metas = metas ?? null;
     if (pontuacao !== undefined) payload.pontuacao = pontuacao ?? null;
-
+    
     return payload;
-
 }
 
 const getToken = () =>
@@ -183,6 +182,10 @@ function toLocalISO_NoZ(date: Date): string {
   const mm = String(date.getMinutes()).padStart(2, "0");
   const ss = String(date.getSeconds()).padStart(2, "0");
   return `${y}-${m}-${d}T${hh}:${mm}:${ss}`;
+}
+
+function dateKeyLocal(date: Date): string {
+  return formatYMD(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 function parseDateOnlyToLocalMidnight(dateOnly: string): Date {
@@ -464,6 +467,7 @@ async function apiDeletarTreinoSalvo(id: string) {
 
 async function apiCriarTreinoSalvo(body: any) {
   const headers = authHeaders();
+  
   const r = await fetch(`${API.BASE_URL}/api/treinosSalvos`, {
     method: "POST",
     headers,
@@ -752,10 +756,7 @@ export default function NovoTreino() {
   const [pontuacao, setPontuacao] = useState<number>(0);
   const [metas, setMetas] = useState<string>("");
   const [dicas, setDicas] = useState<string[]>([]);
-
   const [isParceiro, setIsParceiro] = useState<boolean>(false);
-
-  // ✅ Treino Footera (público/parceiro)
   const [treinoFootera, setTreinoFootera] = useState<boolean>(false);
 
   // ✅ Só professor parceiro pode publicar como "Footera"
@@ -763,15 +764,15 @@ export default function NovoTreino() {
     return Boolean(isParceiro);
   }, [isParceiro]);
 
-
   const [filtroEx, setFiltroEx] = useState("");
   const [filtroCategorias, setFiltroCategorias] = useState<string[]>([]);
   const [filtroNiveis, setFiltroNiveis] = useState<string[]>([]);
   const [filtroProf, setFiltroProf] = useState("");
   const restoredRef = useRef(false);
-  const [idsProgramadosBloqueados, setIdsProgramadosBloqueados] = useState<
-    Set<string>
-  >(new Set());
+  const [datasAgendadasPorTreino, setDatasAgendadasPorTreino] = useState<
+    Map<string, Set<string>>
+  >(new Map());
+
   const [orgsVinculadas, setOrgsVinculadas] = useState<Organizacao[]>([]);
   const [orgSelecionada, setOrgSelecionada] = useState<string>("");
   const [novaTurmaNome, setNovaTurmaNome] = useState<string>("");
@@ -780,6 +781,13 @@ export default function NovoTreino() {
     type: "success" | "error" | "info";
     message: string;
   } | null>(null);
+
+  type DestinoTreino = "NORMAL" | "METODOLOGIA";
+  type MetodologiaMin = { id: string; titulo: string; publicoAlvo?: string | null };
+
+  const [destinoTreino, setDestinoTreino] = useState<DestinoTreino>("NORMAL");
+  const [minhasMetodologias, setMinhasMetodologias] = useState<MetodologiaMin[]>([]);
+  const [metodologiaId, setMetodologiaId] = useState<string>("");
 
   const jaSincronizouCalendarioComDatas = useRef(false);
   type ProfessorItem = { id: string; nome: string; codigo?: string; cref?: string };
@@ -1339,23 +1347,42 @@ useEffect(() => {
             atletaIdLogado
           )}&apenasFuturos=1`;
 
+          
           const ra = await fetch(urlAg, { headers });
           if (ra.ok) {
             const ja = await ra.json().catch(() => null);
             const arrAg = Array.isArray(ja) ? ja : (ja?.items ?? ja?.data ?? ja?.rows ?? []);
-            const ids = new Set<string>(
-              (arrAg || [])
-                .map((x: any) => String(x.treinoProgramadoId ?? x.programadoId ?? x.treinoId ?? ""))
-                .filter((s: string) => s && s !== "undefined" && s !== "null")
-            );
-            if (!cancel) setIdsProgramadosBloqueados(ids);
-          } else {
-            const txt = await ra.text().catch(() => "");
-            console.warn("[NovoTreino] falha ao listar agendados p/ bloquear:", ra.status, txt);
-          }
-        } catch (e) {
-          console.warn("[NovoTreino] erro ao listar agendados p/ bloquear:", e);
-        }
+            const mapa = new Map<string, Set<string>>();
+
+            for (const x of (arrAg || [])) {
+              const treinoId = String(x.treinoProgramadoId ?? x.programadoId ?? x.treinoId ?? "").trim();
+              if (!treinoId || treinoId === "undefined" || treinoId === "null") continue;
+
+             const dtRaw = x.dataTreino ?? x.dataOriginal ?? x.dataAgendada ?? null;
+
+             let dia = "";
+             if (dtRaw) {
+               const d = new Date(String(dtRaw));
+               if (!Number.isNaN(d.getTime())) {
+                 dia = dateKeyLocal(d); // ✅ yyyy-mm-dd
+               }
+             }
+
+             if (!dia) continue;
+
+             if (!mapa.has(treinoId)) mapa.set(treinoId, new Set());
+              mapa.get(treinoId)!.add(dia);
+             }
+
+             if (!cancel) setDatasAgendadasPorTreino(mapa);
+
+           } else {
+             const txt = await ra.text().catch(() => "");
+             console.warn("[NovoTreino] falha ao listar agendados p/ bloquear:", ra.status, txt);
+           }
+         } catch (e) {
+           console.warn("[NovoTreino] erro ao listar agendados p/ bloquear:", e);
+         }
       } catch (e) {
         console.error("Falha ao carregar treinos disponíveis:", e);
         if (!cancel) setTreinosDisponiveis([]);
@@ -1428,51 +1455,50 @@ useEffect(() => {
   };
 }, [atletaIdLogado]);
 
-useEffect(() => {
-  const tipo =
-    (Storage as any).tipoSalvo ??
-    localStorage.getItem("tipoUsuario") ??
-    sessionStorage.getItem("tipoUsuario") ??
-    "";
+  useEffect(() => {
+    const tipo =
+      (Storage as any).tipoSalvo ??
+      localStorage.getItem("tipoUsuario") ??
+      sessionStorage.getItem("tipoUsuario") ??
+      "";
 
-  if (String(tipo).toLowerCase() !== "atleta") return;
+    if (String(tipo).toLowerCase() !== "atleta") return;
 
-  let cancel = false;
+    let cancel = false;
 
-  (async () => {
-    try {
-      const token = getToken();
-      if (!token) return;
+    (async () => {
+      try {
+        const token = getToken();
+        if (!token) return;
 
-      const headers = { Authorization: `Bearer ${token}` };
+        const headers = { Authorization: `Bearer ${token}` };
 
-      const r = await fetch(
-        `${API.BASE_URL}/api/treinos/publicos-professores-parceiros`,
-        { headers },
-      );
+        const r = await fetch(
+          `${API.BASE_URL}/api/treinos/publicos-professores-parceiros`,
+          { headers },
+        );
 
-      if (!r.ok) {
-        const txt = await r.text().catch(() => "");
-        console.warn("[NovoTreino] falha /publicos-professores-parceiros:", r.status, txt);
+        if (!r.ok) {
+          const txt = await r.text().catch(() => "");
+          console.warn("[NovoTreino] falha /publicos-professores-parceiros:", r.status, txt);
+          if (!cancel) setTreinosFootera([]);
+          return;
+        }
+
+        const j = await r.json().catch(() => null);
+        const arr = Array.isArray(j) ? j : (j?.items ?? j?.data ?? j?.rows ?? []);
+
+        if (!cancel) setTreinosFootera(normalizaTreinos(arr || []));
+      } catch (e) {
+        console.warn("[NovoTreino] erro ao carregar treinosFootera:", e);
         if (!cancel) setTreinosFootera([]);
-        return;
       }
+    })();
 
-      const j = await r.json().catch(() => null);
-      const arr = Array.isArray(j) ? j : (j?.items ?? j?.data ?? j?.rows ?? []);
-
-      if (!cancel) setTreinosFootera(normalizaTreinos(arr || []));
-    } catch (e) {
-      console.warn("[NovoTreino] erro ao carregar treinosFootera:", e);
-      if (!cancel) setTreinosFootera([]);
-    }
-  })();
-
-  return () => {
-    cancel = true;
-  };
-}, []);
-
+    return () => {
+      cancel = true;
+    };
+  }, []);
 
   useEffect(() => {
   (async () => {
@@ -1647,6 +1673,9 @@ useEffect(() => {
           );
           setTipoTreino(saved.tipoTreino ?? "Tecnico");
           setObjetivo(saved.objetivo ?? "");
+          if (saved?.destinoTreino) setDestinoTreino(saved.destinoTreino);
+          if (saved?.metodologiaId) setMetodologiaId(saved.metodologiaId);
+
           const exOld = Array.isArray(saved.exerciciosSelecionados)
             ? saved.exerciciosSelecionados
             : [];
@@ -1889,6 +1918,8 @@ useEffect(() => {
       professoresSelecionados,
       capaUrl,
       treinoFootera,
+      destinoTreino,
+      metodologiaId,
     });
   }, [
     etapa,
@@ -1906,6 +1937,55 @@ useEffect(() => {
     professoresSelecionados,
     treinoFootera,
   ]);
+
+  useEffect(() => {
+    // só busca se o usuário quer vincular a uma metodologia
+    if (destinoTreino !== "METODOLOGIA") return;
+
+    // só organizadores criam metodologia (professor/clube/escolinha)
+    const tipo = String(usuario?.tipo ?? "").toLowerCase();
+    const pode = tipo === "professor" || tipo === "clube" || tipo === "escolinha";
+    if (!pode) return;
+
+    let cancel = false;
+
+    (async () => {
+      try {
+        const token = getToken();
+        if (!token) return;
+
+        const headers = { Authorization: `Bearer ${token}` };
+
+        // ✅ Endpoint sugerido (você pode criar/ajustar no backend):
+        // GET /api/metodologias/minhas  -> retorna [{id, nome}]
+        const r = await fetch(`${API.BASE_URL}/api/metodologias/minhas`, { headers });
+
+        if (!r.ok) {
+          if (!cancel) setMinhasMetodologias([]);
+          return;
+        }
+
+        const j = await r.json().catch(() => null);
+        const arr = Array.isArray(j) ? j : (j?.items ?? j?.data ?? j?.rows ?? []);
+        const list = (Array.isArray(arr) ? arr : [])
+          .map((m: any) => ({
+            id: String(m.id ?? "").trim(),
+            titulo: String(m.nome ?? m.titulo ?? "(sem nome)"),
+            publicoAlvo: String(m.publicoAlvo ?? ""),
+          }))
+          .filter((m) => m.id);
+
+        if (!cancel) setMinhasMetodologias(list);
+      } catch (e) {
+        console.error("[NovoTreino] erro ao carregar minhas metodologias:", e);
+        if (!cancel) setMinhasMetodologias([]);
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [destinoTreino, usuario?.tipo]);
 
   async function carregarTreinoParaEdicao(id: string) {
     const token = getToken();
@@ -2618,8 +2698,6 @@ useEffect(() => {
       (payload as any).publico = treinoFooteraFinal;
       (payload as any).parceiro = treinoFooteraFinal;
       (payload as any).isFootera = treinoFooteraFinal; // extra (se você quiser tratar)
-
-
       // atletas / elencos / colaboradores
       (payload as any).atletasIds = atletasSelecionados;
       (payload as any).elencosIds = elencoSelecionado ? [elencoSelecionado] : [];
@@ -2671,6 +2749,18 @@ useEffect(() => {
         try {
           const token = getToken();
           const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+          if (destinoTreino === "METODOLOGIA") {
+            if (!metodologiaId) {
+              showToast("Selecione a metodologia antes de continuar.", "info");
+              return;
+            }
+            (payload as any).metodologiaId = metodologiaId;
+            (payload as any).paraMetodologia = true;
+          } else {
+            (payload as any).metodologiaId = null;
+            (payload as any).paraMetodologia = false;
+          }
 
           const rr = await fetch(
             `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(
@@ -2812,6 +2902,14 @@ useEffect(() => {
         return;
       }
 
+      const diaEscolhido = dateKeyLocal(quando); // yyyy-mm-dd (local)
+      const bloqueadas = datasAgendadasPorTreino.get(String(t.id));
+
+      if (bloqueadas?.has(diaEscolhido)) {
+        showToast("Você já tem esse treino agendado nessa data. Escolha outro dia.", "info");
+        return;
+      }
+
       const expira = new Date(quando.getTime() + 3 * 24 * 60 * 60 * 1000);
       const dataTreinoLocal = toLocalISO_NoZ(quando);
       const dataExpiracaoLocal = toLocalISO_NoZ(expira);
@@ -2843,9 +2941,18 @@ useEffect(() => {
       sessionStorage.setItem("lastAgendamento", JSON.stringify(novo));
       window.dispatchEvent(new CustomEvent("treino:agendado", { detail: novo }));
 
-      setIdsProgramadosBloqueados((prev) => new Set(prev).add(novo.treinoProgramadoId));
-      setPrazos(({ [t.id]: _, ...rest }) => rest);
-      
+      setDatasAgendadasPorTreino((prev) => {
+        const next = new Map(prev);
+        const treinoId = String(novo.treinoProgramadoId ?? t.id);
+        const dia = dateKeyLocal(quando); // usa o "quando" que você já calculou
+
+        const set = next.get(treinoId) ?? new Set<string>();
+        set.add(dia);
+        next.set(treinoId, set);
+
+        return next;
+      });
+      setPrazos(({ [t.id]: _, ...rest }) => rest);          
       showToast("Treino agendado com sucesso!", "success");
       navigate("/treinos");
     } catch (e) {
@@ -2874,13 +2981,8 @@ useEffect(() => {
             return professorVinculadoIds.some((pid) => todos.has(String(pid)));
           });
 
-    const treinosMeuProfessor = treinosMeuProfessorBrutos.filter(
-      (t) => !idsProgramadosBloqueados.has(t.id),
-    );
-
-    const treinosParceirosFootera = treinosFootera.filter(
-      (t) => !idsProgramadosBloqueados.has(t.id),
-    );
+    const treinosMeuProfessor = treinosMeuProfessorBrutos;
+    const treinosParceirosFootera = treinosFootera;
 
     const listaAtiva =
       abaTreinosAtleta === "meu_professor" ? treinosMeuProfessor : treinosParceirosFootera;
@@ -3021,12 +3123,29 @@ useEffect(() => {
                     }));
                   }
                 }}
-                onChange={(e) =>
-                  setPrazos((prev) => ({
-                    ...prev,
-                    [t.id]: e.target.value,
-                  }))
-                }
+                onChange={(e) => {
+                  const val = e.target.value;
+
+                  // datetime-local vem "YYYY-MM-DDTHH:mm" (sem segundos)
+                  const valComSeg = val && val.length === 16 ? `${val}:00` : val;
+                  const d = valComSeg ? new Date(valComSeg) : new Date(NaN);
+
+                  if (!val || isNaN(d.getTime())) {
+                    setPrazos((prev) => ({ ...prev, [t.id]: val }));
+                    return;
+                  }
+
+                  const dia = dateKeyLocal(d);
+                  const bloqueadas = datasAgendadasPorTreino.get(String(t.id));
+
+                  if (bloqueadas?.has(dia)) {
+                    alert("Você já tem esse treino agendado nessa data. Escolha outro dia.");
+                    // mantém o valor anterior (não deixa aplicar essa data)
+                    return;
+                  }
+
+                  setPrazos((prev) => ({ ...prev, [t.id]: val }));
+                }}
               />
 
               <div className="flex justify-end mt-2">
@@ -3330,6 +3449,68 @@ useEffect(() => {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* =========================
+                Destino do treino
+              ========================= */}
+            <div className="mt-4 rounded-xl border bg-white p-3">
+              <p className="text-sm font-semibold text-gray-800 mb-2">
+                Destino do treino
+              </p>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDestinoTreino("NORMAL");
+                    setMetodologiaId("");
+                  }}
+                  className={[
+                    "flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition",
+                    destinoTreino === "NORMAL"
+                      ? "bg-green-800 text-white border-green-800"
+                      : "bg-white text-green-900 border-green-200 hover:bg-green-50",
+                  ].join(" ")}
+                >
+                  Treino normal
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDestinoTreino("METODOLOGIA")}
+                  className={[
+                    "flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition",
+                    destinoTreino === "METODOLOGIA"
+                      ? "bg-green-800 text-white border-green-800"
+                      : "bg-white text-green-900 border-green-200 hover:bg-green-50",
+                  ].join(" ")}
+                >
+                  Para metodologia
+                </button>
+              </div>
+
+              {destinoTreino === "METODOLOGIA" && (
+                <div className="mt-3">
+                  <label className="block text-xs text-gray-700 mb-1">
+                    Selecione a metodologia
+                  </label>
+
+                  <select
+                    value={metodologiaId}
+                    onChange={(e) => setMetodologiaId(e.target.value)}
+                    className="w-full border rounded-xl px-3 py-2 text-sm"
+                  >
+                    <option value="">Selecione...</option>
+                    {minhasMetodologias.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.titulo}
+                      </option>
+                    ))}
+
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="sm:col-span-2">

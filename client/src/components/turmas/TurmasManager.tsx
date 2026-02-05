@@ -101,6 +101,16 @@ export default function TurmasManager({
     professorId ? [professorId] : []
   );
 
+  function formatYMD(ano: number, mesZeroBased: number, dia: number): string {
+    const m = String(mesZeroBased + 1).padStart(2, "0");
+    const d = String(dia).padStart(2, "0");
+    return `${ano}-${m}-${d}`;
+  }
+
+  function dateKeyLocal(date: Date): string {
+    return formatYMD(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+
   useEffect(() => {
     if (open) setFiltroProf(professorId || "");
   }, [open, professorId]);
@@ -868,13 +878,34 @@ export default function TurmasManager({
                           <AgendaTreinos
                             open={open && abaDireita === "agenda" && !!selecionada}
                             title={turmas.find((t) => t.id === selecionada)?.nome ?? "Turma"}
+                            groupByTreinoPerDay
+                            turmaId={selecionada}
                             fetchAgendados={async ({ monthISO }) => {
                               const r = await axios.get(`${API.BASE_URL}/api/treinos/agendados`, {
                                 headers,
                                 params: { turmaId: selecionada, month: monthISO },
                               });
-                              return r.data;
-                            }}
+
+                              const data = r.data;
+
+                              const arr =
+                                (Array.isArray(data?.items) && data.items) ||
+                                (Array.isArray(data?.agendados) && data.agendados) ||
+                                (Array.isArray(data) && data) ||
+                                [];
+
+                              const turmaNome = turmas.find((t) => t.id === selecionada)?.nome ?? "Turma";
+
+                              // ✅ IMPORTANTE: NÃO deduplicar aqui
+                              // só injeta turmaNome pra aparecer no card (se você quiser)
+                              const withTurma = arr.map((it: any) => ({
+                                ...it,
+                                turmaNome,
+                                titulo: it?.titulo ?? it?.treinoProgramado?.nome ?? "Treino",
+                              }));
+
+                              return { ...data, items: withTurma };
+                            }}                            
                             fetchProgramados={async () => {
                             if (!owner) {
                               const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`, {
@@ -894,8 +925,8 @@ export default function TurmasManager({
                               },
                             });
                             return res.data;
-
                             }}
+
                             onAgendar={async ({ selectedDays, treinoProgramadoId }) => {
                               if (bloqueiaAgendarTurma) {
                                 throw new Error(
