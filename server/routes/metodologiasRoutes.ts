@@ -6,22 +6,19 @@ import {
   updateMetodologia,
   deleteMetodologia,
   listMinhasMetodologiasAssinadas,
+  listMinhasMetodologiasCriadas,
+  listMetodologiasVisiveis
 } from "../controllers/metodologiasController.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
 
-// público
-router.get("/", listMetodologias);
-
-// ✅ precisa vir ANTES de "/:id"
+router.get("/visiveis", authenticateToken, listMetodologiasVisiveis);
 router.get("/minhas/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
-
-// público
+router.get("/minhas", authenticateToken, listMinhasMetodologiasCriadas); // ✅ NOVO
 router.get("/:id", getMetodologiaById);
-
-// CRUD (precisa auth)
+router.get("/", listMetodologias);
 router.post("/", authenticateToken, createMetodologia);
 router.put("/:id", authenticateToken, updateMetodologia);
 router.delete("/:id", authenticateToken, deleteMetodologia);
