@@ -38,7 +38,8 @@ import {
   relacaoStatus,
   getTreinosProgramadosStats,
   realizadosCount,
-  treinosPublicosProfessoresParceiros
+  treinosPublicosProfessoresParceiros,
+  listarAlunosTreinoAgendadoTurma,
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
@@ -89,6 +90,7 @@ router.post(
   requireCapability("agendamento:lote"),
   agendarTreinoLote
 );
+router.get("/alunos", authenticateToken, listarAlunosTreinoAgendadoTurma);
 router.get("/calendario", getCalendarioTreinos);
 router.post("/expirar-vencidos", expirarTreinosVencidos);
 router.get("/minhas-submissoes", listarMinhasSubmissoesTreino);

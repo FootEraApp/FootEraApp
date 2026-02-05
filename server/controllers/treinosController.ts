@@ -44,6 +44,20 @@ type AuthenticatedRequest = ExpressRequest & {
   auth?: any;
 };
 
+function getUserId(req: any): string | null {
+  // ajuste para o seu middleware:
+  // - se você usa authenticateToken e coloca req.user = { id: ... }
+  const id =
+    req?.user?.id ??
+    req?.usuario?.id ??
+    req?.auth?.id ??
+    req?.userId ??
+    req?.usuarioId ??
+    null;
+
+  return id ? String(id) : null;
+}
+
 async function recomputeFeitosTreino(treinoProgramadoId: string) {
   const rows = await prisma.submissaoTreino.findMany({
     where: {
@@ -3386,7 +3400,6 @@ if (tipoNorm === "professor") {
 const professorCriadorId =
   tipoStr === "professor" ? (professorIdToConnect ?? "") : "";
 
-
     const treino = await prisma.treinoProgramado.create({
       data: {
         codigo: typeof body.codigo === "string" ? body.codigo.trim() : undefined,
@@ -3437,6 +3450,39 @@ const professorCriadorId =
         escolinha: { select: { id: true, nome: true } },
       },
     });
+
+    // ✅ Vincular treino em 1+ metodologias (se vier do front)
+    const metodologiaIdsRaw = (req.body as any)?.metodologiaIds;
+    const metodologiaIds: string[] = Array.isArray(metodologiaIdsRaw)
+      ? metodologiaIdsRaw.map((x: any) => String(x).trim()).filter(Boolean)
+      : [];
+
+    if (metodologiaIds.length) {
+      // só pode vincular em metodologias criadas pelo próprio usuário
+      const userId = String(usuarioIdToken);
+
+      const metas = await prisma.metodologia.findMany({
+        where: { id: { in: metodologiaIds }, criadorUsuarioId: userId },
+        select: { id: true },
+      });
+
+      if (metas.length !== metodologiaIds.length) {
+        return res.status(403).json({
+          code: "FORBIDDEN",
+          message: "Você só pode vincular treinos às metodologias que você criou.",
+          recebidas: metodologiaIds,
+          permitidas: metas.map((m) => m.id),
+        });
+      }
+
+      await prisma.metodologiaTreino.createMany({
+        data: metodologiaIds.map((metodologiaId) => ({
+          metodologiaId,
+          treinoProgramadoId: treino.id,
+        })),
+        skipDuplicates: true,
+      });
+    }
 
     /**
      * ✅ salvar exercícios do treino (unificado e sem duplicar lógica)
@@ -3878,6 +3924,47 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           ...donoUpdate,
         },
       });
+
+      const metodologiaIdsRaw = (req.body as any)?.metodologiaIds;
+      const metodologiaIds: string[] = Array.isArray(metodologiaIdsRaw)
+        ? metodologiaIdsRaw.map((x: any) => String(x).trim()).filter(Boolean)
+        : [];
+
+      if (Array.isArray(metodologiaIdsRaw)) {
+        // se veio do front (mesmo vazio), sincroniza
+        const userId = getUserId(req);
+        if (!userId) throw new Error("Não autenticado.");
+
+        if (metodologiaIds.length) {
+          const metas = await (tx as any).metodologia.findMany({
+            where: { id: { in: metodologiaIds }, criadorUsuarioId: userId },
+            select: { id: true },
+          });
+
+          if (metas.length !== metodologiaIds.length) {
+            throw new Error("Você só pode vincular às metodologias que você criou.");
+          }
+        }
+
+        // remove vínculos que não estão mais na lista
+        await (tx as any).metodologiaTreino.deleteMany({
+          where: {
+            treinoProgramadoId: id,
+            ...(metodologiaIds.length ? { metodologiaId: { notIn: metodologiaIds } } : {}),
+          },
+        });
+
+        // adiciona os novos
+        if (metodologiaIds.length) {
+          await (tx as any).metodologiaTreino.createMany({
+            data: metodologiaIds.map((metodologiaId) => ({
+              metodologiaId,
+              treinoProgramadoId: id,
+            })),
+            skipDuplicates: true,
+          });
+        }
+      }
 
       if (exsBanco.length) {
         const novosOficiais = exsBanco
@@ -5103,5 +5190,79 @@ export async function getTreinosRealizadosCount(req: AuthenticatedRequest, res: 
   } catch (e) {
     console.error("getTreinosRealizadosCount error:", e);
     return res.status(500).json({ error: "Erro ao contar treinos realizados" });
+  }
+}
+
+function startEndOfDayISO(dayISO: string) {
+  const [y, m, d] = dayISO.split("-").map(Number);
+  const start = new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+  const end = new Date(y, (m || 1) - 1, d || 1, 23, 59, 59, 999);
+  return { start, end };
+}
+
+export async function listarAlunosTreinoAgendadoTurma(req: Request, res: Response) {
+  try {
+    const turmaId = String(req.query.turmaId ?? "").trim();
+    const treinoProgramadoId = String(req.query.treinoProgramadoId ?? "").trim();
+    const day = String(req.query.day ?? "").trim(); // YYYY-MM-DD
+
+    if (!turmaId || !treinoProgramadoId || !day) {
+      return res
+        .status(400)
+        .json({ message: "Informe turmaId, treinoProgramadoId e day (YYYY-MM-DD)." });
+    }
+
+    const { start, end } = startEndOfDayISO(day);
+
+    // 1) membros da turma (usuarioId)
+    const membros = await prisma.turmaUsuario.findMany({
+      where: { turmaId },
+      select: { usuarioId: true },
+    });
+    const usuarioIds = membros.map((m) => m.usuarioId).filter(Boolean);
+
+    if (!usuarioIds.length) return res.json({ items: [] });
+
+    // 2) atletas correspondentes aos usuários
+    const atletas = await prisma.atleta.findMany({
+      where: { usuarioId: { in: usuarioIds } },
+      select: { id: true, usuarioId: true, nome: true, sobrenome: true, foto: true },
+    });
+    const atletaIds = atletas.map((a) => a.id);
+
+    if (!atletaIds.length) return res.json({ items: [] });
+
+    // 3) treinos agendados nesse dia para esse treinoProgramado (somente atletas da turma)
+    const ags = await prisma.treinoAgendado.findMany({
+      where: {
+        treinoProgramadoId,
+        atletaId: { in: atletaIds },
+        dataTreino: { gte: start, lte: end },
+      },
+      select: {
+        atleta: { select: { usuarioId: true, nome: true, sobrenome: true, foto: true } },
+      },
+    });
+
+    // 4) unique por usuarioId
+    const map = new Map<string, { usuarioId: string; nome: string; foto: string | null }>();
+
+    for (const row of ags) {
+      const a = row.atleta;
+      if (!a?.usuarioId) continue;
+
+      const nome = [a.nome, a.sobrenome].filter(Boolean).join(" ").trim() || "Atleta";
+      map.set(String(a.usuarioId), {
+        usuarioId: String(a.usuarioId),
+        nome,
+        foto: a.foto ?? null,
+      });
+    }
+
+    return res.json({ items: Array.from(map.values()) });
+  } catch (e: any) {
+    return res.status(500).json({
+      message: e?.message ?? "Erro ao buscar alunos do treino agendado.",
+    });
   }
 }

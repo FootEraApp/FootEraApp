@@ -7,8 +7,10 @@ import {
   XCircle,
 } from "lucide-react";
 import axios from "axios";
-import { API } from "../../config.js";
+import { API, APP } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
+
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 export type TreinoAgendadoItem = {
   id: string;
@@ -22,7 +24,9 @@ export type TreinoAgendadoItem = {
   execucaoStatus?: string | null;
   submissaoTreinoId?: string | null;
   submissaoFeita?: boolean;
-
+    // ✅ usado quando a lista foi agrupada pra turma
+  alunosCount?: number | null;
+  turmaNome?: string | null;
   atleta?: {
     atletaId?: string;
     usuarioId?: string | null;
@@ -87,6 +91,7 @@ export type AgendaOnAgendar = (args: {
 }) => Promise<void>;
 
 export type AgendaRenderItemActions = (t: TreinoAgendadoItem) => React.ReactNode;
+type AlunoDoTreinoUI = { usuarioId: string; nome: string; foto: string | null };
 
 export type AgendaTreinosProps = {
   open: boolean;
@@ -97,6 +102,9 @@ export type AgendaTreinosProps = {
   additionalItems?: TreinoAgendadoItem[];
   renderItemActions?: AgendaRenderItemActions;
   initialMonth?: Date;
+  turmaId?: string;
+  // ✅ quando true, a agenda agrupa por treino/dia (pra não repetir por aluno)
+  groupByTreinoPerDay?: boolean;
 };
 
 function pad2(n: number) {
@@ -228,6 +236,44 @@ export function normalizeAgendadosPayload(payload: any): TreinoAgendadoItem[] {
       .filter((x: TreinoAgendadoItem) => Boolean(x?.id))
   );
 
+}
+
+function agruparAgendadosPorTreinoEDia(
+  list: TreinoAgendadoItem[],
+  turmaNome?: string
+) {
+  // chave = dia + treinoProgramadoId (ou titulo)
+  const byKey = new Map<string, TreinoAgendadoItem & { _count: number }>();
+
+  for (const t of list) {
+    const day = dayKeyFromAny(t.dataTreino);
+    if (!day) continue;
+
+    const treinoKey = String(t.treinoProgramadoId ?? t.treinoProgramado?.id ?? t.titulo ?? t.id ?? "");
+    if (!treinoKey) continue;
+
+    const key = `${day}__${treinoKey}`;
+    const prev = byKey.get(key);
+
+    if (!prev) {
+      byKey.set(key, { ...t, _count: 1 });
+    } else {
+      // só soma a quantidade (um por aluno)
+      byKey.set(key, { ...prev, _count: (prev._count ?? 1) + 1 });
+    }
+  }
+
+  // devolve itens “únicos” com alunosCount preenchido
+  return Array.from(byKey.values()).map((x) => {
+    const { _count, ...rest } = x;
+    return {
+      ...rest,
+      alunosCount: _count,
+      turmaNome: turmaNome ?? rest.turmaNome ?? null,
+      // remove atleta pra não parecer “de um aluno”
+      atleta: null,
+    } as TreinoAgendadoItem;
+  });
 }
 
 function statusLabel(s?: string | null) {
@@ -371,9 +417,19 @@ export function useAgendaTreinos({
   fetchAgendados,
   fetchProgramados,
   additionalItems,
+  groupByTreinoPerDay,
+  title,
+  turmaId, // ✅ ADD
 }: Pick<
   AgendaTreinosProps,
-  "open" | "initialMonth" | "fetchAgendados" | "fetchProgramados" | "additionalItems"
+  | "open"
+  | "initialMonth"
+  | "fetchAgendados"
+  | "fetchProgramados"
+  | "additionalItems"
+  | "groupByTreinoPerDay"
+  | "title"
+  | "turmaId" // ✅ ADD
 >) {
   const [cursorMonth, setCursorMonth] = useState<Date>(() =>
     startOfMonth(initialMonth ?? new Date())
@@ -385,6 +441,9 @@ export function useAgendaTreinos({
   const [treinosMeus, setTreinosMeus] = useState<TreinoProgramadoItem[]>([]);
   const [treinosFootera, setTreinosFootera] = useState<TreinoProgramadoItem[]>([]);
   const [treinoProgramadoId, setTreinoProgramadoId] = useState<string>("");
+  const [alunosOpenKey, setAlunosOpenKey] = useState<string | null>(null);
+  const [alunosLoading, setAlunosLoading] = useState(false);
+  const [alunosDoTreino, setAlunosDoTreino] = useState<{ usuarioId: string; nome: string; foto: string | null }[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -451,20 +510,26 @@ export function useAgendaTreinos({
     });
   }, [cursorMonth]);
 
-  const agendadosPorDia = useMemo(() => {
-    const map = new Map<string, TreinoAgendadoItem[]>();
-    const base = [...(agendados ?? []), ...(additionalItems ?? [])];
+    const agendadosPorDia = useMemo(() => {
+      const map = new Map<string, TreinoAgendadoItem[]>();
 
-    for (const t of base) {
-      const k = dayKeyFromAny(t.dataTreino);
-      if (!k) continue;
-      const arr = map.get(k) ?? [];
-      arr.push(t);
-      map.set(k, arr);
-    }
+      const baseBruta = [...(agendados ?? []), ...(additionalItems ?? [])];
 
-    return map;
-  }, [agendados, additionalItems]);
+      // ✅ se vier em “modo turma”, agrupa por treino/dia pra não repetir por aluno
+      const base = groupByTreinoPerDay
+        ? agruparAgendadosPorTreinoEDia(baseBruta, title)
+        : baseBruta;
+
+      for (const t of base) {
+        const k = dayKeyFromAny(t.dataTreino);
+        if (!k) continue;
+        const arr = map.get(k) ?? [];
+        arr.push(t);
+        map.set(k, arr);
+      }
+
+      return map;
+    }, [agendados, additionalItems, groupByTreinoPerDay, title]);
 
   const selectedDayItems = useMemo(() => {
     const out: { day: string; items: TreinoAgendadoItem[] }[] = [];
@@ -481,30 +546,58 @@ export function useAgendaTreinos({
     );
   }
 
+  async function carregarAlunosDoTreinoTurma(args: { dayISO: string; treinoProgramadoId: string }) {
+  if (!turmaId || !args.treinoProgramadoId) return;
+
+  try {
+    setAlunosLoading(true);
+
+    const token =
+      (Storage as any)?.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
+
+    const resp = await axios.get(`${API.BASE_URL}/api/treinos/alunos`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      params: {
+        turmaId,
+        treinoProgramadoId: args.treinoProgramadoId,
+        day: args.dayISO,
+      },
+    });
+
+    setAlunosDoTreino(resp.data?.items ?? []);
+  } finally {
+    setAlunosLoading(false);
+  }
+}
+
   return {
     cursorMonth,
     setCursorMonth,
     monthLabel,
     daysGrid,
-
     loadingCalendar,
     agendadosPorDia,
-
     selectedDays,
     setSelectedDays,
     toggleDay,
-
     hasPastSelectedDay,
     selectedDayItems,
-
     loadingProgramados,
     treinosMeus,
     treinosFootera,
     treinoProgramadoId,
     setTreinoProgramadoId,
     setAgendados,
-
     setTreinosFootera,
+    alunosOpenKey,
+    setAlunosOpenKey,
+    alunosLoading,
+    alunosDoTreino,
+    setAlunosDoTreino,
+    carregarAlunosDoTreinoTurma,
   };
 }
 
@@ -517,6 +610,8 @@ export default function AgendaTreinos({
   additionalItems,
   renderItemActions,
   initialMonth,
+  groupByTreinoPerDay,
+  turmaId,
 }: AgendaTreinosProps) {
   const [salvandoAgenda, setSalvandoAgenda] = useState(false);
   const [aba, setAba] = useState<"agenda" | "agendar">("agenda");
@@ -591,37 +686,41 @@ export default function AgendaTreinos({
     }
   }
 
-
   const {
     cursorMonth,
     setCursorMonth,
     monthLabel,
     daysGrid,
-
     loadingCalendar,
     agendadosPorDia,
-
     selectedDays,
     setSelectedDays,
     toggleDay,
-
     hasPastSelectedDay,
     selectedDayItems,
-
     loadingProgramados,
     treinosMeus,
     treinosFootera,
     treinoProgramadoId,
     setTreinoProgramadoId,
     setAgendados,
-
     setTreinosFootera,
+    // ✅ ADD ESTES:
+    alunosOpenKey,
+    setAlunosOpenKey,
+    alunosLoading,
+    alunosDoTreino,
+    setAlunosDoTreino,
+    carregarAlunosDoTreinoTurma,
   } = useAgendaTreinos({
     open,
+    title,
+    groupByTreinoPerDay,
     initialMonth,
     fetchAgendados,
     fetchProgramados,
     additionalItems,
+    turmaId,
   });
 
   useEffect(() => {
@@ -630,7 +729,6 @@ export default function AgendaTreinos({
     setAbaTreinos("meus");
     setBuscaTreino("");
     setFooteraLoaded(false);
-
     setProGateChecked(false);
     setIsPro(true);
   }, [open]);
@@ -1041,18 +1139,52 @@ export default function AgendaTreinos({
                                 ? "text-red-600"
                                 : "text-zinc-600";
 
+                            const treinoKey = `${day}__${String(
+                              t.treinoProgramadoId ?? t.treinoProgramado?.id ?? t.id
+                            )}`;
+
+                            const canOpenAlunos =
+                              !!turmaId && groupByTreinoPerDay && !!t.treinoProgramadoId && (t.alunosCount ?? 0) > 0;
+
+                            const isOpen = alunosOpenKey === treinoKey;
+
                             return (
-                              <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-3">
+                              <div
+                                key={t.id}
+                                className={`rounded-lg border border-zinc-200 bg-white p-3 ${canOpenAlunos ? "cursor-pointer hover:bg-zinc-50" : ""}`}
+                                onClick={async () => {
+                                  if (!canOpenAlunos) return;
+
+                                  if (isOpen) {
+                                    setAlunosOpenKey(null);
+                                    setAlunosDoTreino([]);
+                                    return;
+                                  }
+
+                                  setAlunosOpenKey(treinoKey);
+                                  setAlunosDoTreino([]);
+                                  await carregarAlunosDoTreinoTurma({
+                                    dayISO: day,
+                                    treinoProgramadoId: String(t.treinoProgramadoId),
+                                  });
+                                }}
+                              >
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
                                     <div className="font-bold truncate">{nome}</div>
+
                                     <div className="text-xs opacity-80 mt-1">
                                       Status: <span className={statusClass}>{statusText}</span>
                                     </div>
 
-                                    {renderItemActions ? (
-                                      <div className="mt-2">{renderItemActions(t)}</div>
+                                    {groupByTreinoPerDay && (t.alunosCount ?? 0) > 0 ? (
+                                      <div className="text-xs text-zinc-600 mt-1">
+                                        Turma: <span className="font-semibold">{t.turmaNome ?? title}</span> •{" "}
+                                        <span className="font-semibold">{t.alunosCount}</span> aluno(s)
+                                      </div>
                                     ) : null}
+
+                                    {renderItemActions ? <div className="mt-2">{renderItemActions(t)}</div> : null}
                                   </div>
 
                                   {done ? (
@@ -1061,6 +1193,37 @@ export default function AgendaTreinos({
                                     <XCircle className="h-5 w-5 text-red-300" />
                                   ) : null}
                                 </div>
+
+                                {/* ✅ LISTA DE ALUNOS (AGORA NO LUGAR CERTO) */}
+                                {canOpenAlunos && isOpen ? (
+                                  <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-2">
+                                    {alunosLoading ? (
+                                      <div className="text-sm text-zinc-600">Carregando alunos...</div>
+                                    ) : alunosDoTreino.length === 0 ? (
+                                      <div className="text-sm text-zinc-500">Nenhum aluno encontrado.</div>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {alunosDoTreino.map((a: AlunoDoTreinoUI) => (
+                                          <div key={a.usuarioId} className="flex items-center gap-2">
+                                            <div className="h-8 w-8 rounded-full bg-white border border-zinc-200 overflow-hidden flex-none">
+                                              <img
+                                                src={a.foto || AVATAR_FALLBACK}
+                                                alt={a.nome}
+                                                className="h-full w-full object-cover"
+                                                onError={(e) => {
+                                                  e.currentTarget.onerror = null; // evita loop
+                                                  e.currentTarget.src = AVATAR_FALLBACK;
+                                                }}
+                                              />
+
+                                            </div>
+                                            <div className="text-sm font-semibold text-zinc-800 truncate">{a.nome}</div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : null}
                               </div>
                             );
                           })}
