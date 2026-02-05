@@ -103,6 +103,7 @@ import comentariosRoutes from "./routes/comentarios.js";
 import estatisticasRoutes from "./routes/estatisticas.js";
 import configuracoesPerfilRoutes from "./routes/configuracoesPerfil.js";
 import presencaRoutes from "./routes/presenca.js";
+import metodologiasRoutes from "./routes/metodologiasRoutes.js";
 
 import { handlePaymentWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
@@ -323,6 +324,7 @@ app.use("/api/feedback", feedbackRoutes);
 app.use("/api/status", statusRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
+app.use("/api/metodologias", metodologiasRoutes);
 
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
