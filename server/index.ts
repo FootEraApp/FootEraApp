@@ -105,7 +105,7 @@ import configuracoesPerfilRoutes from "./routes/configuracoesPerfil.js";
 import presencaRoutes from "./routes/presenca.js";
 import metodologiasRoutes from "./routes/metodologiasRoutes.js";
 
-import { handlePaymentWebhook } from "./controllers/billingController.js";
+import { mercadoPagoWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -307,7 +307,7 @@ app.use("/api/turmas", authenticateToken, turmasRoutes);
 app.use("/api/treinos-elencos", authenticateToken, treinosElencosRoutes);
 app.use("/api/treinosSalvos", treinosSalvosRoutes);
 app.use("/api/analytics", authenticateToken, analyticsRoutes);
-app.post("/api/billing/webhook", handlePaymentWebhook);
+app.post("/api/billing/webhook", mercadoPagoWebhook);
 app.use("/api/billing", authenticateToken, billingRoutes);
 app.use("/api/schedule", scheduleRoutes);
 app.use("/api/templates", templatesRoutes);
