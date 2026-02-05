@@ -1,18 +1,17 @@
 // server/middlewares/auth
 import { RequestHandler, Request } from "express";
 import jwt from "jsonwebtoken";
-import { TipoUsuario } from "@prisma/client";
+import { Prisma, PrismaClient, TipoUsuario } from "@prisma/client";
 import { resolveUserContext } from "../services/planResolver.js";
 import type { PlanoName, UserPayload } from "../services/planResolver.js";
 import dotenv from "dotenv";
-import { prisma } from "../prisma.js";
 
 dotenv.config();
+const prisma = new PrismaClient;
 
 const SECRET = process.env.JWT_SECRET || "footera_secret";
 
 export type AuthUser = UserPayload;
-
 export type AuthenticatedRequest = Request & {
   userId?: string;
   authUser?: UserPayload;
@@ -34,6 +33,19 @@ function toTipoUsuario(s: string): TipoUsuario {
       return TipoUsuario.Atleta;
   }
 }
+
+type DbUser = Prisma.UsuarioGetPayload<{
+  select: {
+    id: true;
+    tokenVersion: true;
+    tipo: true;
+    deletedAt: true;
+    status: true;
+    blockedAt: true;
+    blockedReason: true;
+    parceiro: true;
+  };
+}>;
 
 export const authenticateToken: RequestHandler = async (req, res, next) => {
   const publicPrefixes = ["/api/status/maintenance", "/api/status", "/api/auth"];
@@ -78,8 +90,7 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
     return res.status(401).json({ message: "Invalid token payload" });
   }
 
-  // ✅ tokenVersion: invalida tokens antigos quando "encerrar sessões" é acionado
-  let dbUser: { id: string; tokenVersion: number; tipo: TipoUsuario; parceiro: boolean } | null = null;
+  let dbUser: DbUser | null = null;
   try {
     dbUser = await prisma.usuario.findUnique({
       where: { id: userId },
@@ -106,8 +117,8 @@ export const authenticateToken: RequestHandler = async (req, res, next) => {
       });
     }
 
-    const status = String((dbUser as any).status ?? "").toUpperCase();
-      if (status === "BLOQUEADO" || (dbUser as any).blockedAt) {
+    const status = String(dbUser.status ?? "").toUpperCase();
+      if (status === "BLOQUEADO" || dbUser.blockedAt) {
         return res.status(403).json({
           message: "Conta bloqueada.",
           code: "ACCOUNT_BLOCKED",
