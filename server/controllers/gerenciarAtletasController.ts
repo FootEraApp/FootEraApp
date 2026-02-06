@@ -472,10 +472,16 @@ export const gerenciarAtletasController = {
         | "clube"
         | "professor";
 
-      const idOrUser = String(req.query.id || "").trim();
+      let idOrUser = String(req.query.id || "").trim(); // ✅ vira let
       const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim(); 
       const debug = String(req.query.debug || "") === "1";
       const conteudo = String(req.query.conteudo ?? "1") === "1";
+      const userIdFromToken = String((req as any).userId || "").trim();
+
+      // ✅ se o front não mandar id, usa o id do token
+      if (!idOrUser && !tipoUsuarioId && userIdFromToken) {
+        idOrUser = userIdFromToken;
+      }
 
       if (!["escolinha", "clube", "professor"].includes(vinculo)) {
         return res.status(400).json({
