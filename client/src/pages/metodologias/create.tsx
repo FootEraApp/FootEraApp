@@ -10,6 +10,7 @@ import {
   Dumbbell,
   Trash2,
   ChevronDown,
+  Play,
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
@@ -19,10 +20,25 @@ type Nivel = "Base" | "Avancado" | "Performance" | "Livre";
 type PublicoAlvo = "ATLETAS" | "INSTRUTORES" | "AMBOS";
 type ItemTipo = "VIDEO" | "TREINO";
 
-type TreinoProgramadoLite = {
+type TreinoProgramadoPicker = {
   id: string;
   nome: string;
+  descricao?: string | null;
   pontuacao?: number | null;
+  criadorProfessorId?: string | null;
+
+  exercicios: Array<{
+    id: string;
+    ordem: number;
+    repeticoes: string | null;
+    exercicio?: {
+      id: string;
+      codigo: string;
+      nome: string;
+      videoDemonstrativoUrl?: string | null;
+      nivel?: string | null;
+    } | null;
+  }>;
 };
 
 type MetItemUI = {
@@ -30,13 +46,22 @@ type MetItemUI = {
   tipo: ItemTipo;
   titulo: string;
   descricao?: string;
+
   // VIDEO
   videoUrl?: string;
   thumbUrl?: string;
+
+  // ✅ novo: arquivo selecionado (ainda não enviado)
+  videoFile?: File | null;
+
+  // ✅ novo: preview local (objectURL)
+  videoPreviewUrl?: string | null;
+
   // TREINO
   treinoProgramadoId?: string;
   treinoNome?: string;
   treinoPontuacao?: number;
+
   // pontuação exibida no item
   pontos: number;
 };
@@ -52,6 +77,43 @@ function getToken() {
     (Storage as any).token ??
     localStorage.getItem("token") ??
     sessionStorage.getItem("token") ??
+    ""
+  );
+}
+
+async function uploadVideoMetodologia(file: File, meta?: { titulo?: string; descricao?: string }) {
+  const token = getToken();
+  if (!token) throw new Error("Sem token.");
+
+  const fd = new FormData();
+  fd.append("video", file); // ✅ tem que ser "video"
+  if (meta?.titulo) fd.append("titulo", meta.titulo);
+  if (meta?.descricao) fd.append("descricao", meta.descricao);
+
+  // ✅ ajuste a URL pra bater com sua rota real no backend
+  const r = await fetch(`${API.BASE_URL}/api/upload/metodologias/video`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` }, // ⚠️ não setar Content-Type no FormData
+    body: fd,
+  });
+
+  const js = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(js?.message || js?.error || "Falha no upload do vídeo.");
+
+  // backend retorna { relativeUrl, url, ... }
+  return {
+    relativeUrl: String(js?.relativeUrl || ""),
+    url: String(js?.url || ""),
+    filename: String(js?.filename || ""),
+  };
+}
+
+
+function getTipoUsuarioId() {
+  return (
+    (Storage as any).tipoUsuarioId ??
+    localStorage.getItem("tipoUsuarioId") ??
+    sessionStorage.getItem("tipoUsuarioId") ??
     ""
   );
 }
@@ -73,7 +135,6 @@ export default function CriarMetodologia() {
    * ========================= */
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [capaUrl, setCapaUrl] = useState<string>("");
 
   const [nivel, setNivel] = useState<Nivel>("Base");
   const [publicoAlvo, setPublicoAlvo] = useState<PublicoAlvo>("AMBOS");
@@ -81,8 +142,11 @@ export default function CriarMetodologia() {
   /** =========================
    * Treinos para select
    * ========================= */
-  const [treinos, setTreinos] = useState<TreinoProgramadoLite[]>([]);
+  const [treinos, setTreinos] = useState<TreinoProgramadoPicker[]>([]);
   const [carregandoTreinos, setCarregandoTreinos] = useState(false);
+
+  const [uploadingByItem, setUploadingByItem] = useState<Record<string, boolean>>({});
+
 
   useEffect(() => {
     const token = getToken();
@@ -99,21 +163,47 @@ export default function CriarMetodologia() {
         const js = await r.json().catch(() => null);
         if (!r.ok) return;
 
+        const tipoUsuarioId = getTipoUsuarioId();
+
         const items =
           js?.items || js?.treinos || (Array.isArray(js) ? js : []) || [];
 
-        const mapped: TreinoProgramadoLite[] = (items || []).map((t: any) => ({
+        const onlyMine = (items || []).filter((t: any) => {
+          // ✅ regra: só treinos que EU criei
+          return String(t?.criadorProfessorId || "") === String(tipoUsuarioId || "");
+        });
+
+        const mapped: TreinoProgramadoPicker[] = (onlyMine || []).map((t: any) => ({
           id: String(t.id),
           nome: String(t.nome ?? t.titulo ?? "Treino"),
+          descricao: t.descricao ?? null,
           pontuacao:
             typeof t.pontuacao === "number"
               ? t.pontuacao
               : typeof t.pontuacao === "string"
               ? Number(t.pontuacao)
               : null,
+          criadorProfessorId: t.criadorProfessorId ?? null,
+          exercicios: Array.isArray(t.exercicios)
+            ? t.exercicios.map((e: any) => ({
+                id: String(e.id),
+                ordem: Number(e.ordem ?? 0),
+                repeticoes: e.repeticoes ?? null,
+                exercicio: e.exercicio
+                  ? {
+                      id: String(e.exercicio.id),
+                      codigo: String(e.exercicio.codigo ?? ""),
+                      nome: String(e.exercicio.nome ?? "Exercício"),
+                      videoDemonstrativoUrl: e.exercicio.videoDemonstrativoUrl ?? null,
+                      nivel: e.exercicio.nivel ?? null,
+                    }
+                  : null,
+              }))
+            : [],
         }));
 
         if (!cancelled) setTreinos(mapped);
+
       } catch {
         // silencioso
       } finally {
@@ -135,12 +225,10 @@ export default function CriarMetodologia() {
 
   // ✅ aba ativa (tipo Google)
   const [activeSemanaId, setActiveSemanaId] = useState<string>(() => {
-    // garante que inicia na primeira semana
     const first = semanas?.[0]?.id;
     return first || "";
   });
 
-  // se por algum motivo semanas mudar e active ficar inválida, corrige
   useEffect(() => {
     if (!semanas.length) return;
     const exists = semanas.some((s) => s.id === activeSemanaId);
@@ -154,7 +242,6 @@ export default function CriarMetodologia() {
       const nextIndex = prev.length + 1;
       return [...prev, { id: newId, titulo: `Semana ${nextIndex}`, itens: [] }];
     });
-    // ✅ ao criar, já seleciona a nova aba
     setActiveSemanaId(newId);
   }
 
@@ -163,10 +250,8 @@ export default function CriarMetodologia() {
       const idxRemovida = prev.findIndex((s) => s.id === semanaId);
       const next = prev.filter((s) => s.id !== semanaId);
 
-      // renumera títulos
       const renum = next.map((s, idx) => ({ ...s, titulo: `Semana ${idx + 1}` }));
 
-      // se removeu a semana ativa, escolhe outra pra ficar ativa
       if (activeSemanaId === semanaId) {
         const fallback =
           renum[Math.min(idxRemovida, renum.length - 1)] || renum[0];
@@ -177,28 +262,145 @@ export default function CriarMetodologia() {
     });
   }
 
-  function addItem(semanaId: string, tipo: ItemTipo) {
+  function addVideoItem(semanaId: string) {
     setSemanas((prev) =>
       prev.map((s) => {
         if (s.id !== semanaId) return s;
 
         const novo: MetItemUI = {
           id: uid("item"),
-          tipo,
-          titulo: tipo === "VIDEO" ? "Vídeo" : "Treino Programado",
+          tipo: "VIDEO",
+          titulo: "Vídeo",
           descricao: "",
           videoUrl: "",
           thumbUrl: "",
-          treinoProgramadoId: "",
-          treinoNome: "",
-          treinoPontuacao: 0,
-          pontos: tipo === "VIDEO" ? 15 : 0,
+          videoFile: null,
+          videoPreviewUrl: null,
+          pontos: 15,
         };
 
         return { ...s, itens: [...s.itens, novo] };
       })
     );
   }
+
+  // ✅ agora o treino NÃO cria card vazio.
+  // ele abre o "picker" e só adiciona depois que escolher um treino.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerSemanaId, setPickerSemanaId] = useState<string | null>(null);
+  const [pickerOpenId, setPickerOpenId] = useState<string | null>(null); // treino expandido
+
+  // ✅ gaveta do conteúdo do treino (fora do modal)
+  const [treinoDrawerOpenItemId, setTreinoDrawerOpenItemId] = useState<string | null>(null);
+
+  /** =========================
+   * Modal de vídeo do exercício
+   * ========================= */
+  const [videoOpen, setVideoOpen] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+
+  function normalizeVideoUrl(raw?: string | null) {
+    if (!raw) return null;
+    const u = String(raw).trim();
+    if (!u) return null;
+
+    // ✅ se vier relativo tipo "/assets/..." ou "/uploads/..."
+    if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
+
+    return u;
+  }
+
+  function openVideo(raw?: string | null) {
+    const url = normalizeVideoUrl(raw);
+    if (!url) return;
+    setVideoUrl(url);
+    setVideoOpen(true);
+  }
+
+  function closeVideo() {
+    setVideoOpen(false);
+    setVideoUrl(null);
+  }
+
+  function isYouTube(url: string) {
+    const u = url.toLowerCase();
+    return u.includes("youtube.com") || u.includes("youtu.be");
+  }
+
+  function toYouTubeEmbed(url: string) {
+    try {
+      // youtu.be/ID
+      if (url.includes("youtu.be/")) {
+        const id = url.split("youtu.be/")[1]?.split(/[?&]/)[0];
+        if (id) return `https://www.youtube.com/embed/${id}`;
+      }
+      // youtube.com/watch?v=ID
+      const v = new URL(url).searchParams.get("v");
+      if (v) return `https://www.youtube.com/embed/${v}`;
+    } catch {}
+    return url;
+  }
+
+
+  function toggleTreinoDrawer(itemId: string) {
+    setTreinoDrawerOpenItemId((prev) => (prev === itemId ? null : itemId));
+  }
+
+  function getTreinoDetalheById(treinoId?: string) {
+    if (!treinoId) return null;
+    return treinos.find((t) => String(t.id) === String(treinoId)) || null;
+  }
+
+  function openTreinoPicker(semanaId: string) {
+    setPickerSemanaId(semanaId);
+    setPickerOpenId(null);
+    setPickerOpen(true);
+  }
+
+
+  function closeTreinoPicker() {
+    setPickerOpen(false);
+    setPickerSemanaId(null);
+    setPickerOpenId(null);
+  }
+
+
+  function addTreinoFromPicker(t: TreinoProgramadoPicker) {
+    if (!pickerSemanaId) return;
+
+    const treinoId = String(t.id);
+
+    setSemanas((prev) =>
+      prev.map((s) => {
+        if (s.id !== pickerSemanaId) return s;
+
+        const jaExiste = s.itens.some(
+          (i) => i.tipo === "TREINO" && i.treinoProgramadoId === treinoId
+        );
+        if (jaExiste) return s;
+
+        const pontos = pontosItemFromTipo("TREINO", t.pontuacao ?? undefined);
+
+        const novo: MetItemUI = {
+          id: uid("item"),
+          tipo: "TREINO",
+          titulo: t.nome,
+          descricao: "", // ✅ item tem descrição opcional (observações), treino já tem a dele no backend
+
+          treinoProgramadoId: treinoId,
+          treinoNome: t.nome,
+          treinoPontuacao: typeof t.pontuacao === "number" ? t.pontuacao : 0,
+
+          pontos,
+        };
+
+        return { ...s, itens: [...s.itens, novo] };
+      })
+    );
+
+    closeTreinoPicker();
+  }
+
 
   function removeItem(semanaId: string, itemId: string) {
     setSemanas((prev) =>
@@ -316,7 +518,6 @@ export default function CriarMetodologia() {
     const payloadMetodologia = {
       titulo: titulo.trim(),
       descricao: descricaoFinal || null,
-      capaUrl: (capaUrl || "").trim() || null,
       nivel,
       categorias: [],
       totalSemanas: semanas.length,
@@ -343,7 +544,9 @@ export default function CriarMetodologia() {
       }
 
       const metodologiaId = js?.item?.id;
-      if (!metodologiaId) throw new Error("Metodologia criada mas não retornou ID.");
+      if (!metodologiaId) {
+        throw new Error("Metodologia criada mas não retornou ID.");
+      }
 
       const flatItems: Array<{
         semana: number;
@@ -526,18 +729,6 @@ export default function CriarMetodologia() {
             </div>
 
             <div className="lg:col-span-2">
-              <label className="text-sm font-semibold text-gray-800">
-                Capa (URL) (opcional)
-              </label>
-              <input
-                value={capaUrl}
-                onChange={(e) => setCapaUrl(e.target.value)}
-                placeholder="https://... ou /assets/..."
-                className="mt-1 w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-200"
-              />
-            </div>
-
-            <div className="lg:col-span-2">
               <div className="rounded-2xl border bg-neutral-50 p-4 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
                 <div>
                   <div className="text-sm font-semibold text-gray-800">
@@ -616,21 +807,22 @@ export default function CriarMetodologia() {
           {/* Conteúdo da semana ativa */}
           {semanaAtiva ? (
             <div className="mt-4 rounded-2xl border bg-white">
-              {/* Header Semana Ativa */}
               <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b">
                 <div>
                   <div className="text-sm font-bold text-gray-900">
                     {semanaAtiva.titulo}
                   </div>
                   <div className="text-xs text-gray-500">
-                    {semanaAtiva.itens.length} item(s) • +{semanaAtiva.itens.reduce((a, i) => a + (i.pontos || 0), 0)} pts
+                    {semanaAtiva.itens.length} item(s) • +
+                    {semanaAtiva.itens.reduce((a, i) => a + (i.pontos || 0), 0)}{" "}
+                    pts
                   </div>
                 </div>
 
                 <div className="flex gap-2 sm:justify-end">
                   <button
                     type="button"
-                    onClick={() => addItem(semanaAtiva.id, "VIDEO")}
+                    onClick={() => addVideoItem(semanaAtiva.id)}
                     className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm font-semibold"
                   >
                     <VideoIcon className="w-4 h-4" />
@@ -639,7 +831,7 @@ export default function CriarMetodologia() {
 
                   <button
                     type="button"
-                    onClick={() => addItem(semanaAtiva.id, "TREINO")}
+                    onClick={() => openTreinoPicker(semanaAtiva.id)}
                     className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm font-semibold"
                   >
                     <Dumbbell className="w-4 h-4" />
@@ -668,7 +860,6 @@ export default function CriarMetodologia() {
                 </div>
               </div>
 
-              {/* Itens da semana ativa */}
               <div className="p-4 space-y-3">
                 {semanaAtiva.itens.length === 0 ? (
                   <div className="rounded-xl border bg-neutral-50 p-4 text-sm text-gray-600">
@@ -701,27 +892,151 @@ export default function CriarMetodologia() {
                             </span>
                           </div>
 
-                          <div className="mt-2">
-                            <label className="text-xs font-semibold text-gray-700">
-                              Título do item *
-                            </label>
-                            <input
-                              value={it.titulo}
-                              onChange={(e) =>
-                                updateItem(semanaAtiva.id, it.id, {
-                                  titulo: e.target.value,
-                                })
-                              }
-                              placeholder={
-                                it.tipo === "VIDEO"
-                                  ? "Ex: Aula 1 - Controle Orientado"
-                                  : "Ex: Treino 1 - Fundamentos"
-                              }
-                              className="mt-1 w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-200"
-                            />
-                          </div>
+                          {/* ✅ TREINO: título vira "somente leitura" e mostra o treino selecionado */}
+                          {it.tipo === "TREINO" ? (
+                            <div className="mt-2">
+                              <div className="text-xs font-semibold text-gray-700">
+                                Treino selecionado
+                              </div>
+                              <div className="mt-1 rounded-xl border bg-neutral-50 px-3 py-2 text-sm">
+                                <div className="font-semibold text-gray-900">
+                                  {it.treinoNome || it.titulo}
+                                </div>
+                                <div className="text-xs text-gray-600">
+                                  {it.treinoProgramadoId ? `ID: ${it.treinoProgramadoId}` : ""}
+                                  {typeof it.treinoPontuacao === "number"
+                                    ? ` • +${it.treinoPontuacao} pts`
+                                    : ""}
+                                </div>
+                              </div>
+
+                              {(() => {
+                                const treinoDetalhe = getTreinoDetalheById(it.treinoProgramadoId);
+                                const isOpen = treinoDrawerOpenItemId === it.id;
+                                const exCount = treinoDetalhe?.exercicios?.length ?? 0;
+
+                                return (
+                                  <div className="mt-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleTreinoDrawer(it.id)}
+                                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm font-semibold"
+                                    >
+                                      <ChevronDown
+                                        className={[
+                                          "w-4 h-4 text-gray-600 transition",
+                                          isOpen ? "rotate-180" : "",
+                                        ].join(" ")}
+                                      />
+                                      {isOpen ? "Ocultar conteúdo" : `Ver conteúdo (${exCount})`}
+                                    </button>
+
+                                    {isOpen ? (
+                                      <div className="mt-2 rounded-xl border bg-white overflow-hidden">
+                                        {treinoDetalhe?.descricao ? (
+                                          <div className="px-3 py-2 text-xs text-gray-700 bg-neutral-50 border-b">
+                                            <b>Descrição do treino:</b> {treinoDetalhe.descricao}
+                                          </div>
+                                        ) : null}
+
+                                        <div className="px-3 py-2 text-xs font-semibold text-gray-700 bg-neutral-50 border-b">
+                                          Exercícios
+                                        </div>
+
+                                        {exCount === 0 ? (
+                                          <div className="px-3 py-3 text-sm text-gray-600">
+                                            Este treino não possui exercícios cadastrados (ou não vieram no payload).
+                                          </div>
+                                        ) : (
+                                          <div className="divide-y">
+                                            {(treinoDetalhe?.exercicios || [])
+                                              .slice()
+                                              .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
+                                              .map((e) => (
+                                              <div key={e.id} className="px-3 py-3">
+                                                <div className="flex items-start justify-between gap-3">
+                                                  <div className="min-w-0">
+                                                    <div className="text-sm font-semibold text-gray-900">
+                                                      {e.ordem ? `${e.ordem}. ` : ""}
+                                                      {e.exercicio?.nome ?? "Exercício"}
+                                                    </div>
+
+                                                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                      {e.exercicio?.codigo ? (
+                                                        <span className="text-[11px] px-2 py-1 rounded-full border bg-white text-gray-700">
+                                                          {e.exercicio.codigo}
+                                                        </span>
+                                                      ) : null}
+
+                                                      <span className="text-[11px] px-2 py-1 rounded-full border bg-neutral-50 text-gray-700">
+                                                        Reps: {e.repeticoes ? e.repeticoes : "-"}
+                                                      </span>
+
+                                                      {e.exercicio?.nivel ? (
+                                                        <span className="text-[11px] px-2 py-1 rounded-full border bg-green-50 text-green-900">
+                                                          Nível: {e.exercicio.nivel}
+                                                        </span>
+                                                      ) : null}
+                                                    </div>
+
+                                                    {e.exercicio?.videoDemonstrativoUrl ? (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => openVideo(e.exercicio?.videoDemonstrativoUrl)}
+                                                        className="mt-2 inline-flex items-center gap-2 px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 text-xs font-semibold"
+                                                      >
+                                                        <Play className="w-4 h-4" />
+                                                        Ver vídeo
+                                                      </button>
+                                                    ) : (
+                                                      <div className="text-[11px] text-gray-400 mt-2">Sem vídeo demonstrativo</div>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </div>
+
+                                              ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })()}
+
+                            </div>
+                          ) : (
+                            <div className="mt-2">
+                              <label className="text-xs font-semibold text-gray-700">
+                                Título do item *
+                              </label>
+                              <input
+                                value={it.titulo}
+                                onChange={(e) =>
+                                  updateItem(semanaAtiva.id, it.id, {
+                                    titulo: e.target.value,
+                                  })
+                                }
+                                placeholder="Ex: Aula 1 - Controle Orientado"
+                                className="mt-1 w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-200"
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
+
+                    <div className="flex items-center gap-2 sm:justify-end">
+                      {it.tipo === "TREINO" ? (
+                        <button
+                          type="button"
+                          onClick={() => openTreinoPicker(semanaAtiva.id)}
+                          className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm font-semibold"
+                          title="Trocar treino"
+                        >
+                          <Dumbbell className="w-4 h-4" />
+                          Trocar treino
+                        </button>
+                      ) : null}
 
                       <button
                         type="button"
@@ -732,109 +1047,111 @@ export default function CriarMetodologia() {
                         Remover
                       </button>
                     </div>
+                    </div>
 
                     <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
-                      <div className="lg:col-span-2">
-                        <label className="text-xs font-semibold text-gray-700">
-                          Descrição (opcional)
-                        </label>
-                        <textarea
-                          value={it.descricao || ""}
-                          onChange={(e) =>
-                            updateItem(semanaAtiva.id, it.id, {
-                              descricao: e.target.value,
-                            })
-                          }
-                          placeholder="Instruções, objetivo, observações..."
-                          className="mt-1 w-full min-h-[90px] border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-200"
-                        />
-                      </div>
+                      {it.tipo !== "TREINO" ? (
+                        <div className="lg:col-span-2">
+                          <label className="text-xs font-semibold text-gray-700">
+                            Descrição (opcional)
+                          </label>
+                          <textarea
+                            value={it.descricao || ""}
+                            onChange={(e) =>
+                              updateItem(semanaAtiva.id, it.id, { descricao: e.target.value })
+                            }
+                            placeholder="Instruções, objetivo, observações..."
+                            className="mt-1 w-full min-h-[90px] border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-200"
+                          />
+                        </div>
+                      ) : null}
 
                       {it.tipo === "VIDEO" ? (
                         <>
                           <div className="lg:col-span-2">
                             <label className="text-xs font-semibold text-gray-700">
-                              URL do vídeo *
+                              Upload do vídeo *
                             </label>
-                            <input
-                              value={it.videoUrl || ""}
-                              onChange={(e) =>
-                                updateItem(semanaAtiva.id, it.id, {
-                                  videoUrl: e.target.value,
-                                })
-                              }
-                              placeholder="https://... (upload do instrutor) ou link"
-                              className="mt-1 w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-200"
-                            />
+
+                            <div className="mt-1 flex flex-col sm:flex-row gap-2 sm:items-center">
+                              <input
+                                type="file"
+                                accept="video/mp4,video/webm,video/quicktime"
+                                className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+
+                                  setErro(null);
+
+                                  // ✅ cria preview local (não sobe nada pro backend)
+                                  const previewUrl = URL.createObjectURL(file);
+
+                                  // ✅ salva o arquivo + preview dentro do item
+                                  updateItem(semanaAtiva.id, it.id, {
+                                    videoFile: file,
+                                    videoPreviewUrl: previewUrl,
+
+                                    // opcional: se você quer limpar a URL final quando troca o arquivo
+                                    videoUrl: "",
+                                  });
+
+                                  // permitir re-selecionar o mesmo arquivo
+                                  e.currentTarget.value = "";
+                                }}
+                              />
+
+
+                            </div>
+
                             <div className="text-[11px] text-gray-500 mt-1">
-                              Cada vídeo vale <b>15 pontos</b>.
+                              Aceita <b>mp4/webm/mov</b>. O backend salva em <b>/assets/videos/metodologias</b>.
                             </div>
                           </div>
 
+                          {/* Preview / botão play */}
                           <div className="lg:col-span-2">
+                            {it.videoPreviewUrl ? (
+                              <div className="mt-2 rounded-xl border bg-black overflow-hidden">
+                                <video className="w-full aspect-video" src={it.videoPreviewUrl} controls />
+                              </div>
+                            ) : it.videoUrl?.trim() ? (
+                              <div className="mt-2 flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => openVideo(it.videoUrl!)}
+                                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm font-semibold"
+                                >
+                                  <Play className="w-4 h-4" />
+                                  Ver vídeo
+                                </button>
+
+                                <div className="text-xs text-gray-500 truncate">{it.videoUrl}</div>
+                              </div>
+                            ) : (
+                              <div className="text-xs text-gray-400 mt-2">
+                                Nenhum vídeo selecionado ainda.
+                              </div>
+                            )}
+                          </div>
+
+
+                          {/* Thumb opcional: se você ainda quiser manter, deixe. Se não, remova. */}
+                          {/* <div className="lg:col-span-2">
                             <label className="text-xs font-semibold text-gray-700">
                               Thumbnail (URL) (opcional)
                             </label>
-                            <input
-                              value={it.thumbUrl || ""}
-                              onChange={(e) =>
-                                updateItem(semanaAtiva.id, it.id, {
-                                  thumbUrl: e.target.value,
-                                })
-                              }
-                              placeholder="https://... (opcional)"
-                              className="mt-1 w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-200"
-                            />
-                          </div>
+                            <input ... />
+                          </div> */}
                         </>
                       ) : null}
 
+
+                      {/* ✅ TREINO não tem select dentro do card mais */}
                       {it.tipo === "TREINO" ? (
                         <div className="lg:col-span-2">
-                          <label className="text-xs font-semibold text-gray-700">
-                            Treino Programado *
-                          </label>
-
-                          <div className="mt-1 relative">
-                            <select
-                              value={it.treinoProgramadoId || ""}
-                              onChange={(e) => {
-                                const id = e.target.value;
-                                const t = treinos.find((x) => x.id === id);
-
-                                updateItem(semanaAtiva.id, it.id, {
-                                  treinoProgramadoId: id,
-                                  treinoNome: t?.nome || "",
-                                  treinoPontuacao:
-                                    typeof t?.pontuacao === "number"
-                                      ? t?.pontuacao
-                                      : 0,
-                                });
-                              }}
-                              className="w-full appearance-none border rounded-xl px-3 py-2 pr-10 text-sm outline-none focus:ring-2 focus:ring-green-200 bg-white"
-                            >
-                              <option value="">
-                                {carregandoTreinos
-                                  ? "Carregando treinos..."
-                                  : treinos.length
-                                  ? "Selecione um treino"
-                                  : "Nenhum treino disponível"}
-                              </option>
-                              {treinos.map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.nome}
-                                  {typeof t.pontuacao === "number"
-                                    ? ` (+${t.pontuacao} pts)`
-                                    : ""}
-                                </option>
-                              ))}
-                            </select>
-                            <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                          </div>
-
-                          <div className="text-[11px] text-gray-500 mt-1">
-                            A pontuação é a do treino programado (campo{" "}
-                            <b>pontuacao</b>).
+                          <div className="text-[11px] text-gray-500">
+                            Este item é um treino programado já selecionado.
                           </div>
                         </div>
                       ) : null}
@@ -845,7 +1162,6 @@ export default function CriarMetodologia() {
             </div>
           ) : null}
 
-          {/* Footer actions */}
           <div className="mt-6 flex flex-col sm:flex-row gap-2 sm:justify-end">
             <button
               type="button"
@@ -877,6 +1193,217 @@ export default function CriarMetodologia() {
           </div>
         </div>
       </div>
+
+      {/* ✅ Modal Picker de Treino */}
+      {pickerOpen ? (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={closeTreinoPicker}
+          />
+          <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border p-4 sm:p-5 m-0 sm:m-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-base font-bold text-gray-900">
+                  Selecionar treino programado
+                </div>
+                <div className="text-xs text-gray-500">
+                  Escolha um treino seu para adicionar na semana.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeTreinoPicker}
+                className="p-2 rounded-xl border bg-white hover:bg-gray-50"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="mt-4">
+              <div className="text-sm font-semibold text-gray-800">Meus treinos</div>
+              <div className="text-[11px] text-gray-500 mt-1">
+                Só aparecem treinos onde <b>criadorProfessorId = seu tipoUsuarioId</b>. Clique para ver os exercícios.
+              </div>
+
+              <div className="mt-3 max-h-[55vh] overflow-auto pr-1 space-y-2">
+                {carregandoTreinos ? (
+                  <div className="rounded-xl border bg-neutral-50 p-3 text-sm text-gray-600">
+                    Carregando treinos...
+                  </div>
+                ) : treinos.length === 0 ? (
+                  <div className="rounded-xl border bg-neutral-50 p-3 text-sm text-gray-600">
+                    Nenhum treino seu disponível.
+                  </div>
+                ) : (
+                  treinos.map((t) => {
+                    const isOpen = pickerOpenId === t.id;
+                    const exCount = t.exercicios?.length ?? 0;
+
+                    return (
+                      <div key={t.id} className="rounded-2xl border bg-white">
+                        {/* HEADER */}
+                        <button
+                          type="button"
+                          onClick={() => setPickerOpenId(isOpen ? null : t.id)}
+                          className="w-full text-left p-3 flex items-start justify-between gap-3"
+                        >
+                          <div className="min-w-0">
+                            <div className="font-semibold text-gray-900 truncate">
+                              {t.nome}
+                            </div>
+                            <div className="text-xs text-gray-600 mt-0.5">
+                              {typeof t.pontuacao === "number" ? `+${t.pontuacao} pts` : "+0 pts"}
+                              {" • "}
+                              {exCount} exercício(s)
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 flex items-center gap-2">
+                            <span className="text-xs px-2 py-1 rounded-full border bg-green-50 text-green-900">
+                              TREINO
+                            </span>
+                            <ChevronDown
+                              className={[
+                                "w-4 h-4 text-gray-500 transition",
+                                isOpen ? "rotate-180" : "",
+                              ].join(" ")}
+                            />
+                          </div>
+                        </button>
+
+                        {/* GAVETA */}
+                        {isOpen ? (
+                          <div className="px-3 pb-3">
+                            {t.descricao ? (
+                              <div className="text-xs text-gray-700 bg-neutral-50 border rounded-xl p-2">
+                                <b>Descrição do treino:</b> {t.descricao}
+                              </div>
+                            ) : null}
+
+                            <div className="mt-2 rounded-xl border bg-white overflow-hidden">
+                              <div className="px-3 py-2 text-xs font-semibold text-gray-700 bg-neutral-50 border-b">
+                                Exercícios
+                              </div>
+
+                              <div className="divide-y">
+                                {(t.exercicios || [])
+                                  .slice()
+                                  .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
+                                  .map((e) => (
+                                    <div key={e.id} className="px-3 py-2">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <div className="text-sm font-semibold text-gray-900">
+                                            {e.ordem ? `${e.ordem}. ` : ""}{e.exercicio?.nome ?? "Exercício"}
+                                          </div>
+                                          <div className="text-xs text-gray-600">
+                                            {e.exercicio?.codigo ? `${e.exercicio.codigo} • ` : ""}
+                                            {e.repeticoes ? `Reps: ${e.repeticoes}` : "Reps: -"}
+                                            {e.exercicio?.nivel ? ` • Nível: ${e.exercicio.nivel}` : ""}
+                                          </div>
+
+                                          {e.exercicio?.videoDemonstrativoUrl ? (
+                                            <div className="text-[11px] text-gray-500 mt-1 truncate">
+                                              Vídeo: {e.exercicio.videoDemonstrativoUrl}
+                                            </div>
+                                          ) : null}
+                                        </div>
+
+                                        {/* (Opcional) se quiser abrir vídeo depois, dá pra colocar um botão aqui */}
+                                      </div>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+
+                            <div className="mt-3 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => addTreinoFromPicker(t)}
+                                className="px-4 py-2 rounded-xl font-semibold inline-flex items-center justify-center gap-2 bg-green-800 text-white hover:bg-green-900"
+                              >
+                                <Dumbbell className="w-4 h-4" />
+                                Adicionar este treino
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="mt-3 text-[11px] text-gray-500">
+                A pontuação adicionada no item será a <b>pontuação do treino programado</b>.
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col sm:flex-row gap-2 sm:justify-end">
+              <button
+                type="button"
+                onClick={closeTreinoPicker}
+                className="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50 font-semibold"
+              >
+                Fechar
+              </button>
+            </div>
+
+          </div>
+        </div>
+      ) : null}
+
+      {/* ✅ Modal Vídeo Exercício */}
+      {videoOpen && videoUrl ? (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={closeVideo} />
+          <div className="relative w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border overflow-hidden m-0 sm:m-4">
+            <div className="p-3 sm:p-4 border-b flex items-center justify-between gap-2">
+              <div className="text-sm sm:text-base font-bold text-gray-900">
+                Vídeo do exercício
+              </div>
+              <button
+                type="button"
+                onClick={closeVideo}
+                className="p-2 rounded-xl border bg-white hover:bg-gray-50"
+                aria-label="Fechar vídeo"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 sm:p-4 bg-black">
+              <div className="w-full aspect-video rounded-xl overflow-hidden bg-black">
+                {isYouTube(videoUrl) ? (
+                  <iframe
+                    className="w-full h-full"
+                    src={toYouTubeEmbed(videoUrl)}
+                    title="Vídeo"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : (
+                  <video className="w-full h-full" controls src={videoUrl} />
+                )}
+              </div>
+            </div>
+
+            <div className="p-3 sm:p-4 flex justify-end bg-white">
+              <button
+                type="button"
+                onClick={closeVideo}
+                className="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50 font-semibold"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+
 
       <BottomNav active="treinos" />
     </div>

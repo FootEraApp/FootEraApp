@@ -1,3 +1,4 @@
+// server/routes/upload
 import { Router } from "express";
 import { uploadMidia } from "../controllers/uploadController.js";
 
