@@ -420,6 +420,7 @@ export function useAgendaTreinos({
   groupByTreinoPerDay,
   title,
   turmaId, // ✅ ADD
+  
 }: Pick<
   AgendaTreinosProps,
   | "open"
@@ -444,6 +445,7 @@ export function useAgendaTreinos({
   const [alunosOpenKey, setAlunosOpenKey] = useState<string | null>(null);
   const [alunosLoading, setAlunosLoading] = useState(false);
   const [alunosDoTreino, setAlunosDoTreino] = useState<{ usuarioId: string; nome: string; foto: string | null }[]>([]);
+  const [alunosCountByKey, setAlunosCountByKey] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -546,32 +548,47 @@ export function useAgendaTreinos({
     );
   }
 
-  async function carregarAlunosDoTreinoTurma(args: { dayISO: string; treinoProgramadoId: string }) {
-  if (!turmaId || !args.treinoProgramadoId) return;
+  async function carregarAlunosDoTreinoTurma(args: {
+    dayISO: string;
+    treinoProgramadoId: string;
+    treinoKey: string; // ✅ ADD
+  }) {
 
-  try {
-    setAlunosLoading(true);
+    if (!turmaId || !args.treinoProgramadoId) return;
 
-    const token =
-      (Storage as any)?.token ||
-      localStorage.getItem("token") ||
-      sessionStorage.getItem("token") ||
-      "";
+    try {
+      setAlunosLoading(true);
 
-    const resp = await axios.get(`${API.BASE_URL}/api/treinos/alunos`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      params: {
-        turmaId,
-        treinoProgramadoId: args.treinoProgramadoId,
-        day: args.dayISO,
-      },
-    });
+      const token =
+        (Storage as any)?.token ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token") ||
+        "";
 
-    setAlunosDoTreino(resp.data?.items ?? []);
-  } finally {
-    setAlunosLoading(false);
+      const resp = await axios.get(`${API.BASE_URL}/api/treinos/alunos`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        params: {
+          turmaId,
+          treinoProgramadoId: args.treinoProgramadoId,
+          day: args.dayISO,
+        },
+      });
+
+      const items = resp.data?.items ?? [];
+      setAlunosDoTreino(items);
+      const unique = new Map<string, true>();
+       for (const a of items) {
+        if (a?.usuarioId) unique.set(String(a.usuarioId), true);
+      }
+      const count = unique.size;
+       setAlunosCountByKey((prev) => ({
+       ...prev,
+       [args.treinoKey]: count,
+      }));
+    } finally {
+      setAlunosLoading(false);
+    }
   }
-}
 
   return {
     cursorMonth,
@@ -598,6 +615,8 @@ export function useAgendaTreinos({
     alunosDoTreino,
     setAlunosDoTreino,
     carregarAlunosDoTreinoTurma,
+    alunosCountByKey,
+    setAlunosCountByKey,
   };
 }
 
@@ -712,6 +731,8 @@ export default function AgendaTreinos({
     alunosDoTreino,
     setAlunosDoTreino,
     carregarAlunosDoTreinoTurma,
+    alunosCountByKey,
+    setAlunosCountByKey,
   } = useAgendaTreinos({
     open,
     title,
@@ -1143,9 +1164,13 @@ export default function AgendaTreinos({
                               t.treinoProgramadoId ?? t.treinoProgramado?.id ?? t.id
                             )}`;
 
-                            const canOpenAlunos =
-                              !!turmaId && groupByTreinoPerDay && !!t.treinoProgramadoId && (t.alunosCount ?? 0) > 0;
+                            const alunosCountFinal =
+                              typeof alunosCountByKey?.[treinoKey] === "number"
+                                ? alunosCountByKey[treinoKey]
+                                : (t.alunosCount ?? 0);
 
+
+                            const canOpenAlunos = !!turmaId && !!groupByTreinoPerDay && !!t.treinoProgramadoId;
                             const isOpen = alunosOpenKey === treinoKey;
 
                             return (
@@ -1163,9 +1188,11 @@ export default function AgendaTreinos({
 
                                   setAlunosOpenKey(treinoKey);
                                   setAlunosDoTreino([]);
+
                                   await carregarAlunosDoTreinoTurma({
                                     dayISO: day,
                                     treinoProgramadoId: String(t.treinoProgramadoId),
+                                    treinoKey,
                                   });
                                 }}
                               >
@@ -1177,10 +1204,10 @@ export default function AgendaTreinos({
                                       Status: <span className={statusClass}>{statusText}</span>
                                     </div>
 
-                                    {groupByTreinoPerDay && (t.alunosCount ?? 0) > 0 ? (
+                                    {groupByTreinoPerDay ? (
                                       <div className="text-xs text-zinc-600 mt-1">
                                         Turma: <span className="font-semibold">{t.turmaNome ?? title}</span> •{" "}
-                                        <span className="font-semibold">{t.alunosCount}</span> aluno(s)
+                                        <span className="font-semibold">{alunosCountFinal}</span> aluno(s)
                                       </div>
                                     ) : null}
 
