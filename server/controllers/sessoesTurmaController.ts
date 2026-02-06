@@ -3,7 +3,6 @@ import { StatusSessaoTreinoTurma } from "@prisma/client";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 
-
 function assertInstrutor(req: AuthenticatedRequest) {
   const u: any = req.authUser || (req as any).user || {};
 
@@ -22,6 +21,24 @@ function assertInstrutor(req: AuthenticatedRequest) {
     err.status = 403;
     throw err;
   }
+}
+
+function getTodayRangeBRT() {
+  // "hoje" considerando BRT (-03)
+  const now = new Date();
+
+  // converte para "data de calendário" BRT
+  const br = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+
+  const y = br.getFullYear();
+  const m = br.getMonth();
+  const d = br.getDate();
+
+  // cria intervalo no timezone -03:00
+  const start = new Date(`${String(y).padStart(4, "0")}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}T00:00:00-03:00`);
+  const end = new Date(`${String(y).padStart(4, "0")}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}T23:59:59.999-03:00`);
+
+  return { start, end };
 }
 
 async function getDonoIdsPorUsuario(usuarioId: string) {
@@ -231,6 +248,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
       where: { id: treinoProgramadoId },
       select: {
         id: true,
+        nome: true, // ✅ ADD
         professorId: true,
         clubeId: true,
         escolinhaId: true,
@@ -240,6 +258,8 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
     if (!treino) {
       return res.status(404).json({ error: "Treino programado não encontrado." });
     }
+
+    const tituloTreino = String(treino.nome ?? "Treino");
 
     const treinoPertenceAoDonoDireto =
       (donoProfessorId && treino.professorId === donoProfessorId) ||
@@ -288,6 +308,44 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
 
     if (dadosExercicios.length) {
       await tx.sessaoTreinoTurmaExercicio.createMany({ data: dadosExercicios });
+    }
+
+    // ✅ NOVO: criar TreinoAgendado para cada atleta da turma
+    const turmaComMembros = await tx.turma.findUnique({
+      where: { id: turmaId },
+      select: {
+        id: true,
+        membros: {
+          select: {
+            usuario: {
+              select: {
+                atleta: { select: { id: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const atletaIds = (turmaComMembros?.membros ?? [])
+      .map((m) => m.usuario?.atleta?.id)
+      .filter((id): id is string => Boolean(id))
+      .map(String);
+
+    const atletaIdsUnicos = Array.from(new Set(atletaIds));
+
+    if (atletaIdsUnicos.length) {
+      await tx.treinoAgendado.createMany({
+        data: atletaIdsUnicos.map((atletaId) => ({
+          titulo: tituloTreino,
+          dataTreino: dataBR,
+          dataExpiracao: null,
+          atletaId,
+          treinoProgramadoId,
+          turmaId,
+        })),
+        skipDuplicates: true,
+      });
     }
 
     return sessao.id;
@@ -357,18 +415,20 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
     const usuarioId = String(u.id || "");
     if (!usuarioId) return res.status(401).json({ error: "Usuário não autenticado." });
 
-    const agora = new Date();
-    const inicio = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 0, 0, 0, 0);
-    const fim = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 23, 59, 59, 999);
+    const onlyToday = String(req.query.onlyToday || "") === "1";
+    const onlyTurma = String(req.query.onlyTurma || "") === "1";
+    const { start: inicio, end: fim } = getTodayRangeBRT();
 
     const tipoRaw = String(u.tipo || "").toLowerCase();
 
     const { donoProfessorId, donoClubeId, donoEscolinhaId } =
       await getDonoIdsPorUsuario(usuarioId);
 
-    let whereBase: any = {
-      data: { gte: inicio, lte: fim },
-    };
+    let whereBase: any = {};
+
+    if (onlyToday) {
+      whereBase.data = { gte: inicio, lte: fim };
+    }
 
     if (u.isAdmin) {
     } else if (tipoRaw === "professor" && donoProfessorId) {
@@ -409,6 +469,17 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
             categoria: true,
             clubeId: true,
             escolinhaId: true,
+            professores: {
+              select: {
+                professorId: true,
+                professor: {
+                  select: {
+                    id: true,
+                    usuario: { select: { nome: true } },
+                  },
+                },
+              },
+            },
           },
         },
         treino: {
@@ -465,6 +536,12 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
             id: true,
             atletaId: true,
             presente: true,
+            atleta: {
+              select: {
+                id: true,
+                usuario: { select: { nome: true } },
+              },
+            },
           },
         },
       },
@@ -562,7 +639,29 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
       }
     }
 
-    return res.json(enriquecidas);
+    const final = (enriquecidas as any[]).map((s) => {
+    const presentesNomes =
+      (s.presencas ?? [])
+        .filter((p: any) => p.presente)
+        .map((p: any) => p.atleta?.usuario?.nome)
+        .filter(Boolean)
+        .map(String);
+
+    const professoresNomes =
+      (s.turma?.professores ?? [])
+        .map((tp: any) => tp.professor?.usuario?.nome)
+        .filter(Boolean)
+        .map(String);
+
+    return {
+      ...s,
+      presentesNomes,
+      professoresNomes,
+    };
+  });
+
+  return res.json(final);
+
   } catch (err: any) {
     console.error("Erro listarSessoesInstrutor:", err?.message, err?.code, err);
     return res.status(err.status || 500).json({
@@ -611,9 +710,19 @@ export async function iniciarSessao(
     if (!sessao)
       return res.status(404).json({ error: "Sessão não encontrada." });
 
+    if (
+      sessao.status === StatusSessaoTreinoTurma.FINALIZADO ||
+      sessao.status === StatusSessaoTreinoTurma.CANCELADO
+    ) {
+      return res.status(400).json({ error: "Sessão já foi encerrada." });
+    }
+
+    if (sessao.status === StatusSessaoTreinoTurma.EM_ANDAMENTO) {
+      return res.status(400).json({ error: "Sessão já está em andamento." });
+    }
+
     const u: any = req.authUser || req.user;
     const usuarioId = u.id as string;
-
     const tipoRaw = String(u.tipo || "").toLowerCase();
     const ok = await podeGerenciarSessao({
       usuarioId: String(usuarioId),
@@ -697,10 +806,17 @@ export async function remarcarSessao(
 
     const u: any = req.authUser || req.user;
     const usuarioId = u.id as string;
+    const tipoRaw = String(u.tipo || "").toLowerCase();
+    const ok = await podeGerenciarSessao({
+      usuarioId: String(usuarioId),
+      tipoRaw,
+      isAdmin: Boolean(u.isAdmin),
+      sessaoId: String(id),
+    });
 
-    if (sessao.criadorId !== usuarioId && !u.isAdmin) {
+    if (!ok) {
       return res.status(403).json({
-        error: "Você não pode remarcar uma sessão criada por outro usuário.",
+        error: "Você não pode remarcar uma sessão fora do seu escopo.",
       });
     }
 
@@ -746,13 +862,21 @@ export async function atualizarProgresso(req: AuthenticatedRequest, res: Respons
 
     const u: any = req.authUser || req.user;
     const usuarioId = u.id as string;
+    const tipoRaw = String(u.tipo || "").toLowerCase();
+    const ok = await podeGerenciarSessao({
+      usuarioId: String(usuarioId),
+      tipoRaw,
+      isAdmin: Boolean(u.isAdmin),
+      sessaoId: String(id),
+    });
 
-    if (sessao.criadorId !== usuarioId && !u.isAdmin) {
-      return res.status(403).json({ error: "Você não pode alterar uma sessão criada por outro usuário." });
+    if (!ok) {
+      return res.status(403).json({
+        error: "Você não pode alterar uma sessão fora do seu escopo.",
+      });
     }
 
     const concluidoSet = new Set(exerciciosConcluidosIds);
-
     const updates = sessao.exercicios.map((ex) =>
       prisma.sessaoTreinoTurmaExercicio.update({
         where: { id: ex.id },
@@ -808,9 +932,17 @@ export async function finalizarSessao(
     const u: any = req.authUser || req.user;
     const usuarioId = u.id as string;
 
-    if (sessao.criadorId !== usuarioId && !u.isAdmin) {
+    const tipoRaw = String(u.tipo || "").toLowerCase();
+    const ok = await podeGerenciarSessao({
+      usuarioId: String(usuarioId),
+      tipoRaw,
+      isAdmin: Boolean(u.isAdmin),
+      sessaoId: String(id),
+    });
+
+    if (!ok) {
       return res.status(403).json({
-        error: "Você não pode alterar uma sessão criada por outro usuário.",
+        error: "Você não pode alterar uma sessão fora do seu escopo.",
       });
     }
 
@@ -924,9 +1056,17 @@ export async function excluirSessao(
       return res.status(404).json({ error: "Sessão não encontrada." });
     }
 
-    if (sessao.criadorId !== usuarioId && !u.isAdmin) {
+    const tipoRaw = String(u.tipo || "").toLowerCase();
+    const ok = await podeGerenciarSessao({
+      usuarioId: String(usuarioId),
+      tipoRaw,
+      isAdmin: Boolean(u.isAdmin),
+      sessaoId: String(id),
+    });
+
+    if (!ok) {
       return res.status(403).json({
-        error: "Você não pode excluir uma sessão criada por outro usuário.",
+        error: "Você não pode excluir uma sessão fora do seu escopo.",
       });
     }
 
@@ -979,8 +1119,18 @@ export async function obterSessao(req: AuthenticatedRequest, res: Response) {
 
     if (!sessao) return res.status(404).json({ error: "Sessão não encontrada." });
 
-    if (sessao.criadorId !== usuarioId && !u.isAdmin) {
-      return res.status(403).json({ error: "Você não pode acessar uma sessão criada por outro usuário." });
+    const tipoRaw = String(u.tipo || "").toLowerCase();
+    const ok = await podeGerenciarSessao({
+      usuarioId: String(usuarioId),
+      tipoRaw,
+      isAdmin: Boolean(u.isAdmin),
+      sessaoId: String(id),
+    });
+
+    if (!ok) {
+      return res.status(403).json({
+        error: "Você não pode acessar uma sessão fora do seu escopo.",
+      });
     }
 
     const alunos = (sessao.presencas || []).map((p: any) => ({

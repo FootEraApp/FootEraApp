@@ -1078,6 +1078,8 @@ model TreinoAgendado {
 
   criadoPorProfessorId String?
   criadoPorProfessor   Professor? @relation(fields: [criadoPorProfessorId], references: [id], onDelete: SetNull)
+  turmaId              String?
+  turma                Turma?     @relation(fields: [turmaId], references: [id], onDelete: SetNull)
 
   execucaoStatus  TreinoStatus @default(PENDING)
   startedAt       DateTime?
@@ -1607,6 +1609,7 @@ model Turma {
   SessaoTreinoTurma SessaoTreinoTurma[]
   EventoConvocacao  EventoConvocacao[]
   EventoConvocado   EventoConvocado[]
+  TreinoAgendado    TreinoAgendado[]
 }
 
 model TurmaProfessor {

@@ -905,12 +905,24 @@ export default function TurmasManager({
                               }));
 
                               return { ...data, items: withTurma };
-                            }}                            
+                            }}                
+
                             fetchProgramados={async () => {
                             if (!owner) {
+                              const userId =
+                                (Storage as any).user?.id ??
+                                (Storage as any).usuario?.id ??
+                                (Storage as any).userId ??
+                                localStorage.getItem("userId") ??
+                                "";
+
                               const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`, {
                                 headers,
-                                params: { vinculo: "professor", debug: "1" }, 
+                                params: {
+                                  vinculo: "professor",
+                                  id: userId,          // ✅ AQUI é o conserto
+                                  debug: "1",
+                                },
                               });
                               return res.data;
                             }
@@ -928,33 +940,26 @@ export default function TurmasManager({
                             }}
 
                             onAgendar={async ({ selectedDays, treinoProgramadoId }) => {
-                              if (bloqueiaAgendarTurma) {
-                                throw new Error(
-                                  "Não é possível agendar para a turma inteira: existe aluno na turma que não está vinculado à sua instituição. Remova-o da turma para continuar."
-                                );
-                              }
-
-                              await Promise.all(
-                                selectedDays.map((day) =>
-                                  axios.post(
-                                    `${API.BASE_URL}/api/treinos/agendados`,
-                                    {
-                                      turmaId: selecionada,
-                                      treinoProgramadoId,
-                                      dataTreino: day,
-                                      ...(owner
-                                        ? {
-                                            autorId: String(owner.id),
-                                            autorTipo: owner.tipo,
-                                          }
-                                        : {
-                                            autorTipo: "Professor", }),
-                                    },
-                                    { headers }
-                                  )
-                                )
+                            if (bloqueiaAgendarTurma) {
+                              throw new Error(
+                                "Não é possível agendar para a turma inteira: existe aluno na turma que não está vinculado..."
                               );
-                            }}
+                            }
+
+                            await Promise.all(
+                              selectedDays.map((day) =>
+                                axios.post(
+                                  `${API.BASE_URL}/api/sessoes-turma`,
+                                  { turmaId: selecionada, treinoProgramadoId, dataISO: day },
+                                  { headers }
+                                )
+                              )
+                            );
+
+                            // ✅ simples: volta pra aba agenda e força reload de sessões/agenda
+                            setAbaDireita("agenda");
+                            alert("Sessão agendada e treinos criados para os atletas da turma!");
+                          }}
                           />
                         </div>
                       )}
