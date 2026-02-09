@@ -831,20 +831,6 @@ export default function PaginaSubmissao() {
                   </p>
                 )}
               </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700">
-                  Repetições
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  value={reps}
-                  onChange={(e) => setReps(e.target.value)}
-                  className="w-full border p-2 rounded"
-                  placeholder="ex: 25"
-                />
-              </div>
             </div>
 
             <div className="mt-6">

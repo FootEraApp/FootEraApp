@@ -16,8 +16,8 @@ import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 
-type Nivel = "Base" | "Avancado" | "Performance" | "Livre";
-type PublicoAlvo = "ATLETAS" | "INSTRUTORES" | "AMBOS";
+type Nivel = "Base" | "Avancado" | "Performance";
+type PublicoAlvo = "ATLETAS" | "PROFISSIONAIS" | "AMBOS";
 type ItemTipo = "VIDEO" | "TREINO";
 
 type TreinoProgramadoPicker = {
@@ -489,12 +489,14 @@ export default function CriarMetodologia() {
           return;
         }
         if (item.tipo === "VIDEO") {
-          if (!item.videoUrl?.trim()) {
-            setErro(
-              `No item "${item.titulo}" de ${s.titulo}, informe o vídeo (URL).`
-            );
-            return;
-          }
+        const hasUrl = !!item.videoUrl?.trim();
+        const hasFile = !!item.videoFile;
+
+        if (!hasUrl && !hasFile) {
+          setErro(`No item "${item.titulo}" de ${s.titulo}, selecione um vídeo.`);
+          return;
+        }
+
         }
         if (item.tipo === "TREINO") {
           if (!item.treinoProgramadoId?.trim()) {
@@ -507,18 +509,13 @@ export default function CriarMetodologia() {
       }
     }
 
-    const descricaoFinal = [
-      `[#publico:${publicoAlvo}]`,
-      `[#nivel:${nivel}]`,
-      (descricao || "").trim(),
-    ]
-      .filter(Boolean)
-      .join("\n");
+
 
     const payloadMetodologia = {
       titulo: titulo.trim(),
-      descricao: descricaoFinal || null,
+      descricao: (descricao || "").trim() || null,
       nivel,
+      publicoAlvo,
       categorias: [],
       totalSemanas: semanas.length,
     };
@@ -546,6 +543,37 @@ export default function CriarMetodologia() {
       const metodologiaId = js?.item?.id;
       if (!metodologiaId) {
         throw new Error("Metodologia criada mas não retornou ID.");
+      }
+
+      // =======================
+      // 1) Upload dos vídeos (se houver) antes de criar os itens
+      // =======================
+      for (const s of semanas) {
+        for (const it of s.itens) {
+          if (it.tipo !== "VIDEO") continue;
+
+          // se tem arquivo, sobe e grava a url final no próprio item
+          if (it.videoFile) {
+            setUploadingByItem((prev) => ({ ...prev, [it.id]: true }));
+            try {
+              const up = await uploadVideoMetodologia(it.videoFile, {
+                titulo: it.titulo,
+                descricao: it.descricao || "",
+              });
+
+              // você pode escolher usar up.relativeUrl (recomendado) ou up.url
+              const finalUrl = up.relativeUrl || up.url;
+
+              // salva a URL final no state, pra o resto do salvar() usar
+              updateItem(s.id, it.id, {
+                videoUrl: finalUrl,
+                videoFile: null,
+              });
+            } finally {
+              setUploadingByItem((prev) => ({ ...prev, [it.id]: false }));
+            }
+          }
+        }
       }
 
       const flatItems: Array<{
@@ -684,7 +712,7 @@ export default function CriarMetodologia() {
                   className="w-full appearance-none border rounded-xl px-3 py-2 pr-10 text-sm outline-none focus:ring-2 focus:ring-green-200 bg-white"
                 >
                   <option value="ATLETAS">Para Atletas</option>
-                  <option value="INSTRUTORES">Para Instrutores</option>
+                  <option value="PROFISSIONAIS">Para Profissionais</option>
                   <option value="AMBOS">Para Ambos</option>
                 </select>
                 <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -707,7 +735,7 @@ export default function CriarMetodologia() {
                   <option value="Base">Base</option>
                   <option value="Avancado">Avançado</option>
                   <option value="Performance">Performance</option>
-                  <option value="Livre">Livre</option>
+
                 </select>
                 <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
