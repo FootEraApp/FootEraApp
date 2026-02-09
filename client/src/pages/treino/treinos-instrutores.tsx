@@ -124,34 +124,13 @@ function normTxt(s: any) {
   return String(s || "").trim().toLowerCase();
 }
 
-function explodeNomes(input: any): string[] {
-  const arr = Array.isArray(input) ? input : [input];
-
-  return arr
-    .flatMap((v) =>
-      String(v || "")
-        .split(",")              
-        .map((s) => s.trim())
-        .filter(Boolean)
-    );
-}
-
-function splitProfessorNome(raw?: string | null): string[] {
-  return String(raw || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function uniqNames(arr: string[]): string[] {
-  const map = new Map<string, string>();
-  for (const n of arr) {
-    const clean = String(n || "").trim();
-    if (!clean) continue;
-    const key = clean.toLowerCase();
-    if (!map.has(key)) map.set(key, clean);
-  }
-  return Array.from(map.values());
+function formatElapsed(startedAtISO?: string | null, nowMs?: number) {
+  if (!startedAtISO) return "00:00";
+  const startMs = new Date(startedAtISO).getTime();
+  const diffSec = Math.max(0, Math.floor(((nowMs ?? Date.now()) - startMs) / 1000));
+  const mm = String(Math.floor(diffSec / 60)).padStart(2, "0");
+  const ss = String(diffSec % 60).padStart(2, "0");
+  return `${mm}:${ss}`;
 }
 
 function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
@@ -387,6 +366,16 @@ export default function TreinosInstrutores({
      for (const t of turmas) map[String(t.id)] = t;
       return map;
   }, [turmas]);
+
+  const atletaNomeById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const a of atletasVinculados) {
+      const id = String(a?.id ?? "").trim();
+      const nome = String(a?.usuario?.nome ?? "").trim();
+      if (id && nome) map[id] = nome;
+    }
+    return map;
+  }, [atletasVinculados]);
 
   useEffect(() => {
   const token = getToken();
@@ -869,14 +858,14 @@ const videoUrlRaw =
   if (!token) return;
 
   try {
-    const res = await fetch(`${API.BASE_URL}/api/sessoes-turma/minhas`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch(
+      `${API.BASE_URL}/api/sessoes-turma/minhas?onlyToday=1&onlyTurma=1`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
 
     if (!res.ok) throw new Error("Falha ao buscar sessões");
 
     const data = await res.json();
-
     const norm = (Array.isArray(data) ? data : []).map((s: any) => {
       const statusRaw = String(s.status ?? "")
         .trim()
@@ -900,6 +889,30 @@ const videoUrlRaw =
           break;
       }
       const exercicios = extrairExerciciosSessao(s);
+      const presentes = Array.isArray(s.presencas)
+        ? s.presencas
+            .filter((p: any) => p.presente)
+            .map((p: any) => {
+              const atletaId = String(p.atletaId ?? "").trim();
+
+              const nomeBackend =
+                p.atleta?.usuario?.nome ??
+                p.atleta?.nome ??
+                p.usuario?.nome ??
+                p.nome ??
+                null;
+
+              const nome =
+                String(nomeBackend ?? "").trim() ||
+                (atletaId ? atletaNomeById[atletaId] : "") ||
+                // fallback extra: se vier algo em presenca.atleta.usuario direto por id
+                String(p?.atleta?.usuario?.nome ?? "").trim() ||
+                "Atleta";
+
+              return { atletaId, nome };
+            })
+            .filter((x: any) => x.atletaId)
+        : [];
 
       return {
         id: s.id,
@@ -912,6 +925,7 @@ const videoUrlRaw =
         duracaoMinutosReal: s.duracaoMinutosReal ?? null,
         penalidadeAtraso: Boolean(s.penalidadeAtraso),
         exercicios,
+        presentes,
       };
     });
 
@@ -1057,6 +1071,11 @@ async function salvarProgressoSessao(sessaoId: string) {
     console.error("Erro ao salvar progresso da sessão:", e);
   }
 }
+
+  useEffect(() => {
+    if (abaProfessor === "sessoes") carregarSessoesDeHoje();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abaProfessor, atletasVinculados.length]);
 
   useEffect(() => {
     const tipoSalvo =
@@ -1487,10 +1506,9 @@ async function salvarProgressoSessao(sessaoId: string) {
     if (!token) return;
 
     const tipoUsuarioIdRaw =
-      (Storage as any).tipoUsuarioId ||
-      (Storage as any).professorId ||
-      usuario?.tipoUsuarioId ||
-      "";
+      String(usuario?.tipoUsuarioId ?? "").trim() ||
+      String((Storage as any).tipoUsuarioId ?? "").trim() ||
+      String((Storage as any).professorId ?? "").trim();
 
     if (!tipoUsuarioIdRaw) {
       console.warn("[treinos] sem tipoUsuarioId para carregar atletas vinculados");
@@ -1533,10 +1551,9 @@ async function salvarProgressoSessao(sessaoId: string) {
     if (!token) return;
 
     const tipoUsuarioIdRaw =
-      (Storage as any).tipoUsuarioId ||
-      (Storage as any).professorId ||
-      usuario?.tipoUsuarioId ||
-      "";
+      String(usuario?.tipoUsuarioId ?? "").trim() ||
+      String((Storage as any).tipoUsuarioId ?? "").trim() ||
+      String((Storage as any).professorId ?? "").trim();
 
     if (!tipoUsuarioIdRaw) {
       console.warn("[treinos] sem tipoUsuarioId para carregar turmas");
@@ -1622,8 +1639,22 @@ async function salvarProgressoSessao(sessaoId: string) {
           .map((x) => String(x || "").trim())
           .filter(Boolean);
 
+        const splitNomes = (v: any) =>
+          String(v || "")
+            .split(",")
+            .map((x) => String(x || "").trim())
+            .filter(Boolean);
+
         const professorNomes = Array.from(
-          new Set([professorNomeSingular, ...professorNomesDireto, ...nomesFromIds].filter(Boolean))
+          new Set(
+            [
+              ...splitNomes(professorNomeSingular), // 🔥 quebra "A, B" em ["A","B"]
+              ...professorNomesDireto,
+              ...nomesFromIds,
+            ]
+              .map((x) => String(x || "").trim())
+              .filter(Boolean),
+          ),
         );
 
         const atletaIds = Array.from(
@@ -1640,9 +1671,8 @@ async function salvarProgressoSessao(sessaoId: string) {
           atletaIds,
           professorIds,
           professorNomes,
-          professorNome: professorNomes.join(", ") || professorNomeSingular || null,
+          professorNome: professorNomes[0] ?? null,
         };
-
       });
 
       setTurmas(norm);
@@ -1905,15 +1935,20 @@ async function salvarProgressoSessao(sessaoId: string) {
           }),
         });
 
+        const txt = await respSessao.text().catch(() => "");
         if (!respSessao.ok) {
-          const txt = await respSessao.text().catch(() => "");
           console.error("Erro ao criar sessão de turma:", respSessao.status, txt);
-          alert(
-            "Treino foi agendado para os atletas, mas houve erro ao criar a sessão da turma.",
-          );
+          alert("Não foi possível criar a sessão da turma.");
+          return;
         }
+
+        // ✅ AGORA O BACKEND já cria TreinoAgendado para todos os atletas.
+        alert("Treino enviado para a turma (sessão + agendamentos criados)!");
+        return; // 🔥 ISSO EVITA DUPLICAR (não roda o loop abaixo)
       } catch (e) {
         console.error("Erro inesperado ao criar sessão de turma:", e);
+        alert("Erro inesperado ao criar sessão da turma.");
+        return;
       }
     }
 
@@ -1997,12 +2032,12 @@ async function salvarProgressoSessao(sessaoId: string) {
     const tipoUsuarioId = String(usuario?.tipoUsuarioId ?? "").trim();
 
     const res = await fetch(
-      `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(treinoId)}`,
+      `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(treinoId)}` +
+      `?tipo=${encodeURIComponent(tipo)}` +
+      `&tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
       {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       }
     );
 
@@ -2472,16 +2507,64 @@ async function salvarProgressoSessao(sessaoId: string) {
                         {(() => {
                           const turmaId = String(s.turma?.id ?? "");
                           const turmaLocal = turmaId ? turmaById[turmaId] : null;
-
                           const nomeTurma = turmaLocal?.nome ?? s.turma?.nome ?? "Turma";
-                          const profs = Array.from(
+                          const profsFromSessao = Array.from(
+                            new Set(
+                              (Array.isArray(s.turma?.professores) ? s.turma.professores : [])
+                                .map((tp: any) =>
+                                  String(
+                                    tp?.professor?.usuario?.nome ??
+                                    tp?.professor?.nome ??
+                                    tp?.usuario?.nome ??
+                                    tp?.nome ??
+                                    ""
+                                  ).trim()
+                                )
+                                .filter(Boolean)
+                            )
+                          );
+
+                          const profsFromTurmaLocal = Array.from(
                             new Set(
                               [
                                 String(turmaLocal?.professorNome ?? "").trim(),
                                 ...(turmaLocal?.professorNomes ?? []).map((x) => String(x || "").trim()),
                               ].filter(Boolean)
                             )
-                          ).join(", ");
+                          );
+
+                          const splitNomes = (v: any) =>
+                            String(v || "")
+                              .split(",")
+                              .map((x) => String(x || "").trim())
+                              .filter(Boolean);
+
+                          const uniqByNorm = (arr: string[]) =>
+                            Array.from(new Map(arr.map((n) => [normTxt(n), n])).values());
+
+                          const nomesSessao = (Array.isArray(s.turma?.professores) ? s.turma.professores : [])
+                            .flatMap((tp: any) =>
+                              splitNomes(
+                                tp?.professor?.usuario?.nome ??
+                                tp?.professor?.nome ??
+                                tp?.usuario?.nome ??
+                                tp?.nome ??
+                                ""
+                              )
+                            )
+                            .filter(Boolean);
+
+                          const baseTurma = (turmaLocal?.professorNomes ?? []).length
+                            ? (turmaLocal?.professorNomes ?? [])
+                            : [turmaLocal?.professorNome ?? ""];
+
+                          const nomesTurmaLocal = baseTurma
+                            .flatMap(splitNomes) // 🔥 quebra qualquer "A, B" dentro do array
+                            .map((x) => String(x || "").trim())
+                            .filter(Boolean);
+
+                          // ✅ junta tudo e deduplica por normalização
+                          const profs = uniqByNorm([...nomesSessao, ...nomesTurmaLocal]).join(", ");
 
                           return (
                             <div className="text-sm text-gray-600">
@@ -2508,6 +2591,18 @@ async function salvarProgressoSessao(sessaoId: string) {
                         {s.penalidadeAtraso && s.status === "finalizada" && (
                           <div className="text-xs text-amber-700 mt-1">
                             ⚠ Pontos reduzidos pela metade por atraso.
+                          </div>
+                        )}
+
+                        {s.status === "finalizada" && Array.isArray((s as any).presentes) && (s as any).presentes.length > 0 && (
+                          <div className="mt-2 text-xs text-gray-700">
+                            <div className="font-semibold">Presentes:</div>
+                            <div className="text-gray-600">
+                              {Array.isArray((s as any).presentesNomes) && (s as any).presentesNomes.length
+                                ? (s as any).presentesNomes.join(", ")
+                                : (s as any).presentes.map((p: any) => p.nome).join(", ")
+                              }
+                            </div>
                           </div>
                         )}
 
@@ -2656,8 +2751,23 @@ async function salvarProgressoSessao(sessaoId: string) {
                   <X className="w-4 h-4" />
                 </button>
                 <div className="text-sm font-semibold text-gray-800 text-center flex-1">
-                  {sessao.treino?.nome ?? "Treino"}
+                  {(() => {
+                    const startedAtISO = sessao.startedAt || startedAtRef.current || null;
+                    const emAndamento = sessao.status === "em_andamento";
+
+                    if (!emAndamento) return null; // topo fica “só comando”; se não estiver em andamento, fica vazio
+
+                    const tempoStr = formatElapsed(startedAtISO, clockNow);
+
+                    return (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="text-gray-500 font-medium">Tempo decorrido:</span>
+                        <span className="tabular-nums">{tempoStr}</span>
+                      </span>
+                    );
+                  })()}
                 </div>
+
                 <div className="w-8" /> 
               </div>
 
@@ -2757,54 +2867,79 @@ async function salvarProgressoSessao(sessaoId: string) {
                 )}
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                <button
-                  type="button"
-                  className="flex-1 px-3 py-2 rounded-full border text-sm text-gray-700 bg-white hover:bg-gray-50"
-                  onClick={() => {
-                    const jaAtivo = sessaoEmRemarcacaoId === sessao.id;
-                    if (jaAtivo) {
-                      setSessaoEmRemarcacaoId(null);
-                      return;
-                    }
+              {(() => {
+                const emAndamento = sessao.status === "em_andamento";
 
-                    const baseISO =
-                      sessao.data || sessao.startedAt || new Date().toISOString();
+                return (
+                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                    {/* ✅ Remarcar só aparece se NÃO estiver em andamento */}
+                    {!emAndamento && (
+                      <button
+                        type="button"
+                        className="flex-1 px-3 py-2 rounded-full border text-sm text-gray-700 bg-white hover:bg-gray-50"
+                        onClick={() => {
+                          const jaAtivo = sessaoEmRemarcacaoId === sessao.id;
+                          if (jaAtivo) {
+                            setSessaoEmRemarcacaoId(null);
+                            return;
+                          }
 
-                    setSessaoEmRemarcacaoId(sessao.id);
-                    setRemarcarDataBySessaoId((prev) => ({
-                      ...prev,
-                      [sessao.id]: baseISO.slice(0, 10),
-                    }));
-                    setRemarcarHoraBySessaoId((prev) => ({
-                      ...prev,
-                      [sessao.id]: baseISO.slice(11, 16),
-                    }));
-                  }}
-                >
-                  {emRemarcacao ? "Cancelar remarcação" : "Remarcar"}
-                </button>
+                          const baseISO =
+                            sessao.data || sessao.startedAt || new Date().toISOString();
 
-                <button
-                  type="button"
-                  className="flex-1 px-3 py-2 rounded-full bg-green-700 text-white text-sm hover:bg-green-800"
-                  onClick={async () => {
-                    await salvarProgressoSessao(sessao.id);
-                    await carregarSessoesDeHoje();
-                    alert("Progresso salvo!");
-                  }}
-                >
-                  Salvar
-                </button>
+                          setSessaoEmRemarcacaoId(sessao.id);
+                          setRemarcarDataBySessaoId((prev) => ({
+                            ...prev,
+                            [sessao.id]: baseISO.slice(0, 10),
+                          }));
+                          setRemarcarHoraBySessaoId((prev) => ({
+                            ...prev,
+                            [sessao.id]: baseISO.slice(11, 16),
+                          }));
+                        }}
+                      >
+                        {emRemarcacao ? "Cancelar remarcação" : "Remarcar"}
+                      </button>
+                    )}
 
-                <button
-                  type="button"
-                  className="flex-1 px-3 py-2 rounded-full border text-sm bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
-                  onClick={() => excluirSessao(sessao.id)}
-                >
-                  Excluir
-                </button>
-              </div>
+                    {/* ✅ Salvar sempre aparece */}
+                    <button
+                      type="button"
+                      className="flex-1 px-3 py-2 rounded-full bg-green-700 text-white text-sm hover:bg-green-800"
+                      onClick={async () => {
+                        await salvarProgressoSessao(sessao.id);
+                        await carregarSessoesDeHoje();
+                        alert("Progresso salvo!");
+                      }}
+                    >
+                      Salvar
+                    </button>
+
+                    {/* ✅ No lugar de Excluir: se em andamento -> Finalizar treino */}
+                    {emAndamento ? (
+                      <button
+                        type="button"
+                        className="flex-1 px-3 py-2 rounded-full bg-red-600 text-white text-sm hover:bg-red-700"
+                        onClick={async () => {
+                          // opcional mas recomendado: salva antes de finalizar
+                          await salvarProgressoSessao(sessao.id);
+                          await finalizarTreinoSessao(sessao.id);
+                        }}
+                      >
+                        Finalizar treino
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="flex-1 px-3 py-2 rounded-full border text-sm bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+                        onClick={() => excluirSessao(sessao.id)}
+                      >
+                        Excluir
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
 
               {emRemarcacao && (
                 <div className="mt-3 flex flex-col sm:flex-row gap-2 items-center">

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { Share2, User, UserPlus, Search, Users, Trash, ArrowLeft } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
-import { API } from "../config.js";
+import { API, APP } from "../config.js";
 import socket from "../services/socket.js";
 import { ModalGrupos } from "../components/modal/ModalGrupos.js";
 import { ModalDesafiosGrupo } from "../components/modal/ModalDesafiosGrupos.js";
@@ -12,6 +12,8 @@ import * as htmlToImage from "html-to-image";
 import { publicImgUrl } from "../utils/publicUrl.js";
 import { FLAGS } from "../config.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 interface Usuario {
   id: string;
@@ -313,13 +315,16 @@ export default function PaginaMensagens() {
       }
     }
 
+    const fallbackUrl = AVATAR_FALLBACK;
+
     return (
-      <div
-        className={`${className} rounded-full border bg-gray-200 text-gray-700 flex items-center justify-center text-sm font-semibold`}
-        title={name || "Usuário"}
-      >
-        {initials(name)}
-      </div>
+      <img
+        src={fallbackUrl}
+        className={`${className} rounded-full object-cover border bg-white`}
+        alt={name ? `Avatar de ${name}` : "Avatar"}
+        draggable={false}
+        onError={() => setBroken(true)}
+      />
     );
   }
 
@@ -572,14 +577,22 @@ export default function PaginaMensagens() {
                         const p = presencas[u.id];
                         if (!p || p.privacyBlocked) return null;
 
-                        const label = p.isOnline ? "Online" : formatLastSeen(p.lastSeenAt);
+                        const label = p.isOnline
+                          ? "Online"
+                          : formatLastSeen(p.lastSeenAt);
+
+                        // 🎯 regra da bolinha
+                        let dotClass = "bg-red-500"; // offline seco
+                        if (p.isOnline) {
+                          dotClass = "bg-green-500"; // online
+                        } else if (p.lastSeenAt) {
+                          dotClass = "bg-gray-400"; // há X min / há Xh
+                        }
 
                         return (
                           <span className="shrink-0 flex items-center gap-1 text-[11px] text-gray-500">
                             <span
-                              className={`w-2 h-2 rounded-full ${
-                                p.isOnline ? "bg-green-500" : "bg-red-500"
-                              }`}
+                              className={`w-2 h-2 rounded-full ${dotClass}`}
                             />
                             <span>{label}</span>
                           </span>
@@ -588,7 +601,7 @@ export default function PaginaMensagens() {
                     </div>
 
                     <div className="text-xs text-gray-500 truncate">
-                      {lastMsgByUser[u.id] || "Sem mensagens por enquanto"}
+                      {lastMsgByUser[u.id] || ""}
                     </div>
                   </div>
 
