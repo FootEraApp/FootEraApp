@@ -1,3 +1,4 @@
+// server/routes/metodologiasRoutes
 import { Router } from "express";
 import {
   listMetodologias,
@@ -7,7 +8,8 @@ import {
   deleteMetodologia,
   listMinhasMetodologiasAssinadas,
   listMinhasMetodologiasCriadas,
-  listMetodologiasVisiveis
+  listMetodologiasVisiveis,
+  createMetodologiaItens,
 } from "../controllers/metodologiasController.js";
 
 import { authenticateToken } from "../middlewares/auth.js";
@@ -16,7 +18,10 @@ const router = Router();
 
 router.get("/visiveis", authenticateToken, listMetodologiasVisiveis);
 router.get("/minhas/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
-router.get("/minhas", authenticateToken, listMinhasMetodologiasCriadas); // ✅ NOVO
+router.get("/minhas", authenticateToken, listMinhasMetodologiasCriadas);
+
+router.post("/:metodologiaId/itens", authenticateToken, createMetodologiaItens);
+
 router.get("/:id", getMetodologiaById);
 router.get("/", listMetodologias);
 router.post("/", authenticateToken, createMetodologia);
