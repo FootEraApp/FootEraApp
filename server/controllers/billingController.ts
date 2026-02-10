@@ -11,36 +11,32 @@ import * as mercadopagoModule from "mercadopago";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 
-function metodologiasIds() {
-  return ["METH_POSICIONAL", "METH_FORCA", "METH_TECNICA", "METH_TATICO", "METH_MENTAL"];
-}
-
 function allowedPlanIdsByTipo(tipoRaw: string) {
   const tipo = String(tipoRaw || "").trim().toLowerCase();
+
+  if (tipo === "atleta") {
+    return ["ATLETA_PRO", "ATLETA_LEARNING_1", "ATLETA_LEARNING_3", "ATLETA_METODO_1"];
+  }
+
+  if (tipo === "professor") {
+    return ["PROFESSOR_PRO", "PROFESSOR_LEARNING_1", "PROFESSOR_LEARNING_3"];
+  }
+
+  if (tipo === "clube" || tipo === "escolinha") {
+    return ["ORGANIZACOES_PRO", "ORGANIZACOES_LEARNING_3"];
+  }
 
   if (tipo === "olheiro") {
     return ["OLHEIRO_PRO"];
   }
 
-  if (tipo === "professor") {
-    return ["PROFESSOR_PRO", "PROFESSOR_LEARNING", "PROFESSOR_PLUS", ...metodologiasIds()];
-  }
-
-  if (tipo === "atleta") {
-    return ["ATLETA_PRO", "ATLETA_LEARNING", "ATLETA_PLUS", ...metodologiasIds()];
-  }
-
-  if (tipo === "clube" || tipo === "escolinha" || tipo === "organizacoes" || tipo === "organizações") {
-    return ["ORGANIZACOES_PRO", "ORGANIZACOES_LEARNING", "ORGANIZACOES_PLUS", ...metodologiasIds()];
-  }
-
   if (tipo === "admin") {
+    // admin pode tudo (pra testes/dev)
     return [
-      "ATLETA_PRO","ATLETA_LEARNING","ATLETA_PLUS",
-      "OLHEIRO_PRO","OLHEIRO_LEARNING","OLHEIRO_PLUS",
-      "PROFESSOR_PRO","PROFESSOR_LEARNING","PROFESSOR_PLUS",
-      "ORGANIZACOES_PRO","ORGANIZACOES_LEARNING","ORGANIZACOES_PLUS",
-      ...metodologiasIds()
+      "ATLETA_PRO","ATLETA_LEARNING_1","ATLETA_LEARNING_3","ATLETA_METODO_1",
+      "PROFESSOR_PRO","PROFESSOR_LEARNING_1","PROFESSOR_LEARNING_3",
+      "ORGANIZACOES_PRO","ORGANIZACOES_LEARNING_3",
+      "OLHEIRO_PRO"
     ];
   }
 
@@ -161,26 +157,64 @@ function diffDays(a: Date, b: Date) {
   return Math.ceil(ms / (24 * 60 * 60 * 1000));
 }
 
+// =========================
+// Precificação Metodologia Avulsa
+// =========================
+const METODOLOGIA_BASE = 14.9;
+const METODOLOGIA_POR_SEMANA = 2.0;
+const METODOLOGIA_POR_ITEM = 1.0;
+const METODOLOGIA_POR_VIDEO = 1.5;
+const METODOLOGIA_POR_TREINO = 1.5;
+const METODOLOGIA_POR_PONTO = 0.1; // opcional
+const METODOLOGIA_MIN = 14.9;
+const METODOLOGIA_MAX = 159.9;
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+/**
+ * Arredonda para terminar com ".90".
+ * Eu fiz "ceiling para o próximo X.90" pra você nunca cobrar menos do que o cálculo.
+ * Ex: 23.10 -> 23.90 ; 23.95 -> 24.90
+ */
+function roundToDot90Ceil(value: number) {
+  const intPart = Math.floor(value);
+  let candidate = intPart + 0.9;
+  if (candidate + 1e-9 < value) candidate = intPart + 1.9;
+  return Number(candidate.toFixed(2));
+}
+
 const PLANS = [
-  { id: "ATLETA_PRO", title: "Atleta Pro", monthly: 19.9, annual: 199.0, benefits: ["Sem anúncios", "Treinos e desafios ilimitados (fair-use)", "Biblioteca pessoal ilimitada (fair-use)", "Agendamento pessoal"] },
-  { id: "ATLETA_LEARNING", title: "Atleta Learning", monthly: 14.9, annual: 149.0, benefits: ["Acesso ilimitado a metodologias", "Rotinas e trilhas por método", "Conteúdos e sugestões guiadas"] },
-  { id: "ATLETA_PLUS", title: "Atleta Plus", monthly: 29.9, annual: 299.0, benefits: ["Tudo do Pro", "Tudo do Learning", "Pacote completo"] },
-  { id: "OLHEIRO_PRO", title: "Olheiro Pro", monthly: 24.9, annual: 249.0, benefits: ["Sem anúncios", "Ferramentas Pro do olheiro", "Mais limites operacionais"] },
-  { id: "PROFESSOR_PRO", title: "Professor Pro", monthly: 39.9, annual: 399.0, benefits: ["Sem anúncios", "Recursos Pro de treino", "Mais limites operacionais"] },
-  { id: "PROFESSOR_LEARNING", title: "Professor Learning", monthly: 29.9, annual: 299.0, benefits: ["Metodologias ilimitadas", "Trilhas e conteúdos por método"] },
-  { id: "PROFESSOR_PLUS", title: "Professor Plus", monthly: 59.9, annual: 599.0, benefits: ["Tudo do Pro", "Tudo do Learning", "Pacote completo"] },
-  { id: "ORGANIZACOES_PRO", title: "Organizações Pro", monthly: 79.9, annual: 799.0, benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional"] },
-  { id: "ORGANIZACOES_LEARNING", title: "Organizações Learning", monthly: 59.9, annual: 599.0, benefits: ["Metodologias ilimitadas", "Trilhas/rotinas por método"] },
-  { id: "ORGANIZACOES_PLUS", title: "Organizações Plus", monthly: 109.9, annual: 1099.0, benefits: ["Tudo do Pro", "Tudo do Learning", "Pacote completo"] },
-  { id: "METH_POSICIONAL", title: "Treino Posicional", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Posicional"] },
-  { id: "METH_FORCA", title: "Força & Explosão", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Força & Explosão"] },
-  { id: "METH_TECNICA", title: "Técnica Individual", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Técnica Individual"] },
-  { id: "METH_TATICO", title: "Tático", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Tático"] },
-  { id: "METH_MENTAL", title: "Mentalidade", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Mentalidade"] },
+  // ATLETA
+  { id: "ATLETA_PRO", title: "Atleta Pro", monthly: 19.9, annual: null, benefits: ["Sem anúncios", "Recursos Pro do atleta", "Mais limites operacionais"] },
+  { id: "ATLETA_LEARNING_1", title: "Atleta Learning 1", monthly: 44.9, annual: null, benefits: ["Tudo do Atleta Pro", "Escolher 1 metodologia por mês"] },
+  { id: "ATLETA_LEARNING_3", title: "Atleta Learning 3", monthly: 64.9, annual: null, benefits: ["Tudo do Atleta Pro", "Escolher até 3 metodologias por mês"] },
+  { id: "ATLETA_METODO_1", title: "1 Metodologia (mensal)", monthly: 29.9, annual: null, benefits: ["Escolher 1 metodologia por mês", "Sem benefícios do Pro"] },
+
+  // PROFESSOR
+  { id: "PROFESSOR_PRO", title: "Professor Pro", monthly: 39.9, annual: null, benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais"] },
+  { id: "PROFESSOR_LEARNING_1", title: "Professor Learning 1", monthly: 59.9, annual: null, benefits: ["Tudo do Professor Pro", "Escolher 1 metodologia por mês"] },
+  { id: "PROFESSOR_LEARNING_3", title: "Professor Learning 3", monthly: 79.9, annual: null, benefits: ["Tudo do Professor Pro", "Escolher até 3 metodologias por mês"] },
+
+  // ORGANIZAÇÕES
+  { id: "ORGANIZACOES_PRO", title: "Organizações Pro", monthly: 79.9, annual: null, benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional"] },
+  { id: "ORGANIZACOES_LEARNING_3", title: "Organizações Learning", monthly: 149.9, annual: null, benefits: ["Tudo do Pro", "Escolher até 3 metodologias por mês"] },
+
+  // OLHEIRO
+  { id: "OLHEIRO_PRO", title: "Olheiro Pro", monthly: 24.9, annual: null, benefits: ["Sem anúncios", "Ferramentas Pro do olheiro", "Mais limites operacionais"] },
 ] as const;
 
 function normalizePlanoId(planoId: string) {
-  return String(planoId || "").trim().toUpperCase();
+  const raw = String(planoId || "").trim();
+
+  // preserva UUID e padroniza o prefixo
+  if (raw.toUpperCase().startsWith("METODOLOGIA:")) {
+    const id = raw.split(":").slice(1).join(":").trim();
+    return `METODOLOGIA:${id}`;
+  }
+
+  return raw.toUpperCase();
 }
 
 function findPlan(planoId: string) {
@@ -188,22 +222,117 @@ function findPlan(planoId: string) {
   return PLANS.find((p) => p.id === id);
 }
 
-function isMetodologia(planoId: string) {
+async function priceFor(planoId: string, periodicidade: Periodicidade): Promise<number> {
   const id = normalizePlanoId(planoId);
-  return id.startsWith("METH_");
-}
 
-function priceFor(planoId: string, periodicidade: Periodicidade): number {
-  const id = normalizePlanoId(planoId);
+  // Metodologia Avulsa
+  if (isMetodologiaAvulsa(id)) {
+    if (periodicidade !== "Anual") {
+      throw new Error("Metodologia avulsa é apenas ANUAL.");
+    }
+    const mid = extractMetodologiaId(id);
+    const { valorFinal } = await computeMetodologiaAvulsaPricing(mid, false);
+    return Number(valorFinal);
+  }
+
   const p = findPlan(id);
   if (!p) throw new Error("Plano inválido");
 
-  if (isMetodologia(id) && periodicidade !== "Anual") {
-    throw new Error("Metodologias são apenas ANUAL.");
+  if (isMetodologiaAvulsa(id) && periodicidade !== "Anual") {
+    throw new Error("Metodologias avulsas são apenas ANUAL.");
   }
 
   if (periodicidade === "Mensal") return Number(p.monthly || 0);
   return Number(p.annual || 0);
+}
+
+function isMetodologiaAvulsa(planoId: string) {
+  return String(planoId || "").startsWith("METODOLOGIA:");
+}
+
+function extractMetodologiaId(planoId: string) {
+  return String(planoId || "").replace(/^METODOLOGIA:/, "").trim();
+}
+
+function metodologiaLimitFromPlano(planoId: string | null | undefined): number {
+  const p = String(planoId || "").toUpperCase();
+
+  // 0 metodologias
+  if (!p) return 0;
+  if (p === "ATLETA_PRO") return 0;
+  if (p === "PROFESSOR_PRO") return 0;
+  if (p === "ORGANIZACOES_PRO") return 0;
+  if (p === "OLHEIRO_PRO") return 0;
+
+  // 1 metodologia/mês
+  if (p === "ATLETA_LEARNING_1") return 1;
+  if (p === "ATLETA_METODO_1") return 1;
+  if (p === "PROFESSOR_LEARNING_1") return 1;
+
+  // 3 metodologias/mês
+  if (p === "ATLETA_LEARNING_3") return 3;
+  if (p === "PROFESSOR_LEARNING_3") return 3;
+  if (p === "ORGANIZACOES_LEARNING_3") return 3;
+
+  return 0;
+}
+
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+}
+
+async function computeMetodologiaAvulsaPricing(metodologiaId: string, incluirPontos = false) {
+  const m = await prisma.metodologia.findUnique({
+    where: { id: metodologiaId },
+    select: {
+      id: true,
+      titulo: true,
+      totalSemanas: true,
+      itens: { select: { tipo: true, pontos: true } },
+      _count: { select: { itens: true } },
+    },
+  });
+
+  if (!m) {
+    const err: any = new Error("Metodologia não encontrada");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const totalSemanas = Number(m.totalSemanas || 0);
+
+  const itensCount = Number(m._count?.itens || 0);
+
+  const videoCount = m.itens.filter((i) => i.tipo === "VIDEO").length;
+  const treinoCount = m.itens.filter((i) => i.tipo === "TREINO").length;
+
+  const somaPontos = m.itens.reduce((acc, i) => acc + (i.pontos ?? 0), 0);
+
+  let valor =
+    METODOLOGIA_BASE +
+    METODOLOGIA_POR_SEMANA * totalSemanas +
+    METODOLOGIA_POR_ITEM * itensCount +
+    METODOLOGIA_POR_VIDEO * videoCount +
+    METODOLOGIA_POR_TREINO * treinoCount +
+    (incluirPontos ? METODOLOGIA_POR_PONTO * somaPontos : 0);
+
+  valor = clamp(valor, METODOLOGIA_MIN, METODOLOGIA_MAX);
+  valor = roundToDot90Ceil(valor);
+  valor = clamp(valor, METODOLOGIA_MIN, METODOLOGIA_MAX);
+
+  return {
+    metodologia: { id: m.id, titulo: m.titulo },
+    breakdown: {
+      base: METODOLOGIA_BASE,
+      totalSemanas,
+      itensCount,
+      videoCount,
+      treinoCount,
+      somaPontos,
+      incluirPontos,
+    },
+    valorFinal: Number(valor.toFixed(2)),
+  };
 }
 
 async function computeCouponDiscount(
@@ -341,10 +470,8 @@ function isAssinaturaAtiva(a: any) {
 }
 
 function pickPrincipalAssinatura(assinaturas: any[]) {
-  const principalAtiva = assinaturas.find(
-    (a) => !isMetodologia(a.plano) && isAssinaturaAtiva(a)
-  );
-  return principalAtiva ?? assinaturas.find((a) => !isMetodologia(a.plano)) ?? null;
+  const principalAtiva = assinaturas.find((a) => !isMetodologiaAvulsa(a.plano) && isAssinaturaAtiva(a));
+  return principalAtiva ?? assinaturas.find((a) => !isMetodologiaAvulsa(a.plano)) ?? null;
 }
 
 export async function getPlans(req: Request, res: Response) {
@@ -383,26 +510,55 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
     const assinaturas = await getAssinaturasReadOnly(usuarioId);
     const assinaturaPrincipal = pickPrincipalAssinatura(assinaturas as any[]);
 
+    const limiteMetodologiasMes = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
+    const inicioMes = startOfMonth(new Date());
+
+    const metodologiasAtivasNoMes = await prisma.metodologiaAssinante.count({
+      where: {
+        usuarioId,
+        status: "ATIVA",
+        iniciouEm: { gte: inicioMes },
+      },
+    });
+
     const trialJaUsado = (assinaturas as any[]).some((a) => {
-      const principal = !isMetodologia(a.plano);
+      const principal = !isMetodologiaAvulsa(a.plano);
       return principal && Boolean(a.trialStartsAt);
     });
 
     const now = new Date();
     const status = String(assinaturaPrincipal?.status || "SEM_ASSINATURA");
     const trialEndsAt = (assinaturaPrincipal?.trialEndsAt as Date | null) ?? null;
-
     const trialAtivo = status === "TRIAL" && trialEndsAt && now <= trialEndsAt;
     const diasRestantes = trialEndsAt ? diffDays(trialEndsAt, now) : null;
 
-    const precisaEscolherPagamento =
-      trialAtivo && diasRestantes != null && diasRestantes <= 7;
+    const precisaEscolherPagamento = trialAtivo && diasRestantes != null && diasRestantes <= 7;
 
     const bloqueado = status === "BLOQUEADA";
     const cancelada = status === "CANCELADA";
 
     const metodoPreferido = assinaturaPrincipal?.metodoPreferido ?? null;
     const tipo = await getUserTipo(usuarioId);
+
+    const metodologiasAtivasRaw = await prisma.metodologiaAssinante.findMany({
+      where: { usuarioId, status: "ATIVA" },
+      include: {
+        metodologia: { select: { id: true, titulo: true, capaUrl: true, descricao: true, totalSemanas: true } },
+      },
+      orderBy: { iniciouEm: "desc" },
+    });
+
+    // (opcional) já devolver “achatado” pro front
+    const metodologiasAtivas = metodologiasAtivasRaw.map((ma) => ({
+      id: ma.metodologia.id,
+      titulo: ma.metodologia.titulo,
+      descricao: ma.metodologia.descricao,
+      capaUrl: ma.metodologia.capaUrl,
+      totalSemanas: ma.metodologia.totalSemanas,
+      status: ma.status,
+      iniciouEm: ma.iniciouEm,
+      planoId: `METODOLOGIA:${ma.metodologia.id}`,
+    }));
 
     const billingState = {
       status,
@@ -422,6 +578,12 @@ export async function getMyBilling(req: AuthenticatedRequest, res: Response) {
       assinaturas: assinaturas || [],
       pagamentos,
       cupons,
+      metodologiasAtivas,
+      metodologias: {
+        limiteMes: limiteMetodologiasMes,
+        usadasNoMes: metodologiasAtivasNoMes,
+        restantesNoMes: Math.max(0, limiteMetodologiasMes - metodologiasAtivasNoMes),
+      },
       billingState,
     });
   } catch (err) {
@@ -466,11 +628,11 @@ export async function applyCoupon(req: Request, res: Response) {
         return res.status(400).json({ message: `Periodicidade inválida: ${it.planoId}` });
       }
 
-      if (isMetodologia(it.planoId) && it.periodicidade !== "Anual") {
+      if (isMetodologiaAvulsa(it.planoId) && it.periodicidade !== "Anual") {
         return res.status(400).json({ message: `Metodologia ${it.planoId} é apenas ANUAL.` });
       }
 
-      baseTotal += priceFor(it.planoId, it.periodicidade);
+      baseTotal += await priceFor(it.planoId, it.periodicidade);
     }
 
     const alvoParaValidacao =
@@ -505,7 +667,7 @@ export async function applyCoupon(req: Request, res: Response) {
           const planoOk = !alvoPlano || it.planoId === alvoPlano;
           const perOk = !alvoPer || it.periodicidade === alvoPer;
           if (planoOk && perOk) {
-            presenteBase += priceFor(it.planoId, it.periodicidade);
+            presenteBase += await priceFor(it.planoId, it.periodicidade);
           }
         }
 
@@ -526,7 +688,7 @@ export async function applyCoupon(req: Request, res: Response) {
       cupom: { codigo: c.codigo, tipo: c.tipo },
     });
   } catch (err) {
-    return res.status(500).json({ message: "Erro ao validar cupom", err });
+    return res.status(500).json({ message: "Erro ao validar cupom. Para ele ser usado so pode ter o atleta_pro no carrinho.", err });
   }
 }
 
@@ -549,7 +711,7 @@ export async function startTrial(req: AuthenticatedRequest, res: Response) {
     const tipo = await getUserTipo(usuarioId);
     assertPlanoPermitido(tipo, planoId);
 
-    if (isMetodologia(planoNorm)) {
+    if (isMetodologiaAvulsa(planoNorm)) {
       return res.status(400).json({ message: "Trial só pode ser usado em plano principal (Pro/Learning/Plus)." });
     }
 
@@ -672,7 +834,7 @@ async function guardTrialRule(usuarioId: string) {
   const assinaturas = await getAssinaturasReadOnly(usuarioId);
 
   const trialAtivoAss = (assinaturas as any[]).find((a) =>
-    !isMetodologia(a.plano) &&
+    !isMetodologiaAvulsa(a.plano) &&
     a.status === "TRIAL" &&
     a.trialEndsAt &&
     now <= a.trialEndsAt
@@ -742,7 +904,21 @@ async function approvePaymentAndProvision(pagamentoId: string, items: Array<{ pl
     });
 
     for (const it of items) {
-      await upsertSubscriptionTx(tx as any, pg.usuarioId, it.planoId, it.periodicidade);
+      const pid = normalizePlanoId(it.planoId);
+
+      if (isMetodologiaAvulsa(pid)) {
+        const metodologiaId = extractMetodologiaId(pid);
+
+        await (tx as any).metodologiaAssinante.upsert({
+          where: { metodologiaId_usuarioId: { metodologiaId, usuarioId: pg.usuarioId } },
+          update: { status: "ATIVA", cancelouEm: null },
+          create: { metodologiaId, usuarioId: pg.usuarioId, status: "ATIVA" },
+        });
+
+        continue;
+      }
+
+      await upsertSubscriptionTx(tx as any, pg.usuarioId, pid, it.periodicidade);
     }
 
     return pg;
@@ -772,7 +948,7 @@ export async function startCheckout(req: Request, res: Response) {
     const plan = findPlan(planoId);
     if (!plan) return res.status(400).json({ message: "Plano inválido" });
 
-    if (isMetodologia(planoId) && periodicidade !== "Anual") {
+    if (isMetodologiaAvulsa(planoId) && periodicidade !== "Anual") {
       return res.status(400).json({ message: "Metodologias são apenas ANUAL." });
     }
 
@@ -782,7 +958,7 @@ export async function startCheckout(req: Request, res: Response) {
       return res.status(400).json({ message: e.message || "Campos inválidos" });
     }
 
-    let base = priceFor(planoId, periodicidade);
+    let base = await priceFor(planoId, periodicidade);
     let desconto = 0;
     let cupomRow: any = null;
 
@@ -828,13 +1004,25 @@ export async function startCheckout(req: Request, res: Response) {
     });
 
     if (total === 0) {
-      await upsertSubscription(usuarioId, planoId, periodicidade);
+      const pid = normalizePlanoId(planoId);
+
+      if (isMetodologiaAvulsa(pid)) {
+        const metodologiaId = extractMetodologiaId(pid);
+        await prisma.metodologiaAssinante.upsert({
+          where: { metodologiaId_usuarioId: { metodologiaId, usuarioId } },
+          update: { status: "ATIVA", cancelouEm: null },
+          create: { metodologiaId, usuarioId, status: "ATIVA" },
+        });
+      } else {
+        await upsertSubscription(usuarioId, pid, periodicidade);
+      }
+
       if (cupomRow) await resgatarCupom(cupomRow.id, usuarioId, pagamento.id);
 
       return res.json({
         status: "APROVADO",
         pagamento,
-        message: "Assinatura ativada sem cobrança (cupom/presente).",
+        message: "Compra aprovada sem cobrança (cupom/presente).",
       });
     }
 
@@ -878,11 +1066,22 @@ export async function startCheckout(req: Request, res: Response) {
       });
     }
 
+    let planTitle = "Plano";
+    if (isMetodologiaAvulsa(normalizePlanoId(planoId))) {
+      const mid = extractMetodologiaId(normalizePlanoId(planoId));
+      const pr = await computeMetodologiaAvulsaPricing(mid, false);
+      planTitle = `Metodologia Avulsa: ${pr.metodologia.titulo}`;
+    } else {
+      const plan = findPlan(planoId);
+      if (!plan) return res.status(400).json({ message: "Plano inválido" });
+      planTitle = plan.title;
+    }
+
     if (metodoFinal === "PIX") {
       try {
         const mpResp: any = await mercadopago.payment.create({
           transaction_amount: Number(total.toFixed(2)),
-          description: `Assinatura ${plan.title} (${periodicidade})`,
+          description: `Assinatura ${planTitle} (${periodicidade})`,
           payment_method_id: "pix",
           payer: {
             email: pagador!.email,
@@ -934,7 +1133,7 @@ export async function startCheckout(req: Request, res: Response) {
       const mpPrefResp: any = await mercadopago.preferences.create({
         items: [
           {
-            title: plan.title,
+            title: planTitle,
             quantity: 1,
             currency_id: "BRL",
             unit_price: Number(total.toFixed(2)),
@@ -1024,11 +1223,11 @@ export async function startCheckoutBundle(req: Request, res: Response) {
         return res.status(400).json({ message: `Periodicidade inválida: ${it.planoId}` });
       }
 
-      if (isMetodologia(it.planoId) && it.periodicidade !== "Anual") {
+      if (isMetodologiaAvulsa(it.planoId) && it.periodicidade !== "Anual") {
         return res.status(400).json({ message: `Metodologia ${it.planoId} é apenas ANUAL.` });
       }
 
-      totalBase += priceFor(it.planoId, it.periodicidade);
+      totalBase += await priceFor(it.planoId, it.periodicidade);
     }
 
     let desconto = 0;
@@ -1057,7 +1256,7 @@ export async function startCheckoutBundle(req: Request, res: Response) {
             const planoOk = !alvoPlano || it.planoId === alvoPlano;
             const perOk = !alvoPer || it.periodicidade === alvoPer;
             if (planoOk && perOk) {
-              presenteBase += priceFor(it.planoId, it.periodicidade);
+              presenteBase += await priceFor(it.planoId, it.periodicidade);
             }
           }
           desconto = presenteBase;
@@ -1256,7 +1455,7 @@ export async function cancelSubscription(req: Request, res: Response) {
       await (prisma as any).assinatura.updateMany({
         where: { usuarioId, plano, ativo: true },
         data: {
-          ativo: true,
+          ativo: false,
           canceledAt: now,
           status: "CANCELADA",
           bloqueadoEm: null,
@@ -1406,7 +1605,18 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
         where: { id: pagamento.id },
         data: { status: PagamentoStatus.APROVADO, pagoEm: pagamento.pagoEm ?? now },
       });
-      await upsertSubscription(pagamento.usuarioId, pagamento.plano, pagamento.periodicidade);
+      const pid = normalizePlanoId(pagamento.plano);
+
+      if (isMetodologiaAvulsa(pid)) {
+        const metodologiaId = extractMetodologiaId(pid);
+        await prisma.metodologiaAssinante.upsert({
+          where: { metodologiaId_usuarioId: { metodologiaId, usuarioId: pagamento.usuarioId } },
+          update: { status: "ATIVA", cancelouEm: null },
+          create: { metodologiaId, usuarioId: pagamento.usuarioId, status: "ATIVA" },
+        });
+      } else {
+        await upsertSubscription(pagamento.usuarioId, pid, pagamento.periodicidade);
+      }
 
       return res.status(200).json({ ok: true });
     }
@@ -1434,6 +1644,70 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
       message: "Erro ao processar webhook Mercado Pago",
       detalhe: err?.response?.data || String(err),
     });
+  }
+}
+
+export async function getMetodologiasAvulsas(req: AuthenticatedRequest, res: Response) {
+  try {
+    const usuarioId = getUserId(req);
+    if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
+
+    const metodologias = await prisma.metodologia.findMany({
+      where: { ativo: true },
+      orderBy: { criadoEm: "desc" },
+      select: {
+        id: true,
+        titulo: true,
+        descricao: true,
+        capaUrl: true,
+        totalSemanas: true,
+        _count: { select: { itens: true } },
+      },
+    });
+
+    // devolve já com preço calculado (rápido e prático pro frontend)
+    const items = await Promise.all(
+      metodologias.map(async (m) => {
+        const pr = await computeMetodologiaAvulsaPricing(m.id, false);
+        return {
+          ...m,
+          preco: pr.valorFinal,
+          planoId: `METODOLOGIA:${m.id}`,
+          breakdown: pr.breakdown,
+        };
+      })
+    );
+
+    return res.json({ items });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Erro ao carregar metodologias avulsas" });
+  }
+}
+
+export async function resetMetodologiasAvulsasDev(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (process.env.NODE_ENV === "production") {
+      return res.status(403).json({ message: "Operação desativada em produção" });
+    }
+
+    const usuarioId = getUserId(req);
+    if (!usuarioId) return res.status(401).json({ message: "Não autenticado" });
+
+    const tipo = await getUserTipo(usuarioId);
+    if (String(tipo).toLowerCase() !== "admin") {
+      return res.status(403).json({ message: "Apenas admin pode resetar (dev)" });
+    }
+
+    await prisma.metodologiaAssinante.deleteMany({});
+    await prisma.metodologiaItem.deleteMany({});
+    await prisma.metodologiaTreino.deleteMany({});
+    await prisma.metodologia.deleteMany({});
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Erro ao resetar metodologias (dev)" });
   }
 }
 
@@ -1467,7 +1741,7 @@ export async function redeemGift(req: Request, res: Response) {
     if (cupom.periodicidade && cupom.periodicidade !== periodicidade)
       return res.status(400).json({ message: "Presente não válido para esta periodicidade" });
 
-    if (isMetodologia(planoNorm) && periodicidade !== "Anual") {
+    if (isMetodologiaAvulsa(planoNorm) && periodicidade !== "Anual") {
       return res.status(400).json({ message: "Metodologias são apenas ANUAL." });
     }
 

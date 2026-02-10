@@ -1822,10 +1822,6 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                   className="w-full outline-none text-sm"
                 />
               </div>
-
-              <span className="shrink-0 text-xs px-3 py-1 rounded-full border bg-amber-50 text-amber-800 font-semibold">
-                +32 pts
-              </span>
             </div>
 
             {/* FILTROS */}
