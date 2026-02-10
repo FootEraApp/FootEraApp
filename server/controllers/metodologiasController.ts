@@ -1,17 +1,91 @@
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { MetodologiaAssinaturaStatus, MetodologiaPublicoAlvo, MetodologiaConteudoTipo  } from "@prisma/client";
+import { Nivel, Categoria } from "@prisma/client"; // ou MetodologiaNivel
+import { computeMetodologiaAvulsaPricing } from "../services/pricing.js";
+import { startOfMonth } from "date-fns";
 
-/** Pega userId do token (igual seu padrão) */
 function getUserId(req: Request): string | null {
   const r: any = req;
   return r.userId || r.user?.id || r.usuarioId || null;
 }
 
-/** =========================
- * GET /api/metodologias
- * ?criadorUsuarioId=...
- * ========================= */
+function parseNivel(raw: any) {
+  if (raw === undefined || raw === null || String(raw).trim() === "") return undefined;
+  const v = String(raw).trim();
+  const ok = (Object.values(Nivel) as string[]).includes(v);
+  return ok ? (v as Nivel) : undefined;
+}
+
+function parseCategorias(raw: any): Categoria[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const vals = raw.map(String);
+  const ok = vals.every((v) => (Object.values(Categoria) as string[]).includes(v));
+  return ok ? (vals as Categoria[]) : undefined;
+}
+
+function isPlanoMetodologiaAvulsa(plano: string | null | undefined) {
+  const p = String(plano || "");
+  return p.startsWith("METODOLOGIA:");
+}
+
+function metodologiaLimitFromPlano(plano: string | null | undefined): number {
+  const p = String(plano || "").toUpperCase();
+
+  // se o cara comprou uma metodologia avulsa, isso NÃO é "quota mensal"
+  // (é acesso àquela metodologia específica via MetodologiaAssinante)
+  if (isPlanoMetodologiaAvulsa(p)) return 0;
+
+  // 1 por mês
+  if (p === "ATLETA_LEARNING_1") return 1;
+  if (p === "PROFESSOR_LEARNING_1") return 1;
+  if (p === "ATLETA_METODO_1") return 1;
+
+  // 3 por mês
+  if (p === "ATLETA_LEARNING_3") return 3;
+  if (p === "PROFESSOR_LEARNING_3") return 3;
+  if (p === "ORGANIZACOES_LEARNING_3") return 3;
+
+  // Pro e outros: zero
+  return 0;
+}
+
+function pickPrincipalAssinatura(assinaturas: Array<{ plano?: string | null; status?: string | null; ativo?: boolean | null }>) {
+  // mesma regra do billing: assinatura principal = a primeira que NÃO é METODOLOGIA:<id>
+  // e se possível ativa.
+  const isAtiva = (a: any) => (a?.status === "ATIVA" || a?.status === "TRIAL") && a?.ativo === true;
+  const isMetodo = (a: any) => String(a?.plano || "").startsWith("METODOLOGIA:");
+
+  const ativa = assinaturas.find((a) => !isMetodo(a) && isAtiva(a));
+  if (ativa) return ativa as any;
+
+  const primeiraNaoMetodo = assinaturas.find((a) => !isMetodo(a));
+  return (primeiraNaoMetodo ?? null) as any;
+}
+
+async function anexarCountsTipoPorMetodologia(ids: string[]) {
+  if (!ids.length) return {};
+
+  const grouped = await prisma.metodologiaItem.groupBy({
+    by: ["metodologiaId", "tipo"],
+    where: { metodologiaId: { in: ids } },
+    _count: { _all: true },
+  });
+
+  return grouped.reduce((acc, g) => {
+    const mid = g.metodologiaId;
+    if (!acc[mid]) acc[mid] = { videoCount: 0, treinoCount: 0 };
+
+    const tipoItem = String(g.tipo).toUpperCase();
+    const qtd = g._count._all ?? 0;
+
+    if (tipoItem === "VIDEO") acc[mid].videoCount += qtd;
+    if (tipoItem === "TREINO") acc[mid].treinoCount += qtd;
+
+    return acc;
+  }, {} as Record<string, { videoCount: number; treinoCount: number }>);
+}
+
 export async function listMetodologias(req: Request, res: Response) {
   try {
     const criadorUsuarioId = (req.query.criadorUsuarioId as string) || undefined;
@@ -25,15 +99,21 @@ export async function listMetodologias(req: Request, res: Response) {
       },
     });
 
-    return res.json({ items });
+    const ids = items.map((m) => m.id);
+    const countsById = await anexarCountsTipoPorMetodologia(ids);
+
+    return res.json({
+      items: items.map((m) => ({
+        ...m,
+        videoCount: countsById[m.id]?.videoCount ?? 0,
+        treinoCount: countsById[m.id]?.treinoCount ?? 0,
+      })),
+    });
   } catch (e: any) {
     return res.status(500).json({ message: "Erro ao listar metodologias.", detail: e?.message });
   }
 }
 
-/** =========================
- * GET /api/metodologias/:id
- * ========================= */
 export async function getMetodologiaById(req: Request, res: Response) {
   try {
     const { id } = req.params;
@@ -54,10 +134,6 @@ export async function getMetodologiaById(req: Request, res: Response) {
   }
 }
 
-/** =========================
- * POST /api/metodologias
- * body: { titulo, descricao?, capaUrl?, totalSemanas?, nivel?, categorias? }
- * ========================= */
 export async function createMetodologia(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -84,18 +160,29 @@ export async function createMetodologia(req: Request, res: Response) {
       publicoAlvoFinal = raw as MetodologiaPublicoAlvo;
     }
 
+    const niveisOk = ["Base", "Avancado", "Performance"];
+
+    if (nivel !== undefined && nivel !== null && String(nivel).trim() !== "") {
+      const n = String(nivel).trim();
+      if (!niveisOk.includes(n)) {
+        return res.status(400).json({
+          message: "nivel inválido",
+          recebido: nivel,
+          esperado: niveisOk,
+        });
+      }
+    }
+
     const created = await prisma.metodologia.create({
       data: {
         titulo: titulo.trim(),
         descricao: typeof descricao === "string" ? descricao.trim() : null,
         capaUrl: typeof capaUrl === "string" ? capaUrl.trim() : null,
         totalSemanas: typeof totalSemanas === "number" ? totalSemanas : null,
-
         // opcionais do schema
-        nivel: nivel ?? undefined,
-        categorias: Array.isArray(categorias) ? categorias : undefined,
+        nivel: parseNivel(nivel),
+        categorias: parseCategorias(categorias),
         publicoAlvo: publicoAlvoFinal,
-
         criadorUsuarioId: userId,
       },
       include: {
@@ -103,16 +190,24 @@ export async function createMetodologia(req: Request, res: Response) {
       },
     });
 
-    return res.status(201).json({ item: created });
+    const pr = await computeMetodologiaAvulsaPricing(created.id, false);
+    return res.json({
+      metodologia: {
+        id: created.id,
+        titulo: created.titulo,
+        descricao: created.descricao,
+        capaUrl: created.capaUrl,
+        totalSemanas: created.totalSemanas,
+        preco: pr.valorFinal,
+        planoId: `METODOLOGIA:${created.id}`,
+        breakdown: pr.breakdown,
+      }
+    });
   } catch (e: any) {
     return res.status(500).json({ message: "Erro ao criar metodologia.", detail: e?.message });
   }
 }
 
-/** =========================
- * PUT /api/metodologias/:id
- * Edita (somente criador)
- * ========================= */
 export async function updateMetodologia(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -143,6 +238,19 @@ export async function updateMetodologia(req: Request, res: Response) {
       publicoAlvoUpdate = raw as MetodologiaPublicoAlvo;
     }
 
+    const niveisOk = ["Base", "Avancado", "Performance"];
+
+    if (nivel !== undefined && nivel !== null && String(nivel).trim() !== "") {
+      const n = String(nivel).trim();
+      if (!niveisOk.includes(n)) {
+        return res.status(400).json({
+          message: "nivel inválido",
+          recebido: nivel,
+          esperado: niveisOk,
+        });
+      }
+    }
+
     const updated = await prisma.metodologia.update({
       where: { id },
       data: {
@@ -151,8 +259,8 @@ export async function updateMetodologia(req: Request, res: Response) {
         capaUrl: typeof capaUrl === "string" ? capaUrl.trim() : undefined,
         totalSemanas: typeof totalSemanas === "number" ? totalSemanas : undefined,
         ativo: typeof ativo === "boolean" ? ativo : undefined,
-        nivel: nivel ?? undefined,
-        categorias: Array.isArray(categorias) ? categorias : undefined,
+        nivel: parseNivel(nivel),
+        categorias: parseCategorias(categorias),
         ...(publicoAlvoUpdate !== undefined ? { publicoAlvo: publicoAlvoUpdate } : {}),
       },
       include: {
@@ -166,10 +274,6 @@ export async function updateMetodologia(req: Request, res: Response) {
   }
 }
 
-/** =========================
- * DELETE /api/metodologias/:id
- * Exclui (somente criador)
- * ========================= */
 export async function deleteMetodologia(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -192,21 +296,47 @@ export async function deleteMetodologia(req: Request, res: Response) {
   }
 }
 
-/** =========================
- * GET /api/metodologias/minhas/assinadas
- * Lista metodologias assinadas pelo usuário
- * ========================= */
 export async function listMinhasMetodologiasAssinadas(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Não autenticado." });
 
-    const assinaturas = await prisma.metodologiaAssinante.findMany({
+    // 1) pega assinatura principal (plano "principal")
+    const assinaturasPrincipais = await (prisma as any).assinatura.findMany({
+      where: { usuarioId: userId },
+      orderBy: { startsAt: "desc" },
+    });
+
+    const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasPrincipais as any[]);
+    const limite = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
+
+    if (limite <= 0) {
+      return res.status(403).json({
+        code: "NO_METODOLOGIA_QUOTA",
+        message: "Seu plano não permite escolher metodologias. Assine Learning 1/3 ou Método 1.",
+      });
+    }
+
+    // 2) conta quantas escolhas já fez no mês
+    const inicioMes = startOfMonth(new Date());
+    const usadasNoMes = await prisma.metodologiaAssinante.count({
+      where: { usuarioId: userId, status: MetodologiaAssinaturaStatus.ATIVA, iniciouEm: { gte: inicioMes } },
+    });
+
+    if (usadasNoMes >= limite) {
+      return res.status(403).json({
+        code: "METODOLOGIA_QUOTA_EXCEEDED",
+        message: `Você já escolheu ${usadasNoMes}/${limite} metodologias este mês.`,
+      });
+    }
+
+    // 3) lista as metodologias já ativas
+    const rows = await prisma.metodologiaAssinante.findMany({
       where: {
         usuarioId: userId,
-        status: MetodologiaAssinaturaStatus.ATIVA, // ✅ no seu schema é status (enum), não "ativo"
+        status: MetodologiaAssinaturaStatus.ATIVA,
       },
-      orderBy: { iniciouEm: "desc" }, // ✅ no seu schema é iniciouEm (não criadoEm)
+      orderBy: { iniciouEm: "desc" },
       include: {
         metodologia: {
           include: {
@@ -217,22 +347,38 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
       },
     });
 
+    const metodologias = rows.map((r) => r.metodologia);
+    const ids = metodologias.map((m) => m.id);
+    const countsById = await anexarCountsTipoPorMetodologia(ids);
+
     return res.json({
-      items: assinaturas.map((a) => ({
-        ...a,
-        metodologia: a.metodologia, // ✅ agora existe
+      items: rows.map((r) => ({
+        id: r.metodologia.id,
+        titulo: r.metodologia.titulo,
+        descricao: r.metodologia.descricao,
+        capaUrl: r.metodologia.capaUrl ?? null,
+        logoUrl: r.metodologia.capaUrl ?? null,
+        categorias: r.metodologia.categorias ?? [],
+        publicoAlvo: r.metodologia.publicoAlvo,
+        criadorUsuario: r.metodologia.criadorUsuario,
+        _count: r.metodologia._count,
+        videoCount: countsById[r.metodologia.id]?.videoCount ?? 0,
+        treinoCount: countsById[r.metodologia.id]?.treinoCount ?? 0,
+        assinada: true,
+        iniciouEm: r.iniciouEm,
+        status: r.status,
       })),
+      quota: {
+        limite,
+        usadasNoMes,
+        restantes: Math.max(0, limite - usadasNoMes),
+      },
     });
   } catch (e: any) {
     return res.status(500).json({ message: "Erro ao listar assinadas.", detail: e?.message });
   }
 }
 
-/** =========================
- * GET /api/metodologias/minhas
- * Lista metodologias criadas pelo usuário logado
- * (pra selects no front)
- * ========================= */
 export async function listMinhasMetodologiasCriadas(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -241,14 +387,24 @@ export async function listMinhasMetodologiasCriadas(req: Request, res: Response)
     const items = await prisma.metodologia.findMany({
       where: { criadorUsuarioId: userId, ativo: true },
       orderBy: { criadoEm: "desc" },
-      select: {
-        id: true,
-        titulo: true,
-        publicoAlvo: true,
+      include: {
+        criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
+        _count: { select: { assinantes: true, itens: true } },
       },
     });
 
-    return res.json({ items });
+    const ids = items.map((m) => m.id);
+    const countsById = await anexarCountsTipoPorMetodologia(ids);
+
+    return res.json({
+      items: items.map((m) => ({
+        ...m,
+        logoUrl: m.capaUrl ?? null,
+        videoCount: countsById[m.id]?.videoCount ?? 0,
+        treinoCount: countsById[m.id]?.treinoCount ?? 0,
+      })),
+    });
+
   } catch (e: any) {
     return res.status(500).json({ message: "Erro ao listar minhas metodologias.", detail: e?.message });
   }
@@ -260,15 +416,23 @@ export async function listMetodologiasVisiveis(req: Request, res: Response) {
     if (!userId) return res.status(401).json({ message: "Não autenticado." });
 
     const tipo =
-      String((req as any).authUser?.tipo ?? (req as any).user?.tipo ?? "")
+      String(
+        (req as any).authUser?.tipo ??
+        (req as any).user?.tipo ??
+        (req as any).usuario?.tipo ??
+        (req as any).tipo ??
+        ""
+      )
         .toLowerCase()
         .trim();
+
 
     const publicoPermitido =
       tipo === "atleta"
         ? [MetodologiaPublicoAlvo.ATLETAS, MetodologiaPublicoAlvo.AMBOS]
         : [MetodologiaPublicoAlvo.PROFISSIONAIS, MetodologiaPublicoAlvo.AMBOS];
 
+    // 1) lista metodologias
     const items = await prisma.metodologia.findMany({
       where: {
         ativo: true,
@@ -281,30 +445,43 @@ export async function listMetodologiasVisiveis(req: Request, res: Response) {
       },
     });
 
-    return res.json({ items });
+    // 2) conta itens por tipo (VIDEO / TREINO) e junta no retorno
+    const ids = items.map((m) => m.id);
+    let countsById: Record<string, { videoCount: number; treinoCount: number }> = {};
+
+    if (ids.length) {
+      const grouped = await prisma.metodologiaItem.groupBy({
+        by: ["metodologiaId", "tipo"],
+        where: { metodologiaId: { in: ids } },
+        _count: { _all: true },
+      });
+
+      countsById = grouped.reduce((acc, g) => {
+        const mid = g.metodologiaId;
+        if (!acc[mid]) acc[mid] = { videoCount: 0, treinoCount: 0 };
+
+        const tipoItem = String(g.tipo).toUpperCase();
+        const qtd = g._count._all ?? 0;
+
+        if (tipoItem === "VIDEO") acc[mid].videoCount += qtd;
+        if (tipoItem === "TREINO") acc[mid].treinoCount += qtd;
+
+        return acc;
+      }, {} as Record<string, { videoCount: number; treinoCount: number }>);
+    }
+
+    const out = items.map((m) => ({
+      ...m,
+      videoCount: countsById[m.id]?.videoCount ?? 0,
+      treinoCount: countsById[m.id]?.treinoCount ?? 0,
+      logoUrl: m.capaUrl ?? null,
+    }));
+
+    return res.json({ items: out });
   } catch (e: any) {
     return res.status(500).json({ message: "Erro ao listar visíveis.", detail: e?.message });
   }
 }
-
-/** =========================
- * POST /api/metodologias/:metodologiaId/itens
- * body:
- *  - { itens: [...] }  OU  { ...item }
- *
- * Item aceito (flexível):
- *  {
- *    semana: number,
- *    ordem?: number,
- *    tipo: "VIDEO" | "TREINO" | "TEXTO",
- *    titulo?: string,
- *    descricao?: string,
- *    videoUrl?: string,
- *    treinoProgramadoId?: string,
- *    pontos?: number,
- *    duracaoMin?: number
- *  }
- * ========================= */
 
 type MetodologiaItemPreparado = {
   metodologiaId: string;
@@ -318,7 +495,6 @@ type MetodologiaItemPreparado = {
   pontos: number | null;
   duracaoMin: number | null;
 };
-
 
 export async function createMetodologiaItens(req: Request, res: Response) {
   try {
@@ -362,7 +538,6 @@ export async function createMetodologiaItens(req: Request, res: Response) {
       }
 
       const tipoStr = String(raw.tipo || "").toUpperCase().trim();
-
       const tiposPermitidos = ["VIDEO", "TREINO"] as const;
 
       if (!tiposPermitidos.includes(tipoStr as any)) {
@@ -373,7 +548,10 @@ export async function createMetodologiaItens(req: Request, res: Response) {
         });
       }
 
-      const tipo = tipoStr as MetodologiaConteudoTipo;
+      const tipo: MetodologiaConteudoTipo =
+        tipoStr === "VIDEO"
+          ? MetodologiaConteudoTipo.VIDEO
+          : MetodologiaConteudoTipo.TREINO;
 
       const ordem =
         raw.ordem === undefined || raw.ordem === null || raw.ordem === ""
@@ -403,11 +581,10 @@ export async function createMetodologiaItens(req: Request, res: Response) {
           ? raw.videoUrl.trim()
           : null;
 
-      // Regras básicas por tipo (pode relaxar se quiser)
-      if (tipo === "VIDEO" && !videoUrl) {
+      if (tipo === MetodologiaConteudoTipo.VIDEO && !videoUrl) {
         return res.status(400).json({ message: `Item #${i + 1}: tipo VIDEO exige 'videoUrl'.` });
       }
-      if (tipo === "TREINO" && !treinoProgramadoId) {
+      if (tipo === MetodologiaConteudoTipo.TREINO && !treinoProgramadoId) {
         return res.status(400).json({ message: `Item #${i + 1}: tipo TREINO exige 'treinoProgramadoId'.` });
       }
 

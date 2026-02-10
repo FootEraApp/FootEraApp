@@ -73,6 +73,18 @@ type BillingState = {
   trialJaUsado?: boolean; 
 };
 
+type MetodologiaAvulsa = {
+  id: string;
+  titulo: string;
+  descricao: string | null;
+  nivel: "Base" | "Avancado" | "Performance" | string;
+  totalSemanas: number | null;
+  _count: { itens: number; assinantes: number };
+  videoCount: number;
+  treinoCount: number;
+  precoAnual: number;
+};
+
 function PagamentoModal({
   open,
   onClose,
@@ -103,16 +115,12 @@ function PagamentoModal({
 }: {
   open: boolean;
   onClose: () => void;
-
   method: MetodoPagamento;
   setMethod: (m: MetodoPagamento) => void;
-
   pagador: Pagador;
   setPagador: React.Dispatch<React.SetStateAction<Pagador>>;
-
   cartao: Cartao;
   setCartao: React.Dispatch<React.SetStateAction<Cartao>>;
-
   total: number;
   mostrarMsgTrial: boolean;
   bloquearCheckoutPorTrial: boolean;
@@ -120,14 +128,11 @@ function PagamentoModal({
   canFinalize: boolean;
   checkoutError: string | null;
   onFinalize: () => void;
-
   pixQrUrl: string | null;
   pixCopiaECola: string | null;
   setPixCopiaECola: React.Dispatch<React.SetStateAction<string | null>>;
-
   boletoLinha: string | null;
   boletoPdf: string | null;
-
   sanitizeEmail: (v: string) => string;
   sanitizeCpf: (v: string) => string;
   sanitizePhone: (v: string) => string;
@@ -461,7 +466,9 @@ function normalizeTipo(raw?: unknown) {
   return String(raw ?? "").trim().toLowerCase();
 }
 
-function planId(role: RoleUI, tier: "PRO" | "LEARNING" | "PLUS") {
+type MainTier = "PRO" | "LEARNING_1" | "LEARNING_3" | "METODO_1"; // METODO_1 só pra atleta
+
+function planId(role: RoleUI, tier: MainTier) {
   const r =
     role === "Atleta"
       ? "ATLETA"
@@ -470,6 +477,7 @@ function planId(role: RoleUI, tier: "PRO" | "LEARNING" | "PLUS") {
       : role === "Professor"
       ? "PROFESSOR"
       : "ORGANIZACOES";
+
   return `${r}_${tier}`;
 }
 
@@ -484,91 +492,84 @@ const storageRoleToUIRole: Record<string, RoleUI> = {
   admin: "Atleta",
 };
 
-const METODOLOGIAS = [
-  { id: "METH_POSICIONAL", nome: "Treino Posicional", desc: "Rotinas por função: posição, leitura de jogo e tomada de decisão." },
-  { id: "METH_FORCA", nome: "Força & Explosão", desc: "Potência, aceleração, saltos e prevenção." },
-  { id: "METH_TECNICA", nome: "Técnica Individual", desc: "Domínio, passe, condução, finalização e 1v1." },
-  { id: "METH_TATICO", nome: "Tático", desc: "Organização, linhas, compactação e ajustes por cenário." },
-  { id: "METH_MENTAL", nome: "Mentalidade", desc: "Foco, consistência, rotina e performance." },
-];
-
 const FALLBACK_PLANS: Record<string, Plan> = {
+  // ✅ ATLETA
   ATLETA_PRO: {
     id: "ATLETA_PRO",
     title: "Atleta Pro",
-    monthly: 19.9,
-    annual: 199,
-    benefits: ["Sem anúncios no app", "Treinos e desafios ilimitados (fair-use)", "Biblioteca pessoal ilimitada (fair-use)", "Agendamento pessoal"],
+    monthly: 19.9,          // <- mantenha o valor que você já usa no backend
+    annual: null,
+    benefits: ["Sem anúncios", "Recursos Pro do atleta", "Mais limites operacionais"],
   },
-  ATLETA_LEARNING: {
-    id: "ATLETA_LEARNING",
-    title: "Atleta Learning",
-    monthly: 14.9,
-    annual: 149,
-    benefits: ["Acesso ilimitado a metodologias", "Rotinas e trilhas por método", "Conteúdos e sugestões guiadas"],
+  ATLETA_LEARNING_1: {
+    id: "ATLETA_LEARNING_1",
+    title: "Atleta Learning 1",
+    monthly: 44.9,
+    annual: null,
+    benefits: ["Tudo do Atleta Pro", "Escolher 1 metodologia por mês"],
   },
-  ATLETA_PLUS: {
-    id: "ATLETA_PLUS",
-    title: "Atleta Plus",
+  ATLETA_LEARNING_3: {
+    id: "ATLETA_LEARNING_3",
+    title: "Atleta Learning 3",
+    monthly: 64.9,
+    annual: null,
+    benefits: ["Tudo do Atleta Pro", "Escolher até 3 metodologias por mês"],
+  },
+  ATLETA_METODO_1: {
+    id: "ATLETA_METODO_1",
+    title: "1 Metodologia (mensal)",
     monthly: 29.9,
-    annual: 299,
-    benefits: ["Tudo do Pro", "Tudo do Learning", "Pacote completo"],
+    annual: null,
+    benefits: ["Escolher 1 metodologia por mês", "Sem benefícios do Pro"],
   },
+
+  // ✅ PROFESSOR
+  PROFESSOR_PRO: {
+    id: "PROFESSOR_PRO",
+    title: "Professor Pro",
+    monthly: 39.9,          // <- você falou “em torno de 59,90”
+    annual: null,
+    benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais"],
+  },
+  PROFESSOR_LEARNING_1: {
+    id: "PROFESSOR_LEARNING_1",
+    title: "Professor Learning 1",
+    monthly: 59.9,          // se for diferente do Pro, troque aqui
+    annual: null,
+    benefits: ["Tudo do Professor Pro", "Escolher 1 metodologia por mês"],
+  },
+  PROFESSOR_LEARNING_3: {
+    id: "PROFESSOR_LEARNING_3",
+    title: "Professor Learning 3",
+    monthly: 79.9,
+    annual: null,
+    benefits: ["Tudo do Professor Pro", "Escolher até 3 metodologias por mês"],
+  },
+
+  // ✅ ORGANIZAÇÕES
+  ORGANIZACOES_PRO: {
+    id: "ORGANIZACOES_PRO",
+    title: "Organizações Pro",
+    monthly: 79.9,          // mantenha ou ajuste
+    annual: null,
+    benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional"],
+  },
+  ORGANIZACOES_LEARNING_3: {
+    id: "ORGANIZACOES_LEARNING_3",
+    title: "Organizações Learning",
+    monthly: 149.9,
+    annual: null,
+    benefits: ["Tudo do Pro", "Escolher até 3 metodologias por mês"],
+  },
+
+  // ✅ OLHEIRO (mantém)
   OLHEIRO_PRO: {
     id: "OLHEIRO_PRO",
     title: "Olheiro Pro",
     monthly: 24.9,
-    annual: 249,
+    annual: null,
     benefits: ["Sem anúncios", "Ferramentas Pro do olheiro", "Mais limites operacionais"],
   },
-  PROFESSOR_PRO: {
-    id: "PROFESSOR_PRO",
-    title: "Professor Pro",
-    monthly: 39.9,
-    annual: 399,
-    benefits: ["Sem anúncios", "Recursos Pro de treino", "Mais limites operacionais"],
-  },
-  PROFESSOR_LEARNING: {
-    id: "PROFESSOR_LEARNING",
-    title: "Professor Learning",
-    monthly: 29.9,
-    annual: 299,
-    benefits: ["Metodologias ilimitadas", "Trilhas e conteúdos por método"],
-  },
-  PROFESSOR_PLUS: {
-    id: "PROFESSOR_PLUS",
-    title: "Professor Plus",
-    monthly: 59.9,
-    annual: 599,
-    benefits: ["Tudo do Pro", "Tudo do Learning", "Pacote completo"],
-  },
-  ORGANIZACOES_PRO: { 
-    id: "ORGANIZACOES_PRO", 
-    title: "Organizações Pro",
-    monthly: 79.9,
-    annual: 799,
-    benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional"],
-  },
-  ORGANIZACOES_LEARNING: { 
-    id: "ORGANIZACOES_LEARNING", 
-    title: "Organizações Learning",
-    monthly: 59.9,
-    annual: 599,
-    benefits: ["Metodologias ilimitadas", "Trilhas/rotinas por método"],
-  },
-  ORGANIZACOES_PLUS: { 
-    id: "ORGANIZACOES_PLUS", 
-    title: "Organizações Plus",
-    monthly: 109.9,
-    annual: 1099,
-    benefits: ["Tudo do Pro", "Tudo do Learning", "Pacote completo"],
-  },
-
-  METH_POSICIONAL: { id: "METH_POSICIONAL", title: "Treino Posicional", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Posicional"] },
-  METH_FORCA: { id: "METH_FORCA", title: "Força & Explosão", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Força & Explosão"] },
-  METH_TECNICA: { id: "METH_TECNICA", title: "Técnica Individual", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Técnica Individual"] },
-  METH_TATICO: { id: "METH_TATICO", title: "Tático", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Tático"] },
-  METH_MENTAL: { id: "METH_MENTAL", title: "Mentalidade", monthly: 0, annual: 49.9, benefits: ["Acesso anual à metodologia Mentalidade"] },
 };
 
 type CartItem = {
@@ -601,6 +602,7 @@ type PersistState = {
   pickMetods: Record<string, boolean>;
   cupomInput: string;
   method: MetodoPagamento;
+  selectedMain: string | null;
 };
 
 function readPersist(): PersistState | null {
@@ -629,6 +631,10 @@ export default function PagamentosPage() {
   }, [tipoBackend, tipo]);
 
   const [roleSelected, setRoleSelected] = useState<RoleUI>(roleUI);
+  const [metodologiasAvulsas, setMetodologiasAvulsas] = useState<MetodologiaAvulsa[]>([]);
+  const [buscaMetod, setBuscaMetod] = useState("");
+  const [filtroNivelMetod, setFiltroNivelMetod] = useState<"TODOS" | "Base" | "Avancado" | "Performance">("TODOS");
+  const [filtroConteudoMetod, setFiltroConteudoMetod] = useState<"TODOS" | "VIDEOS" | "TREINOS" | "AMBOS">("TODOS");
 
   useEffect(() => {
     if (hadPersistRef.current) return;
@@ -661,6 +667,8 @@ export default function PagamentosPage() {
   const [pickLearning, setPickLearning] = useState(false);
   const [pickPlus, setPickPlus] = useState(false);
   const [pickMetods, setPickMetods] = useState<Record<string, boolean>>({});
+  const [selectedMain, setSelectedMain] = useState<string | null>(null); 
+// exemplo: "ATLETA_PRO", "PROFESSOR_LEARNING_3", etc.
 
   const [cupomInput, setCupomInput] = useState("");
   const [cupomPreview, setCupomPreview] = useState<{ total: number; base: number; desconto: number; codigo: string; tipo: string } | null>(null);
@@ -683,19 +691,49 @@ export default function PagamentosPage() {
   );
 
   useEffect(() => {
-    if (roleSelected === "Olheiro") {
-      setPickPro(true);
-      setPickLearning(false);
-      setPickPlus(false);
-      setPickMetods({});
-      setPeriodPro("Mensal");
+    if (!billingState?.precisaEscolherPagamento) return;
+    // ✅ força reescolher
+    setPickMetods({});
+  }, [billingState?.precisaEscolherPagamento]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    // se mudou o tipo e o plano selecionado não existe mais, zera
+    const validIdsForRole = (() => {
+      if (roleSelected === "Olheiro") return ["OLHEIRO_PRO"];
+      if (roleSelected === "Professor") return [
+        planId("Professor", "PRO"),
+        planId("Professor", "LEARNING_1"),
+        planId("Professor", "LEARNING_3"),
+      ];
+      if (roleSelected === "Organizações") return [
+        planId("Organizações", "PRO"),
+        planId("Organizações", "LEARNING_3"),
+      ];
+      return [
+        planId("Atleta", "PRO"),
+        planId("Atleta", "LEARNING_1"),
+        planId("Atleta", "LEARNING_3"),
+        planId("Atleta", "METODO_1"),
+      ];
+    })();
+
+    if (selectedMain && !validIdsForRole.includes(selectedMain)) {
+      setSelectedMain(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roleSelected]);
+  }, [roleSelected, hydrated, selectedMain]);
 
   useEffect(() => {
     setCupomPreview(null);
-  }, [cupomInput, pickPro, pickLearning, pickPlus, periodPro, periodLearning, periodPlus, pickMetods, roleSelected]);
+  }, [
+    cupomInput,
+    pickPro, pickLearning, pickPlus,
+    periodPro, periodLearning, periodPlus,
+    pickMetods,
+    roleSelected,
+    selectedMain, // ✅ recomendado
+  ]);
 
   function findApiPlan(planoId: string) {
     return apiPlans.find((p) => p.id === planoId);
@@ -727,42 +765,24 @@ export default function PagamentosPage() {
   function buildCart(): CartItem[] {
     const items: CartItem[] = [];
 
-    if (isOlheiro) {
-      const id = planId(roleSelected, "PRO"); 
-      const price = getPrice(id, periodPro);
+    // ✅ plano principal (mensal sempre)
+    if (selectedMain) {
+      const price = getPrice(selectedMain, "Mensal");
       items.push({
-        planoId: id,
-        periodicidade: periodPro,
-        label: `${roleSelected} Pro`,
+        planoId: selectedMain,
+        periodicidade: "Mensal",
+        label: getPlan(selectedMain)?.title ?? selectedMain,
         price,
-        categoria: "PRO",
+        categoria: "PRO", // pode deixar "PRO" ou criar categoria "MAIN"
       });
-
-      return uniqueCart(items);
     }
 
-    if (pickPro) {
-      const id = planId(roleSelected, "PRO");
-      const price = getPrice(id, periodPro);
-      items.push({ planoId: id, periodicidade: periodPro, label: `${roleSelected} Pro`, price, categoria: "PRO" });
-    }
-
-    if (pickLearning) {
-      const id = planId(roleSelected, "LEARNING");
-      const price = getPrice(id, periodLearning);
-      items.push({ planoId: id, periodicidade: periodLearning, label: `${roleSelected} Learning`, price, categoria: "LEARNING" });
-    }
-
-    if (pickPlus) {
-      const id = planId(roleSelected, "PLUS");
-      const price = getPrice(id, periodPlus);
-      items.push({ planoId: id, periodicidade: periodPlus, label: `${roleSelected} Plus`, price, categoria: "PLUS" });
-    }
-
+    // ✅ metodologias avulsas (mantém como está por enquanto)
     Object.entries(pickMetods).forEach(([methId, checked]) => {
       if (!checked) return;
-      const label = `Metodologia: ${METODOLOGIAS.find((m) => m.id === methId)?.nome ?? methId}`;
-      const price = getPrice(methId, "Anual");
+      const meth = metodologiasAvulsas.find((x) => x.id === methId);
+      const price = meth?.precoAnual ?? 0;
+      const label = `Metodologia: ${meth?.titulo ?? methId}`;
       items.push({ planoId: methId, periodicidade: "Anual", label, price, categoria: "METODOLOGIA" });
     });
 
@@ -771,7 +791,15 @@ export default function PagamentosPage() {
 
   const cart = useMemo(
     () => buildCart(),
-    [pickPro, pickLearning, pickPlus, pickMetods, roleSelected, periodPro, periodLearning, periodPlus, apiPlans]
+    [
+      selectedMain,
+      pickPro, pickLearning, pickPlus,
+      pickMetods,
+      roleSelected,
+      periodPro, periodLearning, periodPlus,
+      apiPlans,
+      metodologiasAvulsas, // ✅ ESSENCIAL
+    ]
   );
 
   const cartTotalBase = useMemo(() => cart.reduce((s, it) => s + (it.price || 0), 0), [cart]);
@@ -883,10 +911,12 @@ export default function PagamentosPage() {
         setPickMetods(saved.pickMetods || {});
         setCupomInput(saved.cupomInput || "");
         setMethod(saved.method || "PIX");
+        setSelectedMain(saved.selectedMain ?? null);
       } else {
         setPickPro(true);
         setPickLearning(false);
         setPickPlus(false);
+        setSelectedMain(null);
         setPickMetods({});
       }
       setHydrated(true);
@@ -897,6 +927,9 @@ export default function PagamentosPage() {
         setApiPlans(json?.plans || []);
 
         await loadMe();
+        const rMet = await fetch(`${API.BASE_URL}/api/billing/metodologias-avulsas`, { headers });
+        const jMet = await rMet.json().catch(() => ({}));
+        setMetodologiasAvulsas(jMet.items || []);
       } catch (e) {
         console.error(e);
       } finally {
@@ -920,6 +953,7 @@ export default function PagamentosPage() {
       pickMetods,
       cupomInput,
       method,
+      selectedMain,
     });
   }, [
     hydrated,
@@ -933,6 +967,7 @@ export default function PagamentosPage() {
     pickMetods,
     cupomInput,
     method,
+    selectedMain,
   ]);
 
   function validarCamposAntesDoCheckout(): string | null {
@@ -974,6 +1009,32 @@ export default function PagamentosPage() {
 
     return null;
   }
+
+  const metodologiasFiltradas = useMemo(() => {
+    const q = buscaMetod.trim().toLowerCase();
+
+    return metodologiasAvulsas.filter((m) => {
+      const okBusca =
+        !q ||
+        String(m.titulo).toLowerCase().includes(q) ||
+        String(m.descricao ?? "").toLowerCase().includes(q) ||
+        String(m.id).toLowerCase().includes(q);
+
+      if (!okBusca) return false;
+
+      if (filtroNivelMetod !== "TODOS") {
+        if (String(m.nivel) !== filtroNivelMetod) return false;
+      }
+
+      if (filtroConteudoMetod !== "TODOS") {
+        if (filtroConteudoMetod === "VIDEOS" && (m.videoCount ?? 0) <= 0) return false;
+        if (filtroConteudoMetod === "TREINOS" && (m.treinoCount ?? 0) <= 0) return false;
+        if (filtroConteudoMetod === "AMBOS" && !((m.videoCount ?? 0) > 0 && (m.treinoCount ?? 0) > 0)) return false;
+      }
+
+      return true;
+    });
+  }, [metodologiasAvulsas, buscaMetod, filtroNivelMetod, filtroConteudoMetod]);
 
   const checkoutError = useMemo(() => {
     if (bloquearCheckoutPorTrial) return "Trial ativo (aguarde faltar 7 dias).";
@@ -1026,7 +1087,7 @@ export default function PagamentosPage() {
         tipo: data.cupom.tipo,
       });
     } catch {
-      alert("Erro ao validar cupom");
+      alert("Erro ao validar cupom. Para ele ser usado so pode ter o atleta_pro no carrinho.");
     }
   }
 
@@ -1274,11 +1335,7 @@ export default function PagamentosPage() {
 
   const mostrarMsgTrial = trialAtivoAgora && !isBloqueada;
   const proId = planId(roleSelected, "PRO");
-  const learningId = planId(roleSelected, "LEARNING");
-  const plusId = planId(roleSelected, "PLUS");
   const proPlan = getPlan(proId);
-  const learningPlan = getPlan(learningId);
-  const plusPlan = getPlan(plusId);
 
   function onlyDigits(v: string) {
     return (v || "").replace(/\D+/g, "");
@@ -1523,24 +1580,25 @@ export default function PagamentosPage() {
             })}
 
             {billingState?.precisaEscolherPagamento && !billingState?.bloqueado && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                <div className="font-semibold">Seu mês grátis está acabando!</div>
-                <div className="mt-1">
-                  Faltam <b>{billingState?.diasRestantes ?? "—"}</b> dia(s). Escolha uma forma de
-                  pagamento para evitar bloqueio.
-                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <div className="font-semibold">Seu mês está acabando!</div>
+                  <div className="mt-1">
+                    Faltam <b>{billingState?.diasRestantes ?? "—"}</b> dia(s).
+                    Para continuar, renove mais 1 mês e escolha novamente suas metodologias
+                    (pode manter as mesmas ou trocar).
+                  </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setOpenPagamentoModal(true)}
-                    className="px-3 py-2 rounded-lg border border-amber-300 bg-white text-amber-900 disabled:opacity-60"
-                    disabled={polling}
-                  >
-                    Pagar agora
-                  </button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setOpenPagamentoModal(true)}
+                      className="px-3 py-2 rounded-lg border border-amber-300 bg-white text-amber-900 disabled:opacity-60"
+                      disabled={polling}
+                    >
+                      Renovar agora
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
           </div>
         )}
 
@@ -1590,171 +1648,66 @@ export default function PagamentosPage() {
       </section>
 
       <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-700" />
-            <h2 className="font-semibold text-lg">Plano Pro</h2>
-          </div>
-
-          <label className="flex items-center gap-2 text-sm font-semibold">
-            <input
-              type="checkbox"
-              checked={isOlheiro ? true : pickPro}
-              onChange={(e) => {
-                if (isOlheiro) return; 
-                setPickPro(e.target.checked);
-              }}
-            />
-            Selecionar
-          </label>
+        <div className="flex items-center gap-2 mb-3">
+          <Layers className="w-5 h-5" />
+          <h2 className="font-semibold text-lg">Plano principal</h2>
         </div>
 
-        <p className="text-sm text-gray-600 mt-2">
-          Para quem quer usar o app no máximo: mais capacidade operacional, recursos “Pro” e experiência sem anúncios.
+        <p className="text-sm text-gray-600 mb-3">
+          Escolha <b>1</b> plano mensal. Quando virar o mês, você poderá renovar e escolher novamente as metodologias do seu plano.
         </p>
 
-        <div className="mt-3 flex flex-wrap gap-3 items-center">
-          <span className="text-sm font-semibold text-gray-800">Periodicidade:</span>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="radio" checked={periodPro === "Mensal"} onChange={() => setPeriodPro("Mensal")} />
-            Mensal ({brl(proPlan?.monthly ?? 0)})
-          </label>
-          <label className={`flex items-center gap-2 text-sm ${annualOk(proId) ? "" : "opacity-50"}`}>
-            <input
-              type="radio"
-              checked={periodPro === "Anual"}
-              onChange={() => setPeriodPro("Anual")}
-              disabled={!annualOk(proId)}
-            />
-            Anual ({brl(proPlan?.annual ?? 0)})
-          </label>
-        </div>
+        {(() => {
+          const opts: { id: string; show: boolean }[] = [];
 
-        <div className="mt-3 grid md:grid-cols-2 gap-3">
-          <div className="rounded-lg border p-3 bg-gray-50">
-            <div className="text-sm font-semibold mb-2">Inclui</div>
-            <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
-              {(proPlan?.benefits?.length ? proPlan.benefits : []).map((b, i) => <li key={i}>{b}</li>)}
-            </ul>
-          </div>
+          if (roleSelected === "Olheiro") {
+            opts.push({ id: "OLHEIRO_PRO", show: true });
+          } else if (roleSelected === "Professor") {
+            opts.push({ id: planId("Professor", "PRO"), show: true });
+            opts.push({ id: planId("Professor", "LEARNING_1"), show: true });
+            opts.push({ id: planId("Professor", "LEARNING_3"), show: true });
+          } else if (roleSelected === "Organizações") {
+            opts.push({ id: planId("Organizações", "PRO"), show: true });
+            opts.push({ id: planId("Organizações", "LEARNING_3"), show: true });
+          } else {
+            // Atleta
+            opts.push({ id: planId("Atleta", "PRO"), show: true });
+            opts.push({ id: planId("Atleta", "LEARNING_1"), show: true });
+            opts.push({ id: planId("Atleta", "LEARNING_3"), show: true });
+            opts.push({ id: planId("Atleta", "METODO_1"), show: true });
+          }
 
-          <div className="rounded-lg border p-3">
-            <div className="text-sm font-semibold mb-2">Recomendado para</div>
-            <p className="text-sm text-gray-700">Usuários que querem usar o sistema no dia a dia com recursos premium.</p>
-            <div className="mt-2 text-xs text-gray-500">
-              ID do plano: <b>{proId}</b>
+          return (
+            <div className="grid md:grid-cols-2 gap-3">
+              {opts.filter(o => o.show).map(({ id }) => {
+                const p = getPlan(id);
+                const title = p?.title ?? id;
+                const price = p?.monthly ?? 0;
+                const benefits = p?.benefits ?? [];
+
+                return (
+                  <label key={id} className="rounded-lg border p-3 cursor-pointer hover:bg-gray-50 flex gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedMain === id}
+                      onChange={() => setSelectedMain((prev) => (prev === id ? null : id))}
+                      className="mt-1 h-4 w-4 rounded-full"
+                    />
+                    <div className="flex-1">
+                      <div className="font-semibold">{title}</div>
+                      <div className="text-sm text-gray-700 mt-1">Mensal: <b>{brl(price)}</b></div>
+                      <ul className="list-disc pl-5 text-sm text-gray-600 mt-2 space-y-1">
+                        {benefits.map((b, i) => <li key={i}>{b}</li>)}
+                      </ul>
+                      <div className="text-xs text-gray-500 mt-2">ID: <b>{id}</b></div>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
-          </div>
-        </div>
+          );
+        })()}
       </section>
-
-      {allowLearning && (
-      <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-indigo-700" />
-            <h2 className="font-semibold text-lg">Plano Learning</h2>
-          </div>
-
-          <label className="flex items-center gap-2 text-sm font-semibold">
-            <input type="checkbox" checked={pickLearning} onChange={(e) => setPickLearning(e.target.checked)} />
-            Selecionar
-          </label>
-        </div>
-
-        <p className="text-sm text-gray-600 mt-2">
-          Para quem quer acesso <b>ilimitado</b> a diferentes metodologias.
-        </p>
-
-        <div className="mt-3 flex flex-wrap gap-3 items-center">
-          <span className="text-sm font-semibold text-gray-800">Periodicidade:</span>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="radio" checked={periodLearning === "Mensal"} onChange={() => setPeriodLearning("Mensal")} />
-            Mensal ({brl(learningPlan?.monthly ?? 0)})
-          </label>
-          <label className={`flex items-center gap-2 text-sm ${annualOk(learningId) ? "" : "opacity-50"}`}>
-            <input
-              type="radio"
-              checked={periodLearning === "Anual"}
-              onChange={() => setPeriodLearning("Anual")}
-              disabled={!annualOk(learningId)}
-            />
-            Anual ({brl(learningPlan?.annual ?? 0)})
-          </label>
-        </div>
-
-        <div className="mt-3 grid md:grid-cols-2 gap-3">
-          <div className="rounded-lg border p-3 bg-gray-50">
-            <div className="text-sm font-semibold mb-2">Inclui</div>
-            <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
-              {(learningPlan?.benefits?.length ? learningPlan.benefits : []).map((b, i) => <li key={i}>{b}</li>)}
-            </ul>
-          </div>
-
-          <div className="rounded-lg border p-3">
-            <div className="text-sm font-semibold mb-2">Recomendado para</div>
-            <p className="text-sm text-gray-700">Quem quer alternar entre vários “caminhos” (metodologias).</p>
-            <div className="mt-2 text-xs text-gray-500">
-              ID do plano: <b>{learningId}</b>
-            </div>
-          </div>
-        </div>
-      </section>
-      )}
-
-      {allowPlus && (
-      <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-fuchsia-700" />
-            <h2 className="font-semibold text-lg">Plano Plus</h2>
-          </div>
-
-          <label className="flex items-center gap-2 text-sm font-semibold">
-            <input type="checkbox" checked={pickPlus} onChange={(e) => setPickPlus(e.target.checked)} />
-            Selecionar
-          </label>
-        </div>
-
-        <p className="text-sm text-gray-600 mt-2">
-          A junção de tudo: <b>PRO + Learning</b>.
-        </p>
-
-        <div className="mt-3 flex flex-wrap gap-3 items-center">
-          <span className="text-sm font-semibold text-gray-800">Periodicidade:</span>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="radio" checked={periodPlus === "Mensal"} onChange={() => setPeriodPlus("Mensal")} />
-            Mensal ({brl(plusPlan?.monthly ?? 0)})
-          </label>
-          <label className={`flex items-center gap-2 text-sm ${annualOk(plusId) ? "" : "opacity-50"}`}>
-            <input
-              type="radio"
-              checked={periodPlus === "Anual"}
-              onChange={() => setPeriodPlus("Anual")}
-              disabled={!annualOk(plusId)}
-            />
-            Anual ({brl(plusPlan?.annual ?? 0)})
-          </label>
-        </div>
-
-        <div className="mt-3 grid md:grid-cols-2 gap-3">
-          <div className="rounded-lg border p-3 bg-gray-50">
-            <div className="text-sm font-semibold mb-2">Inclui</div>
-            <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
-              {(plusPlan?.benefits?.length ? plusPlan.benefits : []).map((b, i) => <li key={i}>{b}</li>)}
-            </ul>
-          </div>
-
-          <div className="rounded-lg border p-3">
-            <div className="text-sm font-semibold mb-2">Recomendado para</div>
-            <p className="text-sm text-gray-700">Quem quer o pacote completo sem escolher entre Pro e metodologias.</p>
-            <div className="mt-2 text-xs text-gray-500">
-              ID do plano: <b>{plusId}</b>
-            </div>
-          </div>
-        </div>
-      </section>
-      )}
 
       {allowMetodologias && (
       <section className="mb-8 p-4 border rounded-xl bg-white shadow-sm">
@@ -1767,10 +1720,41 @@ export default function PagamentosPage() {
           Pague <b>por metodologia</b>. Você escolhe uma ou mais e paga um valor anual por cada uma.
         </p>
 
+        {/* filtros (agora eles funcionam) */}
+        <div className="grid gap-2 md:grid-cols-3 mb-3">
+          <input
+            value={buscaMetod}
+            onChange={(e) => setBuscaMetod(e.target.value)}
+            placeholder="Buscar metodologia..."
+            className="border rounded-md px-3 py-2"
+          />
+
+          <select
+            value={filtroNivelMetod}
+            onChange={(e) => setFiltroNivelMetod(e.target.value as any)}
+            className="border rounded-md px-3 py-2"
+          >
+            <option value="TODOS">Todos os níveis</option>
+            <option value="Base">Base</option>
+            <option value="Avancado">Avançado</option>
+            <option value="Performance">Performance</option>
+          </select>
+
+          <select
+            value={filtroConteudoMetod}
+            onChange={(e) => setFiltroConteudoMetod(e.target.value as any)}
+            className="border rounded-md px-3 py-2"
+          >
+            <option value="TODOS">Qualquer conteúdo</option>
+            <option value="VIDEOS">Só vídeos</option>
+            <option value="TREINOS">Só treinos</option>
+            <option value="AMBOS">Vídeos + Treinos</option>
+          </select>
+        </div>
+
         <div className="grid md:grid-cols-2 gap-3">
-          {METODOLOGIAS.map((m) => {
-            const plan = getPlan(m.id);
-            const preco = (plan?.annual ?? 0) as number;
+          {metodologiasFiltradas.map((m) => {
+            const preco = Number(m.precoAnual ?? 0);
 
             return (
               <label key={m.id} className="rounded-lg border p-3 flex gap-3 cursor-pointer hover:bg-gray-50">
@@ -1780,12 +1764,23 @@ export default function PagamentosPage() {
                   onChange={(e) => setPickMetods((prev) => ({ ...prev, [m.id]: e.target.checked }))}
                   className="mt-1"
                 />
+
                 <div className="flex-1">
-                  <div className="font-semibold">{m.nome}</div>
-                  <div className="text-sm text-gray-600">{m.desc}</div>
-                  <div className="text-sm text-gray-800 mt-2">
-                    <b>Anual único:</b> {brl(preco)}
+                  <div className="font-semibold">{m.titulo}</div>
+                  {m.descricao ? <div className="text-sm text-gray-600">{m.descricao}</div> : null}
+
+                  <div className="mt-2 text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-1">
+                    <span>Nível: <b>{m.nivel}</b></span>
+                    <span>Semanas: <b>{m.totalSemanas ?? 0}</b></span>
+                    <span>Vídeos: <b>{m.videoCount ?? 0}</b></span>
+                    <span>Treinos: <b>{m.treinoCount ?? 0}</b></span>
+                    <span>Itens: <b>{m._count?.itens ?? 0}</b></span>
                   </div>
+
+                  <div className="text-sm text-gray-800 mt-2">
+                    <b>Anual:</b> {brl(preco)}
+                  </div>
+
                   <div className="text-xs text-gray-500 mt-1">
                     ID: <b>{m.id}</b>
                   </div>
@@ -1793,6 +1788,12 @@ export default function PagamentosPage() {
               </label>
             );
           })}
+
+          {metodologiasFiltradas.length === 0 && (
+            <div className="text-sm text-gray-600">
+              Nenhuma metodologia encontrada com esses filtros.
+            </div>
+          )}
         </div>
       </section>
       )}

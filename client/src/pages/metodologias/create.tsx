@@ -647,7 +647,7 @@ export default function CriarMetodologia() {
         <div className="pt-3 sticky top-0 z-20 bg-neutral-50/90 backdrop-blur">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => navigate("/metodologias/minhas")}
+              onClick={() => navigate("/treinos/Minhas-Metodologias")}
               className="inline-flex items-center justify-center p-2 rounded-xl border bg-white hover:bg-gray-50"
               aria-label="Voltar"
             >
@@ -662,13 +662,6 @@ export default function CriarMetodologia() {
                 Configure dados comuns no topo e monte as semanas abaixo.
               </p>
             </div>
-
-            <Link
-              href="/metodologias/minhas"
-              className="px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm font-semibold text-green-900"
-            >
-              Minhas
-            </Link>
           </div>
         </div>
 
