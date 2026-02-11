@@ -213,6 +213,7 @@ if (NODE_ENV !== "production") {
   });
 }
 
+app.use("/uploads", express.static(UPLOADS_ROOT));
 app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 app.use("/uploads", express.static(UPLOADS_ROOT, { maxAge: "1d" }));
 {

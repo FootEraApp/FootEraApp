@@ -10,8 +10,10 @@ import {
   listMinhasMetodologiasCriadas,
   listMetodologiasVisiveis,
   createMetodologiaItens,
+  getMetodologiaDetalhe,
+  assinarMetodologia,
+  deleteMetodologiaItens
 } from "../controllers/metodologiasController.js";
-
 import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
@@ -23,7 +25,10 @@ router.get("/minhas", authenticateToken, listMinhasMetodologiasCriadas);
 router.get("/criadas", authenticateToken, listMinhasMetodologiasCriadas);
 router.get("/minhas-criadas", authenticateToken, listMinhasMetodologiasCriadas);
 router.get("/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
+router.get("/:id/detalhe", authenticateToken, getMetodologiaDetalhe);
+router.post("/:id/assinar", authenticateToken, assinarMetodologia);
 router.post("/:metodologiaId/itens", authenticateToken, createMetodologiaItens);
+router.delete("/:metodologiaId/itens", authenticateToken, deleteMetodologiaItens);
 router.get("/:id", getMetodologiaById);
 router.get("/", listMetodologias);
 router.post("/", authenticateToken, createMetodologia);
