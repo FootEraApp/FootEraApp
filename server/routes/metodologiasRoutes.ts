@@ -1,42 +1,47 @@
-// server/routes/metodologiasRoutes
 import { Router } from "express";
+import { authenticateToken } from "../middlewares/auth.js";
 import {
-  listMetodologias,
-  getMetodologiaById,
-  createMetodologia,
-  updateMetodologia,
-  deleteMetodologia,
   listMinhasMetodologiasAssinadas,
   listMinhasMetodologiasCriadas,
   listMetodologiasVisiveis,
-  createMetodologiaItens,
-  getMetodologiaDetalhe,
   assinarMetodologia,
+  createMetodologia,
+  updateMetodologia,
+  deleteMetodologia,
+  createMetodologiaItens,
   deleteMetodologiaItens,
+  getMetodologiaDetalhe,
+  getMetodologiaById,
+  listMetodologias,
 } from "../controllers/metodologiasController.js";
-
-import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
 
-router.get("/visiveis", authenticateToken, listMetodologiasVisiveis);
-router.get("/minhas/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
-router.get("/minhas", authenticateToken, listMinhasMetodologiasCriadas);
-
-// revisar ===================
+// ✅ ROTAS ESPECÍFICAS PRIMEIRO (antes do "/:id")
+router.get("/minhas", authenticateToken, listMinhasMetodologiasAssinadas);
 router.get("/criadas", authenticateToken, listMinhasMetodologiasCriadas);
-router.get("/minhas-criadas", authenticateToken, listMinhasMetodologiasCriadas);
-router.get("/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
-router.get("/:id/detalhe", authenticateToken, getMetodologiaDetalhe);
-router.post("/:id/assinar", authenticateToken, assinarMetodologia);
-// ==========================
 
+// ✅ esse é o “catálogo / todos visíveis”, vai para Treinos-Instrutores
+router.get("/visiveis", authenticateToken, listMetodologiasVisiveis);
+
+// ✅ se você quer manter "/assinadas", faça ela apontar para "/minhas"
+router.get("/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);
+
+// itens
 router.post("/:metodologiaId/itens", authenticateToken, createMetodologiaItens);
 router.delete("/:metodologiaId/itens", authenticateToken, deleteMetodologiaItens);
-router.get("/:id", getMetodologiaById);
-router.get("/", listMetodologias);
-router.post("/", authenticateToken, createMetodologia);
+
+// detalhe/assinatura
+router.get("/:id/detalhe", authenticateToken, getMetodologiaDetalhe);
+router.post("/:id/assinar", authenticateToken, assinarMetodologia);
+
+// por id (sempre por último!)
+router.get("/:id", authenticateToken, getMetodologiaById);
 router.put("/:id", authenticateToken, updateMetodologia);
 router.delete("/:id", authenticateToken, deleteMetodologia);
+
+// CRUD
+router.get("/", authenticateToken, listMetodologias);
+router.post("/", authenticateToken, createMetodologia);
 
 export default router;
