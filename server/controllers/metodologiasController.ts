@@ -361,15 +361,23 @@ export async function listMetodologiasVisiveis(req: Request, res: Response) {
     if (!userId) return res.status(401).json({ message: "Não autenticado." });
 
     const tipo =
-      String((req as any).authUser?.tipo ?? (req as any).user?.tipo ?? "")
+      String(
+        (req as any).authUser?.tipo ??
+        (req as any).user?.tipo ??
+        (req as any).usuario?.tipo ??
+        (req as any).tipo ??
+        ""
+      )
         .toLowerCase()
         .trim();
+
 
     const publicoPermitido =
       tipo === "atleta"
         ? [MetodologiaPublicoAlvo.ATLETAS, MetodologiaPublicoAlvo.AMBOS]
         : [MetodologiaPublicoAlvo.PROFISSIONAIS, MetodologiaPublicoAlvo.AMBOS];
 
+    // 1) lista metodologias
     const items = await prisma.metodologia.findMany({
       where: {
         ativo: true,
@@ -382,7 +390,39 @@ export async function listMetodologiasVisiveis(req: Request, res: Response) {
       },
     });
 
-    return res.json({ items });
+    // 2) conta itens por tipo (VIDEO / TREINO) e junta no retorno
+    const ids = items.map((m) => m.id);
+    let countsById: Record<string, { videoCount: number; treinoCount: number }> = {};
+
+    if (ids.length) {
+      const grouped = await prisma.metodologiaItem.groupBy({
+        by: ["metodologiaId", "tipo"],
+        where: { metodologiaId: { in: ids } },
+        _count: { _all: true },
+      });
+
+      countsById = grouped.reduce((acc, g) => {
+        const mid = g.metodologiaId;
+        if (!acc[mid]) acc[mid] = { videoCount: 0, treinoCount: 0 };
+
+        const tipoItem = String(g.tipo).toUpperCase();
+        const qtd = g._count._all ?? 0;
+
+        if (tipoItem === "VIDEO") acc[mid].videoCount += qtd;
+        if (tipoItem === "TREINO") acc[mid].treinoCount += qtd;
+
+        return acc;
+      }, {} as Record<string, { videoCount: number; treinoCount: number }>);
+    }
+
+    const out = items.map((m) => ({
+      ...m,
+      videoCount: countsById[m.id]?.videoCount ?? 0,
+      treinoCount: countsById[m.id]?.treinoCount ?? 0,
+      logoUrl: m.capaUrl ?? null,
+    }));
+
+    return res.json({ items: out });
   } catch (e: any) {
     return res.status(500).json({ message: "Erro ao listar visíveis.", detail: e?.message });
   }
