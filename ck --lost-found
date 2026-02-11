@@ -1,0 +1,50 @@
+[33m0e445fb[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mpaginasIniciais_clean[m[33m, [m[1;31morigin/paginasIniciais_clean[m[33m)[m HEAD@{Tue Feb 10 23:05:12 2026}: commit: save: changes from today
+[33m3d247eb[m HEAD@{Tue Feb 10 22:48:24 2026}: 
+[33meb7ad98[m HEAD@{Tue Feb 10 22:46:38 2026}: commit: chore: track metodologia mp4 with lfs
+[33mf645848[m[33m ([m[1;31morigin/paginasIniciais[m[33m)[m HEAD@{Tue Feb 10 22:46:25 2026}: checkout: moving from paginasIniciais to paginasIniciais_clean
+[33m16d69bb[m HEAD@{Tue Feb 10 22:29:54 2026}: checkout: moving from paginasIniciais to paginasIniciais
+[33m16d69bb[m HEAD@{Tue Feb 10 22:24:12 2026}: commit: chore: ignore metodologia mp4 videos
+[33m9fb8540[m HEAD@{Tue Feb 10 22:09:35 2026}: commit: chore: move metodologia mp4 to git-lfs
+[33me08d793[m HEAD@{Tue Feb 10 22:05:35 2026}: commit: chore: track mp4 files with git-lfs
+[33m8931c90[m HEAD@{Tue Feb 10 21:53:46 2026}: commit: ajustes pagina de metodologia
+[33mf645848[m[33m ([m[1;31morigin/paginasIniciais[m[33m)[m HEAD@{Mon Feb 9 21:04:39 2026}: commit: ajustes pagina de pagamento
+[33m8b9fb45[m[33m ([m[1;31morigin/Pbranch[m[33m)[m HEAD@{Mon Feb 9 14:11:57 2026}: pull origin Pbranch: Fast-forward
+[33mf98f32e[m HEAD@{Fri Feb 6 17:38:57 2026}: commit: treinos de hj ajustado
+[33mf3ee238[m HEAD@{Thu Feb 5 21:42:16 2026}: commit: ajuste na pagina de treinos completo
+[33mfce14c9[m HEAD@{Thu Feb 5 19:43:14 2026}: commit: ajuste na pagina de treinos
+[33m752664b[m HEAD@{Thu Feb 5 14:21:44 2026}: pull origin Pbranch: Fast-forward
+[33m53c70bd[m HEAD@{Wed Feb 4 19:05:03 2026}: commit: pagina pagamentos completa
+[33m5115511[m HEAD@{Wed Feb 4 18:54:46 2026}: commit: pagina pagamentos completa
+[33m225298e[m HEAD@{Tue Feb 3 18:21:24 2026}: pull origin Pbranch: Fast-forward
+[33m193a0a1[m HEAD@{Tue Feb 3 17:13:32 2026}: commit: qpagar comentarios
+[33m01eb5c7[m HEAD@{Tue Feb 3 15:41:28 2026}: commit: correção completa online
+[33m42b6286[m HEAD@{Mon Feb 2 19:24:21 2026}: commit: bloquear e restaurar conta funcionando
+[33mf817d15[m HEAD@{Fri Jan 30 18:13:55 2026}: commit: online funcionando e a conta apagada sendo mandada p a lixeira por 30 dias
+[33mde306b5[m HEAD@{Thu Jan 29 19:52:21 2026}: commit: ajuste de analises e começo do online
+[33m454b501[m HEAD@{Thu Jan 29 15:10:28 2026}: pull origin Pbranch: Fast-forward
+[33m3683052[m HEAD@{Thu Jan 29 15:09:28 2026}: reset: moving to HEAD
+[33m3683052[m HEAD@{Wed Jan 28 17:21:57 2026}: commit: ajustes na pagina de olheiros e correção da criqção do treino
+[33ma0e8740[m HEAD@{Tue Jan 27 20:06:30 2026}: commit: ajustes na paginas de treinos
+[33mddf422b[m HEAD@{Mon Jan 26 21:35:28 2026}: commit: add editar e apagar treino em treinos
+[33m7d2a657[m HEAD@{Fri Jan 23 18:49:57 2026}: commit: ajustes no admin e foto em novotreino
+[33m550827e[m HEAD@{Fri Jan 23 14:43:31 2026}: pull origin Pbranch: Merge made by the 'ort' strategy.
+[33mea72c1b[m HEAD@{Fri Jan 23 14:41:55 2026}: pull origin Pbranch: Merge made by the 'ort' strategy.
+[33mc59d900[m HEAD@{Thu Jan 22 18:39:10 2026}: commit: ajustes observados e eventos
+[33m7ca49c5[m HEAD@{Thu Jan 22 14:19:50 2026}: pull origin Pbranch: Fast-forward
+[33md4dd86a[m HEAD@{Wed Jan 21 19:13:46 2026}: commit: ajustes configurações e perfil atleta
+[33m62f0406[m HEAD@{Wed Jan 21 14:47:39 2026}: pull origin Pbranch: Fast-forward
+[33m9841149[m HEAD@{Wed Jan 21 14:42:17 2026}: commit: continuação ajustes pro
+[33mdef88fb[m HEAD@{Tue Jan 20 18:24:56 2026}: commit: ajustes necessarios
+[33ma837311[m HEAD@{Tue Jan 20 14:05:48 2026}: pull origin Pbranch: Fast-forward
+[33maaedea7[m HEAD@{Mon Jan 19 18:09:04 2026}: commit: ajuste dos primeiros erros encontrados
+[33maab7954[m HEAD@{Mon Jan 19 14:19:02 2026}: pull origin Pbranch: Merge made by the 'ort' strategy.
+[33mf79754e[m HEAD@{Thu Jan 15 18:15:54 2026}: pull origin Pbranch: Merge made by the 'ort' strategy.
+[33mdf2337f[m HEAD@{Thu Jan 15 17:17:08 2026}: commit: add android studio
+[33mbb0b3ec[m HEAD@{Wed Jan 14 19:28:39 2026}: commit: ajustes faltantes
+[33ma4b6703[m HEAD@{Wed Jan 14 14:23:35 2026}: pull origin Pbranch: Fast-forward
+[33m0aee445[m HEAD@{Tue Jan 13 18:50:11 2026}: commit: conquistas completo e correto
+[33ma97a2e2[m HEAD@{Fri Jan 9 18:02:47 2026}: commit: ajustes notificação e fotos default
+[33m7e11237[m HEAD@{Fri Jan 9 16:13:46 2026}: pull origin Pbranch: Fast-forward
+[33m5b30184[m HEAD@{Fri Jan 9 16:09:33 2026}: commit: ajustes notificação e gerenciar atleta
+[33md45001f[m HEAD@{Thu Jan 8 18:48:05 2026}: pull origin Pbranch: Fast-forward
+[33m329d014[m HEAD@{Thu Jan 8 18:02:57 2026}: pull origin Pbranch: Fast-forward

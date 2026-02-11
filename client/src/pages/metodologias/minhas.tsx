@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ChevronLeft, Search, ExternalLink, Loader2 } from "lucide-react";
+import {
+  ChevronLeft,
+  Search,
+  ExternalLink,
+  Loader2,
+  Trash2,
+  Pencil,
+} from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
 import BottomNav from "@/components/layout/BottomNav.js";
@@ -9,10 +16,16 @@ type Metodologia = {
   id: string;
   titulo: string;
   descricao?: string | null;
+  logoUrl?: string | null;
+  capaUrl?: string | null;
+  categorias?: string[];
   pontosBadge?: string | null;
   pontosPorSemanaLabel?: string | null;
-  categorias?: string[] | null;
-  logoUrl?: string | null;
+  publicoAlvo?: string | null;
+  totalAssinantes?: number;
+  mediaAvaliacao?: number | null;
+  totalReviews?: number;
+  pontosTotal?: number;
   assinada?: boolean;
 };
 
@@ -25,13 +38,243 @@ function getToken() {
   );
 }
 
+function normalizeImgUrl(raw?: string | null) {
+  if (!raw) return null;
+  const u = String(raw).trim();
+  if (!u) return null;
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
+  return `${API.BASE_URL}/${u}`; // <-- cobre "uploads/..." sem barra
+}
+
+function getUserTipo(): string | null {
+  const s: any = Storage as any;
+
+  // 1) Storage (caso exista)
+  const tipoStorage =
+    s?.user?.tipo ||
+    s?.usuario?.tipo ||
+    s?.usuarioLogado?.tipo ||
+    s?.tipoUsuario ||        // ✅ ADD
+    s?.usuarioTipoRaw;       // ✅ ADD
+
+  if (tipoStorage) return String(tipoStorage);
+
+  // 2) localStorage/sessionStorage - chaves diretas (SEU CASO!)
+  const tipoDireto =
+    localStorage.getItem("tipoUsuario") ||
+    localStorage.getItem("usuarioTipoRaw") ||
+    sessionStorage.getItem("tipoUsuario") ||
+    sessionStorage.getItem("usuarioTipoRaw");
+
+  if (tipoDireto) return String(tipoDireto);
+
+  // 3) JSON salvo como "user"/"usuario" etc (fallback)
+  const raw =
+    localStorage.getItem("user") ||
+    localStorage.getItem("usuario") ||
+    sessionStorage.getItem("user") ||
+    sessionStorage.getItem("usuario");
+
+  if (raw) {
+    try {
+      const js = JSON.parse(raw);
+      const tipoJson =
+        js?.tipo ||
+        js?.user?.tipo ||
+        js?.tipoUsuario ||     // ✅ ADD
+        js?.usuarioTipoRaw;    // ✅ ADD
+      if (tipoJson) return String(tipoJson);
+    } catch {}
+  }
+
+  return null;
+}
+
+function isInstrutorTipo(tipo: string | null) {
+  const t = (tipo || "").toLowerCase().trim();
+  return (
+    t === "professor" ||
+    t === "clube" ||
+    t === "escolinha" ||
+    t === "instrutor" // se você usar essa string em algum lugar
+  );
+}
+
 export default function MinhasMetodologias() {
   const [, navigate] = useLocation();
 
+  const userTipo = getUserTipo();
+  const isInstrutor = isInstrutorTipo(userTipo);
+    // instrutor tem 2 abas
+  const [tab, setTab] = useState<"assinadas" | "criadas">("assinadas");
   const [busca, setBusca] = useState("");
-  const [items, setItems] = useState<Metodologia[]>([]);
+  const [assinadas, setAssinadas] = useState<Metodologia[]>([]);
+  const [criadas, setCriadas] = useState<Metodologia[]>([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  async function preencherPontosViaDetalhe(lista: Metodologia[], token: string) {
+    const ids = lista.filter((m) => !Number(m.pontosTotal)).map((m) => m.id);
+    if (!ids.length) return lista;
+
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const detalhes = await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const r = await fetch(`${API.BASE_URL}/api/metodologias/${id}/detalhe`, { headers });
+          const j = await r.json().catch(() => null);
+          if (!r.ok) return null;
+          return { id, pontosTotal: Number(j?.pontosTotal ?? 0) };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const map = new Map(detalhes.filter(Boolean).map((d: any) => [d.id, d.pontosTotal]));
+
+    return lista.map((m) => ({
+      ...m,
+      pontosTotal: Number(m.pontosTotal) || Number(map.get(m.id) ?? 0),
+    }));
+  }
+
+  async function carregarAssinadas(token: string) {
+    // ✅ endpoint sugerido (metodologias assinadas)
+    const r = await fetch(`${API.BASE_URL}/api/metodologias/minhas`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    // fallback: alguns backends preferem /api/metodologias/assinadas
+    if (r.status === 404) {
+      const r2 = await fetch(`${API.BASE_URL}/api/metodologias/assinadas`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const js2 = await r2.json().catch(() => null);
+      if (!r2.ok) {
+        const msg =
+          js2?.message ||
+          js2?.error ||
+          "Não foi possível carregar suas metodologias assinadas (404).";
+        throw new Error(msg);
+      }
+      const arr2: any[] = Array.isArray(js2) ? js2 : js2.items ?? [];
+      const base = arr2.map((m: any) => ({
+        id: String(m.id),
+        titulo: m.titulo ?? m.nome ?? "Metodologia",
+        descricao: m.descricao ?? null,
+        pontosBadge: m.pontosBadge ?? null,
+        pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
+        categorias: m.categorias ?? [],
+        capaUrl: m.capaUrl ?? m.capa ?? null,
+        logoUrl: m.logoUrl ?? null,
+        assinada: m.assinada ?? true,
+        publicoAlvo: m.publicoAlvo ?? m.item?.publicoAlvo ?? "AMBOS",
+        totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
+        mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
+        totalReviews: Number(m.totalReviews ?? 0),
+        pontosTotal: Number(
+          m.pontosTotal ??
+          m.totalPontos ??
+          m.pontos ??
+          m.pontosSemana ??
+          m.pontuacao ??
+          0
+        ),
+      }));
+
+      const final = await preencherPontosViaDetalhe(base, token);
+      setAssinadas(final);
+
+      return;
+    }
+
+    const js = await r.json().catch(() => null);
+    if (!r.ok) {
+      const msg = js?.message || js?.error || "Falha ao carregar assinadas.";
+      throw new Error(msg);
+    }
+
+    const arr: any[] = Array.isArray(js) ? js : js.items ?? [];
+
+    const base = arr.map((m: any) => ({
+      id: String(m.id),
+      titulo: m.titulo ?? m.nome ?? "Metodologia",
+      descricao: m.descricao ?? null,
+      pontosBadge: m.pontosBadge ?? null,
+      pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
+      categorias: m.categorias ?? [],
+      capaUrl: m.capaUrl ?? m.capa ?? null,
+      logoUrl: m.logoUrl ?? null,
+      assinada: m.assinada ?? true,
+      publicoAlvo: m.publicoAlvo ?? m.item?.publicoAlvo ?? "AMBOS",
+      totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
+      mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
+      totalReviews: Number(m.totalReviews ?? 0),
+      pontosTotal: Number(
+        m.pontosTotal ??
+          m.totalPontos ??
+          m.pontos ??
+          m.pontosSemana ??
+          m.pontuacao ??
+          0
+      ),
+    }));
+
+    const final = await preencherPontosViaDetalhe(base, token);
+    setAssinadas(final);
+  }
+
+  async function carregarCriadas(token: string) {
+    // ✅ sugestão: endpoint para metodologias criadas pelo instrutor
+    let r = await fetch(`${API.BASE_URL}/api/metodologias/criadas`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    // fallback 1
+    if (r.status === 404) {
+      r = await fetch(`${API.BASE_URL}/api/metodologias/minhas-criadas`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
+
+    const js = await r.json().catch(() => null);
+    if (!r.ok) {
+      const msg =
+        js?.message || js?.error || "Falha ao carregar metodologias criadas.";
+      throw new Error(msg);
+    }
+
+    const arr: any[] = Array.isArray(js) ? js : js.items ?? [];
+    const base = arr.map((m: any) => ({
+      id: String(m.id),
+      titulo: m.titulo ?? m.nome ?? "Metodologia",
+      descricao: m.descricao ?? null,
+      pontosBadge: m.pontosBadge ?? null,
+      pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
+      categorias: m.categorias ?? [],
+      capaUrl: m.capaUrl ?? m.capa ?? null,
+      logoUrl: m.logoUrl ?? null,
+      assinada: m.assinada ?? false,
+      publicoAlvo: m.publicoAlvo ?? m.item?.publicoAlvo ?? "AMBOS",
+      totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
+      mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
+      totalReviews: Number(m.totalReviews ?? 0),
+      pontosTotal: Number(
+        m.pontosTotal ??
+        m.totalPontos ??
+        m.pontos ??
+        m.pontosSemana ??
+        m.pontuacao ??
+        0
+      ),
+    }));
+
+    const final = await preencherPontosViaDetalhe(base, token);
+    setCriadas(final);
+  }
 
   async function carregar() {
     setErro(null);
@@ -45,82 +288,80 @@ export default function MinhasMetodologias() {
     }
 
     try {
-      // ✅ endpoint sugerido (metodologias assinadas)
-      const r = await fetch(`${API.BASE_URL}/api/metodologias/minhas`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // sempre carrega assinadas
+      await carregarAssinadas(token);
 
-      // fallback: alguns backends preferem /api/metodologias/assinadas
-      if (r.status === 404) {
-        const r2 = await fetch(`${API.BASE_URL}/api/metodologias/assinadas`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const js2 = await r2.json().catch(() => null);
-        if (!r2.ok) {
-          const msg =
-            js2?.message ||
-            js2?.error ||
-            "Não foi possível carregar suas metodologias (404).";
-          throw new Error(msg);
-        }
-        const arr2: any[] = Array.isArray(js2) ? js2 : js2.items ?? [];
-        setItems(
-          arr2.map((m: any) => ({
-            id: String(m.id),
-            titulo: m.titulo ?? m.nome ?? "Metodologia",
-            descricao: m.descricao ?? null,
-            pontosBadge: m.pontosBadge ?? null,
-            pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
-            categorias: m.categorias ?? [],
-            logoUrl: m.logoUrl ?? null,
-            assinada: true,
-          }))
-        );
-        return;
+      // só instrutor carrega criadas
+      if (isInstrutor) {
+        await carregarCriadas(token);
+      } else {
+        setCriadas([]); // atleta não usa
       }
-
-      const js = await r.json().catch(() => null);
-      if (!r.ok) {
-        const msg =
-          js?.message || js?.error || "Falha ao carregar metodologias.";
-        throw new Error(msg);
-      }
-
-      const arr: any[] = Array.isArray(js) ? js : js.items ?? [];
-      setItems(
-        arr.map((m: any) => ({
-          id: String(m.id),
-          titulo: m.titulo ?? m.nome ?? "Metodologia",
-          descricao: m.descricao ?? null,
-          pontosBadge: m.pontosBadge ?? null,
-          pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
-          categorias: m.categorias ?? [],
-          logoUrl: m.logoUrl ?? null,
-          assinada: m.assinada ?? true,
-        }))
-      );
     } catch (e: any) {
       setErro(e?.message || "Erro ao carregar suas metodologias.");
-      setItems([]);
+      setAssinadas([]);
+      setCriadas([]);
     } finally {
       setLoading(false);
     }
   }
 
+  async function deletarMetodologia(id: string) {
+    const token = getToken();
+    if (!token) return;
+
+    const ok = confirm("Tem certeza que deseja deletar esta metodologia?");
+    if (!ok) return;
+
+    try {
+      const r = await fetch(
+        `${API.BASE_URL}/api/metodologias/${encodeURIComponent(id)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const js = await r.json().catch(() => null);
+
+      if (!r.ok) {
+        alert(js?.message || js?.error || "Não foi possível deletar.");
+        return;
+      }
+
+      setCriadas((prev) => prev.filter((m) => m.id !== id));
+    } catch {
+      alert("Erro ao deletar metodologia.");
+    }
+  }
+
   useEffect(() => {
     carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const listaAtiva = useMemo(() => {
+    // atleta só usa assinadas
+    if (!isInstrutor) return assinadas;
+    return tab === "assinadas" ? assinadas : criadas;
+  }, [isInstrutor, tab, assinadas, criadas]);
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((m) => {
+    if (!q) return listaAtiva;
+
+    return listaAtiva.filter((m) => {
       const t = (m.titulo || "").toLowerCase();
       const d = (m.descricao || "").toLowerCase();
       const c = (m.categorias || []).join(" ").toLowerCase();
       return t.includes(q) || d.includes(q) || c.includes(q);
     });
-  }, [items, busca]);
+  }, [listaAtiva, busca]);
+
+  const emptyMsg = useMemo(() => {
+    if (!isInstrutor) return "Você ainda não assinou nenhuma metodologia.";
+    if (tab === "assinadas") return "Você ainda não assinou nenhuma metodologia.";
+    return "Você ainda não criou nenhuma metodologia.";
+  }, [isInstrutor, tab]);
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-24">
@@ -141,17 +382,51 @@ export default function MinhasMetodologias() {
                 Minhas Metodologias
               </h1>
               <p className="text-xs sm:text-sm text-gray-600">
-                Tudo o que você assinou (ou tem acesso).
+                {isInstrutor
+                  ? "Assinadas e criadas por você."
+                  : "Tudo o que você assinou (ou tem acesso)."}
               </p>
             </div>
 
-            <Link
-              href="/metodologias/create"
-              className="px-3 py-2 rounded-xl bg-green-800 text-white text-sm font-semibold hover:bg-green-900"
-            >
-              Criar
-            </Link>
+            {/* ✅ Botão Criar SOMENTE para instrutores */}
+            {isInstrutor && (
+              <Link
+                href="/treinos/Criar-Metodologia"
+                className="px-3 py-2 rounded-xl bg-green-800 text-white text-sm font-semibold hover:bg-green-900"
+              >
+                Criar
+              </Link>
+            )}
           </div>
+
+          {/* ✅ Abas SOMENTE para instrutores */}
+          {isInstrutor && (
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTab("assinadas")}
+                className={`px-3 py-2 rounded-xl border text-sm font-semibold ${
+                  tab === "assinadas"
+                    ? "bg-green-800 text-white border-green-900"
+                    : "bg-white hover:bg-gray-50"
+                }`}
+              >
+                Assinadas ({assinadas.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTab("criadas")}
+                className={`px-3 py-2 rounded-xl border text-sm font-semibold ${
+                  tab === "criadas"
+                    ? "bg-green-800 text-white border-green-900"
+                    : "bg-white hover:bg-gray-50"
+                }`}
+              >
+                Criadas ({criadas.length})
+              </button>
+            </div>
+          )}
 
           {/* Busca */}
           <div className="mt-3 flex items-center gap-2 bg-white border rounded-xl px-3 py-2">
@@ -171,13 +446,6 @@ export default function MinhasMetodologias() {
             <div className="text-sm text-gray-600">
               {loading ? "Carregando..." : `${filtrados.length} encontradas`}
             </div>
-
-            <button
-              onClick={carregar}
-              className="px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm font-semibold"
-            >
-              Atualizar
-            </button>
           </div>
 
           {erro && (
@@ -194,84 +462,111 @@ export default function MinhasMetodologias() {
           )}
 
           {!loading && filtrados.length === 0 && (
-            <div className="text-sm text-gray-600">
-              Você ainda não assinou nenhuma metodologia.
-            </div>
+            <div className="text-sm text-gray-600">{emptyMsg}</div>
           )}
 
           {!loading && filtrados.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtrados.map((m) => (
-                <div
-                  key={m.id}
-                  className="rounded-2xl border shadow-sm bg-white p-4 flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="text-base font-semibold text-green-900 line-clamp-2">
-                          {m.titulo}
-                        </h3>
+              {filtrados.map((m) => {
+                const capa = normalizeImgUrl(m.capaUrl);
+                const logo = normalizeImgUrl(m.logoUrl);
+                const fallback = `${API.BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
-                        {!!m.categorias?.length && (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {m.categorias.slice(0, 3).map((c) => (
-                              <span
-                                key={c}
-                                className="text-[11px] px-2 py-0.5 rounded-full border bg-gray-50 text-gray-700"
-                              >
-                                {c}
-                              </span>
-                            ))}
-                            {m.categorias.length > 3 && (
-                              <span className="text-[11px] px-2 py-0.5 rounded-full border bg-gray-50 text-gray-700">
-                                +{m.categorias.length - 3}
-                              </span>
-                            )}
+                return (
+                  <div
+                    key={m.id}
+                    className="rounded-2xl border shadow-sm bg-white p-4 flex items-center justify-between gap-4"
+                  >
+                    {/* ESQUERDA: logo + infos */}
+                    <div className="flex items-start gap-4 min-w-0">
+                      <img
+                        src={capa || logo || fallback}
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = fallback;
+                        }}
+                        className="h-16 w-16 rounded-2xl border object-cover bg-white flex-shrink-0"
+                        alt={m.titulo}
+                      />
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-white">
+                            {String(m.publicoAlvo ?? "AMBOS")}
+                          </span>
+                          <div className="font-semibold text-green-900 truncate">
+                            {m.titulo}
+                          </div>
+                        </div>
+
+                        {/* rating + assinaturas */}
+                        <div className="mt-1 flex items-center gap-2 text-sm text-gray-600">
+                          <span className="text-gray-300">★★★★★</span>
+                          <span className="font-semibold text-gray-800">
+                            {(Number(m.mediaAvaliacao ?? 0)).toFixed(1)}
+                          </span>
+                          <span>({Number(m.totalReviews ?? 0)})</span>
+                          <span className="text-gray-400">•</span>
+                          <span>
+                            <b>{Number(m.totalAssinantes ?? 0)}</b> assinaturas
+                          </span>
+                        </div>
+
+                        {/* pontos + descrição */}
+                        <div className="mt-1 text-sm text-gray-700">
+                          + <b>{Number(m.pontosTotal ?? 0)}</b> pts
+                        </div>
+
+                        {!!m.descricao && (
+                          <div className="mt-1 text-sm text-gray-600 line-clamp-2">
+                            {m.descricao}
                           </div>
                         )}
                       </div>
-
-                      {!!m.pontosBadge && (
-                        <span className="text-xs px-2 py-1 rounded-full border bg-amber-50 text-amber-800 font-semibold shrink-0">
-                          {m.pontosBadge}
-                        </span>
-                      )}
                     </div>
 
-                    {!!m.descricao && (
-                      <p className="text-sm text-gray-600 mt-2 line-clamp-3">
-                        {m.descricao}
-                      </p>
-                    )}
-                  </div>
+                    {/* DIREITA: ações */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* ✅ CRIADAS: só editar/apagar (sem Acessar) */}
+                      {isInstrutor && tab === "criadas" ? (
+                        <>
+                          <Link
+                            href={`/treinos/Criar-Metodologia?id=${encodeURIComponent(
+                              m.id
+                            )}`}
+                            className="p-2 rounded-xl border bg-white hover:bg-gray-50"
+                            title="Editar"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Link>
 
-                  <div className="mt-4 flex items-center justify-between gap-2">
-                    <span className="text-xs text-gray-600 line-clamp-1">
-                      {m.pontosPorSemanaLabel || ""}
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // aqui você decide o destino:
-                        // pode ser uma página detalhe: /metodologias/:id
-                        // ou abrir dentro do tab "Metodologias"
-                        navigate(`/metodologias/${m.id}`);
-                      }}
-                      className="px-4 py-2 rounded-xl bg-green-800 text-white font-semibold hover:bg-green-900 shrink-0 inline-flex items-center gap-2"
-                    >
-                      Acessar
-                      <ExternalLink className="w-4 h-4" />
-                    </button>
+                          <button
+                            type="button"
+                            onClick={() => deletarMetodologia(m.id)}
+                            className="p-2 rounded-xl border bg-white hover:bg-red-50"
+                            title="Deletar"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-600" />
+                          </button>
+                        </>
+                      ) : (
+                        /* ✅ ASSINADAS: botão "Acessar" */
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/metodologias/${m.id}`)}
+                          className="px-5 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900"
+                        >
+                          Acessar
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       </div>
-
       <BottomNav active="treinos" />
     </div>
   );
