@@ -456,7 +456,7 @@ model Metodologia {
   capaUrl          String?
   nivel            Nivel?
   categorias       Categoria[]            @default([])
-  ativo            Boolean                @default(true)
+  ativo            Boolean                @default(false)
   criadorUsuarioId String
   criadorUsuario   Usuario                @relation("MetodologiaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
   professorId      String?

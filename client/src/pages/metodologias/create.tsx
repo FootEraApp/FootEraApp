@@ -82,29 +82,34 @@ function getToken() {
 }
 
 async function uploadVideoMetodologia(file: File, meta?: { titulo?: string; descricao?: string }) {
+  return uploadVideoMetodologiaLocal(file, meta);
+}
+
+async function uploadVideoMetodologiaLocal(file: File, meta?: { titulo?: string; descricao?: string }) {
   const token = getToken();
   if (!token) throw new Error("Sem token.");
 
   const fd = new FormData();
-  fd.append("video", file); // ✅ tem que ser "video"
+  fd.append("video", file);
   if (meta?.titulo) fd.append("titulo", meta.titulo);
   if (meta?.descricao) fd.append("descricao", meta.descricao);
 
-  // ✅ ajuste a URL pra bater com sua rota real no backend
   const r = await fetch(`${API.BASE_URL}/api/upload/metodologias/video`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` }, // ⚠️ não setar Content-Type no FormData
+    headers: {
+      Authorization: `Bearer ${token}`,
+      // NÃO coloque Content-Type manualmente em FormData
+    },
     body: fd,
   });
 
   const js = await r.json().catch(() => null);
-  if (!r.ok) throw new Error(js?.message || js?.error || "Falha no upload do vídeo.");
+  if (!r.ok) throw new Error(js?.message || js?.error || "Falha no upload local.");
 
-  // backend retorna { relativeUrl, url, ... }
   return {
-    relativeUrl: String(js?.relativeUrl || ""),
-    url: String(js?.url || ""),
-    filename: String(js?.filename || ""),
+    relativeUrl: String(js.relativeUrl || ""),
+    url: String(js.url || js.relativeUrl || ""),
+    filename: String(js.filename || ""),
   };
 }
 
@@ -304,9 +309,13 @@ export default function CriarMetodologia() {
     const u = String(raw).trim();
     if (!u) return null;
 
-    // ✅ se vier relativo tipo "/assets/..." ou "/uploads/..."
-    if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
+    // ✅ se for relativo "/assets/..." => é do FRONT/CDN, não do backend
+    if (u.startsWith("/assets/")) return u;
 
+    // ✅ se vier relativo "/uploads/..." (se você ainda usa isso em outras telas) => backend
+    if (u.startsWith("/uploads/")) return `${API.BASE_URL}${u}`;
+
+    // absoluto
     return u;
   }
 
@@ -548,11 +557,19 @@ export default function CriarMetodologia() {
       // =======================
       // 1) Upload dos vídeos (se houver) antes de criar os itens
       // =======================
+      const uploadedUrlByItemId: Record<string, string> = {};
+
       for (const s of semanas) {
         for (const it of s.itens) {
           if (it.tipo !== "VIDEO") continue;
 
-          // se tem arquivo, sobe e grava a url final no próprio item
+          // se já tem url digitada, usa ela
+          if (it.videoUrl?.trim()) {
+            uploadedUrlByItemId[it.id] = it.videoUrl.trim();
+            continue;
+          }
+
+          // se tem arquivo, sobe e guarda a url final
           if (it.videoFile) {
             setUploadingByItem((prev) => ({ ...prev, [it.id]: true }));
             try {
@@ -561,10 +578,12 @@ export default function CriarMetodologia() {
                 descricao: it.descricao || "",
               });
 
-              // você pode escolher usar up.relativeUrl (recomendado) ou up.url
-              const finalUrl = up.relativeUrl || up.url;
+              const finalUrl = (up.relativeUrl || up.url || "").trim();
+              if (!finalUrl) throw new Error("Upload não retornou url/relativeUrl.");
 
-              // salva a URL final no state, pra o resto do salvar() usar
+              uploadedUrlByItemId[it.id] = finalUrl;
+
+              // opcional: atualiza UI (preview/estado)
               updateItem(s.id, it.id, {
                 videoUrl: finalUrl,
                 videoFile: null,
@@ -576,6 +595,9 @@ export default function CriarMetodologia() {
         }
       }
 
+      // =======================
+      // 2) Monta os itens usando o mapa (não o state)
+      // =======================
       const flatItems: Array<{
         semana: number;
         ordem: number;
@@ -592,21 +614,26 @@ export default function CriarMetodologia() {
       semanas.forEach((s, idxSemana) => {
         const semanaNum = idxSemana + 1;
         s.itens.forEach((it, idxItem) => {
+          const videoUrlFinal =
+            it.tipo === "VIDEO"
+              ? (uploadedUrlByItemId[it.id] || "").trim() || null
+              : null;
+
           flatItems.push({
             semana: semanaNum,
             ordem: idxItem + 1,
             titulo: it.titulo.trim(),
             descricao: (it.descricao || "").trim() || null,
             tipo: it.tipo,
-            videoUrl: it.tipo === "VIDEO" ? it.videoUrl?.trim() || null : null,
+            videoUrl: videoUrlFinal,
             thumbUrl: it.tipo === "VIDEO" ? it.thumbUrl?.trim() || null : null,
-            treinoProgramadoId:
-              it.tipo === "TREINO" ? it.treinoProgramadoId || null : null,
+            treinoProgramadoId: it.tipo === "TREINO" ? it.treinoProgramadoId || null : null,
             pontos: it.pontos ?? null,
             publicado: true,
           });
         });
       });
+
 
       for (const item of flatItems) {
         const rr = await fetch(
@@ -632,7 +659,7 @@ export default function CriarMetodologia() {
       }
 
       setOkMsg("Metodologia criada com sucesso!");
-      setTimeout(() => navigate("/metodologias/minhas"), 700);
+      setTimeout(() => navigate("/treinos"), 700);
     } catch (e: any) {
       setErro(e?.message || "Erro ao salvar metodologia.");
     } finally {
@@ -647,7 +674,7 @@ export default function CriarMetodologia() {
         <div className="pt-3 sticky top-0 z-20 bg-neutral-50/90 backdrop-blur">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => navigate("/metodologias/minhas")}
+              onClick={() => navigate("/treinos")}
               className="inline-flex items-center justify-center p-2 rounded-xl border bg-white hover:bg-gray-50"
               aria-label="Voltar"
             >
@@ -1133,7 +1160,7 @@ export default function CriarMetodologia() {
                             </div>
 
                             <div className="text-[11px] text-gray-500 mt-1">
-                              Aceita <b>mp4/webm/mov</b>. O backend salva em <b>/assets/videos/metodologias</b>.
+                              Aceita <b>mp4/webm/mov</b>. O backend salva em <b>/uploads/metodologias/videos</b>.
                             </div>
                           </div>
 

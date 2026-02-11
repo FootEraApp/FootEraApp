@@ -104,7 +104,7 @@ import estatisticasRoutes from "./routes/estatisticas.js";
 import configuracoesPerfilRoutes from "./routes/configuracoesPerfil.js";
 import presencaRoutes from "./routes/presenca.js";
 import metodologiasRoutes from "./routes/metodologiasRoutes.js";
-import uploadMetodologiasRoutes from "./routes/uploadMetodologias.js";
+import metodologiasUploadRoutes from "./routes/uploadMetodologias.js";
 
 import { mercadoPagoWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
@@ -292,6 +292,7 @@ app.use("/api/submissoes", authenticateToken, submissoesRoutes);
 app.use("/api/treinos", authenticateToken, treinoRoutes);
 app.use("/api/treino-unico", authenticateToken, treinoUnicoRoutes);
 app.use("/api/treinosprogramados", authenticateToken, treinoProgramadoRoutes);
+app.use("/api/upload/metodologias", metodologiasUploadRoutes);
 app.use("/api/upload", authenticateToken, uploadRoutes);
 app.use("/api/vinculo", authenticateToken, vinculoRoutes);
 app.use("/api/vinculos", authenticateToken, vinculoRoutes);
@@ -326,7 +327,7 @@ app.use("/api/status", statusRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
 app.use("/api/metodologias", metodologiasRoutes);
-app.use("/api/upload/metodologias", authenticateToken, uploadMetodologiasRoutes);
+
 
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
