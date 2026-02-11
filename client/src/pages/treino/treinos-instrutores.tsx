@@ -5,11 +5,17 @@ import {
   Check,
   X,
   Pencil,
-  Trash2
+  Trash2,
+  ChevronDown,
+  SlidersHorizontal,
+  Loader2,
+  Search,
 } from "lucide-react";
-import { API } from "../../config.js";
+import { API, APP } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
 import BottomNav from "@/components/layout/BottomNav.js";
+
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 const Storage = {
   get token() {
@@ -107,6 +113,28 @@ interface Turma {
   professorNome?: string | null;
 }
 
+type MetodologiaPublico = "ATLETAS" | "PROFISSIONAIS" | "AMBOS" | string;
+
+type MetodologiaCard = {
+  id: string;
+  titulo: string;
+  descricao?: string | null;
+  capaUrl?: string | null;
+  criadorNome?: string | null;
+  totalAssinantes?: number | null;
+  // ✅ novos:
+  videoCount?: number;
+  treinoCount?: number;
+  nivel?: "Base" | "Avancado" | "Performance" | string | null;
+  jaAssinada?: boolean;
+  tags?: string[];
+  mediaAvaliacao: number;     // 0..5
+  notaCount: number;     // quantidade de avaliações
+  pontos: number; 
+  publicoAlvo?: MetodologiaPublico | null;
+  totalReviews?: number | null;
+};
+
 type SessaoDeHoje = {
   id: string;
   data?: string;
@@ -122,6 +150,25 @@ type SessaoDeHoje = {
 
 function normTxt(s: any) {
   return String(s || "").trim().toLowerCase();
+}
+
+function Stars({ value }: { value: number }) {
+  const v = Math.max(0, Math.min(5, value || 0));
+  const full = Math.floor(v);
+  const half = v - full >= 0.5;
+
+  // simples (sem meia estrela real): enche arredondando
+  const filled = Math.round(v);
+
+  return (
+    <span className="tracking-[1px] text-gray-400">
+      {"★★★★★".split("").map((_, i) => (
+        <span key={i} className={i < filled ? "text-amber-400" : "text-gray-300"}>
+          ★
+        </span>
+      ))}
+    </span>
+  );
 }
 
 function formatElapsed(startedAtISO?: string | null, nowMs?: number) {
@@ -154,22 +201,16 @@ function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
 }
 const PLACEHOLDER_USER = "/assets/usuarios/default-user.png";
 
-function resolveUploadUrl(raw?: string | null): string | null {
+function resolveUploadUrl(raw?: string | null) {
   if (!raw) return null;
+  const p = String(raw).trim();
+  if (!p) return null;
 
-  if (raw.startsWith("http://") || raw.startsWith("https://")) {
-    return raw;
-  }
+  if (p.startsWith("http://") || p.startsWith("https://")) return p;
+  if (p.startsWith("/")) return `${API.BASE_URL}${p}`;
 
-  if (raw.startsWith("/assets/")) {
-    return raw;
-  }
-
-  if (raw.startsWith("/uploads/")) {
-    return `${API.BASE_URL}${raw}`;
-  }
-
-  return raw;
+  // "uploads/..." ou "assets/..." sem barra
+  return `${API.BASE_URL}/${p}`;
 }
 
 function formatarData(data?: string) {
@@ -268,6 +309,27 @@ const getToken = () =>
   sessionStorage.getItem("token") ??
   "";
 
+function normalizeAssetUrl(raw?: string | null) {
+  if (!raw) return null;
+  const u = String(raw).trim();
+  if (!u) return null;
+
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
+  return `${API.BASE_URL}/${u}`; // cobre "uploads/..." sem barra
+}
+
+function normalizeImgUrl(raw?: string | null) {
+  if (!raw) return null;
+  const u = String(raw).trim();
+  if (!u) return null;
+
+  // se vier "/uploads/..." ou "/assets/..." → precisa apontar para o BACKEND
+  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
+
+  return u; // já é URL absoluta
+}
+
 function isUsuarioFree() {
   try {
     const planoRaw =
@@ -304,7 +366,9 @@ export default function TreinosInstrutores({
   const [, navigate] = useLocation();
 
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
-  const [abaProfessor, setAbaProfessor] = useState<"avaliar" | "criar" | "sessoes">("criar");
+  const [abaProfessor, setAbaProfessor] = useState<
+    "avaliar" | "criar" | "sessoes" | "metodologias"
+  >("criar");
   const [meuNome, setMeuNome] = useState<string>("");
   const [treinos, setTreinos] = useState<TreinoProgramado[]>([]);
   const [profNomeById, setProfNomeById] = useState<Record<string, string>>({});
@@ -313,39 +377,50 @@ export default function TreinosInstrutores({
   >([]);
   const [carregandoSubmissoes, setCarregandoSubmissoes] = useState(false);
   const [page, setPage] = useState({ total: 0, limit: 20, offset: 0 });
+  const [metodologias, setMetodologias] = useState<MetodologiaCard[]>([]);
+  const [carregandoMetodologias, setCarregandoMetodologias] = useState(false);
+  const [buscaMetodologias, setBuscaMetodologias] = useState("");
+  const [loadingMetodologias, setLoadingMetodologias] = useState(false);
+  const [erroMetodologias, setErroMetodologias] = useState<string | null>(null);
+  // filtros selecionados (chips)
+  const [filtrosSelecionados, setFiltrosSelecionados] = useState<string[]>([]);
+  const [filtroConteudo, setFiltroConteudo] = useState<"AMBOS" | "VIDEOS" | "TREINOS">("AMBOS");
+  const [filtroNivel, setFiltroNivel] = useState<"TODOS" | "Base" | "Avancado" | "Performance">("TODOS");
+  const OPCOES_FILTRO = [
+    "Goleiros",
+    "Linhas",
+    "Base",
+    "Avançado",
+    "Mentalidade",
+  ] as const;
 
-  const [dataAgendarById, setDataAgendarById] = useState<Record<string, string>>({});
-  const [obsById, setObsById] = useState<Record<string, string>>({});
-  const [horaAgendarById, setHoraAgendarById] = useState<Record<string, string>>({});
-  
+  function toggleFiltro(tag: string) {
+    setFiltrosSelecionados((prev) => {
+      const has = prev.some((x) => normTxt(x) === normTxt(tag));
+      if (has) return prev.filter((x) => normTxt(x) !== normTxt(tag));
+      return [...prev, tag];
+    });
+  }
+
+  function limparFiltros() {
+    setFiltrosSelecionados([]);
+  }
+
+  const [filtroPublico, setFiltroPublico] = useState<"TODOS" | "ATLETAS" | "PROFISSIONAIS" | "AMBOS">("TODOS");
   const [atletasVinculados, setAtletasVinculados] = useState<AtletaVinculado[]>([]);
-
-  const [atletasSelecionadosByTreinoId, setAtletasSelecionadosByTreinoId] =
-    useState<Record<string, string[]>>({});
-
+  const [atletasSelecionadosByTreinoId, setAtletasSelecionadosByTreinoId] = useState<Record<string, string[]>>({});
   const [turmas, setTurmas] = useState<Turma[]>([]);
-
-  const [turmaSelecionadaByTreinoId, setTurmaSelecionadaByTreinoId] =
-    useState<Record<string, string>>({});
-
+  const [turmaSelecionadaByTreinoId, setTurmaSelecionadaByTreinoId] = useState<Record<string, string>>({});
   const [sessoesDeHoje, setSessoesDeHoje] = useState<SessaoDeHoje[]>([]);
-  const [sessaoAbertaExerciciosId, setSessaoAbertaExerciciosId] =
-    useState<string | null>(null);
-  const [sessaoEmRemarcacaoId, setSessaoEmRemarcacaoId] =
-  useState<string | null>(null);
-
-  const [remarcarDataBySessaoId, setRemarcarDataBySessaoId] =
-    useState<Record<string, string>>({});
-
-  const [remarcarHoraBySessaoId, setRemarcarHoraBySessaoId] =
-    useState<Record<string, string>>({});
-
+  const [sessaoAbertaExerciciosId, setSessaoAbertaExerciciosId] = useState<string | null>(null);
+  const [sessaoEmRemarcacaoId, setSessaoEmRemarcacaoId] = useState<string | null>(null);
+  const [remarcarDataBySessaoId, setRemarcarDataBySessaoId] = useState<Record<string, string>>({});
+  const [remarcarHoraBySessaoId, setRemarcarHoraBySessaoId] = useState<Record<string, string>>({});
   const [videoModal, setVideoModal] = useState<{
     url: string;
     nome: string;
     repeticoes?: string;
   } | null>(null);
-
   const [exerciciosMarcadosBySessao, setExerciciosMarcadosBySessao] =
     useState<Record<string, string[]>>({});
   const [alunosDaSessao, setAlunosDaSessao] = useState<AtletaVinculado[]>([]);
@@ -356,7 +431,6 @@ export default function TreinosInstrutores({
   const [professoresVinculadosNomeById, setProfessoresVinculadosNomeById] = useState<Record<string, string>>({});
   const [realizadoCountByTreinoId, setRealizadoCountByTreinoId] = useState<Record<string, number>>({});
   const [exerciciosCountByTreinoId, setExerciciosCountByTreinoId] = useState<Record<string, number>>({});
-
   const [videoByExId, setVideoByExId] = useState<Record<string, string>>({});
   const startedAtRef = useRef<string | null>(null);
   const debugOnceRef = useRef(false);
@@ -439,76 +513,83 @@ useEffect(() => {
   })();
 }, []);
 
-useEffect(() => {
-  const token = getToken();
-  if (!token) return;
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
 
-  const tipoUser = String(usuario?.tipo ?? "").toLowerCase();
-  const tipoUsuarioId = String(usuario?.tipoUsuarioId ?? "").trim();
+    const tipoUser = String(usuario?.tipo ?? "").toLowerCase();
+    const tipoUsuarioId = String(usuario?.tipoUsuarioId ?? "").trim();
 
-  if (!tipoUsuarioId) return;
+    if (!tipoUsuarioId) return;
 
-  if (tipoUser !== "clube" && tipoUser !== "escolinha") {
-    setProfessoresVinculadosIds([]);
-    setProfessoresVinculadosNomeById({});
-    return;
-  }
-
-  (async () => {
-    try {
-      const res = await fetch(
-        `${API.BASE_URL}/api/professores/vinculados?tipo=${encodeURIComponent(tipoUser)}&tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      const txt = await res.text().catch(() => "");
-      
-      if (!res.ok) {
-        setProfessoresVinculadosIds([]);
-        setProfessoresVinculadosNomeById({});
-        return;
-      }
-
-      const data = txt ? JSON.parse(txt) : [];
-
-      const list = Array.isArray(data) ? data : data.items ?? data.data ?? [];
-
-      const ids: string[] = [];
-      const nomeById: Record<string, string> = {};
-
-      for (const p of list) {
-        const id =
-          String(
-            p?.professorId ??
-            p?.professor?.id ??
-            p?.id ??
-            ""
-          ).trim();
-
-        if (!id) continue;
-
-        const nome =
-          String(
-            p?.professor?.usuario?.nome ??
-            p?.professor?.nome ??
-            p?.usuario?.nome ??
-            p?.nome ??
-            ""
-          ).trim();
-
-        ids.push(id);
-        if (nome) nomeById[id] = nome;
-      }
-
-      setProfessoresVinculadosIds(Array.from(new Set(ids)));
-      setProfessoresVinculadosNomeById(nomeById);
-    } catch (e) {
-      console.warn("[treinos] erro ao carregar professores vinculados", e);
+    if (tipoUser !== "clube" && tipoUser !== "escolinha") {
       setProfessoresVinculadosIds([]);
       setProfessoresVinculadosNomeById({});
+      return;
     }
-  })();
-}, [usuario?.tipo, usuario?.tipoUsuarioId]);
+
+    (async () => {
+      try {
+        const res = await fetch(
+          `${API.BASE_URL}/api/professores/vinculados?tipo=${encodeURIComponent(tipoUser)}&tipoUsuarioId=${encodeURIComponent(tipoUsuarioId)}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        const txt = await res.text().catch(() => "");
+        
+        if (!res.ok) {
+          setProfessoresVinculadosIds([]);
+          setProfessoresVinculadosNomeById({});
+          return;
+        }
+
+        const data = txt ? JSON.parse(txt) : [];
+
+        const list = Array.isArray(data) ? data : data.items ?? data.data ?? [];
+
+        const ids: string[] = [];
+        const nomeById: Record<string, string> = {};
+
+        for (const p of list) {
+          const id =
+            String(
+              p?.professorId ??
+              p?.professor?.id ??
+              p?.id ??
+              ""
+            ).trim();
+
+          if (!id) continue;
+
+          const nome =
+            String(
+              p?.professor?.usuario?.nome ??
+              p?.professor?.nome ??
+              p?.usuario?.nome ??
+              p?.nome ??
+              ""
+            ).trim();
+
+          ids.push(id);
+          if (nome) nomeById[id] = nome;
+        }
+
+        setProfessoresVinculadosIds(Array.from(new Set(ids)));
+        setProfessoresVinculadosNomeById(nomeById);
+      } catch (e) {
+        console.warn("[treinos] erro ao carregar professores vinculados", e);
+        setProfessoresVinculadosIds([]);
+        setProfessoresVinculadosNomeById({});
+      }
+    })();
+  }, [usuario?.tipo, usuario?.tipoUsuarioId]);
+
+  useEffect(() => {
+    if (abaProfessor === "metodologias") {
+      carregarMetodologias();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abaProfessor]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -517,6 +598,155 @@ useEffect(() => {
 
     return () => clearInterval(id);
   }, []);
+
+  async function carregarMetodologias() {
+    const token = getToken();
+    if (!token) {
+      setErroMetodologias("Sem token. Faça login novamente.");
+      return;
+    }
+
+    setLoadingMetodologias(true);
+    setErroMetodologias(null);
+
+    try {
+      // ✅ endpoint que você já tem nas routes: /api/metodologias/visiveis
+      const r = await fetch(`${API.BASE_URL}/api/metodologias/visiveis`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const js = await r.json().catch(() => null);
+      if (!r.ok) {
+        throw new Error(js?.message || js?.error || "Falha ao carregar metodologias.");
+      }
+
+      const arr: any[] = Array.isArray(js) ? js : js.items ?? [];
+
+      const normalizadas: MetodologiaCard[] = arr.map((m: any) => ({
+        id: String(m.id),
+        titulo: m.titulo ?? m.nome ?? "Metodologia",
+        descricao: m.descricao ?? null,
+
+        // ✅ capa correta (evita 404 em localhost:5173/uploads/...)
+        capaUrl: normalizeAssetUrl(m.capaUrl ?? m.logoUrl ?? m.imagemUrl ?? null),
+
+        publicoAlvo: m.publicoAlvo ?? "AMBOS",
+        nivel: m.nivel ?? null,
+        tipo: m.tipo ?? null,
+        totalSemanas: Number(m.totalSemanas ?? 0),
+        videoCount: Number(m.videoCount ?? m._count?.itensVideo ?? 0),
+        treinoCount: Number(m.treinoCount ?? m._count?.itensTreino ?? 0),
+
+        totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
+        mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
+        notaCount: Number(m.totalReviews ?? m.notaCount ?? 0),
+        totalReviews: Number(m.totalReviews ?? 0),
+        // ⚠️ a lista normalmente NÃO vem com pontos -> vamos preencher depois via detalhe
+        pontos: Number(m.pontosTotal ?? m.pontos ?? m.pontuacao ?? 0),
+        criadorNome:
+          m.criadorNome ??
+          m.autor?.nome ??
+          m.criador?.nome ??
+          m.professor?.nome ??
+          m.usuarioCriador?.nome ??
+          null,
+
+      }));
+
+      // ✅ ENRIQUECE (pontos + capa garantida) usando /detalhe
+      const detalhadas = await Promise.all(
+        normalizadas.map(async (card) => {
+          try {
+            const rr = await fetch(
+              `${API.BASE_URL}/api/metodologias/${encodeURIComponent(card.id)}/detalhe`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            const jj = await rr.json().catch(() => null);
+            if (!rr.ok || !jj) return card;
+
+            // 1) tenta vir pronto do backend
+            let pontosTotal = Number(jj.pontosTotal ?? 0);
+
+            // 2) fallback: soma pontos dos itens (MetodologiaItem.pontos)
+            if (!pontosTotal && Array.isArray(jj.itens)) {
+              pontosTotal = jj.itens
+                .filter((it: any) => it?.publicado !== false)
+                .reduce((acc: number, it: any) => acc + Number(it?.pontos ?? 0), 0);
+            }
+
+            // (opcional) melhora contagem de itens se o detalhe vier com itens
+            const itens = Array.isArray(jj.itens) ? jj.itens : [];
+            const videoCount = itens.filter((it: any) => String(it?.tipo).toUpperCase() === "VIDEO" && it?.publicado !== false).length;
+            const treinoCount = itens.filter((it: any) => String(it?.tipo).toUpperCase() === "TREINO" && it?.publicado !== false).length;
+
+            const nomeCriador =
+              jj?.criadorNome ??
+              jj?.criadorUsuario?.nome ??
+              jj?.criadorUsuario?.nomeDeUsuario ??
+              jj?.autor?.nome ??
+              jj?.autor?.nomeDeUsuario ??
+              jj?.professor?.nome ??
+              jj?.clube?.nome ??
+              jj?.escolinha?.nome ??
+              null;
+
+            return {
+              ...card,
+              criadorNome: card.criadorNome || (nomeCriador ? String(nomeCriador) : null),
+              pontos: Number.isFinite(pontosTotal) ? pontosTotal : card.pontos,
+              capaUrl: normalizeAssetUrl(jj.capaUrl ?? card.capaUrl) ?? card.capaUrl,
+              videoCount: videoCount || card.videoCount,
+              treinoCount: treinoCount || card.treinoCount,
+            };
+          } catch {
+            return card;
+          }
+        })
+      );
+
+      setMetodologias(detalhadas);
+    } catch (e: any) {
+      setErroMetodologias(e?.message || "Erro ao carregar metodologias.");
+      setMetodologias([]);
+    } finally {
+      setLoadingMetodologias(false);
+    }
+  }
+
+  async function assinarMetodologia(metodologiaId: string) {
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      // ajuste se sua rota for outra:
+      // ex: POST /api/metodologias/:id/assinar
+      const res = await fetch(
+        `${API.BASE_URL}/api/metodologias/${encodeURIComponent(metodologiaId)}/assinar`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        alert(payload?.message || "Não foi possível assinar a metodologia.");
+        return;
+      }
+
+      // marca como assinada sem precisar refetch
+      setMetodologias((prev) =>
+        prev.map((m) => (m.id === metodologiaId ? { ...m, jaAssinada: true } : m))
+      );
+    } catch {
+      alert("Erro ao assinar a metodologia.");
+    }
+  }
 
   async function buscarAlunosDaTurma(turmaId: string): Promise<AtletaVinculado[]> {
     const token = getToken();
@@ -1418,6 +1648,11 @@ async function salvarProgressoSessao(sessaoId: string) {
             pickFirstId(tr?.criador, ["clubeId"]) ||
             undefined;
 
+          const toNum = (v: any) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : 0;
+          };
+
           return {
             id: String(tr.id),
             nome: String(tr.nome ?? ""),
@@ -1430,7 +1665,7 @@ async function salvarProgressoSessao(sessaoId: string) {
             professorId: professorIdFix,
             escolinhaId: escolinhaIdFix,
             clubeId: clubeIdFix,
-            pontuacao: typeof tr.pontuacao === "number" ? tr.pontuacao : undefined,
+            pontuacao: toNum(tr.pontuacao ?? 0),
             professoresIds,
             criadoresNomes,
             criadorTipo,
@@ -2212,6 +2447,16 @@ async function salvarProgressoSessao(sessaoId: string) {
                   >
                     Treinos de Hoje
                   </button>
+                  <button
+                    onClick={() => setAbaProfessor("metodologias")}
+                    className={`shrink-0 px-3 py-2 rounded-lg border text-xs sm:text-sm min-w-[130px] sm:min-w-0 ${
+                      abaProfessor === "metodologias"
+                        ? "bg-green-800 text-white border-green-900"
+                        : "bg-white text-gray-800 border-gray-200"
+                    }`}
+                  >
+                    Metodologias
+                  </button>
                 </div>
               </div>
             ) : (
@@ -2384,6 +2629,257 @@ async function salvarProgressoSessao(sessaoId: string) {
                   )}
                 </>
               )}
+            </div>
+          )}
+
+          {abaProfessor === "metodologias" && (
+            <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-lg font-semibold text-green-900">Metodologias</h3>
+
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/treinos/Minhas-Metodologias"
+                    className="px-3 py-2 rounded-full bg-green-800 text-white text-sm font-semibold hover:bg-green-900"
+                  >
+                    Minha Metodologia
+                  </Link>
+                </div>
+              </div>
+
+              {/* Busca */}
+              <div className="mt-3 flex items-center gap-2 bg-white border rounded-xl px-3 py-2">
+                <Search className="w-4 h-4 text-gray-500" />
+                <input
+                  value={buscaMetodologias}
+                  onChange={(e) => setBuscaMetodologias(e.target.value)}
+                  placeholder="Buscar metodologias..."
+                  className="w-full outline-none text-sm"
+                />
+              </div>
+
+              {/* Filtros estruturados + dropdown */}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <select
+                  value={filtroPublico}
+                  onChange={(e) => setFiltroPublico(e.target.value as any)}
+                  className="px-3 py-2 rounded-xl border bg-white text-sm"
+                >
+                  <option value="TODOS">Público: Todos</option>
+                  <option value="ATLETAS">Para Atletas</option>
+                  <option value="PROFISSIONAIS">Para Profissionais</option>
+                  <option value="AMBOS">Ambos</option>
+                </select>
+
+                <select
+                  value={filtroConteudo}
+                  onChange={(e) => setFiltroConteudo(e.target.value as any)}
+                  className="px-3 py-2 rounded-xl border bg-white text-sm"
+                >
+                  <option value="AMBOS">Vídeos + Treinos</option>
+                  <option value="VIDEOS">Só Vídeos</option>
+                  <option value="TREINOS">Só Treinos</option>
+                </select>
+
+                <select
+                  value={filtroNivel}
+                  onChange={(e) => setFiltroNivel(e.target.value as any)}
+                  className="px-3 py-2 rounded-xl border bg-white text-sm"
+                >
+                  <option value="TODOS">Nível: Todos</option>
+                  <option value="Base">Base</option>
+                  <option value="Avancado">Avançado</option>
+                  <option value="Performance">Performance</option>
+                </select>
+
+                {/* dropdown de chips (simples, sem popover) */}
+                <details className="relative">
+                  <summary className="list-none cursor-pointer px-3 py-2 rounded-xl border bg-white text-sm inline-flex items-center gap-2">
+                    <SlidersHorizontal className="w-4 h-4" />
+                    Adicionar filtro
+                    <ChevronDown className="w-4 h-4" />
+                  </summary>
+
+                  <div className="absolute mt-2 left-0 z-30 w-56 rounded-xl border bg-white shadow-lg p-2">
+                    {/* chips */}
+                    <div className="flex flex-col gap-1">
+                      {OPCOES_FILTRO.map((opt) => {
+                        const ativo = filtrosSelecionados.some((x) => normTxt(x) === normTxt(opt));
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => toggleFiltro(opt)}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
+                              ativo ? "bg-green-50 border border-green-200" : "hover:bg-gray-50"
+                            }`}
+                          >
+                            <span className="text-gray-800">{opt}</span>
+                            {ativo ? <Check className="w-4 h-4 text-green-700" /> : <span className="w-4 h-4" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-2 pt-2 border-t flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={limparFiltros}
+                        className="text-xs font-semibold text-gray-600 hover:text-gray-900"
+                      >
+                        Limpar
+                      </button>
+                      <span className="text-xs text-gray-500">{filtrosSelecionados.length} selecionado(s)</span>
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              {erroMetodologias && (
+                <div className="mt-3 rounded-xl border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
+                  {erroMetodologias}
+                </div>
+              )}
+
+              {/* Lista filtrada */}
+              <div className="mt-4">
+                {loadingMetodologias ? (
+                  <div className="flex items-center gap-2 text-gray-600 text-sm">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Carregando metodologias...
+                  </div>
+                ) : (
+                  (() => {
+                    const q = buscaMetodologias.trim().toLowerCase();
+
+                    const filtradas = metodologias.filter((m) => {
+                      // busca
+                      const okBusca =
+                        !q ||
+                        (m.titulo || "").toLowerCase().includes(q) ||
+                        (m.descricao || "").toLowerCase().includes(q) ||
+                        (m.tags || []).join(" ").toLowerCase().includes(q);
+
+                      if (!okBusca) return false;
+
+                      // público alvo
+                      if (filtroPublico !== "TODOS") {
+                        const p = String(m.publicoAlvo || "").toUpperCase();
+                        if (p !== filtroPublico) return false;
+                      }
+
+                      // nível
+                      if (filtroNivel !== "TODOS") {
+                        const n = String(m.nivel || "").toLowerCase();
+                        const alvo = filtroNivel.toLowerCase();
+                        if (n !== alvo) return false;
+                      }
+
+                      // conteúdo (Vídeos / Treinos)
+                      if (filtroConteudo === "VIDEOS") {
+                        if ((m.videoCount ?? 0) <= 0) return false;
+                      }
+                      if (filtroConteudo === "TREINOS") {
+                        if ((m.treinoCount ?? 0) <= 0) return false;
+                      }
+
+                      // filtros do dropdown (tags)
+                      if (filtrosSelecionados.length > 0) {
+                        const tagsMet = (m.tags || []).map(normTxt);
+                        const okTag = filtrosSelecionados.some((f) => tagsMet.includes(normTxt(f)));
+                        if (!okTag) return false;
+                      }
+
+                      return true;                      
+                    });
+
+                    if (filtradas.length === 0) {
+                      return <div className="text-gray-600">Nenhuma metodologia encontrada.</div>;
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {filtradas.map((m) => (
+                          <label key={m.id} className="rounded-2xl border p-4 flex flex-col gap-3 cursor-pointer hover:bg-gray-50">
+                            {/* HEADER (badge + titulo + assinaturas no canto direito) */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  {/* Público-alvo (chip) */}
+                                  <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-white">
+                                    {String(m.publicoAlvo ?? "AMBOS")}
+                                  </span>
+
+                                  {/* Título */}
+                                  <div className="font-semibold text-[16px] truncate ml-3">
+                                    {m.titulo}
+                                  </div>
+                                </div>                              
+                              </div>
+
+                              {/* assinaturas no canto direito */}
+                              <div className="text-sm text-gray-600 whitespace-nowrap">
+                                <b>{Number(m.totalAssinantes ?? 0)}</b> assinaturas
+                              </div>
+                            </div>
+
+                            {/* CONTEÚDO (foto embaixo, como você pediu) */}
+                            <div className="flex gap-3">
+                              <img
+                                src={normalizeAssetUrl(m.capaUrl) || AVATAR_FALLBACK}
+                                onError={(e) => {
+                                  e.currentTarget.onerror = null;
+                                  e.currentTarget.src = AVATAR_FALLBACK;
+                                }}
+                                alt={m.titulo}
+                                className="h-16 w-16 rounded-xl border object-cover bg-white"
+                              />
+
+                              <div className="flex-1 min-w-0">
+                                {/* ⭐⭐⭐⭐⭐ + nota */}
+                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                  <Stars value={Number(m.mediaAvaliacao ?? 0)} />
+                                  <span className="font-semibold text-gray-800">
+                                    {Number(m.mediaAvaliacao ?? 0).toFixed(1)}
+                                  </span>
+                                  <span>({Number(m.totalReviews ?? 0)})</span>
+                                </div>
+
+                                {/* + pontos */}
+                                <div className="mt-1 text-sm text-gray-700">
+                                  + <b>{Number(m.pontos ?? 0)}</b> pts
+                                </div>
+
+                                {/* Criado por */}
+                                <div className="mt-1 text-sm text-gray-700">
+                                  Criado por: <b>{m.criadorNome ?? "—"}</b>
+                                </div>
+
+                                {/* Descrição */}
+                                {m.descricao ? (
+                                  <div className="mt-1 text-sm text-gray-600 line-clamp-2">
+                                    {m.descricao}
+                                  </div>
+                                ) : null}
+                              </div>
+                              <button
+                                type="button"
+                                className="self-end px-5 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  navigate(`/metodologias/${m.id}`);
+                                }}
+                              >
+                                Ver / Assinar
+                              </button>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
             </div>
           )}
 
