@@ -1,3 +1,4 @@
+// server/controllers/metodologiasController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { MetodologiaAssinaturaStatus, MetodologiaPublicoAlvo, MetodologiaConteudoTipo  } from "@prisma/client";
@@ -69,6 +70,26 @@ export async function createMetodologia(req: Request, res: Response) {
       return res.status(400).json({ message: "Campo 'titulo' é obrigatório." });
     }
 
+    // ✅ resolve o "dono real" (professor/clube/escolinha) a partir do usuário logado
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: userId },
+      select: {
+        tipo: true,
+        professor: { select: { id: true } },
+        clube: { select: { id: true } },
+        escolinha: { select: { id: true } },
+      },
+    });
+
+    const professorId =
+      usuario?.tipo === "Professor" ? usuario?.professor?.id ?? null : null;
+
+    const clubeId =
+      usuario?.tipo === "Clube" ? usuario?.clube?.id ?? null : null;
+
+    const escolinhaId =
+      usuario?.tipo === "Escolinha" ? usuario?.escolinha?.id ?? null : null;
+
     let publicoAlvoFinal: MetodologiaPublicoAlvo = MetodologiaPublicoAlvo.AMBOS;
 
     if (publicoAlvo !== undefined && publicoAlvo !== null && String(publicoAlvo).trim() !== "") {
@@ -90,17 +111,18 @@ export async function createMetodologia(req: Request, res: Response) {
         descricao: typeof descricao === "string" ? descricao.trim() : null,
         capaUrl: typeof capaUrl === "string" ? capaUrl.trim() : null,
         totalSemanas: typeof totalSemanas === "number" ? totalSemanas : null,
-
-        // opcionais do schema
         nivel: nivel ?? undefined,
         categorias: Array.isArray(categorias) ? categorias : undefined,
         publicoAlvo: publicoAlvoFinal,
 
         criadorUsuarioId: userId,
+
+        // ✅ agora grava o “tipo dono”
+        professorId: professorId ?? undefined,
+        clubeId: clubeId ?? undefined,
+        escolinhaId: escolinhaId ?? undefined,
       },
-      include: {
-        _count: { select: { assinantes: true, itens: true } },
-      },
+      include: { _count: { select: { assinantes: true, itens: true } } },
     });
 
     return res.status(201).json({ item: created });
@@ -319,7 +341,6 @@ type MetodologiaItemPreparado = {
   duracaoMin: number | null;
 };
 
-
 export async function createMetodologiaItens(req: Request, res: Response) {
   try {
     const userId = getUserId(req);
@@ -468,6 +489,23 @@ export async function createMetodologiaItens(req: Request, res: Response) {
                 : null,
           },
         });
+
+        // ✅ PASSO 2: se for TREINO, garante vínculo na MetodologiaTreino
+        if (item.tipo === MetodologiaConteudoTipo.TREINO && item.treinoProgramadoId) {
+          await tx.metodologiaTreino.upsert({
+            where: {
+              metodologiaId_treinoProgramadoId: {
+                metodologiaId,
+                treinoProgramadoId: item.treinoProgramadoId,
+              },
+            },
+            update: {},
+            create: {
+              metodologiaId,
+              treinoProgramadoId: item.treinoProgramadoId,
+            },
+          });
+        }
 
         result.push(novo);
       }
