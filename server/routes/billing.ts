@@ -15,6 +15,8 @@ import {
   checkExpiringSubscriptions,
   setPreferredPaymentMethod,
   startTrial,
+  getMetodologiasAvulsas,
+  resetMetodologiasAvulsasDev,
 } from "../controllers/billingController.js";
 
 const router = Router();
@@ -36,5 +38,7 @@ router.post("/switch-plan", switchPlan);
 router.post("/mercadopago/webhook", mercadoPagoWebhook);
 router.post("/webhook/provider", providerWebhook);
 router.get("/check-expiring", checkExpiringSubscriptions);
+router.get("/metodologias-avulsas", getMetodologiasAvulsas);
+router.post("/metodologias-avulsas/reset-dev", resetMetodologiasAvulsasDev);
 
 export default router;
