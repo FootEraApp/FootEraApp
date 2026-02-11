@@ -177,7 +177,10 @@ export async function createMetodologia(req: Request, res: Response) {
       data: {
         titulo: titulo.trim(),
         descricao: typeof descricao === "string" ? descricao.trim() : null,
-        capaUrl: typeof capaUrl === "string" ? capaUrl.trim() : null,
+        capaUrl:
+          typeof capaUrl === "string" && capaUrl.trim()
+            ? capaUrl.trim()
+            : null,
         totalSemanas: typeof totalSemanas === "number" ? totalSemanas : null,
         // opcionais do schema
         nivel: parseNivel(nivel),
@@ -256,7 +259,7 @@ export async function updateMetodologia(req: Request, res: Response) {
       data: {
         titulo: typeof titulo === "string" ? titulo.trim() : undefined,
         descricao: typeof descricao === "string" ? descricao.trim() : undefined,
-        capaUrl: typeof capaUrl === "string" ? capaUrl.trim() : undefined,
+        capaUrl: capaUrl ?? null, 
         totalSemanas: typeof totalSemanas === "number" ? totalSemanas : undefined,
         ativo: typeof ativo === "boolean" ? ativo : undefined,
         nivel: parseNivel(nivel),
@@ -655,5 +658,254 @@ export async function createMetodologiaItens(req: Request, res: Response) {
     return res.status(201).json({ itens: created });
   } catch (e: any) {
     return res.status(500).json({ message: "Erro ao adicionar itens.", detail: e?.message });
+  }
+}
+
+export async function getMetodologiaDetalhe(req: Request, res: Response) {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+    const { id } = req.params;
+
+    const metodologia = await prisma.metodologia.findUnique({
+      where: { id },
+      include: {
+        criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
+        itens: {
+          orderBy: [{ semana: "asc" }, { ordem: "asc" }],
+          include: {
+            treinoProgramado: { select: { id: true, nome: true, imagemUrl: true } },
+          },
+        },
+        _count: { select: { assinantes: true, itens: true } },
+      },
+    });
+
+    if (!metodologia) return res.status(404).json({ message: "Metodologia não encontrada." });
+
+    const assinatura = await prisma.metodologiaAssinante.findUnique({
+      where: { metodologiaId_usuarioId: { metodologiaId: id, usuarioId: userId } },
+    });
+
+    const signed = assinatura?.status === MetodologiaAssinaturaStatus.ATIVA;
+
+    // progresso (sem mudar banco): tenta ler progresso.concluidos (array de itemId)
+    const concluidosIds: string[] = Array.isArray((assinatura as any)?.progresso?.concluidos)
+      ? ((assinatura as any).progresso.concluidos as string[])
+      : [];
+
+    const totalItens = metodologia.itens.length;
+    const concluidos = concluidosIds.length;
+    const ratio = totalItens > 0 ? concluidos / totalItens : 0;
+
+    // agrupa por semana
+    const weeksMap = new Map<number, any[]>();
+    for (const it of metodologia.itens) {
+      if (!weeksMap.has(it.semana)) weeksMap.set(it.semana, []);
+      weeksMap.get(it.semana)!.push(it);
+    }
+
+    const semanas = Array.from(weeksMap.entries()).map(([semana, itens]) => {
+      const itensOut = itens.map((it) => {
+        const isDone = concluidosIds.includes(it.id);
+
+        // preview se não assinado: não entrega videoUrl/treinoProgramadoId
+        const locked = !signed;
+
+        return {
+          id: it.id,
+          semana: it.semana,
+          ordem: it.ordem,
+          tipo: it.tipo,
+          titulo: it.titulo,
+          descricao: it.descricao,
+          pontos: it.pontos ?? 0,
+          duracaoMin: it.duracaoMin ?? null,
+          thumbUrl: signed ? it.thumbUrl : null,
+          videoUrl: signed ? it.videoUrl : null,
+          treinoProgramadoId: signed ? it.treinoProgramadoId : null,
+          locked,
+          done: isDone,
+        };
+      });
+
+      const totalPtsSemana = itensOut.reduce((acc, x) => acc + (x.pontos ?? 0), 0);
+
+      return {
+        semana,
+        totalPtsSemana,
+        itens: itensOut,
+      };
+    });
+
+    // ✅ soma de pontos total
+    const pontosTotal = metodologia.itens.reduce((acc, it) => acc + (it.pontos ?? 0), 0);
+    // ✅ regra de quota (mesma lógica da listMinhasMetodologiasAssinadas)
+    const assinaturasPrincipais = await (prisma as any).assinatura.findMany({
+      where: { usuarioId: userId },
+      orderBy: { startsAt: "desc" },
+    });
+
+    const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasPrincipais as any[]);
+    const limite = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
+    const inicioMes = startOfMonth(new Date());
+    const usadasNoMes = await prisma.metodologiaAssinante.count({
+      where: { usuarioId: userId, status: MetodologiaAssinaturaStatus.ATIVA, iniciouEm: { gte: inicioMes } },
+    });
+    const podeAssinarAgora = signed ? true : (limite > 0 && usadasNoMes < limite);
+
+    let motivoBloqueio: string | null = null;
+    if (!signed && !podeAssinarAgora) {
+      motivoBloqueio = limite <= 0 ? "PRECISA_LEARNING" : "LIMITE_MES";
+    }
+
+    return res.json({
+      id: metodologia.id,
+      titulo: metodologia.titulo,
+      descricao: metodologia.descricao,
+      capaUrl: metodologia.capaUrl ?? null,
+      publicoAlvo: metodologia.publicoAlvo,
+      totalSemanas: metodologia.totalSemanas ?? null,
+      totalAssinantes: metodologia.totalAssinantes ?? 0,
+      mediaAvaliacao: metodologia.mediaAvaliacao ?? 0,
+      totalReviews: metodologia.totalReviews ?? 0,
+      pontosTotal,
+      criadorNome: metodologia.criadorUsuario?.nome ?? null,
+      // ✅ aqui seu front usa direto data.itens
+      itens: metodologia.itens.map((it) => ({
+        id: it.id,
+        semana: it.semana,
+        ordem: it.ordem,
+        titulo: it.titulo,
+        descricao: it.descricao,
+        tipo: it.tipo,
+        pontos: it.pontos ?? 0,
+        // se não assinado: tranca links
+        videoUrl: signed ? it.videoUrl : null,
+        thumbUrl: signed ? (it as any).thumbUrl ?? null : null,
+        duracaoMin: it.duracaoMin ?? null,
+        treinoProgramadoId: signed ? it.treinoProgramadoId : null,
+        treinoProgramado: signed ? (it as any).treinoProgramado ?? null : null,
+        publicado: (it as any).publicado ?? true,
+      })),
+
+      viewer: {
+        isAssinante: signed,
+        podeAssinarAgora,
+        motivoBloqueio,
+        progresso: {
+          concluidos: concluidosIds,
+        },
+      },
+    });
+  } catch (e: any) {
+    return res.status(500).json({ message: "Erro ao buscar detalhe da metodologia.", detail: e?.message });
+  }
+}
+
+export async function assinarMetodologia(req: Request, res: Response) {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+    const { id } = req.params;
+
+    const metodologia = await prisma.metodologia.findUnique({
+      where: { id },
+      select: { id: true, ativo: true },
+    });
+
+    if (!metodologia || metodologia.ativo === false) {
+      return res.status(404).json({ message: "Metodologia não encontrada." });
+    }
+
+    // já assinou?
+    const existing = await prisma.metodologiaAssinante.findUnique({
+      where: { metodologiaId_usuarioId: { metodologiaId: id, usuarioId: userId } },
+    });
+
+    if (existing?.status === MetodologiaAssinaturaStatus.ATIVA) {
+      return res.json({ ok: true, already: true });
+    }
+
+    // regra de quota
+    const assinaturasPrincipais = await (prisma as any).assinatura.findMany({
+      where: { usuarioId: userId },
+      orderBy: { startsAt: "desc" },
+    });
+
+    const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasPrincipais as any[]);
+    const limite = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
+
+    if (limite <= 0) {
+      return res.status(403).json({
+        code: "PRECISA_PAGAR",
+        message: "Seu plano não permite assinar metodologias agora. Vá para o pagamento.",
+      });
+    }
+
+    const inicioMes = startOfMonth(new Date());
+    const usadasNoMes = await prisma.metodologiaAssinante.count({
+      where: { usuarioId: userId, status: MetodologiaAssinaturaStatus.ATIVA, iniciouEm: { gte: inicioMes } },
+    });
+
+    if (usadasNoMes >= limite) {
+      return res.status(403).json({
+        code: "METODOLOGIA_QUOTA_EXCEEDED",
+        message: `Você já escolheu ${usadasNoMes}/${limite} metodologias este mês.`,
+      });
+    }
+
+    // cria/reativa assinatura
+    await prisma.metodologiaAssinante.upsert({
+      where: { metodologiaId_usuarioId: { metodologiaId: id, usuarioId: userId } },
+      create: {
+        metodologiaId: id,
+        usuarioId: userId,
+        status: MetodologiaAssinaturaStatus.ATIVA,
+        iniciouEm: new Date(),
+        progresso: { concluidos: [] } as any,
+      },
+      update: {
+        status: MetodologiaAssinaturaStatus.ATIVA,
+        iniciouEm: new Date(),
+        progresso: (existing as any)?.progresso ?? ({ concluidos: [] } as any),
+      },
+    });
+
+    return res.json({ ok: true });
+  } catch (e: any) {
+    return res.status(500).json({ message: "Erro ao assinar metodologia.", detail: e?.message });
+  }
+}
+
+export async function deleteMetodologiaItens(req: Request, res: Response) {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+    const { metodologiaId } = req.params;
+
+    const metodologia = await prisma.metodologia.findUnique({
+      where: { id: metodologiaId },
+      select: { id: true, criadorUsuarioId: true },
+    });
+
+    if (!metodologia) {
+      return res.status(404).json({ message: "Metodologia não encontrada." });
+    }
+
+    if (metodologia.criadorUsuarioId !== userId) {
+      return res.status(403).json({ message: "Você não tem permissão para alterar esta metodologia." });
+    }
+
+    const del = await prisma.metodologiaItem.deleteMany({
+      where: { metodologiaId },
+    });
+
+    return res.json({ ok: true, deleted: del.count });
+  } catch (e: any) {
+    return res.status(500).json({ message: "Erro ao limpar itens.", detail: e?.message });
   }
 }

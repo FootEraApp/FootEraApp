@@ -16,10 +16,16 @@ type Metodologia = {
   id: string;
   titulo: string;
   descricao?: string | null;
+  logoUrl?: string | null;
+  capaUrl?: string | null;
+  categorias?: string[];
   pontosBadge?: string | null;
   pontosPorSemanaLabel?: string | null;
-  categorias?: string[] | null;
-  logoUrl?: string | null;
+  publicoAlvo?: string | null;
+  totalAssinantes?: number;
+  mediaAvaliacao?: number | null;
+  totalReviews?: number;
+  pontosTotal?: number;
   assinada?: boolean;
 };
 
@@ -30,6 +36,15 @@ function getToken() {
     sessionStorage.getItem("token") ??
     ""
   );
+}
+
+function normalizeImgUrl(raw?: string | null) {
+  if (!raw) return null;
+  const u = String(raw).trim();
+  if (!u) return null;
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
+  return `${API.BASE_URL}/${u}`; // <-- cobre "uploads/..." sem barra
 }
 
 function getUserTipo(): string | null {
@@ -99,6 +114,33 @@ export default function MinhasMetodologias() {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
+  async function preencherPontosViaDetalhe(lista: Metodologia[], token: string) {
+    const ids = lista.filter((m) => !Number(m.pontosTotal)).map((m) => m.id);
+    if (!ids.length) return lista;
+
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const detalhes = await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const r = await fetch(`${API.BASE_URL}/api/metodologias/${id}/detalhe`, { headers });
+          const j = await r.json().catch(() => null);
+          if (!r.ok) return null;
+          return { id, pontosTotal: Number(j?.pontosTotal ?? 0) };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const map = new Map(detalhes.filter(Boolean).map((d: any) => [d.id, d.pontosTotal]));
+
+    return lista.map((m) => ({
+      ...m,
+      pontosTotal: Number(m.pontosTotal) || Number(map.get(m.id) ?? 0),
+    }));
+  }
+
   async function carregarAssinadas(token: string) {
     // ✅ endpoint sugerido (metodologias assinadas)
     const r = await fetch(`${API.BASE_URL}/api/metodologias/minhas`, {
@@ -119,18 +161,33 @@ export default function MinhasMetodologias() {
         throw new Error(msg);
       }
       const arr2: any[] = Array.isArray(js2) ? js2 : js2.items ?? [];
-      setAssinadas(
-        arr2.map((m: any) => ({
-          id: String(m.id),
-          titulo: m.titulo ?? m.nome ?? "Metodologia",
-          descricao: m.descricao ?? null,
-          pontosBadge: m.pontosBadge ?? null,
-          pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
-          categorias: m.categorias ?? [],
-          logoUrl: m.logoUrl ?? null,
-          assinada: true,
-        }))
-      );
+      const base = arr2.map((m: any) => ({
+        id: String(m.id),
+        titulo: m.titulo ?? m.nome ?? "Metodologia",
+        descricao: m.descricao ?? null,
+        pontosBadge: m.pontosBadge ?? null,
+        pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
+        categorias: m.categorias ?? [],
+        capaUrl: m.capaUrl ?? m.capa ?? null,
+        logoUrl: m.logoUrl ?? null,
+        assinada: m.assinada ?? true,
+        publicoAlvo: m.publicoAlvo ?? m.item?.publicoAlvo ?? "AMBOS",
+        totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
+        mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
+        totalReviews: Number(m.totalReviews ?? 0),
+        pontosTotal: Number(
+          m.pontosTotal ??
+          m.totalPontos ??
+          m.pontos ??
+          m.pontosSemana ??
+          m.pontuacao ??
+          0
+        ),
+      }));
+
+      const final = await preencherPontosViaDetalhe(base, token);
+      setAssinadas(final);
+
       return;
     }
 
@@ -141,18 +198,33 @@ export default function MinhasMetodologias() {
     }
 
     const arr: any[] = Array.isArray(js) ? js : js.items ?? [];
-    setAssinadas(
-      arr.map((m: any) => ({
-        id: String(m.id),
-        titulo: m.titulo ?? m.nome ?? "Metodologia",
-        descricao: m.descricao ?? null,
-        pontosBadge: m.pontosBadge ?? null,
-        pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
-        categorias: m.categorias ?? [],
-        logoUrl: m.logoUrl ?? null,
-        assinada: m.assinada ?? true,
-      }))
-    );
+
+    const base = arr.map((m: any) => ({
+      id: String(m.id),
+      titulo: m.titulo ?? m.nome ?? "Metodologia",
+      descricao: m.descricao ?? null,
+      pontosBadge: m.pontosBadge ?? null,
+      pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
+      categorias: m.categorias ?? [],
+      capaUrl: m.capaUrl ?? m.capa ?? null,
+      logoUrl: m.logoUrl ?? null,
+      assinada: m.assinada ?? true,
+      publicoAlvo: m.publicoAlvo ?? m.item?.publicoAlvo ?? "AMBOS",
+      totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
+      mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
+      totalReviews: Number(m.totalReviews ?? 0),
+      pontosTotal: Number(
+        m.pontosTotal ??
+          m.totalPontos ??
+          m.pontos ??
+          m.pontosSemana ??
+          m.pontuacao ??
+          0
+      ),
+    }));
+
+    const final = await preencherPontosViaDetalhe(base, token);
+    setAssinadas(final);
   }
 
   async function carregarCriadas(token: string) {
@@ -176,18 +248,32 @@ export default function MinhasMetodologias() {
     }
 
     const arr: any[] = Array.isArray(js) ? js : js.items ?? [];
-    setCriadas(
-      arr.map((m: any) => ({
-        id: String(m.id),
-        titulo: m.titulo ?? m.nome ?? "Metodologia",
-        descricao: m.descricao ?? null,
-        pontosBadge: m.pontosBadge ?? null,
-        pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
-        categorias: m.categorias ?? [],
-        logoUrl: m.logoUrl ?? null,
-        assinada: m.assinada ?? false,
-      }))
-    );
+    const base = arr.map((m: any) => ({
+      id: String(m.id),
+      titulo: m.titulo ?? m.nome ?? "Metodologia",
+      descricao: m.descricao ?? null,
+      pontosBadge: m.pontosBadge ?? null,
+      pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
+      categorias: m.categorias ?? [],
+      capaUrl: m.capaUrl ?? m.capa ?? null,
+      logoUrl: m.logoUrl ?? null,
+      assinada: m.assinada ?? false,
+      publicoAlvo: m.publicoAlvo ?? m.item?.publicoAlvo ?? "AMBOS",
+      totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
+      mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
+      totalReviews: Number(m.totalReviews ?? 0),
+      pontosTotal: Number(
+        m.pontosTotal ??
+        m.totalPontos ??
+        m.pontos ??
+        m.pontosSemana ??
+        m.pontuacao ??
+        0
+      ),
+    }));
+
+    const final = await preencherPontosViaDetalhe(base, token);
+    setCriadas(final);
   }
 
   async function carregar() {
@@ -381,61 +467,68 @@ export default function MinhasMetodologias() {
 
           {!loading && filtrados.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtrados.map((m) => (
-                <div
-                  key={m.id}
-                  className="rounded-2xl border shadow-sm bg-white p-4 flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="text-base font-semibold text-green-900 line-clamp-2">
-                          {m.titulo}
-                        </h3>
+              {filtrados.map((m) => {
+                const capa = normalizeImgUrl(m.capaUrl);
+                const logo = normalizeImgUrl(m.logoUrl);
+                const fallback = `${API.BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
-                        {!!m.categorias?.length && (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {m.categorias.slice(0, 3).map((c) => (
-                              <span
-                                key={c}
-                                className="text-[11px] px-2 py-0.5 rounded-full border bg-gray-50 text-gray-700"
-                              >
-                                {c}
-                              </span>
-                            ))}
-                            {m.categorias.length > 3 && (
-                              <span className="text-[11px] px-2 py-0.5 rounded-full border bg-gray-50 text-gray-700">
-                                +{m.categorias.length - 3}
-                              </span>
-                            )}
+                return (
+                  <div
+                    key={m.id}
+                    className="rounded-2xl border shadow-sm bg-white p-4 flex items-center justify-between gap-4"
+                  >
+                    {/* ESQUERDA: logo + infos */}
+                    <div className="flex items-start gap-4 min-w-0">
+                      <img
+                        src={capa || logo || fallback}
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = fallback;
+                        }}
+                        className="h-16 w-16 rounded-2xl border object-cover bg-white flex-shrink-0"
+                        alt={m.titulo}
+                      />
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-white">
+                            {String(m.publicoAlvo ?? "AMBOS")}
+                          </span>
+                          <div className="font-semibold text-green-900 truncate">
+                            {m.titulo}
+                          </div>
+                        </div>
+
+                        {/* rating + assinaturas */}
+                        <div className="mt-1 flex items-center gap-2 text-sm text-gray-600">
+                          <span className="text-gray-300">★★★★★</span>
+                          <span className="font-semibold text-gray-800">
+                            {(Number(m.mediaAvaliacao ?? 0)).toFixed(1)}
+                          </span>
+                          <span>({Number(m.totalReviews ?? 0)})</span>
+                          <span className="text-gray-400">•</span>
+                          <span>
+                            <b>{Number(m.totalAssinantes ?? 0)}</b> assinaturas
+                          </span>
+                        </div>
+
+                        {/* pontos + descrição */}
+                        <div className="mt-1 text-sm text-gray-700">
+                          + <b>{Number(m.pontosTotal ?? 0)}</b> pts
+                        </div>
+
+                        {!!m.descricao && (
+                          <div className="mt-1 text-sm text-gray-600 line-clamp-2">
+                            {m.descricao}
                           </div>
                         )}
                       </div>
-
-                      {!!m.pontosBadge && (
-                        <span className="text-xs px-2 py-1 rounded-full border bg-amber-50 text-amber-800 font-semibold shrink-0">
-                          {m.pontosBadge}
-                        </span>
-                      )}
                     </div>
 
-                    {!!m.descricao && (
-                      <p className="text-sm text-gray-600 mt-2 line-clamp-3">
-                        {m.descricao}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between gap-2">
-                    <span className="text-xs text-gray-600 line-clamp-1">
-                      {m.pontosPorSemanaLabel || ""}
-                    </span>
-
-                    {/* ✅ Ações:
-                        - Sempre tem Acessar
-                        - Se instrutor e aba "Criadas": mostra Editar/Deletar */}
-                    <div className="flex items-center gap-2">
-                      {isInstrutor && tab === "criadas" && (
+                    {/* DIREITA: ações */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* ✅ CRIADAS: só editar/apagar (sem Acessar) */}
+                      {isInstrutor && tab === "criadas" ? (
                         <>
                           <Link
                             href={`/treinos/Criar-Metodologia?id=${encodeURIComponent(
@@ -456,25 +549,24 @@ export default function MinhasMetodologias() {
                             <Trash2 className="w-4 h-4 text-red-600" />
                           </button>
                         </>
+                      ) : (
+                        /* ✅ ASSINADAS: botão "Acessar" */
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/metodologias/${m.id}`)}
+                          className="px-5 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900"
+                        >
+                          Acessar
+                        </button>
                       )}
-
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/metodologias/${m.id}`)}
-                        className="px-4 py-2 rounded-xl bg-green-800 text-white font-semibold hover:bg-green-900 shrink-0 inline-flex items-center gap-2"
-                      >
-                        Acessar
-                        <ExternalLink className="w-4 h-4" />
-                      </button>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       </div>
-
       <BottomNav active="treinos" />
     </div>
   );
