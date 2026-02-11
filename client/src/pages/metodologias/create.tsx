@@ -108,6 +108,44 @@ async function uploadVideoMetodologia(file: File, meta?: { titulo?: string; desc
   };
 }
 
+function normalizeImgUrl(raw?: string | null) {
+  if (!raw) return null;
+
+  const u = String(raw).trim();
+  if (!u) return null;
+
+  // já é absoluta
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+
+  // começa com / -> aponta pro backend
+  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
+
+  // sem / (ex: "uploads/xxx" ou "assets/xxx") -> força backend
+  return `${API.BASE_URL}/${u}`;
+}
+
+async function uploadCapaMetodologia(file: File) {
+  const token = getToken();
+  if (!token) throw new Error("Sem token.");
+
+  const fd = new FormData();
+  fd.append("capa", file); // ✅ o nome do campo (multer) vai ser "capa"
+
+  const r = await fetch(`${API.BASE_URL}/api/upload/metodologias/capa`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+
+  const js = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(js?.message || js?.error || "Falha no upload da capa.");
+
+  return {
+    relativeUrl: String(js?.relativeUrl || ""),
+    url: String(js?.url || ""),
+    filename: String(js?.filename || ""),
+  };
+}
 
 function getTipoUsuarioId() {
   return (
@@ -130,23 +168,114 @@ function pontosItemFromTipo(tipo: ItemTipo, treinoPontuacao?: number) {
 export default function CriarMetodologia() {
   const [, navigate] = useLocation();
 
-  /** =========================
-   * Campos do topo
-   * ========================= */
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
-
   const [nivel, setNivel] = useState<Nivel>("Base");
   const [publicoAlvo, setPublicoAlvo] = useState<PublicoAlvo>("AMBOS");
-
+  const [capaUrl, setCapaUrl] = useState<string | null>(null);
+  const [capaFile, setCapaFile] = useState<File | null>(null);
+  const [capaPreviewUrl, setCapaPreviewUrl] = useState<string | null>(null);
   /** =========================
    * Treinos para select
    * ========================= */
   const [treinos, setTreinos] = useState<TreinoProgramadoPicker[]>([]);
   const [carregandoTreinos, setCarregandoTreinos] = useState(false);
-
   const [uploadingByItem, setUploadingByItem] = useState<Record<string, boolean>>({});
 
+  const metodologiaId = useMemo(() => {
+    return new URLSearchParams(window.location.search).get("id");
+  }, []);
+
+  useEffect(() => {
+    if (!metodologiaId) return;
+
+    (async () => {
+      try {
+        const token = getToken();
+
+        // ✅ melhor: pegar o detalhe (porque geralmente vem itens completos)
+        const r = await fetch(
+          `${API.BASE_URL}/api/metodologias/${metodologiaId}/detalhe`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          alert(j?.message || "Erro ao carregar metodologia para edição.");
+          return;
+        }
+
+        const m = j?.item ?? j;
+
+        setTitulo(m.titulo ?? "");
+        setDescricao(m.descricao ?? "");
+        setPublicoAlvo((m.publicoAlvo ?? "AMBOS") as PublicoAlvo);
+        setNivel((m.nivel ?? "Base") as Nivel);
+        setCapaUrl(m.capaUrl ?? null);
+        setCapaFile(null);
+        setCapaPreviewUrl(null);
+
+        const itens = Array.isArray(m.itens) ? m.itens : [];
+        // agrupa por semana
+        const bySemana = new Map<number, MetItemUI[]>();
+
+        for (const it of itens) {
+          const semanaNum = Number(it.semana ?? 1);
+
+          const tipo = String(it.tipo).toUpperCase() as ItemTipo;
+
+          const treinoPontuacao =
+            typeof it.treinoProgramado?.pontuacao === "number"
+              ? it.treinoProgramado.pontuacao
+              : typeof it.pontos === "number" && tipo === "TREINO"
+              ? it.pontos
+              : 0;
+
+          const ui: MetItemUI = {
+            id: uid("item"), // ✅ id local do React
+            tipo,
+            titulo: it.titulo ?? (tipo === "TREINO" ? it.treinoProgramado?.nome ?? "Treino" : "Vídeo"),
+            descricao: it.descricao ?? "",
+
+            videoUrl: it.videoUrl ?? "",
+            thumbUrl: it.thumbUrl ?? "",
+
+            videoFile: null,
+            videoPreviewUrl: null,
+
+            treinoProgramadoId: it.treinoProgramadoId ?? undefined,
+            treinoNome: it.treinoProgramado?.nome ?? undefined,
+            treinoPontuacao,
+
+            pontos:
+              typeof it.pontos === "number"
+                ? it.pontos
+                : pontosItemFromTipo(tipo, treinoPontuacao),
+          };
+
+          const arr = bySemana.get(semanaNum) ?? [];
+          arr.push(ui);
+          bySemana.set(semanaNum, arr);
+        }
+
+        // monta SemanaUI[] no formato do seu state
+        const semanasUI: SemanaUI[] = Array.from(bySemana.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([semanaNum, arr], idx) => ({
+            id: uid("semana"),
+            titulo: `Semana ${idx + 1}`,
+            itens: arr, // se quiser ordenar por ordem do backend, você precisa incluir it.ordem na ui
+          }));
+
+        // se não veio nada, garante uma semana
+        setSemanas(semanasUI.length ? semanasUI : [{ id: uid("semana"), titulo: "Semana 1", itens: [] }]);
+
+      } catch (e) {
+        console.error(e);
+        alert("Erro ao carregar metodologia para edição.");
+      }
+    })();
+  }, [metodologiaId]);
 
   useEffect(() => {
     const token = getToken();
@@ -289,10 +418,7 @@ export default function CriarMetodologia() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSemanaId, setPickerSemanaId] = useState<string | null>(null);
   const [pickerOpenId, setPickerOpenId] = useState<string | null>(null); // treino expandido
-
-  // ✅ gaveta do conteúdo do treino (fora do modal)
   const [treinoDrawerOpenItemId, setTreinoDrawerOpenItemId] = useState<string | null>(null);
-
   /** =========================
    * Modal de vídeo do exercício
    * ========================= */
@@ -341,7 +467,6 @@ export default function CriarMetodologia() {
     return url;
   }
 
-
   function toggleTreinoDrawer(itemId: string) {
     setTreinoDrawerOpenItemId((prev) => (prev === itemId ? null : itemId));
   }
@@ -357,17 +482,14 @@ export default function CriarMetodologia() {
     setPickerOpen(true);
   }
 
-
   function closeTreinoPicker() {
     setPickerOpen(false);
     setPickerSemanaId(null);
     setPickerOpenId(null);
   }
 
-
   function addTreinoFromPicker(t: TreinoProgramadoPicker) {
     if (!pickerSemanaId) return;
-
     const treinoId = String(t.id);
 
     setSemanas((prev) =>
@@ -386,11 +508,9 @@ export default function CriarMetodologia() {
           tipo: "TREINO",
           titulo: t.nome,
           descricao: "", // ✅ item tem descrição opcional (observações), treino já tem a dele no backend
-
           treinoProgramadoId: treinoId,
           treinoNome: t.nome,
           treinoPontuacao: typeof t.pontuacao === "number" ? t.pontuacao : 0,
-
           pontos,
         };
 
@@ -400,7 +520,6 @@ export default function CriarMetodologia() {
 
     closeTreinoPicker();
   }
-
 
   function removeItem(semanaId: string, itemId: string) {
     setSemanas((prev) =>
@@ -467,63 +586,120 @@ export default function CriarMetodologia() {
   const [erro, setErro] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
+  async function checarTituloDuplicado(token: string, tituloNovo: string, excluirId?: string | null) {
+    // tenta reaproveitar endpoint de criadas
+    const r = await fetch(`${API.BASE_URL}/api/metodologias/criadas`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const js = await r.json().catch(() => null);
+    if (!r.ok) return false; // se falhar, não bloqueia
+
+    const arr: any[] = Array.isArray(js) ? js : js.items ?? [];
+    const wanted = tituloNovo.trim().toLowerCase();
+
+    return arr.some((m) => {
+      const id = String(m.id ?? "");
+      const t = String(m.titulo ?? m.nome ?? "").trim().toLowerCase();
+      if (excluirId && id === String(excluirId)) return false;
+      return t === wanted;
+    });
+  }
+
   async function salvar() {
+    // evita clique duplo
+    if (salvando) return;
+
+    setSalvando(true);        // ✅ liga imediatamente
     setErro(null);
     setOkMsg(null);
 
-    const token = getToken();
-    if (!token) {
-      setErro("Sem token. Faça login novamente.");
-      return;
-    }
+    try {
+      const token = getToken();
+      if (!token) throw new Error("Sem token. Faça login novamente.");
 
-    if (!canSubmit) {
-      setErro("Preencha título e selecione público e nível.");
-      return;
-    }
+      if (!canSubmit) throw new Error("Preencha título e selecione público e nível.");
 
-    for (const s of semanas) {
-      for (const item of s.itens) {
-        if (!item.titulo?.trim()) {
-          setErro(`Há um item sem título em ${s.titulo}.`);
-          return;
-        }
-        if (item.tipo === "VIDEO") {
-        const hasUrl = !!item.videoUrl?.trim();
-        const hasFile = !!item.videoFile;
+      const dup = await checarTituloDuplicado(token, titulo, metodologiaId);
+      if (dup) throw new Error("Já existe uma metodologia com esse nome. Escolha outro nome.");
 
-        if (!hasUrl && !hasFile) {
-          setErro(`No item "${item.titulo}" de ${s.titulo}, selecione um vídeo.`);
-          return;
-        }
+      // ✅ cria map ANTES (vai usar na hora de montar flatItems)
+      const videoUrlByLocalId: Record<string, string> = {};
 
-        }
-        if (item.tipo === "TREINO") {
-          if (!item.treinoProgramadoId?.trim()) {
-            setErro(
-              `No item "${item.titulo}" de ${s.titulo}, selecione um treino programado.`
-            );
-            return;
+      // =======================
+      // 0) Upload da capa (se escolheu arquivo)
+      // =======================
+      let finalCapaUrl: string | null = capaUrl;
+
+      if (capaFile) {
+        const up = await uploadCapaMetodologia(capaFile);
+        finalCapaUrl = (up.relativeUrl || up.url || null) ? (up.relativeUrl || up.url) : null;
+
+        setCapaUrl(finalCapaUrl);
+        setCapaFile(null);
+        setCapaPreviewUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return null;
+        });
+      }
+
+      // =======================
+      // 1) Upload dos vídeos (UMA VEZ SÓ)
+      // =======================
+      for (const s of semanas) {
+        for (const it of s.itens) {
+          if (it.tipo !== "VIDEO") continue;
+
+          // se tem arquivo, sobe e guarda a url final
+          if (it.videoFile) {
+            setUploadingByItem((prev) => ({ ...prev, [it.id]: true }));
+            try {
+              const up = await uploadVideoMetodologia(it.videoFile, {
+                titulo: it.titulo,
+                descricao: it.descricao || "",
+              });
+
+              const finalUrl = up.relativeUrl || up.url;
+              videoUrlByLocalId[it.id] = finalUrl;
+
+              // atualiza UI (opcional mas bom)
+              updateItem(s.id, it.id, {
+                videoUrl: finalUrl,
+                videoFile: null,
+                // videoPreviewUrl: null, // se quiser limpar preview também
+              });
+            } finally {
+              setUploadingByItem((prev) => ({ ...prev, [it.id]: false }));
+            }
+          } else if (it.videoUrl?.trim()) {
+            // se já existe url no item, guarda também
+            videoUrlByLocalId[it.id] = it.videoUrl.trim();
           }
         }
       }
-    }
 
+      // =======================
+      // 2) Salva Metodologia (PUT/POST)
+      // =======================
+      const payloadMetodologia = {
+        titulo: titulo.trim(),
+        descricao: (descricao || "").trim() || null,
+        nivel,
+        publicoAlvo,
+        categorias: [],
+        totalSemanas: semanas.length,
+        capaUrl: finalCapaUrl,
+      };
 
+      const isEdit = !!metodologiaId;
+      const urlMet = isEdit
+        ? `${API.BASE_URL}/api/metodologias/${metodologiaId}`
+        : `${API.BASE_URL}/api/metodologias`;
 
-    const payloadMetodologia = {
-      titulo: titulo.trim(),
-      descricao: (descricao || "").trim() || null,
-      nivel,
-      publicoAlvo,
-      categorias: [],
-      totalSemanas: semanas.length,
-    };
+      const methodMet = isEdit ? "PUT" : "POST";
 
-    setSalvando(true);
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/metodologias`, {
-        method: "POST",
+      const r = await fetch(urlMet, {
+        method: methodMet,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -533,49 +709,35 @@ export default function CriarMetodologia() {
 
       const js = await r.json().catch(() => null);
       if (!r.ok) {
-        const msg =
-          js?.message ||
-          js?.error ||
-          "Não foi possível criar a metodologia (verifique o backend).";
-        throw new Error(msg);
+        throw new Error(js?.message || js?.error || "Não foi possível salvar a metodologia.");
       }
 
-      const metodologiaId = js?.item?.id;
-      if (!metodologiaId) {
-        throw new Error("Metodologia criada mas não retornou ID.");
-      }
+      const finalMetId =
+        (isEdit ? metodologiaId! : null) ??
+        js?.item?.id ??
+        js?.id ??
+        js?.metodologia?.id;
+
+      if (!finalMetId) throw new Error("Não retornou ID da metodologia.");
 
       // =======================
-      // 1) Upload dos vídeos (se houver) antes de criar os itens
+      // 3) Se edição: limpa itens antigos
       // =======================
-      for (const s of semanas) {
-        for (const it of s.itens) {
-          if (it.tipo !== "VIDEO") continue;
+      if (isEdit) {
+        const del = await fetch(`${API.BASE_URL}/api/metodologias/${finalMetId}/itens`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-          // se tem arquivo, sobe e grava a url final no próprio item
-          if (it.videoFile) {
-            setUploadingByItem((prev) => ({ ...prev, [it.id]: true }));
-            try {
-              const up = await uploadVideoMetodologia(it.videoFile, {
-                titulo: it.titulo,
-                descricao: it.descricao || "",
-              });
-
-              // você pode escolher usar up.relativeUrl (recomendado) ou up.url
-              const finalUrl = up.relativeUrl || up.url;
-
-              // salva a URL final no state, pra o resto do salvar() usar
-              updateItem(s.id, it.id, {
-                videoUrl: finalUrl,
-                videoFile: null,
-              });
-            } finally {
-              setUploadingByItem((prev) => ({ ...prev, [it.id]: false }));
-            }
-          }
+        const jdel = await del.json().catch(() => null);
+        if (!del.ok) {
+          throw new Error(jdel?.message || "Não foi possível limpar os itens antigos.");
         }
       }
 
+      // =======================
+      // 4) Recria itens
+      // =======================
       const flatItems: Array<{
         semana: number;
         ordem: number;
@@ -598,10 +760,12 @@ export default function CriarMetodologia() {
             titulo: it.titulo.trim(),
             descricao: (it.descricao || "").trim() || null,
             tipo: it.tipo,
-            videoUrl: it.tipo === "VIDEO" ? it.videoUrl?.trim() || null : null,
+            videoUrl:
+              it.tipo === "VIDEO"
+                ? (videoUrlByLocalId[it.id] || null)
+                : null,
             thumbUrl: it.tipo === "VIDEO" ? it.thumbUrl?.trim() || null : null,
-            treinoProgramadoId:
-              it.tipo === "TREINO" ? it.treinoProgramadoId || null : null,
+            treinoProgramadoId: it.tipo === "TREINO" ? it.treinoProgramadoId || null : null,
             pontos: it.pontos ?? null,
             publicado: true,
           });
@@ -609,34 +773,41 @@ export default function CriarMetodologia() {
       });
 
       for (const item of flatItems) {
-        const rr = await fetch(
-          `${API.BASE_URL}/api/metodologias/${metodologiaId}/itens`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(item),
-          }
-        );
+        const rr = await fetch(`${API.BASE_URL}/api/metodologias/${finalMetId}/itens`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(item),
+        });
 
         const jsi = await rr.json().catch(() => null);
         if (!rr.ok) {
-          const msg =
+          throw new Error(
             jsi?.message ||
-            jsi?.error ||
-            `Falha ao criar item "${item.titulo}" (semana ${item.semana}).`;
-          throw new Error(msg);
+              jsi?.error ||
+              `Falha ao criar item "${item.titulo}" (semana ${item.semana}).`
+          );
         }
       }
 
-      setOkMsg("Metodologia criada com sucesso!");
-      setTimeout(() => navigate("/metodologias/minhas"), 700);
+      // ✅ feedback imediato + navegação
+      const msg = isEdit
+        ? "Alterações salvas com sucesso!"
+        : "Metodologia criada com sucesso!";
+
+      setOkMsg(`✅ ${msg}`);
+      alert(msg);
+
+      navigate("/treinos");
+      setTimeout(() => window.location.reload(), 50);
     } catch (e: any) {
-      setErro(e?.message || "Erro ao salvar metodologia.");
+      const msg = e?.message || "Erro ao salvar metodologia.";
+      setErro(msg);
+      alert(msg); // ✅ feedback imediato também no erro
     } finally {
-      setSalvando(false);
+      setSalvando(false); // ✅ sempre volta ao normal
     }
   }
 
@@ -747,6 +918,119 @@ export default function CriarMetodologia() {
                 placeholder="Explique o que entrega, duração, recomendação..."
                 className="mt-1 w-full min-h-[110px] border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-200"
               />
+            </div>
+
+            <div className="lg:col-span-2">
+              <label className="text-sm font-semibold text-gray-800">
+                Capa da Metodologia (opcional)
+              </label>
+
+              <div className="mt-2 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {/* Upload */}
+                <div>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+
+                      setErro(null);
+
+                      // validação simples (opcional)
+                      const maxMb = 5;
+                      const sizeMb = file.size / 1024 / 1024;
+                      if (sizeMb > maxMb) {
+                        setErro(`A capa deve ter no máximo ${maxMb}MB.`);
+                        e.currentTarget.value = "";
+                        return;
+                      }
+
+                      // preview local
+                      const preview = URL.createObjectURL(file);
+
+                      // se já tinha um preview antes, revoga
+                      setCapaPreviewUrl((prev) => {
+                        if (prev) URL.revokeObjectURL(prev);
+                        return preview;
+                      });
+
+                      setCapaFile(file);
+
+                      // permitir selecionar o mesmo arquivo novamente
+                      e.currentTarget.value = "";
+                    }}
+                  />
+
+                  <div className="text-xs text-gray-500 mt-1">
+                    PNG/JPG/WEBP (até 5MB). Se não enviar, fica sem capa.
+                  </div>
+
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      className="px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm font-semibold"
+                      onClick={() => {
+                        // limpa capa escolhida localmente
+                        setCapaFile(null);
+                        setCapaPreviewUrl((prev) => {
+                          if (prev) URL.revokeObjectURL(prev);
+                          return null;
+                        });
+                      }}
+                      disabled={!capaFile && !capaPreviewUrl}
+                    >
+                      Remover upload
+                    </button>
+
+                    <button
+                      type="button"
+                      className="px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm font-semibold text-red-700"
+                      onClick={() => {
+                        // remove capa do banco (deixa null)
+                        setCapaUrl(null);
+                        setCapaFile(null);
+                        setCapaPreviewUrl((prev) => {
+                          if (prev) URL.revokeObjectURL(prev);
+                          return null;
+                        });
+                      }}
+                      disabled={!capaUrl && !capaFile && !capaPreviewUrl}
+                      title="Remove a capa atual (salvando vai virar null)"
+                    >
+                      Remover capa atual
+                    </button>
+                  </div>
+                </div>
+
+                {/* Preview */}
+                <div className="rounded-2xl border bg-neutral-50 p-3">
+                  <div className="text-xs font-semibold text-gray-700">Pré-visualização</div>
+
+                  {capaPreviewUrl ? (
+                    <div className="mt-2 rounded-xl overflow-hidden border bg-white">
+                      <img
+                        src={capaPreviewUrl}
+                        alt="Preview da capa"
+                        className="w-full h-40 object-cover"
+                      />
+                    </div>
+                  ) : normalizeImgUrl(capaUrl) ? (
+                    <div className="mt-2 rounded-xl overflow-hidden border bg-white">
+                      <img
+                        src={normalizeImgUrl(capaUrl)!}
+                        alt="Capa atual"
+                        className="w-full h-40 object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-xs text-gray-500">
+                      Nenhuma capa definida.
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="lg:col-span-2">
@@ -1204,7 +1488,7 @@ export default function CriarMetodologia() {
                 }`}
             >
               <Save className="w-4 h-4" />
-              {salvando ? "Salvando..." : "Criar metodologia"}
+              {salvando ? "Salvando..." : (metodologiaId ? "Salvar alterações" : "Criar metodologia")}
             </button>
           </div>
 

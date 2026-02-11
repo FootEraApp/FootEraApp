@@ -59,6 +59,7 @@ import PaginaConvocarEvento from "./pages/eventos/convocar.js";
 import PaginaVerificarEmail from "./pages/verificar-email.js";
 import CriarMetodologia from "./pages/metodologias/create.js";
 import MinhasMetodologias from "./pages/metodologias/minhas.js";
+import MetodologiaUnicaPage from "./pages/metodologias/metodologia-unica.js";
 
 export function AppRoutes() {
   return (
@@ -164,7 +165,6 @@ export function AppRoutes() {
       )}
 
       <Route path="/feed"><Private><PaginaFeed /></Private></Route>
-      
       <Route path="/treinos/avaliar" component={AvaliarTreino} />
       <Route path="/treinos/livre/novo" component={PaginaTreinoLivreNovo} />
       <Route path="/treinos/livre/historico" component={PaginaTreinoLivresHistorico} />
@@ -172,20 +172,17 @@ export function AppRoutes() {
       <Route path="/treinos/elenco/jogos"><Private><PaginaJogosElenco/></Private></Route>
       <Route path="/treinos/novo"><PaginaNovoTreino /></Route>
       <Route path="/treinos/unico"><Private><PaginaTreinoUnico /></Private></Route>
-      <Route path="/treinos"><Private><PaginaTreinos /></Private></Route>
-
       <Route path="/treinos/Criar-Metodologia"><CriarMetodologia/></Route>
       <Route path="/treinos/Minhas-Metodologias"><MinhasMetodologias/></Route>
-
+      <Route path="/treinos"><Private><PaginaTreinos /></Private></Route>
       <Route path="/perfil/pontuacao"><Private><PaginaPontuacaoPerfil /></Private></Route>
       <Route path="/perfil/:id/pontuacao"><Private><PaginaPontuacaoDePerfil /></Private></Route>
       <Route path="/perfil/editar"><Private><PaginaEditarPerfil /></Private></Route>
       <Route path="/perfil/:id"><Private><PaginaPerfilUnico /></Private></Route>
       <Route path="/perfil"><Private><PaginaPerfil /></Private></Route>
-
       <Route path="/post/:id"><Private><PaginaPostUnico /></Private></Route>
       <Route path="/post"><Private><PaginaCreatePost /></Private></Route>
-
+      <Route path="/metodologias/:id"><MetodologiaUnicaPage/></Route>
       <Route path="/submissao"><PaginaSubmissao /></Route>
       <Route path="/explorar"><Private><PaginaExplorar /></Private></Route>
       <Route path="/minha-rede"><Private><PaginaMinhaRede /></Private></Route>
@@ -194,7 +191,6 @@ export function AppRoutes() {
       <Route path="/notificacoes"><PaginaNotificacoes /></Route>
       <Route path="/mensagens"><PaginaMensagens /></Route>
       <Route path="/"><HomeRedirect /></Route>
-
       <Route><div style={{ padding: 16 }}>Página não encontrada</div></Route>
     </Switch>
   );
