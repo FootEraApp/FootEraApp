@@ -585,11 +585,10 @@ useEffect(() => {
   }, [usuario?.tipo, usuario?.tipoUsuarioId]);
 
   useEffect(() => {
-    if (abaProfessor === "metodologias") {
-      carregarMetodologias();
-    }
+    if (abaProfessor !== "metodologias") return;
+    carregarMetodologias();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [abaProfessor]);
+  }, [abaProfessor, filtroPublico]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -610,10 +609,13 @@ useEffect(() => {
     setErroMetodologias(null);
 
     try {
-      // ✅ endpoint que você já tem nas routes: /api/metodologias/visiveis
-      const r = await fetch(`${API.BASE_URL}/api/metodologias/visiveis`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const publicoParam = filtroPublico; // já é "TODOS" | "ATLETAS" | "PROFISSIONAIS" | "AMBOS"
+
+      const r = await fetch(
+        `${API.BASE_URL}/api/metodologias/visiveis?publico=${encodeURIComponent(publicoParam)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
 
       const js = await r.json().catch(() => null);
       if (!r.ok) {
