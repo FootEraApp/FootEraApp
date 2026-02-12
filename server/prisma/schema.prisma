@@ -536,10 +536,11 @@ model MetodologiaAssinante {
   metodologiaId String
   usuarioId     String
 
-  metodologia Metodologia @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
-  usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-
-  status MetodologiaAssinaturaStatus @default(ATIVA)
+  metodologia Metodologia                 @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  usuario     Usuario                     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  origem      MetodologiaAssinaturaOrigem @default(LEARNING)
+  expiraEm    DateTime?
+  status      MetodologiaAssinaturaStatus @default(ATIVA)
 
   iniciouEm       DateTime  @default(now())
   cancelouEm      DateTime?
@@ -2456,4 +2457,9 @@ enum MetodologiaPublicoAlvo {
   ATLETAS
   PROFISSIONAIS
   AMBOS
+}
+
+enum MetodologiaAssinaturaOrigem {
+  LEARNING
+  AVULSA
 }
