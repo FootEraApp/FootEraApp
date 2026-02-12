@@ -217,38 +217,75 @@ export default function MetodologiaUnicaPage() {
   async function assinarMetodologia() {
     if (!data || !id) return;
 
-    // se não pode assinar, manda pro pagamento
+    // 1) Se o backend disser que não pode assinar agora, decide o destino certo:
     if (!data.viewer.podeAssinarAgora) {
-      // ✅ manda pra pagamentos (você pode melhorar passando query)
-      navigate("/pagamentos");
-      return;
+        const motivo = String(data.viewer?.motivoBloqueio || "");
+        const label =
+        data.viewer?.isAssinante
+            ? "✅ Assinada"
+            : (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES")
+            ? "Ver minhas metodologias"
+            : (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR")
+                ? "Ativar Learning"
+                : "Assinar metodologia";
+
+        // A) Não tem Learning ativo -> vai pro pagamento (com return)
+        if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR") {
+        navigate(`/pagamentos?produto=learning&returnTo=/metodologias/${id}`);
+        return;
+        }
+
+        // B) Já atingiu limite (1/1 ou 3/3) -> vai pra Minhas Metodologias
+        if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") {
+        alert("Você já atingiu o limite de metodologias do seu plano neste ciclo.");
+        navigate("/metodologias/minhas");
+        return;
+        }
+
+        // fallback
+        navigate("/pagamentos");
+        return;
     }
 
+    // 2) Pode assinar: tenta “selecionar” essa metodologia
     try {
-      setBusy(true);
-      const r = await fetch(`${API.BASE_URL}/api/metodologias/${id}/assinar`, {
+        setBusy(true);
+
+        const r = await fetch(`${API.BASE_URL}/api/metodologias/${id}/assinar`, {
         method: "POST",
         headers,
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        alert(j?.message || "Não foi possível assinar");
-        if (j?.code === "PRECISA_PAGAR") navigate("/pagamentos");
-        return;
-      }
+        });
 
-      // recarrega
-      const rr = await fetch(`${API.BASE_URL}/api/metodologias/${id}/detalhe`, { headers });
-      const jj = await rr.json().catch(() => ({}));
-      if (rr.ok) setData(jj);
-      alert("✅ Metodologia assinada!");
+        const j = await r.json().catch(() => ({}));
+
+        if (!r.ok) {
+        // Se backend responder que precisa pagar, também joga pro pagamento
+        if (j?.code === "PRECISA_PAGAR" || j?.code === "PRECISA_LEARNING") {
+            navigate(`/pagamentos?produto=learning&returnTo=/metodologias/${id}`);
+            return;
+        }
+
+        // Se backend responder limite
+        if (j?.code === "LIMITE_METODOLOGIAS") {
+            alert(j?.message || "Você já atingiu o limite do seu plano.");
+            navigate("/metodologias/minhas");
+            return;
+        }
+
+        alert(j?.message || "Não foi possível assinar");
+        return;
+        }
+
+        // sucesso: redireciona para Minhas Metodologias (ou recarrega detalhe)
+        alert("✅ Metodologia adicionada em 'Minhas Metodologias'!");
+        navigate("/metodologias/minhas");
     } catch (e) {
-      console.error(e);
-      alert("Erro ao assinar");
+        console.error(e);
+        alert("Erro ao assinar");
     } finally {
-      setBusy(false);
+        setBusy(false);
     }
-  }
+    }
 
   function bloquearAcao(): boolean {
     return !(data?.viewer?.isAssinante);
@@ -326,18 +363,43 @@ export default function MetodologiaUnicaPage() {
               {/* CTA */}
               <div className="flex flex-col items-end gap-2">
                 <button
-                  disabled={busy}
+                  disabled={busy || !!data?.viewer?.isAssinante}
                   onClick={assinarMetodologia}
                   className="px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900 disabled:opacity-60"
                 >
-                  {data.viewer?.isAssinante ? "✅ Assinada" : "Assinar metodologia"}
+                  {(() => {
+                    const motivo = String(data.viewer?.motivoBloqueio || "");
+
+                    if (data.viewer?.isAssinante) return "✅ Escolhida";
+                    if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR") return "Ativar Learning";
+                    if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") return "Ver minhas metodologias";
+                    return "Assinar metodologia";
+                   })()}
+
                 </button>
 
                 {!data.viewer?.isAssinante && (
                   <div className="text-xs text-gray-500 text-right max-w-[240px]">
-                    {data.viewer?.motivoBloqueio
-                      ? "Para assinar, você precisa ter Learning ativo e respeitar o limite do mês. Clique para ir ao pagamento."
-                      : "Assine para iniciar os conteúdos (vídeos/treinos)."}
+                   {(() => {
+                    const motivo = String(data.viewer?.motivoBloqueio || "");
+                    const label =
+                    data.viewer?.isAssinante
+                        ? "✅ Assinada"
+                        : (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES")
+                        ? "Ver minhas metodologias"
+                        : (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR")
+                            ? "Ativar Learning"
+                            : "Assinar metodologia";
+
+                    if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR")
+                        return "Para assinar, você precisa ativar o Learning. Clique para ir ao pagamento.";
+
+                    if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES")
+                        return "Você já atingiu o limite de metodologias do seu plano neste ciclo. Clique para ver 'Minhas Metodologias'.";
+
+                    return "Assine para iniciar os conteúdos (vídeos/treinos).";
+                    })()}
+
                   </div>
                 )}
               </div>
