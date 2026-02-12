@@ -384,7 +384,8 @@ export default function TreinosInstrutores({
   const [erroMetodologias, setErroMetodologias] = useState<string | null>(null);
   // filtros selecionados (chips)
   const [filtrosSelecionados, setFiltrosSelecionados] = useState<string[]>([]);
-  const [filtroConteudo, setFiltroConteudo] = useState<"AMBOS" | "VIDEOS" | "TREINOS">("AMBOS");
+  type FiltroConteudo = "TODOS" | "VIDEOS_TREINOS" | "VIDEOS" | "TREINOS";
+  const [filtroConteudo, setFiltroConteudo] = useState<FiltroConteudo>("TODOS");
   const [filtroNivel, setFiltroNivel] = useState<"TODOS" | "Base" | "Avancado" | "Performance">("TODOS");
   const OPCOES_FILTRO = [
     "Goleiros",
@@ -2675,12 +2676,13 @@ async function salvarProgressoSessao(sessaoId: string) {
 
                 <select
                   value={filtroConteudo}
-                  onChange={(e) => setFiltroConteudo(e.target.value as any)}
-                  className="px-3 py-2 rounded-xl border bg-white text-sm"
+                  onChange={(e) => setFiltroConteudo(e.target.value as FiltroConteudo)}
+                  className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
                 >
-                  <option value="AMBOS">Vídeos + Treinos</option>
-                  <option value="VIDEOS">Só Vídeos</option>
-                  <option value="TREINOS">Só Treinos</option>
+                  <option value="TODOS">Todos</option>
+                  <option value="VIDEOS_TREINOS">Vídeos + Treinos</option>
+                  <option value="VIDEOS">Vídeos</option>
+                  <option value="TREINOS">Treinos</option>
                 </select>
 
                 <select
@@ -2777,13 +2779,18 @@ async function salvarProgressoSessao(sessaoId: string) {
                         if (n !== alvo) return false;
                       }
 
-                      // conteúdo (Vídeos / Treinos)
-                      if (filtroConteudo === "VIDEOS") {
-                        if ((m.videoCount ?? 0) <= 0) return false;
-                      }
-                      if (filtroConteudo === "TREINOS") {
-                        if ((m.treinoCount ?? 0) <= 0) return false;
-                      }
+                      const vc = Number(m.videoCount ?? 0);
+                      const tc = Number(m.treinoCount ?? 0);
+
+                      if (filtroConteudo === "TODOS") return true;
+                      // "Vídeos + Treinos" = tem os dois
+                      if (filtroConteudo === "VIDEOS_TREINOS") return vc > 0 && tc > 0;
+                      // "Vídeos" = só vídeos (tem vídeo e NÃO tem treino)
+                      if (filtroConteudo === "VIDEOS") return vc > 0 && tc === 0;
+                      // "Treinos" = só treinos (tem treino e NÃO tem vídeo)
+                      if (filtroConteudo === "TREINOS") return tc > 0 && vc === 0;
+
+                      return true;
 
                       // filtros do dropdown (tags)
                       if (filtrosSelecionados.length > 0) {

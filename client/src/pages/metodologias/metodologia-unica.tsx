@@ -34,26 +34,27 @@ type MetodologiaDetalhe = {
   titulo: string;
   descricao?: string | null;
   capaUrl?: string | null;
-
   publicoAlvo?: "ATLETAS" | "PROFISSIONAIS" | "AMBOS" | string;
   totalSemanas?: number | null;
-
   totalAssinantes?: number;
   mediaAvaliacao?: number | null;
   totalReviews?: number;
-
   pontosTotal?: number; // vindo do backend (soma dos itens)
   criadorNome?: string | null;
-
   itens: MetodologiaItem[];
-
-  // estado do usuário (backend decide)
   viewer: {
+    // antigo
     isAssinante: boolean;
+    // NOVO: acesso real (learning OU avulsa)
+    temAcesso: boolean;
+    // NOVO: tipo do acesso
+    assinaturaTipo?: "LEARNING" | "AVULSA" | null;
+    // NOVO: quando expira (pra avulsa = agora + 1 ano)
+    expiraEm?: string | null;
     podeAssinarAgora: boolean;
-    motivoBloqueio?: string | null; // ex: "PRECISA_LEARNING", "LIMITE_MES", "JA_ESCOLHIDA_NO_MES"
+    motivoBloqueio?: string | null; // ex: "PRECISA_LEARNING", "PRECISA_PAGAR_AVULSA", "LIMITE_MES"...
     progresso: {
-      concluidos: string[]; // ids de itens concluídos
+      concluidos: string[];
     };
   };
 };
@@ -234,6 +235,11 @@ export default function MetodologiaUnicaPage() {
         navigate(`/pagamentos?produto=learning&returnTo=/metodologias/${id}`);
         return;
         }
+        
+        if (motivo === "PRECISA_PAGAR_AVULSA") {
+        navigate(`/pagamentos?produto=metodologia&id=${id}&returnTo=/metodologias/${id}`);
+        return;
+        }
 
         // B) Já atingiu limite (1/1 ou 3/3) -> vai pra Minhas Metodologias
         if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") {
@@ -288,7 +294,7 @@ export default function MetodologiaUnicaPage() {
     }
 
   function bloquearAcao(): boolean {
-    return !(data?.viewer?.isAssinante);
+    return !data?.viewer?.temAcesso;
   }
 
   if (loading) return <div className="p-6">Carregando metodologia...</div>;
@@ -363,22 +369,31 @@ export default function MetodologiaUnicaPage() {
               {/* CTA */}
               <div className="flex flex-col items-end gap-2">
                 <button
-                  disabled={busy || !!data?.viewer?.isAssinante}
-                  onClick={assinarMetodologia}
-                  className="px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900 disabled:opacity-60"
+                disabled={busy || !!data?.viewer?.temAcesso}
+                onClick={assinarMetodologia}
+                className="px-4 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900 disabled:opacity-60"
                 >
-                  {(() => {
+                {(() => {
                     const motivo = String(data.viewer?.motivoBloqueio || "");
 
-                    if (data.viewer?.isAssinante) return "✅ Escolhida";
+                    // ✅ já tem acesso
+                    if (data.viewer?.temAcesso) {
+                    if (data.viewer?.assinaturaTipo === "AVULSA") return "✅ Metodologia paga";
+                    return "✅ Learning ativo";
+                    }
+
+                    // ✅ se precisa pagar avulsa, manda pro checkout dessa metodologia
+                    if (motivo === "PRECISA_PAGAR_AVULSA") return "Comprar metodologia";
+
+                    // ✅ se precisa learning
                     if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR") return "Ativar Learning";
+
                     if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") return "Ver minhas metodologias";
                     return "Assinar metodologia";
-                   })()}
-
+                })()}
                 </button>
 
-                {!data.viewer?.isAssinante && (
+                {(!data.viewer?.isAssinante || !data.viewer?.temAcesso) && (
                   <div className="text-xs text-gray-500 text-right max-w-[240px]">
                    {(() => {
                     const motivo = String(data.viewer?.motivoBloqueio || "");
@@ -396,6 +411,9 @@ export default function MetodologiaUnicaPage() {
 
                     if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES")
                         return "Você já atingiu o limite de metodologias do seu plano neste ciclo. Clique para ver 'Minhas Metodologias'.";
+
+                    if (motivo === "PRECISA_PAGAR_AVULSA")
+                        return "Para liberar esta metodologia por 1 ano, faça a compra avulsa. Clique para ir ao pagamento.";
 
                     return "Assine para iniciar os conteúdos (vídeos/treinos).";
                     })()}

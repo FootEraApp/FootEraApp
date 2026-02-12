@@ -960,10 +960,10 @@ function PaginaFeed(): JSX.Element {
                 title="Repostar"
               >
                 <FaRetweet />
+                <span>
+                  {(post as any).reposts ?? (post as any).compartilhamentos ?? 0}
+                </span>
               </button>
-              <span className="ml-1 text-sm">
-                {(post as any).reposts ?? (post as any).compartilhamentos ?? 0}
-              </span>
             </div>
 
             {mostrarInputPorPost[post.id] && (
