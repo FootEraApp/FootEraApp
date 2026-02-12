@@ -11,7 +11,9 @@ yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
 public/assets/videos/metodologias/*.mp4
-
+# ignorar todos os videos mp4 do projeto
+*.mp4
+uploads/**/*.mp4
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
