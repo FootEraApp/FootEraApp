@@ -77,16 +77,13 @@ interface TreinoAgendado {
       };
       repeticoes: string;
     }[];
-
     criador?: {
       id: string;
       nome: string;
       tipo: "Professor" | "Clube" | "Escolinha";
     } | null;
-
     criadorNome?: string | null;
     criadorTipo?: string | null;
-
     professorId?: string | null;
     clubeId?: string | null;
     escolinhaId?: string | null;
@@ -112,79 +109,34 @@ type WeekStatus = {
   count: { total: number; approved: number; rejected: number };
 };
 
-type MinhasSubTreino = {
-  id: string;
-  treinoAgendadoId: string | null;
-  treinoProgramadoId: string | null;
-  aprovado: boolean | null;
-};
+type MetodologiaPublicoAlvo = "ATLETAS" | "PROFISSIONAIS" | "AMBOS" | string;
 
 type MetodologiaCatalogo = {
   id: string;
   titulo: string;
   descricao?: string | null;
-
-  // opcional: badge tipo "+10 pts"
-  pontosBadge?: string | null;
-
-  // opcional: texto embaixo (ex: "+10 pts por semana")
-  pontosPorSemanaLabel?: string | null;
-
-  // opcional: tags/categorias pra filtrar
-  categorias?: string[]; // ex: ["Goleiros", "Base"]
-
-  // opcional: se já está assinada
-  assinada?: boolean;
-
-  // opcional: logo/thumbnail
-  logoUrl?: string | null;
+  capaUrl?: string | null;
+  nivel?: string | null;
+  publicoAlvo?: MetodologiaPublicoAlvo;
+  pontosTotal?: number | null; // se você usa pontos
+  pontosBadge?: string | null; // texto curto, tipo "150 pts" ou "Novo"
+  pontosPorSemanaLabel?: string | null; // texto curto, tipo "50 pts/semana"
+  // catálogo
+  totalAssinantes?: number | null;
+  mediaAvaliacao?: number | null;
+  totalAvaliacoes?: number | null;
+  // pontos (se você usa)
+  pontosPorSemana?: number | null;
+  // criador
+  criadorNome?: string | null;
+  criadorTipo?: "Professor" | "Clube" | "Escolinha" | string | null;
+  // assinatura
+  assinada?: boolean | null;
+  // plano/label se você usa
+  planoMinimo?: string | null;
+  hasVideo?: boolean;
+  hasTreino?: boolean;
 };
-
-function MetodologiaCard({
-  item,
-  onAssinar,
-}: {
-  item: MetodologiaCatalogo;
-  onAssinar?: (id: string) => void;
-}) {
-  return (
-    <div className="bg-white rounded-2xl border shadow-sm p-4 flex flex-col justify-between">
-      <div>
-        <div className="flex items-start justify-between gap-3">
-          <h4 className="text-base font-semibold text-green-900 line-clamp-2">
-            {item.titulo}
-          </h4>
-
-          {!!item.pontosBadge && (
-            <span className="text-xs px-2 py-1 rounded-full border bg-amber-50 text-amber-800 font-semibold shrink-0">
-              {item.pontosBadge}
-            </span>
-          )}
-        </div>
-
-        {!!item.descricao && (
-          <p className="text-sm text-gray-600 mt-2 line-clamp-3">
-            {item.descricao}
-          </p>
-        )}
-      </div>
-
-      <div className="mt-4 flex items-center justify-between text-sm gap-2">
-        <span className="text-gray-600 line-clamp-1">
-          {item.pontosPorSemanaLabel || ""}
-        </span>
-
-        <button
-          type="button"
-          onClick={() => onAssinar?.(item.id)}
-          className="px-4 py-2 rounded-xl bg-green-800 text-white font-semibold hover:bg-green-900 shrink-0"
-        >
-          {item.assinada ? "ACESSAR →" : "ASSINAR →"}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 const now = new Date();
 const hoje = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -192,7 +144,6 @@ const hoje = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 const PLACEHOLDER_USER = "/assets/usuarios/default-user.png";
 const TIMER_KEY = (id: string) => `footera:treinoTimerStart:${id}`;
 const CHECKLIST_KEY = (id: string) => `footera:treinoChecklist:${id}`;
-
 const VISIBLE_TREINOS = 6;
 const ROW_ESTIMATE_PX = 72;
 const DESAFIOS_MAX_PX = 240;
@@ -398,6 +349,22 @@ export default function TreinosAtletas() {
   const [midiaPorNomeExercicio, setMidiaPorNomeExercicio] = useState<
     Record<string, { video?: string | null; img?: string | null }>
   >({});
+  const [filtroPublico, setFiltroPublico] = useState<string>("TODOS");
+  const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
+  const [filtroNivel, setFiltroNivel] = useState<string>("TODOS");
+
+  function normalizeAssetUrl(raw?: string | null) {
+    if (!raw) return "";
+
+    const v = String(raw).trim();
+    if (!v || v === "null" || v === "undefined") return "";
+
+    if (v.startsWith("http://") || v.startsWith("https://")) return v;
+    if (v.startsWith("/assets/")) return v;
+    if (v.startsWith("/uploads/")) return `${API.BASE_URL}${v}`;
+
+    return `${API.BASE_URL}/${v.replace(/^\/+/, "")}`;
+  }
 
   function normNome(n?: string | null) {
     return String(n || "")
@@ -422,7 +389,6 @@ export default function TreinosAtletas() {
       }
     >
   >({});
-
   const [checklistByTreino, setChecklistByTreino] = useState<
     Record<string, Checklist>
   >({});
@@ -434,7 +400,6 @@ export default function TreinosAtletas() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-
   const [videoModal, setVideoModal] = useState<{
     exercicioId: string;
     nome: string;
@@ -442,6 +407,121 @@ export default function TreinosAtletas() {
   } | null>(null);
   const [videoCarregando, setVideoCarregando] = useState(false);
   const [videoErro, setVideoErro] = useState<string | null>(null);
+
+  async function carregarMetodologias() {
+    try {
+      setMetodologiasLoading(true);
+      setMetodologiasErro(null);
+
+      const token = getToken();
+      if (!token) return;
+
+      const publicoParam = filtroPublico;
+
+      const r = await fetch(
+        `${API.BASE_URL}/api/metodologias/visiveis?publico=${encodeURIComponent(publicoParam)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const js = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(js?.message || "Falha ao carregar metodologias");
+
+      const arr: any[] = Array.isArray(js) ? js : js.items ?? js.metodologias ?? [];
+
+      // 1) normaliza o que vier do /visiveis
+      const normalizadas: MetodologiaCatalogo[] = arr.map((m: any) => ({
+        id: String(m.id),
+        titulo: m.titulo ?? m.nome ?? "Metodologia",
+        descricao: m.descricao ?? null,
+
+        capaUrl: normalizeAssetUrl(m.capaUrl ?? m.logoUrl ?? m.imagemUrl ?? null),
+
+        publicoAlvo: m.publicoAlvo ?? "AMBOS",
+        nivel: m.nivel ?? null,
+
+        totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
+        mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
+        totalAvaliacoes: Number(m.totalAvaliacoes ?? m.totalReviews ?? m.notaCount ?? 0),
+
+        criadorNome:
+          m.criadorNome ??
+          m.autor?.nome ??
+          m.criador?.nome ??
+          m.professor?.nome ??
+          m.usuarioCriador?.nome ??
+          null,
+
+        criadorTipo: m.criadorTipo ?? m.tipoCriador ?? "Professor",
+        planoMinimo: m.planoMinimo ?? "Free",
+
+        pontosTotal: Number(m.pontosTotal ?? m.pontos ?? m.pontuacao ?? 0),
+      }));
+
+      // 2) enriquece com /detalhe (pontos + descricao + capa)
+      const detalhadas = await Promise.all(
+        normalizadas.map(async (card) => {
+          try {
+            const rr = await fetch(
+              `${API.BASE_URL}/api/metodologias/${encodeURIComponent(card.id)}/detalhe`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            const jj = await rr.json().catch(() => null);
+            if (!rr.ok || !jj) return card;
+
+            // itens publicados
+            const itensPub: any[] = Array.isArray(jj.itens)
+              ? jj.itens.filter((it: any) => it?.publicado !== false)
+              : [];
+
+            const tipos = itensPub.map((it: any) => String(it?.tipo || "").toUpperCase());
+
+            const hasVideo = tipos.includes("VIDEO");
+            const hasTreino = tipos.includes("TREINO");
+
+            // tenta vir pronto do backend
+            let pontosTotal = Number(jj.pontosTotal ?? 0);
+
+            // fallback: soma pontos dos itens
+            if (!pontosTotal && itensPub.length) {
+              pontosTotal = itensPub.reduce(
+                (acc: number, it: any) => acc + Number(it?.pontos ?? 0),
+                0
+              );
+            }
+
+            return {
+              ...card,
+              descricao: card.descricao ?? jj.descricao ?? null,
+              pontosTotal: Number.isFinite(pontosTotal) ? pontosTotal : card.pontosTotal,
+              hasVideo,
+              hasTreino,
+              capaUrl:
+                normalizeAssetUrl(jj.capaUrl ?? jj.logoUrl ?? jj.imagemUrl ?? null) ||
+                card.capaUrl,
+              criadorNome:
+                card.criadorNome ??
+                jj?.criadorNome ??
+                jj?.criadorUsuario?.nome ??
+                jj?.professor?.nome ??
+                jj?.clube?.nome ??
+                jj?.escolinha?.nome ??
+                null,
+            };
+          } catch {
+            return card;
+          }
+        })
+      );
+
+      setMetodologias(detalhadas);
+    } catch (e: any) {
+      setMetodologias([]);
+      setMetodologiasErro(e?.message || "Erro ao carregar metodologias.");
+    } finally {
+      setMetodologiasLoading(false);
+    }
+  }
 
   async function carregarCatalogoExercicios() {
   try {
@@ -472,18 +552,6 @@ export default function TreinosAtletas() {
   } catch (e) {
     console.warn("[TREINOS] falha ao carregar catálogo de exercícios:", e);
   }
-}
-
-  function pickMidiaFromExercicioPayload(ex: any): string {
-  return (
-    ex?.videoDemonstrativoUrl ||
-    ex?.imgDemonstrativaUrl ||
-    ex?.videoUrl ||
-    ex?.imagemUrl ||
-    ex?.midiaUrl ||
-    ex?.midias?.[0]?.url ||
-    ""
-  );
 }
 
 function abrirMidiaExercicioDireto(
@@ -575,6 +643,12 @@ function removerFiltroMetodologia(label: string) {
     carregarCatalogoExercicios();
   }, []);
 
+  useEffect(() => {
+    if (mainTab !== "metodologias") return;
+    carregarMetodologias();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mainTab, buscaMetodologia, filtroPublico, filtroTipo, filtroNivel]);
+  
   useEffect(() => {
     if (!easterEggMsg) return;
 
@@ -1116,7 +1190,6 @@ function removerFiltroMetodologia(label: string) {
     return () => window.removeEventListener("mousedown", onDown);
   }, [addFiltroOpen]);
 
-
   async function iniciar(id: string) {
     try {
       const nowMs = Date.now();
@@ -1235,120 +1308,150 @@ function removerFiltroMetodologia(label: string) {
     }
   }
 
-function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
-  const exs = t.treinoProgramado?.exercicios ?? [];
-  if (exs.length === 0)
-    return <p className="text-gray-500">Nenhum exercício cadastrado.</p>;
+  function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
+    const exs = t.treinoProgramado?.exercicios ?? [];
+    if (exs.length === 0)
+      return <p className="text-gray-500">Nenhum exercício cadastrado.</p>;
 
-  const ck = checklistByTreino[t.id] ?? {};
-  const tileInfo = tiles.find((tl) => tl.id === t.id);
-  const isMissedTreino = tileInfo?.isMissed ?? false;
-  const toggleExercicio = (itemKey: string) => {
-    if (isMissedTreino) return;
+    const ck = checklistByTreino[t.id] ?? {};
+    const tileInfo = tiles.find((tl) => tl.id === t.id);
+    const isMissedTreino = tileInfo?.isMissed ?? false;
+    const toggleExercicio = (itemKey: string) => {
+      if (isMissedTreino) return;
 
-    setChecklistByTreino((prev) => {
-      const atualTreino = { ...(prev[t.id] ?? {}) };
-      const novoValor = !atualTreino[itemKey];
-      atualTreino[itemKey] = novoValor;
+      setChecklistByTreino((prev) => {
+        const atualTreino = { ...(prev[t.id] ?? {}) };
+        const novoValor = !atualTreino[itemKey];
+        atualTreino[itemKey] = novoValor;
 
-      const next = { ...prev, [t.id]: atualTreino };
-      try {
-        localStorage.setItem(CHECKLIST_KEY(t.id), JSON.stringify(atualTreino));
-      } catch {}
-      return next;
-    });
-  };
+        const next = { ...prev, [t.id]: atualTreino };
+        try {
+          localStorage.setItem(CHECKLIST_KEY(t.id), JSON.stringify(atualTreino));
+        } catch {}
+        return next;
+      });
+    };
 
-  return (
-    <div className="space-y-4">
-      {exs.map((ex) => {
-        const itemKey = (ex as any)._key ?? ex.exercicio.id;
-        const checked = ck[itemKey] === true;
-        
-        return (
-          <div 
-            key={(ex as any)._key ?? ex.exercicio.id}
-            className="p-3 border rounded-lg bg-neutral-50 flex justify-between items-center gap-3"
-          >
-            <div className="flex items-start gap-3">
-              <button
-                type="button"
-                onClick={() => toggleExercicio(itemKey)}
-                disabled={isMissedTreino}
-                className={`mt-1 inline-flex items-center justify-center rounded-full border w-6 h-6 transition
-                  ${
-                    isMissedTreino
-                      ? "bg-gray-100 border-gray-300 text-gray-300 cursor-not-allowed"
-                      : checked
-                      ? "bg-emerald-600 border-emerald-600 text-white"
-                      : "bg-white border-gray-300 text-gray-400"
-                  }`}
-                aria-pressed={checked}
-                aria-label={
-                  checked
-                    ? "Marcar como não feito"
-                    : "Marcar como feito"
-                }
-              >
-                {checked ? (
-                  <CircleCheck className="w-4 h-4" />
-                ) : (
-                  <CircleX className="w-4 h-4" />
-                )}
-              </button>
-
-              <div>
-                <div
-                  className={`font-medium ${
-                    checked ? "line-through text-gray-500" : ""
-                  }`}
+    return (
+      <div className="space-y-4">
+        {exs.map((ex) => {
+          const itemKey = (ex as any)._key ?? ex.exercicio.id;
+          const checked = ck[itemKey] === true;
+          
+          return (
+            <div 
+              key={(ex as any)._key ?? ex.exercicio.id}
+              className="p-3 border rounded-lg bg-neutral-50 flex justify-between items-center gap-3"
+            >
+              <div className="flex items-start gap-3">
+                <button
+                  type="button"
+                  onClick={() => toggleExercicio(itemKey)}
+                  disabled={isMissedTreino}
+                  className={`mt-1 inline-flex items-center justify-center rounded-full border w-6 h-6 transition
+                    ${
+                      isMissedTreino
+                        ? "bg-gray-100 border-gray-300 text-gray-300 cursor-not-allowed"
+                        : checked
+                        ? "bg-emerald-600 border-emerald-600 text-white"
+                        : "bg-white border-gray-300 text-gray-400"
+                    }`}
+                  aria-pressed={checked}
+                  aria-label={
+                    checked
+                      ? "Marcar como não feito"
+                      : "Marcar como feito"
+                  }
                 >
-                  {ex.exercicio.nome}
-                </div>
-                <div className="text-sm text-gray-500">
-                  {ex.repeticoes || "-"}
+                  {checked ? (
+                    <CircleCheck className="w-4 h-4" />
+                  ) : (
+                    <CircleX className="w-4 h-4" />
+                  )}
+                </button>
+
+                <div>
+                  <div
+                    className={`font-medium ${
+                      checked ? "line-through text-gray-500" : ""
+                    }`}
+                  >
+                    {ex.exercicio.nome}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {ex.repeticoes || "-"}
+                  </div>
                 </div>
               </div>
+
+              <button
+                disabled={isMissedTreino}
+                className={`text-green-700 underline text-sm ${
+                  isMissedTreino ? "text-gray-400 no-underline cursor-not-allowed" : ""
+                }`}
+                onClick={() => {
+                  if (isMissedTreino) return;
+
+                  const midiaDireta =
+                    ex.exercicio.videoDemonstrativoUrl ||
+                    (ex.exercicio as any).imgDemonstrativaUrl ||
+                    null;
+
+                  const midiaFallback = (() => {
+                    const m = midiaDoCatalogo(ex.exercicio.nome); // agora nome resolve
+                    return m?.video || m?.img || null;
+                  })();
+
+                  const midia = midiaDireta || midiaFallback;
+
+                  if (!midia) {
+                    alert("Esse exercício está sem vídeo cadastrado no banco (videoDemonstrativoUrl = null).");
+                    return;
+                  }
+
+                  abrirMidiaExercicioDireto(ex.exercicio.id, ex.exercicio.nome, midia);
+                }}
+
+              >
+                Ver vídeo
+              </button>
             </div>
+          );
+        })}
+      </div>
+    );
+  }
 
-            <button
-              disabled={isMissedTreino}
-              className={`text-green-700 underline text-sm ${
-                isMissedTreino ? "text-gray-400 no-underline cursor-not-allowed" : ""
-              }`}
-              onClick={() => {
-                if (isMissedTreino) return;
+  const metodologiasFiltradas = React.useMemo(() => {
+    const q = normNome(buscaMetodologia);
 
-                const midiaDireta =
-                  ex.exercicio.videoDemonstrativoUrl ||
-                  (ex.exercicio as any).imgDemonstrativaUrl ||
-                  null;
-
-                const midiaFallback = (() => {
-                  const m = midiaDoCatalogo(ex.exercicio.nome); // agora nome resolve
-                  return m?.video || m?.img || null;
-                })();
-
-                const midia = midiaDireta || midiaFallback;
-
-                if (!midia) {
-                  alert("Esse exercício está sem vídeo cadastrado no banco (videoDemonstrativoUrl = null).");
-                  return;
-                }
-
-                abrirMidiaExercicioDireto(ex.exercicio.id, ex.exercicio.nome, midia);
-              }}
-
-            >
-              Ver vídeo
-            </button>
-          </div>
+    return metodologias.filter((m) => {
+      // busca
+      if (q) {
+        const hay = normNome(
+          `${m.titulo ?? ""} ${m.descricao ?? ""} ${m.criadorNome ?? ""}`
         );
-      })}
-    </div>
-  );
-}
+        if (!hay.includes(q)) return false;
+      }
 
+      // nível
+      if (filtroNivel !== "TODOS") {
+        const nv = String(m.nivel ?? "").toUpperCase();
+        if (nv !== filtroNivel) return false;
+      }
+
+      // tipo (o que você pediu)
+      const hv = m.hasVideo === true;
+      const ht = m.hasTreino === true;
+
+      if (filtroTipo === "TODOS") return true;
+      if (filtroTipo === "VIDEOS_TREINOS") return hv && ht;
+      if (filtroTipo === "VIDEOS") return hv && !ht;
+      if (filtroTipo === "TREINOS") return ht && !hv;
+
+      return true;
+    });
+  }, [metodologias, buscaMetodologia, filtroNivel, filtroTipo]);
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-24 overflow-x-hidden">
@@ -1793,27 +1896,26 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
         )}
 
         {/* METODOLOGIAS */}
-        {mainTab === "metodologias" && (
-          <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mt-4 space-y-4">
-            {/* HEADER */}
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-lg font-semibold">Metodologias</h3>
+          {mainTab === "metodologias" && (
+            <div className="bg-white/90 backdrop-blur rounded-xl shadow-sm border p-4 mt-4">
+              {/* Header */}
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-lg font-semibold text-green-900">Metodologias</h3>
 
-              <button
-                type="button"
-                onClick={() => navigate("/treinos/Minhas-Metodologias")}
-                className="shrink-0 inline-flex items-center gap-2 bg-green-800 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow hover:bg-green-900"
-              >
-                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/15">
-                  👤
-                </span>
-                Minha metodologia
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => navigate("/treinos/Minhas-Metodologias")}
+                  className="shrink-0 inline-flex items-center gap-2 bg-green-800 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow hover:bg-green-900"
+                >
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/15">
+                    👤
+                  </span>
+                  Minha Metodologia
+                </button>
+              </div>
 
-            {/* BUSCA + PONTOS */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <div className="flex-1 flex items-center gap-2 border rounded-xl px-3 py-2 bg-white">
+              {/* Busca */}
+              <div className="mt-3 flex items-center gap-2 border rounded-xl px-3 py-2 bg-white">
                 <span className="text-gray-500">🔍</span>
                 <input
                   value={buscaMetodologia}
@@ -1823,150 +1925,172 @@ function renderTreinoDetalhesConteudo(t: TreinoAgendado) {
                 />
               </div>
 
-              <span className="shrink-0 text-xs px-3 py-1 rounded-full border bg-amber-50 text-amber-800 font-semibold">
-                +32 pts
-              </span>
-            </div>
-
-            {/* FILTROS */}
-
-            <div data-filtro-menu="1" className="flex flex-wrap items-center gap-2">
-              {filtrosMetodologia.map((filtro) => {
-                const ativo = filtroAtivo === filtro;
-
-                return (
-                  <div
-                    key={filtro}
-                    className={`inline-flex items-center rounded-full border overflow-hidden ${
-                      ativo
-                        ? "bg-green-800 text-white border-green-800"
-                        : "bg-white text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setFiltroAtivo(ativo ? null : filtro)}
-                      className="px-3 py-1.5 text-sm"
-                    >
-                      {filtro}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => removerFiltroMetodologia(filtro)}
-                      className={`px-2 py-1.5 text-sm border-l ${
-                        ativo ? "border-white/30" : "border-gray-200"
-                      }`}
-                      title="Remover filtro"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                );
-              })}
-
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setAddFiltroOpen((v) => !v)}
-                  className="px-3 py-1.5 rounded-full text-sm border bg-white hover:bg-gray-50 flex items-center gap-1"
+              {/* Filtros (igual instrutores) */}
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <select
+                  value={filtroPublico}
+                  onChange={(e) => setFiltroPublico(e.target.value)}
+                  className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
                 >
-                  ➕ Adicionar filtro
-                  <ChevronDown className={`w-4 h-4 transition ${addFiltroOpen ? "rotate-180" : ""}`} />
-                </button>
+                  <option value="TODOS">Público: Todos</option>
+                  <option value="ATLETAS">Público: Atletas</option>
+                  <option value="PROFISSIONAIS">Público: Profissionais</option>
+                  <option value="AMBOS">Público: Ambos</option>
+                </select>
 
-                {addFiltroOpen && (
-                  <div className="absolute left-0 mt-2 w-56 bg-white border rounded-xl shadow-lg z-50 overflow-hidden">
-                    {FILTROS_FIXOS.filter((f) => !filtrosMetodologia.includes(f)).length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-gray-500">
-                        Todos os filtros já foram adicionados.
-                      </div>
-                    ) : (
-                      FILTROS_FIXOS
-                        .filter((f) => !filtrosMetodologia.includes(f))
-                        .map((f) => (
-                          <button
-                            key={f}
-                            type="button"
-                            onClick={() => adicionarFiltroMetodologia(f)}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                          >
-                            {f}
-                          </button>
-                        ))
-                    )}
-                  </div>
-                )}
+                <select
+                  value={filtroTipo}
+                  onChange={(e) => setFiltroTipo(e.target.value)}
+                  className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
+                >
+                  <option value="TODOS">Todos</option>
+                  <option value="VIDEOS_TREINOS">Vídeos + Treinos</option>
+                  <option value="VIDEOS">Só Vídeos</option>
+                  <option value="TREINOS">Só Treinos</option>
+                </select>
+
+                <select
+                  value={filtroNivel}
+                  onChange={(e) => setFiltroNivel(e.target.value)}
+                  className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
+                >
+                  <option value="TODOS">Nível: Todos</option>
+                  <option value="BASE">Base</option>
+                  <option value="AVANCADO">Avançado</option>
+                  <option value="PERFORMANCE">Performance</option>
+                </select>
               </div>
 
-              <button
-                type="button"
-                className="px-3 py-1.5 rounded-full text-sm border bg-white hover:bg-gray-50"
-                onClick={() => alert("Em breve")}
-              >
-                •••
-              </button>
+              {/* Lista (cards iguais do instrutores) */}
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {metodologiasLoading && (
+                  <div className="text-sm text-gray-600">Carregando metodologias...</div>
+                )}
+
+                {!metodologiasLoading && metodologiasErro && (
+                  <div className="text-sm text-red-600">{metodologiasErro}</div>
+                )}
+
+                {!metodologiasLoading && !metodologiasErro && metodologiasFiltradas.length === 0 && (
+                  <div className="text-sm text-gray-600">
+                    Nenhuma metodologia encontrada.
+                  </div>
+                )}
+
+                {!metodologiasLoading &&
+                  !metodologiasErro &&
+                  metodologiasFiltradas.map((m) => {
+                    const publico =
+                      (m.publicoAlvo || "AMBOS").toString().toUpperCase() === "PROFISSIONAIS"
+                        ? "PROFISSIONAIS"
+                        : (m.publicoAlvo || "AMBOS").toString().toUpperCase() === "ATLETAS"
+                        ? "ATLETAS"
+                        : "AMBOS";
+
+                    const assinaturas = m.totalAssinantes ?? 0;
+                    const media = Number(m.mediaAvaliacao ?? 0);
+                    const reviews = m.totalAvaliacoes ?? 0;
+                    const pts = Number(m.pontosTotal ?? m.pontosPorSemana ?? 0);
+
+                    return (
+                      <div
+                      key={m.id}
+                      className="rounded-2xl border shadow-sm p-4 flex flex-col gap-3 bg-white hover:bg-gray-50"
+                    >
+                      {/* HEADER: chip + titulo na esquerda, assinaturas na direita */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            {/* Público */}
+                            <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-white">
+                              {publico}
+                            </span>
+
+                            {/* Título ao lado do chip */}
+                            <div className="font-semibold text-[16px] truncate ml-3">
+                              {m.titulo}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* assinaturas bem à direita */}
+                        <div className="text-sm text-gray-600 whitespace-nowrap">
+                          <b>{assinaturas}</b> assinaturas
+                        </div>
+                      </div>
+
+                      {/* CONTEÚDO: foto + infos + botão embaixo (self-end) */}
+                      <div className="flex gap-3">
+                        <img
+                          src={normalizeAssetUrl(m.capaUrl) || "/assets/usuarios/footera-logo-fundo-verde.png"}
+                          onError={(e) => {
+                            e.currentTarget.src = "/assets/usuarios/footera-logo-fundo-verde.png";
+                          }}
+                          alt=""
+                          className="h-16 w-16 rounded-xl border object-cover bg-white"
+                        />
+
+                        <div className="flex-1 min-w-0">
+                          {/* ⭐⭐⭐⭐⭐ + nota */}
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <div className="flex items-center">
+                              {Array.from({ length: 5 }).map((_, i) => {
+                                const filled = i < Math.round(media);
+                                return (
+                                  <StarIcon
+                                    key={i}
+                                    className={`w-4 h-4 ${filled ? "text-amber-500" : "text-gray-300"}`}
+                                    fill={filled ? "currentColor" : "none"}
+                                  />
+                                );
+                              })}
+                            </div>
+
+                            <span className="font-semibold text-gray-800">{media.toFixed(1)}</span>
+                            <span>({reviews})</span>
+                          </div>
+
+                          {/* + pontos */}
+                          <div className="mt-1 text-sm text-gray-700">
+                            + <b>{pts}</b> pts
+                          </div>
+
+                          {/* Criado por */}
+                          <div className="mt-1 text-sm text-gray-700">
+                            Criado por: <b>{m.criadorTipo || "Professor"}</b>
+                          </div>
+
+                          {/* Plano */}
+                          <div className="text-sm text-gray-600">{m.planoMinimo || "Free"}</div>
+
+                          {/* Descrição */}
+                          {!!m.descricao && (
+                            <div className="mt-1 text-sm text-gray-600 line-clamp-2">
+                              {m.descricao}
+                            </div>
+                          )}
+
+                          {/* Nome criador */}
+                          {m.criadorNome && (
+                            <div className="text-sm text-gray-500">{m.criadorNome}</div>
+                          )}
+                        </div>
+
+                        {/* botão mais pra baixo */}
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/metodologias/${m.id}`)}
+                          className="self-end px-5 py-2 rounded-full bg-green-800 text-white font-semibold hover:bg-green-900"
+                        >
+                          Ver / Assinar
+                        </button>
+                      </div>
+                    </div>
+                    );
+                  })}
+              </div>
             </div>
-
-
-
-{/* CATÁLOGO (vem do backend) */}
-<div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-  {metodologiasLoading && (
-    <div className="col-span-full text-sm text-gray-600">
-      Carregando metodologias...
-    </div>
-  )}
-
-  {!metodologiasLoading && metodologiasErro && (
-    <div className="col-span-full text-sm text-red-600">
-      {metodologiasErro}
-    </div>
-  )}
-
-  {!metodologiasLoading && !metodologiasErro && metodologias.length === 0 && (
-    <div className="col-span-full text-sm text-gray-600">
-      Nenhuma metodologia encontrada.
-    </div>
-  )}
-
-{!metodologiasLoading &&
-  !metodologiasErro &&
-  metodologias
-    .filter((m) => {
-      const q = buscaMetodologia.trim().toLowerCase();
-      if (!q) return true;
-
-      const t = (m.titulo || "").toLowerCase();
-      const d = (m.descricao || "").toLowerCase();
-
-      return t.includes(q) || d.includes(q);
-    })
-    .filter((m) => {
-      if (!filtroAtivo) return true;
-
-      const cats = m.categorias || [];
-      return cats.some(
-        (c) =>
-          String(c).toLowerCase() ===
-          String(filtroAtivo).toLowerCase()
-      );
-    })
-    .map((m) => (
-      <MetodologiaCard
-        key={m.id}
-        item={m}
-        onAssinar={(id) => alert(`Assinar metodologia: ${id}`)}
-      />
-    ))}
-
-</div>
-
-          </div>
-        )}
-
-
-
+          )}
       </div>
 
       {fullscreenId && (

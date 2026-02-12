@@ -1,29 +1,24 @@
 // server/controllers/metodologiasController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
-import { MetodologiaAssinaturaStatus, MetodologiaPublicoAlvo, MetodologiaConteudoTipo  } from "@prisma/client";
-import { Nivel, Categoria } from "@prisma/client";
-import { computeMetodologiaAvulsaPricing } from "@/services/pricing.js";
-import { startOfMonth } from "date-fns";
-
+import { startOfMonth, addMonths, addYears } from "date-fns";
+import {
+  MetodologiaAssinaturaStatus,
+  MetodologiaAssinaturaOrigem,
+  MetodologiaPublicoAlvo,
+  MetodologiaConteudoTipo,
+} from "@prisma/client";
 /** Pega userId do token (igual seu padrão) */
 function getUserId(req: Request): string | null {
   const r: any = req;
   return r.userId || r.user?.id || r.usuarioId || null;
 }
 
-function parseNivel(raw: any) {
-  if (raw === undefined || raw === null || String(raw).trim() === "") return undefined;
-  const v = String(raw).trim();
-  const ok = (Object.values(Nivel) as string[]).includes(v);
-  return ok ? (v as Nivel) : undefined;
-}
-
-function parseCategorias(raw: any): Categoria[] | undefined {
-  if (!Array.isArray(raw)) return undefined;
-  const vals = raw.map(String);
-  const ok = vals.every((v) => (Object.values(Categoria) as string[]).includes(v));
-  return ok ? (vals as Categoria[]) : undefined;
+function assinaturaDaAcesso(a: any) {
+  if (!a) return false;
+  if (a.status !== MetodologiaAssinaturaStatus.ATIVA) return false;
+  if (a.expiraEm && new Date(a.expiraEm) <= new Date()) return false; // expirou
+  return true;
 }
 
 function isPlanoMetodologiaAvulsa(plano: string | null | undefined) {
@@ -41,7 +36,6 @@ function metodologiaLimitFromPlano(plano: string | null | undefined): number {
   // 1 por mês
   if (p === "ATLETA_LEARNING_1") return 1;
   if (p === "PROFESSOR_LEARNING_1") return 1;
-  if (p === "ATLETA_METODO_1") return 1;
 
   // 3 por mês
   if (p === "ATLETA_LEARNING_3") return 3;
@@ -193,13 +187,12 @@ export async function createMetodologia(req: Request, res: Response) {
         nivel: nivel ?? undefined,
         categorias: Array.isArray(categorias) ? categorias : undefined,
         publicoAlvo: publicoAlvoFinal,
-
         criadorUsuarioId: userId,
-
         // ✅ agora grava o “tipo dono”
         professorId: professorId ?? undefined,
         clubeId: clubeId ?? undefined,
         escolinhaId: escolinhaId ?? undefined,
+        ativo: false,
       },
       include: { _count: { select: { assinantes: true, itens: true } } },
     });
@@ -314,22 +307,20 @@ export async function listMinhasMetodologiasAssinadas(req: Request, res: Respons
     const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasPrincipais as any[]);
     const limite = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
 
-    if (limite <= 0) {
-      // pode devolver 200 com lista vazia; assim a tela funciona
-      return res.json({
-        items: [],
-        quota: { limite: 0, usadasNoMes: 0, restantes: 0 },
-        code: "PRECISA_LEARNING",
-        message: "Ative o Learning para selecionar metodologias.",
-      });
-    }
-
-    // 2) conta quantas escolhas já fez no mês
+    // ✅ NÃO retorna cedo: mesmo sem Learning, pode ter AVULSAS ativas
     const inicioMes = startOfMonth(new Date());
-    const usadasNoMes = await prisma.metodologiaAssinante.count({
-      where: { usuarioId: userId, status: MetodologiaAssinaturaStatus.ATIVA, iniciouEm: { gte: inicioMes } },
-    });
-
+    const usadasNoMes =
+      limite > 0
+        ? await prisma.metodologiaAssinante.count({
+            where: {
+              usuarioId: userId,
+              status: MetodologiaAssinaturaStatus.ATIVA,
+              origem: MetodologiaAssinaturaOrigem.LEARNING,
+              iniciouEm: { gte: inicioMes },
+            },
+          })
+        : 0;
+    
     // 3) lista as metodologias já ativas
     const rows = await prisma.metodologiaAssinante.findMany({
       where: {
@@ -733,8 +724,7 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
       where: { metodologiaId_usuarioId: { metodologiaId: id, usuarioId: userId } },
     });
 
-    const signed = assinatura?.status === MetodologiaAssinaturaStatus.ATIVA;
-
+    const hasAccess = assinaturaDaAcesso(assinatura);
     // progresso (sem mudar banco): tenta ler progresso.concluidos (array de itemId)
     const concluidosIds: string[] = Array.isArray((assinatura as any)?.progresso?.concluidos)
       ? ((assinatura as any).progresso.concluidos as string[])
@@ -742,48 +732,13 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
 
     const totalItens = metodologia.itens.length;
     const concluidos = concluidosIds.length;
-    const ratio = totalItens > 0 ? concluidos / totalItens : 0;
-
+    
     // agrupa por semana
     const weeksMap = new Map<number, any[]>();
     for (const it of metodologia.itens) {
       if (!weeksMap.has(it.semana)) weeksMap.set(it.semana, []);
       weeksMap.get(it.semana)!.push(it);
     }
-
-    const semanas = Array.from(weeksMap.entries()).map(([semana, itens]) => {
-      const itensOut = itens.map((it) => {
-        const isDone = concluidosIds.includes(it.id);
-
-        // preview se não assinado: não entrega videoUrl/treinoProgramadoId
-        const locked = !signed;
-
-        return {
-          id: it.id,
-          semana: it.semana,
-          ordem: it.ordem,
-          tipo: it.tipo,
-          titulo: it.titulo,
-          descricao: it.descricao,
-          pontos: it.pontos ?? 0,
-          duracaoMin: it.duracaoMin ?? null,
-          thumbUrl: signed ? it.thumbUrl : null,
-          videoUrl: signed ? it.videoUrl : null,
-          treinoProgramadoId: signed ? it.treinoProgramadoId : null,
-          locked,
-          done: isDone,
-        };
-      });
-
-      const totalPtsSemana = itensOut.reduce((acc, x) => acc + (x.pontos ?? 0), 0);
-
-      return {
-        semana,
-        totalPtsSemana,
-        itens: itensOut,
-      };
-    });
-
     // ✅ soma de pontos total
     const pontosTotal = metodologia.itens.reduce((acc, it) => acc + (it.pontos ?? 0), 0);
     // ✅ regra de quota (mesma lógica da listMinhasMetodologiasAssinadas)
@@ -799,19 +754,29 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
       where: {
         usuarioId: userId,
         status: MetodologiaAssinaturaStatus.ATIVA,
+        origem: MetodologiaAssinaturaOrigem.LEARNING,
         iniciouEm: { gte: inicioMes },
       },
     });
 
-    const podeAssinarAgora = signed ? false : (limite > 0 && usadasNoMes < limite);
+    const assinaturaTipo = assinatura
+      ? (assinatura.origem === MetodologiaAssinaturaOrigem.AVULSA ? "AVULSA" : "LEARNING")
+      : null;
+
+    const podeAssinarAgora = !hasAccess && limite > 0 && usadasNoMes < limite;
 
     let motivoBloqueio: string | null = null;
-    if (signed) motivoBloqueio = "JA_ASSINADA";
-    else if (limite <= 0) motivoBloqueio = "PRECISA_LEARNING";
-    else if (usadasNoMes >= limite) motivoBloqueio = "LIMITE_METODOLOGIAS";
 
-    if (!signed && !podeAssinarAgora) {
-      motivoBloqueio = limite <= 0 ? "PRECISA_LEARNING" : "LIMITE_METODOLOGIAS";
+    if (hasAccess) {
+      motivoBloqueio = "JA_ASSINADA";
+    } else if (podeAssinarAgora) {
+      motivoBloqueio = null; // pode selecionar via Learning
+    } else if (limite <= 0) {
+      // ✅ sem learning → oferece compra avulsa
+      motivoBloqueio = "PRECISA_PAGAR_AVULSA";
+    } else {
+      // limite > 0 mas já estourou
+      motivoBloqueio = "LIMITE_METODOLOGIAS";
     }
 
     return res.json({
@@ -836,19 +801,25 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
         tipo: it.tipo,
         pontos: it.pontos ?? 0,
         // se não assinado: tranca links
-        videoUrl: signed ? it.videoUrl : null,
-        thumbUrl: signed ? (it as any).thumbUrl ?? null : null,
+        videoUrl: hasAccess ? it.videoUrl : null,
+        thumbUrl: hasAccess ? (it as any).thumbUrl ?? null : null,
         duracaoMin: it.duracaoMin ?? null,
-        treinoProgramadoId: signed ? it.treinoProgramadoId : null,
-        treinoProgramado: signed ? (it as any).treinoProgramado ?? null : null,
+        treinoProgramadoId: hasAccess ? it.treinoProgramadoId : null,
+        treinoProgramado: hasAccess ? (it as any).treinoProgramado ?? null : null,
         publicado: (it as any).publicado ?? true,
       })),
 
       viewer: {
-        isAssinante: signed,
-        podeAssinarAgora: signed ? false : podeAssinarAgora,
+        // compat (se quiser manter)
+        isAssinante: hasAccess,
+        // ✅ o que o front realmente usa
+        temAcesso: hasAccess,
+        assinaturaTipo,
+        expiraEm: assinatura?.expiraEm ? new Date(assinatura.expiraEm).toISOString() : null,
+        podeAssinarAgora: hasAccess ? false : podeAssinarAgora,
         motivoBloqueio,
         progresso: { concluidos: concluidosIds },
+        // pode manter, mas atualize seu type do front se quiser tipar
         quota: {
           limite,
           usadasNoMes,
@@ -877,61 +848,88 @@ export async function assinarMetodologia(req: Request, res: Response) {
       return res.status(404).json({ message: "Metodologia não encontrada." });
     }
 
-    // já assinou?
+    // ✅ origem pode vir por query ou body
+    const origemRaw = String(req.query.origem ?? req.body?.origem ?? MetodologiaAssinaturaOrigem.LEARNING)
+      .toUpperCase()
+      .trim();
+
+    const origem =
+      origemRaw === "AVULSA"
+        ? MetodologiaAssinaturaOrigem.AVULSA
+        : MetodologiaAssinaturaOrigem.LEARNING;
+
+    // Já tem assinatura?
     const existing = await prisma.metodologiaAssinante.findUnique({
       where: { metodologiaId_usuarioId: { metodologiaId: id, usuarioId: userId } },
     });
 
-    if (existing?.status === MetodologiaAssinaturaStatus.ATIVA) {
+    // Se já tem acesso ativo, não faz nada
+    if (existing && assinaturaDaAcesso(existing)) {
       return res.json({ ok: true, already: true });
     }
 
-    // regra de quota
-    const assinaturasPrincipais = await (prisma as any).assinatura.findMany({
-      where: { usuarioId: userId },
-      orderBy: { startsAt: "desc" },
-    });
+    const agora = new Date();
 
-    const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasPrincipais as any[]);
-    const limite = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
+    // ✅ Expiração: Learning = 1 mês | Avulsa = 1 ano
+    const expiraEm =
+      origem === MetodologiaAssinaturaOrigem.AVULSA ? addYears(agora, 1) : addMonths(agora, 1);
 
-    if (limite <= 0) {
-      return res.status(403).json({
-        code: "PRECISA_LEARNING",
-        message: "Você precisa ter Learning ativo para selecionar metodologias.",
+    // ✅ Se for LEARNING, aplica quota mensal
+    if (origem === MetodologiaAssinaturaOrigem.LEARNING) {
+      const assinaturasPrincipais = await (prisma as any).assinatura.findMany({
+        where: { usuarioId: userId },
+        orderBy: { startsAt: "desc" },
       });
+
+      const assinaturaPrincipal = pickPrincipalAssinatura(assinaturasPrincipais as any[]);
+      const limite = metodologiaLimitFromPlano(assinaturaPrincipal?.plano);
+
+      if (limite <= 0) {
+        return res.status(403).json({
+          code: "PRECISA_LEARNING",
+          message: "Você precisa ter Learning ativo para selecionar metodologias.",
+        });
+      }
+
+      const inicioMes = startOfMonth(new Date());
+      const usadasNoMes = await prisma.metodologiaAssinante.count({
+        where: {
+          usuarioId: userId,
+          status: MetodologiaAssinaturaStatus.ATIVA,
+          origem: MetodologiaAssinaturaOrigem.LEARNING,
+          iniciouEm: { gte: inicioMes },
+        },
+      });
+
+      if (usadasNoMes >= limite) {
+        return res.status(403).json({
+          code: "LIMITE_METODOLOGIAS",
+          message: `Você já selecionou ${usadasNoMes}/${limite} metodologias neste ciclo.`,
+        });
+      }
     }
 
-    const inicioMes = startOfMonth(new Date());
-    const usadasNoMes = await prisma.metodologiaAssinante.count({
-      where: { usuarioId: userId, status: MetodologiaAssinaturaStatus.ATIVA, iniciouEm: { gte: inicioMes } },
-    });
-
-    if (usadasNoMes >= limite) {
-      return res.status(403).json({
-        code: "LIMITE_METODOLOGIAS",
-        message: `Você já selecionou ${usadasNoMes}/${limite} metodologias neste ciclo.`,
-      });
-    }
-
-    // cria/reativa assinatura
+    // ✅ Cria/reativa assinatura com expiraEm correto
     await prisma.metodologiaAssinante.upsert({
       where: { metodologiaId_usuarioId: { metodologiaId: id, usuarioId: userId } },
       create: {
         metodologiaId: id,
         usuarioId: userId,
         status: MetodologiaAssinaturaStatus.ATIVA,
-        iniciouEm: new Date(),
+        origem,
+        iniciouEm: agora,
+        expiraEm,
         progresso: { concluidos: [] } as any,
       },
       update: {
         status: MetodologiaAssinaturaStatus.ATIVA,
-        iniciouEm: new Date(),
-        progresso: (existing as any)?.progresso ?? ({ concluidos: [] } as any),
+        origem,
+        iniciouEm: agora,
+        expiraEm,
       },
     });
 
-    return res.json({ ok: true });
+    return res.json({ ok: true, origem, expiraEm });
   } catch (e: any) {
     return res.status(500).json({ message: "Erro ao assinar metodologia.", detail: e?.message });
   }
