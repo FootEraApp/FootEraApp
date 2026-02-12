@@ -1,3 +1,4 @@
+// client/src/pages/admin-page
 import React, { useEffect, useState, useMemo } from "react";
 import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
