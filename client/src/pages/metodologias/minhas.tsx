@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   ChevronLeft,
   Search,
-  ExternalLink,
   Loader2,
   Trash2,
   Pencil,
@@ -27,6 +26,7 @@ type Metodologia = {
   totalReviews?: number;
   pontosTotal?: number;
   assinada?: boolean;
+  criadorUsuario?: { id: string; nome: string; foto?: string | null; parceiro?: boolean };
 };
 
 function getToken() {
@@ -113,6 +113,7 @@ export default function MinhasMetodologias() {
   const [criadas, setCriadas] = useState<Metodologia[]>([]);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [quota, setQuota] = useState<{ limite: number; usadasNoMes: number; restantes: number } | null>(null);
 
   async function preencherPontosViaDetalhe(lista: Metodologia[], token: string) {
     const ids = lista.filter((m) => !Number(m.pontosTotal)).map((m) => m.id);
@@ -164,7 +165,7 @@ export default function MinhasMetodologias() {
       const base = arr2.map((m: any) => ({
         id: String(m.id),
         titulo: m.titulo ?? m.nome ?? "Metodologia",
-        descricao: m.descricao ?? null,
+        descricao: m.descricao ?? m.item?.descricao ?? null,
         pontosBadge: m.pontosBadge ?? null,
         pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
         categorias: m.categorias ?? [],
@@ -175,6 +176,7 @@ export default function MinhasMetodologias() {
         totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
         mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
         totalReviews: Number(m.totalReviews ?? 0),
+        criadorUsuario: m.criadorUsuario ?? m.item?.criadorUsuario ?? null,
         pontosTotal: Number(
           m.pontosTotal ??
           m.totalPontos ??
@@ -199,10 +201,20 @@ export default function MinhasMetodologias() {
 
     const arr: any[] = Array.isArray(js) ? js : js.items ?? [];
 
+    if (!Array.isArray(js) && js?.quota) {
+      setQuota({
+        limite: Number(js.quota.limite ?? 0),
+        usadasNoMes: Number(js.quota.usadasNoMes ?? 0),
+        restantes: Number(js.quota.restantes ?? 0),
+      });
+    } else {
+      setQuota(null);
+    }
+
     const base = arr.map((m: any) => ({
       id: String(m.id),
       titulo: m.titulo ?? m.nome ?? "Metodologia",
-      descricao: m.descricao ?? null,
+      descricao: m.descricao ?? m.item?.descricao ?? null,
       pontosBadge: m.pontosBadge ?? null,
       pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
       categorias: m.categorias ?? [],
@@ -213,6 +225,7 @@ export default function MinhasMetodologias() {
       totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
       mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
       totalReviews: Number(m.totalReviews ?? 0),
+      criadorUsuario: m.criadorUsuario ?? m.item?.criadorUsuario ?? null,
       pontosTotal: Number(
         m.pontosTotal ??
           m.totalPontos ??
@@ -251,7 +264,7 @@ export default function MinhasMetodologias() {
     const base = arr.map((m: any) => ({
       id: String(m.id),
       titulo: m.titulo ?? m.nome ?? "Metodologia",
-      descricao: m.descricao ?? null,
+      descricao: m.descricao ?? m.item?.descricao ?? null,
       pontosBadge: m.pontosBadge ?? null,
       pontosPorSemanaLabel: m.pontosPorSemanaLabel ?? null,
       categorias: m.categorias ?? [],
@@ -262,6 +275,7 @@ export default function MinhasMetodologias() {
       totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
       mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
       totalReviews: Number(m.totalReviews ?? 0),
+      criadorUsuario: m.criadorUsuario ?? m.item?.criadorUsuario ?? null,
       pontosTotal: Number(
         m.pontosTotal ??
         m.totalPontos ??
@@ -382,11 +396,30 @@ export default function MinhasMetodologias() {
                 Minhas Metodologias
               </h1>
               <p className="text-xs sm:text-sm text-gray-600">
-                {isInstrutor
-                  ? "Assinadas e criadas por você."
-                  : "Tudo o que você assinou (ou tem acesso)."}
+                {isInstrutor ? "Assinadas e criadas por você." : "Tudo o que você assinou (ou tem acesso)."}
+                {quota && quota.limite > 0 && (
+                  <span className="ml-2 inline-flex items-center gap-2">
+                    <span className="px-2 py-1 rounded-full border bg-white text-[11px] font-semibold">
+                      {quota.usadasNoMes}/{quota.limite}
+                    </span>
+                    {quota.restantes === 0 && (
+                      <span className="text-[11px] text-amber-700">
+                        Limite atingido
+                      </span>
+                    )}
+                  </span>
+                )}
               </p>
             </div>
+
+            {quota && quota.limite === 0 && (
+              <button
+                onClick={() => navigate("/pagamentos?produto=learning")}
+                className="px-3 py-2 rounded-xl bg-green-800 text-white text-sm font-semibold hover:bg-green-900"
+              >
+                Ativar Learning
+              </button>
+            )}
 
             {/* ✅ Botão Criar SOMENTE para instrutores */}
             {isInstrutor && (
@@ -516,6 +549,12 @@ export default function MinhasMetodologias() {
                         <div className="mt-1 text-sm text-gray-700">
                           + <b>{Number(m.pontosTotal ?? 0)}</b> pts
                         </div>
+
+                        {m.criadorUsuario?.nome && (
+                          <div className="mt-1 text-sm text-gray-700">
+                            Criado por: <b>{m.criadorUsuario.nome}</b>
+                          </div>
+                        )}
 
                         {!!m.descricao && (
                           <div className="mt-1 text-sm text-gray-600 line-clamp-2">
