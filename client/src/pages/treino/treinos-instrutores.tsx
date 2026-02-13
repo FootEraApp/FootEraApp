@@ -1497,12 +1497,19 @@ async function salvarProgressoSessao(sessaoId: string) {
 
     const run = async () => {
       try {
-        const url =
-          `${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis` +
-          `?vinculo=${encodeURIComponent(vinculo)}` +
-          `&id=${encodeURIComponent(idParaEnviar)}` +
-          (entidadeIdReal ? `&tipoUsuarioId=${encodeURIComponent(entidadeIdReal)}` : "") +
-          `&debug=1`;
+        const isProfessor = vinculo === "professor";
+
+        const url = isProfessor
+          ? `${API.BASE_URL}/api/treinosprogramados` +
+            `?professorId=${encodeURIComponent(idParaEnviar)}` +
+            `&incluirColabs=1` +
+            `&order=desc` +
+            `&limit=200`
+          : `${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis` +
+            `?vinculo=${encodeURIComponent(vinculo)}` +
+            `&id=${encodeURIComponent(idParaEnviar)}` +
+            (entidadeIdReal ? `&tipoUsuarioId=${encodeURIComponent(entidadeIdReal)}` : "") +
+            `&debug=1`;
 
         const r = await fetch(url, { headers });
 
@@ -2329,6 +2336,21 @@ async function salvarProgressoSessao(sessaoId: string) {
 
   const renderTreinoCard = (treino: TreinoProgramado) => {
     const podeEditar = isTreinoMeuDeVerdade(treino, usuario);
+    const meuId = String(usuario?.tipoUsuarioId || usuario?.usuarioId || "").trim();
+    const souDono =
+      (String(usuario?.tipo || "").toLowerCase() === "professor" && String(treino.professorId || "").trim() === meuId) ||
+      (String(usuario?.tipo || "").toLowerCase() === "clube" && String(treino.clubeId || "").trim() === meuId) ||
+      ((String(usuario?.tipo || "").toLowerCase() === "escolinha" || String(usuario?.tipo || "").toLowerCase() === "escola") &&
+        String(treino.escolinhaId || "").trim() === meuId);
+
+    const souColaborador =
+      Array.isArray(treino.professoresIds) &&
+      treino.professoresIds.map(String).some((id) => String(id).trim() === meuId);
+
+    const papelNoTreino =
+      String(usuario?.tipo || "").toLowerCase() === "professor"
+        ? (souColaborador && !souDono ? "Colaborador" : (souDono ? "Criador" : null))
+        : (souDono ? "Criador" : null);
 
     return (
       <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border">
@@ -2341,7 +2363,13 @@ async function salvarProgressoSessao(sessaoId: string) {
             {treino.nome}
           </h4>
 
-          <div className="flex flex-col items-end">
+          <div className="flex flex-col items-end gap-1">
+            {papelNoTreino && (
+              <span className="px-2 py-0.5 rounded-full bg-gray-50 border border-gray-200 text-gray-700 text-xs">
+                {papelNoTreino}
+              </span>
+            )}
+
             {typeof treino.pontuacao === "number" && (
               <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
                 +{treino.pontuacao} pts
@@ -2955,7 +2983,23 @@ async function salvarProgressoSessao(sessaoId: string) {
                               onClick={() => navigate(`/treinos/unico?programadoId=${t.id}`)}
                               title="Abrir detalhes do treino"
                             >
-                              {t.nome}
+                               <span>{t.nome}</span>
+
+                                {(() => {
+                                  const meuProfId = String(usuario?.tipoUsuarioId ?? "").trim();
+                                  const souCriador = String(t.professorId ?? "").trim() === meuProfId;
+
+                                  const souColab =
+                                    !souCriador &&
+                                    (t.professoresIds || []).map(String).includes(meuProfId);
+
+                                  <span className="text-xs font-medium text-green-800/80">
+                                    {souCriador ? "(Criador)" : souColab ? "(Colaborador)" : ""}
+                                  </span>
+
+                                  return null;
+                                })()}
+
                             </h4>
 
                             <div className="flex flex-col items-end">
