@@ -5,13 +5,11 @@ import {
   getAtividadesRecentesMe, getBadgesMe, atualizarPerfil, getPosicaoAtualAtleta,
   getPerfilProfessor, getPerfilClube, getPerfilEscola, getPerfilOlheiro, 
   getUltimasSubmissoesDesafioVideosMe, getUltimasSubmissoesDesafioVideos,
+  getPontuacaoPerfil
 } from "../controllers/perfilController.js";
 import { authenticateToken } from "../middlewares/auth.js";
-import { PrismaClient } from "@prisma/client";
 import multer from "multer";
-import { getPontuacaoPerfil } from "../controllers/perfilController.js";
 
-const prisma = new PrismaClient();
 const storage = multer.diskStorage({
   destination: function (_req, _file, cb) {
     cb(null, "uploads/");

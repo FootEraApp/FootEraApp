@@ -1,6 +1,6 @@
 // client/src/pages/metodologias/create.tsx
-import React, { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import {
   ChevronLeft,
   Plus,
@@ -26,7 +26,7 @@ type TreinoProgramadoPicker = {
   descricao?: string | null;
   pontuacao?: number | null;
   criadorProfessorId?: string | null;
-
+  origem?: OrigemTreino;
   exercicios: Array<{
     id: string;
     ordem: number;
@@ -154,6 +154,39 @@ function getTipoUsuarioId() {
     sessionStorage.getItem("tipoUsuarioId") ??
     ""
   );
+}
+
+function getTipoUsuario() {
+  return (
+    (Storage as any).tipoUsuario ??
+    localStorage.getItem("tipoUsuario") ??
+    sessionStorage.getItem("tipoUsuario") ??
+    ""
+  );
+}
+
+type OrigemTreino = "CRIADOR" | "COLABORADOR" | "PARCEIRO_PUBLICO" | "OUTRO";
+
+function resolveOrigemTreino(t: any, tipoUsuarioRaw: string, tipoUsuarioId: string): OrigemTreino {
+  const me = String(tipoUsuarioId || "").trim();
+  const tipoUsuario = String(tipoUsuarioRaw || "").trim().toLowerCase();
+
+  const isOwner =
+    (tipoUsuario === "professor" && String(t?.professorId || "") === me) ||
+    (tipoUsuario === "clube" && String(t?.clubeId || "") === me) ||
+    ((tipoUsuario === "escolinha" || tipoUsuario === "escola") && String(t?.escolinhaId || "") === me);
+
+  const isColab =
+    tipoUsuario === "professor" &&
+    Array.isArray(t?.professores) &&
+    t.professores.some((p: any) => String(p?.professorId || "") === me);
+
+  const isParceiroPublico = Boolean(t?.parceiro) === true && !!t?.professorId;
+
+  if (isOwner) return "CRIADOR";
+  if (isColab) return "COLABORADOR";
+  if (isParceiroPublico) return "PARCEIRO_PUBLICO";
+  return "OUTRO";
 }
 
 function uid(prefix = "id") {
@@ -285,7 +318,7 @@ export default function CriarMetodologia() {
     (async () => {
       setCarregandoTreinos(true);
       try {
-        const r = await fetch(`${API.BASE_URL}/api/treinosprogramados`, {
+        const r = await fetch(`${API.BASE_URL}/api/treinosprogramados?scope=picker`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -293,13 +326,14 @@ export default function CriarMetodologia() {
         if (!r.ok) return;
 
         const tipoUsuarioId = getTipoUsuarioId();
+        const tipoUsuario = getTipoUsuario();
 
         const items =
           js?.items || js?.treinos || (Array.isArray(js) ? js : []) || [];
 
         const onlyMine = (items || []).filter((t: any) => {
-          // ✅ regra: só treinos que EU criei
-          return String(t?.criadorProfessorId || "") === String(tipoUsuarioId || "");
+          const origem = resolveOrigemTreino(t, tipoUsuario, tipoUsuarioId);
+          return origem === "CRIADOR" || origem === "COLABORADOR" || origem === "PARCEIRO_PUBLICO";
         });
 
         const mapped: TreinoProgramadoPicker[] = (onlyMine || []).map((t: any) => ({
@@ -313,6 +347,7 @@ export default function CriarMetodologia() {
               ? Number(t.pontuacao)
               : null,
           criadorProfessorId: t.criadorProfessorId ?? null,
+          origem: resolveOrigemTreino(t, tipoUsuario, tipoUsuarioId),
           exercicios: Array.isArray(t.exercicios)
             ? t.exercicios.map((e: any) => ({
                 id: String(e.id),
@@ -331,8 +366,23 @@ export default function CriarMetodologia() {
             : [],
         }));
 
-        if (!cancelled) setTreinos(mapped);
+        const prioridade: Record<OrigemTreino, number> = {
+          CRIADOR: 0,
+          COLABORADOR: 1,
+          PARCEIRO_PUBLICO: 2,
+          OUTRO: 3,
+        };
 
+        mapped.sort((a, b) => {
+          const pa = prioridade[a.origem ?? "OUTRO"];
+          const pb = prioridade[b.origem ?? "OUTRO"];
+          if (pa !== pb) return pa - pb;
+
+          // desempate opcional: por nome
+          return a.nome.localeCompare(b.nome, "pt-BR");
+        });
+
+        if (!cancelled) setTreinos(mapped);
       } catch {
         // silencioso
       } finally {
@@ -1529,7 +1579,7 @@ export default function CriarMetodologia() {
             <div className="mt-4">
               <div className="text-sm font-semibold text-gray-800">Meus treinos</div>
               <div className="text-[11px] text-gray-500 mt-1">
-                Só aparecem treinos onde <b>criadorProfessorId = seu tipoUsuarioId</b>. Clique para ver os exercícios.
+                Só aparecem treinos que você criou, que você é colaborador, ou treinos públicos de professor parceiro. Clique para ver os exercícios.
               </div>
 
               <div className="mt-3 max-h-[55vh] overflow-auto pr-1 space-y-2">
@@ -1566,9 +1616,23 @@ export default function CriarMetodologia() {
                           </div>
 
                           <div className="shrink-0 flex items-center gap-2">
-                            <span className="text-xs px-2 py-1 rounded-full border bg-green-50 text-green-900">
-                              TREINO
-                            </span>
+                            {t.origem === "CRIADOR" ? (
+                              <span className="text-xs px-2 py-1 rounded-full border bg-blue-50 text-blue-900">
+                                CRIADOR
+                              </span>
+                            ) : t.origem === "COLABORADOR" ? (
+                              <span className="text-xs px-2 py-1 rounded-full border bg-amber-50 text-amber-900">
+                                COLABORADOR
+                              </span>
+                            ) : t.origem === "PARCEIRO_PUBLICO" ? (
+                              <span className="text-xs px-2 py-1 rounded-full border bg-emerald-50 text-emerald-900">
+                                PARCEIRO (PÚBLICO)
+                              </span>
+                            ) : (
+                              <span className="text-xs px-2 py-1 rounded-full border bg-gray-50 text-gray-700">
+                                TREINO
+                              </span>
+                            )}
                             <ChevronDown
                               className={[
                                 "w-4 h-4 text-gray-500 transition",

@@ -188,7 +188,6 @@ export async function createMetodologia(req: Request, res: Response) {
         categorias: Array.isArray(categorias) ? categorias : undefined,
         publicoAlvo: publicoAlvoFinal,
         criadorUsuarioId: userId,
-        // ✅ agora grava o “tipo dono”
         professorId: professorId ?? undefined,
         clubeId: clubeId ?? undefined,
         escolinhaId: escolinhaId ?? undefined,
@@ -196,6 +195,22 @@ export async function createMetodologia(req: Request, res: Response) {
       },
       include: { _count: { select: { assinantes: true, itens: true } } },
     });
+
+    // ✅ ADICIONA NA ATIVIDADE RECENTE
+    try {
+      await prisma.atividadeRecente.create({
+        data: {
+          usuarioId: userId,
+          tipo: "Metodologia",
+          titulo: `Nova metodologia: ${created.titulo}`,
+          imagemUrl: created.capaUrl ?? null,
+          link: `/metodologias/${created.id}`,
+          // createdAt: NÃO precisa (default now())
+        },
+      });
+    } catch (e) {
+      console.error("Falha ao criar AtividadeRecente da metodologia:", e);
+    }
 
     return res.status(201).json({ item: created });
   } catch (e: any) {

@@ -5,7 +5,15 @@ import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
-import { Activity, ChevronRight, PlusCircle } from "lucide-react";
+import { 
+  Activity, 
+  ChevronRight,
+  CalendarClock,
+  Trophy,
+  CameraIcon as VideoCamera,
+  PlusCircle,
+  FileText,
+  BookOpen } from "lucide-react";
 import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
@@ -97,9 +105,20 @@ type EventoPreview = {
   descricao?: string | null;
 };
 
+type AtividadeRecenteTipo =
+  | "Treino"
+  | "Desafio"
+  | "Vídeo"
+  | "Video"
+  | "Postagem"
+  | "Evento"
+  | "Metodologia"
+  | "METODOLOGIA"
+  | "metodologia";
+
 type AtividadeRecente = {
   id: string;
-  tipo: "Treino" | "Desafio" | "Vídeo" | "Postagem" | "Evento";
+  tipo: AtividadeRecenteTipo | string; // ✅ fallback caso venha algo inesperado
   titulo: string;
   criadoEm: string;
   imagemUrl?: string | null;
@@ -896,9 +915,29 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
             {atividades && atividades.length > 0 ? (
               <ul className="space-y-3">
                 {atividades.slice(0, 6).map((a) => {
+                  const tipoNorm = String(a.tipo || "").toUpperCase();
+
+                   const Icon =
+                    a.tipo === "Evento" ? CalendarClock :
+                    a.tipo === "Metodologia" ? BookOpen :
+                    a.tipo === "Desafio" ? Trophy :
+                    a.tipo === "Vídeo" || a.tipo === "Video" ? VideoCamera :
+                    a.tipo === "Treino" ? Activity :
+                    a.tipo === "Postagem" ? FileText :
+                    Activity;
+                    
+                  const tipoLabel =
+                    tipoNorm === "METODOLOGIA" ? "Metodologia"
+                    : tipoNorm === "VIDEO" ? "Vídeo"
+                    : tipoNorm === "TREINO" ? "Treino"
+                    : tipoNorm === "DESAFIO" ? "Desafio"
+                    : tipoNorm === "POSTAGEM" ? "Postagem"
+                    : tipoNorm === "EVENTO" ? "Evento"
+                    : "Atividade";
+
                   const content = (
                     <div className="flex items-center gap-3">
-                      <Activity className="w-5 h-5 text-green-700" />
+                      <Icon className="w-5 h-5 text-green-700" />
 
                       {a.imagemUrl ? (
                         <img
@@ -911,7 +950,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                       <div className="text-sm">
                         <div className="font-medium text-green-900">{a.titulo}</div>
                         <div className="text-xs text-green-900/70">
-                          {new Date(a.criadoEm).toLocaleString()}
+                          {tipoLabel} • {new Date(a.criadoEm).toLocaleString()}
                         </div>
                       </div>
 

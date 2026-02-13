@@ -1166,6 +1166,8 @@ model AtividadeRecente {
   usuarioId String
   tipo      String
   imagemUrl String?
+  titulo    String?
+  link      String?
   createdAt DateTime @default(now())
   usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 }

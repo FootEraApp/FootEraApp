@@ -256,11 +256,22 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       : [];
 
     const duplicado = await prisma.treinoProgramado.findFirst({
-      where: { nome },
+      where: {
+        nome,
+        OR: [
+          owner.professorId ? { professorId: owner.professorId } : undefined,
+          owner.clubeId ? { clubeId: owner.clubeId } : undefined,
+          owner.escolinhaId ? { escolinhaId: owner.escolinhaId } : undefined,
+        ].filter(Boolean) as any,
+      },
       select: { id: true, nome: true },
     });
+
     if (duplicado) {
-      return res.status(400).json({ message: "Treino com o mesmo nome já existe.", duplicado });
+      return res.status(400).json({
+        message: "Treino com o mesmo nome já existe para este dono.",
+        duplicado,
+      });
     }
 
     const itens = (exercicios as any[]).map((e: any, i: number) => ({
@@ -310,133 +321,116 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
 
     const imagemFinal = uploadedPath ?? (imagemUrl ? String(imagemUrl) : null);
     const treinoCriado = await prisma.treinoProgramado.create({
-      data: {
-        nome,
-        nivel: nivelNorm,
-        descricao: descricao ?? null,
-        categoria: categoriasNorm.length ? categoriasNorm : undefined,
-        tipoTreino: tipoTreinoNorm,
-        dataAgendada: dataAgendada ? new Date(dataAgendada) : null,
-        objetivo: objetivo ?? null,
-        duracao: duracao != null ? Number(duracao) : null,
-        dicas: Array.isArray(dicas) ? dicas : [],
-        imagemUrl: imagemFinal,
-        metas: metas ?? null,
-        pontuacao: pontuacao != null ? Number(pontuacao) : null,
-        expiraEm: expiraEm ? new Date(expiraEm) : null,
-        naoExpira: Boolean(naoExpira),
-        ...(owner.professorId ? { Professor: { connect: { id: owner.professorId } } } : {}),
-        ...(owner.clubeId ? { clube: { connect: { id: owner.clubeId } } } : {}),
-        ...(owner.escolinhaId ? { escolinha: { connect: { id: owner.escolinhaId } } } : {}),
-        ...(criadorProfessorIdNorm
-          ? { criadorProfessor: { connect: { id: criadorProfessorIdNorm } } }
-          : owner.dono === "Professor"
-          ? { criadorProfessor: { connect: { id: owner.professorId! } } }
-          : {}),
-
-        professores: {
-          create: colabProfIds.map((professorId: string) => ({ professorId })),
-        },
-        exercicios: { create: itens },
-      },
-      include: {
-        criadorProfessor: { include: { usuario: true } }, 
-        clube: true,
-        escolinha: true,
-        exercicios: { include: { exercicio: true } },
-      }
-    });
-
-    let agendadosCriados = 0;
-
-      const professorIdForStats =
-        normalizarTipoUsuario(tipoUsuario) === "Professor"
-          ? String(tipoUsuarioId)
-          : undefined;
-
-      const r = await prisma.treinoAgendado.createMany({
-        data: [],
-        skipDuplicates: true,
-      });
-
-      agendadosCriados = r.count ?? 0;
-
-      if (agendadosCriados > 0) {
-        await audit(req, {
-          acao: "ALTERAR_AGENDA",
-          entidade: "TreinoAgendado",
-          entidadeId: undefined,
-          descricao: `Agendamento em lote gerado pelo TreinoProgramado`,
-          meta: {
-            treinoProgramadoId: treinoCriado.id,
-            criados: agendadosCriados,
-            dataBase: req.body.dataAgendada || null,
+          data: {
+            nome,
+            nivel: nivelNorm,
+            descricao: descricao ?? null,
+            categoria: categoriasNorm.length ? categoriasNorm : undefined,
+            tipoTreino: tipoTreinoNorm,
+            dataAgendada: dataAgendada ? new Date(dataAgendada) : null,
+            objetivo: objetivo ?? null,
+            duracao: duracao != null ? Number(duracao) : null,
+            dicas: Array.isArray(dicas) ? dicas : [],
+            imagemUrl: imagemFinal,
+            metas: metas ?? null,
+            pontuacao: pontuacao != null ? Number(pontuacao) : null,
+            expiraEm: expiraEm ? new Date(expiraEm) : null,
+            naoExpira: Boolean(naoExpira),
+            ...(owner.professorId ? { Professor: { connect: { id: owner.professorId } } } : {}),
+            ...(owner.clubeId ? { clube: { connect: { id: owner.clubeId } } } : {}),
+            ...(owner.escolinhaId ? { escolinha: { connect: { id: owner.escolinhaId } } } : {}),
+            ...(criadorProfessorIdNorm
+              ? { criadorProfessor: { connect: { id: criadorProfessorIdNorm } } }
+              : owner.dono === "Professor"
+              ? { criadorProfessor: { connect: { id: owner.professorId! } } }
+              : {}),
+            professores: {
+              create: colabProfIds.map((professorId: string) => ({ professorId })),
+            },
+            exercicios: { create: itens },
+          },
+          include: {
+            criadorProfessor: { include: { usuario: true } },
+            clube: true,
+            escolinha: true,
+            exercicios: { include: { exercicio: true } },
           },
         });
 
-    await audit(req, {
-      acao: 'PRESCREVER_TREINO',
-      entidade: 'TreinoProgramado',
-      entidadeId: treinoCriado.id,
-      descricao: `Treino criado (${treinoCriado.nome})`,
-      meta: { nome, tipoTreino: tipoTreinoNorm, categorias: categoriasNorm },
-    });
-
-      await Promise.all(
-        (itens || [])
-          .map((i) => i.exercicioId)
-          .filter((id) => typeof id === "string" && id)
-          .map((exercicioId: string) =>
-            onExercicioIncluidoNoTreino({
-              treinoId: treinoCriado.id,
-              exercicioId,
-              professorId: professorIdForStats,
-            })
-          )
-      );
-    } 
-
-    try {
-      const elencosParaBuscar = [
-        ...new Set([...(Array.isArray(elencosIds) ? elencosIds : []), ...(elencoId ? [elencoId] : [])]),
-      ];
-
-      let atletasDeElencos: string[] = [];
-      if (elencosParaBuscar.length) {
-        const rels = await prisma.atletaElenco.findMany({
-          where: { elencoId: { in: elencosParaBuscar } },
-          select: { atletaId: true },
+        // ✅ AUDIT
+        await audit(req, {
+          acao: "PRESCREVER_TREINO",
+          entidade: "TreinoProgramado",
+          entidadeId: treinoCriado.id,
+          descricao: `Treino criado (${treinoCriado.nome})`,
+          meta: { nome, tipoTreino: tipoTreinoNorm, categorias: categoriasNorm },
         });
-        atletasDeElencos = rels.map(r => r.atletaId);
+
+        // ✅ STATS (só se fizer sentido pro professor)
+        const professorIdForStats =
+          normalizarTipoUsuario(tipoUsuario) === "Professor" ? String(tipoUsuarioId) : undefined;
+
+        await Promise.all(
+          (itens || [])
+            .map((i) => i.exercicioId)
+            .filter((id) => typeof id === "string" && id)
+            .map((exercicioId: string) =>
+              onExercicioIncluidoNoTreino({
+                treinoId: treinoCriado.id,
+                exercicioId,
+                professorId: professorIdForStats,
+              })
+            )
+        );
+
+        // ✅ AGENDAR ATLETAS (continua dentro do mesmo try)
+        try {
+          const elencosParaBuscar = [
+            ...new Set([
+              ...(Array.isArray(elencosIds) ? elencosIds : []),
+              ...(elencoId ? [elencoId] : []),
+            ]),
+          ];
+
+          let atletasDeElencos: string[] = [];
+          if (elencosParaBuscar.length) {
+            const rels = await prisma.atletaElenco.findMany({
+              where: { elencoId: { in: elencosParaBuscar } },
+              select: { atletaId: true },
+            });
+            atletasDeElencos = rels.map((r) => r.atletaId);
+          }
+
+          const alvoAtletas = Array.from(
+            new Set([...(Array.isArray(atletasIds) ? atletasIds : []), ...atletasDeElencos])
+          ).filter(Boolean);
+
+          if (alvoAtletas.length) {
+            const quando = req.body.dataAgendada
+              ? new Date(req.body.dataAgendada)
+              : new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+            await prisma.treinoAgendado.createMany({
+              data: alvoAtletas.map((aid) => ({
+                titulo: treinoCriado.nome,
+                atletaId: aid,
+                treinoProgramadoId: treinoCriado.id,
+                dataTreino: quando,
+                dataExpiracao: quando,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        } catch (e) {
+          console.warn("Agendamento em lote falhou (seguindo com 201):", e);
+        }
+
+        return res.status(201).json(treinoCriado);
+      } catch (error: any) {
+        console.error("Erro ao criar treino programado:", error);
+        return res.status(500).json({ message: "Erro interno ao criar treino.", error: error.message });
       }
-
-      const alvoAtletas = Array.from(new Set([...(Array.isArray(atletasIds) ? atletasIds : []), ...atletasDeElencos]))
-        .filter(Boolean);
-
-      if (alvoAtletas.length) {
-        const quando = req.body.dataAgendada ? new Date(req.body.dataAgendada) : new Date(Date.now() + 24*60*60*1000);
-        await prisma.treinoAgendado.createMany({
-          data: alvoAtletas.map(aid => ({
-            titulo: treinoCriado.nome,
-            atletaId: aid,
-            treinoProgramadoId: treinoCriado.id,
-            dataTreino: quando,
-            dataExpiracao: quando,
-          })),
-          skipDuplicates: true,
-        });
-      }
-    } catch (e) {
-      console.warn("Agendamento em lote falhou (seguindo com 201):", e);
-    }
-
-    return res.status(201).json(treinoCriado);
-
-  } catch (error: any) {
-    console.error("Erro ao criar treino programado:", error);
-    return res.status(500).json({ message: "Erro interno ao criar treino.", error: error.message });
-  }
-};
+    };
 
 export const getTreinoById = async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -529,9 +523,17 @@ export async function updateTreino(req: Request, res: Response) {
         data: {
           ...(nome !== undefined ? { nome } : {}),
           ...(descricao !== undefined ? { descricao } : {}),
-          ...(nivel !== undefined ? { nivel: nivel as Nivel } : {}),
-          ...(categoria !== undefined ? { categoria: { set: categoria as Categoria[] } } : {}),
-          ...(tipoTreino !== undefined ? { tipoTreino: tipoTreino as TipoTreino | null } : {}),
+          ...(nivel !== undefined ? { nivel: normNivel(nivel) } : {}),
+          ...(categoria !== undefined
+            ? {
+                categoria: {
+                  set: Array.isArray(categoria)
+                    ? (categoria.map(normCategoria) as Categoria[])
+                    : [],
+                },
+              }
+            : {}),
+          ...(tipoTreino !== undefined ? { tipoTreino: normTipoTreino(tipoTreino) } : {}),
           ...(dataAgendada !== undefined ? { dataAgendada: dataAgendada ? new Date(dataAgendada) : null } : {}),
           ...(objetivo !== undefined ? { objetivo } : {}),
           ...(duracao !== undefined ? { duracao: duracao != null ? Number(duracao) : null } : {}),
@@ -612,47 +614,129 @@ export const deleteTreino = async (req: Request, res: Response) => {
 };
 
 export const getAllTreinos = async (req: Request, res: Response) => {
+  const viewerTipo = String((req as any).user?.tipo || "").toLowerCase();
+  const viewerId = String((req as any).user?.tipoUsuarioId || "").trim();
+  const scope = String((req.query as any).scope || "");
+
   try {
     const {
       professorId,
-      ownerTipo,        
-      apenasCriador,     
+      ownerTipo,
+      apenasCriador,
+      incluirColabs,
       order = "desc",
       limit,
+      tipoUsuario,
+      tipoUsuarioId,
+      onlyMine,
     } = req.query as Record<string, string | undefined>;
 
-    const dono = normalizarTipoUsuario(ownerTipo);
     const where: any = {};
 
-    if ((apenasCriador === "1" || dono === "Professor") && professorId) {
-      where.professorId = String(professorId);
-      where.clubeId = null;
-      where.escolinhaId = null;
-    }
-    else if (professorId) {
-      where.professorId = String(professorId);
+    // 1) filtro explícito: quero os treinos "do professor X"
+    if (professorId) {
+      const pid = String(professorId);
+      const incluirColabsBool = String(incluirColabs ?? "") === "1";
+
+      if (incluirColabsBool) {
+        // ✅ dono OU colaborador
+        where.OR = [
+          { professorId: pid },
+          { professores: { some: { professorId: pid } } },
+        ];
+      } else {
+        // ✅ só dono (comportamento atual)
+        where.professorId = pid;
+      }
+
+      // se você quer forçar "somente treinos do professor (não do clube/escolinha)",
+      // mantenha essa regra SÓ quando for modo apenasCriador:
+      const dono = normalizarTipoUsuario(ownerTipo);
+      if (!incluirColabsBool && (dono === "Professor" || apenasCriador === "1")) {
+        where.clubeId = null;
+        where.escolinhaId = null;
+      }
     }
 
-    const onlyMine = String((req.query?.onlyMine ?? "")).toLowerCase() === "true";
-    const tipoUsuario = String((req.query?.tipoUsuario ?? "")).trim();
-    const tipoUsuarioId = String((req.query?.tipoUsuarioId ?? "")).trim();
-
+    // 2) compatibilidade com o seu modo "onlyMine" (caso você use em outras telas)
+    const onlyMineBool = String(onlyMine ?? "").toLowerCase() === "true";
     const ownerWhere = ownerWhereFrom(tipoUsuario, tipoUsuarioId);
+    if (onlyMineBool && ownerWhere) {
+      Object.assign(where, ownerWhere);
+    }
+
+    const take = limit && !Number.isNaN(Number(limit)) ? Math.min(50, Math.max(1, Number(limit))) : undefined;
+    const sort = String(order).toLowerCase() === "asc" ? "asc" : "desc";
+
+    if (scope === "picker" && viewerTipo && viewerId) {
+      const isProfessor = viewerTipo === "professor";
+      const isClube = viewerTipo === "clube";
+      const isEscolinha = viewerTipo === "escolinha" || viewerTipo === "escola";
+
+      const wherePicker: any = {
+        OR: [
+          ...(isProfessor ? [{ professorId: viewerId }] : []),
+          ...(isClube ? [{ clubeId: viewerId }] : []),
+          ...(isEscolinha ? [{ escolinhaId: viewerId }] : []),
+
+          ...(isProfessor ? [{ professores: { some: { professorId: viewerId } } }] : []),
+
+          // públicos de parceiro (seu requisito)
+          { parceiro: true, professorId: { not: null } },
+        ],
+      };
+
+      const treinos = await prisma.treinoProgramado.findMany({
+        where: wherePicker,
+        orderBy: { createdAt: sort },
+        take,
+        include: {
+          criadorProfessor: { include: { usuario: true } },
+          Professor: { include: { usuario: true } },
+          clube: true,
+          escolinha: true,
+          professores: { include: { professor: { include: { usuario: true } } } },
+          exercicios: { include: { exercicio: true } },
+        },
+      });
+
+      const mapped = treinos.map((t) => {
+      const donoId = t.professorId || t.clubeId || t.escolinhaId || "";
+
+      const isOwner =
+        (viewerTipo === "professor" && t.professorId === viewerId) ||
+        (viewerTipo === "clube" && t.clubeId === viewerId) ||
+        ((viewerTipo === "escolinha" || viewerTipo === "escola") && t.escolinhaId === viewerId);
+
+      const isColab =
+        viewerTipo === "professor" &&
+        (t.professores?.some((p: any) => p.professorId === viewerId) ?? false);
+
+      const isParceiroPublico = Boolean((t as any).parceiro) === true && !!t.professorId;
+
+      return {
+        ...t,
+        origem: isOwner ? "CRIADOR" : isColab ? "COLABORADOR" : isParceiroPublico ? "PARCEIRO_PUBLICO" : "OUTRO",
+      };
+    });
+
+    return res.json(mapped);
+    }
 
     const treinos = await prisma.treinoProgramado.findMany({
-      where: onlyMine && ownerWhere ? ownerWhere : undefined,
-      orderBy: { createdAt: "desc" },
+      where: Object.keys(where).length ? where : undefined,
+      orderBy: { createdAt: sort },
+      take,
       include: {
         criadorProfessor: { include: { usuario: true } },
-        Professor: { include: { usuario: true } }, 
+        Professor: { include: { usuario: true } },
         clube: true,
         escolinha: true,
-        professores: { 
+        professores: {
           include: { professor: { include: { usuario: true } } },
         },
         exercicios: { include: { exercicio: true } },
       },
-
     });
 
     return res.json(treinos);
