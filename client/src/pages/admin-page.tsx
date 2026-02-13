@@ -11,6 +11,7 @@ type Tab =
   | "exercicios"
   | "treinos"
   | "professores"
+  | "metodologias"
   | "desafios"
   | "validacao"
   | "moderacao"
@@ -221,6 +222,7 @@ export default function AdminDashboard() {
     "exercicios",
     "treinos",
     "professores",
+    "metodologias",
     ...(FLAGS.DESAFIOS_ENABLED ? (["desafios", "validacao", "moderacao"] as Tab[]) : []),
     "assinaturas",
     "feedback",
@@ -277,6 +279,99 @@ export default function AdminDashboard() {
   const [profToDelete, setProfToDelete] = useState<{ id: string; nome?: string } | null>(null);
   const [profDeleteBusy, setProfDeleteBusy] = useState(false);
   const [profDeleteErr, setProfDeleteErr] = useState<string>("");
+
+  type MetodologiaItemPreview = {
+    id: string;
+    semana: number;
+    ordem: number;
+    tipo: string;
+    titulo: string;
+    videoUrl?: string | null;
+    thumbUrl?: string | null;
+    duracaoMin?: number | null;
+    treinoProgramadoId?: string | null;
+    treinoProgramado?: {
+      id: string;
+      nome: string;
+      codigo: string;
+      imagemUrl?: string | null;
+      nivel?: string | null;
+      categoria?: any;
+      pontuacao?: number | null;
+      duracao?: number | null;
+    } | null;
+  };
+
+  type MetodologiaPendente = {
+    id: string;
+    titulo: string;
+    descricao?: string | null;
+    capaUrl?: string | null;
+    nivel?: string | null;
+    categorias?: any[];
+    ativo: boolean;
+    criadoEm?: string | null;
+    criadorUsuario?: {
+      id: string;
+      nome?: string | null;
+      nomeDeUsuario?: string | null;
+      email?: string | null;
+      foto?: string | null;
+      parceiro?: boolean | null;
+    } | null;
+    _count?: { assinantes?: number; itens?: number };
+
+    // ✅ vem do include.itens (take 3)
+    itens?: MetodologiaItemPreview[];
+  };
+
+  type MetodologiaDetail = MetodologiaPendente & {
+    itens?: Array<{
+      id: string;
+      semana: number;
+      ordem: number;
+      titulo: string;
+      descricao?: string | null;
+      tipo: string;
+      pontos?: number | null;
+      publicado?: boolean | null;
+      criadoEm?: string | null;
+      atualizadoEm?: string | null;
+      videoUrl?: string | null;
+      thumbUrl?: string | null;
+      duracaoMin?: number | null;
+      treinoProgramadoId?: string | null;
+      treinoProgramado?: {
+        id: string;
+        nome: string;
+        codigo: string;
+        descricao?: string | null;
+        imagemUrl?: string | null;
+        nivel?: string | null;
+        categoria?: any;
+        pontuacao?: number | null;
+        duracao?: number | null;
+        parceiro?: boolean | null;
+        metodologia?: boolean | null;
+      } | null;
+    }>;
+  };
+
+
+  const [metPendentes, setMetPendentes] = useState<MetodologiaPendente[]>([]);
+  const [metLoading, setMetLoading] = useState(false);
+  const [metErro, setMetErro] = useState<string>("");
+  const [metQ, setMetQ] = useState("");
+  const [metDebQ, setMetDebQ] = useState("");
+  const [metPage, setMetPage] = useState(1);
+  const [metTotal, setMetTotal] = useState(0);
+  const metPageSize = 20;
+
+  const [metDetailOpen, setMetDetailOpen] = useState(false);
+  const [metDetailLoading, setMetDetailLoading] = useState(false);
+  const [metDetail, setMetDetail] = useState<MetodologiaDetail | null>(null);
+  const [metDetailErr, setMetDetailErr] = useState<string>("");
+
 
   function showToast(type: "success" | "error", msg: string) {
     setToast({ type, msg });
@@ -592,6 +687,110 @@ useEffect(() => {
       setProfLoading(false);
     }
   }
+
+  useEffect(() => {
+    const h = setTimeout(() => setMetDebQ(metQ.trim()), 350);
+    return () => clearTimeout(h);
+  }, [metQ]);
+
+  async function carregarMetodologiasPendentes(page: number) {
+    setMetLoading(true);
+    setMetErro("");
+
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(metPageSize));
+      if (metDebQ) params.set("q", metDebQ);
+
+      const r = await fetch(`${API.BASE_URL}/api/admin/metodologias/pendentes?${params.toString()}`, {
+        headers: authHeaders(),
+      });
+
+      const txt = await r.text().catch(() => "");
+      if (!r.ok) {
+        setMetPendentes([]);
+        setMetTotal(0);
+        setMetPage(page);
+        setMetErro(txt || `Falha ao carregar metodologias pendentes (HTTP ${r.status}).`);
+        return;
+      }
+
+      const json = txt ? JSON.parse(txt) : {};
+      const items = Array.isArray(json.items) ? json.items : [];
+      setMetPendentes(items);
+      setMetTotal(Number(json.total || 0));
+      setMetPage(Number(json.page || page));
+    } catch (e: any) {
+      setMetPendentes([]);
+      setMetTotal(0);
+      setMetErro(e?.message || "Falha de rede ao carregar metodologias pendentes.");
+    } finally {
+      setMetLoading(false);
+    }
+  }
+
+  async function setMetodologiaAtiva(id: string, ativo: boolean) {
+    setAcaoBusyId(id);
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/admin/metodologias/${id}/ativo`, {
+        method: "PATCH",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ ativo }),
+      });
+      const txt = await r.text().catch(() => "");
+      if (!r.ok) {
+        showToast("error", txt || `Erro HTTP ${r.status}`);
+        return;
+      }
+
+      showToast("success", ativo ? "Metodologia ativada ✅" : "Metodologia desativada ✅");
+
+      // remove da lista (porque essa aba é só pendentes)
+      if (ativo) {
+        setMetPendentes((prev) => prev.filter((m) => m.id !== id));
+        setMetTotal((prev) => Math.max(0, prev - 1));
+      } else {
+        // se desativou de novo, mantém na lista
+        await carregarMetodologiasPendentes(metPage);
+      }
+    } catch (e: any) {
+      showToast("error", e?.message || "Falha de rede.");
+    } finally {
+      setAcaoBusyId(null);
+    }
+  }
+
+  async function abrirMetodologiaDetalhe(id: string) {
+    setMetDetailOpen(true);
+    setMetDetailLoading(true);
+    setMetDetailErr("");
+    setMetDetail(null);
+
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/admin/metodologias/${id}`, {
+        headers: authHeaders(),
+      });
+      const txt = await r.text().catch(() => "");
+      if (!r.ok) {
+        setMetDetailErr(txt || `Erro HTTP ${r.status}`);
+        return;
+      }
+      const data = txt ? JSON.parse(txt) : {};
+      setMetDetail((data.item ?? data) as MetodologiaDetail);
+    } catch (e: any) {
+      setMetDetailErr(e?.message || "Falha de rede.");
+    } finally {
+      setMetDetailLoading(false);
+    }
+  }
+
+
+  useEffect(() => {
+    if (aba !== "metodologias") return;
+    void carregarMetodologiasPendentes(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, metDebQ]);
 
 async function carregarAssinantes(page: number) {
   setAssLoading(true);
@@ -1365,7 +1564,13 @@ async function confirmarExcluirProfessor() {
             className={`px-4 py-2 rounded ${aba === t ? "bg-green-800 text-white" : "bg-gray-200"}`}
             onClick={() => setAba(t)}
           >
-            {t === "moderacao" ? "Moderação" : t === "validacao" ? "Validar desafios" : t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === "moderacao"
+              ? "Moderação"
+              : t === "validacao"
+              ? "Validar desafios"
+              : t === "metodologias"
+              ? "Metodologias"
+              : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </nav>
@@ -1973,6 +2178,191 @@ async function confirmarExcluirProfessor() {
               <button
                 disabled={profLoading || profPage * profPageSize >= profTotal || professores.length < profPageSize}
                 onClick={() => carregarProfessores(profPage + 1)}
+                className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
+              >
+                Próxima
+              </button>
+            </div>
+          </div>
+        )}
+
+        {aba === "metodologias" && (
+          <div>
+            <h3 className="text-xl font-bold mb-3">Metodologias pendentes (ativo = false)</h3>
+
+            <div className="flex flex-wrap gap-2 items-center mb-4">
+              <input
+                value={metQ}
+                onChange={(e) => setMetQ(e.target.value)}
+                placeholder="Buscar por título, descrição ou criador…"
+                className="border rounded px-3 py-2 w-[min(520px,100%)]"
+              />
+
+              <button
+                className="px-3 py-2 rounded bg-gray-200"
+                onClick={() => carregarMetodologiasPendentes(1)}
+                disabled={metLoading}
+              >
+                {metLoading ? "Carregando…" : "Atualizar"}
+              </button>
+
+              <div className="ml-auto text-sm text-gray-600">
+                {metLoading ? "Carregando…" : `${metTotal} pendente(s)`}
+              </div>
+            </div>
+
+            {metErro && <div className="mb-3 text-sm text-red-600">{metErro}</div>}
+
+            {metPendentes.length === 0 && !metLoading ? (
+              <div className="bg-white p-6 rounded shadow text-center text-gray-500">
+                Nenhuma metodologia pendente no momento.
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {metPendentes.map((m) => {
+                  const criador = m.criadorUsuario;
+                  const capa = toAbsoluteUrl(m.capaUrl) || null;
+
+                  return (
+                    <li key={m.id} className="bg-white p-4 rounded shadow">
+                      <div className="flex gap-4">
+                        <div className="w-24 h-24 rounded bg-gray-100 overflow-hidden flex items-center justify-center border">
+                          {capa ? (
+                            <img
+                              src={capa}
+                              alt="Capa"
+                              className="w-full h-full object-cover"
+                              onError={(e) => ((e.currentTarget.style.display = "none"), void 0)}
+                            />
+                          ) : (
+                            <span className="text-gray-400 text-xs">sem capa</span>
+                          )}
+                        </div>
+
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="font-semibold text-gray-900">{m.titulo}</div>
+                              <div className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                {m.descricao || "—"}
+                              </div>
+
+                              <div className="text-xs text-gray-500 mt-2 flex flex-wrap gap-2">
+                                <span className="px-2 py-1 rounded bg-gray-50 border">
+                                  Nível: <strong>{m.nivel ?? "—"}</strong>
+                                </span>
+                                <span className="px-2 py-1 rounded bg-gray-50 border">
+                                  Itens: <strong>{Number(m._count?.itens || 0)}</strong>
+                                </span>
+                                <span className="px-2 py-1 rounded bg-gray-50 border">
+                                  Assinantes: <strong>{Number(m._count?.assinantes || 0)}</strong>
+                                </span>
+                                <span className="px-2 py-1 rounded bg-gray-50 border">
+                                  Criado em: <strong>{formatDate(m.criadoEm ?? null)}</strong>
+                                </span>
+                              </div>
+
+                              <div className="text-xs text-gray-600 mt-2">
+                                Criador:{" "}
+                                <strong>
+                                  {criador?.nome || criador?.nomeDeUsuario || criador?.email || "—"}
+                                </strong>
+                                {criador?.parceiro ? (
+                                  <span className="ml-2 text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-800 border border-green-200">
+                                    Parceiro
+                                  </span>
+                                ) : null}
+                              </div>
+                              {Array.isArray(m.itens) && m.itens.length > 0 ? (
+                                <div className="mt-3 text-xs text-gray-600">
+                                  <div className="font-semibold text-gray-700 mb-1">Preview (3 primeiros itens)</div>
+                                  <ul className="space-y-1">
+                                    {m.itens.slice(0, 3).map((it) => (
+                                      <li key={it.id} className="flex items-center gap-2">
+                                        <span className="px-2 py-0.5 rounded bg-gray-100 border">
+                                          S{it.semana} • #{it.ordem}
+                                        </span>
+                                        <span className="px-2 py-0.5 rounded bg-gray-100 border">
+                                          {it.tipo}
+                                        </span>
+                                        <span className="truncate max-w-[420px]" title={it.titulo}>
+                                          {it.titulo}
+                                        </span>
+
+                                        {!!it.videoUrl && (
+                                          <button
+                                            className="text-blue-700 underline"
+                                            onClick={() => openVideo(it.videoUrl!)}
+                                          >
+                                            ver vídeo
+                                          </button>
+                                        )}
+
+                                        {!!it.treinoProgramado && (
+                                          <span className="text-gray-500">
+                                            • treino: <strong>{it.treinoProgramado.nome}</strong> ({it.treinoProgramado.codigo})
+                                          </span>
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ) : null}
+
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {capa ? (
+                                <button
+                                  className="px-3 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm"
+                                  onClick={() => setPlayer({ kind: "image", src: capa })}
+                                >
+                                  Ver capa
+                                </button>
+                              ) : null}
+
+                              <button
+                                className="px-3 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm"
+                                onClick={() => abrirMetodologiaDetalhe(m.id)}
+                              >
+                                Detalhes
+                              </button>
+
+                              <button
+                                className="px-3 py-2 rounded bg-green-700 hover:bg-green-800 text-white text-sm disabled:opacity-60"
+                                disabled={acaoBusyId === m.id}
+                                onClick={() => {
+                                  const ok = confirm(`Ativar esta metodologia?\n\n"${m.titulo}"`);
+                                  if (!ok) return;
+                                  void setMetodologiaAtiva(m.id, true);
+                                }}
+                              >
+                                {acaoBusyId === m.id ? "Ativando..." : "Ativar ✅"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            <div className="flex items-center justify-between mt-3">
+              <button
+                disabled={metPage <= 1 || metLoading}
+                onClick={() => carregarMetodologiasPendentes(metPage - 1)}
+                className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
+              >
+                Anterior
+              </button>
+
+              <div className="text-sm text-gray-600">Página {metPage}</div>
+
+              <button
+                disabled={metLoading || metPage * metPageSize >= metTotal || metPendentes.length < metPageSize}
+                onClick={() => carregarMetodologiasPendentes(metPage + 1)}
                 className="px-3 py-1 rounded bg-gray-200 disabled:opacity-50"
               >
                 Próxima
@@ -2594,6 +2984,149 @@ async function confirmarExcluirProfessor() {
             <button onClick={() => setPlayer(null)} className="absolute -top-3 -right-3 bg-white text-gray-700 rounded-full shadow p-2">
               ✕
             </button>
+          </div>
+        </div>
+      )}
+
+      {metDetailOpen && (
+        <div className="fixed inset-0 z-[75] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMetDetailOpen(false)} />
+          <div className="relative bg-white w-full max-w-3xl rounded shadow-lg p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-lg font-semibold">Detalhes da Metodologia</h4>
+              <button onClick={() => setMetDetailOpen(false)} className="text-gray-600">✕</button>
+            </div>
+
+            {metDetailLoading && <div className="text-sm text-gray-600">Carregando…</div>}
+            {!!metDetailErr && <div className="text-sm text-red-600">{metDetailErr}</div>}
+
+            {!metDetailLoading && metDetail && (
+              <div className="space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-28 h-28 rounded bg-gray-100 overflow-hidden border flex items-center justify-center">
+                    {toAbsoluteUrl(metDetail.capaUrl) ? (
+                      <img
+                        src={toAbsoluteUrl(metDetail.capaUrl)!}
+                        className="w-full h-full object-cover"
+                        onError={(e) => ((e.currentTarget.style.display = "none"), void 0)}
+                      />
+                    ) : (
+                      <span className="text-gray-400 text-xs">sem capa</span>
+                    )}
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="font-semibold text-gray-900 text-lg">{metDetail.titulo}</div>
+                    <div className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">
+                      {metDetail.descricao || "—"}
+                    </div>
+
+                    <div className="text-xs text-gray-500 mt-2 flex flex-wrap gap-2">
+                      <span className="px-2 py-1 rounded bg-gray-50 border">
+                        Nível: <strong>{metDetail.nivel ?? "—"}</strong>
+                      </span>
+                      <span className="px-2 py-1 rounded bg-gray-50 border">
+                        Itens: <strong>{Number(metDetail._count?.itens || metDetail.itens?.length || 0)}</strong>
+                      </span>
+                      <span className="px-2 py-1 rounded bg-gray-50 border">
+                        Assinantes: <strong>{Number(metDetail._count?.assinantes || 0)}</strong>
+                      </span>
+                      <span className="px-2 py-1 rounded bg-gray-50 border">
+                        Criado em: <strong>{formatDate(metDetail.criadoEm ?? null)}</strong>
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-gray-600 mt-2">
+                      Criador:{" "}
+                      <strong>
+                        {metDetail.criadorUsuario?.nome ||
+                          metDetail.criadorUsuario?.nomeDeUsuario ||
+                          metDetail.criadorUsuario?.email ||
+                          "—"}
+                      </strong>
+                      {metDetail.criadorUsuario?.parceiro ? (
+                        <span className="ml-2 text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-800 border border-green-200">
+                          Parceiro
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t pt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-semibold">Itens da metodologia</div>
+
+                    <button
+                      className="px-3 py-2 rounded bg-green-700 hover:bg-green-800 text-white text-sm disabled:opacity-60"
+                      disabled={acaoBusyId === metDetail.id}
+                      onClick={() => {
+                        const ok = confirm(`Ativar esta metodologia?\n\n"${metDetail.titulo}"`);
+                        if (!ok) return;
+                        void setMetodologiaAtiva(metDetail.id, true).then(() => {
+                          setMetDetailOpen(false);
+                        });
+                      }}
+                    >
+                      {acaoBusyId === metDetail.id ? "Ativando..." : "Ativar ✅"}
+                    </button>
+                  </div>
+
+                  {Array.isArray(metDetail.itens) && metDetail.itens.length > 0 ? (
+                    <div className="max-h-[45vh] overflow-auto rounded border">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left">Semana</th>
+                            <th className="px-3 py-2 text-left">Ordem</th>
+                            <th className="px-3 py-2 text-left">Tipo</th>
+                            <th className="px-3 py-2 text-left">Título</th>
+                            <th className="px-3 py-2 text-left">Mídia</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {metDetail.itens.map((it) => (
+                            <tr key={it.id} className="border-t">
+                              <td className="px-3 py-2">{it.semana}</td>
+                              <td className="px-3 py-2">{it.ordem}</td>
+                              <td className="px-3 py-2">{it.tipo}</td>
+                              <td className="px-3 py-2">
+                                <div className="font-medium">{it.titulo}</div>
+                                {it.treinoProgramado ? (
+                                  <div className="text-xs text-gray-500">
+                                    Treino: {it.treinoProgramado.nome} ({it.treinoProgramado.codigo})
+                                  </div>
+                                ) : null}
+                              </td>
+                              <td className="px-3 py-2">
+                                {it.videoUrl ? (
+                                  <button className="text-blue-700 underline" onClick={() => openVideo(it.videoUrl!)}>
+                                    ver vídeo
+                                  </button>
+                                ) : it.thumbUrl ? (
+                                  <button
+                                    className="text-blue-700 underline"
+                                    onClick={() =>
+                                      setPlayer({ kind: "image", src: toAbsoluteUrl(it.thumbUrl)! })
+                                    }
+                                  >
+                                    ver thumb
+                                  </button>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500">Sem itens.</div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

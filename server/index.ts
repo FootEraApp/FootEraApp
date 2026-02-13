@@ -105,6 +105,7 @@ import configuracoesPerfilRoutes from "./routes/configuracoesPerfil.js";
 import presencaRoutes from "./routes/presenca.js";
 import metodologiasRoutes from "./routes/metodologiasRoutes.js";
 import metodologiasUploadRoutes from "./routes/uploadMetodologias.js";
+import adminMetodologiasRoutes from "./routes/adminMetodologiasRoutes.js";
 
 import { mercadoPagoWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
@@ -254,6 +255,7 @@ app.use("/api/admin", metricsRoutes);
 app.use("/api/admin/usuarios", adminUsuariosRoutes);
 app.use("/api/admin/assinantes", adminAssinantesRoutes);
 app.use("/api/admin/moderacao", authenticateToken, requireAdmin, adminModeracaoRoutes);
+app.use("/api/admin/metodologias", adminMetodologiasRoutes);
 app.use("/api/analises", analisesRoutes);
 app.use("/api/assinaturas", assinaturasRoutes);
 app.use("/api/comentarios", comentariosRoutes);
