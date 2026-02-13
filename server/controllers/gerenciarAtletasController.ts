@@ -431,7 +431,16 @@ export const gerenciarAtletasController = {
       let whereTreino: any = {};
       if (criador === "clube") whereTreino = { clubeId: entidadeId };
       else if (criador === "escolinha") whereTreino = { escolinhaId: entidadeId };
-      else whereTreino = { professorId: entidadeId };
+      else {
+        // professor: dono OU colaborador
+        whereTreino = {
+          OR: [
+            { professorId: entidadeId },
+            { criadorProfessorId: entidadeId },
+            { professores: { some: { professorId: entidadeId } } },
+          ],
+        };
+      }
 
       const treinos = await prisma.treinoProgramado.findMany({
         where: whereTreino,
@@ -645,6 +654,7 @@ export const gerenciarAtletasController = {
             OR: [
               { professorId: { in: professorIdOrUsuarioIds } },
               { criadorProfessorId: { in: professorIdOrUsuarioIds } },
+              { professores: { some: { professorId: { in: professorIdOrUsuarioIds } } } },
             ],
           });
         }
@@ -658,6 +668,7 @@ export const gerenciarAtletasController = {
             OR: [
               { professorId: { in: professorIdOrUsuarioIds } },
               { criadorProfessorId: { in: professorIdOrUsuarioIds } },
+              { professores: { some: { professorId: { in: professorIdOrUsuarioIds } } } },
             ],
           });
         }
@@ -665,7 +676,11 @@ export const gerenciarAtletasController = {
 
       if (vinculo === "professor") {
         orWhere.push({
-          OR: [{ professorId: entidadeId }, { criadorProfessorId: entidadeId }],
+          OR: [
+            { professorId: entidadeId },
+            { criadorProfessorId: entidadeId },
+            { professores: { some: { professorId: entidadeId } } },
+          ],
         });
 
         if (clubeIds.length) orWhere.push({ clubeId: { in: clubeIds } });

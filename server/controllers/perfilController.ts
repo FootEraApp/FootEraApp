@@ -1,16 +1,15 @@
 import { Request, Response } from "express";
 import { PosicaoCampo } from "@prisma/client";
-import { AuthenticatedRequest } from "server/middlewares/auth.js";
+import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { requireUsage } from "server/lib/usage.js";
 import { validarJanelaAtleta, getRangeFromQuery, PlanoAtleta } from "../utils/analyticsWindow.js";
 import { prisma } from "../prisma.js";
-
 
 type AtividadeUI = {
   id: string;
   tipo: string;         
   titulo: string;      
-  criadoEm: string;    
+  createdAt: string;    
   imagemUrl?: string | null;
   link?: string | null; 
 };
@@ -493,6 +492,13 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
     const userId = String(req.params.id || "").trim();
     if (!userId) return res.json([]);
 
+    const atividadesDb = await prisma.atividadeRecente.findMany({
+      where: { usuarioId: userId },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { id: true, tipo: true, titulo: true, createdAt: true, imagemUrl: true, link: true },
+    });
+
     const atleta = await prisma.atleta.findFirst({
       where: { usuarioId: userId },
       select: { id: true },
@@ -528,30 +534,64 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
         }),
       ]);
 
-      type AtividadeComTs = AtividadeUI & { ts: number };
+
+      type AtividadeComTs = (AtividadeUI & { ts: number });
 
       const itensComTs: AtividadeComTs[] = [
         ...eventos.map((e): AtividadeComTs => ({
           id: `ev-${e.id}`,
           tipo: "Evento",
           titulo: `Novo evento: ${e.titulo ?? "Evento"}`,
-          criadoEm: e.criadoEm.toISOString(),
+          createdAt: e.criadoEm.toISOString(),
           imagemUrl: logo ?? null,
           link: `/eventos/${e.id}`,
           ts: +e.criadoEm,
         })),
+
         ...treinos.map((t): AtividadeComTs => ({
           id: `tp-${t.id}`,
           tipo: "Treino",
           titulo: `Novo treino: ${t.nome ?? "Treino"}`,
-          criadoEm: t.createdAt.toISOString(),
+          createdAt: t.createdAt.toISOString(),
           imagemUrl: t.imagemUrl ?? logo ?? null,
           link: `/treinos`,
           ts: +t.createdAt,
         })),
+        ...atividadesDb.map((a): AtividadeComTs => ({
+          id: `ar-${a.id}`,
+          tipo: a.tipo ?? "Atividade",
+          titulo: a.titulo ?? "Atividade",
+          createdAt: a.createdAt.toISOString(),
+          imagemUrl: a.imagemUrl ?? null,
+          link: a.link ?? null,
+          ts: +a.createdAt,
+        })),
       ];
 
-      const itens: AtividadeUI[] = itensComTs
+      function dedupKey(it: any) {
+        const tipo = String(it.tipo ?? "").toLowerCase();
+
+        const link = typeof it.link === "string" ? it.link : "";
+        const m1 = link.match(/\/metodologias\/([0-9a-f-]+)/i);
+        if (m1) return `metodologia:${m1[1]}`;
+
+        const m2 = link.match(/\/eventos\/([0-9a-f-]+)/i);
+        if (m2) return `evento:${m2[1]}`;
+
+        // fallback
+        return `${tipo}:${String(it.id ?? "")}`.toLowerCase();
+      }
+
+      const seen = new Set<string>();
+
+      const dedup = itensComTs.filter((it) => {
+        const key = dedupKey(it);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      const itens: AtividadeUI[] = dedup
         .sort((a, b) => b.ts - a.ts)
         .slice(0, 10)
         .map(({ ts, ...rest }) => rest);
@@ -617,7 +657,7 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
         id: `tl-${t.id}`,
         tipo: "Treino Livre",
         titulo: t.descricao || "Treino Livre",
-        criadoEm: new Date(t.data).toISOString(),
+        createdAt: new Date(t.data).toISOString(),
         imagemUrl: t.urlEvidencia ?? null,
         link: "/treinos",
         ts: +new Date(t.data),
@@ -638,7 +678,7 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
           id: `t-${s.id}`,
           tipo: isLivre ? "Treino Livre" : "Treino",
           titulo,
-          criadoEm: new Date(dt).toISOString(),
+          createdAt: new Date(dt).toISOString(),
           imagemUrl: s.treinoAgendado?.treinoProgramado?.imagemUrl ?? null,
           link: "/treinos",
           ts: +new Date(dt),
@@ -651,7 +691,7 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
           id: `d-${s.id}`,
           tipo: "Desafio",
           titulo: s.desafio?.titulo ?? "Desafio",
-          criadoEm: new Date(dt).toISOString(),
+          createdAt: new Date(dt).toISOString(),
           imagemUrl: s.desafio?.imagemUrl ?? s.videoUrl ?? null,
           link: "/explorar",
           ts: +new Date(dt),
@@ -664,7 +704,7 @@ export const getAtividadesRecentes = async (req: AuthenticatedRequest, res: Resp
           id: String(g.id),
           tipo: g.tipo ?? "Desafio",
           titulo: g.nome ?? "Atividade",
-          criadoEm: new Date(dt).toISOString(),
+          createdAt: new Date(dt).toISOString(),
           imagemUrl: g.imagemUrl ?? null,
           link: "/explorar",
           ts: +new Date(dt),
@@ -699,43 +739,10 @@ export const getBadges = async (_req: Request, res: Response) => {
   }
 };
 
-async function calcularPontuacaoBase(usuarioId: string) {
-  const atleta = await prisma.atleta.findFirst({
-    where: { usuarioId },
-    select: { id: true },
-  });
-  if (!atleta) {
-    return { performance: 0, disciplina: 0, responsabilidade: 0, subsTreino: [], subsDesafio: [] as any[] };
-  }
-
-  const [subsTreino, subsDesafio] = await Promise.all([
-    prisma.submissaoTreino.findMany({
-      where: { atletaId: atleta.id, aprovado: true as any },
-      include: { treinoAgendado: { include: { treinoProgramado: true } } },
-      orderBy: { criadoEm: "desc" },
-    }),
-    prisma.submissaoDesafio.findMany({
-      where: { atletaId: atleta.id, aprovado: true as any },
-      include: { desafio: true },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
-
-  const pontosTreinos = subsTreino.reduce((acc: number, s: any) => {
-    const p = s?.pontosCreditados ?? s?.pontuacaoSnapshot ?? s?.treinoAgendado?.treinoProgramado?.pontuacao ?? 0;
-    return acc + (Number(p) || 0);
-  }, 0);
-
-  const pontosDesafios = subsDesafio.reduce((acc: number, s: any) => {
-    const p = s?.desafio?.pontuacao ?? 0;
-    return acc + (Number(p) || 0);
-  }, 0);
-
-  const performance = pontosTreinos + pontosDesafios;
-  const disciplina = subsTreino.length * 2;
-  const responsabilidade = subsDesafio.length * 2;
-
-  return { performance, disciplina, responsabilidade, subsTreino, subsDesafio };
+function parseDateSafe(it: any) {
+  const raw = it?.criadoEm ?? it?.createdAt ?? it?.data ?? it?.criado_em ?? null;
+  const d = raw ? new Date(raw) : null;
+  return d && !isNaN(+d) ? d : null;
 }
 
 export async function getPontuacaoPerfil(req: Request, res: Response) {
