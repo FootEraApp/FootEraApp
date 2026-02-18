@@ -7,6 +7,9 @@ import {
   Trophy,
   Shield,
   PlusCircle,
+  BookOpen,
+  FileText,
+  CameraIcon
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
@@ -82,11 +85,12 @@ type SolicitacaoItem = {
   status?: "PENDENTE" | "APROVADO" | "REJEITADO";
   criadaEm?: string;
 };
+
 type AtividadeRecente = {
   id: string;
-  tipo: "Treino" | "Desafio" | "Vídeo" | "Postagem" | "Evento";
+  tipo: "Treino" | "Desafio" | "Vídeo" | "Postagem" | "Evento" | "Metodologia";
   titulo: string;
-  criadoEm: string;
+  createdAt: string;
   imagemUrl?: string | null;
   link?: string | null;
 };
@@ -140,6 +144,27 @@ function SectionCard({
       <div className="p-4">{children}</div>
     </section>
   );
+}
+
+function parseDateSafe(it: any) {
+  const raw =
+    it?.createdAt ??
+    it?.criadoEm ??
+    it?.data ??
+    it?.created_at ??
+    null;
+
+  const d = raw ? new Date(raw) : null;
+  return d && !isNaN(+d) ? d : null;
+}
+
+function normalizeImg(raw?: string | null) {
+  if (!raw) return null;
+  const u = String(raw).trim();
+  if (!u) return null;
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
+  return `${API.BASE_URL}/${u}`;
 }
 
 function EmptyState({ text }: { text: string }) {
@@ -207,6 +232,10 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     setAtividades(null);
     setEventos(null);
   }, [isOwn, data?.escolinha?.id, data?.usuario?.id]);
+
+  useEffect(() => {
+    if (aba === "visao") setAtividades(null);
+  }, [aba]);
 
   useEffect(() => {
     if (!token) return;
@@ -315,7 +344,21 @@ export default function PerfilEscola({ idDaUrl }: Props) {
           `${API.BASE_URL}/api/perfil/${targetUserForActivities}/atividades`,
           { headers }
         );
-        if (!cancel.v) setAtividades(Array.isArray(itens) ? itens : []);
+         if (!cancel.v) {
+          const arr = Array.isArray(itens) ? itens : [];
+          const seen = new Set<string>();
+
+          const dedup = arr.filter((it: any) => {
+            const key =
+              (it.link && String(it.link).toLowerCase()) ||
+              `${it.tipo}:${it.id}`.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+
+          setAtividades(dedup);
+        }
       } catch {
         if (!cancel.v) setAtividades([]);
       }
@@ -852,6 +895,9 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             {atividades && atividades.length > 0 ? (
               <ul className="space-y-3">
                 {atividades.slice(0, 6).map((a) => {
+                  const d = parseDateSafe(a);
+                  const label = d ? d.toLocaleDateString("pt-BR") : "—";
+
                   const content = (
                     <div className="flex items-center gap-3">
                         {a.tipo === "Evento" ? (
@@ -860,13 +906,19 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                           <Activity className="w-5 h-5 text-green-700" />
                         ) : a.tipo === "Desafio" ? (
                           <Trophy className="w-5 h-5 text-green-700" />
+                        ) : a.tipo === "Metodologia" ? (
+                          <BookOpen className="w-5 h-5 text-green-700" />
+                        ) : a.tipo === "Vídeo" ? (
+                          <CameraIcon className="w-5 h-5 text-green-700" />
+                        ) : a.tipo === "Postagem" ? (
+                          <FileText className="w-5 h-5 text-green-700" />
                         ) : (
                           <Activity className="w-5 h-5 text-green-700" />
                         )}
 
                         {a.imagemUrl ? (
                           <img
-                            src={a.imagemUrl}
+                            src={normalizeImg(a.imagemUrl) ?? undefined}
                             alt={a.titulo}
                             className="w-10 h-10 rounded-lg object-cover border border-green-100"
                           />
@@ -875,7 +927,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                         <div className="text-sm">
                         <div className="font-medium text-green-900">{a.titulo}</div>
                         <div className="text-xs text-green-900/70">
-                          {new Date(a.criadoEm).toLocaleString()}
+                          {d ? d.toLocaleString("pt-BR") : "Data não informada"}
                         </div>
                       </div>
                       {a.link ? (

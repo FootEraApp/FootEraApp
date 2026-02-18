@@ -140,6 +140,7 @@ type TreinoCriado = {
   categoria?: string | null;
   nivel?: string | null;
   alunos?: number | null;
+  papel?: "Criador" | "Colaborador";
 };
 
 function SectionCard({
@@ -284,7 +285,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
     if (!rawToken) return;
 
     const h = { Authorization: `Bearer ${rawToken}` };
-    const profId = String(data?.professor?.id ?? Storage.tipoUsuarioId ?? "").trim();
+    const profId = String(data?.professor?.id ?? "").trim();
     if (!profId) return;
 
     try {
@@ -292,7 +293,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
         headers: h,
         params: {
           professorId: profId,
-          ownerTipo: "Professor", 
+          incluirColabs: "1",
           order: "desc",
           limit: 6,
         },
@@ -303,20 +304,35 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
       const parseDate = (x: any) =>
         x?.criadoEm || x?.createdAt || x?.dataCriacao || x?.created_at || new Date().toISOString();
 
-      const parsed: TreinoCriado[] = (lista ?? []).map((t: any) => ({
-        id: String(t.id),
-        nome: String(t.nome ?? t.titulo ?? "Treino"),
-        criadoEm: String(parseDate(t)),
-        categoria: t.categoria ?? null,
-        nivel: t.nivel ?? t.level ?? null,
-        alunos: t._count?.atletas ?? t._count?.agendamentos ?? t.alunosCount ?? null,
-      }));
+      setTreinosCriados(
+        (lista ?? []).map((t: any) => {
+          const criadoPorMim =
+            String(t?.professorId ?? "") === profId ||
+            String(t?.criadorProfessorId ?? t?.criadorProfessor?.id ?? "") === profId;
 
-      setTreinosCriados(parsed);
+          const souColab =
+            Array.isArray(t?.professores) &&
+            t.professores.some((p: any) => String(p?.professorId ?? p?.professor?.id ?? "") === profId);
+
+          const papel: "Criador" | "Colaborador" =
+            criadoPorMim ? "Criador" : souColab ? "Colaborador" : "Colaborador";
+
+          return {
+            id: String(t.id),
+            nome: String(t.nome ?? t.titulo ?? "Treino"),
+            criadoEm: String(parseDate(t)),
+            categoria: t.categoria ?? null,
+            nivel: t.nivel ?? t.level ?? null,
+            alunos: t._count?.atletas ?? t._count?.agendamentos ?? t.alunosCount ?? null,
+            papel,
+          };
+        })
+      );
+
     } catch {
       setTreinosCriados([]);
     }
-  }, [rawToken, data?.professor?.id, headers]);
+  }, [rawToken, data?.professor?.id]);
 
   const reloadTurmas = useCallback(async () => {
     if (!rawToken || !professorId) return;
@@ -968,7 +984,17 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
                   <li key={t.id} className="flex items-center gap-3">
                     <CalendarClock className="w-5 h-5 text-green-700" />
                     <div className="text-sm">
-                      <div className="font-medium text-green-900">{t.nome}</div>
+                      <div className="font-medium text-green-900">
+                        {t.nome}{" "}
+                        <span
+                          className={`text-xs ${
+                            t.papel === "Criador" ? "text-green-700" : "text-slate-600"
+                          }`}
+                        >
+                          ({t.papel})
+                        </span>
+                      </div>
+
                       <div className="text-xs text-green-900/70">
                         {new Date(t.criadoEm).toLocaleString()}
                         {t.categoria ? ` • Cat. ${t.categoria}` : ""}

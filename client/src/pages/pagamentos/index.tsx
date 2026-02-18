@@ -83,6 +83,8 @@ type MetodologiaAvulsa = {
   videoCount: number;
   treinoCount: number;
   precoAnual: number;
+  pontosTotal?: number | null;
+  publicoAlvo?: "ATLETAS" | "PROFISSIONAIS" | "AMBOS" | string | null;
 };
 
 function PagamentoModal({
@@ -466,7 +468,7 @@ function normalizeTipo(raw?: unknown) {
   return String(raw ?? "").trim().toLowerCase();
 }
 
-type MainTier = "PRO" | "LEARNING_1" | "LEARNING_3" | "METODO_1"; // METODO_1 só pra atleta
+type MainTier = "PRO" | "LEARNING_1" | "LEARNING_3"; 
 
 function planId(role: RoleUI, tier: MainTier) {
   const r =
@@ -513,13 +515,6 @@ const FALLBACK_PLANS: Record<string, Plan> = {
     monthly: 64.9,
     annual: null,
     benefits: ["Tudo do Atleta Pro", "Escolher até 3 metodologias por mês"],
-  },
-  ATLETA_METODO_1: {
-    id: "ATLETA_METODO_1",
-    title: "1 Metodologia (mensal)",
-    monthly: 29.9,
-    annual: null,
-    benefits: ["Escolher 1 metodologia por mês", "Sem benefícios do Pro"],
   },
 
   // ✅ PROFESSOR
@@ -634,6 +629,9 @@ export default function PagamentosPage() {
   const [buscaMetod, setBuscaMetod] = useState("");
   const [filtroNivelMetod, setFiltroNivelMetod] = useState<"TODOS" | "Base" | "Avancado" | "Performance">("TODOS");
   const [filtroConteudoMetod, setFiltroConteudoMetod] = useState<"TODOS" | "VIDEOS" | "TREINOS" | "AMBOS">("TODOS");
+  const [filtroPublicoMetod, setFiltroPublicoMetod] = useState<
+    "TODOS" | "ATLETAS" | "PROFISSIONAIS" | "AMBOS"
+  >("TODOS");
 
   useEffect(() => {
     if (hadPersistRef.current) return;
@@ -714,7 +712,6 @@ export default function PagamentosPage() {
         planId("Atleta", "PRO"),
         planId("Atleta", "LEARNING_1"),
         planId("Atleta", "LEARNING_3"),
-        planId("Atleta", "METODO_1"),
       ];
     })();
 
@@ -1025,15 +1022,37 @@ export default function PagamentosPage() {
         if (String(m.nivel) !== filtroNivelMetod) return false;
       }
 
+      const v = Number(m.videoCount ?? 0);
+      const t = Number(m.treinoCount ?? 0);
+
+      // ✅ CONTEÚDO (exclusivo do jeito que você pediu)
       if (filtroConteudoMetod !== "TODOS") {
-        if (filtroConteudoMetod === "VIDEOS" && (m.videoCount ?? 0) <= 0) return false;
-        if (filtroConteudoMetod === "TREINOS" && (m.treinoCount ?? 0) <= 0) return false;
-        if (filtroConteudoMetod === "AMBOS" && !((m.videoCount ?? 0) > 0 && (m.treinoCount ?? 0) > 0)) return false;
+        if (filtroConteudoMetod === "VIDEOS") {
+          if (!(v > 0 && t === 0)) return false;
+        }
+        if (filtroConteudoMetod === "TREINOS") {
+          if (!(t > 0 && v === 0)) return false;
+        }
+        if (filtroConteudoMetod === "AMBOS") {
+          if (!(v > 0 && t > 0)) return false;
+        }
+      }
+
+      // ✅ PÚBLICO
+      if (filtroPublicoMetod !== "TODOS") {
+        const pub = String(m.publicoAlvo ?? "").toUpperCase(); // ATLETAS | PROFISSIONAIS | AMBOS
+        if (pub !== filtroPublicoMetod) return false;
       }
 
       return true;
     });
-  }, [metodologiasAvulsas, buscaMetod, filtroNivelMetod, filtroConteudoMetod]);
+  }, [
+    metodologiasAvulsas,
+    buscaMetod,
+    filtroNivelMetod,
+    filtroConteudoMetod,
+    filtroPublicoMetod, // ✅ IMPORTANTE
+  ]);
 
   const checkoutError = useMemo(() => {
     if (bloquearCheckoutPorTrial) return "Trial ativo (aguarde faltar 7 dias).";
@@ -1673,7 +1692,6 @@ export default function PagamentosPage() {
             opts.push({ id: planId("Atleta", "PRO"), show: true });
             opts.push({ id: planId("Atleta", "LEARNING_1"), show: true });
             opts.push({ id: planId("Atleta", "LEARNING_3"), show: true });
-            opts.push({ id: planId("Atleta", "METODO_1"), show: true });
           }
 
           return (
@@ -1719,8 +1737,7 @@ export default function PagamentosPage() {
           Pague <b>por metodologia</b>. Você escolhe uma ou mais e paga um valor anual por cada uma.
         </p>
 
-        {/* filtros (agora eles funcionam) */}
-        <div className="grid gap-2 md:grid-cols-3 mb-3">
+        <div className="grid gap-2 md:grid-cols-4 mb-3">
           <input
             value={buscaMetod}
             onChange={(e) => setBuscaMetod(e.target.value)}
@@ -1749,6 +1766,18 @@ export default function PagamentosPage() {
             <option value="TREINOS">Só treinos</option>
             <option value="AMBOS">Vídeos + Treinos</option>
           </select>
+
+          {/* ✅ NOVO: Público */}
+          <select
+            value={filtroPublicoMetod}
+            onChange={(e) => setFiltroPublicoMetod(e.target.value as any)}
+            className="border rounded-md px-3 py-2"
+          >
+            <option value="TODOS">Público: Todos</option>
+            <option value="ATLETAS">Atletas</option>
+            <option value="PROFISSIONAIS">Profissionais</option>
+            <option value="AMBOS">Ambos</option>
+          </select>
         </div>
 
         <div className="grid md:grid-cols-2 gap-3">
@@ -1769,11 +1798,24 @@ export default function PagamentosPage() {
                   {m.descricao ? <div className="text-sm text-gray-600">{m.descricao}</div> : null}
 
                   <div className="mt-2 text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-1">
+                    <span>Pontos: <b>{m.pontosTotal ?? 0}</b></span>
                     <span>Nível: <b>{m.nivel}</b></span>
                     <span>Semanas: <b>{m.totalSemanas ?? 0}</b></span>
                     <span>Vídeos: <b>{m.videoCount ?? 0}</b></span>
                     <span>Treinos: <b>{m.treinoCount ?? 0}</b></span>
                     <span>Itens: <b>{m._count?.itens ?? 0}</b></span>
+                    <span>
+                      Público:{" "}
+                      <b>
+                        {String(m.publicoAlvo ?? "—").toUpperCase() === "ATLETAS"
+                          ? "Atletas"
+                          : String(m.publicoAlvo ?? "").toUpperCase() === "PROFISSIONAIS"
+                          ? "Profissionais"
+                          : String(m.publicoAlvo ?? "").toUpperCase() === "AMBOS"
+                          ? "Ambos"
+                          : "Todos"}
+                      </b>
+                    </span>
                   </div>
 
                   <div className="text-sm text-gray-800 mt-2">
