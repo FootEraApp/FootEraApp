@@ -42,27 +42,18 @@ type TreinoProgramadoPicker = {
 };
 
 type MetItemUI = {
-  id: string; // local
+  id: string;
   tipo: ItemTipo;
   titulo: string;
   descricao?: string;
-
-  // VIDEO
   videoUrl?: string;
   thumbUrl?: string;
-
-  // ✅ novo: arquivo selecionado (ainda não enviado)
   videoFile?: File | null;
-
-  // ✅ novo: preview local (objectURL)
   videoPreviewUrl?: string | null;
-
-  // TREINO
+  duracaoMin?: number | null; // ✅ ADD
   treinoProgramadoId?: string;
   treinoNome?: string;
   treinoPontuacao?: number;
-
-  // pontuação exibida no item
   pontos: number;
 };
 
@@ -81,30 +72,24 @@ function getToken() {
   );
 }
 
-async function uploadVideoMetodologia(file: File, meta?: { titulo?: string; descricao?: string }) {
-  const token = getToken();
-  if (!token) throw new Error("Sem token.");
+async function uploadVideoMetodologia(file: File) {
+  const form = new FormData();
+  form.append("video", file);
 
-  const fd = new FormData();
-  fd.append("video", file); // ✅ tem que ser "video"
-  if (meta?.titulo) fd.append("titulo", meta.titulo);
-  if (meta?.descricao) fd.append("descricao", meta.descricao);
-
-  // ✅ ajuste a URL pra bater com sua rota real no backend
-  const r = await fetch(`${API.BASE_URL}/api/upload/metodologias/video`, {
+  const r = await fetch(`${API.BASE_URL}/api/metodologias/upload/video`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` }, // ⚠️ não setar Content-Type no FormData
-    body: fd,
+    headers: { Authorization: `Bearer ${Storage.token}` },
+    body: form,
   });
 
-  const js = await r.json().catch(() => null);
-  if (!r.ok) throw new Error(js?.message || js?.error || "Falha no upload do vídeo.");
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j?.message || "Falha ao subir vídeo");
 
-  // backend retorna { relativeUrl, url, ... }
   return {
-    relativeUrl: String(js?.relativeUrl || ""),
-    url: String(js?.url || ""),
-    filename: String(js?.filename || ""),
+    relativeUrl: String(j?.relativeUrl || j?.url || ""),
+    url: String(j?.url || j?.relativeUrl || ""),
+    filename: String(j?.filename || ""),
+    thumbUrl: String(j?.thumbUrl || j?.thumbRelativeUrl || ""),
   };
 }
 
@@ -144,6 +129,7 @@ async function uploadCapaMetodologia(file: File) {
     relativeUrl: String(js?.relativeUrl || ""),
     url: String(js?.url || ""),
     filename: String(js?.filename || ""),
+    thumbUrl: String(js?.thumbUrl || js?.thumbRelativeUrl || ""),
   };
 }
 
@@ -196,6 +182,24 @@ function uid(prefix = "id") {
 function pontosItemFromTipo(tipo: ItemTipo, treinoPontuacao?: number) {
   if (tipo === "VIDEO") return 15;
   return typeof treinoPontuacao === "number" ? treinoPontuacao : 0;
+}
+
+function normalizeMediaUrl(raw?: string | null) {
+  if (!raw) return "";
+  const u = String(raw).trim();
+  if (!u) return "";
+
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
+  return `${API.BASE_URL}/${u}`;
+}
+
+function guessThumbFromVideo(videoUrl?: string | null) {
+  const cleaned = normalizeMediaUrl(videoUrl);
+  const file = cleaned.split("/").pop() || "";
+  const base = file.replace(/\.[a-z0-9]+$/i, "");
+  // ✅ PADRÃO ÚNICO (ver seção das pastas): /uploads/thumbs/metodologias/...
+  return base ? `/uploads/thumbs/metodologias/${base}.jpg` : "";
 }
 
 export default function CriarMetodologia() {
@@ -263,23 +267,19 @@ export default function CriarMetodologia() {
               : typeof it.pontos === "number" && tipo === "TREINO"
               ? it.pontos
               : 0;
-
+          const videoUrl = (it.videoUrl ?? "") as string;
           const ui: MetItemUI = {
             id: uid("item"), // ✅ id local do React
             tipo,
             titulo: it.titulo ?? (tipo === "TREINO" ? it.treinoProgramado?.nome ?? "Treino" : "Vídeo"),
             descricao: it.descricao ?? "",
-
-            videoUrl: it.videoUrl ?? "",
-            thumbUrl: it.thumbUrl ?? "",
-
+            thumbUrl: (it.thumbUrl ?? "") || guessThumbFromVideo(videoUrl),
+            videoUrl,
             videoFile: null,
             videoPreviewUrl: null,
-
             treinoProgramadoId: it.treinoProgramadoId ?? undefined,
             treinoNome: it.treinoProgramado?.nome ?? undefined,
             treinoPontuacao,
-
             pontos:
               typeof it.pontos === "number"
                 ? it.pontos
@@ -477,13 +477,18 @@ export default function CriarMetodologia() {
 
   function normalizeVideoUrl(raw?: string | null) {
     if (!raw) return null;
+
     const u = String(raw).trim();
     if (!u) return null;
 
-    // ✅ se vier relativo tipo "/assets/..." ou "/uploads/..."
+    // absoluta
+    if (u.startsWith("http://") || u.startsWith("https://")) return u;
+
+    // relativo com / (ex: "/assets/...")
     if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
 
-    return u;
+    // relativo sem / (ex: "assets/..." ou "uploads/...")
+    return `${API.BASE_URL}/${u}`;
   }
 
   function openVideo(raw?: string | null) {
@@ -673,8 +678,8 @@ export default function CriarMetodologia() {
       const dup = await checarTituloDuplicado(token, titulo, metodologiaId);
       if (dup) throw new Error("Já existe uma metodologia com esse nome. Escolha outro nome.");
 
-      // ✅ cria map ANTES (vai usar na hora de montar flatItems)
       const videoUrlByLocalId: Record<string, string> = {};
+      const thumbUrlByLocalId: Record<string, string> = {}; // ✅ ADICIONE
 
       // =======================
       // 0) Upload da capa (se escolheu arquivo)
@@ -704,26 +709,38 @@ export default function CriarMetodologia() {
           if (it.videoFile) {
             setUploadingByItem((prev) => ({ ...prev, [it.id]: true }));
             try {
-              const up = await uploadVideoMetodologia(it.videoFile, {
-                titulo: it.titulo,
-                descricao: it.descricao || "",
-              });
-
+              const up = await uploadVideoMetodologia(it.videoFile);
               const finalUrl = up.relativeUrl || up.url;
-              videoUrlByLocalId[it.id] = finalUrl;
+              const finalThumb =
+                (up.thumbUrl && up.thumbUrl.trim())
+                  ? up.thumbUrl.trim()
+                  : (it.thumbUrl?.trim() ? it.thumbUrl.trim() : guessThumbFromVideo(finalUrl));
 
-              // atualiza UI (opcional mas bom)
+              videoUrlByLocalId[it.id] = finalUrl;
+              if (finalThumb) thumbUrlByLocalId[it.id] = finalThumb;
+
+              // ✅ atualiza o item corretamente (semana + item)
               updateItem(s.id, it.id, {
                 videoUrl: finalUrl,
+                thumbUrl: finalThumb || "",
                 videoFile: null,
-                // videoPreviewUrl: null, // se quiser limpar preview também
               });
             } finally {
               setUploadingByItem((prev) => ({ ...prev, [it.id]: false }));
             }
           } else if (it.videoUrl?.trim()) {
-            // se já existe url no item, guarda também
-            videoUrlByLocalId[it.id] = it.videoUrl.trim();
+            const finalUrl = it.videoUrl.trim();
+            videoUrlByLocalId[it.id] = finalUrl;
+
+            const finalThumb =
+              it.thumbUrl?.trim() ? it.thumbUrl.trim() : guessThumbFromVideo(finalUrl);
+
+            if (finalThumb) thumbUrlByLocalId[it.id] = finalThumb;
+
+            // opcional: sincroniza UI também
+            if (!it.thumbUrl?.trim() && finalThumb) {
+              updateItem(s.id, it.id, { thumbUrl: finalThumb });
+            }
           }
         }
       }
@@ -810,11 +827,8 @@ export default function CriarMetodologia() {
             titulo: it.titulo.trim(),
             descricao: (it.descricao || "").trim() || null,
             tipo: it.tipo,
-            videoUrl:
-              it.tipo === "VIDEO"
-                ? (videoUrlByLocalId[it.id] || null)
-                : null,
-            thumbUrl: it.tipo === "VIDEO" ? it.thumbUrl?.trim() || null : null,
+            videoUrl: it.tipo === "VIDEO" ? (videoUrlByLocalId[it.id] || null) : null,
+            thumbUrl: it.tipo === "VIDEO" ? (thumbUrlByLocalId[it.id] || null) : null,
             treinoProgramadoId: it.tipo === "TREINO" ? it.treinoProgramadoId || null : null,
             pontos: it.pontos ?? null,
             publicado: true,
@@ -1460,47 +1474,38 @@ export default function CriarMetodologia() {
                             </div>
 
                             <div className="text-[11px] text-gray-500 mt-1">
-                              Aceita <b>mp4/webm/mov</b>. O backend salva em <b>/assets/videos/metodologias</b>.
+                              Aceita <b>mp4/webm/mov</b>. O backend salva em <b>/assets/metodologias/videos</b>.
                             </div>
                           </div>
 
-                          {/* Preview / botão play */}
+                          {/* Preview / player (CREATE e EDIT) */}
                           <div className="lg:col-span-2">
-                            {it.videoPreviewUrl ? (
-                              <div className="mt-2 rounded-xl border bg-black overflow-hidden">
-                                <video className="w-full aspect-video" src={it.videoPreviewUrl} controls />
-                              </div>
-                            ) : it.videoUrl?.trim() ? (
-                              <div className="mt-2 flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => openVideo(it.videoUrl!)}
-                                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm font-semibold"
-                                >
-                                  <Play className="w-4 h-4" />
-                                  Ver vídeo
-                                </button>
+                            {(() => {
+                              const srcPreview =
+                                it.videoPreviewUrl ||
+                                (it.videoUrl?.trim() ? normalizeMediaUrl(it.videoUrl) : "");
 
-                                <div className="text-xs text-gray-500 truncate">{it.videoUrl}</div>
-                              </div>
-                            ) : (
-                              <div className="text-xs text-gray-400 mt-2">
-                                Nenhum vídeo selecionado ainda.
-                              </div>
-                            )}
+                              return srcPreview ? (
+                                <div className="mt-2 rounded-xl border bg-black overflow-hidden">
+                                  <video
+                                    className="w-full aspect-video"
+                                    src={srcPreview}
+                                    controls
+                                    onLoadedMetadata={(e) => {
+                                      const dur = (e.currentTarget.duration || 0) / 60;
+                                      if (Number.isFinite(dur) && dur > 0) {
+                                        updateItem(semanaAtiva.id, it.id, { duracaoMin: Math.round(dur) });
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="text-xs text-gray-400 mt-2">Nenhum vídeo selecionado ainda.</div>
+                              );
+                            })()}
                           </div>
-
-
-                          {/* Thumb opcional: se você ainda quiser manter, deixe. Se não, remova. */}
-                          {/* <div className="lg:col-span-2">
-                            <label className="text-xs font-semibold text-gray-700">
-                              Thumbnail (URL) (opcional)
-                            </label>
-                            <input ... />
-                          </div> */}
                         </>
                       ) : null}
-
 
                       {/* ✅ TREINO não tem select dentro do card mais */}
                       {it.tipo === "TREINO" ? (

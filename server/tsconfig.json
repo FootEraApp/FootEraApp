@@ -10,8 +10,7 @@
       "server/*": ["./*"],
       "@shared/*": ["shared/*"]
     },
-    "typeRoots": ["./node_modules/@types"],
-    "types": ["node", "express"],
+    "typeRoots": ["../node_modules/@types", "./node_modules/@types"],
     "outDir": "dist",
     "rootDir": ".",
     "esModuleInterop": true,
