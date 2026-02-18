@@ -384,7 +384,8 @@ export default function TreinosInstrutores({
   const [erroMetodologias, setErroMetodologias] = useState<string | null>(null);
   // filtros selecionados (chips)
   const [filtrosSelecionados, setFiltrosSelecionados] = useState<string[]>([]);
-  const [filtroConteudo, setFiltroConteudo] = useState<"AMBOS" | "VIDEOS" | "TREINOS">("AMBOS");
+  type FiltroConteudo = "TODOS" | "VIDEOS_TREINOS" | "VIDEOS" | "TREINOS";
+  const [filtroConteudo, setFiltroConteudo] = useState<FiltroConteudo>("TODOS");
   const [filtroNivel, setFiltroNivel] = useState<"TODOS" | "Base" | "Avancado" | "Performance">("TODOS");
   const OPCOES_FILTRO = [
     "Goleiros",
@@ -1496,12 +1497,19 @@ async function salvarProgressoSessao(sessaoId: string) {
 
     const run = async () => {
       try {
-        const url =
-          `${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis` +
-          `?vinculo=${encodeURIComponent(vinculo)}` +
-          `&id=${encodeURIComponent(idParaEnviar)}` +
-          (entidadeIdReal ? `&tipoUsuarioId=${encodeURIComponent(entidadeIdReal)}` : "") +
-          `&debug=1`;
+        const isProfessor = vinculo === "professor";
+
+        const url = isProfessor
+          ? `${API.BASE_URL}/api/treinosprogramados` +
+            `?professorId=${encodeURIComponent(idParaEnviar)}` +
+            `&incluirColabs=1` +
+            `&order=desc` +
+            `&limit=200`
+          : `${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis` +
+            `?vinculo=${encodeURIComponent(vinculo)}` +
+            `&id=${encodeURIComponent(idParaEnviar)}` +
+            (entidadeIdReal ? `&tipoUsuarioId=${encodeURIComponent(entidadeIdReal)}` : "") +
+            `&debug=1`;
 
         const r = await fetch(url, { headers });
 
@@ -2328,6 +2336,21 @@ async function salvarProgressoSessao(sessaoId: string) {
 
   const renderTreinoCard = (treino: TreinoProgramado) => {
     const podeEditar = isTreinoMeuDeVerdade(treino, usuario);
+    const meuId = String(usuario?.tipoUsuarioId || usuario?.usuarioId || "").trim();
+    const souDono =
+      (String(usuario?.tipo || "").toLowerCase() === "professor" && String(treino.professorId || "").trim() === meuId) ||
+      (String(usuario?.tipo || "").toLowerCase() === "clube" && String(treino.clubeId || "").trim() === meuId) ||
+      ((String(usuario?.tipo || "").toLowerCase() === "escolinha" || String(usuario?.tipo || "").toLowerCase() === "escola") &&
+        String(treino.escolinhaId || "").trim() === meuId);
+
+    const souColaborador =
+      Array.isArray(treino.professoresIds) &&
+      treino.professoresIds.map(String).some((id) => String(id).trim() === meuId);
+
+    const papelNoTreino =
+      String(usuario?.tipo || "").toLowerCase() === "professor"
+        ? (souColaborador && !souDono ? "Colaborador" : (souDono ? "Criador" : null))
+        : (souDono ? "Criador" : null);
 
     return (
       <div key={treino.id} className="bg-white p-4 rounded-xl shadow-sm border">
@@ -2340,7 +2363,13 @@ async function salvarProgressoSessao(sessaoId: string) {
             {treino.nome}
           </h4>
 
-          <div className="flex flex-col items-end">
+          <div className="flex flex-col items-end gap-1">
+            {papelNoTreino && (
+              <span className="px-2 py-0.5 rounded-full bg-gray-50 border border-gray-200 text-gray-700 text-xs">
+                {papelNoTreino}
+              </span>
+            )}
+
             {typeof treino.pontuacao === "number" && (
               <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs">
                 +{treino.pontuacao} pts
@@ -2675,12 +2704,13 @@ async function salvarProgressoSessao(sessaoId: string) {
 
                 <select
                   value={filtroConteudo}
-                  onChange={(e) => setFiltroConteudo(e.target.value as any)}
-                  className="px-3 py-2 rounded-xl border bg-white text-sm"
+                  onChange={(e) => setFiltroConteudo(e.target.value as FiltroConteudo)}
+                  className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
                 >
-                  <option value="AMBOS">Vídeos + Treinos</option>
-                  <option value="VIDEOS">Só Vídeos</option>
-                  <option value="TREINOS">Só Treinos</option>
+                  <option value="TODOS">Todos</option>
+                  <option value="VIDEOS_TREINOS">Vídeos + Treinos</option>
+                  <option value="VIDEOS">Vídeos</option>
+                  <option value="TREINOS">Treinos</option>
                 </select>
 
                 <select
@@ -2777,13 +2807,18 @@ async function salvarProgressoSessao(sessaoId: string) {
                         if (n !== alvo) return false;
                       }
 
-                      // conteúdo (Vídeos / Treinos)
-                      if (filtroConteudo === "VIDEOS") {
-                        if ((m.videoCount ?? 0) <= 0) return false;
-                      }
-                      if (filtroConteudo === "TREINOS") {
-                        if ((m.treinoCount ?? 0) <= 0) return false;
-                      }
+                      const vc = Number(m.videoCount ?? 0);
+                      const tc = Number(m.treinoCount ?? 0);
+
+                      if (filtroConteudo === "TODOS") return true;
+                      // "Vídeos + Treinos" = tem os dois
+                      if (filtroConteudo === "VIDEOS_TREINOS") return vc > 0 && tc > 0;
+                      // "Vídeos" = só vídeos (tem vídeo e NÃO tem treino)
+                      if (filtroConteudo === "VIDEOS") return vc > 0 && tc === 0;
+                      // "Treinos" = só treinos (tem treino e NÃO tem vídeo)
+                      if (filtroConteudo === "TREINOS") return tc > 0 && vc === 0;
+
+                      return true;
 
                       // filtros do dropdown (tags)
                       if (filtrosSelecionados.length > 0) {
@@ -2948,7 +2983,23 @@ async function salvarProgressoSessao(sessaoId: string) {
                               onClick={() => navigate(`/treinos/unico?programadoId=${t.id}`)}
                               title="Abrir detalhes do treino"
                             >
-                              {t.nome}
+                               <span>{t.nome}</span>
+
+                                {(() => {
+                                  const meuProfId = String(usuario?.tipoUsuarioId ?? "").trim();
+                                  const souCriador = String(t.professorId ?? "").trim() === meuProfId;
+
+                                  const souColab =
+                                    !souCriador &&
+                                    (t.professoresIds || []).map(String).includes(meuProfId);
+
+                                  <span className="text-xs font-medium text-green-800/80">
+                                    {souCriador ? "(Criador)" : souColab ? "(Colaborador)" : ""}
+                                  </span>
+
+                                  return null;
+                                })()}
+
                             </h4>
 
                             <div className="flex flex-col items-end">
