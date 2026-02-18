@@ -452,19 +452,29 @@ export default function MetodologiaUnicaPage() {
 
             <div className="mt-3 space-y-3">
               {w.itens.map((it) => {
-                const isVideo = String(it.tipo).toUpperCase() === "VIDEO";
-                const isTreino = String(it.tipo).toUpperCase() === "TREINO";
                 const concluido = concluIds.has(it.id);
                 const locked = bloquearAcao();
-                const thumb =
-                    (isVideo ? (normalizeMediaUrl(it.thumbUrl) || thumbFromVideo[it.id] || null) : null) ||
-                    (isTreino ? normalizeMediaUrl(it.treinoProgramado?.imagemUrl) : null) ||
-                    AVATAR_FALLBACK;
+                const isVideo = String(it.tipo).toUpperCase() === "VIDEO";
+                const isTreino = String(it.tipo).toUpperCase() === "TREINO";
+                const capaFallback = data?.capaUrl ? normalizeMediaUrl(data.capaUrl) : null;
+
+                const thumbRaw = isVideo
+                  ? (it.thumbUrl || thumbFromVideo[it.id] || capaFallback)
+                  : isTreino
+                    ? (
+                        it.treinoProgramado?.imagemUrl ||
+                        (it.treinoProgramado as any)?.capaUrl ||
+                        (it.treinoProgramado as any)?.thumbUrl ||
+                        capaFallback
+                      )
+                    : capaFallback;
+
+                const imgSrc = normalizeMediaUrl(thumbRaw) || AVATAR_FALLBACK;
 
                 return (
                   <div key={it.id} className="rounded-xl border p-3 flex items-center gap-3">
                     <img
-                      src={thumb || AVATAR_FALLBACK}
+                      src={imgSrc}
                       onError={(e) => {
                         e.currentTarget.onerror = null;
                         e.currentTarget.src = AVATAR_FALLBACK;

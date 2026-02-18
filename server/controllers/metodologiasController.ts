@@ -502,25 +502,6 @@ export async function listMetodologiasVisiveis(req: Request, res: Response) {
   }
 }
 
-/** =========================
- * POST /api/metodologias/:metodologiaId/itens
- * body:
- *  - { itens: [...] }  OU  { ...item }
- *
- * Item aceito (flexível):
- *  {
- *    semana: number,
- *    ordem?: number,
- *    tipo: "VIDEO" | "TREINO" | "TEXTO",
- *    titulo?: string,
- *    descricao?: string,
- *    videoUrl?: string,
- *    treinoProgramadoId?: string,
- *    pontos?: number,
- *    duracaoMin?: number
- *  }
- * ========================= */
-
 type MetodologiaItemPreparado = {
   metodologiaId: string;
   semana: number;
@@ -529,6 +510,7 @@ type MetodologiaItemPreparado = {
   titulo: string;
   descricao: string | null;
   videoUrl: string | null;
+  thumbUrl: string | null;
   treinoProgramadoId: string | null;
   pontos: number | null;
   duracaoMin: number | null;
@@ -565,7 +547,6 @@ export async function createMetodologiaItens(req: Request, res: Response) {
 
     // 3) Valida e prepara itens
     const itensPreparados: MetodologiaItemPreparado[] = [];
-
 
     for (let i = 0; i < itensEntrada.length; i++) {
       const raw = itensEntrada[i] || {};
@@ -617,6 +598,11 @@ export async function createMetodologiaItens(req: Request, res: Response) {
           ? raw.videoUrl.trim()
           : null;
 
+      const thumbUrl =
+        typeof raw.thumbUrl === "string" && raw.thumbUrl.trim()
+          ? raw.thumbUrl.trim()
+          : null;
+
       // Regras básicas por tipo (pode relaxar se quiser)
       if (tipo === "VIDEO" && !videoUrl) {
         return res.status(400).json({ message: `Item #${i + 1}: tipo VIDEO exige 'videoUrl'.` });
@@ -639,6 +625,7 @@ export async function createMetodologiaItens(req: Request, res: Response) {
 
         descricao: typeof raw.descricao === "string" ? raw.descricao.trim() : null,
         videoUrl,
+        thumbUrl,
         treinoProgramadoId,
         pontos,
         duracaoMin:
@@ -674,6 +661,7 @@ export async function createMetodologiaItens(req: Request, res: Response) {
             titulo: item.titulo,
             descricao: item.descricao,
             videoUrl: item.videoUrl,
+            thumbUrl: item.thumbUrl,
             treinoProgramadoId: item.treinoProgramadoId,
             pontos: item.pontos,
             duracaoMin:
@@ -780,6 +768,33 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
 
     const podeAssinarAgora = !hasAccess && limite > 0 && usadasNoMes < limite;
 
+    const r: any = req;
+    const tipoUsuario = String(r?.user?.tipo || "").toUpperCase();
+    const isAdmin = tipoUsuario === "ADMIN" || tipoUsuario === "ADMINISTRADOR";
+
+    const isOwner = metodologia.criadorUsuarioId === userId;
+    const podeVerVideo = hasAccess || isOwner || isAdmin;
+
+    const itens = metodologia.itens.map((it) => ({
+      id: it.id,
+      semana: it.semana,
+      ordem: it.ordem,
+      tipo: it.tipo,
+      titulo: it.titulo,
+      descricao: it.descricao,
+      pontos: it.pontos,
+      // ✅ thumb e duração sempre (preview)
+      thumbUrl: it.thumbUrl,
+      duracaoMin: it.duracaoMin,
+      // ✅ vídeo só se tiver acesso OU for criador/admin
+      videoUrl: podeVerVideo ? it.videoUrl : null,
+      treinoProgramadoId: it.treinoProgramadoId,
+      treinoProgramado: it.treinoProgramado
+        ? { id: it.treinoProgramado.id, nome: it.treinoProgramado.nome, imagemUrl: it.treinoProgramado.imagemUrl }
+        : null,
+      publicado: it.publicado,
+    }));
+
     let motivoBloqueio: string | null = null;
 
     if (hasAccess) {
@@ -807,23 +822,7 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
       pontosTotal,
       criadorNome: metodologia.criadorUsuario?.nome ?? null,
       // ✅ aqui seu front usa direto data.itens
-      itens: metodologia.itens.map((it) => ({
-        id: it.id,
-        semana: it.semana,
-        ordem: it.ordem,
-        titulo: it.titulo,
-        descricao: it.descricao,
-        tipo: it.tipo,
-        pontos: it.pontos ?? 0,
-        // se não assinado: tranca links
-        videoUrl: hasAccess ? it.videoUrl : null,
-        thumbUrl: hasAccess ? (it as any).thumbUrl ?? null : null,
-        duracaoMin: it.duracaoMin ?? null,
-        treinoProgramadoId: hasAccess ? it.treinoProgramadoId : null,
-        treinoProgramado: hasAccess ? (it as any).treinoProgramado ?? null : null,
-        publicado: (it as any).publicado ?? true,
-      })),
-
+      itens: itens,
       viewer: {
         // compat (se quiser manter)
         isAssinante: hasAccess,
