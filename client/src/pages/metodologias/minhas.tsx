@@ -6,6 +6,7 @@ import {
   Loader2,
   Trash2,
   Pencil,
+  Star as StarIcon,
 } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API } from "../../config.js";
@@ -26,6 +27,7 @@ type Metodologia = {
   totalReviews?: number;
   pontosTotal?: number;
   assinada?: boolean;
+  ativo?: boolean;
   criadorUsuario?: { id: string; nome: string; foto?: string | null; parceiro?: boolean };
 };
 
@@ -41,10 +43,62 @@ function getToken() {
 function normalizeImgUrl(raw?: string | null) {
   if (!raw) return null;
   const u = String(raw).trim();
-  if (!u) return null;
+  if (!u || u === "null" || u === "undefined") return null;
+
   if (u.startsWith("http://") || u.startsWith("https://")) return u;
+
+  // ✅ assets locais do frontend
+  if (u.startsWith("/assets/")) return u;
+
+  // ✅ uploads/api
+  if (u.startsWith("/uploads/") || u.startsWith("/exercicios/")) return `${API.BASE_URL}${u}`;
+
+  // ✅ qualquer outro caminho com "/"
   if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
-  return `${API.BASE_URL}/${u}`; // <-- cobre "uploads/..." sem barra
+
+  // ✅ "uploads/..." sem barra
+  return `${API.BASE_URL}/${u}`;
+}
+
+function StarsRating({ value }: { value: number }) {
+  const v = Math.max(0, Math.min(5, Number(value || 0)));
+  const half = Math.round(v * 2) / 2; // 0.5 steps
+  const full = Math.floor(half);
+  const hasHalf = half - full === 0.5;
+
+  return (
+    <div className="flex items-center">
+      {Array.from({ length: 5 }).map((_, i) => {
+        const idx = i + 1;
+
+        if (idx <= full) {
+          return (
+            <StarIcon
+              key={i}
+              className="w-4 h-4 text-amber-500"
+              fill="currentColor"
+            />
+          );
+        }
+
+        if (idx === full + 1 && hasHalf) {
+          return (
+            <span key={i} className="relative inline-block w-4 h-4">
+              <StarIcon
+                className="absolute inset-0 w-4 h-4 text-gray-300"
+                fill="currentColor"
+              />
+              <span className="absolute inset-0 overflow-hidden" style={{ width: "50%" }}>
+                <StarIcon className="w-4 h-4 text-amber-500" fill="currentColor" />
+              </span>
+            </span>
+          );
+        }
+
+        return <StarIcon key={i} className="w-4 h-4 text-gray-300" fill="none" />;
+      })}
+    </div>
+  );
 }
 
 function getUserTipo(): string | null {
@@ -284,6 +338,7 @@ export default function MinhasMetodologias() {
         m.pontuacao ??
         0
       ),
+      ativo: Boolean(m.ativo ?? m.ativoCriacao ?? true), // para criadas, ativo pode vir como "ativo" ou "ativoCriacao"
     }));
 
     const final = await preencherPontosViaDetalhe(base, token);
@@ -527,18 +582,27 @@ export default function MinhasMetodologias() {
                           <span className="px-2 py-1 rounded-full text-[11px] font-semibold border bg-white">
                             {String(m.publicoAlvo ?? "AMBOS")}
                           </span>
+
+                          {/* ✅ ADD: badge de status quando estiver na aba "criadas" */}
+                          {isInstrutor && tab === "criadas" && (
+                            <span className={`px-2 py-1 rounded-full text-[11px] font-semibold border ${
+                              m.ativo ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"
+                            }`}>
+                              {m.ativo ? "Publicada" : "Aguardando validação"}
+                            </span>
+                          )}
+
                           <div className="font-semibold text-green-900 truncate">
                             {m.titulo}
                           </div>
                         </div>
 
-                        {/* rating + assinaturas */}
                         <div className="mt-1 flex items-center gap-2 text-sm text-gray-600">
-                          <span className="text-gray-300">★★★★★</span>
+                          <StarsRating value={Number(m.mediaAvaliacao ?? 0)} />
                           <span className="font-semibold text-gray-800">
                             {(Number(m.mediaAvaliacao ?? 0)).toFixed(1)}
                           </span>
-                          <span>({Number(m.totalReviews ?? 0)})</span>
+                          <span>({Number((m as any).totalAvaliacoes ?? m.totalReviews ?? 0)})</span>
                           <span className="text-gray-400">•</span>
                           <span>
                             <b>{Number(m.totalAssinantes ?? 0)}</b> assinaturas

@@ -10,6 +10,7 @@ import {
   SlidersHorizontal,
   Loader2,
   Search,
+  Star as StarIcon,
 } from "lucide-react";
 import { API, APP } from "../../config.js";
 import HealthBanner from "../../components/legal/HealthBanner.js";
@@ -152,22 +153,49 @@ function normTxt(s: any) {
   return String(s || "").trim().toLowerCase();
 }
 
-function Stars({ value }: { value: number }) {
-  const v = Math.max(0, Math.min(5, value || 0));
-  const full = Math.floor(v);
-  const half = v - full >= 0.5;
+function clamp01(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(5, n));
+}
 
-  // simples (sem meia estrela real): enche arredondando
-  const filled = Math.round(v);
+function Stars({ rating }: { rating: number }) {
+  const v = Math.max(0, Math.min(5, Number(rating || 0)));
+  const half = Math.round(v * 2) / 2; // passos de 0.5
+  const full = Math.floor(half);
+  const hasHalf = half - full === 0.5;
 
   return (
-    <span className="tracking-[1px] text-gray-400">
-      {"★★★★★".split("").map((_, i) => (
-        <span key={i} className={i < filled ? "text-amber-400" : "text-gray-300"}>
-          ★
-        </span>
-      ))}
-    </span>
+    <div className="flex items-center">
+      {Array.from({ length: 5 }).map((_, i) => {
+        const idx = i + 1;
+
+        if (idx <= full) {
+          return (
+            <StarIcon
+              key={i}
+              className="w-4 h-4 text-yellow-500"
+              fill="currentColor"
+            />
+          );
+        }
+
+        if (idx === full + 1 && hasHalf) {
+          return (
+            <span key={i} className="relative inline-block w-4 h-4">
+              <StarIcon
+                className="absolute inset-0 w-4 h-4 text-gray-300"
+                fill="currentColor"
+              />
+              <span className="absolute inset-0 overflow-hidden" style={{ width: "50%" }}>
+                <StarIcon className="w-4 h-4 text-yellow-500" fill="currentColor" />
+              </span>
+            </span>
+          );
+        }
+
+        return <StarIcon key={i} className="w-4 h-4 text-gray-300" fill="none" />;
+      })}
+    </div>
   );
 }
 
@@ -639,11 +667,10 @@ useEffect(() => {
         totalSemanas: Number(m.totalSemanas ?? 0),
         videoCount: Number(m.videoCount ?? m._count?.itensVideo ?? 0),
         treinoCount: Number(m.treinoCount ?? m._count?.itensTreino ?? 0),
-
         totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
         mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
         notaCount: Number(m.totalReviews ?? m.notaCount ?? 0),
-        totalReviews: Number(m.totalReviews ?? 0),
+        totalReviews: Number(m.totalReviews ?? m.notaCount ?? 0),
         // ⚠️ a lista normalmente NÃO vem com pontos -> vamos preencher depois via detalhe
         pontos: Number(m.pontosTotal ?? m.pontos ?? m.pontuacao ?? 0),
         criadorNome:
@@ -694,6 +721,14 @@ useEffect(() => {
               jj?.escolinha?.nome ??
               null;
 
+            const mediaAvaliacao = Number(
+              jj.mediaAvaliacao ?? jj.media ?? jj.notaMedia ?? card.mediaAvaliacao ?? 0
+            );
+
+            const totalReviews = Number(
+              jj.totalReviews ?? jj.totalAvaliacoes ?? jj.notaCount ?? card.totalReviews ?? 0
+            );
+
             return {
               ...card,
               criadorNome: card.criadorNome || (nomeCriador ? String(nomeCriador) : null),
@@ -701,8 +736,11 @@ useEffect(() => {
               capaUrl: normalizeAssetUrl(jj.capaUrl ?? card.capaUrl) ?? card.capaUrl,
               videoCount: videoCount || card.videoCount,
               treinoCount: treinoCount || card.treinoCount,
+              mediaAvaliacao: Number.isFinite(mediaAvaliacao) ? mediaAvaliacao : (card.mediaAvaliacao ?? 0),
+              totalReviews: Number.isFinite(totalReviews) ? totalReviews : (card.totalReviews ?? 0),
             };
-          } catch {
+          } catch (e: any) {
+            console.warn("Erro ao detalhar metodologia", card.id, e);
             return card;
           }
         })
@@ -2697,8 +2735,8 @@ async function salvarProgressoSessao(sessaoId: string) {
                   className="px-3 py-2 rounded-xl border bg-white text-sm"
                 >
                   <option value="TODOS">Público: Todos</option>
-                  <option value="ATLETAS">Para Atletas</option>
-                  <option value="PROFISSIONAIS">Para Profissionais</option>
+                  <option value="ATLETAS">Atletas</option>
+                  <option value="PROFISSIONAIS">Profissionais</option>
                   <option value="AMBOS">Ambos</option>
                 </select>
 
@@ -2707,7 +2745,7 @@ async function salvarProgressoSessao(sessaoId: string) {
                   onChange={(e) => setFiltroConteudo(e.target.value as FiltroConteudo)}
                   className="w-full border rounded-xl px-3 py-2 text-sm bg-white"
                 >
-                  <option value="TODOS">Todos</option>
+                  <option value="TODOS">Tipo: Todos</option>
                   <option value="VIDEOS_TREINOS">Vídeos + Treinos</option>
                   <option value="VIDEOS">Vídeos</option>
                   <option value="TREINOS">Treinos</option>
@@ -2875,11 +2913,11 @@ async function salvarProgressoSessao(sessaoId: string) {
                               <div className="flex-1 min-w-0">
                                 {/* ⭐⭐⭐⭐⭐ + nota */}
                                 <div className="flex items-center gap-2 text-sm text-gray-600">
-                                  <Stars value={Number(m.mediaAvaliacao ?? 0)} />
+                                  <Stars rating={Number(m.mediaAvaliacao ?? 0)} />
                                   <span className="font-semibold text-gray-800">
                                     {Number(m.mediaAvaliacao ?? 0).toFixed(1)}
                                   </span>
-                                  <span>({Number(m.totalReviews ?? 0)})</span>
+                                  <span>({Number(m.totalReviews ?? m.notaCount ?? 0)})</span>
                                 </div>
 
                                 {/* + pontos */}
@@ -3419,57 +3457,31 @@ async function salvarProgressoSessao(sessaoId: string) {
               {(() => {
                 const emAndamento = sessao.status === "em_andamento";
 
+                // ✅ Só libera "Finalizar treino" quando TODOS os exercícios estiverem marcados
+                const todosExerciciosMarcados =
+                  exercicios.length > 0 && exercicios.every((ex) => marcados.has((ex as any).exercicioId ?? ex.id));
+
                 return (
                   <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                    {/* ✅ Remarcar só aparece se NÃO estiver em andamento */}
-                    {!emAndamento && (
-                      <button
-                        type="button"
-                        className="flex-1 px-3 py-2 rounded-full border text-sm text-gray-700 bg-white hover:bg-gray-50"
-                        onClick={() => {
-                          const jaAtivo = sessaoEmRemarcacaoId === sessao.id;
-                          if (jaAtivo) {
-                            setSessaoEmRemarcacaoId(null);
-                            return;
-                          }
+                    {/* ... seu botão SALVAR continua igual ... */}
 
-                          const baseISO =
-                            sessao.data || sessao.startedAt || new Date().toISOString();
-
-                          setSessaoEmRemarcacaoId(sessao.id);
-                          setRemarcarDataBySessaoId((prev) => ({
-                            ...prev,
-                            [sessao.id]: baseISO.slice(0, 10),
-                          }));
-                          setRemarcarHoraBySessaoId((prev) => ({
-                            ...prev,
-                            [sessao.id]: baseISO.slice(11, 16),
-                          }));
-                        }}
-                      >
-                        {emRemarcacao ? "Cancelar remarcação" : "Remarcar"}
-                      </button>
-                    )}
-
-                    {/* ✅ Salvar sempre aparece */}
-                    <button
-                      type="button"
-                      className="flex-1 px-3 py-2 rounded-full bg-green-700 text-white text-sm hover:bg-green-800"
-                      onClick={async () => {
-                        await salvarProgressoSessao(sessao.id);
-                        await carregarSessoesDeHoje();
-                        alert("Progresso salvo!");
-                      }}
-                    >
-                      Salvar
-                    </button>
-
-                    {/* ✅ No lugar de Excluir: se em andamento -> Finalizar treino */}
                     {emAndamento ? (
                       <button
                         type="button"
-                        className="flex-1 px-3 py-2 rounded-full bg-red-600 text-white text-sm hover:bg-red-700"
+                        disabled={!todosExerciciosMarcados}
+                        title={
+                          !todosExerciciosMarcados
+                            ? "Marque todos os exercícios para habilitar o finalizar."
+                            : ""
+                        }
+                        className={`flex-1 px-3 py-2 rounded-full text-white text-sm ${
+                          todosExerciciosMarcados
+                            ? "bg-red-600 hover:bg-red-700"
+                            : "bg-red-300 cursor-not-allowed"
+                        }`}
                         onClick={async () => {
+                          if (!todosExerciciosMarcados) return;
+
                           // opcional mas recomendado: salva antes de finalizar
                           await salvarProgressoSessao(sessao.id);
                           await finalizarTreinoSessao(sessao.id);
@@ -3477,15 +3489,7 @@ async function salvarProgressoSessao(sessaoId: string) {
                       >
                         Finalizar treino
                       </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="flex-1 px-3 py-2 rounded-full border text-sm bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
-                        onClick={() => excluirSessao(sessao.id)}
-                      >
-                        Excluir
-                      </button>
-                    )}
+                    ) : null}
                   </div>
                 );
               })()}

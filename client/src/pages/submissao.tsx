@@ -52,15 +52,20 @@ export default function PaginaSubmissao() {
   const [treinoRecordedBlob, setTreinoRecordedBlob] = useState<Blob | null>(null);
   const [treinoRecordedUrl, setTreinoRecordedUrl] = useState<string | null>(null);
   const [treinoRecError, setTreinoRecError] = useState<string | null>(null);
+  const [metodologiaId, setMetodologiaId] = useState<string | null>(null);
+  const [metodologiaItemId, setMetodologiaItemId] = useState<string | null>(null);
+
   const treinoMediaStreamRef = useRef<MediaStream | null>(null);
   const treinoMediaRecorderRef = useRef<MediaRecorder | null>(null);
   const treinoChunksRef = useRef<BlobPart[]>([]);
   const treinoLiveVideoRef = useRef<HTMLVideoElement | null>(null);
   const isDesafio = Boolean(desafioId);
   const isTreino = Boolean(treinoAgendadoId) || Boolean(sessaoId);
+  
   const isSecureContext =
     typeof window !== "undefined" &&
     (window.location.protocol === "https:" || window.location.hostname === "localhost");
+  
   const dualStorage = {
     getItem(key: string): string | null {
       let a: string | null = null;
@@ -301,6 +306,11 @@ export default function PaginaSubmissao() {
     const sId = params.get("sessaoId");
     const pontosParam = Number(params.get("pontos") || 0);
     const atletasParam = params.get("atletas");
+    const mId = params.get("metodologiaId");
+    const mItemId = params.get("metodologiaItemId");
+
+    setMetodologiaId(mId);
+    setMetodologiaItemId(mItemId);
 
     if (sId) setSessaoId(sId);
     if (Number.isFinite(pontosParam)) setAwardPontos(pontosParam);
@@ -633,6 +643,35 @@ export default function PaginaSubmissao() {
     setTreinoRecordedBlob(null);
   }
 
+  async function concluirItemDaMetodologia(): Promise<boolean> {
+    if (!metodologiaId || !metodologiaItemId) return false;
+
+    try {
+      const res = await fetch(
+        `${API.BASE_URL}/api/metodologias/${metodologiaId}/concluir-item`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${Storage.token || ""}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ itemId: metodologiaItemId }),
+        }
+      );
+
+      const js = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.warn("[metodologia] falha ao concluir item:", js);
+        return false;
+      }
+
+      return Boolean((js as any)?.metodologiaCompleta ?? (js as any)?.progresso?.metodologiaCompleta);
+    } catch (e) {
+      console.warn("[metodologia] erro ao concluir item:", e);
+      return false;
+    }
+  }
+
   const handleEnviar = async () => {
     if (!isSessaoTreino && !atletaId) {
       alert("Preencha todos os campos obrigatórios.");
@@ -731,6 +770,13 @@ export default function PaginaSubmissao() {
               "Submissão enviada com sucesso!";
 
         alert(msg);
+        
+        const metodologiaCompleta = await concluirItemDaMetodologia();
+
+        if (metodologiaCompleta && metodologiaId) {
+          navigate(`/metodologias/avaliar?metodologiaId=${encodeURIComponent(metodologiaId)}`);
+          return;
+        }
 
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("treino:submetido"));
