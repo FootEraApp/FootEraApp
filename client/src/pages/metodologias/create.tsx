@@ -1525,7 +1525,7 @@ export default function CriarMetodologia() {
           <div className="mt-6 flex flex-col sm:flex-row gap-2 sm:justify-end">
             <button
               type="button"
-              onClick={() => navigate("/metodologias/minhas")}
+              onClick={() => navigate("/treinos/Minhas-Metodologias")}
               className="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50 font-semibold"
             >
               Cancelar

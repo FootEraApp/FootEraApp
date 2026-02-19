@@ -87,6 +87,7 @@ function groupLabelFromTipo(tipo?: string | null): string {
   if (t === "PERFIL") return "Pontuação";
   if (t === "ORGANIZACAO") return "Gestão";
   if (t === "EVENTO") return "Eventos";
+  if (t === "METODOLOGIA") return "Metodologias";
   return "Outros";
 }
 
