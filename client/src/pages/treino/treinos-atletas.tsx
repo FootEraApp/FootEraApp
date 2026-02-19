@@ -227,6 +227,59 @@ function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+function StarsRating({ value }: { value: number }) {
+  const v = Math.max(0, Math.min(5, Number(value || 0)));
+  const half = Math.round(v * 2) / 2; // 0.5 steps
+  const full = Math.floor(half);
+  const hasHalf = half - full === 0.5;
+
+  return (
+    <div className="flex items-center">
+      {Array.from({ length: 5 }).map((_, i) => {
+        const idx = i + 1;
+
+        if (idx <= full) {
+          return (
+            <StarIcon
+              key={i}
+              className="w-4 h-4 text-amber-500"
+              fill="currentColor"
+            />
+          );
+        }
+
+        if (idx === full + 1 && hasHalf) {
+          return (
+            <span key={i} className="relative inline-block w-4 h-4">
+              <StarIcon
+                className="absolute inset-0 w-4 h-4 text-gray-300"
+                fill="currentColor"
+              />
+              <span
+                className="absolute inset-0 overflow-hidden"
+                style={{ width: "50%" }}
+              >
+                <StarIcon
+                  className="w-4 h-4 text-amber-500"
+                  fill="currentColor"
+                />
+              </span>
+            </span>
+          );
+        }
+
+        return (
+          <StarIcon
+            key={i}
+            className="w-4 h-4 text-gray-300"
+            fill="none"
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 const getToken = () =>
   (Storage as any).token ??
   localStorage.getItem("token") ??
@@ -338,8 +391,65 @@ function getCriadorLabel(t: TreinoAgendado): string | null {
   return nome;
 }
 
+function clamp01(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(5, n));
+}
+
+function StarRating({
+  value,
+  sizeClass = "w-4 h-4",
+}: {
+  value: number;
+  sizeClass?: string;
+}) {
+  const v = clamp01(value);
+
+  return (
+    <div className="flex items-center">
+      {Array.from({ length: 5 }).map((_, i) => {
+        // 0..1 (quanto dessa estrela fica preenchida)
+        const frac = Math.max(0, Math.min(1, v - i));
+        const pct = `${Math.round(frac * 100)}%`;
+
+        return (
+          <span key={i} className="relative inline-block">
+            {/* estrela vazia */}
+            <StarIcon className={`${sizeClass} text-gray-300`} fill="none" />
+
+            {/* estrela preenchida (recortada por %) */}
+            <span
+              className="absolute inset-0 overflow-hidden"
+              style={{ width: pct }}
+            >
+              <StarIcon
+                className={`${sizeClass} text-amber-500`}
+                fill="currentColor"
+              />
+            </span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function TreinosAtletas() {
   const [location, navigate] = useLocation();
+  // ✅ Querystring vindo da metodologia
+  const qs = React.useMemo(() => {
+    const raw = typeof window !== "undefined" ? window.location.search : "";
+    return new URLSearchParams(raw);
+  }, [location]);
+
+  const openAgendadoByProgramadoId = qs.get("openAgendadoByProgramadoId"); // treinoProgramadoId
+  const qsMetodologiaId = qs.get("metodologiaId");
+  const qsMetodologiaItemId = qs.get("metodologiaItemId");
+
+  // ✅ chave pra guardar o vínculo metodologia <-> treino agendado
+  const METODOLOGIA_LINK_KEY = (treinoAgendadoId: string) =>
+    `footera:metodologiaLink:${treinoAgendadoId}`;
+
   const [treinosAgendados, setTreinosAgendados] = useState<TreinoAgendado[]>([]);
   const [desafios, setDesafios] = useState<Desafio[]>([]);
   const [semanasDesafio, setSemanasDesafio] = useState<WeekStatus[]>([]);
@@ -433,16 +543,12 @@ export default function TreinosAtletas() {
         id: String(m.id),
         titulo: m.titulo ?? m.nome ?? "Metodologia",
         descricao: m.descricao ?? null,
-
         capaUrl: normalizeAssetUrl(m.capaUrl ?? m.logoUrl ?? m.imagemUrl ?? null),
-
         publicoAlvo: m.publicoAlvo ?? "AMBOS",
         nivel: m.nivel ?? null,
-
         totalAssinantes: Number(m.totalAssinantes ?? m._count?.assinantes ?? 0),
         mediaAvaliacao: Number(m.mediaAvaliacao ?? 0),
         totalAvaliacoes: Number(m.totalAvaliacoes ?? m.totalReviews ?? m.notaCount ?? 0),
-
         criadorNome:
           m.criadorNome ??
           m.autor?.nome ??
@@ -450,10 +556,8 @@ export default function TreinosAtletas() {
           m.professor?.nome ??
           m.usuarioCriador?.nome ??
           null,
-
         criadorTipo: m.criadorTipo ?? m.tipoCriador ?? "Professor",
         planoMinimo: m.planoMinimo ?? "Free",
-
         pontosTotal: Number(m.pontosTotal ?? m.pontos ?? m.pontuacao ?? 0),
       }));
 
@@ -475,7 +579,6 @@ export default function TreinosAtletas() {
               : [];
 
             const tipos = itensPub.map((it: any) => String(it?.tipo || "").toUpperCase());
-
             const hasVideo = tipos.includes("VIDEO");
             const hasTreino = tipos.includes("TREINO");
 
@@ -490,6 +593,14 @@ export default function TreinosAtletas() {
               );
             }
 
+            const mediaAvaliacao = Number(
+              jj.mediaAvaliacao ?? jj.media ?? jj.notaMedia ?? card.mediaAvaliacao ?? 0
+            );
+
+            const totalAvaliacoes = Number(
+              jj.totalAvaliacoes ?? jj.totalReviews ?? jj.notaCount ?? card.totalAvaliacoes ?? 0
+            );
+
             return {
               ...card,
               descricao: card.descricao ?? jj.descricao ?? null,
@@ -499,6 +610,9 @@ export default function TreinosAtletas() {
               capaUrl:
                 normalizeAssetUrl(jj.capaUrl ?? jj.logoUrl ?? jj.imagemUrl ?? null) ||
                 card.capaUrl,
+              // ✅ AQUI: nota vem do detalhe também
+              mediaAvaliacao: Number.isFinite(mediaAvaliacao) ? mediaAvaliacao : (card.mediaAvaliacao ?? 0),
+              totalAvaliacoes: Number.isFinite(totalAvaliacoes) ? totalAvaliacoes : (card.totalAvaliacoes ?? 0),
               criadorNome:
                 card.criadorNome ??
                 jj?.criadorNome ??
@@ -508,7 +622,8 @@ export default function TreinosAtletas() {
                 jj?.escolinha?.nome ??
                 null,
             };
-          } catch {
+          } catch (e: any) {
+            console.warn("Erro ao detalhar metodologia:", e);
             return card;
           }
         })
@@ -956,6 +1071,47 @@ function removerFiltroMetodologia(label: string) {
     return () => window.removeEventListener("treino:agendado", onAgendado);
   }, []);
 
+  useEffect(() => {
+    if (!openAgendadoByProgramadoId) return;
+    if (!qsMetodologiaId || !qsMetodologiaItemId) return;
+    if (!treinosAgendados?.length) return;
+
+    const alvo = treinosAgendados.find(
+      (t) => String(t.treinoProgramado?.id || "") === String(openAgendadoByProgramadoId)
+    );
+
+    if (!alvo) {
+      // se não existir treino agendado ainda, você pode:
+      // 1) avisar o usuário
+      // 2) ou agendar automaticamente (se você tiver endpoint pra isso)
+      alert("Esse treino ainda não está nos seus treinos agendados. Agende primeiro e tente novamente.");
+      return;
+    }
+
+    // ✅ salva o vínculo (treinoAgendado -> metodologia/item)
+    try {
+      localStorage.setItem(
+        METODOLOGIA_LINK_KEY(alvo.id),
+        JSON.stringify({
+          metodologiaId: qsMetodologiaId,
+          metodologiaItemId: qsMetodologiaItemId,
+        })
+      );
+    } catch {}
+
+    // ✅ abre o treino
+    setFullscreenId(alvo.id);
+
+    // ✅ limpa a URL (opcional, mas recomendado pra não reabrir sempre ao recarregar)
+    try {
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("openAgendadoByProgramadoId");
+      clean.searchParams.delete("metodologiaId");
+      clean.searchParams.delete("metodologiaItemId");
+      window.history.replaceState({}, "", clean.toString());
+    } catch {}
+  }, [openAgendadoByProgramadoId, qsMetodologiaId, qsMetodologiaItemId, treinosAgendados]);
+
   const tipo = String(
     (Storage as any).tipoSalvo ?? localStorage.getItem("tipo") ?? ""
   ).toLowerCase();
@@ -1209,6 +1365,39 @@ function removerFiltroMetodologia(label: string) {
     }
   }
 
+  async function concluirItemDaMetodologiaSeHouver(treinoAgendadoId: string) {
+    try {
+      const raw = localStorage.getItem(METODOLOGIA_LINK_KEY(treinoAgendadoId));
+      if (!raw) return;
+
+      const link = JSON.parse(raw) as {
+        metodologiaId?: string;
+        metodologiaItemId?: string;
+      };
+
+      const metodologiaId = String(link?.metodologiaId || "");
+      const itemId = String(link?.metodologiaItemId || "");
+      if (!metodologiaId || !itemId) return;
+
+      const token = getToken();
+      if (!token) return;
+
+      await fetch(`${API.BASE_URL}/api/metodologias/${metodologiaId}/concluir-item`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ itemId }),
+      });
+
+      // ✅ evita concluir 2x
+      localStorage.removeItem(METODOLOGIA_LINK_KEY(treinoAgendadoId));
+    } catch (e) {
+      console.warn("[metodologia] falha ao concluir item:", e);
+    }
+  }
+
   async function finalizarEEnviar(treino: TreinoAgendado) {
     try {
       const token = getToken();
@@ -1223,6 +1412,8 @@ function removerFiltroMetodologia(label: string) {
       );
 
       if (!r.ok) throw new Error("não foi possível finalizar");
+
+      await concluirItemDaMetodologiaSeHouver(treino.id);
 
       setStatusPorTreino((st) => ({
         ...st,
@@ -2031,21 +2222,8 @@ function removerFiltroMetodologia(label: string) {
                         />
 
                         <div className="flex-1 min-w-0">
-                          {/* ⭐⭐⭐⭐⭐ + nota */}
                           <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <div className="flex items-center">
-                              {Array.from({ length: 5 }).map((_, i) => {
-                                const filled = i < Math.round(media);
-                                return (
-                                  <StarIcon
-                                    key={i}
-                                    className={`w-4 h-4 ${filled ? "text-amber-500" : "text-gray-300"}`}
-                                    fill={filled ? "currentColor" : "none"}
-                                  />
-                                );
-                              })}
-                            </div>
-
+                            <StarsRating value={media} />
                             <span className="font-semibold text-gray-800">{media.toFixed(1)}</span>
                             <span>({reviews})</span>
                           </div>
@@ -2378,9 +2556,18 @@ function removerFiltroMetodologia(label: string) {
                 const elapsed = elapsedByTreino[fullscreenId] ?? 0;
                 const params = new URLSearchParams();
                 params.set("treinoAgendadoId", t.id);
-                if (elapsed > 0) {
-                  params.set("tempoSeg", String(elapsed));
-                }
+                if (elapsed > 0) params.set("tempoSeg", String(elapsed));
+
+                // ✅ repassa metodologiaId/metodologiaItemId pra tela de submissão (se existir vínculo)
+                try {
+                  const raw = localStorage.getItem(METODOLOGIA_LINK_KEY(t.id));
+                  if (raw) {
+                    const link = JSON.parse(raw);
+                    if (link?.metodologiaId) params.set("metodologiaId", String(link.metodologiaId));
+                    if (link?.metodologiaItemId) params.set("metodologiaItemId", String(link.metodologiaItemId));
+                  }
+                } catch {}
+
                 navigate(`/submissao?${params.toString()}`);
                 return;
               }
