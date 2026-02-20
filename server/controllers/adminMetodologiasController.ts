@@ -109,8 +109,16 @@ export async function getMetodologiaPendenteDetail(req: Request, res: Response) 
       where: { id },
       include: {
         criadorUsuario: {
-          select: { id: true, nome: true, nomeDeUsuario: true, email: true, foto: true, parceiro: true },
+          select: {
+            id: true,
+            nome: true,
+            nomeDeUsuario: true,
+            email: true,
+            foto: true,
+            parceiro: true,
+          },
         },
+
         _count: { select: { assinantes: true, itens: true } },
 
         // ✅ TODOS os itens da metodologia (vídeos/treinos)
@@ -124,18 +132,20 @@ export async function getMetodologiaPendenteDetail(req: Request, res: Response) 
             descricao: true,
             tipo: true,
 
+            // vídeo
             videoUrl: true,
             thumbUrl: true,
             duracaoMin: true,
 
+            // treino
             treinoProgramadoId: true,
             pontos: true,
             publicado: true,
 
-            // ✅ nomes corretos no seu schema
             criadoEm: true,
             atualizadoEm: true,
 
+            // ✅ aqui é o upgrade: traz o treino completo (exercícios + vídeos demonstrativos)
             treinoProgramado: {
               select: {
                 id: true,
@@ -149,11 +159,72 @@ export async function getMetodologiaPendenteDetail(req: Request, res: Response) 
                 duracao: true,
                 parceiro: true,
                 metodologia: true,
+                metas: true,
+                dicas: true,
+                objetivo: true,
+                tipoTreino: true,
+
+                // 🔥 exercícios do treino (join table)
+                exercicios: {
+                  orderBy: { ordem: "asc" },
+                  select: {
+                    id: true,
+                    ordem: true,
+                    repeticoes: true,
+
+                    exercicio: {
+                      select: {
+                        id: true,
+                        codigo: true,
+                        nome: true,
+                        descricao: true,
+                        nivel: true,
+                        categorias: true,
+                        videoDemonstrativoUrl: true, // ✅ “vídeo do exercício”
+                      },
+                    },
+
+                    exercicioTemporario: {
+                      select: {
+                        id: true,
+                        codigo: true,
+                        nome: true,
+                        descricao: true,
+                        nivel: true,
+                        categorias: true,
+                        videoDemonstrativoUrl: true, // ✅ “vídeo do exercício temporário”
+                      },
+                    },
+                  },
+                },
+
+                // (opcional) se você quiser mostrar exercícios temporários que existem no treino
+                temporarios: {
+                  select: {
+                    id: true,
+                    codigo: true,
+                    nome: true,
+                    descricao: true,
+                    nivel: true,
+                    categorias: true,
+                    videoDemonstrativoUrl: true,
+                  },
+                },
+
+                // (opcional) infos do criador do treino
+                criadorProfessor: {
+                  select: {
+                    id: true,
+                    nome: true,
+                    cref: true,
+                    fotoUrl: true,
+                    codigo: true,
+                  },
+                },
               },
             },
           },
         },
-
 
         // ✅ Treinos vinculados pela tabela MetodologiaTreino (opcional, mas útil)
         MetodologiaTreino: {

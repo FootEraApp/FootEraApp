@@ -4,6 +4,7 @@ import { API, APP } from "../config.js";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import ValidacaoVideo from "./validacaovideo.js";
 import { FLAGS } from "../config.js";
+import ToggleSwitch from "../components/ToggleSwitch";
 
 type Tab =
   | "dashboard"
@@ -294,6 +295,23 @@ export default function AdminDashboard() {
       id: string;
       nome: string;
       codigo: string;
+
+      // ✅ ADICIONAR:
+      descricao?: string | null;
+      exercicios?: Array<{
+        id: string;
+        ordem?: number | null;
+        repeticoes?: string | null;
+        exercicio?: {
+          id: string;
+          nome?: string | null;
+          codigo?: string | null;
+          nivel?: string | null;
+          descricao?: string | null;
+          videoDemonstrativoUrl?: string | null;
+        } | null;
+      }> | null;
+
       imagemUrl?: string | null;
       nivel?: string | null;
       categoria?: any;
@@ -301,6 +319,7 @@ export default function AdminDashboard() {
       duracao?: number | null;
     } | null;
   };
+
 
   type MetodologiaPendente = {
     id: string;
@@ -346,6 +365,22 @@ export default function AdminDashboard() {
         nome: string;
         codigo: string;
         descricao?: string | null;
+
+        // ✅ ADICIONAR:
+        exercicios?: Array<{
+          id: string;
+          ordem?: number | null;
+          repeticoes?: string | null;
+          exercicio?: {
+            id: string;
+            nome?: string | null;
+            codigo?: string | null;
+            nivel?: string | null;
+            descricao?: string | null;
+            videoDemonstrativoUrl?: string | null;
+          } | null;
+        }> | null;
+
         imagemUrl?: string | null;
         nivel?: string | null;
         categoria?: any;
@@ -431,6 +466,8 @@ const [fbTipo, setFbTipo] = useState<string>("");
 const [fbFrom, setFbFrom] = useState<string>("");
 const [fbOnlyUnread, setFbOnlyUnread] = useState(false);
 const [profParceiroBusyId, setProfParceiroBusyId] = useState<string | null>(null);
+
+const [expandedTreinoItemId, setExpandedTreinoItemId] = useState<string | null>(null);
 
  function safeJsonParse(txt: string) {
     try {
@@ -2881,44 +2918,39 @@ async function confirmarExcluirProfessor() {
               ].map((item) => (
                 <div key={item.key} className="flex items-center justify-between border-b py-2">
                   <div>
-                    <p className="font-medium">{item.label} ✅</p>
+                    <p className="font-medium">{item.label} </p>
                     <p className="text-sm text-gray-600">{item.desc}</p>
                   </div>
-<input
-  type="checkbox"
-  checked={!!configuracoes?.[item.key]}
-  onChange={async (e) => {
-    const next = e.target.checked;
 
-    setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: next }));
+                <ToggleSwitch
+                  checked={!!configuracoes?.[item.key]}
+                  disabled={false} // ou coloque seu loading/busy aqui se quiser travar durante o PATCH
+                  onChange={async (next) => {
+                    // otimista
+                    setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: next }));
 
-    try {
-      const res = await fetch(`${API.BASE_URL}/api/configuracoes`, {
-        method: "PATCH",
-        headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ [item.key]: next }),
-      });
+                    try {
+                      const res = await fetch(`${API.BASE_URL}/api/configuracoes`, {
+                        method: "PATCH",
+                        headers: authHeaders({ "Content-Type": "application/json" }),
+                        body: JSON.stringify({ [item.key]: next }),
+                      });
 
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: !next }));
-        alert(txt || "Erro ao salvar configuração.");
-        return;
-      }
+                      if (!res.ok) {
+                        const txt = await res.text().catch(() => "");
+                        setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: !next }));
+                        alert(txt || "Erro ao salvar configuração.");
+                        return;
+                      }
 
-      const txt = await res.text().catch(() => "");
-      
-      if (txt) {
-        const server = JSON.parse(txt);
-        setConfiguracoes(server);
-      }
-    } catch (err: any) {
-      setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: !next }));
-      alert(err?.message || "Falha de rede ao salvar configuração.");
-    }
-  }}
-  className="scale-125"
-/>
+                      const txt = await res.text().catch(() => "");
+                      if (txt) setConfiguracoes(JSON.parse(txt));
+                    } catch (err: any) {
+                      setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: !next }));
+                      alert(err?.message || "Falha de rede ao salvar configuração.");
+                    }
+                  }}
+                />
 
                 </div>
               ))}
@@ -2961,7 +2993,7 @@ async function confirmarExcluirProfessor() {
       </div>
 
       {player && (
-        <div className="fixed inset-0 z-[70] grid place-items-center">
+        <div className="fixed inset-0 z-[9999] grid place-items-center">
           <div className="absolute inset-0 bg-black/60" onClick={() => setPlayer(null)} />
           <div className="relative z-10">
             {player.kind === "video" && (
@@ -2994,7 +3026,15 @@ async function confirmarExcluirProfessor() {
           <div className="relative bg-white w-full max-w-3xl rounded shadow-lg p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold">Detalhes da Metodologia</h4>
-              <button onClick={() => setMetDetailOpen(false)} className="text-gray-600">✕</button>
+              <button 
+                onClick={() => {
+                  setMetDetailOpen(false);
+                  setExpandedTreinoItemId(null);
+                }} 
+                className="text-gray-600"
+              >
+                ✕
+              </button>
             </div>
 
             {metDetailLoading && <div className="text-sm text-gray-600">Carregando…</div>}
@@ -3085,39 +3125,160 @@ async function confirmarExcluirProfessor() {
                           </tr>
                         </thead>
                         <tbody>
-                          {metDetail.itens.map((it) => (
-                            <tr key={it.id} className="border-t">
-                              <td className="px-3 py-2">{it.semana}</td>
-                              <td className="px-3 py-2">{it.ordem}</td>
-                              <td className="px-3 py-2">{it.tipo}</td>
-                              <td className="px-3 py-2">
-                                <div className="font-medium">{it.titulo}</div>
-                                {it.treinoProgramado ? (
-                                  <div className="text-xs text-gray-500">
-                                    Treino: {it.treinoProgramado.nome} ({it.treinoProgramado.codigo})
-                                  </div>
-                                ) : null}
-                              </td>
-                              <td className="px-3 py-2">
-                                {it.videoUrl ? (
-                                  <button className="text-blue-700 underline" onClick={() => openVideo(it.videoUrl!)}>
-                                    ver vídeo
-                                  </button>
-                                ) : it.thumbUrl ? (
-                                  <button
-                                    className="text-blue-700 underline"
-                                    onClick={() =>
-                                      setPlayer({ kind: "image", src: toAbsoluteUrl(it.thumbUrl)! })
-                                    }
-                                  >
-                                    ver thumb
-                                  </button>
-                                ) : (
-                                  "—"
+                          {metDetail.itens.map((it) => {
+                            const isTreino = String(it.tipo).toUpperCase() === "TREINO";
+                            const isOpen = expandedTreinoItemId === it.id;
+                            const tp = it.treinoProgramado;
+                            const exercs = Array.isArray(tp?.exercicios) ? tp!.exercicios : [];
+
+                            return (
+                              <React.Fragment key={it.id}>
+                                <tr className="border-t">
+                                  <td className="px-3 py-2">{it.semana}</td>
+                                  <td className="px-3 py-2">{it.ordem}</td>
+                                  <td className="px-3 py-2">
+                                    <span className="px-2 py-0.5 rounded bg-gray-100 border">
+                                      {it.tipo}
+                                    </span>
+                                  </td>
+
+                                  <td className="px-3 py-2">
+                                    <div className="font-medium flex items-center gap-2">
+                                      {it.titulo}
+
+                                      {isTreino && tp && (
+                                        <button
+                                          className="text-xs px-2 py-1 rounded border bg-white hover:bg-gray-50"
+                                          onClick={() => setExpandedTreinoItemId(isOpen ? null : it.id)}
+                                          title="Ver detalhes do treino"
+                                        >
+                                          {isOpen ? "Recolher ▲" : "Detalhes ▼"}
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {tp ? (
+                                      <div className="text-xs text-gray-500">
+                                        Treino: {tp.nome} ({tp.codigo})
+                                      </div>
+                                    ) : null}
+                                  </td>
+
+                                  <td className="px-3 py-2">
+                                    {it.videoUrl ? (
+                                      <button className="text-blue-700 underline" onClick={() => openVideo(it.videoUrl!)}>
+                                        ver vídeo
+                                      </button>
+                                    ) : it.thumbUrl ? (
+                                      <button
+                                        className="text-blue-700 underline"
+                                        onClick={() => setPlayer({ kind: "image", src: toAbsoluteUrl(it.thumbUrl)! })}
+                                      >
+                                        ver thumb
+                                      </button>
+                                    ) : (
+                                      "—"
+                                    )}
+                                  </td>
+                                </tr>
+
+                                {/* GAVETA */}
+                                {isTreino && tp && isOpen && (
+                                  <tr className="border-t bg-gray-50">
+                                    <td colSpan={5} className="px-3 py-3">
+                                      <div className="rounded border bg-white p-3">
+                                        <div className="flex flex-wrap items-center gap-2 justify-between">
+                                          <div>
+                                            <div className="font-semibold text-gray-900">
+                                              {tp.nome} <span className="text-xs text-gray-500">({tp.codigo})</span>
+                                            </div>
+                                            {tp.descricao ? (
+                                              <div className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">
+                                                {tp.descricao}
+                                              </div>
+                                            ) : null}
+                                          </div>
+
+                                          <div className="text-xs text-gray-600 flex flex-wrap gap-2">
+                                            <span className="px-2 py-1 rounded bg-gray-50 border">
+                                              Nível: <strong>{tp.nivel ?? "—"}</strong>
+                                            </span>
+                                            <span className="px-2 py-1 rounded bg-gray-50 border">
+                                              Duração: <strong>{tp.duracao ?? "—"} min</strong>
+                                            </span>
+                                            <span className="px-2 py-1 rounded bg-gray-50 border">
+                                              Pontos: <strong>{tp.pontuacao ?? "—"}</strong>
+                                            </span>
+                                            <span className="px-2 py-1 rounded bg-gray-50 border">
+                                              Exercícios: <strong>{exercs.length}</strong>
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        <div className="mt-3">
+                                          {exercs.length === 0 ? (
+                                            <div className="text-sm text-gray-500">Sem exercícios nesse treino.</div>
+                                          ) : (
+                                            <div className="overflow-auto rounded border">
+                                              <table className="min-w-full text-sm">
+                                                <thead className="bg-gray-50">
+                                                  <tr>
+                                                    <th className="px-3 py-2 text-left w-16">#</th>
+                                                    <th className="px-3 py-2 text-left">Exercício</th>
+                                                    <th className="px-3 py-2 text-left w-32">Reps</th>
+                                                    <th className="px-3 py-2 text-left w-28">Vídeo</th>
+                                                  </tr>
+                                                </thead>
+                                                <tbody>
+                                                  {exercs
+                                                    .slice()
+                                                    .sort((a: any, b: any) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0))
+                                                    .map((ex: any) => {
+                                                      const exInfo = ex.exercicio;
+                                                      const video = exInfo?.videoDemonstrativoUrl ?? null;
+                                                      return (
+                                                        <tr key={ex.id} className="border-t">
+                                                          <td className="px-3 py-2">{ex.ordem ?? "—"}</td>
+                                                          <td className="px-3 py-2">
+                                                            <div className="font-medium">{exInfo?.nome ?? "—"}</div>
+                                                            <div className="text-xs text-gray-500">
+                                                              {exInfo?.codigo ?? "—"} • {exInfo?.nivel ?? "—"}
+                                                            </div>
+                                                            {exInfo?.descricao ? (
+                                                              <div className="text-xs text-gray-600 mt-1">
+                                                                {exInfo.descricao}
+                                                              </div>
+                                                            ) : null}
+                                                          </td>
+                                                          <td className="px-3 py-2">{ex.repeticoes ?? "—"}</td>
+                                                          <td className="px-3 py-2">
+                                                            {video ? (
+                                                              <button
+                                                                className="text-blue-700 underline"
+                                                                onClick={() => openVideo(video)}
+                                                              >
+                                                                ver vídeo
+                                                              </button>
+                                                            ) : (
+                                                              <span className="text-gray-400">—</span>
+                                                            )}
+                                                          </td>
+                                                        </tr>
+                                                      );
+                                                    })}
+                                                </tbody>
+                                              </table>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
                                 )}
-                              </td>
-                            </tr>
-                          ))}
+                              </React.Fragment>
+                            );
+                          })}
+
                         </tbody>
                       </table>
                     </div>
