@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
-import { ArrowLeft, Lock, Play, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Lock, Play, CheckCircle2, Star } from "lucide-react";
 import Storage from "../../../../server/utils/storage.js";
 import { API, APP } from "../../config.js";
 
@@ -52,6 +52,12 @@ type MetodologiaDetalhe = {
     // NOVO: quando expira (pra avulsa = agora + 1 ano)
     expiraEm?: string | null;
     podeAssinarAgora: boolean;
+    podeAvaliar?: boolean;
+    minhaAvaliacao?: { 
+      nota: number; 
+      comentario: string | null;
+      updatedAt: string 
+    } | null;
     motivoBloqueio?: string | null; // ex: "PRECISA_LEARNING", "PRECISA_PAGAR_AVULSA", "LIMITE_MES"...
     progresso: {
       concluidos: string[];
@@ -64,28 +70,53 @@ function normalizeMediaUrl(raw?: string | null) {
   const u = String(raw).trim();
   if (!u) return null;
 
-  // já é absoluta
   if (u.startsWith("http://") || u.startsWith("https://")) return u;
 
-  // se vier "uploads/arquivo.png" -> vira "/uploads/arquivo.png"
+  // ✅ uploads (backend)
   if (u.startsWith("uploads/")) return `${API.BASE_URL}/${u}`;
+  if (u.startsWith("/uploads/")) return `${API.BASE_URL}${u}`;
 
-  // se vier "/uploads/arquivo.png" ou "/assets/..."
-  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
+  // ✅ assets (frontend)
+  if (u.startsWith("/assets/")) return `${APP.FRONTEND_BASE_URL}${u}`;
 
-  return u; // fallback
+  // fallback
+  if (u.startsWith("/")) return `${APP.FRONTEND_BASE_URL}${u}`;
+
+  return u;
 }
 
 function Stars({ value }: { value: number }) {
-  const v = Math.max(0, Math.min(5, value || 0));
-  const full = Math.round(v); // simples
+  const v = Math.max(0, Math.min(5, Number(value || 0)));
+  // arredonda pra 0.5
+  const half = Math.round(v * 2) / 2;
+  const full = Math.floor(half);
+  const hasHalf = half - full === 0.5;
+
   return (
     <div className="flex items-center gap-[2px]">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <span key={i} className={i < full ? "text-amber-500" : "text-gray-300"}>
-          ★
-        </span>
-      ))}
+      {Array.from({ length: 5 }).map((_, i) => {
+        const idx = i + 1;
+
+        // cheia
+        if (idx <= full) {
+          return <Star key={i} className="w-4 h-4 text-amber-500 fill-amber-500" />;
+        }
+
+        // meia
+        if (idx === full + 1 && hasHalf) {
+          return (
+            <span key={i} className="relative inline-block w-4 h-4">
+              <Star className="absolute inset-0 w-4 h-4 text-gray-300 fill-gray-300" />
+              <span className="absolute inset-0 overflow-hidden" style={{ width: "50%" }}>
+                <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+              </span>
+            </span>
+          );
+        }
+
+        // vazia
+        return <Star key={i} className="w-4 h-4 text-gray-300" />;
+      })}
     </div>
   );
 }
@@ -95,12 +126,52 @@ export default function MetodologiaUnicaPage() {
   const [, navigate] = useLocation();
 
   const id = params?.id;
-  const token = Storage.token;
+  const token =
+    (Storage as any).token ??
+    localStorage.getItem("token") ??
+    sessionStorage.getItem("token") ??
+    "";
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<MetodologiaDetalhe | null>(null);
   const [busy, setBusy] = useState(false);
   const [thumbFromVideo, setThumbFromVideo] = useState<Record<string, string>>({});
+  const [playerOpen, setPlayerOpen] = useState(false);
+  const [playerItem, setPlayerItem] = useState<MetodologiaItem | null>(null);
+  const [maxTime, setMaxTime] = useState(0); // trava seek
+
+  async function concluirItem(itemId: string) {
+    if (!id) return;
+    if (!data?.viewer?.temAcesso) return;
+
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/metodologias/${id}/concluir-item`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ itemId }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.message || "Falha ao concluir item");
+
+      // ✅ atualiza o state local sem precisar recarregar tudo
+      setData((prev) => {
+        if (!prev) return prev;
+        const prevIds = prev.viewer?.progresso?.concluidos || [];
+        const set = new Set(prevIds);
+        set.add(itemId);
+        return {
+          ...prev,
+          viewer: {
+            ...prev.viewer,
+            progresso: { ...prev.viewer.progresso, concluidos: Array.from(set) },
+          },
+        };
+      });
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message || "Erro ao marcar como concluído");
+    }
+  }
 
   async function gerarThumbDoVideo(itemId: string, videoUrl: string) {
     try {
@@ -212,11 +283,18 @@ export default function MetodologiaUnicaPage() {
   const concluIds = useMemo(() => new Set(data?.viewer?.progresso?.concluidos || []), [data]);
   const totalItens = useMemo(() => (data?.itens?.filter((i) => i.publicado !== false).length || 0), [data]);
   const totalConcluidos = useMemo(() => (data?.viewer?.progresso?.concluidos?.length || 0), [data]);
-
   const pct = totalItens > 0 ? Math.round((totalConcluidos / totalItens) * 100) : 0;
+  const metodologiaCompleta = pct >= 100;
+  const jaAvaliou = !!data?.viewer?.minhaAvaliacao;
 
   async function assinarMetodologia() {
     if (!data || !id) return;
+
+    const motivo = String(data.viewer?.motivoBloqueio || "");
+    if (motivo === "JA_ASSINADA") {
+      navigate("/treinos/Minhas-Metodologias");
+      return;
+    }
 
     // 1) Se o backend disser que não pode assinar agora, decide o destino certo:
     if (!data.viewer.podeAssinarAgora) {
@@ -244,7 +322,7 @@ export default function MetodologiaUnicaPage() {
         // B) Já atingiu limite (1/1 ou 3/3) -> vai pra Minhas Metodologias
         if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") {
         alert("Você já atingiu o limite de metodologias do seu plano neste ciclo.");
-        navigate("/metodologias/minhas");
+        navigate("/treinos/Minhas-Metodologias");
         return;
         }
 
@@ -274,7 +352,7 @@ export default function MetodologiaUnicaPage() {
         // Se backend responder limite
         if (j?.code === "LIMITE_METODOLOGIAS") {
             alert(j?.message || "Você já atingiu o limite do seu plano.");
-            navigate("/metodologias/minhas");
+            navigate("/treinos/Minhas-Metodologias");
             return;
         }
 
@@ -284,7 +362,7 @@ export default function MetodologiaUnicaPage() {
 
         // sucesso: redireciona para Minhas Metodologias (ou recarrega detalhe)
         alert("✅ Metodologia adicionada em 'Minhas Metodologias'!");
-        navigate("/metodologias/minhas");
+        navigate("/treinos/Minhas-Metodologias");
     } catch (e) {
         console.error(e);
         alert("Erro ao assinar");
@@ -305,6 +383,7 @@ export default function MetodologiaUnicaPage() {
   const pontosTotal = Number(data.pontosTotal ?? 0);
   const assinaturas = Number(data.totalAssinantes ?? 0);
   const capaHeader = normalizeMediaUrl(data.capaUrl) || AVATAR_FALLBACK;
+  const podeAvaliar = !!data?.viewer?.podeAvaliar; // vindo do backend
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8">
@@ -389,6 +468,7 @@ export default function MetodologiaUnicaPage() {
                     if (motivo === "PRECISA_LEARNING" || motivo === "PRECISA_PAGAR") return "Ativar Learning";
 
                     if (motivo === "LIMITE_METODOLOGIAS" || motivo === "JA_ESCOLHIDA_NO_MES") return "Ver minhas metodologias";
+
                     return "Assinar metodologia";
                 })()}
                 </button>
@@ -435,6 +515,33 @@ export default function MetodologiaUnicaPage() {
                 <div className="h-full bg-green-700" style={{ width: `${pct}%` }} />
               </div>
             </div>
+
+            {/* ✅ FINALIZAR METODOLOGIA (COLE AQUI) */}
+            <div className="mt-4">
+              <button
+                disabled={!data.viewer.temAcesso || !metodologiaCompleta || jaAvaliou || !podeAvaliar}
+                onClick={() => {
+                  if (!data.viewer.temAcesso) return;
+                  if (!metodologiaCompleta) return;
+
+                  const titulo = encodeURIComponent(data.titulo || "Metodologia");
+                  navigate(`/metodologias/avaliar?metodologiaId=${data.id}`);
+                }}
+                className={`w-full h-12 rounded-xl font-semibold text-white ${
+                  !data.viewer.temAcesso || !metodologiaCompleta || jaAvaliou
+                    ? "bg-gray-300"
+                    : "bg-green-800 hover:bg-green-900"
+                }`}
+              >
+                {jaAvaliou ? "Metodologia já avaliada ✅" : "Finalizar metodologia"}
+              </button>
+
+              {!metodologiaCompleta && (
+                <div className="mt-2 text-xs text-gray-500">
+                  Conclua todos os vídeos e treinos para liberar o botão.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -452,19 +559,29 @@ export default function MetodologiaUnicaPage() {
 
             <div className="mt-3 space-y-3">
               {w.itens.map((it) => {
-                const isVideo = String(it.tipo).toUpperCase() === "VIDEO";
-                const isTreino = String(it.tipo).toUpperCase() === "TREINO";
                 const concluido = concluIds.has(it.id);
                 const locked = bloquearAcao();
-                const thumb =
-                    (isVideo ? (normalizeMediaUrl(it.thumbUrl) || thumbFromVideo[it.id] || null) : null) ||
-                    (isTreino ? normalizeMediaUrl(it.treinoProgramado?.imagemUrl) : null) ||
-                    AVATAR_FALLBACK;
+                const isVideo = String(it.tipo).toUpperCase() === "VIDEO";
+                const isTreino = String(it.tipo).toUpperCase() === "TREINO";
+                const capaFallback = data?.capaUrl ? normalizeMediaUrl(data.capaUrl) : null;
+
+                const thumbRaw = isVideo
+                  ? (it.thumbUrl || thumbFromVideo[it.id] || capaFallback)
+                  : isTreino
+                    ? (
+                        it.treinoProgramado?.imagemUrl ||
+                        (it.treinoProgramado as any)?.capaUrl ||
+                        (it.treinoProgramado as any)?.thumbUrl ||
+                        capaFallback
+                      )
+                    : capaFallback;
+
+                const imgSrc = normalizeMediaUrl(thumbRaw) || AVATAR_FALLBACK;
 
                 return (
                   <div key={it.id} className="rounded-xl border p-3 flex items-center gap-3">
                     <img
-                      src={thumb || AVATAR_FALLBACK}
+                      src={imgSrc}
                       onError={(e) => {
                         e.currentTarget.onerror = null;
                         e.currentTarget.src = AVATAR_FALLBACK;
@@ -512,9 +629,9 @@ export default function MetodologiaUnicaPage() {
                               className="px-3 py-2 rounded-lg bg-green-800 text-white text-sm font-semibold hover:bg-green-900 disabled:opacity-60"
                               onClick={() => {
                                 if (locked) return;
-                                // ✅ aqui você abre o player (modal ou rota)
-                                // exemplo simples:
-                                window.open(it.videoUrl || "#", "_blank");
+                                setPlayerItem(it);
+                                setMaxTime(0);
+                                setPlayerOpen(true);
                               }}
                             >
                               {concluido ? "Ver novamente" : "Assistir"}
@@ -529,7 +646,11 @@ export default function MetodologiaUnicaPage() {
                                 if (locked) return;
                                 // ✅ ir para treino
                                 if (it.treinoProgramadoId) {
-                                  navigate(`/treinos/unico?programadoId=${it.treinoProgramadoId}`);
+                                  navigate(
+                                    `/treinos/unico?programadoId=${it.treinoProgramadoId}` +
+                                    `&metodologiaId=${data.id}` +
+                                    `&metodologiaItemId=${it.id}`
+                                  );
                                 }
                               }}
                             >
@@ -553,6 +674,55 @@ export default function MetodologiaUnicaPage() {
           </div>
         ))}
       </div>
+
+      {playerOpen && playerItem && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl bg-white rounded-2xl overflow-hidden shadow-lg">
+            <div className="flex items-center justify-between p-3 border-b">
+              <div className="font-semibold truncate">{playerItem.titulo}</div>
+              <button
+                className="px-3 py-1 rounded-lg border text-sm"
+                onClick={() => {
+                  setPlayerOpen(false);
+                  setPlayerItem(null);
+                }}
+              >
+                Fechar
+              </button>
+            </div>
+
+            <div className="bg-black">
+              <video
+                src={normalizeMediaUrl(playerItem.videoUrl) || playerItem.videoUrl || ""}
+                controls
+                controlsList="nodownload noplaybackrate"
+                disablePictureInPicture
+                playsInline
+                autoPlay
+                className="w-full max-h-[70vh]"
+                onTimeUpdate={(e) => {
+                  const v = e.currentTarget;
+                  setMaxTime((prev) => Math.max(prev, v.currentTime));
+                }}
+                onSeeking={(e) => {
+                  const v = e.currentTarget;
+                  if (v.currentTime > maxTime + 0.25) v.currentTime = maxTime;
+                }}
+                onEnded={async () => {
+                  await concluirItem(playerItem.id);
+                  // ✅ fecha ao concluir (opcional, mas recomendado)
+                  setPlayerOpen(false);
+                  setPlayerItem(null);
+                }}
+              />
+            </div>
+
+            <div className="p-3 text-xs text-gray-600">
+              Você precisa assistir até o final para marcar como concluído.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
