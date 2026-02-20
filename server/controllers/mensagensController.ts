@@ -7,6 +7,7 @@ import path from "path";
 import { getDailyUsage } from "../services/usage.js";
 import { audit } from "../services/audit.js"; 
 import { recomputeAndEmitBadge } from "./notificacoesController.js";
+import { NotificacaoTipo } from "@prisma/client";
 
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
@@ -217,7 +218,7 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
           data: {
             usuarioId: paraId,
             actorId: deId,
-            tipo: "MENSAGEM",
+            tipo: NotificacaoTipo.MENSAGEM,
             titulo: "Nova mensagem",
             mensagem: "Você recebeu uma nova mensagem.",
             link: `/mensagens?otherId=${deId}`,
