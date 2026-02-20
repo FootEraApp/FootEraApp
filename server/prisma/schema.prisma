@@ -95,6 +95,7 @@ model Usuario {
   notificacoes           Notificacao[]             @relation("NotificacaoUsuario")
   notificacoesGeradas    Notificacao[]             @relation("NotificacaoActor")
   AvaliacaoTreino        AvaliacaoTreino[]
+  AvaliacaoMetodologia   AvaliacaoMetodologia[]
 
   metodologiasCriadas   Metodologia[]          @relation("MetodologiaCriador")
   metodologiasAssinadas MetodologiaAssinante[]
@@ -480,6 +481,7 @@ model Metodologia {
   itens             MetodologiaItem[]
   assinantes        MetodologiaAssinante[]
   MetodologiaTreino MetodologiaTreino[]
+  avaliacoes        AvaliacaoMetodologia[]
 
   @@index([criadorUsuarioId])
   @@index([professorId])
@@ -909,6 +911,23 @@ model AvaliacaoTreino {
   @@index([treinoAgendadoId])
   @@index([atletaId])
   @@index([autorTipo, autorId])
+  @@index([createdAt])
+}
+
+model AvaliacaoMetodologia {
+  id            String      @id @default(uuid())
+  metodologiaId String
+  usuarioId     String
+  nota          Int
+  comentario    String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  metodologia   Metodologia @relation(fields: [metodologiaId], references: [id], onDelete: Cascade)
+  usuario       Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([metodologiaId, usuarioId])
+  @@index([metodologiaId])
+  @@index([usuarioId])
   @@index([createdAt])
 }
 

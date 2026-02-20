@@ -60,6 +60,7 @@ import PaginaVerificarEmail from "./pages/verificar-email.js";
 import CriarMetodologia from "./pages/metodologias/create.js";
 import MinhasMetodologias from "./pages/metodologias/minhas.js";
 import MetodologiaUnicaPage from "./pages/metodologias/metodologia-unica.js";
+import AvaliarMetodologia from "./pages/metodologias/avaliar.js";
 
 export function AppRoutes() {
   return (
@@ -183,6 +184,7 @@ export function AppRoutes() {
       <Route path="/perfil"><Private><PaginaPerfil /></Private></Route>
       <Route path="/post/:id"><Private><PaginaPostUnico /></Private></Route>
       <Route path="/post"><Private><PaginaCreatePost /></Private></Route>
+      <Route path="/metodologias/avaliar" component={AvaliarMetodologia} />
       <Route path="/metodologias/:id"><MetodologiaUnicaPage/></Route>
       <Route path="/submissao"><PaginaSubmissao /></Route>
       <Route path="/explorar"><Private><PaginaExplorar /></Private></Route>
