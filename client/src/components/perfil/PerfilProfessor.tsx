@@ -143,6 +143,47 @@ type TreinoCriado = {
   papel?: "Criador" | "Colaborador";
 };
 
+function pickPontuacao(raw: any): number | null {
+  const candidates = [
+    raw?.pontuacaoTotal,
+    raw?.pontuacao,
+    raw?.pontos,
+    raw?.totalPontos,
+    raw?.pontuacaoAtual,
+    raw?.pontuacao_atual,
+
+    raw?.atleta?.pontuacaoTotal,
+    raw?.atleta?.pontuacao,
+    raw?.atleta?.pontos,
+
+    raw?.usuario?.pontuacaoTotal,
+    raw?.usuario?.pontuacao,
+    raw?.usuario?.pontos,
+  ];
+
+  for (const v of candidates) {
+    const n = typeof v === "string" ? Number(v) : v;
+    if (typeof n === "number" && Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function pickPontuacaoFromPerfilPontuacaoEndpoint(raw: any): number | null {
+  if (!raw) return null;
+
+  // alguns backends já devolvem um "total"
+  const totalDireto = pickPontuacao(raw);
+  if (typeof totalDireto === "number") return totalDireto;
+
+  // igual o ProfileHeader: performance + disciplina + responsabilidade
+  const performance = Number(raw?.performance) || 0;
+  const disciplina = Number(raw?.disciplina) || 0;
+  const responsabilidade = Number(raw?.responsabilidade) || 0;
+
+  const total = performance + disciplina + responsabilidade;
+  return Number.isFinite(total) ? total : null;
+}
+
 function SectionCard({
   title,
   children,
@@ -473,7 +514,7 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
       posicao: x.posicao ?? x.atleta?.posicao ?? null,
       idade: x.idade ?? x.atleta?.idade ?? null,
       categoria: x.categoria ?? x.atleta?.categoria ?? null,
-      pontuacao: x.pontuacao ?? null,
+      pontuacao: pickPontuacao(x),
     }));
 
     const seen = new Set<string>();
@@ -484,7 +525,31 @@ export default function PerfilProfessor({ idDaUrl }: Props) {
       return true;
     });
 
-    setVinculados(unique);
+    // ✅ agora traz a pontuação real do mesmo jeito que o ProfileHeader
+    const enriched = await Promise.all(
+      unique.map(async (a) => {
+        const uid = String(a.usuarioId || a.id || "").trim();
+        if (!uid) return a;
+
+        try {
+          const r2 = await axios.get(
+            `${API.BASE_URL}/api/perfil/${encodeURIComponent(uid)}/pontuacao`,
+            { headers: h }
+          );
+
+          const total = pickPontuacaoFromPerfilPontuacaoEndpoint(r2.data);
+          return {
+            ...a,
+            pontuacao: typeof total === "number" ? total : a.pontuacao ?? null,
+          };
+        } catch {
+          return a;
+        }
+      })
+    );
+
+    setVinculados(enriched);
+
   }, [rawToken, isOwn, data?.professor?.id, data?.usuario?.id]);
 
   useEffect(() => {
