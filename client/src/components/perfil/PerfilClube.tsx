@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
 import Storage from "../../../../server/utils/storage.js";
-import { API } from "../../config.js";
+import { API, APP } from "../../config.js";
 import ProfileHeader from "../profile/ProfileHeader.js";
 import { Link } from "wouter";
 import { 
@@ -17,6 +17,8 @@ import {
 import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
+
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
 type Props = { idDaUrl?: string; usuarioId?: string | null };
 type UsuarioMin = { id: string; nome: string; email: string; foto?: string | null };
@@ -118,12 +120,25 @@ type AtividadeRecenteTipo =
 
 type AtividadeRecente = {
   id: string;
-  tipo: AtividadeRecenteTipo | string; // ✅ fallback caso venha algo inesperado
+  tipo: AtividadeRecenteTipo | string;
   titulo: string;
-  criadoEm: string;
+  createdAt?: string | null;   // ✅ nome certo
+  criadoEm?: string | null;    // ✅ opcional, caso algum endpoint antigo use
   imagemUrl?: string | null;
   link?: string | null;
 };
+
+function parseDateSafe(it: any) {
+  const raw =
+    it?.createdAt ??
+    it?.criadoEm ??
+    it?.data ??
+    it?.created_at ??
+    null;
+
+  const d = raw ? new Date(raw) : null;
+  return d && !isNaN(+d) ? d : null;
+}
 
 function EmptyState({ text }: { text: string }) {
   return (
@@ -132,6 +147,15 @@ function EmptyState({ text }: { text: string }) {
       <p>{text}</p>
     </div>
   );
+}
+
+function resolveImg(raw?: string | null) {
+  if (!raw) return null;
+  const u = String(raw).trim();
+  if (!u) return null;
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
+  return `${API.BASE_URL}/${u}`;
 }
 
 function SectionCard({
@@ -392,7 +416,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
 
     async function loadAtividadesIfNeeded() {
       if (aba !== "perfil") return;
-      if (atividades != null) return; 
+      if (atividades != null) return;
       if (!targetUserForActivities) return;
 
       try {
@@ -400,8 +424,24 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
           `${API.BASE_URL}/api/perfil/${targetUserForActivities}/atividades`,
           { headers }
         );
-        if (!cancel.v) setAtividades(Array.isArray(itens) ? itens : []);
-      } catch (e) {
+
+        if (cancel.v) return;
+
+        const arr = Array.isArray(itens) ? itens : [];
+
+        // ✅ normaliza a data para sempre cair em createdAt
+        const normalized: AtividadeRecente[] = arr.map((it: any) => ({
+          ...it,
+          createdAt:
+            it?.createdAt ??
+            it?.criadoEm ??
+            it?.createAt ??      // caso algum lugar antigo ainda mande assim
+            it?.created_at ??
+            null,
+        }));
+
+        setAtividades(normalized);
+      } catch {
         if (!cancel.v) setAtividades([]);
       }
     }
@@ -935,13 +975,25 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                     : tipoNorm === "EVENTO" ? "Evento"
                     : "Atividade";
 
+                  const d = parseDateSafe(a);
+
+                  const dataStr = d
+                    ? d.toLocaleString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "";
+
                   const content = (
                     <div className="flex items-center gap-3">
                       <Icon className="w-5 h-5 text-green-700" />
 
                       {a.imagemUrl ? (
                         <img
-                          src={a.imagemUrl}
+                          src={resolveImg(a.imagemUrl) || AVATAR_FALLBACK}
                           alt={a.titulo}
                           className="w-10 h-10 rounded-lg object-cover border border-green-100"
                         />
@@ -950,7 +1002,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
                       <div className="text-sm">
                         <div className="font-medium text-green-900">{a.titulo}</div>
                         <div className="text-xs text-green-900/70">
-                          {tipoLabel} • {new Date(a.criadoEm).toLocaleString()}
+                          {tipoLabel} • {dataStr}
                         </div>
                       </div>
 
