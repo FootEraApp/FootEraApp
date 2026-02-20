@@ -246,6 +246,42 @@ const formatRelativo = (iso: string) => {
   return `há ${dias} d`;
 };
 
+// ✅ cache para não bater na API toda hora
+const pontuacaoCacheRef = { current: new Map<string, number>() };
+
+// ✅ mesma lógica do ProfileHeader: soma performance + disciplina + responsabilidade
+async function fetchPontuacaoTotalPorUsuarioId(
+  usuarioId: string,
+  headers: any
+): Promise<number | null> {
+  const uid = String(usuarioId || "").trim();
+  if (!uid) return null;
+
+  const cached = pontuacaoCacheRef.current.get(uid);
+  if (typeof cached === "number") return cached;
+
+  try {
+    const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(uid)}/pontuacao`, {
+      headers,
+    });
+
+    if (!r.ok) return null;
+    const data: any = await r.json();
+
+    // mesma soma do ProfileHeader
+    const performance = Number(data?.performance) || 0;
+    const disciplina = Number(data?.disciplina) || 0;
+    const responsabilidade = Number(data?.responsabilidade) || 0;
+
+    const total = performance + disciplina + responsabilidade;
+
+    pontuacaoCacheRef.current.set(uid, total);
+    return total;
+  } catch {
+    return null;
+  }
+}
+
 function onImgErrorFallback(e: React.SyntheticEvent<HTMLImageElement>) {
   const img = e.currentTarget;
   if ((img as any).dataset?.fallbackApplied) return;
@@ -471,30 +507,48 @@ const GerenciarAtletas: React.FC = () => {
       const { data } = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, { headers, params });
       const lista = (data?.atletas || []) as any[];
       const normalizados: AtletaMin[] = lista.map((a) => {
-      const nomeUsuario = a.usuario?.nome ?? null;
+        const nomeUsuario = a.usuario?.nome ?? null;
 
-      return {
-        id: a.id,
-        usuarioId: a.usuarioId,
-        nome: a.nome ?? "Atleta",
-        sobrenome: a.sobrenome ?? null,
-        nomeUsuario,
-        idade: a.idade ?? null,
-        foto: a.foto ?? a.usuario?.foto ?? null,
-        posicao: (posicoesMap as any)[a.posicao] ?? a.posicao ?? null,
-        categoria: apiToUiCategoria(a.categoria),
-        pontuacao: a.pontuacao ?? null,
-        ativoRecentemente: !!a.ativoRecentemente,
-        clubeNome: a.clube?.nome ?? a.clubeNome ?? null,
-        escolinhaNome: a.escolinha?.nome ?? a.escolinhaNome ?? null,
-        professorNome:
-          a.professor?.nome ??
-          a.professor?.usuario?.nome ??
-          a.professorNome ??
-          null,
-      };
-    });
+        return {
+          id: a.id,
+          usuarioId: a.usuarioId,
+          nome: a.nome ?? "Atleta",
+          sobrenome: a.sobrenome ?? null,
+          nomeUsuario,
+          idade: a.idade ?? null,
+          foto: a.foto ?? a.usuario?.foto ?? null,
+          posicao: (posicoesMap as any)[a.posicao] ?? a.posicao ?? null,
+          categoria: apiToUiCategoria(a.categoria),
+          pontuacao: a.pontuacao ?? null, // (vai ser sobrescrito abaixo com o cálculo real)
+          ativoRecentemente: !!a.ativoRecentemente,
+          clubeNome: a.clube?.nome ?? a.clubeNome ?? null,
+          escolinhaNome: a.escolinha?.nome ?? a.escolinhaNome ?? null,
+          professorNome:
+            a.professor?.nome ??
+            a.professor?.usuario?.nome ??
+            a.professorNome ??
+            null,
+        };
+      });
+
+      // ✅ seta rápido (UI não fica vazia)
       setAtletas(normalizados);
+
+      // ✅ agora resolve pontuação REAL igual ProfileHeader (p/ cada atleta)
+      const withRealScore = await Promise.all(
+        normalizados.map(async (at) => {
+          const total = await fetchPontuacaoTotalPorUsuarioId(at.usuarioId, {
+            ...(headers || {}),
+          });
+
+          return {
+            ...at,
+            pontuacao: typeof total === "number" ? total : (at.pontuacao ?? null),
+          };
+        })
+      );
+
+      setAtletas(withRealScore);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Falha ao carregar atletas");
     } finally {

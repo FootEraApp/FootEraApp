@@ -225,6 +225,26 @@ export default function PerfilEscola({ idDaUrl }: Props) {
 
   const escolinhaId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
 
+  async function buscarPontuacaoRealDoUsuario(usuarioId: string): Promise<number | null> {
+    if (!token || !usuarioId) return null;
+
+    try {
+      const { data } = await axios.get(
+        `${API.BASE_URL}/api/perfil/${encodeURIComponent(usuarioId)}/pontuacao`,
+        { headers }
+      );
+
+      // mesmo padrão do ProfileHeader.tsx
+      const performance = Number(data?.performance) || 0;
+      const disciplina = Number(data?.disciplina) || 0;
+      const responsabilidade = Number(data?.responsabilidade) || 0;
+
+      return performance + disciplina + responsabilidade;
+    } catch {
+      return null;
+    }
+  }
+
   useEffect(() => {
     setVinculados(null);
     setObservados(null);
@@ -380,7 +400,23 @@ export default function PerfilEscola({ idDaUrl }: Props) {
             },
           }
         );
-        setVinculados(Array.isArray(resp?.atletas) ? resp.atletas : []);
+
+        const base = Array.isArray(resp?.atletas) ? resp.atletas : [];
+
+        // ✅ sobrescreve pontuação com a "oficial" do perfil
+        const comPontuacaoReal = await Promise.all(
+          base.map(async (a) => {
+            const uid = String(a.usuarioId || "").trim();
+            const pts = uid ? await buscarPontuacaoRealDoUsuario(uid) : null;
+
+            return {
+              ...a,
+              pontuacao: typeof pts === "number" ? pts : (a.pontuacao ?? null),
+            };
+          })
+        );
+
+        setVinculados(comPontuacaoReal);
       } catch {
         setVinculados([]);
       }
