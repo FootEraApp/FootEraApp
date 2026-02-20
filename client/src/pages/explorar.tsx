@@ -52,6 +52,7 @@ type AtletaItem = {
   estado?: string | null;
   independente?: boolean | null;
   pontuacao?: number | null;
+  pontuacaoTotal?: number | null;
   categoriaBase?: string | null;
   idade?: number | null;
   categoria?: string[];
@@ -369,6 +370,47 @@ function Explorar() {
   const [inscrevendoEvento, setInscrevendoEvento] = useState(false);
   const [erroEvento, setErroEvento] = useState<string | null>(null);
 
+    // ✅ cache local dos pontos totais corretos por usuarioId
+  const [pontosCache, setPontosCache] = useState<Record<string, number>>({});
+
+  function getUserIdFromAtleta(a: AtletaItem): string {
+    return String(a?.usuario?.id ?? a?.usuarioId ?? a?.id ?? "").trim();
+  }
+
+  function calcTotalFromPontuacaoPayload(data: any): number {
+    const performance = Number(data?.performance) || 0;
+    const disciplina = Number(data?.disciplina) || 0;
+    const responsabilidade = Number(data?.responsabilidade) || 0;
+    return performance + disciplina + responsabilidade;
+  }
+
+  async function fetchPontuacaoTotalCorreta(usuarioId: string): Promise<number | null> {
+    const id = String(usuarioId || "").trim();
+    if (!id) return null;
+
+    // já temos no cache
+    if (typeof pontosCache[id] === "number") return pontosCache[id];
+
+    const token = Storage?.token || "";
+    if (!token) return null;
+
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/perfil/${encodeURIComponent(id)}/pontuacao`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!r.ok) return null;
+
+      const data = await r.json();
+      const total = calcTotalFromPontuacaoPayload(data);
+
+      setPontosCache((prev) => ({ ...prev, [id]: total }));
+      return total;
+    } catch {
+      return null;
+    }
+  }
+
   useEffect(() => {
     setShowFilters(false);
   }, [aba]);
@@ -435,17 +477,30 @@ function Explorar() {
     const independente =
       typeof independenteRaw === "boolean" ? independenteRaw : null;
     const pontuacaoRaw =
-      (a as any)?.pontuacao ??
-      (a as any)?.total ??
+      (a as any)?.pontuacaoTotal ??
+      (typeof (a as any)?.pontuacao === "object"
+        ? (a as any)?.pontuacao?.total
+        : (a as any)?.pontuacao) ??
+      (a as any)?.pontuacaoGeral ??
       (a as any)?.pontos ??
       (a as any)?.pontuacaoTotal ??
+      (a as any)?.total ??
+      (a as any)?.pontuacaoTotal ??
       null;
-    const pontuacao =
+        const uidLocal = getUserIdFromAtleta(a);
+
+    const pontuacaoFallback =
       typeof pontuacaoRaw === "number"
         ? pontuacaoRaw
         : pontuacaoRaw != null && !Number.isNaN(Number(pontuacaoRaw))
         ? Number(pontuacaoRaw)
         : null;
+
+    // ✅ se já buscamos a pontuação correta (igual no ProfileHeader), usa ela
+    const pontuacao =
+      uidLocal && typeof pontosCache[uidLocal] === "number"
+        ? pontosCache[uidLocal]
+        : pontuacaoFallback;
     const categoria =
       (a as any)?.categoriaBase ||
       (Array.isArray((a as any)?.categoria) && (a as any).categoria[0]) ||
@@ -497,7 +552,7 @@ function Explorar() {
     });
 
     return sortProThenName(base, (a) => (a as any)?.usuario?.nome ?? "");
-  }, [dados.atletas, filtrosKey, busca]);
+  }, [dados.atletas, filtrosKey, busca, pontosCache]);
 
   const eventosFiltrados = useMemo(() => {
     const q = (busca || "").toLowerCase();
@@ -670,6 +725,38 @@ function Explorar() {
         setTopPorCategoria({});
       });
   }, []);
+
+    // ✅ Pré-carrega pontuação correta (mesma lógica do ProfileHeader) pros atletas visíveis
+  useEffect(() => {
+    if (aba !== "atletas") return;
+
+    const token = Storage?.token || "";
+    if (!token) return;
+
+    const visibles = atletasFiltrados
+      .slice(0, showCountAtletas)
+      .map((a) => getUserIdFromAtleta(a))
+      .filter(Boolean);
+
+    const missing = visibles.filter((id) => typeof pontosCache[id] !== "number");
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      // leve controle de concorrência (não estoura requests)
+      const CHUNK = 8;
+      for (let i = 0; i < missing.length; i += CHUNK) {
+        if (cancelled) return;
+        const slice = missing.slice(i, i + CHUNK);
+        await Promise.allSettled(slice.map((id) => fetchPontuacaoTotalCorreta(id)));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [aba, atletasFiltrados, showCountAtletas, pontosCache]);
 
   useEffect(() => {
     const token = Storage?.token ?? (typeof window !== "undefined" ? Storage.token : "");
@@ -1600,6 +1687,7 @@ function Explorar() {
                       ? `${ev.local ? ev.local + " • " : ""}${ev.cidade ?? ""}${ev.estado ? ` - ${ev.estado}` : ""}`
                       : "Local a definir";
 
+                      
                   return (
                     <button
                       key={ev.id}

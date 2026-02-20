@@ -178,6 +178,30 @@ function SectionCard({
   );
 }
 
+async function fetchPontuacaoTotalByUsuarioId(
+  usuarioId: string,
+  headers: any
+): Promise<number | null> {
+  if (!usuarioId) return null;
+
+  try {
+    const r = await fetch(
+      `${API.BASE_URL}/api/perfil/${encodeURIComponent(usuarioId)}/pontuacao`,
+      { headers }
+    );
+    if (!r.ok) return null;
+    const data = await r.json();
+
+    const performance = Number(data?.performance) || 0;
+    const disciplina = Number(data?.disciplina) || 0;
+    const responsabilidade = Number(data?.responsabilidade) || 0;
+
+    return performance + disciplina + responsabilidade; // ✅ igual ProfileHeader
+  } catch {
+    return null;
+  }
+}
+
 export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
   const token = Storage.token;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -310,24 +334,27 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
 
     let cancel = false;
     (async () => {
-      const usuarioIdEnt = entidadeUsuarioId;
-      if (!usuarioIdEnt) {
+      const idEntidade = clubeId; // ✅ clubeId mesmo
+      if (!idEntidade) {
         if (!cancel) {
           setAtletasHeaderCount(0);
           setVinculadosPreview([]);
         }
         return;
       }
+
       try {
         const params: any = {
           vinculo: "clube",
-          id: usuarioIdEnt,
+          id: idEntidade,
           order: "pontuacao_desc",
+          incluirPontuacao: 1,
         };
-        const resp = await axios.get(
-          `${API.BASE_URL}/api/gerenciar/atletas`,
-          { headers, params }
-        );
+
+        const resp = await axios.get(`${API.BASE_URL}/api/gerenciar/atletas`, {
+          headers,
+          params,
+        });
 
         const rows: any[] = Array.isArray(resp.data?.atletas)
           ? resp.data.atletas
@@ -338,19 +365,44 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
           : [];
 
         if (cancel) return;
+
         setAtletasHeaderCount(rows.length);
-        setVinculadosPreview(
-          rows.slice(0, 5).map((r) => ({
-            id: r.id || r.atletaId,               
-            atletaId: r.atletaId || r.id,
-            usuarioId: r.usuarioId ?? r.usuario?.id ?? null, 
-            nome: r.nome,
-            foto: r.foto ?? null,
-            posicao: r.posicao ?? null,
-            categoria: r.categoria ?? null,
-            pontuacao: r.pontuacao ?? null,
-          }))
+
+        // ✅ Só pro preview (5) — busca a pontuação REAL igual ao ProfileHeader
+        const top5 = rows.slice(0, 5);
+
+        const mapped = await Promise.all(
+          top5.map(async (r) => {
+            const usuarioIdRow =
+              String(r.usuarioId ?? r.usuario?.id ?? r.usuario?.usuarioId ?? "").trim();
+
+            const pontuacaoTotal =
+              usuarioIdRow
+                ? await fetchPontuacaoTotalByUsuarioId(usuarioIdRow, headers)
+                : null;
+
+            return {
+              id: r.id || r.atletaId,
+              atletaId: r.atletaId || r.id,
+              usuarioId: usuarioIdRow || null,
+              nome: r.nome,
+              foto: r.foto ?? null,
+              posicao: r.posicao ?? null,
+              categoria: r.categoria ?? null,
+
+              // ✅ aqui é o que você quer: mesmo número do ProfileHeader (ex.: 171)
+              pontuacao:
+                (typeof pontuacaoTotal === "number" ? pontuacaoTotal : null) ??
+                (typeof r.pontuacao === "number" ? r.pontuacao : null) ??
+                (typeof r.pontuacaoTotal === "number" ? r.pontuacaoTotal : null) ??
+                (typeof r.pontos === "number" ? r.pontos : null) ??
+                null,
+            };
+          })
         );
+
+        if (cancel) return;
+        setVinculadosPreview(mapped);
       } catch {
         if (!cancel) {
           setAtletasHeaderCount(0);
@@ -362,7 +414,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
     return () => {
       cancel = true;
     };
-  }, [token, entidadeUsuarioId]);
+  }, [token, clubeId]); // ✅ dependências corretas
 
   useEffect(() => {
     setAtividades(null);
