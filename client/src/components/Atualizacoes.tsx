@@ -1,3 +1,4 @@
+// client/src/components/Atualizacoes.tsx
 import React, { useState } from "react";
 
 type UpdateType = "atualizacao" | "correcoes";
@@ -54,6 +55,134 @@ function UpdateCard({
 export default function Atualizacoes() {
   return (
     <div className="space-y-4 text-sm text-gray-800">
+
+      <UpdateCard type="atualizacao" title="✨ Atualizações — 20/02/2026">
+        <ul className="list-disc list-inside space-y-1">
+          <li>
+            Implementamos um sistema de <strong>“lixeira” para contas</strong>:
+            ao excluir, a conta vai para lixeira e só é removida definitivamente após{" "}
+            <strong>30 dias</strong>.
+          </li>
+          <li>
+            Adicionamos <strong>restauração de conta</strong> dentro do prazo de 30 dias
+            (pelo usuário ou pelo admin).
+          </li>
+          <li>
+            Criamos o <strong>status online</strong> (online / ausente / offline) exibido no{" "}
+            <strong>perfil único</strong> e no sistema de <strong>mensagens</strong>.
+          </li>
+          <li>
+            Novo controle de privacidade: o usuário pode{" "}
+            <strong>bloquear nas configurações</strong> se o status online será exibido.
+          </li>
+          <li>
+            O status online agora aparece apenas para conexões permitidas, como{" "}
+            <strong>seguidores mútuos</strong> e pessoas que <strong>treinam juntas</strong>.
+          </li>
+          <li>
+            Treinos de <strong>professores parceiros</strong> agora podem ser publicados para{" "}
+            <strong>toda a FootEra</strong> (treino parceiro) ou apenas para{" "}
+            <strong>seus próprios alunos</strong> (treino normal), com opção dedicada.
+          </li>
+          <li>
+            Criamos o módulo de <strong>Metodologias</strong> (para assinantes), com aulas
+            que podem ter <strong>vários treinos</strong>, blocos por <strong>semana</strong>,
+            pontuação e agendamento.
+          </li>
+          <li>
+            Metodologias agora suportam <strong>video-aulas</strong> (10min a 1h), com
+            pontuação proporcional ao tempo e opção de assistir em{" "}
+            <strong>dia aleatório</strong>.
+          </li>
+          <li>
+            Adicionamos <strong>thumbUrl</strong> para vídeos das metodologias.
+          </li>
+          <li>
+            Ao finalizar uma metodologia, liberamos{" "}
+            <strong>avaliação com nota</strong> (similar aos treinos).
+          </li>
+          <li>
+            Evitamos duplicação: agora não é possível criar{" "}
+            <strong>mais de uma metodologia com o mesmo nome</strong> por acidente, com
+            alerta de sucesso/erro e suporte a foto da metodologia.
+          </li>
+          <li>
+            Metodologias agora podem ser separadas por público:{" "}
+            <strong>Atletas</strong>, <strong>Profissionais</strong> ou <strong>Ambos</strong>.
+          </li>
+          <li>
+            Criamos base para novos modelos de assinatura:{" "}
+            <strong>Plus</strong> (treinos + metodologias) e plano voltado para{" "}
+            <strong>learnings</strong>.
+          </li>
+          <li>
+            Fluxo de assinatura melhorado: se o usuário já tem plano de learnings, ao
+            “assinar metodologia” ele não vai para pagamento — a metodologia é liberada e
+            passa a contar no limite de metodologias selecionadas.
+          </li>
+          <li>
+            Adicionamos modo na criação de treino para indicar se o treino é{" "}
+            <strong>destinado a metodologia</strong>.
+          </li>
+          <li>
+            Nova dinâmica por turma: o professor pode escolher uma{" "}
+            <strong>turma</strong>, selecionar um treino do dia, marcar{" "}
+            <strong>presença</strong> e contabilizar <strong>pontos</strong> para os presentes.
+          </li>
+        </ul>
+      </UpdateCard>
+
+      <UpdateCard type="correcoes" title="🐞 Correções de bugs — 20/02/2026">
+        <ul className="list-disc list-inside space-y-1">
+          <li>
+            Correção nos <strong>exercícios temporários</strong> e em casos onde treinos
+            apareciam <strong>sem exercícios</strong> ou <strong>sem vídeos</strong>.
+          </li>
+          <li>
+            Correção em “treinos novos” que às vezes vinham{" "}
+            <strong>sem exercícios</strong>, <strong>sem pontuação</strong>,{" "}
+            <strong>sem data agendada</strong> ou <strong>sem imagem</strong>.
+          </li>
+          <li>
+            Ajuste para permitir <strong>reagir aos posts</strong> também na página de{" "}
+            <strong>perfil</strong>, igual ao feed.
+          </li>
+          <li>
+            Ajuste no <strong>Gerenciar Atletas</strong> para exibir corretamente treinos do{" "}
+            <strong>mês anterior</strong> quando o calendário mostra datas no mês seguinte.
+          </li>
+          <li>
+            Reduzimos a quantidade de vezes que <strong>treino agendado</strong> aparecia
+            duplicado no <strong>Gerenciar Turma</strong>.
+          </li>
+          <li>
+            Correção no criar metodologias para listar{" "}
+            <strong>todos os treinos do professor/escolinha/clube criador</strong>.
+          </li>
+          <li>
+            Correção no filtro de “<strong>treinos criados recentemente</strong>” que estava
+            exibindo todos os vinculados em vez de apenas os do usuário logado.
+          </li>
+          <li>
+            Ajuste para incluir treinos onde o professor é{" "}
+            <strong>colaborador</strong> tanto em “treinos criados recentemente” quanto em
+            “meus treinos”.
+          </li>
+          <li>
+            Ajustes para metodologias avulsas: liberar apenas a{" "}
+            <strong>metodologia comprada</strong> quando aplicável.
+          </li>
+          <li>
+            Metodologias concluídas agora podem aparecer como{" "}
+            <strong>atividades recentes</strong> também em perfis de{" "}
+            <strong>clube/escolinha</strong>.
+          </li>
+          <li>
+            Testes e correções para garantir que metodologias postadas apareçam em{" "}
+            <strong>Atividades Recentes</strong> no perfil de clube.
+          </li>
+        </ul>
+      </UpdateCard>
 
       <UpdateCard type="correcoes" title="🐞 Correções de bugs — ??/01/2026">
         <ul className="list-disc list-inside space-y-1">
@@ -142,10 +271,7 @@ export default function Atualizacoes() {
         </p>
       </UpdateCard>
 
-      <UpdateCard
-        type="correcoes"
-        title="🐞 Correções de bugs — 19/01/2026"
-      >
+      <UpdateCard type="correcoes" title="🐞 Correções de bugs — 19/01/2026">
         <ul className="list-disc list-inside space-y-1">
           <li>Correção no carregamento de treinos agendados;</li>
           <li>Ajustes em notificações duplicadas;</li>
