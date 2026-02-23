@@ -2385,6 +2385,10 @@ enum NotificacaoTipo {
   FOLLOW
   FOLLOW_BACK
   FOLLOW_REMOVED
+  MENSAGEM        // DM
+  MENSAGEM_GRUPO  // opcional (se usar)
+  TREINO
+  DESAFIO
 }
 
 enum TipoMembro {

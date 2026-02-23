@@ -2922,7 +2922,7 @@ async function salvarProgressoSessao(sessaoId: string) {
 
                                 {/* + pontos */}
                                 <div className="mt-1 text-sm text-gray-700">
-                                  + <b>{Number(m.pontos ?? 0)}</b> pts
+                                  Pontuação: +<b>{Number(m.pontos ?? 0)}</b> pts
                                 </div>
 
                                 {/* Criado por */}
@@ -2932,8 +2932,8 @@ async function salvarProgressoSessao(sessaoId: string) {
 
                                 {/* Descrição */}
                                 {m.descricao ? (
-                                  <div className="mt-1 text-sm text-gray-600 line-clamp-2">
-                                    {m.descricao}
+                                  <div className="mt-1 text-sm text-gray-700">
+                                    Descrição: <b>{m.descricao}</b>
                                   </div>
                                 ) : null}
                               </div>
