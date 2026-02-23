@@ -76,6 +76,7 @@ interface TreinoAgendado {
         imgDemonstrativaUrl?: string | null;
       };
       repeticoes: string;
+      series?: number | null;
     }[];
     criador?: {
       id: string;
@@ -205,6 +206,25 @@ function toYouTubeEmbed(u: string) {
     }
   } catch {}
   return u;
+}
+
+function formatSerieXReps(
+  series?: number | null,
+  repeticoes?: string | number | null
+) {
+  const reps = String(repeticoes ?? "").trim();
+  if (!reps) return "";
+
+  // Se já veio "3x12" do banco, não duplica
+  if (/\d+\s*x\s*\d+/i.test(reps)) {
+    return reps;
+  }
+
+  if (series && series > 0) {
+    return `${series}x${reps}`;
+  }
+
+  return reps;
 }
 
 function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
@@ -1001,7 +1021,29 @@ function removerFiltroMetodologia(label: string) {
         };
       });
 
-      setTreinosAgendados(listaAdaptada);
+      // ✅ remove duplicados: mesmo dia + mesmo título
+      const dedupMap = new Map<string, TreinoAgendado>();
+
+      for (const t of listaAdaptada) {
+        const rawDate = t.dataTreino ? new Date(t.dataTreino) : null;
+        const dateKey = rawDate
+          ? `${rawDate.getFullYear()}-${String(rawDate.getMonth() + 1).padStart(2, "0")}-${String(
+              rawDate.getDate()
+            ).padStart(2, "0")}`
+          : "sem-data";
+
+        const titleKey = String(t.titulo || "")
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, " ");
+
+        const key = `${dateKey}::${titleKey}`;
+
+        // se já existir um, mantém o primeiro (ou troque a regra se preferir)
+        if (!dedupMap.has(key)) dedupMap.set(key, t);
+      }
+
+      setTreinosAgendados(Array.from(dedupMap.values()));
     } catch (e) {
       console.error("Erro ao carregar treinos agendados:", e);
       setTreinosAgendados([]);
@@ -1569,9 +1611,9 @@ function removerFiltroMetodologia(label: string) {
                   >
                     {ex.exercicio.nome}
                   </div>
-                  <div className="text-sm text-gray-500">
-                    {ex.repeticoes || "-"}
-                  </div>
+                  <p className="text-sm text-gray-500">
+                    {formatSerieXReps(ex.series, ex.repeticoes)}
+                  </p>
                 </div>
               </div>
 
@@ -2223,34 +2265,25 @@ function removerFiltroMetodologia(label: string) {
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <StarsRating value={media} />
+                            <p>Avaliação media: </p><StarsRating value={media} />
                             <span className="font-semibold text-gray-800">{media.toFixed(1)}</span>
                             <span>({reviews})</span>
                           </div>
 
                           {/* + pontos */}
                           <div className="mt-1 text-sm text-gray-700">
-                            + <b>{pts}</b> pts
+                            Pontuação: +<b>{pts}</b> pts
                           </div>
 
-                          {/* Criado por */}
-                          <div className="mt-1 text-sm text-gray-700">
-                            Criado por: <b>{m.criadorTipo || "Professor"}</b>
-                          </div>
-
-                          {/* Plano */}
-                          <div className="text-sm text-gray-600">{m.planoMinimo || "Free"}</div>
+                          {m.criadorNome && (
+                            <div className="mt-1 text-sm text-gray-700">Criado por: <b>{m.criadorNome}</b></div>
+                          )}
 
                           {/* Descrição */}
                           {!!m.descricao && (
-                            <div className="mt-1 text-sm text-gray-600 line-clamp-2">
-                              {m.descricao}
+                            <div className="mt-1 text-sm text-gray-700">
+                              Descrição: <b>{m.descricao}</b>
                             </div>
-                          )}
-
-                          {/* Nome criador */}
-                          {m.criadorNome && (
-                            <div className="text-sm text-gray-500">{m.criadorNome}</div>
                           )}
                         </div>
 

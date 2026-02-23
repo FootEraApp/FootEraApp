@@ -40,6 +40,7 @@ type ExercicioSelecionadoUI = {
   id?: string;             
   ordem?: number | null;
   repeticoes?: string | number | null;
+  series?: number | null;
 };
 
 function toRepeticoesStr(v: any): string {
@@ -47,6 +48,23 @@ function toRepeticoesStr(v: any): string {
   if (typeof v === "string") return v.trim();
   if (typeof v === "number") return String(v);
   return String(v);
+}
+
+function formatSerieXReps(series?: number | null, repsRaw?: string | number | null) {
+  const s = typeof series === "number" && series > 0 ? series : null;
+
+  const reps = String(repsRaw ?? "").trim();
+  if (!reps) return null;
+
+  // Se o cara já digitou "3x12", "4 x 10", etc, não mexe
+  const jaTemX = /\d+\s*x\s*\d+/i.test(reps);
+  if (jaTemX) return reps.replace(/\s+/g, " ").trim();
+
+  // Se tem séries, monta "SxREPS"
+  if (s) return `${s}x${reps}`;
+
+  // Se não tem séries, fica só reps mesmo
+  return reps;
 }
 
 export function montarPayloadSomenteInfoEExercicios(params: {
@@ -83,11 +101,16 @@ export function montarPayloadSomenteInfoEExercicios(params: {
       const rawId = it.exercicioId ?? it.id ?? "";
       const exercicioId = String(rawId).trim();
 
+      const repsFinal =
+        formatSerieXReps((it as any).series ?? null, it.repeticoes) ??
+        toRepeticoesStr(it.repeticoes);
+
       return {
         exercicioId,
         ordem: Number.isFinite(Number(it.ordem)) ? Number(it.ordem) : idx + 1,
-        repeticoes: toRepeticoesStr(it.repeticoes),
-        series: (it as any).series ?? null,
+        // ✅ SALVA "3x12" dentro de repeticoes
+        repeticoes: repsFinal,
+        // 🚫 NÃO manda "series" porque seu schema não tem essa coluna
         descansoSeg: (it as any).descansoSeg ?? null,
       };
     })
@@ -2327,6 +2350,14 @@ useEffect(() => {
   ) => {
     setExerciciosSelecionados((prev) => {
       const copia = [...prev];
+
+      // ✅ NORMALIZA series para number | null
+      if (campo === "series") {
+        const n = parseInt(String(valor), 10);
+        (copia[index] as any).series = Number.isFinite(n) && n > 0 ? n : null;
+        return copia;
+      }
+
       (copia[index] as any)[campo] = valor;
 
       if (campo === "ordem") {
@@ -2641,7 +2672,6 @@ useEffect(() => {
         .map((e: any, idx: number) => {
           const exercicioId =
             e.exercicioId ?? e.idCatalogo ?? e.exercicio?.id ?? e.id ?? null;
-
           const nomeTemp = typeof e.nome === "string" ? e.nome.trim() : "";
 
           return {
@@ -2655,6 +2685,13 @@ useEffect(() => {
               e.repeticoesTexto ??
               e.repeticoesString ??
               null,
+            // ✅ mantém séries
+            series:
+              typeof e.series === "number"
+                ? e.series
+                : e.series != null && String(e.series).trim()
+                ? parseInt(String(e.series), 10) || null
+                : null,
           };
         })
         .filter((e: any) => !!e.exercicioId || (!!e.nome && String(e.nome).trim().length > 0));
@@ -2686,9 +2723,7 @@ useEffect(() => {
       (payload as any).pontuacao = pontuacaoTopo;
       (payload as any).objetivo = (metas ?? "").trim() || null;
       (payload as any).tipoUsuario = tipoUsuarioNorm;            
-      (payload as any).tipoUsuarioId = String(tipoUsuarioIdProfessor);
-      (payload as any).tipoUsuarioId = String(tipoUsuarioId);
-
+      (payload as any).tipoUsuarioId = String(tipoUsuarioIdProfessor || tipoUsuarioId);
       // ✅ define se o treino é "Footera" (público/parceiro) ou normal
       // (o backend pode usar "publico" e/ou "parceiro" — mandamos ambos pra garantir)
       // ✅ segurança extra: se não é parceiro, força false
@@ -2697,25 +2732,26 @@ useEffect(() => {
 
       (payload as any).publico = treinoFooteraFinal;
       (payload as any).parceiro = treinoFooteraFinal;
-      (payload as any).isFootera = treinoFooteraFinal; // extra (se você quiser tratar)
-      // atletas / elencos / colaboradores
+      (payload as any).isFootera = treinoFooteraFinal; 
       (payload as any).atletasIds = atletasSelecionados;
       (payload as any).elencosIds = elencoSelecionado ? [elencoSelecionado] : [];
       (payload as any).colaboradoresProfessorIds = professoresIdsFinalSemEu;
       (payload as any).codigo = codigo;
       (payload as any).exercicios = exerciciosNormalizados.map((e: any, idx: number) => {
-        const repeticoesStr =
-          typeof e.repeticoes === "string"
-            ? e.repeticoes
+        const repeticoesFinal =
+          formatSerieXReps(e.series ?? null, e.repeticoes ?? null) ??
+          (typeof e.repeticoes === "string"
+            ? e.repeticoes.trim()
             : e.repeticoes != null
             ? String(e.repeticoes)
-            : null;
+            : "");
 
         if (e.exercicioId) {
           return {
             exercicioId: String(e.exercicioId),
             ordem: Number(e.ordem ?? idx + 1),
-            repeticoes: repeticoesStr,
+            // ✅ aqui vai "3x12"
+            repeticoes: repeticoesFinal,
             observacao: e.observacao ?? null,
           };
         }
@@ -2723,7 +2759,8 @@ useEffect(() => {
         return {
           nome: String(e.nome || "").trim(),
           ordem: Number(e.ordem ?? idx + 1),
-          repeticoes: repeticoesStr,
+          // ✅ aqui vai "3x12"
+          repeticoes: repeticoesFinal,
           observacao: e.observacao ?? null,
         };
       });
