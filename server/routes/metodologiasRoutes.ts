@@ -16,6 +16,7 @@ import {
   criarAvaliacaoMetodologia,
   concluirItemMetodologia,
 } from "../controllers/metodologiasController.js";
+import { requireMetodologiaCreator } from "../middlewares/requireMetodologiaCreator.js";
 
 const router = Router();
 
@@ -36,10 +37,10 @@ router.post("/:id/assinar", authenticateToken, assinarMetodologia);
 router.post("/:id/concluir-item", authenticateToken, concluirItemMetodologia);
 // por id (sempre por último!)
 router.get("/:id", authenticateToken, getMetodologiaById);
-router.put("/:id", authenticateToken, updateMetodologia);
-router.delete("/:id", authenticateToken, deleteMetodologia);
+router.put("/:id", authenticateToken, requireMetodologiaCreator, updateMetodologia);
+router.delete("/:id", authenticateToken, requireMetodologiaCreator, deleteMetodologia);
 // CRUD
 router.get("/", authenticateToken, listMetodologias);
-router.post("/", authenticateToken, createMetodologia);
+router.post("/", authenticateToken, requireMetodologiaCreator, createMetodologia);
 
 export default router;

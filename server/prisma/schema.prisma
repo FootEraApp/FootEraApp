@@ -2459,12 +2459,13 @@ enum ConquistaOwnerTipo {
 }
 
 enum ConquistaTipo {
-  GERAL
+  GERAL   
   TREINO
   DESAFIO
   SOCIAL
   PERFIL
   ORGANIZACAO
+  METODOLOGIA
 }
 
 enum MetodologiaConteudoTipo {

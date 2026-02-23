@@ -1,17 +1,17 @@
+// server/controller/conquistascontroller.tsx
 import { Request, Response } from "express";
-import {
-  
+import {  
   TipoUsuario,
   ConquistaOwnerTipo,
   TipoMidia,
 } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
+import { syncConquistasMetodologias, syncTemplatesMetodologiasProfissionais } from "../services/conquistasMetodologia.js";
 
 const prismaAny = prisma as any;
 
 type AuthReq = Request & { userId?: string };
-
 type ConquistaDTO = {
   id: string;
   codigo: string;
@@ -254,14 +254,67 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
     }
   }
 
+  try {
+    await syncTemplatesMetodologiasProfissionais();
+  } catch (e) {
+    console.error("Falha ao syncTemplatesMetodologiasProfissionais:", e);
+  }
+
   const catalogo = await prisma.conquista.findMany({
     where: { ativo: true, publico: { has: ownerTipo } },
     select: { id: true, codigo: true, tipo: true, meta: true },
     orderBy: { createdAt: "asc" },
   });
 
+  // ✅ (B) fallback de metodologias concluídas (só faz algo para profissionais)
+  try {
+    await syncConquistasMetodologias(usuarioId);
+  } catch (e) {
+    console.error("Falha ao syncConquistasMetodologias:", e);
+  }
+
   for (const c of catalogo) {
+    const tipo = String(c.tipo || "").toUpperCase();
     const codigo = String(c.codigo || "");
+
+    if (tipo === "METODOLOGIA" || codigo.startsWith("met_prof_")) {
+      // cria vínculo "travado" para aparecer em preto e branco,
+      // mas sem mexer se já foi conquistada
+      const existing = await prisma.conquistaVinculo.findUnique({
+        where: {
+          ownerTipo_ownerId_conquistaId: { ownerTipo, ownerId, conquistaId: c.id },
+        },
+        select: { concluida: true },
+      });
+
+      if (!existing) {
+        const ownerFkData =
+          ownerTipo === ConquistaOwnerTipo.Atleta
+            ? { atletaId: ownerId, professorId: null, clubeId: null, escolinhaId: null }
+            : ownerTipo === ConquistaOwnerTipo.Professor
+            ? { atletaId: null, professorId: ownerId, clubeId: null, escolinhaId: null }
+            : ownerTipo === ConquistaOwnerTipo.Clube
+            ? { atletaId: null, professorId: null, clubeId: ownerId, escolinhaId: null }
+            : { atletaId: null, professorId: null, clubeId: null, escolinhaId: ownerId };
+
+        await prisma.conquistaVinculo.create({
+          data: {
+            ownerTipo,
+            ownerId,
+            conquistaId: c.id,
+            progresso: 0,
+            concluida: false,
+            conquistadoEm: null,
+            refTipo: null,
+            refId: null,
+            ...ownerFkData,
+          },
+        });
+      }
+
+      continue;
+    }
+
     const meta = c.meta == null ? null : Number(c.meta);
     if (meta == null || meta <= 0) continue;
 
@@ -288,7 +341,6 @@ export async function syncConquistasDoUsuario(usuarioId: string) {
     else if (codigo.startsWith("clu_tp_")) atual = treinosCriados;
     else if (codigo.startsWith("clu_atletas_")) atual = atletasVinculados;
     else if (codigo.startsWith("clu_evento_")) atual = eventosCriados;
-
     else {
       switch (String(c.tipo).toUpperCase()) {
         case "TREINO":
