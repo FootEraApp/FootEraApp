@@ -3081,7 +3081,6 @@ async function salvarProgressoSessao(sessaoId: string) {
                       const totalSec = Math.max(0, Math.floor(diffMs / 1000));
                       const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
                       const ss = String(totalSec % 60).padStart(2, "0");
-                      labelTempo = `Tempo decorrido: ${mm}:${ss}`;
                     } else if (s.status === "finalizada" && s.duracaoMinutosReal) {
                       labelTempo = `Duração registrada: ${s.duracaoMinutosReal} min`;
                     }
@@ -3205,18 +3204,9 @@ async function salvarProgressoSessao(sessaoId: string) {
                         {(s.status === "em_andamento" || s.status === "nao_iniciada") && (
                           <button
                             onClick={() => setSessaoAbertaExerciciosId(s.id)}
-                            className="px-3 py-2.5 border rounded-lg mr-3 bg-transparent text-green-700 ml-3 text-sm"
+                            className="px-3 py-2.5 mt-2 border rounded-lg bg-transparent text-green-700 ml-3 text-sm"
                           >
-                            Ver exercícios
-                          </button>
-                        )}
-
-                        {s.status === "em_andamento" && (
-                          <button
-                            onClick={() => finalizarTreinoSessao(s.id)}
-                            className="mt-2 ml-0 sm:ml-2 px-3 py-2 bg-red-600 text-white rounded-lg"
-                          >
-                            Finalizar treino
+                            Realizar treino
                           </button>
                         )}
 

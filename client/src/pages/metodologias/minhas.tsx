@@ -101,6 +101,31 @@ function StarsRating({ value }: { value: number }) {
   );
 }
 
+function getUserId(): string | null {
+  const s: any = Storage as any;
+  const id =
+    s?.user?.id ||
+    s?.usuario?.id ||
+    s?.usuarioLogado?.id ||
+    localStorage.getItem("userId") ||
+    sessionStorage.getItem("userId");
+
+  return id ? String(id) : null;
+}
+
+function getPlanoIdLocal(): string | null {
+  // ajuste aqui se você salva com outra chave
+  return (
+    localStorage.getItem("planoId") ||
+    localStorage.getItem("produtoPlanoId") ||
+    localStorage.getItem("assinaturaProdutoId") ||
+    sessionStorage.getItem("planoId") ||
+    sessionStorage.getItem("produtoPlanoId") ||
+    sessionStorage.getItem("assinaturaProdutoId") ||
+    null
+  );
+}
+
 function getUserTipo(): string | null {
   const s: any = Storage as any;
 
@@ -160,6 +185,7 @@ export default function MinhasMetodologias() {
 
   const userTipo = getUserTipo();
   const isInstrutor = isInstrutorTipo(userTipo);
+  
     // instrutor tem 2 abas
   const [tab, setTab] = useState<"assinadas" | "criadas">("assinadas");
   const [busca, setBusca] = useState("");
@@ -168,6 +194,70 @@ export default function MinhasMetodologias() {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [quota, setQuota] = useState<{ limite: number; usadasNoMes: number; restantes: number } | null>(null);
+  const [canCriarMetodologia, setCanCriarMetodologia] = useState(false);
+  const [checkingPerm, setCheckingPerm] = useState(true);
+
+  const podeGerenciar = canCriarMetodologia; // <- aqui é o que manda
+
+  async function checarPermissaoCriarMetodologia() {
+    const tipo = (getUserTipo() || "").toLowerCase().trim();
+    const token = getToken();
+
+    // regra: só professor/clube/escolinha podem sequer tentar
+    const isPossivelAutor =
+      tipo === "professor" || tipo === "clube" || tipo === "escolinha";
+
+    if (!isPossivelAutor) {
+      setCanCriarMetodologia(false);
+      setCheckingPerm(false);
+      return;
+    }
+
+    // 1) tenta ler plano salvo localmente (rápido)
+    const planoLocal = (getPlanoIdLocal() || "").toUpperCase();
+
+    // ✅ IDs que você mostrou/quer
+    const ORGANIZACOES_PRO = "ORGANIZACOES_PRO";
+    const PROFESSOR_PRO = "PROFESSOR_PRO"; // <<< se no seu sistema tiver outro ID, troque aqui
+
+    // Regra por tipo
+    if (tipo === "clube" || tipo === "escolinha") {
+      if (planoLocal === ORGANIZACOES_PRO) {
+        setCanCriarMetodologia(true);
+        setCheckingPerm(false);
+        return;
+      }
+    }
+
+    if (tipo === "professor") {
+      // pode por plano professor_pro OU parceiro
+      if (planoLocal === PROFESSOR_PRO) {
+        setCanCriarMetodologia(true);
+        setCheckingPerm(false);
+        return;
+      }
+    }
+
+    // 2) fallback robusto: pergunta pro backend quem é parceiro e qual plano está ativo
+    // ✅ você vai criar esse endpoint no back (veja seção 2)
+    if (!token) {
+      setCanCriarMetodologia(false);
+      setCheckingPerm(false);
+      return;
+    }
+
+    try {
+      const r = await fetch(`${API.BASE_URL}/api/permissoes/metodologias/criar`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const j = await r.json().catch(() => null);
+      setCanCriarMetodologia(Boolean(j?.canCreate));
+    } catch {
+      setCanCriarMetodologia(false);
+    } finally {
+      setCheckingPerm(false);
+    }
+  }
 
   async function preencherPontosViaDetalhe(lista: Metodologia[], token: string) {
     const ids = lista.filter((m) => !Number(m.pontosTotal)).map((m) => m.id);
@@ -361,10 +451,10 @@ export default function MinhasMetodologias() {
       await carregarAssinadas(token);
 
       // só instrutor carrega criadas
-      if (isInstrutor) {
+      if (canCriarMetodologia) {
         await carregarCriadas(token);
       } else {
-        setCriadas([]); // atleta não usa
+        setCriadas([]);
       }
     } catch (e: any) {
       setErro(e?.message || "Erro ao carregar suas metodologias.");
@@ -405,9 +495,18 @@ export default function MinhasMetodologias() {
 
   useEffect(() => {
     carregar();
+    checarPermissaoCriarMetodologia();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!canCriarMetodologia) return;
+    const token = getToken();
+    if (!token) return;
+    carregarCriadas(token).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canCriarMetodologia]);
+  
   const listaAtiva = useMemo(() => {
     // atleta só usa assinadas
     if (!isInstrutor) return assinadas;
@@ -476,14 +575,23 @@ export default function MinhasMetodologias() {
               </button>
             )}
 
-            {/* ✅ Botão Criar SOMENTE para instrutores */}
-            {isInstrutor && (
+            {checkingPerm ? null : canCriarMetodologia ? (
               <Link
                 href="/treinos/Criar-Metodologia"
                 className="px-3 py-2 rounded-xl bg-green-800 text-white text-sm font-semibold hover:bg-green-900"
               >
                 Criar
               </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => navigate("/pagamentos")} // ou /pagamentos?produto=...
+                className="px-3 py-2 rounded-xl bg-gray-200 text-gray-600 text-sm font-semibold cursor-not-allowed"
+                title="Disponível apenas para Professor Parceiro ou planos Pro"
+                disabled
+              >
+                Criar
+              </button>
             )}
           </div>
 
