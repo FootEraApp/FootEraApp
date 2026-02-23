@@ -1,3 +1,4 @@
+// client/src/components/turmas/TurmasManager
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
@@ -456,11 +457,60 @@ export default function TurmasManager({
   const termoAluno = filtroAluno.trim().toLowerCase();
   const setSel = useMemo(() => new Set(alunosSelecionados.map(String)), [alunosSelecionados]);
 
+  const turmaAlunosMap = useMemo(() => {
+    const m = new Map<string, TurmaAluno>();
+    (turmaAlunos || []).forEach((a) => {
+      const k = String(a.usuarioId || "").trim();
+      if (k) m.set(k, a);
+    });
+    return m;
+  }, [turmaAlunos]);
+
+  const alunosMap = useMemo(() => {
+    const m = new Map<string, AtletaMin>();
+    (alunos || []).forEach((a) => {
+      const k = String(a.usuarioId || "").trim();
+      if (k) m.set(k, a);
+    });
+    return m;
+  }, [alunos]);
+
+  const naoVincSet = useMemo(
+    () => new Set((naoVinculadosUsuarioIds || []).map(String)),
+    [naoVinculadosUsuarioIds]
+  );
+
   const alunosNaTurma = useMemo(() => {
-    return turmaAlunos
-      .filter((a) => setSel.has(String(a.usuarioId)))
-      .filter((a) => (termoAluno ? (a.nome || "").toLowerCase().includes(termoAluno) : true));
-  }, [turmaAlunos, setSel, termoAluno]);
+    const selecionados = alunosSelecionados.map(String);
+
+    const merged: TurmaAluno[] = selecionados
+      .map((uid) => {
+        const fromTurma = turmaAlunosMap.get(uid);
+        if (fromTurma) return fromTurma;
+
+        // fallback: ainda não veio do backend, mas o usuário marcou agora
+        const base = alunosMap.get(uid);
+        const nome = String(base?.nome ?? "Atleta").trim();
+
+        const naoVinculado = naoVincSet.has(uid);
+
+        return {
+          usuarioId: uid,
+          atletaId: null,
+          nome,
+          sobrenome: base?.sobrenome,
+          foto: null,
+
+          vinculado: !naoVinculado,
+          vinculoTipo: naoVinculado ? "NENHUM" : "RELACAO_INSTITUICAO",
+          vinculoProfessorId: null,
+        } as TurmaAluno;
+      })
+      .filter((a) => !!a.usuarioId);
+
+    const termo = termoAluno ? termoAluno.toLowerCase() : "";
+    return termo ? merged.filter((a) => (a.nome || "").toLowerCase().includes(termo)) : merged;
+  }, [alunosSelecionados, turmaAlunosMap, alunosMap, naoVincSet, termoAluno]);
 
   const alunosForaDaTurma = useMemo(() => {
     return alunos
