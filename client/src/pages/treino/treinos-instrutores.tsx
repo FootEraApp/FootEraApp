@@ -136,26 +136,132 @@ type MetodologiaCard = {
   totalReviews?: number | null;
 };
 
+type StatusVisualSessao =
+  | "nao_iniciada"
+  | "em_andamento"
+  | "finalizada"
+  | "cancelada"
+  | "faltou";
+
 type SessaoDeHoje = {
   id: string;
-  data?: string;
-  treino?: any;
-  turma?: any;
-  status: "nao_iniciada" | "em_andamento" | "finalizada";
+  data: string;
+  treino: any;
+  turma: any;
+
+  // status original do backend (AGENDADO / EM_ANDAMENTO / FINALIZADO / CANCELADO)
+  statusRaw: string;
+
+  // status visual do frontend (inclui "faltou")
+  status: "nao_iniciada" | "em_andamento" | "finalizada" | "cancelada" | "faltou";
+
+  // datas já parseadas
+  dataSessao: Date | null;
+
+  // regras de janela (1h antes / 30min depois)
+  win: StartWindowInfo | null;
+
+  // conveniências
+  faltou: boolean;
+  podeIniciar: boolean;
+
+  // (se você já usa esses campos no modal, mantém)
+  exercicios?: any[];
+  presencas?: any[];
   startedAt?: string | null;
-  finishedAt?: string | null;
-  duracaoMinutosReal?: number | null;
-  penalidadeAtraso?: boolean;
-  exercicios: ExercicioSessaoDetalhe[];
 };
+
+type StartWindowInfo = {
+  hasTime: boolean;     // se a data tem hora marcada (ex: 21:00)
+  canStart: boolean;    // se pode iniciar agora
+  isLate: boolean;      // se já passou do limite e virou "faltou"
+  startAt: Date;        // momento "alvo" (hora marcada ou meio-dia do dia)
+  lateAt: Date;         // momento em que vira "faltou"
+};
+
+function parseDateSafe(raw: any): Date | null {
+  if (!raw) return null;
+  if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+
+  const s = String(raw).trim();
+  if (!s) return null;
+
+  // datetime-local sem timezone: 2026-02-24T19:00 ou 2026-02-24T19:00:00
+  const mLocal = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (mLocal) {
+    const [, Y, M, D, h, mi, sec] = mLocal;
+    return new Date(
+      Number(Y),
+      Number(M) - 1,
+      Number(D),
+      Number(h),
+      Number(mi),
+      Number(sec || 0),
+      0
+    );
+  }
+
+  // só data YYYY-MM-DD
+  const mDate = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (mDate) {
+    const [, Y, M, D] = mDate;
+    return new Date(Number(Y), Number(M) - 1, Number(D), 0, 0, 0, 0);
+  }
+
+  // ISO com timezone
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function hasHoraMarcada(d: Date | null) {
+  if (!d) return false;
+  // se no horário BRT não for 00:00, considera "tem hora"
+  const hh = Number(
+    new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      hour12: false,
+    }).format(d)
+  );
+  const mm = Number(
+    new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      minute: "2-digit",
+    }).format(d)
+  );
+  return !(hh === 0 && mm === 0);
+}
+
+function getStartWindowInfo(d: Date | null): StartWindowInfo | null {
+  if (!d) return null;
+
+  const now = new Date();
+
+  // ✅ se tem hora marcada: libera 1h antes; passa 30min depois => faltou
+  if (hasHoraMarcada(d)) {
+    const startAt = d;
+    const canStartFrom = new Date(startAt.getTime() - 60 * 60 * 1000); // 1h antes
+    const lateAt = new Date(startAt.getTime() + 60 * 60 * 1000);       // 30min depois
+
+    const canStart = now >= canStartFrom && now <= lateAt;
+    const isLate = now > lateAt;
+
+    return { hasTime: true, canStart, isLate, startAt, lateAt };
+  }
+
+  // ✅ se NÃO tem hora: libera apenas no dia (BRT); depois do dia acabar => faltou
+  const startDay = startOfDayBRT(d);
+  const endDay = endOfDayBRT(d);
+
+  const canStart = now >= startDay && now <= endDay;
+  const isLate = now > endDay;
+
+  // startAt aqui é só referência (pode ser o próprio startDay)
+  return { hasTime: false, canStart, isLate, startAt: startDay, lateAt: endDay };
+}
 
 function normTxt(s: any) {
   return String(s || "").trim().toLowerCase();
-}
-
-function clamp01(n: number) {
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(5, n));
 }
 
 function Stars({ rating }: { rating: number }) {
@@ -244,6 +350,41 @@ function resolveUploadUrl(raw?: string | null) {
 function formatarData(data?: string) {
   return data ? new Date(data).toLocaleDateString("pt-BR") : "";
 }
+
+function formatarDataBR(d: Date) {
+  return d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+}
+
+function getHoraHHMM(d: Date) {
+  return d.toLocaleTimeString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getYMDInBRT(d: Date) {
+  // pega “ano/mês/dia” no calendário do Brasil
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d); // YYYY-MM-DD
+  const [Y, M, D] = parts.split("-").map(Number);
+  return { Y, M, D };
+}
+
+function startOfDayBRT(d: Date) {
+  const { Y, M, D } = getYMDInBRT(d);
+  return new Date(`${String(Y).padStart(4, "0")}-${String(M).padStart(2, "0")}-${String(D).padStart(2, "0")}T00:00:00-03:00`);
+}
+
+function endOfDayBRT(d: Date) {
+  const { Y, M, D } = getYMDInBRT(d);
+  return new Date(`${String(Y).padStart(4, "0")}-${String(M).padStart(2, "0")}-${String(D).padStart(2, "0")}T23:59:59.999-03:00`);
+}
+
 function isVideoUrl(url: string) {
   const clean = url.split("?")[0].toLowerCase();
   return /\.(mp4|webm|ogg|mov|m4v)$/i.test(clean);
@@ -1137,66 +1278,41 @@ const videoUrlRaw =
     if (!res.ok) throw new Error("Falha ao buscar sessões");
 
     const data = await res.json();
-    const norm = (Array.isArray(data) ? data : []).map((s: any) => {
-      const statusRaw = String(s.status ?? "")
-        .trim()
-        .toUpperCase();
 
-      let status: "nao_iniciada" | "em_andamento" | "finalizada";
+    // ✅ pega a lista independente do formato que o backend retornar
+    const items: any[] =
+      Array.isArray(data) ? data :
+      Array.isArray(data?.items) ? data.items :
+      Array.isArray(data?.sessoes) ? data.sessoes :
+      [];
 
-      switch (statusRaw) {
-        case "EM_ANDAMENTO":
-          status = "em_andamento";
-          break;
+    const norm: SessaoDeHoje[] = (items ?? []).map((s: any) => {
+      const dataSessao = parseDateSafe(s.data);
+      const win = getStartWindowInfo(dataSessao);
 
-        case "FINALIZADO":
-          status = "finalizada";
-          break;
+      const faltou = s.status === "AGENDADO" && Boolean(win?.isLate);
+      const podeIniciar = s.status === "AGENDADO" && Boolean(win?.canStart) && !Boolean(win?.isLate);
 
-        case "AGENDADO":
-        case "CANCELADO":
-        default:
-          status = "nao_iniciada";
-          break;
-      }
-      const exercicios = extrairExerciciosSessao(s);
-      const presentes = Array.isArray(s.presencas)
-        ? s.presencas
-            .filter((p: any) => p.presente)
-            .map((p: any) => {
-              const atletaId = String(p.atletaId ?? "").trim();
-
-              const nomeBackend =
-                p.atleta?.usuario?.nome ??
-                p.atleta?.nome ??
-                p.usuario?.nome ??
-                p.nome ??
-                null;
-
-              const nome =
-                String(nomeBackend ?? "").trim() ||
-                (atletaId ? atletaNomeById[atletaId] : "") ||
-                // fallback extra: se vier algo em presenca.atleta.usuario direto por id
-                String(p?.atleta?.usuario?.nome ?? "").trim() ||
-                "Atleta";
-
-              return { atletaId, nome };
-            })
-            .filter((x: any) => x.atletaId)
-        : [];
+      const statusVisual: SessaoDeHoje["status"] =
+        s.status === "EM_ANDAMENTO" ? "em_andamento"
+        : s.status === "FINALIZADO" ? "finalizada"
+        : s.status === "CANCELADO" ? "cancelada"
+        : faltou ? "faltou"
+        : "nao_iniciada";
 
       return {
-        id: s.id,
-        data: s.data,
-        treino: s.treino ?? null,
-        turma: s.turma ?? null,
-        status,
-        startedAt: s.startedAt ?? null,
-        finishedAt: s.finishedAt ?? null,
-        duracaoMinutosReal: s.duracaoMinutosReal ?? null,
-        penalidadeAtraso: Boolean(s.penalidadeAtraso),
-        exercicios,
-        presentes,
+        id: String(s.id),
+        data: String(s.data),
+        treino: s.treino,
+        turma: s.turma,
+        exercicios: s.exercicios,
+        presencas: s.presencas,
+        statusRaw: String(s.status),
+        status: statusVisual,
+        dataSessao,
+        win,
+        faltou,
+        podeIniciar,
       };
     });
 
@@ -3170,6 +3286,13 @@ async function salvarProgressoSessao(sessaoId: string) {
                           </div>
                         )}
 
+                        {s.dataSessao && (
+                          <div className="text-sm text-gray-500 mt-1 mb-1">
+                            Agendado para: {formatarDataBR(s.dataSessao)}
+                            {s.win?.hasTime ? ` às ${getHoraHHMM(s.dataSessao)}` : ""}
+                          </div>
+                        )}
+
                         {labelTempo && (
                           <div className="text-xs text-gray-500 mt-1">{labelTempo}</div>
                         )}
@@ -3194,23 +3317,36 @@ async function salvarProgressoSessao(sessaoId: string) {
 
                         {s.status === "nao_iniciada" && (
                           <button
-                            onClick={() => abrirModalIniciar(s.id, s.turma?.id)}
-                            className="mt-2 px-3 py-2 bg-emerald-700 text-white rounded-lg"
+                            onClick={() => abrirModalIniciar(s)}
+                            disabled={!s.podeIniciar}
+                            title={
+                              s.faltou
+                                ? "Sessão expirou e virou falta."
+                                : s.win?.hasTime
+                                  ? "Liberado 1h antes e expira 1h depois do horário."
+                                  : "Liberado apenas na hora do treino."
+                            }
+                            className={`px-4 py-2 rounded-xl text-sm font-semibold transition mr-2 ${
+                              s.podeIniciar ? "bg-green-600 text-white" : "bg-gray-400 text-white cursor-not-allowed"
+                            }`}
                           >
-                            Iniciar treino
+                            Iniciar
                           </button>
                         )}
 
-                        {(s.status === "em_andamento" || s.status === "nao_iniciada") && (
-                          <button
-                            onClick={() => setSessaoAbertaExerciciosId(s.id)}
-                            className="px-3 py-2.5 mt-2 border rounded-lg bg-transparent text-green-700 ml-3 text-sm"
-                          >
-                            Realizar treino
-                          </button>
-                        )}
+                        <button
+                          onClick={() => setSessaoAbertaExerciciosId(s)}
+                          disabled={!(s.status === "em_andamento" || (s.status === "nao_iniciada" && s.podeIniciar))}
+                          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                            (s.status === "em_andamento" || (s.status === "nao_iniciada" && s.podeIniciar))
+                              ? "bg-blue-600 text-white hover:bg-blue-700"
+                              : "bg-gray-300 text-gray-600 cursor-not-allowed"
+                          }`}
+                        >
+                          Realizar Treino
+                        </button>
 
-                        { s.status === "finalizada" && (
+                        {s.status === "finalizada" && (
                           <span className="mt-2 inline-block text-emerald-700 font-medium">
                             Finalizado ✓
                           </span>
@@ -3351,6 +3487,17 @@ async function salvarProgressoSessao(sessaoId: string) {
               <h3 className="text-base sm:text-lg font-bold text-green-900">
                 {sessao.treino?.nome ?? "Treino"}
               </h3>
+
+              <p className="text-xs text-gray-500 mt-1">
+                {(() => {
+                  const d = parseDateSafe(sessao.data);
+                  if (!d) return null;
+
+                  const dataStr = d.toLocaleDateString("pt-BR");
+                  const horaStr = hasHoraMarcada(d) ? ` • ${getHoraHHMM(d)}` : "";
+                  return `Agendado para: ${dataStr}${horaStr}`;
+                })()}
+              </p>
 
               {pontosTreino !== null && (
                 <div className="text-xs sm:text-sm text-amber-700 mt-1">

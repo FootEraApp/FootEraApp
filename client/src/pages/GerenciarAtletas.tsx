@@ -1707,11 +1707,13 @@ async function salvarAvaliacao() {
 
                   return res.data;
                 }}
-                onAgendar={async ({ selectedDays, treinoProgramadoId }) => {
+                onAgendar={async ({ selectedDays, treinoProgramadoId, selectedTime }) => {
                   const autorId = String(tipoUsuarioIdEntidade || "");
                   const autorTipo = tipo ? autorTipoFromTela(tipo) : undefined;
 
                   if (!autorId || !autorTipo) throw new Error("Autor inválido");
+
+                  const time = String(selectedTime || "12:00"); // fallback
 
                   await Promise.all(
                     selectedDays.map((day) =>
@@ -1720,7 +1722,8 @@ async function salvarAvaliacao() {
                         {
                           atletaId: focado!.id,
                           treinoProgramadoId,
-                          dataTreino: day,
+                          // ✅ agora vai dia + hora:
+                          dataTreino: `${day}T${time}:00`,
                           autorId,
                           autorTipo,
                         },
