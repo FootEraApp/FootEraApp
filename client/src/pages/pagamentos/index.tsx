@@ -507,14 +507,14 @@ const FALLBACK_PLANS: Record<string, Plan> = {
     title: "Atleta Learning 1",
     monthly: 44.9,
     annual: null,
-    benefits: ["Tudo do Atleta Pro", "Escolher 1 metodologia por mês"],
+    benefits: ["Sem anúncios", "Recursos Pro do atleta", "Mais limites operacionais", "Escolher 1 metodologia por mês"],
   },
   ATLETA_LEARNING_3: {
     id: "ATLETA_LEARNING_3",
     title: "Atleta Learning 3",
     monthly: 64.9,
     annual: null,
-    benefits: ["Tudo do Atleta Pro", "Escolher até 3 metodologias por mês"],
+    benefits: ["Sem anúncios", "Recursos Pro do atleta", "Mais limites operacionais", "Escolher até 3 metodologias por mês"],
   },
 
   // ✅ PROFESSOR
@@ -523,21 +523,21 @@ const FALLBACK_PLANS: Record<string, Plan> = {
     title: "Professor Pro",
     monthly: 39.9,          // <- você falou “em torno de 59,90”
     annual: null,
-    benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais"],
+    benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais", "Você pode criar metodologias e disponibilizar para os alunos"],
   },
   PROFESSOR_LEARNING_1: {
     id: "PROFESSOR_LEARNING_1",
     title: "Professor Learning 1",
     monthly: 59.9,          // se for diferente do Pro, troque aqui
     annual: null,
-    benefits: ["Tudo do Professor Pro", "Escolher 1 metodologia por mês"],
+    benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais", "Escolher 1 metodologia por mês"],
   },
   PROFESSOR_LEARNING_3: {
     id: "PROFESSOR_LEARNING_3",
     title: "Professor Learning 3",
     monthly: 79.9,
     annual: null,
-    benefits: ["Tudo do Professor Pro", "Escolher até 3 metodologias por mês"],
+    benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais", "Escolher até 3 metodologias por mês"],
   },
 
   // ✅ ORGANIZAÇÕES
@@ -546,14 +546,14 @@ const FALLBACK_PLANS: Record<string, Plan> = {
     title: "Organizações Pro",
     monthly: 79.9,          // mantenha ou ajuste
     annual: null,
-    benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional"],
+    benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional", "Você pode criar metodologias e disponibilizar para os membros da organização"],
   },
   ORGANIZACOES_LEARNING_3: {
     id: "ORGANIZACOES_LEARNING_3",
     title: "Organizações Learning",
     monthly: 149.9,
     annual: null,
-    benefits: ["Tudo do Pro", "Escolher até 3 metodologias por mês"],
+    benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional", "Escolher até 3 metodologias por mês"],
   },
 
   // ✅ OLHEIRO (mantém)
@@ -665,20 +665,15 @@ export default function PagamentosPage() {
   const [pickPlus, setPickPlus] = useState(false);
   const [pickMetods, setPickMetods] = useState<Record<string, boolean>>({});
   const [selectedMain, setSelectedMain] = useState<string | null>(null); 
-// exemplo: "ATLETA_PRO", "PROFESSOR_LEARNING_3", etc.
-
   const [cupomInput, setCupomInput] = useState("");
   const [cupomPreview, setCupomPreview] = useState<{ total: number; base: number; desconto: number; codigo: string; tipo: string } | null>(null);
-
   const [method, setMethod] = useState<MetodoPagamento>("PIX");
   const [pagador, setPagador] = useState<Pagador>({ nome: "", email: "", cpf: "", telefone: "" });
   const [cartao, setCartao] = useState<Cartao>({ numero: "", nomeImpresso: "", validade: "", cvv: "" });
-
   const [pixCopiaECola, setPixCopiaECola] = useState<string | null>(null);
   const [pixQrUrl, setPixQrUrl] = useState<string | null>(null);
   const [boletoLinha, setBoletoLinha] = useState<string | null>(null);
   const [boletoPdf, setBoletoPdf] = useState<string | null>(null);
-
   const [pendingPaymentId, setPendingPaymentId] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
 
