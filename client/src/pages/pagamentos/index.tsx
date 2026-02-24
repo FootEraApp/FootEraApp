@@ -732,12 +732,23 @@ export default function PagamentosPage() {
 
   function getPlan(planoId: string): Plan | undefined {
     const pApi = findApiPlan(planoId);
-    if (pApi && ((pApi.monthly ?? 0) > 0 || (pApi.annual ?? 0) > 0)) return pApi;
-
     const pFallback = FALLBACK_PLANS[planoId];
+
+    // Se veio do backend, mescla com fallback:
+    if (pApi) {
+      const apiBenefits = Array.isArray(pApi.benefits) ? pApi.benefits : [];
+      const fallbackBenefits = pFallback?.benefits ?? [];
+
+      return {
+        ...(pFallback ?? {}),   // fallback como base (inclui benefits bonitinho)
+        ...pApi,                // backend sobrescreve preços, título etc
+        benefits: pFallback?.benefits ?? pApi.benefits ?? [], // <- aqui é o pulo do gato
+      } as Plan;
+    }
+
+    // Sem backend, usa fallback
     if (pFallback) return pFallback;
 
-    if (pApi) return pApi;
     return undefined;
   }
 
