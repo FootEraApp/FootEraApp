@@ -989,27 +989,36 @@ export default function TurmasManager({
                             return res.data;
                             }}
 
-                            onAgendar={async ({ selectedDays, treinoProgramadoId }) => {
-                            if (bloqueiaAgendarTurma) {
-                              throw new Error(
-                                "Não é possível agendar para a turma inteira: existe aluno na turma que não está vinculado..."
-                              );
-                            }
+                            onAgendar={async ({ selectedDays, treinoProgramadoId, selectedTime }) => {
+                              if (bloqueiaAgendarTurma) {
+                                throw new Error("Não é possível agendar para a turma inteira...");
+                              }
 
-                            await Promise.all(
-                              selectedDays.map((day) =>
-                                axios.post(
-                                  `${API.BASE_URL}/api/sessoes-turma`,
-                                  { turmaId: selecionada, treinoProgramadoId, dataISO: day },
-                                  { headers }
+                              const buildDataHoraISO = (dayISO: string, hhmm: string) => {
+                                // opção 1 (mais simples): datetime-local sem timezone
+                                // return `${dayISO}T${hhmm}`;
+
+                                // opção 2 (mais segura p/ Brasil): fixa BRT no payload
+                                return `${dayISO}T${hhmm}:00-03:00`;
+                              };
+
+                              await Promise.all(
+                                selectedDays.map((day) =>
+                                  axios.post(
+                                    `${API.BASE_URL}/api/sessoes-turma`,
+                                    {
+                                      turmaId: selecionada,
+                                      treinoProgramadoId,
+                                      dataHoraISO: buildDataHoraISO(day, selectedTime),
+                                    },
+                                    { headers }
+                                  )
                                 )
-                              )
-                            );
+                              );
 
-                            // ✅ simples: volta pra aba agenda e força reload de sessões/agenda
-                            setAbaDireita("agenda");
-                            alert("Sessão agendada e treinos criados para os atletas da turma!");
-                          }}
+                              setAbaDireita("agenda");
+                              alert("Sessão agendada e treinos criados para os atletas da turma!");
+                            }}
                           />
                         </div>
                       )}
