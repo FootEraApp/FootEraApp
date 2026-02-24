@@ -6,6 +6,21 @@ function daysAgo(n) {
     d.setDate(d.getDate() - n);
     return d;
 }
+async function upsertTreinoPorCodigoSemUnique(payload) {
+    const found = await prisma.treinoProgramado.findFirst({
+        where: { codigo: payload.codigo },
+        select: { id: true },
+    });
+    if (found?.id) {
+        return prisma.treinoProgramado.update({
+            where: { id: found.id },
+            data: payload.updateData,
+        });
+    }
+    return prisma.treinoProgramado.create({
+        data: payload.createData,
+    });
+}
 function monthsAgo(n) {
     const d = new Date();
     d.setMonth(d.getMonth() - n);
@@ -479,49 +494,21 @@ async function main() {
             console.warn(`⚠️ Sem exercícios suficientes para ${args.codigo}. Pulando.`);
             return;
         }
-        await prisma.treinoProgramado.upsert({
-            where: { codigo: args.codigo },
-            update: {
-                ...donoData(args.dono),
-                nome: args.nome,
-                descricao: args.descricao,
-                tipoTreino: args.tipoTreino,
-                nivel: args.nivel,
-                categoria: args.categoria,
-                duracao: args.duracao,
-                pontuacao: args.pontuacao,
-                dataAgendada: prazo25Out,
-                imagemUrl: args.imagemUrl,
-                exercicios: {
-                    deleteMany: {},
-                    create: [
-                        { exercicioId: exs[0].id, ordem: 1, repeticoes: "3x 40s + 20s descanso" },
-                        { exercicioId: exs[1].id, ordem: 2, repeticoes: "4x 10 reps" },
-                        { exercicioId: exs[2].id, ordem: 3, repeticoes: "3x 8 reps" },
-                    ],
-                },
-            },
-            create: {
-                codigo: args.codigo,
-                ...donoData(args.dono),
-                nome: args.nome,
-                descricao: args.descricao,
-                tipoTreino: args.tipoTreino,
-                nivel: args.nivel,
-                categoria: args.categoria,
-                duracao: args.duracao,
-                pontuacao: args.pontuacao,
-                dataAgendada: prazo25Out,
-                imagemUrl: args.imagemUrl,
-                exercicios: {
-                    create: [
-                        { exercicioId: exs[0].id, ordem: 1, repeticoes: "3x 40s + 20s descanso" },
-                        { exercicioId: exs[1].id, ordem: 2, repeticoes: "4x 10 reps" },
-                        { exercicioId: exs[2].id, ordem: 3, repeticoes: "3x 8 reps" },
-                    ],
-                },
-            },
-        });
+        if (professorMateus) {
+            await criarTreinoDoDono({
+                dono: { kind: "PROF", professorId: professorMateus.id },
+                codigo: "TP_MATEUS_01",
+                nome: "Treino do Prof Mateus (Performance)",
+                descricao: "Seed: treino do Mateus para testes de listagem por professor.",
+                tipoTreino: TipoTreino.Fisico,
+                nivel: Nivel.Avancado,
+                categoria: [Categoria.Livre],
+                duracao: 55,
+                pontuacao: 14,
+                imagemUrl: "/assets/treinos/explosao.jpg",
+                exercicioCodes: ["EX031", "EX032", "EX035", "EX041", "EX042", "EX057", "EX061", "EX068"],
+            });
+        }
     }
     if (clubeFooteraDb?.id) {
         await criarTreinoDoDono({
@@ -614,31 +601,52 @@ async function main() {
         });
     }
     if (professorMateus && ex1 && ex2 && ex3 && ex4 && ex5) {
-        await prisma.treinoProgramado.upsert({
-            where: { codigo: 'TR002' },
-            update: {},
-            create: {
-                codigo: 'TR002',
-                nome: 'Treino Técnico Agilidade',
-                descricao: 'Sequência integrada de fundamentos: drible, passes no chão e no alto, e cabeceio.',
+        await upsertTreinoPorCodigoSemUnique({
+            codigo: "TR002",
+            updateData: {
+                nome: "Treino Técnico Agilidade",
+                descricao: "Sequência integrada de fundamentos: drible, passes no chão e no alto, e cabeceio.",
                 nivel: Nivel.Base,
                 categoria: [Categoria.Livre],
                 duracao: 60,
                 tipoTreino: TipoTreino.Tecnico,
                 professorId: professorMateus.id,
                 dataAgendada: prazo25Out,
-                imagemUrl: '/assets/treinos/agilidade.jpg',
+                imagemUrl: "/assets/treinos/agilidade.jpg",
+                pontuacao: 12,
+                exercicios: {
+                    deleteMany: {},
+                    create: [
+                        { exercicioId: ex1.id, ordem: 1, repeticoes: "3x 40s + 20s descanso" },
+                        { exercicioId: ex2.id, ordem: 2, repeticoes: "4x 12 passes cada" },
+                        { exercicioId: ex3.id, ordem: 3, repeticoes: "3x 10 lançamentos" },
+                        { exercicioId: ex4.id, ordem: 4, repeticoes: "3x 12 cabeceios" },
+                        { exercicioId: ex5.id, ordem: 5, repeticoes: "5 voltas" },
+                    ],
+                },
+            },
+            createData: {
+                codigo: "TR002",
+                nome: "Treino Técnico Agilidade",
+                descricao: "Sequência integrada de fundamentos: drible, passes no chão e no alto, e cabeceio.",
+                nivel: Nivel.Base,
+                categoria: [Categoria.Livre],
+                duracao: 60,
+                tipoTreino: TipoTreino.Tecnico,
+                professorId: professorMateus.id,
+                dataAgendada: prazo25Out,
+                imagemUrl: "/assets/treinos/agilidade.jpg",
                 pontuacao: 12,
                 exercicios: {
                     create: [
-                        { exercicioId: ex1.id, ordem: 1, repeticoes: '3x 40s + 20s descanso' },
-                        { exercicioId: ex2.id, ordem: 2, repeticoes: '4x 12 passes cada' },
-                        { exercicioId: ex3.id, ordem: 3, repeticoes: '3x 10 lançamentos' },
-                        { exercicioId: ex4.id, ordem: 4, repeticoes: '3x 12 cabeceios' },
-                        { exercicioId: ex5.id, ordem: 5, repeticoes: '5 voltas' },
-                    ]
-                }
-            }
+                        { exercicioId: ex1.id, ordem: 1, repeticoes: "3x 40s + 20s descanso" },
+                        { exercicioId: ex2.id, ordem: 2, repeticoes: "4x 12 passes cada" },
+                        { exercicioId: ex3.id, ordem: 3, repeticoes: "3x 10 lançamentos" },
+                        { exercicioId: ex4.id, ordem: 4, repeticoes: "3x 12 cabeceios" },
+                        { exercicioId: ex5.id, ordem: 5, repeticoes: "5 voltas" },
+                    ],
+                },
+            },
         });
     }
     const ex031 = await prisma.exercicio.findUnique({ where: { codigo: 'EX031' } });
@@ -651,47 +659,55 @@ async function main() {
     const ex068 = await prisma.exercicio.findUnique({ where: { codigo: 'EX068' } });
     if (professorMateus &&
         ex031 && ex032 && ex035 && ex041 && ex042 && ex057 && ex061 && ex068) {
-        await prisma.treinoProgramado.upsert({
-            where: { codigo: 'TR003' },
-            update: {
-                tipoTreino: TipoTreino.Fisico,
-                dataAgendada: prazo25Out,
-                exercicios: {
-                    deleteMany: {},
-                    create: [
-                        { exercicioId: ex031.id, ordem: 1, repeticoes: '3x 20s + 20s descanso' },
-                        { exercicioId: ex032.id, ordem: 2, repeticoes: '3x 20s + 20s descanso' },
-                        { exercicioId: ex041.id, ordem: 3, repeticoes: '3x 20s + 20s descanso' },
-                        { exercicioId: ex042.id, ordem: 4, repeticoes: '4x 15m (zig-zag)' },
-                        { exercicioId: ex057.id, ordem: 5, repeticoes: '4x 6 saltos' },
-                        { exercicioId: ex061.id, ordem: 6, repeticoes: '3x 20s (shuffle)' },
-                        { exercicioId: ex035.id, ordem: 7, repeticoes: '3x 20s + 20s descanso' },
-                        { exercicioId: ex068.id, ordem: 8, repeticoes: '3x 40s (isometria)' },
-                    ],
-                },
-            },
-            create: {
-                codigo: 'TR003',
-                nome: 'Agilidade & Core (Escada + Pliometria)',
-                descricao: 'Circuito integrado de escada, mudanças de direção, pliometria e core.',
+        await upsertTreinoPorCodigoSemUnique({
+            codigo: "TR003",
+            updateData: {
+                nome: "Agilidade & Core (Escada + Pliometria)",
+                descricao: "Circuito integrado de escada, mudanças de direção, pliometria e core.",
                 nivel: Nivel.Avancado,
                 categoria: [Categoria.Livre],
                 duracao: 50,
                 tipoTreino: TipoTreino.Fisico,
                 professorId: professorMateus.id,
                 dataAgendada: prazo25Out,
-                imagemUrl: '/assets/treinos/agilidade.jpg',
+                imagemUrl: "/assets/treinos/agilidade.jpg",
+                pontuacao: 14,
+                exercicios: {
+                    deleteMany: {},
+                    create: [
+                        { exercicioId: ex031.id, ordem: 1, repeticoes: "3x 20s + 20s descanso" },
+                        { exercicioId: ex032.id, ordem: 2, repeticoes: "3x 20s + 20s descanso" },
+                        { exercicioId: ex041.id, ordem: 3, repeticoes: "3x 20s + 20s descanso" },
+                        { exercicioId: ex042.id, ordem: 4, repeticoes: "4x 15m (zig-zag)" },
+                        { exercicioId: ex057.id, ordem: 5, repeticoes: "4x 6 saltos" },
+                        { exercicioId: ex061.id, ordem: 6, repeticoes: "3x 20s (shuffle)" },
+                        { exercicioId: ex035.id, ordem: 7, repeticoes: "3x 20s + 20s descanso" },
+                        { exercicioId: ex068.id, ordem: 8, repeticoes: "3x 40s (isometria)" },
+                    ],
+                },
+            },
+            createData: {
+                codigo: "TR003",
+                nome: "Agilidade & Core (Escada + Pliometria)",
+                descricao: "Circuito integrado de escada, mudanças de direção, pliometria e core.",
+                nivel: Nivel.Avancado,
+                categoria: [Categoria.Livre],
+                duracao: 50,
+                tipoTreino: TipoTreino.Fisico,
+                professorId: professorMateus.id,
+                dataAgendada: prazo25Out,
+                imagemUrl: "/assets/treinos/agilidade.jpg",
                 pontuacao: 14,
                 exercicios: {
                     create: [
-                        { exercicioId: ex031.id, ordem: 1, repeticoes: '3x 20s + 20s descanso' },
-                        { exercicioId: ex032.id, ordem: 2, repeticoes: '3x 20s + 20s descanso' },
-                        { exercicioId: ex041.id, ordem: 3, repeticoes: '3x 20s + 20s descanso' },
-                        { exercicioId: ex042.id, ordem: 4, repeticoes: '4x 15m (zig-zag)' },
-                        { exercicioId: ex057.id, ordem: 5, repeticoes: '4x 6 saltos' },
-                        { exercicioId: ex061.id, ordem: 6, repeticoes: '3x 20s (shuffle)' },
-                        { exercicioId: ex035.id, ordem: 7, repeticoes: '3x 20s + 20s descanso' },
-                        { exercicioId: ex068.id, ordem: 8, repeticoes: '3x 40s (isometria)' },
+                        { exercicioId: ex031.id, ordem: 1, repeticoes: "3x 20s + 20s descanso" },
+                        { exercicioId: ex032.id, ordem: 2, repeticoes: "3x 20s + 20s descanso" },
+                        { exercicioId: ex041.id, ordem: 3, repeticoes: "3x 20s + 20s descanso" },
+                        { exercicioId: ex042.id, ordem: 4, repeticoes: "4x 15m (zig-zag)" },
+                        { exercicioId: ex057.id, ordem: 5, repeticoes: "4x 6 saltos" },
+                        { exercicioId: ex061.id, ordem: 6, repeticoes: "3x 20s (shuffle)" },
+                        { exercicioId: ex035.id, ordem: 7, repeticoes: "3x 20s + 20s descanso" },
+                        { exercicioId: ex068.id, ordem: 8, repeticoes: "3x 40s (isometria)" },
                     ],
                 },
             },
@@ -1332,23 +1348,23 @@ async function main() {
         if (!(exA && exB && exC && exD && exE)) {
             throw new Error('Exercícios do TR001 não encontrados no seed');
         }
-        const treino = await prisma.treinoProgramado.upsert({
-            where: { codigo: "TR001" },
-            update: {
+        const treino = await upsertTreinoPorCodigoSemUnique({
+            codigo: "TR001",
+            updateData: {
                 tipoTreino: TipoTreino.Fisico,
                 dataAgendada: prazo25Out,
                 exercicios: {
                     deleteMany: {},
                     create: [
-                        { exercicioId: exA.id, ordem: 1, repeticoes: '4x 45s + 15s descanso' },
-                        { exercicioId: exB.id, ordem: 2, repeticoes: '3x 12 reps' },
-                        { exercicioId: exC.id, ordem: 3, repeticoes: '3x 10 lançamentos' },
-                        { exercicioId: exD.id, ordem: 4, repeticoes: '4x 8 cabeceios' },
-                        { exercicioId: exE.id, ordem: 5, repeticoes: '4x 60s' },
+                        { exercicioId: exA.id, ordem: 1, repeticoes: "4x 45s + 15s descanso" },
+                        { exercicioId: exB.id, ordem: 2, repeticoes: "3x 12 reps" },
+                        { exercicioId: exC.id, ordem: 3, repeticoes: "3x 10 lançamentos" },
+                        { exercicioId: exD.id, ordem: 4, repeticoes: "4x 8 cabeceios" },
+                        { exercicioId: exE.id, ordem: 5, repeticoes: "4x 60s" },
                     ],
                 },
             },
-            create: {
+            createData: {
                 nome: "Treino Resistencia Física",
                 codigo: "TR001",
                 descricao: "Treino voltado para resistência",
@@ -1362,11 +1378,11 @@ async function main() {
                 dataAgendada: prazo25Out,
                 exercicios: {
                     create: [
-                        { exercicioId: exA.id, ordem: 1, repeticoes: '4x 45s + 15s descanso' },
-                        { exercicioId: exB.id, ordem: 2, repeticoes: '3x 12 reps' },
-                        { exercicioId: exC.id, ordem: 3, repeticoes: '3x 10 lançamentos' },
-                        { exercicioId: exD.id, ordem: 4, repeticoes: '4x 8 cabeceios' },
-                        { exercicioId: exE.id, ordem: 5, repeticoes: '4x 60s' },
+                        { exercicioId: exA.id, ordem: 1, repeticoes: "4x 45s + 15s descanso" },
+                        { exercicioId: exB.id, ordem: 2, repeticoes: "3x 12 reps" },
+                        { exercicioId: exC.id, ordem: 3, repeticoes: "3x 10 lançamentos" },
+                        { exercicioId: exD.id, ordem: 4, repeticoes: "4x 8 cabeceios" },
+                        { exercicioId: exE.id, ordem: 5, repeticoes: "4x 60s" },
                     ],
                 },
             },
