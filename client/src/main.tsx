@@ -9,8 +9,19 @@ import { queryClient } from "./lib/queryClient.js";
 
 import { registerSW } from "virtual:pwa-register";
 
-registerSW({
+const updateSW = registerSW({
   immediate: true,
+
+  onNeedRefresh() {
+    // força ativar o novo SW e recarrega
+    updateSW(true);
+  },
+
+  onOfflineReady() {
+    // opcional: você pode exibir um toast “offline pronto”
+    // console.log("Offline ready");
+  },
+
   onRegisterError(error) {
     console.warn("SW register error:", error);
   },

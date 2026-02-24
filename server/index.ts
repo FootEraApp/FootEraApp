@@ -1,3 +1,4 @@
+// server/index
 import express from "express";
 import cors from "cors";
 import path, { dirname } from "path";

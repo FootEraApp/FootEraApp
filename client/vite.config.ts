@@ -1,3 +1,4 @@
+// client/vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
@@ -8,15 +9,22 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      strategies: "injectManifest",
-      srcDir: "src",
-      filename: "sw.ts",
-      injectRegister: null,
+      strategies: "generateSW",
       registerType: "autoUpdate",
+      injectRegister: "auto",
+
       devOptions: {
         enabled: true,
         type: "module",
       },
+
+      workbox: {
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
+      },
+
       manifest: {
         name: "FootEra",
         short_name: "FootEra",
