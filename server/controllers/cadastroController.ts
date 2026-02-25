@@ -1,3 +1,4 @@
+//server/controllers/cadastroController
 import { Request, Response } from "express";
 import { TipoUsuario, Nivel, StatusCref } from "@prisma/client";
 import bcrypt from "bcryptjs";
@@ -6,7 +7,7 @@ import crypto from "crypto";
 import { sendEmailVerification } from "../utils/mailer.js";
 import { prisma } from "../prisma.js";
 
-const FRONTEND_URL = (process.env.WEB_BASE_URL || "http://localhost:5173").replace(/\/+$/, "");
+const FRONTEND_URL = (process.env.WEB_BASE_URL || "https://footera.app.br").replace(/\/+$/, "");
 
 const API_BASE_URL = (
   process.env.API_BASE_URL ||

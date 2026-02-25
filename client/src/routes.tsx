@@ -61,6 +61,7 @@ import CriarMetodologia from "./pages/metodologias/create.js";
 import MinhasMetodologias from "./pages/metodologias/minhas.js";
 import MetodologiaUnicaPage from "./pages/metodologias/metodologia-unica.js";
 import AvaliarMetodologia from "./pages/metodologias/avaliar.js";
+import TutorialPage from "./pages/tutorial.js";
 
 export function AppRoutes() {
   return (
@@ -173,6 +174,7 @@ export function AppRoutes() {
       <Route path="/treinos/elenco"><Private><PaginaElenco /></Private></Route>
       <Route path="/treinos/elenco/jogos"><Private><PaginaJogosElenco/></Private></Route>
       <Route path="/treinos/novo"><PaginaNovoTreino /></Route>
+      <Route path="/treinos/tutorial" component={TutorialPage}/>
       <Route path="/treinos/unico"><Private><PaginaTreinoUnico /></Private></Route>
       <Route path="/treinos/Criar-Metodologia"><CriarMetodologia/></Route>
       <Route path="/treinos/Minhas-Metodologias"><MinhasMetodologias/></Route>
