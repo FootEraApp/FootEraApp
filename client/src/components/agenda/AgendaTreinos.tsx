@@ -86,8 +86,9 @@ export type AgendaFetchAgendados = (args: {
 export type AgendaFetchProgramados = () => Promise<any>;
 
 export type AgendaOnAgendar = (args: {
-  selectedDays: string[]; 
+  selectedDays: string[];
   treinoProgramadoId: string;
+  selectedTime: string; // "HH:mm"
 }) => Promise<void>;
 
 export type AgendaRenderItemActions = (t: TreinoAgendadoItem) => React.ReactNode;
@@ -179,9 +180,7 @@ export function normalizeAgendadosPayload(payload: any): TreinoAgendadoItem[] {
           t?.treinoProgramadoId ?? treinoProgramadoObj?.id ?? null;
 
         const dataTreino = t?.dataTreino ?? t?.dataHora ?? t?.data ?? null;
-
         const submissaoFeita = !!(t?.submissao?.feito ?? t?.submissaoFeita ?? false);
-
         const atletaObj = t?.atleta ?? t?.atletaUsuario ?? t?.usuario ?? null;
         const atletaNome =
           atletaObj?.nome ??
@@ -252,7 +251,9 @@ function agruparAgendadosPorTreinoEDia(
     const treinoKey = String(t.treinoProgramadoId ?? t.treinoProgramado?.id ?? t.titulo ?? t.id ?? "");
     if (!treinoKey) continue;
 
-    const key = `${day}__${treinoKey}`;
+    const dt = parseAsDate(t.dataTreino);
+    const hhmm = dt ? `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}` : "00:00";
+    const key = `${day}__${hhmm}__${treinoKey}`;
     const prev = byKey.get(key);
 
     if (!prev) {
@@ -637,14 +638,14 @@ export default function AgendaTreinos({
   const [abaTreinos, setAbaTreinos] = useState<"meus" | "footera">("meus");
   const [buscaTreino, setBuscaTreino] = useState("");
   const [footeraLoaded, setFooteraLoaded] = useState(false);
-
+  const [selectedTime, setSelectedTime] = useState<string>("12:00");
   // 🔒 PRO gate (bloqueia aba FootEra para não assinantes)
   const [proLoading, setProLoading] = useState(false);
   const [isPro, setIsPro] = useState(true); // default true pra não piscar bloqueio antes de checar
   const [proGateChecked, setProGateChecked] = useState(false);
-
   const parceirosCacheRef = useRef<TreinoProgramadoItem[]>([]);
 
+  
   async function checkIsPro() {
     const token =
       (Storage as any)?.token ||
@@ -891,7 +892,7 @@ export default function AgendaTreinos({
 
     setSalvandoAgenda(true);
     try {
-      await onAgendar({ selectedDays, treinoProgramadoId });
+      await onAgendar({ selectedDays, treinoProgramadoId, selectedTime });
 
       const list = await fetchAgendados3Meses(fetchAgendados, cursorMonth);
       setAgendados(list);
@@ -1015,10 +1016,15 @@ export default function AgendaTreinos({
                 <div className="grid grid-cols-7 gap-1 sm:gap-2">
                   {daysGrid.map(({ date, key, inMonth }) => {
                     const items = agendadosPorDia.get(key) ?? [];
-                    const hasTreino = items.length > 0;
+                    const itemsSorted = [...items].sort((a,b) => {
+                      const da = parseAsDate(a.dataTreino)?.getTime() ?? 0;
+                      const db = parseAsDate(b.dataTreino)?.getTime() ?? 0;
+                      return da - db;
+                    });
+                    const hasTreino = itemsSorted.length > 0;
                     const done =
                       hasTreino &&
-                      items.some((t) =>
+                      itemsSorted.some((t) =>
                         isCompleted(t.meuStatus || t.execucaoStatus || t.status)
                       );
                     const lost = hasTreino && !done && items.some((t) => isLost(t));
@@ -1033,7 +1039,7 @@ export default function AgendaTreinos({
                     const opacity = inMonth ? "opacity-100" : "opacity-40";
                     const selected = selectedDays.includes(key);
                     const past = isPastDayISO(key);
-
+            
                     return (
                       <button
                         key={key}
@@ -1071,9 +1077,9 @@ export default function AgendaTreinos({
                                       : "bg-zinc-400"
                                 }`}
                               />
-                              {items.length > 1 ? (
+                              {itemsSorted.length > 1 ? (
                                 <span className="text-[10px] text-zinc-600 font-semibold">
-                                  +{items.length - 1}
+                                  +{itemsSorted.length - 1}
                                 </span>
                               ) : (
                                 <span className="text-[10px] text-zinc-500">treino</span>
@@ -1085,9 +1091,9 @@ export default function AgendaTreinos({
                         </div>
 
                         {hasTreino ? (
-                          <div className="hidden sm:block mt-1 text-[11px] opacity-90 truncate">
-                            {items[0]?.treinoProgramado?.nome || items[0]?.titulo || "Treino"}
-                            {items.length > 1 ? ` +${items.length - 1}` : ""}
+                          <div className="hidden sm:block mt-1 text-[11px] opacity-90 truncate">   
+                            {itemsSorted[0]?.treinoProgramado?.nome || itemsSorted[0]?.titulo || "Treino"}
+                            {itemsSorted.length > 1 ? ` +${itemsSorted.length - 1}` : ""}
                           </div>
                         ) : (
                           <div className="hidden sm:block mt-1 text-[11px] opacity-60 truncate">
@@ -1133,131 +1139,157 @@ export default function AgendaTreinos({
                 ) : null}
 
                 <div className={["space-y-4", forceScrollDetails ? "" : ""].join(" ")}>
-                  {selectedDayItems.map(({ day, items }) => (
-                    <div key={day} className="rounded-xl border border-zinc-200 bg-white p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="font-bold">{formatDayPtBR(day)}</div>
-                        <div className="text-xs opacity-80">
-                          {items.length ? `${items.length} treino(s)` : "Sem treino"}
-                        </div>
-                      </div>
+                  {selectedDayItems.map(({ day, items }) => {
+                    const itemsSorted: TreinoAgendadoItem[] = [...items].sort((a, b) => {
+                      const da = parseAsDate(a.dataTreino)?.getTime() ?? 0;
+                      const db = parseAsDate(b.dataTreino)?.getTime() ?? 0;
+                      return da - db;
+                    });
 
-                      {!items.length ? (
-                        <div className="text-sm opacity-80">
-                          Nenhum treino agendado neste dia.
+                    return (
+                      <div key={day} className="rounded-xl border border-zinc-200 bg-white p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="font-bold">{formatDayPtBR(day)}</div>
+                          <div className="text-xs opacity-80">
+                            {itemsSorted.length ? `${itemsSorted.length} treino(s)` : "Sem treino"}
+                          </div>
                         </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {items.map((t) => {
-                            const nome = t.treinoProgramado?.nome || t.titulo || "Treino";
-                            const done = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
-                            const lost = !done && isLost(t);
 
-                            const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
-                            const statusClass = done
-                              ? "text-emerald-600"
-                              : lost
+                        {!itemsSorted.length ? (
+                          <div className="text-sm opacity-80">Nenhum treino agendado neste dia.</div>
+                        ) : (
+                          <div className="space-y-2">
+                            {itemsSorted.map((t: TreinoAgendadoItem) => {
+                              const nome = t.treinoProgramado?.nome || t.titulo || "Treino";
+                              const done = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
+                              const lost = !done && isLost(t);
+                              const dt = parseAsDate(t.dataTreino);
+                              const horaTxt = dt
+                                ? dt.toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  timeZone: "America/Sao_Paulo",
+                                })
+                                : null;
+
+                              const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
+                              const statusClass = done
+                                ? "text-emerald-600"
+                                : lost
                                 ? "text-red-600"
                                 : "text-zinc-600";
 
-                            const treinoKey = `${day}__${String(
-                              t.treinoProgramadoId ?? t.treinoProgramado?.id ?? t.id
-                            )}`;
+                              const treinoKey = `${day}__${String(
+                                t.treinoProgramadoId ?? t.treinoProgramado?.id ?? t.id
+                              )}`;
 
-                            const alunosCountFinal =
-                              typeof alunosCountByKey?.[treinoKey] === "number"
-                                ? alunosCountByKey[treinoKey]
-                                : (t.alunosCount ?? 0);
+                              const alunosCountFinal =
+                                typeof alunosCountByKey?.[treinoKey] === "number"
+                                  ? alunosCountByKey[treinoKey]
+                                  : t.alunosCount ?? 0;
 
+                              const canOpenAlunos =
+                                !!turmaId && !!groupByTreinoPerDay && !!t.treinoProgramadoId;
 
-                            const canOpenAlunos = !!turmaId && !!groupByTreinoPerDay && !!t.treinoProgramadoId;
-                            const isOpen = alunosOpenKey === treinoKey;
+                              const isOpen = alunosOpenKey === treinoKey;
 
-                            return (
-                              <div
-                                key={t.id}
-                                className={`rounded-lg border border-zinc-200 bg-white p-3 ${canOpenAlunos ? "cursor-pointer hover:bg-zinc-50" : ""}`}
-                                onClick={async () => {
-                                  if (!canOpenAlunos) return;
+                              return (
+                                <div
+                                  key={t.id}
+                                  className={`rounded-lg border border-zinc-200 bg-white p-3 ${
+                                    canOpenAlunos ? "cursor-pointer hover:bg-zinc-50" : ""
+                                  }`}
+                                  onClick={async () => {
+                                    if (!canOpenAlunos) return;
 
-                                  if (isOpen) {
-                                    setAlunosOpenKey(null);
+                                    if (isOpen) {
+                                      setAlunosOpenKey(null);
+                                      setAlunosDoTreino([]);
+                                      return;
+                                    }
+
+                                    setAlunosOpenKey(treinoKey);
                                     setAlunosDoTreino([]);
-                                    return;
-                                  }
 
-                                  setAlunosOpenKey(treinoKey);
-                                  setAlunosDoTreino([]);
+                                    await carregarAlunosDoTreinoTurma({
+                                      dayISO: day,
+                                      treinoProgramadoId: String(t.treinoProgramadoId),
+                                      treinoKey,
+                                    });
+                                  }}
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <div className="font-bold truncate">{nome}</div>
 
-                                  await carregarAlunosDoTreinoTurma({
-                                    dayISO: day,
-                                    treinoProgramadoId: String(t.treinoProgramadoId),
-                                    treinoKey,
-                                  });
-                                }}
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <div className="font-bold truncate">{nome}</div>
+                                      <div className="text-xs opacity-80 mt-1">
+                                        Status: <span className={statusClass}>{statusText}</span>
+                                      </div>
 
-                                    <div className="text-xs opacity-80 mt-1">
-                                      Status: <span className={statusClass}>{statusText}</span>
+                                      {horaTxt ? (
+                                        <div className="text-xs text-zinc-600 mt-1">
+                                          Horário: <span className="font-semibold">{horaTxt}</span>
+                                        </div>
+                                      ) : null}
+
+                                      {groupByTreinoPerDay ? (
+                                        <div className="text-xs text-zinc-600 mt-1">
+                                          Turma: <span className="font-semibold">{t.turmaNome ?? title}</span> •{" "}
+                                          <span className="font-semibold">{alunosCountFinal}</span> aluno(s)
+                                        </div>
+                                      ) : null}
+
+                                      {renderItemActions ? (
+                                        <div className="mt-2">{renderItemActions(t)}</div>
+                                      ) : null}
                                     </div>
 
-                                    {groupByTreinoPerDay ? (
-                                      <div className="text-xs text-zinc-600 mt-1">
-                                        Turma: <span className="font-semibold">{t.turmaNome ?? title}</span> •{" "}
-                                        <span className="font-semibold">{alunosCountFinal}</span> aluno(s)
-                                      </div>
+                                    {done ? (
+                                      <CheckCircle2 className="h-5 w-5 text-green-300" />
+                                    ) : lost ? (
+                                      <XCircle className="h-5 w-5 text-red-300" />
                                     ) : null}
-
-                                    {renderItemActions ? <div className="mt-2">{renderItemActions(t)}</div> : null}
                                   </div>
 
-                                  {done ? (
-                                    <CheckCircle2 className="h-5 w-5 text-green-300" />
-                                  ) : lost ? (
-                                    <XCircle className="h-5 w-5 text-red-300" />
+                                  {/* ✅ LISTA DE ALUNOS */}
+                                  {canOpenAlunos && isOpen ? (
+                                    <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-2">
+                                      {alunosLoading ? (
+                                        <div className="text-sm text-zinc-600">Carregando alunos...</div>
+                                      ) : alunosDoTreino.length === 0 ? (
+                                        <div className="text-sm text-zinc-500">Nenhum aluno encontrado.</div>
+                                      ) : (
+                                        <div className="space-y-2">
+                                          {alunosDoTreino.map((a: AlunoDoTreinoUI) => (
+                                            <div key={a.usuarioId} className="flex items-center gap-2">
+                                              <div className="h-8 w-8 rounded-full bg-white border border-zinc-200 overflow-hidden flex-none">
+                                                <img
+                                                  src={a.foto || AVATAR_FALLBACK}
+                                                  alt={a.nome}
+                                                  className="h-full w-full object-cover"
+                                                  onError={(e) => {
+                                                    e.currentTarget.onerror = null;
+                                                    e.currentTarget.src = AVATAR_FALLBACK;
+                                                  }}
+                                                />
+                                              </div>
+                                              <div className="text-sm font-semibold text-zinc-800 truncate">
+                                                {a.nome}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
                                   ) : null}
                                 </div>
-
-                                {/* ✅ LISTA DE ALUNOS (AGORA NO LUGAR CERTO) */}
-                                {canOpenAlunos && isOpen ? (
-                                  <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-2">
-                                    {alunosLoading ? (
-                                      <div className="text-sm text-zinc-600">Carregando alunos...</div>
-                                    ) : alunosDoTreino.length === 0 ? (
-                                      <div className="text-sm text-zinc-500">Nenhum aluno encontrado.</div>
-                                    ) : (
-                                      <div className="space-y-2">
-                                        {alunosDoTreino.map((a: AlunoDoTreinoUI) => (
-                                          <div key={a.usuarioId} className="flex items-center gap-2">
-                                            <div className="h-8 w-8 rounded-full bg-white border border-zinc-200 overflow-hidden flex-none">
-                                              <img
-                                                src={a.foto || AVATAR_FALLBACK}
-                                                alt={a.nome}
-                                                className="h-full w-full object-cover"
-                                                onError={(e) => {
-                                                  e.currentTarget.onerror = null; // evita loop
-                                                  e.currentTarget.src = AVATAR_FALLBACK;
-                                                }}
-                                              />
-
-                                            </div>
-                                            <div className="text-sm font-semibold text-zinc-800 truncate">{a.nome}</div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1291,6 +1323,25 @@ export default function AgendaTreinos({
                 </div>
               </div>
 
+              <div className="rounded-xl border border-zinc-200 bg-white p-4">
+                <div className="font-extrabold text-zinc-900">Horário do treino</div>
+                <div className="text-sm text-zinc-600 mt-1">
+                  Escolha o horário (ele será usado para todos os dias selecionados).
+                </div>
+
+                <div className="mt-3 flex items-center gap-3">
+                  <input
+                    type="time"
+                    value={selectedTime}
+                    onChange={(e) => setSelectedTime(e.target.value)}
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-emerald-400"
+                  />
+
+                  <div className="text-xs text-zinc-500">
+                    Ex.: 07:30, 14:00, 19:15
+                  </div>
+                </div>
+              </div>
               <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden">
                 <div className="p-2 border-b border-zinc-100 flex items-center justify-between gap-2">
                   <div className="inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">

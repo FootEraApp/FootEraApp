@@ -112,20 +112,45 @@ async function recomputeInclusoesExercicio(exercicioId: string) {
   return total;
 }
 
-function parseDateInput(raw: any): Date {
-  let s = String(raw ?? "").trim();
-  if (!s) return new Date(NaN);
+function parseDateInput(raw?: any): Date | null {
+  if (!raw) return null;
 
-  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
-    s = s.slice(0, 10);
+  // já veio Date
+  if (raw instanceof Date) {
+    return Number.isNaN(raw.getTime()) ? null : raw;
   }
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    const [y, m, d] = s.split("-").map(Number);
-    return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+  const s = String(raw).trim();
+  if (!s) return null;
+
+  // ✅ datetime-local SEM timezone: "2026-02-24T19:00" ou "2026-02-24T19:00:00"
+  const mLocal = s.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/
+  );
+  if (mLocal) {
+    const [, Y, M, D, h, mi, sec] = mLocal;
+    return new Date(
+      Number(Y),
+      Number(M) - 1,
+      Number(D),
+      Number(h),
+      Number(mi),
+      Number(sec || 0),
+      0
+    );
   }
 
-  return new Date(s);
+  // ✅ só data "YYYY-MM-DD" (sem hora) -> mantém fallback
+  const mDate = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (mDate) {
+    const [, Y, M, D] = mDate;
+    // meio-dia evita “voltar dia” em fuso negativo quando serializa/mostra
+    return new Date(Number(Y), Number(M) - 1, Number(D), 12, 0, 0, 0);
+  }
+
+  // ✅ ISO com timezone (Z ou offset) ou qualquer formato que Date entenda
+  const dt = new Date(s);
+  return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
 function parseDateOnlySafe(raw: any): Date {
@@ -275,7 +300,7 @@ export async function agendarTreinoPessoal(req: AuthenticatedRequest, res: Respo
   }
 
   const novaData = parseDateInput(dataTreino);
-    if (Number.isNaN(novaData.getTime())) {
+    if (!novaData) {
       return res.status(400).json({ message: "dataTreino inválida" });
     }
 
@@ -320,7 +345,7 @@ export async function agendarTreinoLote(req: AuthenticatedRequest, res: Response
   }
 
   const dt = /T/.test(String(dataTreino)) ? parseDateInput(dataTreino) : parseDateOnlySafe(dataTreino);
-  if (Number.isNaN(dt.getTime())) {
+  if (!dt) {
     return res.status(400).json({ message: "dataTreino inválida" });
   }
 
@@ -506,7 +531,7 @@ export async function getCalendarioTreinos(req: Request, res: Response) {
     const startDate = parseDateInput(start);
     const endDate = parseDateInput(end);
 
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    if (!startDate || !endDate) {
       return res.status(400).json({ error: "Datas 'start'/'end' inválidas" });
     }
 
@@ -1346,7 +1371,7 @@ const atletaId = atleta?.id ?? "";
       ? parseDateInput(dataTreino)
       : parseDateOnlySafe(dataTreino);
 
-    if (Number.isNaN(quandoBase.getTime())) {
+    if (!quandoBase) {
       return res.status(400).json({ message: "dataTreino inválida" });
     }
 
@@ -1354,7 +1379,7 @@ const atletaId = atleta?.id ?? "";
       ? parseDateInput(dataExpiracao)
       : new Date(quandoBase.getTime() + 3 * 24 * 60 * 60 * 1000);
 
-    if (Number.isNaN(exp.getTime())) {
+    if (!exp) {
       return res.status(400).json({ message: "dataExpiracao inválida" });
     }
 
@@ -3894,7 +3919,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
                 dataAgendada: dataAgendada
                   ? (() => {
                       const d = parseDateInput(dataAgendada);
-                      if (Number.isNaN(d.getTime())) throw new Error("dataAgendada inválida");
+                      if (!d) throw new Error("dataAgendada inválida");
                       return d;
                     })()
                   : null,
@@ -3913,7 +3938,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
                 expiraEm: expiraEm
                   ? (() => {
                       const d = parseDateInput(expiraEm);
-                      if (Number.isNaN(d.getTime())) throw new Error("expiraEm inválida");
+                      if (!d) throw new Error("expiraEm inválida");
                       return d;
                     })()
                   : null,

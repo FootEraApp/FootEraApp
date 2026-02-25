@@ -224,6 +224,31 @@ export default function CriarMetodologia() {
   }, []);
 
   useEffect(() => {
+    async function guard() {
+      const token = getToken();
+      if (!token) {
+        alert("Faça login novamente.");
+        window.location.href = "/login";
+        return;
+      }
+
+      const r = await fetch(`${API.BASE_URL}/api/permissoes/metodologias/criar`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const j = await r.json().catch(() => null);
+
+      if (!r.ok || !j?.canCreate) {
+        alert("Você não tem permissão para criar metodologias. Disponível apenas para Professor Parceiro ou planos Pro.");
+        window.location.href = "/metodologias/minhas"; // ajuste rota real
+        return;
+      }
+    }
+
+    guard();
+  }, []);
+
+  useEffect(() => {
     if (!metodologiaId) return;
 
     (async () => {
