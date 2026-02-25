@@ -805,13 +805,6 @@ export default function NovoTreino() {
     message: string;
   } | null>(null);
 
-  type DestinoTreino = "NORMAL" | "METODOLOGIA";
-  type MetodologiaMin = { id: string; titulo: string; publicoAlvo?: string | null };
-
-  const [destinoTreino, setDestinoTreino] = useState<DestinoTreino>("NORMAL");
-  const [minhasMetodologias, setMinhasMetodologias] = useState<MetodologiaMin[]>([]);
-  const [metodologiaId, setMetodologiaId] = useState<string>("");
-
   const jaSincronizouCalendarioComDatas = useRef(false);
   type ProfessorItem = { id: string; nome: string; codigo?: string; cref?: string };
 
@@ -1696,9 +1689,6 @@ useEffect(() => {
           );
           setTipoTreino(saved.tipoTreino ?? "Tecnico");
           setObjetivo(saved.objetivo ?? "");
-          if (saved?.destinoTreino) setDestinoTreino(saved.destinoTreino);
-          if (saved?.metodologiaId) setMetodologiaId(saved.metodologiaId);
-
           const exOld = Array.isArray(saved.exerciciosSelecionados)
             ? saved.exerciciosSelecionados
             : [];
@@ -1941,8 +1931,6 @@ useEffect(() => {
       professoresSelecionados,
       capaUrl,
       treinoFootera,
-      destinoTreino,
-      metodologiaId,
     });
   }, [
     etapa,
@@ -1960,55 +1948,6 @@ useEffect(() => {
     professoresSelecionados,
     treinoFootera,
   ]);
-
-  useEffect(() => {
-    // só busca se o usuário quer vincular a uma metodologia
-    if (destinoTreino !== "METODOLOGIA") return;
-
-    // só organizadores criam metodologia (professor/clube/escolinha)
-    const tipo = String(usuario?.tipo ?? "").toLowerCase();
-    const pode = tipo === "professor" || tipo === "clube" || tipo === "escolinha";
-    if (!pode) return;
-
-    let cancel = false;
-
-    (async () => {
-      try {
-        const token = getToken();
-        if (!token) return;
-
-        const headers = { Authorization: `Bearer ${token}` };
-
-        // ✅ Endpoint sugerido (você pode criar/ajustar no backend):
-        // GET /api/metodologias/minhas  -> retorna [{id, nome}]
-        const r = await fetch(`${API.BASE_URL}/api/metodologias/minhas`, { headers });
-
-        if (!r.ok) {
-          if (!cancel) setMinhasMetodologias([]);
-          return;
-        }
-
-        const j = await r.json().catch(() => null);
-        const arr = Array.isArray(j) ? j : (j?.items ?? j?.data ?? j?.rows ?? []);
-        const list = (Array.isArray(arr) ? arr : [])
-          .map((m: any) => ({
-            id: String(m.id ?? "").trim(),
-            titulo: String(m.nome ?? m.titulo ?? "(sem nome)"),
-            publicoAlvo: String(m.publicoAlvo ?? ""),
-          }))
-          .filter((m) => m.id);
-
-        if (!cancel) setMinhasMetodologias(list);
-      } catch (e) {
-        console.error("[NovoTreino] erro ao carregar minhas metodologias:", e);
-        if (!cancel) setMinhasMetodologias([]);
-      }
-    })();
-
-    return () => {
-      cancel = true;
-    };
-  }, [destinoTreino, usuario?.tipo]);
 
   async function carregarTreinoParaEdicao(id: string) {
     const token = getToken();
@@ -2787,18 +2726,6 @@ useEffect(() => {
           const token = getToken();
           const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-          if (destinoTreino === "METODOLOGIA") {
-            if (!metodologiaId) {
-              showToast("Selecione a metodologia antes de continuar.", "info");
-              return;
-            }
-            (payload as any).metodologiaId = metodologiaId;
-            (payload as any).paraMetodologia = true;
-          } else {
-            (payload as any).metodologiaId = null;
-            (payload as any).paraMetodologia = false;
-          }
-
           const rr = await fetch(
             `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(
               String(treinoProgramadoId),
@@ -3486,68 +3413,6 @@ useEffect(() => {
                   )}
                 </div>
               </div>
-            </div>
-
-            {/* =========================
-                Destino do treino
-              ========================= */}
-            <div className="mt-4 rounded-xl border bg-white p-3">
-              <p className="text-sm font-semibold text-gray-800 mb-2">
-                Destino do treino
-              </p>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDestinoTreino("NORMAL");
-                    setMetodologiaId("");
-                  }}
-                  className={[
-                    "flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition",
-                    destinoTreino === "NORMAL"
-                      ? "bg-green-800 text-white border-green-800"
-                      : "bg-white text-green-900 border-green-200 hover:bg-green-50",
-                  ].join(" ")}
-                >
-                  Treino normal
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setDestinoTreino("METODOLOGIA")}
-                  className={[
-                    "flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition",
-                    destinoTreino === "METODOLOGIA"
-                      ? "bg-green-800 text-white border-green-800"
-                      : "bg-white text-green-900 border-green-200 hover:bg-green-50",
-                  ].join(" ")}
-                >
-                  Para metodologia
-                </button>
-              </div>
-
-              {destinoTreino === "METODOLOGIA" && (
-                <div className="mt-3">
-                  <label className="block text-xs text-gray-700 mb-1">
-                    Selecione a metodologia
-                  </label>
-
-                  <select
-                    value={metodologiaId}
-                    onChange={(e) => setMetodologiaId(e.target.value)}
-                    className="w-full border rounded-xl px-3 py-2 text-sm"
-                  >
-                    <option value="">Selecione...</option>
-                    {minhasMetodologias.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.titulo}
-                      </option>
-                    ))}
-
-                  </select>
-                </div>
-              )}
             </div>
 
             <div className="sm:col-span-2">
