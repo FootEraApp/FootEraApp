@@ -107,6 +107,7 @@ import presencaRoutes from "./routes/presenca.js";
 import metodologiasRoutes from "./routes/metodologiasRoutes.js";
 import metodologiasUploadRoutes from "./routes/uploadMetodologias.js";
 import adminMetodologiasRoutes from "./routes/adminMetodologiasRoutes.js";
+import permissoesRoutes from "./routes/permissoesRoutes.js";
 
 import { mercadoPagoWebhook } from "./controllers/billingController.js";
 const __filename = fileURLToPath(import.meta.url);
@@ -328,10 +329,10 @@ app.use("/api/treinar-juntos", treinarJuntosRoute);
 app.use("/api/sessoes-turma", sessoesTurmaRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/status", statusRoutes);
+app.use("/api/metodologias", metodologiasRoutes);
+app.use("/api/permissoes", permissoesRoutes);
 app.use("/api", authenticateToken, treinoLivreRoutes);
 app.use("/api", authenticateToken, scoutNotesRoutes);
-app.use("/api/metodologias", metodologiasRoutes);
-
 
 server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
