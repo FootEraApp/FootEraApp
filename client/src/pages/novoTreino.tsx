@@ -461,11 +461,17 @@ async function apiListarTreinosSalvos(
   ownerId: string,
 ) {
   const headers = authHeaders();
-  const url = `${API.BASE_URL}/api/treinosSalvos?tipoUsuario=${encodeURIComponent(
-    ownerTipo,
-  )}&tipoUsuarioId=${encodeURIComponent(ownerId)}&includePublic=0`;
+    const url =
+    `${API.BASE_URL}/api/treinosSalvos` +
+    `?tipoUsuario=${encodeURIComponent(ownerTipo)}` +
+    `&tipoUsuarioId=${encodeURIComponent(ownerId)}` +
+    `&includePublic=0` +
+    `&_ts=${Date.now()}`;
 
-  const r = await fetch(url, { headers });
+    const r = await fetch(url, {
+      headers,          // ✅ não manda Cache-Control como header
+      cache: "no-store" // ✅ isso já força não-cache sem preflight de CORS
+    });
   await assertOk(r, "Falha ao listar treinos salvos");
 
   const j = await r.json().catch(() => null);
@@ -481,8 +487,12 @@ async function apiListarTreinosSalvos(
 async function apiDeletarTreinoSalvo(id: string) {
   const headers = authHeaders();
   const r = await fetch(
-    `${API.BASE_URL}/api/treinosSalvos/${encodeURIComponent(id)}`,
-    { method: "DELETE", headers },
+    `${API.BASE_URL}/api/treinosSalvos/${encodeURIComponent(id)}?_ts=${Date.now()}`,
+    {
+      method: "DELETE",
+      headers,          // ✅ não manda Cache-Control como header
+      cache: "no-store",
+    },
   );
   await assertOk(r, "Falha ao apagar treino salvo");
   return true;
@@ -493,7 +503,8 @@ async function apiCriarTreinoSalvo(body: any) {
   
   const r = await fetch(`${API.BASE_URL}/api/treinosSalvos`, {
     method: "POST",
-    headers,
+    headers: { ...headers },
+    cache: "no-store",
     body: JSON.stringify(body),
   });
 
@@ -505,61 +516,80 @@ async function tentarSalvarComoTreinoSalvo(
   payload: TreinoCreatePayload,
   scoreTotal: number,
 ) {
+  const token = getToken();
+  if (!token) return { saved: false, reason: "sem-token" as const };
+
+  const ownerTipo = payload.tipoUsuario;
+  const ownerId = payload.tipoUsuarioId;
+  if (!ownerTipo || !ownerId) return { saved: false, reason: "sem-dono" as const };
+
   try {
-    const token = getToken();
-    if (!token) {
-      return { saved: false, reason: "sem-token" as const };
-    }
-
-    const ownerTipo = payload.tipoUsuario;
-    const ownerId = payload.tipoUsuarioId;
-
-    if (!ownerTipo || !ownerId)
-      return { saved: false, reason: "sem-dono" as const };
-
-    const meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
-
-    if (meus.length >= MAX_SLOTS_TREINOS_SALVOS) {
-      const lista = meus
-        .map((m, i) => {
-          const dt = m.atualizadoEm || m.expiraEm || "";
-          return `${i + 1}) ${m.titulo} ${dt ? `(${dt})` : ""} [${m.id}]`;
-        })
-        .join("\n");
-
-      const escolha = window.prompt(
-        `Você já possui ${MAX_SLOTS_TREINOS_SALVOS} treinos salvos.\n` +
-          `Escolha um número para apagar e liberar espaço OU deixe vazio para não salvar este novo treino.\n\n${lista}\n\nDigite 1-${meus.length}, ou deixe em branco para pular:`,
-      );
-
-      const idx = Number(escolha);
-      if (
-        !escolha ||
-        !Number.isFinite(idx) ||
-        idx < 1 ||
-        idx > meus.length
-      ) {
-        return { saved: false, reason: "usuario-pulou" as const };
-      }
-
-      const apagar = meus[idx - 1];
-      try {
-        await apiDeletarTreinoSalvo(apagar.id);
-      } catch {
-        alert(
-          "Não foi possível apagar o treino selecionado. O novo não será salvo na Gaveta.",
-        );
-        return { saved: false, reason: "falha-apagar" as const };
-      }
+    // ✅ valida antes de tudo
+    if (!Array.isArray(payload.exercicios) || payload.exercicios.length === 0) {
+      console.warn("[Gaveta] pulou: treino sem exercícios no payload");
+      return { saved: false, reason: "sem-exercicios" as const };
     }
 
     const categorias = Array.isArray(payload.categoria)
       ? payload.categoria.map(toCategoriaEnum).filter(Boolean)
       : [];
-    
-    if (!Array.isArray(payload.exercicios) || payload.exercicios.length === 0) {
-      console.warn("[Gaveta] pulou: treino sem exercícios no payload");
-      return { saved: false, reason: "sem-exercicios" as const };
+
+    // ✅ sempre pega a lista mais recente (evita “treino antigo que já apaguei”)
+    let meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
+
+    const formatarData = (iso?: string | null) => {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "";
+      // dd/mm/aaaa hh:mm
+      return d.toLocaleString("pt-BR");
+    };
+
+    // ✅ enquanto estiver cheio, obriga liberar espaço
+    while (meus.length >= MAX_SLOTS_TREINOS_SALVOS) {
+      const lista = meus
+        .map((m, i) => {
+          const dt = m.atualizadoEm || m.expiraEm || "";
+          const dtFmt = dt ? formatarData(dt) : "";
+          return `${i + 1}) ${m.titulo}${dtFmt ? ` (${dtFmt})` : ""} [${m.id}]`;
+        })
+        .join("\n");
+
+      const escolha = window.prompt(
+        `Você já possui ${MAX_SLOTS_TREINOS_SALVOS} treinos salvos.\n` +
+          `Escolha um número para apagar e liberar espaço OU deixe vazio para não salvar este novo treino.\n\n` +
+          `${lista}\n\nDigite 1-${meus.length}, ou deixe em branco para pular:`,
+      );
+
+      const idx = Number(escolha);
+
+      // ✅ usuário desistiu
+      if (!escolha || !Number.isFinite(idx) || idx < 1 || idx > meus.length) {
+        return { saved: false, reason: "usuario-pulou" as const };
+      }
+
+      const apagar = meus[idx - 1];
+
+      // ✅ remove da lista local já (evita o prompt “mostrar apagado”)
+      meus = meus.filter((t) => t.id !== apagar.id);
+
+      try {
+        await apiDeletarTreinoSalvo(apagar.id);
+      } catch (err) {
+        // ✅ se falhar, refaz listagem pra não ficar desincronizado
+        meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
+        alert("Não foi possível apagar o treino selecionado. O novo não será salvo na Gaveta.");
+        return { saved: false, reason: "falha-apagar" as const };
+      }
+
+      // ✅ refetch “de verdade” depois do delete (resolve seu bug do 5 continuar preso)
+      meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
+
+      // ✅ se por algum motivo ainda está cheio, continua o loop e pede para apagar mais um
+      if (meus.length >= MAX_SLOTS_TREINOS_SALVOS) {
+        // aqui não retorna: volta pro prompt do while
+        continue;
+      }
     }
 
     const body = {
@@ -2500,10 +2530,34 @@ useEffect(() => {
     }
   }
 
+  const limparProgressoETela = () => {
+    sessionStorage.removeItem(SAVE_KEY);
+    sessionStorage.removeItem(RESTORE_FLAG_KEY);
+
+    setEtapa(1);
+    setCompletedUntil(1);
+    setNome("");
+    setDescricao("");
+    setNivel("Base");
+    setDuracao(60);
+    setDataTreino("");
+    setCategorias([]);
+    setTipoTreino("Tecnico");
+    setObjetivo("");
+    setExerciciosSelecionados([]);
+    setAtletasSelecionados([]);
+    setDatasAgendamento([]);
+    setProfessoresSelecionados([]);
+    setCapaUrl("");
+    setCapaPreview("");
+    setTreinoFootera(false);
+  };
+
   const criarTreino = async () => {
     if (salvando) return;
     setSalvando(true);
-
+    let payloadOriginal: any = null;
+    
     try {
       const { tipoUsuario, tipoUsuarioId } = getDono();
       const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
@@ -2649,6 +2703,7 @@ useEffect(() => {
         metas,
       } as any);
 
+      payloadOriginal = payload;
       const pontuacaoTopo = Number.isFinite(Number(score?.total)) ? Math.max(0, Math.floor(Number(score.total))) : null;
       
       const tipoUsuarioIdProfessor =
@@ -2800,41 +2855,49 @@ useEffect(() => {
         console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
       }
 
-      showToast(msgPrincipal + extra, "success");
-      sessionStorage.removeItem(SAVE_KEY);
-      sessionStorage.removeItem(RESTORE_FLAG_KEY);
-      setEtapa(1);
-      setCompletedUntil(1);
-      setNome("");
-      setDescricao("");
-      setNivel("Base");
-      setDuracao(60);
-      setDataTreino("");
-      setCategorias([]);
-      setTipoTreino("Tecnico");
-      setObjetivo("");
-      setExerciciosSelecionados([]);
-      setAtletasSelecionados([]);
-      setDatasAgendamento([]);
-      setProfessoresSelecionados([]);
-      setCapaUrl("");
-      setCapaPreview("");
-      setTreinoFootera(false);
+      showToast("Treino criado! Um treino antigo foi apagado.", "success");
+      limparProgressoETela();
+
       setTimeout(() => {
         navigate("/treinos");
-      }, 500);
+      }, 200);
+
+      return;
     } catch (e: any) {
-      console.error("Falha inesperada ao criar treino:", e?.response?.data || e);
+      const data = e?.response?.data;
 
-      const msgErro =
-        e?.response?.data?.error ||
-        e?.response?.data?.message ||
-        e?.message ||
-        (typeof e === "string" ? e : "") ||
-        "Erro inesperado ao criar treino.";
+      // ✅ estourou limite de treinos programados (5) -> oferece apagar 1
+      if (data?.code === "LIMIT_TREINOS_PROGRAMADOS" && Array.isArray(data?.meus)) {
+        const meus = data.meus as Array<{ id: string; nome: string }>;
+        const lista = meus.map((m, i) => `${i + 1}) ${m.nome}`).join("\n");
+        const escolha = window.prompt(
+          `Você atingiu o limite de 5 treinos.\n\nEscolha um número para apagar e liberar espaço:\n${lista}\n\nDigite 1-${meus.length} (ou deixe vazio para cancelar).`
+        );
 
+        const idx = Number(escolha);
+
+        // cancelou
+        if (!escolha || !Number.isFinite(idx) || idx < 1 || idx > meus.length) {
+          return;
+        }
+
+        const apagar = meus[idx - 1];
+
+        // ✅ reenvia o POST com apagarTreinoProgramadoId
+        await TreinosApi.criar({
+          ...(payloadOriginal || {}),
+          apagarTreinoProgramadoId: apagar.id,
+        });
+
+        showToast("Treino criado! Um treino antigo foi apagado.", "success");
+        navigate("/treinos");
+        return;
+      }
+
+      // fallback normal
+      const msgErro = data?.message || e?.message || "Falha inesperada ao criar treino.";
+      console.error("[NovoTreino] erro criar treino:", data || e);
       showToast(msgErro, "error");
-
     } finally {
       setSalvando(false);
     }

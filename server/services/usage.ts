@@ -1,9 +1,8 @@
-import { PrismaClient } from '@prisma/client';
 import { getUserPlan, planLimitFor } from './plan.js';
-import { USAGE_MESSAGES, WINDOW_BY_KEY, type WindowKind } from './usage.messages.js';
+import { WINDOW_BY_KEY, type WindowKind } from './usage.messages.js';
 import { sendLimitInfo } from "../lib/limitInfo.js";
+import { prisma } from '../prisma.js';
 
-const prisma = new PrismaClient();
 const TZ = 'America/Sao_Paulo';
 
 const LIMITS: Record<
@@ -120,7 +119,10 @@ export async function requireUsage(
     return false;
   }
 
-  const plan = (req.user?.plan as string | undefined) || (await getUserPlan(userId));
+  const plan =
+    (req.user?.plano as string | undefined) ||
+    (req.user?.plan as string | undefined) ||
+    (await getUserPlan(userId));
   const limit = planLimitFor(plan, key);
 
   if (windowKind === 'TOTAL') {
@@ -176,7 +178,10 @@ export async function enforceTotalLimit(
     return false;
   }
 
-  const plan = (req.user?.plan as string | undefined) || (await getUserPlan(userId));
+  const plan =
+    (req.user?.plano as string | undefined) ||
+    (req.user?.plan as string | undefined) ||
+    (await getUserPlan(userId));
   const limit = planLimitFor(plan, key);
 
   if (!Number.isFinite(limit)) {
