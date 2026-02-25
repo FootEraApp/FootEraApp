@@ -1,3 +1,4 @@
+// client/src/pages/configuracoesPerfil
 import { Switch } from "../components/ui/switch.js";
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
@@ -9,6 +10,9 @@ import BottomNav from "@/components/layout/BottomNav.js";
 import socket from "../services/socket.js";
 
 type FeedbackTipo = "sugestao" | "bug";
+
+// ✅ Flag para liberar/bloquear o tutorial (enquanto não está pronto)
+const TUTORIAL_ENABLED = false;
 
 export default function ConfiguracoesPerfil() {
   const [, setLocation] = useLocation();
@@ -254,6 +258,7 @@ export default function ConfiguracoesPerfil() {
 
   return (
     <div className="min-h-screen bg-transparent pb-24">
+      
       <header className="bg-green-900 text-white py-3 px-3 flex items-center relative">
         <Link
           href="/perfil"
@@ -271,8 +276,7 @@ export default function ConfiguracoesPerfil() {
         </h1>
       </header>
 
-
-      <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
+      <div className="bg-white mx-4 mt-4 p-4 rounded-xl shadow mb-4">
         <h2 className="text-gray-800 font-bold mb-3">Conta</h2>
         <div className="flex justify-between py-2 items-start border-b">
           <div>
@@ -339,6 +343,37 @@ export default function ConfiguracoesPerfil() {
           <Link href="/pagamentos" className="text-green-800 font-semibold">
             Alterar
           </Link>
+        </div>
+      </div>
+
+      {/* ===== Tutorial ===== */}
+      <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-gray-800 font-bold mb-1">Tutorial</h2>
+            <p className="text-sm text-gray-600">
+              Aprenda passo a passo como usar a plataforma (criar treinos, gerenciar atletas e mais).
+            </p>
+            {!TUTORIAL_ENABLED && (
+              <p className="text-xs text-orange-700 mt-2 font-semibold">
+                🚧 Em breve — este tutorial ainda está em desenvolvimento.
+              </p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            disabled={!TUTORIAL_ENABLED}
+            onClick={() => setLocation("/treinos/tutorial")}
+            className={`shrink-0 px-3 py-2 rounded-md text-sm font-semibold ${
+              TUTORIAL_ENABLED
+                ? "bg-green-700 text-white hover:bg-green-800"
+                : "bg-gray-200 text-gray-500 cursor-not-allowed"
+            }`}
+            title={TUTORIAL_ENABLED ? "Abrir tutorial" : "Tutorial em breve"}
+          >
+            {TUTORIAL_ENABLED ? "Acessar" : "Bloqueado"}
+          </button>
         </div>
       </div>
 

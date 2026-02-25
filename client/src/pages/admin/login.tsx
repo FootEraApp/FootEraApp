@@ -1,3 +1,4 @@
+// client/src/pages/admin/login
 import { useEffect, useState, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import axios from "axios";
@@ -273,12 +274,19 @@ export default function AdminLogin() {
           </div>
 
           <div className="relative z-10 w-full max-w-md bg-white shadow-lg rounded-2xl p-8 text-center">
-            <h2 className="text-[22px] font-bold mb-3">Login Administrativo</h2>
+
             <img
-              src="/assets/usuarios/footera-logo.png"
+              src="/assets/usuarios/footera-logo-fundo-verde.png"
               alt="Logo FootEra"
-              className="w-[70px] h-[70px] mx-auto mb-3"
+              className="w-[70px] h-[70px] mx-auto mb-3 rounded-2xl"
             />
+
+            <h2 className="text-[22px] font-bold mb-3">Login Administrativo</h2>
+
+            <p className="text-xs text-red-600 font-medium mb-4">
+              Acesso restrito. Área exclusiva para administradores autorizados.
+              Tentativas de acesso indevido poderão ser registradas e tratadas conforme a legislação vigente.
+            </p>
 
             <form onSubmit={handleLogin} className="mt-2 text-left">
               <input
