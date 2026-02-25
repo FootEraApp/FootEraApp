@@ -523,7 +523,7 @@ const FALLBACK_PLANS: Record<string, Plan> = {
     title: "Professor Pro",
     monthly: 39.9,          // <- você falou “em torno de 59,90”
     annual: null,
-    benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais", "Você pode criar metodologias e disponibilizar para os alunos"],
+    benefits: ["Sem anúncios", "Poder criar mais de 5 treinos", "Poder criar treino para daqui a mais de 30 dias", "Mais limites operacionais", "Você pode criar metodologias e disponibilizar para os alunos"],
   },
   PROFESSOR_LEARNING_1: {
     id: "PROFESSOR_LEARNING_1",
@@ -546,7 +546,7 @@ const FALLBACK_PLANS: Record<string, Plan> = {
     title: "Organizações Pro",
     monthly: 79.9,          // mantenha ou ajuste
     annual: null,
-    benefits: ["Sem anúncios", "Recursos Pro da organização", "Mais capacidade operacional", "Você pode criar metodologias e disponibilizar para os membros da organização"],
+    benefits: ["Sem anúncios", "Poder criar mais de 5 treinos", "Poder criar treino para daqui a mais de 30 dias", "Mais limites operacionais", "Você pode criar metodologias e disponibilizar para os membros da organização"],
   },
   ORGANIZACOES_LEARNING_3: {
     id: "ORGANIZACOES_LEARNING_3",
