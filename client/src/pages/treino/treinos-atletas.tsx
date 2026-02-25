@@ -165,6 +165,33 @@ function formatHHMMSS(totalSec: number) {
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
 
+function hasHoraMarcada(d: Date | null) {
+  if (!d) return false;
+  return !(d.getHours() === 0 && d.getMinutes() === 0);
+}
+
+function getStartWindowInfo(t: TreinoAgendado) {
+  const d = getDataExibicaoTreino(t);
+  if (!d) {
+    return { canStart: false, isLate: false };
+  }
+
+  // ✅ Se tem hora marcada: libera 1h antes e até 1h depois
+  if (hasHoraMarcada(d)) {
+    const start = new Date(d.getTime() - 60 * 60 * 1000);
+    const end = new Date(d.getTime() + 60 * 60 * 1000);
+
+    const canStart = now >= start && now <= end;
+    const isLate = now > end; // passou 1h depois => faltou
+    return { canStart, isLate };
+  }
+
+  // ✅ Se NÃO tem hora: libera o dia inteiro daquele dia
+  const canStart = sameDay(d, hoje);
+  const isLate = now > endOfDay(d); // passou o dia => faltou
+  return { canStart, isLate };
+}
+
 function resolveUploadUrl(raw?: string | null) {
   if (!raw) return "";
 
@@ -320,18 +347,20 @@ const getToken = () =>
 
 function getDataExibicaoTreino(t: TreinoAgendado): Date | null {
   return (
-    parseDateSafe(t.prazoEnvio) ||
+    // ✅ data/hora do agendamento deve mandar na exibição
     parseDateSafe(t.dataTreino) ||
+    // ✅ se não tiver dataTreino, aí sim tenta prazoEnvio como fallback
+    parseDateSafe(t.prazoEnvio) ||
     parseDateSafe(t.treinoProgramado?.dataAgendada ?? null) ||
     null
   );
 }
 
 function getDataExibicaoTreinoRaw(t: TreinoAgendado): string | null {
-  return (t.prazoEnvio || t.dataTreino || t.treinoProgramado?.dataAgendada || null) as any;
+  // ✅ mesma ordem do helper acima
+  return (t.dataTreino || t.prazoEnvio || t.treinoProgramado?.dataAgendada || null) as any;
 }
 
-const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
 const sameDay = (a?: Date | null, b?: Date | null) =>
   !!a &&
@@ -339,6 +368,20 @@ const sameDay = (a?: Date | null, b?: Date | null) =>
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
+
+function getHoraHHMM(d?: Date | null) {
+  if (!d) return "";
+  const hh = d.getHours();
+  const mm = d.getMinutes();
+
+  // se não tem horário (ou veio como meia-noite), não mostra
+  if (hh === 0 && mm === 0) return "";
+
+  return d.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function WeeklyChecker({ weeks }: { weeks: any[] }) {
   if (!weeks || weeks.length === 0) return null;
@@ -930,7 +973,7 @@ function removerFiltroMetodologia(label: string) {
           id: item.id,
           titulo: item.titulo ?? tp?.nome ?? "Treino",
           prazoEnvio: item.prazoEnvio ?? null,
-          dataTreino: item.prazoEnvio ?? item.dataTreino ?? tp?.dataAgendada ?? null,
+          dataTreino: item.dataTreino ?? tp?.dataAgendada ?? item.prazoEnvio ?? null,
           dataExpiracao: item.dataExpiracao ?? null,
           nivel: tp?.nivel ?? null,
           duracaoMinutos:
@@ -1026,18 +1069,22 @@ function removerFiltroMetodologia(label: string) {
 
       for (const t of listaAdaptada) {
         const rawDate = t.dataTreino ? new Date(t.dataTreino) : null;
+
         const dateKey = rawDate
-          ? `${rawDate.getFullYear()}-${String(rawDate.getMonth() + 1).padStart(2, "0")}-${String(
-              rawDate.getDate()
-            ).padStart(2, "0")}`
+          ? `${rawDate.getFullYear()}-${String(rawDate.getMonth() + 1).padStart(2, "0")}-${String(rawDate.getDate()).padStart(2, "0")}`
           : "sem-data";
+
+        // ✅ inclui horário na chave
+        const timeKey = rawDate
+          ? `${String(rawDate.getHours()).padStart(2, "0")}:${String(rawDate.getMinutes()).padStart(2, "0")}`
+          : "sem-hora";
 
         const titleKey = String(t.titulo || "")
           .trim()
           .toLowerCase()
           .replace(/\s+/g, " ");
 
-        const key = `${dateKey}::${titleKey}`;
+        const key = `${dateKey} ${timeKey}::${titleKey}`;
 
         // se já existir um, mantém o primeiro (ou troque a regra se preferir)
         if (!dedupMap.has(key)) dedupMap.set(key, t);
@@ -1795,15 +1842,14 @@ function removerFiltroMetodologia(label: string) {
                             const diaStr = d
                               ? String(d.getDate()).padStart(2, "0")
                               : "—";
+                            const hora = getHoraHHMM(d);
                             const subtitulo = d
-                              ? d.toLocaleDateString("pt-BR", {
-                                  weekday: "short",
-                                  month: "short",
-                                })
+                              ? `${d.toLocaleDateString("pt-BR", { weekday: "short", month: "short" })}${
+                                  hora ? ` • ${hora}` : ""
+                                }`
                               : "Sem data";
 
                             const criadorLabel = getCriadorLabel(treino);
-
                             const st = (statusPorTreino[treino.id]?.status ??
                               treino.meuStatus) as TreinoStatus | undefined;
 
@@ -2003,14 +2049,22 @@ function removerFiltroMetodologia(label: string) {
                                 <span
                                   className={`inline-block h-2.5 w-2.5 rounded-full ${tl.dotClass}`}
                                 />
-                                <span className="font-semibold text-sm">
-                                  {tl.date
-                                    ? tl.date.toLocaleDateString("pt-BR", {
-                                        day: "2-digit",
-                                        month: "short",
-                                      })
-                                    : "Sem data"}
-                                </span>
+                               {(() => {
+                                  const hora = getHoraHHMM(tl.date);
+
+                                  return (
+                                    <span className="font-semibold text-sm">
+                                      {tl.date
+                                        ? tl.date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
+                                        : "Sem data"}
+                                      {hora ? (
+                                        <span className="ml-2 text-[12px] font-medium text-gray-700">
+                                          {hora}
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                  );
+                                })()}
 
                                 {tl.isToday && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/70 border">
@@ -2351,7 +2405,8 @@ function removerFiltroMetodologia(label: string) {
               const expiradoBackend =
                 (st as string) === "EXPIRED" ||
                 (atual as any)?.execucaoStatus === "EXPIRED";
-
+              const dExib = atual ? getDataExibicaoTreino(atual) : null;
+              const horaTop = getHoraHHMM(dExib);
               const isCompletedTreino =
                 st === "COMPLETED" || submittedAgendado;
               const isMissedTreino =
@@ -2386,7 +2441,9 @@ function removerFiltroMetodologia(label: string) {
                   <div className="flex-1 min-w-0 text-center relative z-0">
                     {st !== "IN_PROGRESS" && (
                       <div className="text-base sm:text-lg font-semibold text-green-900 truncate max-w-[70vw] mx-auto">
-                        {atual?.titulo ?? "Treino"}
+                        {dExib
+                          ? `${dExib.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}${horaTop ? ` • ${horaTop}` : ""}`
+                          : "Sem data"}
                       </div>
                     )}
                   </div>
@@ -2537,11 +2594,19 @@ function removerFiltroMetodologia(label: string) {
               labelCentral = "Iniciar";
             }
 
+            const windowInfo = getStartWindowInfo(t);
+            // ✅ Se já está atrasado pela regra (1h depois / ou passou do dia), trata como faltou
+            const missedByRule = !isCompletedTreino && windowInfo.isLate;
+            // ✅ Somando suas regras atuais + a nova regra
+            const finalIsMissed = isMissedTreino || missedByRule;
+            // ✅ Bloqueia iniciar fora da janela (apenas quando ainda está pendente)
+            const blockStartByTime =
+              (!st || st === "PENDING") && !windowInfo.canStart;
             const disabledCentral =
               (st === "IN_PROGRESS" && total > 0 && !allChecked) ||
-              isCompletedTreino;
-
-            const visuallyDisabled = disabledCentral || isMissedTreino;
+              isCompletedTreino ||
+              blockStartByTime;
+            const visuallyDisabled = disabledCentral || finalIsMissed;
 
             const handleCentralClick = () => {
               if (isCompletedTreino) {
@@ -2551,12 +2616,17 @@ function removerFiltroMetodologia(label: string) {
                 return;
               }
 
-              if (isMissedTreino) {
+              if (finalIsMissed) {
                 handleMissedClick(t.id);
                 return;
               }
 
               if (!st || st === "PENDING") {
+                // ✅ só inicia dentro da janela permitida
+                if (!windowInfo.canStart) {
+                  handleMissedClick(t.id); // ou só dá um alert, se preferir
+                  return;
+                }
                 iniciar(t.id);
                 return;
               }

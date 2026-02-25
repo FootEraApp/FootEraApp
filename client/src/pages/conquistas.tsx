@@ -1,3 +1,4 @@
+//conquistas.tsx
 import { useEffect, useMemo, useState } from "react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
@@ -44,6 +45,8 @@ const groupOrder = [
   "Treinos",
   "Desafios",
   "Desafios em Grupo",
+  "Metodologias",
+  "Metodologias Profissionais",
   "Pontuação",
   "Gestão",
   "Eventos",
@@ -90,6 +93,7 @@ function groupLabelFromTipo(tipo?: string | null): string {
   if (t === "PERFIL") return "Pontuação";
   if (t === "ORGANIZACAO") return "Gestão";
   if (t === "EVENTO") return "Eventos";
+  if (t === "METODOLOGIA") return "Metodologias"; // ✅ ADD
   return "Outros";
 }
 
@@ -149,7 +153,14 @@ const BLOQUEADOS_POR_FLAG = new Set<string>([
   ...(ENABLE_DESAFIOS_GRUPO ? [] : ["Desafios em Grupo"]),
 ]);
 
-const GROUPS_PROGRESSO_BASE = new Set<string>(["Treinos", "Pontuação", "Gestão", "Eventos"]);
+const GROUPS_PROGRESSO_BASE = new Set<string>([
+  "Treinos",
+  "Metodologias",
+  "Metodologias Profissionais",
+  "Pontuação",
+  "Gestão",
+  "Eventos",
+]);
 
 const GROUPS_PROGRESSO_TOTAL = new Set<string>([
   ...GROUPS_PROGRESSO_BASE,
@@ -455,11 +466,11 @@ export default function ConquistasPage() {
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-green-900 text-white px-6 py-3 flex justify-around items-center shadow-md">
-        <Link href="/feed"><House /></Link>
-        <Link href="/explorar"><Search /></Link>
-        <Link href="/post"><CirclePlus /></Link>
-        <Link href="/treinos"><Volleyball /></Link>
-        <Link href="/perfil"><User /></Link>
+        <Link to="/feed"><House /></Link>
+        <Link to="/explorar"><Search /></Link>
+        <Link to="/post"><CirclePlus /></Link>
+        <Link to="/treinos"><Volleyball /></Link>
+        <Link to="/perfil"><User /></Link>
       </nav>
     </div>
   );

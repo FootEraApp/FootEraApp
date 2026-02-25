@@ -8,6 +8,12 @@ import {
   MetodologiaPublicoAlvo,
   MetodologiaConteudoTipo,
 } from "@prisma/client";
+import {
+  ensureConquistaTemplateMetodologia,
+  unlockConquistaMetodologia,
+  syncTemplatesMetodologiasProfissionais
+} from "../services/conquistasMetodologia.js";
+
 /** Pega userId do token (igual seu padrão) */
 function getUserId(req: Request): string | null {
   const r: any = req;
@@ -82,10 +88,6 @@ async function anexarCountsTipoPorMetodologia(ids: string[]) {
   }, {} as Record<string, { videoCount: number; treinoCount: number }>);
 }
 
-/** =========================
- * GET /api/metodologias
- * ?criadorUsuarioId=...
- * ========================= */
 export async function listMetodologias(req: Request, res: Response) {
   try {
     const criadorUsuarioId = (req.query.criadorUsuarioId as string) || undefined;
@@ -196,52 +198,16 @@ export async function createMetodologia(req: Request, res: Response) {
       include: { _count: { select: { assinantes: true, itens: true } } },
     });
 
-    async function garantirBadgeMetodologiaProfissional(metodologiaId: string) {
-      const m = await prisma.metodologia.findUnique({
-        where: { id: metodologiaId },
-        select: {
-          id: true,
-          titulo: true,
-          descricao: true,
-          capaUrl: true,
-          publicoAlvo: true,
-          criadorUsuario: { select: { tipo: true } },
-        },
-      });
+    // ✅ garante template de conquista (o service só cria se for PROFISSIONAIS)
+    try {
+      // garante/atualiza template se for profissionais, ou desativa se não for
+      await ensureConquistaTemplateMetodologia(created.id);
 
-      if (!m) return;
-      if (m.publicoAlvo !== MetodologiaPublicoAlvo.PROFISSIONAIS) return;
-
-      const codigo = `met_prof_${m.id}`; // ✅ ID único por metodologia
-
-      await prisma.conquista.upsert({
-        where: { codigo },
-        create: {
-          codigo,
-          titulo: `Metodologia: ${m.titulo}`,
-          descricao: (m.descricao ? m.descricao : "Conclua esta metodologia profissional.") + `\n\nGrupo: Metodologias\nTier: bronze`,
-          tipo: "METODOLOGIA" as any, // ✅ se você criar ConquistaTipo.METODOLOGIA no Prisma, troca pra ConquistaTipo.METODOLOGIA
-          publico: ["Professor", "Clube", "Escolinha"] as any, // ✅ ConquistaOwnerTipo[]
-          icon: "🎓",
-          meta: 1,
-          ativo: true,
-          // se seu model tiver imagem/iconUrl, coloque aqui também:
-          // iconUrl: m.capaUrl ?? null
-        },
-        update: {
-          titulo: `Metodologia: ${m.titulo}`,
-          descricao: (m.descricao ? m.descricao : "Conclua esta metodologia profissional.") + `\n\nGrupo: Metodologias\nTier: bronze`,
-          ativo: true,
-        },
-      });
-    }
-
-    if (publicoAlvoFinal === MetodologiaPublicoAlvo.PROFISSIONAIS) {
-      try {
-        await garantirBadgeMetodologiaProfissional(created.id);
-      } catch (e) {
-        console.error("Falha ao criar badge da metodologia profissional:", e);
-      }
+      // opcional (recomendado): mantém o catálogo todo consistente
+      // (bom pra caso tenha metodologias antigas sem template)
+      await syncTemplatesMetodologiasProfissionais();
+    } catch (e) {
+      console.error("Falha ao sync template de conquista da metodologia:", e);
     }
 
     // ✅ ADICIONA NA ATIVIDADE RECENTE
@@ -324,6 +290,12 @@ export async function updateMetodologia(req: Request, res: Response) {
       },
     });
 
+    try {
+      await ensureConquistaTemplateMetodologia(updated.id);
+      await syncTemplatesMetodologiasProfissionais();
+    } catch (e) {
+      console.error("Falha ao sync template de conquista da metodologia:", e);
+    }
     return res.json({ item: updated });
   } catch (e: any) {
     return res.status(500).json({ message: "Erro ao editar metodologia.", detail: e?.message });
@@ -350,6 +322,13 @@ export async function deleteMetodologia(req: Request, res: Response) {
 
     await prisma.metodologia.delete({ where: { id } });
 
+    try {
+      // como já deletou, ensure vai desativar met_prof_<id>
+      await ensureConquistaTemplateMetodologia(id);
+      await syncTemplatesMetodologiasProfissionais();
+    } catch (e) {
+      console.error("Falha ao sync template de conquista após delete metodologia:", e);
+    }
     return res.json({ ok: true });
   } catch (e: any) {
     return res.status(500).json({ message: "Erro ao excluir metodologia.", detail: e?.message });
@@ -1177,12 +1156,11 @@ export async function concluirItemMetodologia(req: Request, res: Response) {
 
     // ✅ calcula se a metodologia ficou completa (comparando total publicado vs concluidos)
     const totalPublicados = await prisma.metodologiaItem.count({
-      where: { metodologiaId: id },
+      where: { metodologiaId: id, publicado: true },
     });
 
     const metodologiaCompleta = totalPublicados > 0 && novoConcluidos.length >= totalPublicados;
 
-    // ✅ se completou, marca assinatura como CONCLUÍDA + concluiuEm
     if (metodologiaCompleta) {
       await prisma.metodologiaAssinante.update({
         where: { metodologiaId_usuarioId: { metodologiaId: id, usuarioId: userId } },
@@ -1191,10 +1169,13 @@ export async function concluirItemMetodologia(req: Request, res: Response) {
           concluiuEm: new Date() as any,
         },
       });
-      const meta = await prisma.metodologia.findUnique({
-        where: { id },
-        select: { id: true, publicoAlvo: true, titulo: true },
-      });
+
+      // ✅ AQUI É O (A): dá a conquista (idempotente)
+      try {
+        await unlockConquistaMetodologia(userId, id);
+      } catch (e) {
+        console.error("Falha ao desbloquear conquista da metodologia:", e);
+      }
     }
 
     return res.json({

@@ -162,6 +162,43 @@ async function getProfessoresVinculadosIds(params: {
   return Array.from(new Set(ids.map(String)));
 }
 
+function parseDateInput(raw?: any): Date | null {
+  if (!raw) return null;
+
+  if (raw instanceof Date) {
+    return Number.isNaN(raw.getTime()) ? null : raw;
+  }
+
+  const s = String(raw).trim();
+  if (!s) return null;
+
+  // datetime-local sem timezone: "2026-02-24T19:00" ou "2026-02-24T19:00:00"
+  const mLocal = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (mLocal) {
+    const [, Y, M, D, h, mi, sec] = mLocal;
+    return new Date(
+      Number(Y),
+      Number(M) - 1,
+      Number(D),
+      Number(h),
+      Number(mi),
+      Number(sec || 0),
+      0
+    );
+  }
+
+  // só data "YYYY-MM-DD"
+  const mDate = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (mDate) {
+    const [, Y, M, D] = mDate;
+    return new Date(Number(Y), Number(M) - 1, Number(D), 0, 0, 0, 0);
+  }
+
+  // ISO com timezone (Z ou -03:00 etc)
+  const dt = new Date(s);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
 export async function criarSessao(req: AuthenticatedRequest, res: Response) {
   try {
     assertInstrutor(req);
@@ -169,24 +206,26 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
     const u: any = req.authUser || (req as any).user;
     const usuarioId = String(u.id || "");
 
-    const { treinoProgramadoId, turmaId, dataISO } = req.body as {
+    const { treinoProgramadoId, turmaId, dataISO, dataHoraISO } = req.body as {
       treinoProgramadoId: string;
       turmaId: string;
-      dataISO: string;
+      dataISO?: string;
+      dataHoraISO?: string;
     };
 
-    if (!treinoProgramadoId || !turmaId || !dataISO) {
-      return res.status(400).json({
-        error: "treinoProgramadoId, turmaId e dataISO são obrigatórios.",
-      });
+    const raw = (dataHoraISO || dataISO || "").trim();
+    if (!raw) {
+      return res.status(400).json({ error: "dataHoraISO (ou dataISO) é obrigatório." });
     }
 
-    const apenasData = dataISO.slice(0, 10);
-    const dataBR = new Date(`${apenasData}T00:00:00-03:00`);
+    const dataBR = parseDateInput(raw);
+    if (!dataBR) {
+      return res.status(400).json({ error: "dataHoraISO/dataISO inválida." });
+    }
+
     if (isNaN(dataBR.getTime())) {
-      return res.status(400).json({ error: "dataISO inválida." });
+      return res.status(400).json({ error: "dataHoraISO/dataISO inválida." });
     }
-
     const [professor, clube, escolinha] = await Promise.all([
       prisma.professor.findUnique({ where: { usuarioId } }),
       prisma.clube.findUnique({ where: { usuarioId } }),
@@ -788,8 +827,7 @@ export async function remarcarSessao(
     assertInstrutor(req);
 
     const { id } = req.params;
-    const { novaDataISO } = req.body as { novaDataISO?: string };
-
+    const { novaDataISO, novaDataHoraISO } = req.body as { novaDataISO?: string; novaDataHoraISO?: string };
     if (!novaDataISO) {
       return res
         .status(400)
@@ -820,8 +858,15 @@ export async function remarcarSessao(
       });
     }
 
-    const apenasData = novaDataISO.slice(0, 10);
-    const novaData = new Date(`${apenasData}T00:00:00-03:00`);
+    const raw = String(novaDataHoraISO || novaDataISO || "").trim();
+    if (!raw) {
+      return res.status(400).json({ error: "Campo 'novaDataHoraISO' (ou 'novaDataISO') é obrigatório." });
+    }
+
+    const novaData = parseDateInput(raw);
+    if (!novaData) {
+      return res.status(400).json({ error: "novaDataHoraISO/novaDataISO inválida." });
+    }
 
     const atualizada = await prisma.sessaoTreinoTurma.update({
       where: { id },
@@ -966,7 +1011,7 @@ export async function finalizarSessao(
     let penalidadeAtraso = false;
     let minutosConsiderados = minutosBase;
 
-    if (minutosReal > minutosBase + 5) {
+    if (minutosReal > minutosBase + 2) {
       penalidadeAtraso = true;
       minutosConsiderados = Math.max(1, Math.round(minutosBase / 2));
     }
