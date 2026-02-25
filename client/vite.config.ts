@@ -23,6 +23,20 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
+
+        // ✅ não deixa o service worker interferir em chamadas da API
+        navigateFallbackDenylist: [/^\/api\//],
+
+        // ✅ garante que /api sempre é rede (nunca cache)
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
+            handler: "NetworkOnly",
+            options: {
+              cacheName: "api-no-cache",
+            },
+          },
+        ],
       },
 
       manifest: {

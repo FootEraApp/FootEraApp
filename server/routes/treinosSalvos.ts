@@ -11,17 +11,10 @@ import { authenticateToken } from '../middlewares/auth.js';
 
 const router = express.Router();
 
-router.get('/', authenticateToken, listarTreinosSalvos);
-
-router.post('/', authenticateToken, async (req, res) => {
-  const chk = await requireUsage(req as any, res, 'treinos_salvos_total');
-  if (chk === undefined) return;
-  return criarTreinoSalvo(req, res);
-});
-
 router.post('/:id/reutilizar', authenticateToken, reutilizarTreinoSalvo);
 router.delete('/:id', authenticateToken, deletarTreinoSalvo);
-
 router.delete('/__maintenance__/expirados', authenticateToken, limparTreinosSalvosExpirados);
+router.get('/', authenticateToken, listarTreinosSalvos);
+router.post("/", authenticateToken, criarTreinoSalvo);
 
 export default router;
