@@ -461,11 +461,17 @@ async function apiListarTreinosSalvos(
   ownerId: string,
 ) {
   const headers = authHeaders();
-  const url = `${API.BASE_URL}/api/treinosSalvos?tipoUsuario=${encodeURIComponent(
-    ownerTipo,
-  )}&tipoUsuarioId=${encodeURIComponent(ownerId)}&includePublic=0`;
+    const url =
+    `${API.BASE_URL}/api/treinosSalvos` +
+    `?tipoUsuario=${encodeURIComponent(ownerTipo)}` +
+    `&tipoUsuarioId=${encodeURIComponent(ownerId)}` +
+    `&includePublic=0` +
+    `&_ts=${Date.now()}`;
 
-  const r = await fetch(url, { headers });
+    const r = await fetch(url, {
+      headers,          // ✅ não manda Cache-Control como header
+      cache: "no-store" // ✅ isso já força não-cache sem preflight de CORS
+    });
   await assertOk(r, "Falha ao listar treinos salvos");
 
   const j = await r.json().catch(() => null);
@@ -481,8 +487,12 @@ async function apiListarTreinosSalvos(
 async function apiDeletarTreinoSalvo(id: string) {
   const headers = authHeaders();
   const r = await fetch(
-    `${API.BASE_URL}/api/treinosSalvos/${encodeURIComponent(id)}`,
-    { method: "DELETE", headers },
+    `${API.BASE_URL}/api/treinosSalvos/${encodeURIComponent(id)}?_ts=${Date.now()}`,
+    {
+      method: "DELETE",
+      headers,          // ✅ não manda Cache-Control como header
+      cache: "no-store",
+    },
   );
   await assertOk(r, "Falha ao apagar treino salvo");
   return true;
@@ -493,7 +503,8 @@ async function apiCriarTreinoSalvo(body: any) {
   
   const r = await fetch(`${API.BASE_URL}/api/treinosSalvos`, {
     method: "POST",
-    headers,
+    headers: { ...headers },
+    cache: "no-store",
     body: JSON.stringify(body),
   });
 
@@ -505,61 +516,80 @@ async function tentarSalvarComoTreinoSalvo(
   payload: TreinoCreatePayload,
   scoreTotal: number,
 ) {
+  const token = getToken();
+  if (!token) return { saved: false, reason: "sem-token" as const };
+
+  const ownerTipo = payload.tipoUsuario;
+  const ownerId = payload.tipoUsuarioId;
+  if (!ownerTipo || !ownerId) return { saved: false, reason: "sem-dono" as const };
+
   try {
-    const token = getToken();
-    if (!token) {
-      return { saved: false, reason: "sem-token" as const };
-    }
-
-    const ownerTipo = payload.tipoUsuario;
-    const ownerId = payload.tipoUsuarioId;
-
-    if (!ownerTipo || !ownerId)
-      return { saved: false, reason: "sem-dono" as const };
-
-    const meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
-
-    if (meus.length >= MAX_SLOTS_TREINOS_SALVOS) {
-      const lista = meus
-        .map((m, i) => {
-          const dt = m.atualizadoEm || m.expiraEm || "";
-          return `${i + 1}) ${m.titulo} ${dt ? `(${dt})` : ""} [${m.id}]`;
-        })
-        .join("\n");
-
-      const escolha = window.prompt(
-        `Você já possui ${MAX_SLOTS_TREINOS_SALVOS} treinos salvos.\n` +
-          `Escolha um número para apagar e liberar espaço OU deixe vazio para não salvar este novo treino.\n\n${lista}\n\nDigite 1-${meus.length}, ou deixe em branco para pular:`,
-      );
-
-      const idx = Number(escolha);
-      if (
-        !escolha ||
-        !Number.isFinite(idx) ||
-        idx < 1 ||
-        idx > meus.length
-      ) {
-        return { saved: false, reason: "usuario-pulou" as const };
-      }
-
-      const apagar = meus[idx - 1];
-      try {
-        await apiDeletarTreinoSalvo(apagar.id);
-      } catch {
-        alert(
-          "Não foi possível apagar o treino selecionado. O novo não será salvo na Gaveta.",
-        );
-        return { saved: false, reason: "falha-apagar" as const };
-      }
+    // ✅ valida antes de tudo
+    if (!Array.isArray(payload.exercicios) || payload.exercicios.length === 0) {
+      console.warn("[Gaveta] pulou: treino sem exercícios no payload");
+      return { saved: false, reason: "sem-exercicios" as const };
     }
 
     const categorias = Array.isArray(payload.categoria)
       ? payload.categoria.map(toCategoriaEnum).filter(Boolean)
       : [];
-    
-    if (!Array.isArray(payload.exercicios) || payload.exercicios.length === 0) {
-      console.warn("[Gaveta] pulou: treino sem exercícios no payload");
-      return { saved: false, reason: "sem-exercicios" as const };
+
+    // ✅ sempre pega a lista mais recente (evita “treino antigo que já apaguei”)
+    let meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
+
+    const formatarData = (iso?: string | null) => {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "";
+      // dd/mm/aaaa hh:mm
+      return d.toLocaleString("pt-BR");
+    };
+
+    // ✅ enquanto estiver cheio, obriga liberar espaço
+    while (meus.length >= MAX_SLOTS_TREINOS_SALVOS) {
+      const lista = meus
+        .map((m, i) => {
+          const dt = m.atualizadoEm || m.expiraEm || "";
+          const dtFmt = dt ? formatarData(dt) : "";
+          return `${i + 1}) ${m.titulo}${dtFmt ? ` (${dtFmt})` : ""} [${m.id}]`;
+        })
+        .join("\n");
+
+      const escolha = window.prompt(
+        `Você já possui ${MAX_SLOTS_TREINOS_SALVOS} treinos salvos.\n` +
+          `Escolha um número para apagar e liberar espaço OU deixe vazio para não salvar este novo treino.\n\n` +
+          `${lista}\n\nDigite 1-${meus.length}, ou deixe em branco para pular:`,
+      );
+
+      const idx = Number(escolha);
+
+      // ✅ usuário desistiu
+      if (!escolha || !Number.isFinite(idx) || idx < 1 || idx > meus.length) {
+        return { saved: false, reason: "usuario-pulou" as const };
+      }
+
+      const apagar = meus[idx - 1];
+
+      // ✅ remove da lista local já (evita o prompt “mostrar apagado”)
+      meus = meus.filter((t) => t.id !== apagar.id);
+
+      try {
+        await apiDeletarTreinoSalvo(apagar.id);
+      } catch (err) {
+        // ✅ se falhar, refaz listagem pra não ficar desincronizado
+        meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
+        alert("Não foi possível apagar o treino selecionado. O novo não será salvo na Gaveta.");
+        return { saved: false, reason: "falha-apagar" as const };
+      }
+
+      // ✅ refetch “de verdade” depois do delete (resolve seu bug do 5 continuar preso)
+      meus = await apiListarTreinosSalvos(ownerTipo, ownerId);
+
+      // ✅ se por algum motivo ainda está cheio, continua o loop e pede para apagar mais um
+      if (meus.length >= MAX_SLOTS_TREINOS_SALVOS) {
+        // aqui não retorna: volta pro prompt do while
+        continue;
+      }
     }
 
     const body = {
@@ -804,13 +834,6 @@ export default function NovoTreino() {
     type: "success" | "error" | "info";
     message: string;
   } | null>(null);
-
-  type DestinoTreino = "NORMAL" | "METODOLOGIA";
-  type MetodologiaMin = { id: string; titulo: string; publicoAlvo?: string | null };
-
-  const [destinoTreino, setDestinoTreino] = useState<DestinoTreino>("NORMAL");
-  const [minhasMetodologias, setMinhasMetodologias] = useState<MetodologiaMin[]>([]);
-  const [metodologiaId, setMetodologiaId] = useState<string>("");
 
   const jaSincronizouCalendarioComDatas = useRef(false);
   type ProfessorItem = { id: string; nome: string; codigo?: string; cref?: string };
@@ -1696,9 +1719,6 @@ useEffect(() => {
           );
           setTipoTreino(saved.tipoTreino ?? "Tecnico");
           setObjetivo(saved.objetivo ?? "");
-          if (saved?.destinoTreino) setDestinoTreino(saved.destinoTreino);
-          if (saved?.metodologiaId) setMetodologiaId(saved.metodologiaId);
-
           const exOld = Array.isArray(saved.exerciciosSelecionados)
             ? saved.exerciciosSelecionados
             : [];
@@ -1941,8 +1961,6 @@ useEffect(() => {
       professoresSelecionados,
       capaUrl,
       treinoFootera,
-      destinoTreino,
-      metodologiaId,
     });
   }, [
     etapa,
@@ -1960,55 +1978,6 @@ useEffect(() => {
     professoresSelecionados,
     treinoFootera,
   ]);
-
-  useEffect(() => {
-    // só busca se o usuário quer vincular a uma metodologia
-    if (destinoTreino !== "METODOLOGIA") return;
-
-    // só organizadores criam metodologia (professor/clube/escolinha)
-    const tipo = String(usuario?.tipo ?? "").toLowerCase();
-    const pode = tipo === "professor" || tipo === "clube" || tipo === "escolinha";
-    if (!pode) return;
-
-    let cancel = false;
-
-    (async () => {
-      try {
-        const token = getToken();
-        if (!token) return;
-
-        const headers = { Authorization: `Bearer ${token}` };
-
-        // ✅ Endpoint sugerido (você pode criar/ajustar no backend):
-        // GET /api/metodologias/minhas  -> retorna [{id, nome}]
-        const r = await fetch(`${API.BASE_URL}/api/metodologias/minhas`, { headers });
-
-        if (!r.ok) {
-          if (!cancel) setMinhasMetodologias([]);
-          return;
-        }
-
-        const j = await r.json().catch(() => null);
-        const arr = Array.isArray(j) ? j : (j?.items ?? j?.data ?? j?.rows ?? []);
-        const list = (Array.isArray(arr) ? arr : [])
-          .map((m: any) => ({
-            id: String(m.id ?? "").trim(),
-            titulo: String(m.nome ?? m.titulo ?? "(sem nome)"),
-            publicoAlvo: String(m.publicoAlvo ?? ""),
-          }))
-          .filter((m) => m.id);
-
-        if (!cancel) setMinhasMetodologias(list);
-      } catch (e) {
-        console.error("[NovoTreino] erro ao carregar minhas metodologias:", e);
-        if (!cancel) setMinhasMetodologias([]);
-      }
-    })();
-
-    return () => {
-      cancel = true;
-    };
-  }, [destinoTreino, usuario?.tipo]);
 
   async function carregarTreinoParaEdicao(id: string) {
     const token = getToken();
@@ -2561,10 +2530,34 @@ useEffect(() => {
     }
   }
 
+  const limparProgressoETela = () => {
+    sessionStorage.removeItem(SAVE_KEY);
+    sessionStorage.removeItem(RESTORE_FLAG_KEY);
+
+    setEtapa(1);
+    setCompletedUntil(1);
+    setNome("");
+    setDescricao("");
+    setNivel("Base");
+    setDuracao(60);
+    setDataTreino("");
+    setCategorias([]);
+    setTipoTreino("Tecnico");
+    setObjetivo("");
+    setExerciciosSelecionados([]);
+    setAtletasSelecionados([]);
+    setDatasAgendamento([]);
+    setProfessoresSelecionados([]);
+    setCapaUrl("");
+    setCapaPreview("");
+    setTreinoFootera(false);
+  };
+
   const criarTreino = async () => {
     if (salvando) return;
     setSalvando(true);
-
+    let payloadOriginal: any = null;
+    
     try {
       const { tipoUsuario, tipoUsuarioId } = getDono();
       const tipoUsuarioNormRaw = (tipoUsuario ?? "").toLowerCase();
@@ -2710,6 +2703,7 @@ useEffect(() => {
         metas,
       } as any);
 
+      payloadOriginal = payload;
       const pontuacaoTopo = Number.isFinite(Number(score?.total)) ? Math.max(0, Math.floor(Number(score.total))) : null;
       
       const tipoUsuarioIdProfessor =
@@ -2787,18 +2781,6 @@ useEffect(() => {
           const token = getToken();
           const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-          if (destinoTreino === "METODOLOGIA") {
-            if (!metodologiaId) {
-              showToast("Selecione a metodologia antes de continuar.", "info");
-              return;
-            }
-            (payload as any).metodologiaId = metodologiaId;
-            (payload as any).paraMetodologia = true;
-          } else {
-            (payload as any).metodologiaId = null;
-            (payload as any).paraMetodologia = false;
-          }
-
           const rr = await fetch(
             `${API.BASE_URL}/api/treinos/programados/${encodeURIComponent(
               String(treinoProgramadoId),
@@ -2873,41 +2855,49 @@ useEffect(() => {
         console.warn("Treino Salvo: sem dono identificado, pulando gaveta.");
       }
 
-      showToast(msgPrincipal + extra, "success");
-      sessionStorage.removeItem(SAVE_KEY);
-      sessionStorage.removeItem(RESTORE_FLAG_KEY);
-      setEtapa(1);
-      setCompletedUntil(1);
-      setNome("");
-      setDescricao("");
-      setNivel("Base");
-      setDuracao(60);
-      setDataTreino("");
-      setCategorias([]);
-      setTipoTreino("Tecnico");
-      setObjetivo("");
-      setExerciciosSelecionados([]);
-      setAtletasSelecionados([]);
-      setDatasAgendamento([]);
-      setProfessoresSelecionados([]);
-      setCapaUrl("");
-      setCapaPreview("");
-      setTreinoFootera(false);
+      showToast("Treino criado! Um treino antigo foi apagado.", "success");
+      limparProgressoETela();
+
       setTimeout(() => {
         navigate("/treinos");
-      }, 500);
+      }, 200);
+
+      return;
     } catch (e: any) {
-      console.error("Falha inesperada ao criar treino:", e?.response?.data || e);
+      const data = e?.response?.data;
 
-      const msgErro =
-        e?.response?.data?.error ||
-        e?.response?.data?.message ||
-        e?.message ||
-        (typeof e === "string" ? e : "") ||
-        "Erro inesperado ao criar treino.";
+      // ✅ estourou limite de treinos programados (5) -> oferece apagar 1
+      if (data?.code === "LIMIT_TREINOS_PROGRAMADOS" && Array.isArray(data?.meus)) {
+        const meus = data.meus as Array<{ id: string; nome: string }>;
+        const lista = meus.map((m, i) => `${i + 1}) ${m.nome}`).join("\n");
+        const escolha = window.prompt(
+          `Você atingiu o limite de 5 treinos.\n\nEscolha um número para apagar e liberar espaço:\n${lista}\n\nDigite 1-${meus.length} (ou deixe vazio para cancelar).`
+        );
 
+        const idx = Number(escolha);
+
+        // cancelou
+        if (!escolha || !Number.isFinite(idx) || idx < 1 || idx > meus.length) {
+          return;
+        }
+
+        const apagar = meus[idx - 1];
+
+        // ✅ reenvia o POST com apagarTreinoProgramadoId
+        await TreinosApi.criar({
+          ...(payloadOriginal || {}),
+          apagarTreinoProgramadoId: apagar.id,
+        });
+
+        showToast("Treino criado! Um treino antigo foi apagado.", "success");
+        navigate("/treinos");
+        return;
+      }
+
+      // fallback normal
+      const msgErro = data?.message || e?.message || "Falha inesperada ao criar treino.";
+      console.error("[NovoTreino] erro criar treino:", data || e);
       showToast(msgErro, "error");
-
     } finally {
       setSalvando(false);
     }
@@ -3486,68 +3476,6 @@ useEffect(() => {
                   )}
                 </div>
               </div>
-            </div>
-
-            {/* =========================
-                Destino do treino
-              ========================= */}
-            <div className="mt-4 rounded-xl border bg-white p-3">
-              <p className="text-sm font-semibold text-gray-800 mb-2">
-                Destino do treino
-              </p>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDestinoTreino("NORMAL");
-                    setMetodologiaId("");
-                  }}
-                  className={[
-                    "flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition",
-                    destinoTreino === "NORMAL"
-                      ? "bg-green-800 text-white border-green-800"
-                      : "bg-white text-green-900 border-green-200 hover:bg-green-50",
-                  ].join(" ")}
-                >
-                  Treino normal
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setDestinoTreino("METODOLOGIA")}
-                  className={[
-                    "flex-1 px-3 py-2 rounded-xl border text-sm font-semibold transition",
-                    destinoTreino === "METODOLOGIA"
-                      ? "bg-green-800 text-white border-green-800"
-                      : "bg-white text-green-900 border-green-200 hover:bg-green-50",
-                  ].join(" ")}
-                >
-                  Para metodologia
-                </button>
-              </div>
-
-              {destinoTreino === "METODOLOGIA" && (
-                <div className="mt-3">
-                  <label className="block text-xs text-gray-700 mb-1">
-                    Selecione a metodologia
-                  </label>
-
-                  <select
-                    value={metodologiaId}
-                    onChange={(e) => setMetodologiaId(e.target.value)}
-                    className="w-full border rounded-xl px-3 py-2 text-sm"
-                  >
-                    <option value="">Selecione...</option>
-                    {minhasMetodologias.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.titulo}
-                      </option>
-                    ))}
-
-                  </select>
-                </div>
-              )}
             </div>
 
             <div className="sm:col-span-2">

@@ -3145,9 +3145,6 @@ export async function criarTreinoProgramado(
     });
   }
 
-  const ok = await requireUsage(req as any, res, "treinos_programados_mes");
-  if (!ok) return;
-
   try {
     const {
       nome,
@@ -3184,7 +3181,6 @@ export async function criarTreinoProgramado(
   // ✅ fonte de verdade: token (tipoStr). header/body só como fallback
   const tipoNorm = (tipoStr || tipoNormHeaderBody).toLowerCase().trim();
 
-
     const tipoUsuarioIdFinal = String(
       tokenUser?.tipoUsuarioId ||
         (req.headers["x-tipousuarioid"] as string) ||
@@ -3210,7 +3206,6 @@ export async function criarTreinoProgramado(
     });
 
     const usuarioEhParceiro = Boolean(usuarioDb?.parceiro);
-
     const parceiroSolicitado = Boolean(parceiro);
 
     if (parceiroSolicitado && !usuarioEhParceiro) {
@@ -3327,6 +3322,135 @@ export async function criarTreinoProgramado(
 
     // ✅ se for professor, tipoUsuarioIdFinal pode vir como usuarioId
     let professorIdToConnect: string | null = null;
+
+    // ✅ resolve o professor ANTES do limite (pra ownerWhere funcionar)
+    if (tipoNorm === "professor") {
+      const prof = await prisma.professor.findFirst({
+        where: {
+          OR: [{ id: tipoUsuarioIdFinal }, { usuarioId: tipoUsuarioIdFinal }],
+        },
+        select: { id: true },
+      });
+
+      if (!prof?.id) {
+        return res.status(400).json({
+          code: "PROFESSOR_NOT_FOUND",
+          message:
+            "Não encontrei o professor do usuário logado (tipoUsuarioId inválido).",
+          recebida: tipoUsuarioIdFinal,
+        });
+      }
+
+      professorIdToConnect = prof.id;
+    }
+
+    // ✅ swap de slot: se já tem 5, obriga escolher um pra apagar
+    const apagarTreinoProgramadoId = String(
+      (req.body as any)?.apagarTreinoProgramadoId || ""
+    ).trim();
+
+    const plan = String((req.user as any)?.plano || (req.user as any)?.plan || "FREE");
+    const limit = planLimitFor(plan, "treinos_programados_mes"); // 5 no FREE
+
+    if (Number.isFinite(limit)) {
+      const ownerWhere =
+        tipoNorm === "clube"
+          ? { clubeId: String(tipoUsuarioIdFinal) }
+          : tipoNorm === "escolinha" || tipoNorm === "escola"
+          ? { escolinhaId: String(tipoUsuarioIdFinal) }
+          : tipoNorm === "professor"
+          ? {
+              OR: [
+                { professorId: String(professorIdToConnect) },
+                { criadorProfessorId: String(professorIdToConnect) },
+              ],
+            }
+          : null;
+
+      if (ownerWhere) {
+        const result = await prisma.$transaction(async (tx) => {
+          // 1) se veio id pra apagar, apaga (garantindo ownership)
+          if (apagarTreinoProgramadoId) {
+            await tx.treinoProgramado.deleteMany({
+              where: { id: apagarTreinoProgramadoId, ...ownerWhere },
+            });
+          }
+
+          // 2) conta de novo
+          const used = await tx.treinoProgramado.count({ where: ownerWhere });
+
+          if (used >= Number(limit)) {
+            const meus = await tx.treinoProgramado.findMany({
+              where: ownerWhere,
+              select: { id: true, nome: true, createdAt: true },
+              orderBy: { createdAt: "desc" },
+              take: 50,
+            });
+
+            return { allowed: false as const, meus };
+          }
+
+          return { allowed: true as const };
+        });
+
+        if (!result.allowed) {
+          return res.status(400).json({
+            code: "LIMIT_TREINOS_PROGRAMADOS",
+            message: `Você já possui ${Number(limit)} treinos. Escolha um para apagar e liberar espaço.`,
+            meus: result.meus,
+          });
+        }
+      }
+    }
+    
+    if (Number.isFinite(limit)) {
+      // monta o "owner" correto
+      const ownerWhere =
+        tipoNorm === "clube"
+          ? { clubeId: tipoUsuarioIdFinal }
+          : tipoNorm === "escolinha" || tipoNorm === "escola"
+          ? { escolinhaId: tipoUsuarioIdFinal }
+          : tipoNorm === "professor"
+          ? { OR: [{ criadorProfessorId: professorIdToConnect }, { professorId: professorIdToConnect }] }
+          : null;
+
+      if (ownerWhere) {
+        const result = await prisma.$transaction(async (tx) => {
+          // se veio id pra apagar, apaga (garantindo ownership)
+          if (apagarTreinoProgramadoId) {
+            await tx.treinoProgramado.deleteMany({
+              where: {
+                id: apagarTreinoProgramadoId,
+                ...ownerWhere,
+              },
+            });
+          }
+
+          const used = await tx.treinoProgramado.count({ where: ownerWhere });
+
+          if (used >= Number(limit)) {
+            const meus = await tx.treinoProgramado.findMany({
+              where: ownerWhere,
+              select: { id: true, nome: true, createdAt: true },
+              orderBy: { createdAt: "desc" },
+              take: 20,
+            });
+
+            return { allowed: false, used, meus };
+          }
+
+          return { allowed: true };
+        });
+
+        if (!result.allowed) {
+          return res.status(400).json({
+            code: "LIMIT_TREINOS_PROGRAMADOS",
+            message: `Você já possui ${Number(limit)} treinos. Escolha um para apagar e liberar espaço.`,
+            meus: result.meus,
+          });
+        }
+      }
+    }
 
     if (tipoNorm === "professor") {
       const prof = await prisma.professor.findFirst({

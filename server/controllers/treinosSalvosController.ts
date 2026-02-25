@@ -1,7 +1,5 @@
 import type { Request, Response } from "express";
-import { Categoria, Nivel, TipoTreino } from "@prisma/client";
-import { requireUsage } from "server/lib/usage.js";
-import { enforceTotalLimit } from "server/services/usage.js";
+import { Categoria } from "@prisma/client";
 import { prisma } from "../prisma.js";
 
 const MAX_SLOTS = 5;
@@ -25,24 +23,15 @@ function ownerWhere(tipoUsuario?: string, tipoUsuarioId?: string) {
 export const criarTreinoSalvo = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user as
-      | { id: string; tipo: string; plano?: string }
+      | { id: string; tipo: string; plano?: string; plan?: string }
       | undefined;
 
-    if (!user || !user.id) {
-      return res
-        .status(401)
-        .json({ message: "Usuário não autenticado para salvar treino." });
+    if (!user?.id) {
+      return res.status(401).json({ message: "Usuário não autenticado para salvar treino." });
     }
 
-    await enforceTotalLimit(req, res, "treinos_salvos_total", async () => {
-      const where = { criadoPorUsuarioId: user.id };
-      return prisma.treinoSalvo.count({ where });
-    });
-
-    if (user.tipo === "Atleta" && user.plano !== "PRO") {
-      const ok = await requireUsage(req, res, "treinos_salvos_total");
-      if (!ok) return;
-    }
+    const tipoUser = String(user.tipo || "").toLowerCase();
+    const planoUser = String((user as any).plano || (user as any).plan || "").toUpperCase();
 
     const {
       titulo,
@@ -60,11 +49,12 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
       tipoUsuarioId,
       criadoPorUsuarioId,
       treinoProgramadoId,
+      apagarTreinoSalvoId, // ✅ vem do frontend
     } = req.body || {};
 
+    // ✅ dono obrigatório e único
     const owner = ownerWhere(tipoUsuario, tipoUsuarioId);
     const ownerKeys = Object.keys(owner);
-
     if (ownerKeys.length !== 1) {
       return res.status(400).json({
         message:
@@ -72,18 +62,9 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
       });
     }
 
-    const ativosCount = await prisma.treinoSalvo.count({
-      where: {
-        ...owner,
-        OR: [{ expiraEm: null }, { expiraEm: { gt: new Date() } }],
-      },
-    });
-
-    if (!publico && ativosCount >= MAX_SLOTS) {
-      return res.status(400).json({
-        message: `Limite de ${MAX_SLOTS} treinos salvos atingido para este dono.`,
-      });
-    }
+    // ✅ (opcional) regra do plano (se você quiser manter)
+    // Eu recomendo NÃO duplicar com route e NÃO duplicar com enforceTotalLimit.
+    // Se quiser manter, mantenha só aqui:
 
     if (
       !titulo ||
@@ -102,27 +83,62 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
       treinoProgramadoId ??
       `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-    const created = await prisma.treinoSalvo.create({
-      data: {
-        usuarioId: user.id,
-        treinoProgramadoId: String(effectiveTreinoProgramadoId),
+    // ✅ tudo em transação: apaga (se mandou) e cria
+    const created = await prisma.$transaction(async (tx) => {
+      // 1) se veio id pra apagar, apaga garantindo que é do user e do dono
+      if (apagarTreinoSalvoId) {
+        await tx.treinoSalvo.deleteMany({
+          where: {
+            id: String(apagarTreinoSalvoId),
+            usuarioId: user.id,
+            ...owner,
+          },
+        });
+      }
 
-        titulo,
-        descricao: descricao ?? null,
-        nivel: nivel ?? null,
-        tipoTreino: tipoTreino ?? null,
-        categoria: Array.isArray(categoria) ? (categoria as Categoria[]) : [],
-        duracao: duracao ?? null,
-        dicas: Array.isArray(dicas) ? dicas : [],
-        conteudo,
-        publico: Boolean(publico),
-        parceiro: Boolean(parceiro),
-        naoExpira: Boolean(naoExpira),
-        expiraEm,
-        criadoPorUsuarioId: criadoPorUsuarioId ?? user.id,
-        ...owner,
-      },
+      // 2) conta ativos DEPOIS do delete
+      const ativosCount = await tx.treinoSalvo.count({
+        where: {
+          usuarioId: user.id,
+          ...owner,
+          OR: [{ expiraEm: null }, { expiraEm: { gt: new Date() } }],
+        },
+      });
+
+      // 3) aplica limite de slots (FREE=5)
+      if (!publico && ativosCount >= MAX_SLOTS) {
+        return null;
+      }
+
+      // 4) cria
+      return tx.treinoSalvo.create({
+        data: {
+          usuarioId: user.id,
+          treinoProgramadoId: String(effectiveTreinoProgramadoId),
+          titulo,
+          descricao: descricao ?? null,
+          nivel: nivel ?? null,
+          tipoTreino: tipoTreino ?? null,
+          categoria: Array.isArray(categoria) ? (categoria as Categoria[]) : [],
+          duracao: duracao ?? null,
+          dicas: Array.isArray(dicas) ? dicas : [],
+          conteudo,
+          publico: Boolean(publico),
+          parceiro: Boolean(parceiro),
+          naoExpira: Boolean(naoExpira),
+          expiraEm,
+          criadoPorUsuarioId: criadoPorUsuarioId ?? user.id,
+          ...owner,
+        },
+      });
     });
+
+    if (!created) {
+      return res.status(400).json({
+        code: "LIMIT_TREINOS_SALVOS",
+        message: `Você já possui ${MAX_SLOTS} treinos salvos. Escolha um para apagar.`,
+      });
+    }
 
     return res.status(201).json(created);
   } catch (err: any) {
@@ -139,9 +155,12 @@ export const listarTreinosSalvos = async (req: Request, res: Response) => {
     const { tipoUsuario, tipoUsuarioId, includePublic } = req.query as any;
 
     const owner = ownerWhere(tipoUsuario, tipoUsuarioId);
+    const user = (req as any).user;
+    const userId = String(user?.id || "");
 
     const meus = await prisma.treinoSalvo.findMany({
       where: {
+        usuarioId: userId,   // ✅ ESSENCIAL
         ...owner,
         OR: [{ expiraEm: null }, { expiraEm: { gt: new Date() } }],
       },

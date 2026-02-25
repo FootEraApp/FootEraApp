@@ -175,13 +175,83 @@ export async function requireUsage(
     return true;
   }
 
-  const userId = (req as any).userId as string | undefined;
-  if (!userId) {
+  const authUserId = (req as any).userId as string | undefined;
+  if (!authUserId) {
     res.status(401).json({ code: "UNAUTHENTICATED" });
     return false;
   }
 
-    const chk = await incAndCheck(userId, key, limit, win);
+  // ✅ para Professor/Clube/Escolinha, o limite deve ser por organização
+  const subjectIdFromBody =
+    String((req as any)?.body?.tipoUsuarioId || "").trim() || null;
+
+  const subjectId =
+    subjectIdFromBody ||
+    String(
+      (req.user as any)?.tipoUsuarioId ||
+      (req.user as any)?.tipoUsuarioIdRaw ||
+      (req.user as any)?.clubeId ||
+      (req.user as any)?.escolinhaId ||
+      (req.user as any)?.professorId ||
+      authUserId
+    );
+    // ✅ TREINOS_PROGRAMADOS_MES (na prática: limite por quantidade no banco, não por tentativas)
+  if (key === "treinos_programados_mes") {
+    const tipoRaw = String(
+      (req as any)?.body?.tipoUsuario ??
+      (req as any)?.body?.tipo ??
+      (req.user as any)?.tipo ??
+      (req.user as any)?.tipoUsuario ??
+      (req.user as any)?.usuarioTipoRaw ??
+      ""
+    ).trim().toLowerCase();
+    // conta treinos do dono (clube/escolinha/professor); fallback: criadorUsuarioId
+    const where: any = (() => {
+      if (tipoRaw.includes("clube")) return { clubeId: subjectId };
+      if (tipoRaw.includes("escolinha") || tipoRaw.includes("escola")) return { escolinhaId: subjectId };
+      if (tipoRaw.includes("professor")) return { OR: [{ professorId: subjectId }, { criadorProfessorId: subjectId }] };
+      return { OR: [{ clubeId: subjectId }, { escolinhaId: subjectId }] };
+    })();
+
+    const used = await prisma.treinoProgramado.count({ where });
+    const remaining = Math.max(0, Number(limit) - used);
+    const allowed = used < Number(limit); // ✅ se já tem 5, não deixa criar o 6º
+
+    if (!allowed) {
+      const capability = CAPABILITY_BY_KEY[key] ?? key;
+
+      recordCapabilityDecision({ capability, allowed: false });
+      logCapabilityDenied({
+        req,
+        capability,
+        periodRef: boundsFor("month").periodRef,
+        remaining,
+        reason: "USAGE_LIMIT",
+      });
+
+      // ✅ manda lista para o front escolher 1 pra apagar
+      const meus = await prisma.treinoProgramado.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        select: { id: true, nome: true, createdAt: true },
+        take: 50,
+      });
+
+      res.status(400).json({
+        code: "LIMIT_TREINOS_PROGRAMADOS",
+        message:
+          "Você atingiu o limite de 5 treinos. Escolha um para apagar e liberar espaço.",
+        limit: Number(limit),
+        meus,
+      });
+      return false;
+    }
+
+    recordCapabilityDecision({ capability: CAPABILITY_BY_KEY[key] ?? key, allowed: true });
+    return true;
+  }
+
+  const chk = await incAndCheck(subjectId, key, limit, win);
   const capability = CAPABILITY_BY_KEY[key] ?? key;
 
   if (!chk.allowed) {
@@ -216,38 +286,50 @@ export async function incAndCheck(
 ) {
   const { windowStart, windowEnd, periodRef, windowKind } = boundsFor(win, new Date());
 
-  const row = await prisma.usageCounter.upsert({
-    where: {
-      userId_key_windowKind_windowStart: { userId, key, windowKind, windowStart },
-    },
-    create: {
-      userId,
-      key,
-      windowKind,
-      windowStart,
-      windowEnd,
-      periodRef,
-      count: 1,
-      value: 0,
-    },
-    update: win === "total"  ? {
-      count: { increment: 1 },
-      updatedAt: new Date(),
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.usageCounter.findUnique({
+      where: {
+        userId_key_windowKind_windowStart: { userId, key, windowKind, windowStart },
+      },
+      select: { count: true },
+    });
+
+    const usedNow = existing?.count ?? 0;
+
+    // ✅ se já bateu o limite, não incrementa
+    if (Number.isFinite(limit) && usedNow >= limit) {
+      const used = usedNow;
+      const remaining = 0;
+      return { allowed: false, used, remaining, limit, window: win, periodRef };
     }
-  : {
-      count: { increment: 1 },
-      windowEnd,
-      periodRef,
-      updatedAt: new Date(),
-    },
-    select: { count: true },
+
+    // ✅ agora sim incrementa (ou cria)
+    const row = await tx.usageCounter.upsert({
+      where: {
+        userId_key_windowKind_windowStart: { userId, key, windowKind, windowStart },
+      },
+      create: {
+        userId,
+        key,
+        windowKind,
+        windowStart,
+        windowEnd,
+        periodRef,
+        count: 1,
+        value: 0,
+      },
+      update: win === "total"
+        ? { count: { increment: 1 }, updatedAt: new Date() }
+        : { count: { increment: 1 }, windowEnd, periodRef, updatedAt: new Date() },
+      select: { count: true },
+    });
+
+    const used = row.count;
+    const remaining = Math.max(0, limit - used);
+    const allowed = used <= limit;
+
+    return { allowed, used, remaining, limit, window: win, periodRef };
   });
-
-  const used = row.count;
-  const remaining = Math.max(0, limit - used);
-  const allowed = used <= limit;
-
-  return { allowed, used, remaining, limit, window: win, periodRef };
 }
 
 export function denyUsage(
