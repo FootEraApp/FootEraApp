@@ -1,3 +1,4 @@
+// server/controllers/turmasController
 import type { Request, Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import type { TurmaUsuario, Usuario as UsuarioModel, Atleta as AtletaModel } from "@prisma/client";
@@ -385,7 +386,7 @@ export async function listarMinhasTurmas(req: AuthenticatedRequest, res: Respons
         OR: [
           { clubeId: tipoUsuarioId },
           { escolinhaId: tipoUsuarioId },
-          { professores: { some: { professor: { usuarioId: tipoUsuarioId } } } },
+          { professores: { some: { professorId: tipoUsuarioId } } },
         ],
       },
       select: {
