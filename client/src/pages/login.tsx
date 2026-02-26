@@ -1,3 +1,4 @@
+// client/src/pages/login
 import { useState, useEffect, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import axios from "axios";
@@ -490,18 +491,18 @@ export default function PaginaLogin() {
         <div className="relative z-10 w-full max-w-md bg-white shadow-lg rounded-2xl p-7 md:p-8 mx-auto">
           <h2 className="text-xl font-semibold mb-2 text-center">Entrar</h2>
           <p className="text-sm text-center text-gray-600 mb-6">
-            Entre com seu nome de usuário e senha
+            Entre com seu usuário (ou e-mail) e senha
           </p>
 
           <form onSubmit={handleLogin}>
             <div className="mb-4">
               <label className="block text-sm font-medium mb-1">
-                Nome de usuário
+                Usuário ou e-mail
               </label>
               <input
                 name="nomeDeUsuario"
                 className="w-full border border-gray-300 rounded px-3 py-2"
-                placeholder="Seu nome de usuário"
+                placeholder="Seu usuário ou e-mail"
                 value={nomeDeUsuario}
                 onChange={(e) => setNomeDeUsuario(e.target.value)}
               />

@@ -68,9 +68,15 @@ export async function login(req: Request, res: Response) {
 
   try {
     const userKey = String(nomeDeUsuario).trim();
+    const lowerKey = userKey.toLowerCase();
 
-    const usuario = await prisma.usuario.findUnique({
-      where: { nomeDeUsuario: userKey },
+    const usuario = await prisma.usuario.findFirst({
+      where: {
+        OR: [
+          { nomeDeUsuario: userKey },       // mantém case como está
+          { email: lowerKey },              // email normalizado
+        ],
+      },
       include: {
         atleta: { select: { id: true } },
         professor: { select: { id: true } },
