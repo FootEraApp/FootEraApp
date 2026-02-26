@@ -2766,7 +2766,57 @@ useEffect(() => {
         ? await TreinosApi.atualizar(editProgramadoId || editId, payload)
         : await TreinosApi.criar(payload);
 
-      const criado = resp?.data ?? resp;
+      // ✅ Se você manteve validateStatus, resp SEMPRE vem aqui (até 400).
+      const status = (resp as any)?.status;
+      const data = (resp as any)?.data;
+
+      // ✅ 1) LIMITE DE TREINOS PROGRAMADOS (o alert correto)
+      if (!isEditing && status === 400 && data?.code === "LIMIT_TREINOS_PROGRAMADOS" && Array.isArray(data?.meus)) {
+        const meus = data.meus as Array<{ id: string; nome: string; createdAt?: string }>;
+        const lista = meus
+          .map((m, i) => `${i + 1}) ${m.nome} (${m.createdAt ? new Date(m.createdAt).toLocaleString("pt-BR") : ""}) [${m.id}]`)
+          .join("\n");
+
+        const escolha = window.prompt(
+          `Você atingiu o limite de 5 treinos.\n\nEscolha um número para apagar e liberar espaço:\n${lista}\n\nDigite 1-${meus.length} (ou deixe vazio para cancelar).`,
+        );
+
+        const idx = Number(escolha);
+        if (!escolha || !Number.isFinite(idx) || idx < 1 || idx > meus.length) {
+          // cancelou -> NÃO navega e NÃO limpa progresso
+          return;
+        }
+
+        const apagar = meus[idx - 1];
+
+        const resp2 = await TreinosApi.criar({
+          ...(payload as any),
+          apagarTreinoProgramadoId: apagar.id,
+        } as any);
+
+        const status2 = (resp2 as any)?.status;
+        const data2 = (resp2 as any)?.data;
+
+        if (status2 >= 400) {
+          showToast(data2?.message || "Não foi possível criar o treino após apagar um antigo.", "error");
+          return;
+        }
+
+        // ✅ agora sim: sucesso real -> limpa e navega
+        showToast("Treino criado! Um treino antigo foi apagado.", "success");
+        limparProgressoETela(); // (se você já tiver helper, usa ele)
+        setTimeout(() => navigate("/treinos"), 300);
+        return;
+      }
+
+      // ✅ 2) Qualquer outro erro 4xx/5xx
+      if (status >= 400) {
+        showToast(data?.message || "Falha ao criar treino.", "error");
+        return;
+      }
+
+      // ✅ 3) Sucesso real (2xx)
+      const criado = data;
 
       let qtdAgendados = 0;
       const treinoProgramadoId =

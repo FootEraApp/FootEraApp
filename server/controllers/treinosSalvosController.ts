@@ -96,21 +96,60 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
         });
       }
 
-      // 2) conta ativos DEPOIS do delete
-      const ativosCount = await tx.treinoSalvo.count({
+      const ativos = await tx.treinoSalvo.findMany({
         where: {
           usuarioId: user.id,
           ...owner,
           OR: [{ expiraEm: null }, { expiraEm: { gt: new Date() } }],
         },
+        select: { id: true, treinoProgramadoId: true, createdAt: true, titulo: true },
+        orderBy: { createdAt: "desc" },
+        take: 200,
       });
 
-      // 3) aplica limite de slots (FREE=5)
+      const idsProgramados = Array.from(
+        new Set(ativos.map((a) => String(a.treinoProgramadoId)).filter(Boolean))
+      );
+
+      const existentes = idsProgramados.length
+        ? await tx.treinoProgramado.findMany({
+            where: { id: { in: idsProgramados } },
+            select: { id: true },
+          })
+        : [];
+
+      const setExistentes = new Set(existentes.map((e) => e.id));
+
+      // remove órfãos (pra não poluir a contagem nunca mais)
+      const orfaos = ativos.filter((a) => !setExistentes.has(String(a.treinoProgramadoId)));
+      if (orfaos.length) {
+        await tx.treinoSalvo.deleteMany({
+          where: { usuarioId: user.id, ...owner, id: { in: orfaos.map((o) => o.id) } },
+        });
+      }
+
+      const ativosCount = ativos.length - orfaos.length;
+
       if (!publico && ativosCount >= MAX_SLOTS) {
+        const validosOrdenados = ativos
+          .filter((a) => setExistentes.has(String(a.treinoProgramadoId)))
+          .slice(0, 50);
+
+        // devolve lista para o front escolher qual apagar
+        (res as any).__limitPayload = {
+          code: "LIMIT_TREINOS_SALVOS",
+          message: `Você já possui ${MAX_SLOTS} treinos salvos. Escolha um para apagar.`,
+          meus: validosOrdenados.map((t) => ({
+            id: t.id,
+            createdAt: t.createdAt,
+            nome: t.titulo,
+            treinoProgramadoId: t.treinoProgramadoId,
+          })),
+        };
+
         return null;
       }
 
-      // 4) cria
       return tx.treinoSalvo.create({
         data: {
           usuarioId: user.id,
@@ -134,10 +173,12 @@ export const criarTreinoSalvo = async (req: Request, res: Response) => {
     });
 
     if (!created) {
-      return res.status(400).json({
-        code: "LIMIT_TREINOS_SALVOS",
-        message: `Você já possui ${MAX_SLOTS} treinos salvos. Escolha um para apagar.`,
-      });
+      return res.status(400).json(
+        ((res as any).__limitPayload) || {
+          code: "LIMIT_TREINOS_SALVOS",
+          message: `Você já possui ${MAX_SLOTS} treinos salvos. Escolha um para apagar.`,
+        }
+      );
     }
 
     return res.status(201).json(created);
@@ -154,18 +195,63 @@ export const listarTreinosSalvos = async (req: Request, res: Response) => {
   try {
     const { tipoUsuario, tipoUsuarioId, includePublic } = req.query as any;
 
-    const owner = ownerWhere(tipoUsuario, tipoUsuarioId);
+    const owner = ownerWhere(String(tipoUsuario || ""), String(tipoUsuarioId || ""));
     const user = (req as any).user;
     const userId = String(user?.id || "");
+    if (!userId) return res.status(401).json({ message: "Não autenticado" });
 
-    const meus = await prisma.treinoSalvo.findMany({
+    // 1) pega salvos do usuário (e do dono) ainda "ativos" (não expirados)
+    const salvos = await prisma.treinoSalvo.findMany({
       where: {
-        usuarioId: userId,   // ✅ ESSENCIAL
+        usuarioId: userId,
         ...owner,
         OR: [{ expiraEm: null }, { expiraEm: { gt: new Date() } }],
       },
-      orderBy: [{ atualizadoEm: "desc" }],
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        createdAt: true,
+        treinoProgramadoId: true,
+      },
+      take: 50,
     });
+
+    const idsProgramados = Array.from(
+      new Set(salvos.map((s) => String(s.treinoProgramadoId)).filter(Boolean))
+    );
+
+    // 2) confere quais ids ainda existem no banco
+    const programados = idsProgramados.length
+      ? await prisma.treinoProgramado.findMany({
+          where: { id: { in: idsProgramados } },
+          select: { id: true, nome: true, createdAt: true },
+        })
+      : [];
+
+    const mapNome = new Map(programados.map((p) => [p.id, p.nome]));
+
+    // 3) separa válidos x órfãos
+    const validos = salvos.filter((s) => mapNome.has(String(s.treinoProgramadoId)));
+    const orfaos = salvos.filter((s) => !mapNome.has(String(s.treinoProgramadoId)));
+
+    // 4) remove órfãos do banco (do usuário + dono)
+    if (orfaos.length) {
+      await prisma.treinoSalvo.deleteMany({
+        where: {
+          usuarioId: userId,
+          ...owner,
+          id: { in: orfaos.map((o) => o.id) },
+        },
+      });
+    }
+
+    // 5) monta retorno com "nome" (sem relation)
+    const meus = validos.map((s) => ({
+      id: s.id,
+      createdAt: s.createdAt,
+      treinoProgramadoId: s.treinoProgramadoId,
+      treinoProgramado: { nome: mapNome.get(String(s.treinoProgramadoId)) || "(Removido)" },
+    }));
 
     let publicos: any[] = [];
     if (String(includePublic) === "1") {
@@ -180,13 +266,13 @@ export const listarTreinosSalvos = async (req: Request, res: Response) => {
       });
     }
 
-    res.json({
-      meus,
-      publicos,
-    });
+    return res.json({ meus, publicos });
   } catch (err: any) {
     console.error("listarTreinosSalvos", err);
-    res.status(500).json({ message: "Erro ao listar treinos salvos", error: String(err?.message || err) });
+    return res.status(500).json({
+      message: "Erro ao listar treinos salvos",
+      error: String(err?.message || err),
+    });
   }
 };
 
