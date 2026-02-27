@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useState} from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { format as formatDateFns, startOfDay, endOfMonth } from "date-fns";
+import { format as formatDateFns, startOfDay } from "date-fns";
 import { ptBR } from 'date-fns/locale';
 import {
   ArrowUpRight, Calendar, CheckCircle2, Clock,
@@ -11,7 +11,8 @@ import { Button } from '../ui/button.js';
 import { Badge } from '../ui/badge.js';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs.js';
 import { Link, useLocation} from 'wouter';
-import { API } from '../../config.js';
+import { API, APP } from '../../config.js';
+import { publicImgUrl } from "@/utils/publicUrl.js";
 import Storage from '../../../../server/utils/storage.js';
 
 type Training = {
@@ -86,21 +87,6 @@ function extractTierFromDescricao(desc?: string | null): Earned["tier"] {
   if (t === "bronze" || t === "prata" || t === "ouro" || t === "platina") return t;
   return undefined;
 }
-function getActivityLink(a: any): string | null {
-  if (a?.treinoAgendadoId) {
-    return `/treinos/${a.treinoAgendadoId}`;
-  }
-
-  if (a?.treinoProgramadoId) {
-    return `/treinos/${a.treinoProgramadoId}`;
-  }
-
-  if (a?.desafioId) {
-    return `/desafios/${a.desafioId}`;
-  }
-
-  return null;
-}
 
 function extractGrupoFromDescricao(desc?: string | null): string | null {
   if (!desc) return null;
@@ -147,11 +133,9 @@ function safeDateFromWire(v?: string | null): Date | null {
   return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
 }
 
-function asArray(v: any): any[] {
-  return Array.isArray(v) ? v : Array.isArray(v?.badges) ? v.badges : Array.isArray(v?.conquistas) ? v.conquistas : [];
-}
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
-function getActivityImage(a: any): string | null {
+function getActivityImage(a: any): string {
   const raw =
     a?.imagemUrl ??
     a?.imagem ??
@@ -162,11 +146,7 @@ function getActivityImage(a: any): string | null {
     a?.treinoProgramado?.imagemUrl ??
     null;
 
-  if (!raw) return null;
-  const s = String(raw);
-  if (s.startsWith("http")) return s;
-  if (s.startsWith("/")) return s;
-  return `${API.BASE_URL}/${s.replace(/^\/+/, "")}`;
+  return publicImgUrl(raw) || AVATAR_FALLBACK;
 }
 
 function pickNumber(...vals: any[]): number {
@@ -741,7 +721,7 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                 {Array.isArray(atividades) && atividades.length > 0 ? (
                   <div className="grid grid-cols-3 gap-3">
                     {atividades.slice(0, 6).map((a: any, idx: number) => {
-                      const img = getActivityImage(a) ?? "/assets/treinos/placeholder.png";
+                      const img = getActivityImage(a);
                       const label =
                         a?.tipo ?? a?.categoria ?? a?.kind ?? (a?.desafioId ? "Desafio" : "Treino");
                       const titulo =
@@ -790,8 +770,7 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
                               alt={titulo}
                               className="w-full h-20 object-cover"
                               onError={(e) => {
-                                (e.currentTarget as HTMLImageElement).src =
-                                  "/assets/treinos/placeholder.png";
+                                (e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK;
                               }}
                             />
                             <div className="absolute bottom-2 left-2 text-[10px] bg-black/50 text-white px-2 py-1 rounded-full">

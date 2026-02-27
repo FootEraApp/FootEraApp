@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   listAdminUsers,
   getAdminUserDetail,
+  hardDeleteUsuario,
 } from "../controllers/adminUsersController.js";
 import {
   bloquearUsuario,
@@ -17,6 +18,7 @@ router.use(authenticateToken, requireAdmin);
 router.post("/:id/bloquear", bloquearUsuario);
 router.post("/:id/reativar", reativarUsuario);
 router.get("/:id", getAdminUserDetail);
+router.delete("/:id", hardDeleteUsuario);
 router.get("/", listAdminUsers);
 
 export default router;
