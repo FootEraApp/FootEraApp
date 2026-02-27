@@ -4,6 +4,9 @@ type ExPayloadExistente = {
   exercicioId: string;
   ordem: number;
   repeticoes: string | null;
+  exercicioPersonalizadoId?: string | null;
+  videoDemonstrativoUrl?: string | null;
+  videoPosterUrl?: string | null;
 };
 
 type ExPayloadTemporario = {
@@ -12,6 +15,11 @@ type ExPayloadTemporario = {
   series: string | null;
   repeticoes: string | null;
   ordem: number;
+
+  // ✅ novos (para salvar ExercicioPersonalizado com mídia)
+  exercicioPersonalizadoId?: string | null;
+  videoDemonstrativoUrl?: string | null;
+  videoPosterUrl?: string | null;
 };
 
 type ExPayload = ExPayloadExistente | ExPayloadTemporario;
@@ -34,13 +42,22 @@ function montarRepsTexto(item: ExItemUI) {
   return "";
 }
 
+type ExPayloadOrNull = ExPayload | null;
+
+function isExPayload(x: ExPayloadOrNull): x is ExPayload {
+  return x !== null;
+}
+
 export function montarExerciciosParaPayload(lista: ExItemUI[]): ExPayload[] {
   return lista
-    .map((item, idx) => {
+    .map<ExPayloadOrNull>((item, idx) => {
       const ordem = idx + 1;
       const repsTexto = montarRepsTexto(item);
 
-      if (item.exercicioId) {
+      // ✅ se o item tiver exercicioPersonalizadoId, NÃO trata como catálogo
+      const persId = normalizeText((item as any).exercicioPersonalizadoId);
+
+      if (item.exercicioId && !persId) {
         return {
           exercicioId: item.exercicioId,
           ordem,
@@ -59,9 +76,18 @@ export function montarExerciciosParaPayload(lista: ExItemUI[]): ExPayload[] {
         series: seriesRaw || null,
         repeticoes: repsTexto || null,
         ordem,
+
+        exercicioPersonalizadoId: persId || null,
+
+        // ✅ aceita tanto videoDemonstrativoUrl quanto videoUrl
+        videoDemonstrativoUrl:
+          normalizeText((item as any).videoDemonstrativoUrl || (item as any).videoUrl) ||
+          null,
+
+        videoPosterUrl: normalizeText((item as any).videoPosterUrl) || null,
       } satisfies ExPayloadTemporario;
     })
-    .filter((x): x is ExPayload => x !== null);
+    .filter(isExPayload);
 }
 
 export function parseRepeticoesStr(str?: string) {

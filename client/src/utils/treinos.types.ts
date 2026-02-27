@@ -44,4 +44,10 @@ export type ExItemUI = {
   series?: string; 
   exercicioId?: string; 
   repeticoesTexto?: string | null;
+  exercicioPersonalizadoId?: string | null;
+  videoDemonstrativoUrl?: string | null;
+  videoPosterUrl?: string | null;
+
+  // se você usa "videoUrl" em algum lugar do UI:
+  videoUrl?: string | null;
 };

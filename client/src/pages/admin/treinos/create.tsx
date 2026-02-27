@@ -18,6 +18,43 @@ function getToken() {
   return localStorage.getItem("token") || sessionStorage.getItem("token") || "";
 }
 
+function dataUrlToFile(dataUrl: string, filename: string) {
+  const arr = dataUrl.split(",");
+  const mime = arr[0].match(/:(.*?);/)?.[1] || "image/jpeg";
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) u8arr[n] = bstr.charCodeAt(n);
+  return new File([u8arr], filename, { type: mime });
+}
+
+async function uploadImagem(token: string, file: File): Promise<string> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("tipo", "Imagem");
+
+  const res = await fetch(`${API.BASE_URL}/api/upload/imagem`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || "Falha ao enviar imagem.");
+
+  const url = String(data?.url || data?.midia?.url || data?.path || data?.relativeUrl || "").trim();
+  if (!url) throw new Error("Upload retornou sem URL da imagem.");
+
+  return url;
+}
+
+function normalizeUrl(u?: string | null) {
+  const s = String(u || "").trim();
+  if (!s) return "";
+  if (s.startsWith("http") || s.startsWith("blob:") || s.startsWith("data:")) return s;
+  return `${API.BASE_URL}${s.startsWith("/") ? "" : "/"}${s}`;
+}
+
 type ProfessorMin = { id: string; nome: string; codigo?: string | null; cref?: string | null };
 type ExercicioMin = {
   id: string;
@@ -31,18 +68,24 @@ type ExercicioMin = {
   thumbUrl?: string | null;
   videoDemonstrativoUrl?: string | null;
 };
+
 type ExLinha = {
-  exercicioId: string; 
+  exercicioId: string;
   ordem: number;
-  customVideoPosterUrl?: string | null;
   repeticoes: string;
   series?: string;
   reps?: string;
   isCustom?: boolean;
+  // ✅ novos
+  exercicioPersonalizadoId?: string | null;
+  exercicioTemporarioId?: string | null;
   customTitulo?: string;
   customDesc?: string;
   customVideoFile?: File | null;
   customVideoPreviewUrl?: string | null;
+  // ✅ novo (URL real enviada / vinda do banco)
+  customVideoUrl?: string | null;
+  customVideoPosterUrl?: string | null;
 };
 
 const opcoesCategorias = ["Sub9", "Sub11", "Sub13", "Sub15", "Sub17", "Sub20", "Livre"];
@@ -139,6 +182,34 @@ function buildRepeticoes(series: string, reps: string) {
 function getThumbUrlFromEx(ex: ExercicioMin | null | undefined) {
   if (!ex) return ""
   return String((ex as any).thumbUrl || (ex as any).capaUrl || (ex as any).imagemUrl || "").trim();
+}
+
+async function uploadVideo(
+  token: string,
+  file: File
+): Promise<{ url: string; thumbUrl?: string | null }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("tipo", "Video"); // ajuda o backend a classificar
+
+  const res = await fetch(`${API.BASE_URL}/api/upload/video`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || "Falha ao enviar vídeo.");
+
+  const url =
+    String(data?.url || data?.midia?.url || data?.path || data?.relativeUrl || "").trim();
+
+  const thumbUrl =
+    data?.thumbUrl || data?.midia?.thumbUrl || null;
+
+  if (!url) throw new Error("Upload retornou sem URL do vídeo.");
+
+  return { url, thumbUrl: thumbUrl ? String(thumbUrl) : null };
 }
 
 async function gerarPosterDoVideo(file: File): Promise<string> {
@@ -313,17 +384,34 @@ export default function CriarOuEditarTreino() {
       setCatsSelecionadas(Array.isArray(data.categoria) ? data.categoria : []);
 
       const loaded: ExLinha[] =
-        data.exercicios?.map((e: any, i: number) => {
-          const rep = String(e.repeticoes ?? "");
-          const sr = parseSeriesRepsFromRepeticoes(rep);
+        (data.exercicios ?? []).map((row: any, i: number) => {
+          const repStr = String(row.repeticoes ?? "");
+          const sr = parseSeriesRepsFromRepeticoes(repStr);
+          const ex = row.exercicio || row.exercicioPersonalizado || row.exercicioTemporario;
+          const isCustom = !!row.exercicioPersonalizadoId || !!row.exercicioTemporarioId;
+
           return {
-            exercicioId: String(e.exercicioId ?? ""),
-            ordem: Number(e.ordem ?? i + 1),
-            repeticoes: rep,
+            exercicioId: String(row.exercicioId ?? ""),
+            ordem: Number(row.ordem ?? i + 1),
+            repeticoes: repStr,
             series: sr.series,
             reps: sr.reps,
+            ...(isCustom
+              ? {
+                  isCustom: true,
+                  exercicioPersonalizadoId: row.exercicioPersonalizadoId ? String(row.exercicioPersonalizadoId) : null,
+                  exercicioTemporarioId: row.exercicioTemporarioId ? String(row.exercicioTemporarioId) : null,
+                  customTitulo: String(ex?.nome ?? ""),
+                  customDesc: ex?.descricao ?? "",
+                  customVideoPreviewUrl: normalizeUrl(ex?.videoDemonstrativoUrl),
+                  customVideoUrl: ex?.videoDemonstrativoUrl ? String(ex.videoDemonstrativoUrl) : null,
+                  customVideoFile: null,
+                  customVideoPosterUrl: normalizeUrl(ex?.videoPosterUrl),
+                }
+              : {}),
           };
         }) || [];
+
       setLinhas(loaded);
     };
 
@@ -395,7 +483,7 @@ export default function CriarOuEditarTreino() {
 
     setLinhas((prev) => {
       prev.forEach((l) => {
-        if (l.customVideoPreviewUrl) URL.revokeObjectURL(l.customVideoPreviewUrl);
+        revokeIfBlob(l.customVideoPreviewUrl);
       });
       return [];
     });
@@ -455,9 +543,7 @@ export default function CriarOuEditarTreino() {
   const removerLinha = (idx: number) => {
     setLinhas((prev) => {
       const toRemove = prev[idx];
-      if (toRemove?.customVideoPreviewUrl) {
-        URL.revokeObjectURL(toRemove.customVideoPreviewUrl);
-      }
+      revokeIfBlob(toRemove?.customVideoPreviewUrl);
       const next = prev.filter((_, i) => i !== idx).map((l, i) => ({ ...l, ordem: i + 1 }));
       return next;
     });
@@ -476,13 +562,19 @@ export default function CriarOuEditarTreino() {
     atualizarLinha(idx, { series, reps, repeticoes });
   };
 
+  function revokeIfBlob(url?: string | null) {
+    if (!url || !url.startsWith("blob:")) return;
+    // dá tempo pro React trocar o src antes de revogar
+    setTimeout(() => {
+      try { URL.revokeObjectURL(url); } catch {}
+    }, 3000);
+  }
+
   const onUploadVideoCustom = async (idx: number, file: File | null) => {
     setLinhas((prev) => {
       const next = [...prev];
       const cur = next[idx];
-
-      if (cur?.customVideoPreviewUrl) URL.revokeObjectURL(cur.customVideoPreviewUrl);
-
+      revokeIfBlob(cur?.customVideoPreviewUrl);
       next[idx] = {
         ...cur,
         customVideoFile: null,
@@ -496,11 +588,16 @@ export default function CriarOuEditarTreino() {
 
     const previewUrl = URL.createObjectURL(file);
 
-    let poster: string | null = null;
+    const token = getToken();
+
+    let posterUrlFinal: string | null = null;
     try {
-      poster = await gerarPosterDoVideo(file);
+      const posterDataUrl = await gerarPosterDoVideo(file); // data:image/jpeg;base64...
+      const posterFile = dataUrlToFile(posterDataUrl, `thumb-${Date.now()}.jpg`);
+      const uploadedPosterUrl = await uploadImagem(token, posterFile);
+      posterUrlFinal = uploadedPosterUrl; // ✅ isso é o que vai pro banco
     } catch {
-      poster = null;
+      posterUrlFinal = null;
     }
 
     setLinhas((prev) => {
@@ -510,7 +607,7 @@ export default function CriarOuEditarTreino() {
         ...cur,
         customVideoFile: file,
         customVideoPreviewUrl: previewUrl,
-        customVideoPosterUrl: poster,
+        customVideoPosterUrl: posterUrlFinal, // ✅ URL do backend
       };
       return next;
     });
@@ -519,12 +616,11 @@ export default function CriarOuEditarTreino() {
   const podeIrProximo = useMemo(() => {
     if (step === 1) {
       if (!titulo.trim()) return false;
-      if (!professorId) return false;
       if (!nivelTreino) return false;
       return true;
     }
     return true;
-  }, [step, titulo, professorId, nivelTreino]);
+  }, [step, titulo, nivelTreino]);
 
   const onVoltar = () => {
     if (step === 1) {
@@ -538,7 +634,7 @@ export default function CriarOuEditarTreino() {
   const onProximo = () => {
     if (step === 1) {
       if (!podeIrProximo) {
-        alert("Preencha o título, selecione um professor e o nível.");
+        alert("Preencha o título e o nível.");
         return;
       }
       setStep(2);
@@ -555,15 +651,84 @@ export default function CriarOuEditarTreino() {
       setStep(1);
       return;
     }
-    if (!professorId) {
-      alert("Selecione um professor.");
-      setStep(1);
+
+    const temAlgum = linhas.some((l) => (!!l.exercicioId && !l.isCustom) || (l.isCustom && (l.customTitulo || "").trim()));
+    if (!temAlgum) {
+      alert("Adicione ao menos 1 exercício (do banco ou personalizado).");
+      setStep(2);
       return;
     }
 
-    const exerciciosOficiais = linhas.filter((l) => !l.isCustom && !!l.exercicioId);
-    if (exerciciosOficiais.length === 0) {
-      alert("Adicione ao menos 1 exercício do banco para salvar o treino.");
+    const token = getToken();
+
+    // 1) primeiro sobe os vídeos de linhas custom (se tiver)
+    const linhasComVideo = [...linhas];
+    for (let idx = 0; idx < linhasComVideo.length; idx++) {
+      const l = linhasComVideo[idx];
+      if (l.isCustom && l.customVideoFile) {
+        const up = await uploadVideo(token, l.customVideoFile);
+
+        revokeIfBlob(l.customVideoPreviewUrl); // ✅ solta o blob antigo
+
+        linhasComVideo[idx] = {
+          ...l,
+          customVideoUrl: up.url,
+          customVideoPreviewUrl: up.url, // ✅ PREVIEW AGORA É URL REAL (não blob)
+          customVideoPosterUrl: l.customVideoPosterUrl ?? up.thumbUrl ?? null,
+          customVideoFile: null, // ✅ opcional: limpa o file após subir
+        };
+      }
+    }
+
+    // 2) agora monta o payload usando as URLs já subidas
+    const exerciciosPayload = await Promise.all(
+      linhasComVideo.map(async (l, i) => {
+        const ordem = Number(l.ordem ?? i + 1);
+        const repeticoes = buildRepeticoes(String(l.series ?? ""), String(l.reps ?? ""));
+        
+        // ✅ oficial
+        if (!l.isCustom && l.exercicioId) {
+          return {
+            exercicioId: l.exercicioId,
+            ordem,
+            repeticoes,
+          };
+        }
+
+        // ✅ personalizado/temporário
+        if (l.isCustom) {
+          const nome = String(l.customTitulo || "").trim();
+          if (!nome) return null;
+
+          const descricao = String(l.customDesc || "").trim() || null;
+          // pega a URL do vídeo (ou a que veio do banco, ou a que acabou de subir)
+          const videoDemonstrativoUrl =
+            String(l.customVideoUrl || "").trim() || null;
+
+          // 👇 NOVO: enviar poster gerado do vídeo
+          const videoPosterUrl =
+            String(l.customVideoPosterUrl || "").trim() || null;
+
+          return {
+            exercicioPersonalizadoId: l.exercicioPersonalizadoId ?? null,
+            exercicioTemporarioId: l.exercicioTemporarioId ?? null,
+            nome,
+            descricao,
+            videoDemonstrativoUrl,
+            videoPosterUrl, // ⭐ ESSENCIAL
+            ordem,
+            repeticoes,
+          };
+        }
+
+        return null;
+      })
+    );
+
+    const exerciciosFinal = exerciciosPayload.filter(Boolean);
+
+    if (exerciciosFinal.length === 0) {
+      alert("Adicione ao menos 1 exercício (do banco ou personalizado) para salvar o treino.");
       setStep(2);
       return;
     }
@@ -572,7 +737,7 @@ export default function CriarOuEditarTreino() {
     const tipoUsuarioId =
       (localStorage.getItem("tipoUsuarioId") || sessionStorage.getItem("tipoUsuarioId") || "").trim();
 
-    const payload = {
+    const payload: any = {
       nome: titulo,
       descricao,
       nivel: nivelTreino,
@@ -580,19 +745,13 @@ export default function CriarOuEditarTreino() {
       duracao: duracaoMin,
       tipoUsuario,
       tipoUsuarioId,
-      criadorProfessorId: professorId,
-      professoresColabIds,
+      ...(professorId ? { criadorProfessorId: professorId } : {}), // ✅ opcional na edição
+      professoresColabIds: professoresColabIds,
       ...(catsSelecionadas.length ? { categoria: catsSelecionadas } : {}),
-      exercicios: exerciciosOficiais.map((l, i) => ({
-        exercicioId: l.exercicioId,
-        ordem: Number(l.ordem ?? i + 1),
-        series: String(l.series ?? ""),
-        repeticoes: String(l.reps ?? ""),
-      })),
+      exercicios: exerciciosFinal,
     };
 
     const url = `${API.BASE_URL}/api/treinosprogramados${id ? `/${id}` : ""}`;
-    const token = getToken();
 
     try {
       const formData = new FormData();
@@ -753,7 +912,6 @@ export default function CriarOuEditarTreino() {
                     className="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
                     value={professorId}
                     onChange={(e) => setProfessorId(e.target.value)}
-                    required
                   >
                     <option value="">Selecione um professor</option>
                     {professoresDisponiveis.map((p) => (
@@ -895,7 +1053,7 @@ export default function CriarOuEditarTreino() {
 
                                   <button
                                     type="button"
-                                    onClick={() => openVideo(exVideo, ex?.nome || "Vídeo do exercício")}
+                                    onClick={() => openVideo(normalizeUrl(exVideo), ex?.nome || "Vídeo do exercício")}
                                     className="absolute inset-0 grid place-items-center bg-black/25 text-white"
                                     title="Assistir vídeo"
                                   >
@@ -910,13 +1068,13 @@ export default function CriarOuEditarTreino() {
                                 <>
                                   {l.customVideoPosterUrl ? (
                                     <img
-                                      src={l.customVideoPosterUrl}
+                                      src={normalizeUrl(l.customVideoPosterUrl)}
                                       alt="Thumb do vídeo"
                                       className="absolute inset-0 h-full w-full object-cover"
                                     />
                                   ) : (
                                     <video
-                                      src={l.customVideoPreviewUrl}
+                                      src={normalizeUrl(l.customVideoPreviewUrl)}
                                       muted
                                       playsInline
                                       preload="metadata"
@@ -926,7 +1084,10 @@ export default function CriarOuEditarTreino() {
 
                                   <button
                                     type="button"
-                                    onClick={() => openVideo(l.customVideoPreviewUrl || "", l.customTitulo || "Vídeo")}
+                                    onClick={() => openVideo(
+                                      normalizeUrl(l.customVideoUrl || l.customVideoPreviewUrl || ""),
+                                      l.customTitulo || "Vídeo"
+                                    )}
                                     className="absolute inset-0 grid place-items-center bg-black/25 text-white"
                                     title="Assistir vídeo"
                                   >
@@ -1162,7 +1323,7 @@ export default function CriarOuEditarTreino() {
                                     {exVideo ? (
                                       <button
                                         type="button"
-                                        onClick={() => openVideo(exVideo, ex.nome || "Vídeo do exercício")}
+                                        onClick={() => openVideo(normalizeUrl(exVideo), ex.nome || "Vídeo do exercício")}
                                         className="absolute inset-0 grid place-items-center bg-black/60"
                                         title="Assistir vídeo"
                                       >
@@ -1266,4 +1427,4 @@ export default function CriarOuEditarTreino() {
                 </div>
                 </div>
                 );
-                }
+ }

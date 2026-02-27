@@ -206,8 +206,14 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
     if (!Array.isArray(exercicios) || exercicios.length === 0) {
       return res.status(400).json({ message: "Informe ao menos um exercício no treino." });
     }
-    if (exercicios.some((e: any) => !(e.exercicioId || e.id))) {
-      return res.status(400).json({ message: "Todos os exercícios devem possuir 'exercicioId'." });
+    if (exercicios.some((e: any) => {
+      const id = String(e?.exercicioId ?? e?.id ?? "").trim();
+      const nome = String(e?.nome ?? "").trim();
+      return !id && !nome;
+    })) {
+      return res.status(400).json({
+        message: "Cada exercício precisa ter 'exercicioId' (catálogo) OU 'nome' (personalizado).",
+      });
     }
 
     const owner = assertOwnerIdsFromBodyOrReq(req.body);
@@ -274,11 +280,80 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       });
     }
 
-    const itens = (exercicios as any[]).map((e: any, i: number) => ({
-      exercicioId: String(e.exercicioId ?? e.id ?? "").trim(),
-      ordem: Number(e.ordem ?? i + 1),
-      repeticoes: toRepeticoes(e.series ?? e.serie, e.repeticoes), 
-    }));
+    const viewerUserId = String((req as any).user?.id || "").trim();
+    if (!viewerUserId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    const itens = await Promise.all(
+      (exercicios as any[]).map(async (e: any, i: number) => {
+        const exercicioId = String(e?.exercicioId ?? e?.id ?? "").trim();
+        const ordem = Number(e?.ordem ?? i + 1);
+
+        // repeticoes: o front já manda "3x 12" em muitos casos
+        // mas pra manter compatível com seu código atual:
+        const repeticoes = toRepeticoes(e?.series ?? e?.serie, e?.repeticoes);
+
+        // ✅ 1) Exercício do catálogo
+        if (exercicioId) {
+          return { exercicioId, ordem, repeticoes };
+        }
+
+        // ✅ 2) Exercício personalizado
+        const nome = String(e?.nome ?? "").trim();
+        const descricao = e?.descricao != null ? String(e.descricao) : null;
+
+        // opcional
+        const videoDemonstrativoUrl =
+          e?.videoDemonstrativoUrl != null ? String(e.videoDemonstrativoUrl) : null;
+
+        const videoPosterUrl = e?.videoPosterUrl != null ? String(e.videoPosterUrl) : null;
+        // se vier nivel/categorias no treino, dá pra salvar junto
+        const nivelDoTreino = nivel ? normNivel(nivel) : null;
+        const categoriasDoTreino: Categoria[] = Array.isArray(categoria)
+          ? (categoria.map(normCategoria) as Categoria[])
+          : [];
+
+        // procura por nome (único por criador)
+        const existente = await prisma.exercicioPersonalizado.findFirst({
+          where: { criadorUsuarioId: viewerUserId, nome },
+          select: { id: true },
+        });
+
+        if (existente?.id && (videoDemonstrativoUrl || videoPosterUrl)) {
+          await prisma.exercicioPersonalizado.update({
+            where: { id: existente.id },
+            data: {
+              ...(videoDemonstrativoUrl ? { videoDemonstrativoUrl } : {}),
+              ...(videoPosterUrl ? { videoPosterUrl } : {}),
+            },
+          });
+        }
+
+        const personalizadoId = existente?.id
+          ? existente.id
+          : (
+              await prisma.exercicioPersonalizado.create({
+                data: {
+                  nome,
+                  descricao,
+                  nivel: nivelDoTreino,
+                  categorias: categoriasDoTreino,
+                  videoDemonstrativoUrl,
+                  videoPosterUrl,
+                  criadorUsuarioId: viewerUserId,
+                },
+                select: { id: true },
+              })
+            ).id;
+
+        return {
+          exercicioPersonalizadoId: personalizadoId,
+          ordem,
+          repeticoes,
+        };
+      })
+    );
 
     if (owner.dono === "Professor") {
       const profExiste = await prisma.professor.findUnique({
@@ -304,9 +379,12 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       if (!escExiste) return res.status(400).json({ message: "Escolinha dona inválida." });
     }
 
-    const colabs = Array.isArray((req.body as any).professoresColabIds)
-      ? (req.body as any).professoresColabIds
-      : [];
+    const colabs =
+      Array.isArray((req.body as any).professoresColabIds)
+        ? (req.body as any).professoresColabIds
+        : Array.isArray((req.body as any).colaboradoresProfessorIds)
+        ? (req.body as any).colaboradoresProfessorIds
+        : [];
 
     const donoProfessorId = owner.dono === "Professor" ? owner.professorId : null;
     const allProfIds = Array.from(
@@ -353,7 +431,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             criadorProfessor: { include: { usuario: true } },
             clube: true,
             escolinha: true,
-            exercicios: { include: { exercicio: true } },
+            exercicios: { include: { exercicio: true, exercicioPersonalizado: true } },
           },
         });
 
@@ -370,17 +448,18 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         const professorIdForStats =
           normalizarTipoUsuario(tipoUsuario) === "Professor" ? String(tipoUsuarioId) : undefined;
 
+        const exerciciosOficiaisIds = (itens || [])
+          .map((i: any) => i?.exercicioId)
+          .filter((id: any): id is string => typeof id === "string" && id.trim().length > 0);
+
         await Promise.all(
-          (itens || [])
-            .map((i) => i.exercicioId)
-            .filter((id) => typeof id === "string" && id)
-            .map((exercicioId: string) =>
-              onExercicioIncluidoNoTreino({
-                treinoId: treinoCriado.id,
-                exercicioId,
-                professorId: professorIdForStats,
-              })
-            )
+          exerciciosOficiaisIds.map((exercicioId) =>
+            onExercicioIncluidoNoTreino({
+              treinoId: treinoCriado.id,
+              exercicioId,
+              professorId: professorIdForStats,
+            })
+          )
         );
 
         // ✅ AGENDAR ATLETAS (continua dentro do mesmo try)
@@ -441,7 +520,7 @@ export const getTreinoById = async (req: Request, res: Response) => {
         criadorProfessor: { include: { usuario: true } }, 
         clube: true,
         escolinha: true,
-        exercicios: { include: { exercicio: true } },
+        exercicios: { include: { exercicio: true, exercicioPersonalizado: true } },
       }
     });
     if (!treino) return res.status(404).json({ message: "Treino não encontrado." });
@@ -495,11 +574,81 @@ export async function updateTreino(req: Request, res: Response) {
       if (dono === "Escolinha") dataDono.escolinha = { connect: { id: tipoUsuarioId } };
     }
 
-    const itens = (exercicios as any[]).map((e: any, i: number) => ({
-      exercicioId: String(e.exercicioId ?? e.id ?? "").trim(),
-      ordem: Number(e.ordem ?? i + 1),
-      repeticoes: toRepeticoes(e.series ?? e.serie, e.repeticoes), 
-    }));
+    const viewerUserId = String((req as any).user?.id || "").trim();
+    if (!viewerUserId) {
+      return res.status(401).json({ message: "Usuário não autenticado." });
+    }
+
+    const itens = await Promise.all(
+      (exercicios as any[]).map(async (e: any, i: number) => {
+        const exercicioId = String(e?.exercicioId ?? e?.id ?? "").trim();
+        const ordem = Number(e?.ordem ?? i + 1);
+
+        // repeticoes: o front já manda "3x 12" em muitos casos
+        // mas pra manter compatível com seu código atual:
+        const repeticoes = toRepeticoes(e?.series ?? e?.serie, e?.repeticoes);
+
+        // ✅ 1) Exercício do catálogo
+        if (exercicioId) {
+          return { exercicioId, ordem, repeticoes };
+        }
+
+        // ✅ 2) Exercício personalizado
+        const nome = String(e?.nome ?? "").trim();
+        const descricao = e?.descricao != null ? String(e.descricao) : null;
+
+        // opcional
+        const videoDemonstrativoUrl =
+          e?.videoDemonstrativoUrl != null ? String(e.videoDemonstrativoUrl) : null;
+
+        const videoPosterUrl =
+  e?.videoPosterUrl != null ? String(e.videoPosterUrl) : null;
+        // se vier nivel/categorias no treino, dá pra salvar junto
+        const nivelDoTreino = nivel ? normNivel(nivel) : null;
+        const categoriasDoTreino: Categoria[] = Array.isArray(categoria)
+          ? (categoria.map(normCategoria) as Categoria[])
+          : [];
+
+        // procura por nome (único por criador)
+        const existente = await prisma.exercicioPersonalizado.findFirst({
+          where: { criadorUsuarioId: viewerUserId, nome },
+          select: { id: true },
+        });
+
+        if (existente?.id && (videoDemonstrativoUrl || videoPosterUrl)) {
+          await prisma.exercicioPersonalizado.update({
+            where: { id: existente.id },
+            data: {
+              ...(videoDemonstrativoUrl ? { videoDemonstrativoUrl } : {}),
+              ...(videoPosterUrl ? { videoPosterUrl } : {}),
+            },
+          });
+        }
+
+        const personalizadoId = existente?.id
+          ? existente.id
+          : (
+              await prisma.exercicioPersonalizado.create({
+                data: {
+                  nome,
+                  descricao,
+                  nivel: nivelDoTreino,
+                  categorias: categoriasDoTreino,
+                  videoDemonstrativoUrl,
+                  videoPosterUrl,
+                  criadorUsuarioId: viewerUserId,
+                },
+                select: { id: true },
+              })
+            ).id;
+
+        return {
+          exercicioPersonalizadoId: personalizadoId,
+          ordem,
+          repeticoes,
+        };
+      })
+    );
 
     const antigos = await prisma.treinoProgramadoExercicio.findMany({
       where: { treinoProgramadoId: id },
@@ -557,7 +706,7 @@ export async function updateTreino(req: Request, res: Response) {
         clube: true,
         escolinha: true,
         professores: { include: { professor: { include: { usuario: true } } } },
-        exercicios: { include: { exercicio: true } },
+        exercicios: { include: { exercicio: true, exercicioPersonalizado: true } },
       },
     });
 
@@ -696,7 +845,7 @@ export const getAllTreinos = async (req: Request, res: Response) => {
           clube: true,
           escolinha: true,
           professores: { include: { professor: { include: { usuario: true } } } },
-          exercicios: { include: { exercicio: true } },
+          exercicios: { include: { exercicio: true, exercicioPersonalizado: true } },
         },
       });
 
@@ -735,7 +884,7 @@ export const getAllTreinos = async (req: Request, res: Response) => {
         professores: {
           include: { professor: { include: { usuario: true } } },
         },
-        exercicios: { include: { exercicio: true } },
+        exercicios: { include: { exercicio: true, exercicioPersonalizado: true } },
       },
     });
 
