@@ -23,6 +23,7 @@ type ExercicioItem = {
   repeticoes?: string | null;
   descricao?: string | null;
   videoUrl?: string | null;
+  nivel?: string | null;
 };
 
 type OrigemInfo = {
@@ -69,9 +70,9 @@ const mediaUrl = (u?: string | null) => {
   if (!u) return "";
   if (u.startsWith("http")) return u;
   if (u.startsWith("/assets/")) return `${APP.FRONTEND_BASE_URL}${u}`;
-  if (u.startsWith("/uploads/")) return `${API.BASE_URL}${u}`;
-  
-  return `${API.BASE_URL}${u}`;
+  if (u.startsWith("/uploads/") || u.startsWith("/upload/")) return `${API.BASE_URL}${u}`;
+  if (u.startsWith("/")) return `${API.BASE_URL}${u}`;
+  return `${API.BASE_URL}/${u}`;
 };
 
 function Stars({ value }: { value: number }) {
@@ -117,17 +118,23 @@ export default function TreinoUnico() {
         setLoading(true);
         setErro(null);
 
-        const qs = agendadoId
-          ? `agendadoId=${encodeURIComponent(agendadoId)}`
-          : `programadoId=${encodeURIComponent(programadoId || "")}`;
+        if (programadoId) {
+          const qs = `programadoId=${encodeURIComponent(programadoId)}`;
+          const res = await fetch(`${API.BASE_URL}/api/treino-unico?${qs}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (!res.ok) throw new Error(`(${res.status}) ${await res.text()}`);
+          const json = await res.json(); // já vem no formato TreinoUnicoPayload
+          setTreino(json);
+          return;
+        }
 
+        // ✅ 2) SE FOR AGENDADO: mantém seu endpoint atual
+        const qs = `agendadoId=${encodeURIComponent(agendadoId || "")}`;
         const res = await fetch(`${API.BASE_URL}/api/treino-unico?${qs}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
-        if (!res.ok) {
-          const txt = await res.text();
-          throw new Error(`(${res.status}) ${txt}`);
-        }
+        if (!res.ok) throw new Error(`(${res.status}) ${await res.text()}`);
         const json = (await res.json()) as TreinoUnicoPayload;
         setTreino(json);
       } catch (e: any) {
@@ -397,6 +404,12 @@ export default function TreinoUnico() {
                           {i + 1}. {ex.nome}
                         </div>
 
+                        {ex.nivel ? (
+                          <div className="text-xs text-gray-500 mt-1">
+                            <span className="font-medium">Nível:</span> {ex.nivel}
+                          </div>
+                        ) : null}
+                        
                         <div className="mt-1 text-sm text-gray-700">
                           {ex.repeticoes ? (
                             <div className="text-gray-700">
