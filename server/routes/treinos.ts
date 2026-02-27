@@ -40,6 +40,7 @@ import {
   realizadosCount,
   treinosPublicosProfessoresParceiros,
   listarAlunosTreinoAgendadoTurma,
+  listarExerciciosPersonalizados
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
@@ -103,6 +104,7 @@ router.get("/disponiveis", treinosDisponiveis);
 router.get("/publicos-professores-parceiros", treinosPublicosProfessoresParceiros);
 router.get("/atletas-vinculados", atletasVinculados);
 router.post("/restaurar", restaurarTreinos);
+router.get("/exercicios/personalizados", listarExerciciosPersonalizados);
 router.get("/exercicios", getExercicios);
 router.get("/pontuacoes", getPontuacoes);
 router.get("/desafios-semanais", statusDesafiosSemanais);

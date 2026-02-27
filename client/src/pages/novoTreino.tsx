@@ -97,24 +97,47 @@ export function montarPayloadSomenteInfoEExercicios(params: {
   } = params;
 
   const exercicios = (exerciciosSelecionados ?? [])
-    .map((it, idx) => {
-      const rawId = it.exercicioId ?? it.id ?? "";
-      const exercicioId = String(rawId).trim();
+    .map((it: any, idx: number) => {
+      const rawId = it.exercicioId ?? it.idCatalogo ?? it.id ?? "";
+      const exercicioId = String(rawId || "").trim();
+
+      const nomeCustom = String(it.nome || "").trim();
+      const descCustom = String(it.descricao || "").trim();
 
       const repsFinal =
-        formatSerieXReps((it as any).series ?? null, it.repeticoes) ??
+        formatSerieXReps(it.series ?? null, it.repeticoes) ??
         toRepeticoesStr(it.repeticoes);
 
-      return {
-        exercicioId,
+      const base = {
         ordem: Number.isFinite(Number(it.ordem)) ? Number(it.ordem) : idx + 1,
-        // ✅ SALVA "3x12" dentro de repeticoes
         repeticoes: repsFinal,
-        // 🚫 NÃO manda "series" porque seu schema não tem essa coluna
-        descansoSeg: (it as any).descansoSeg ?? null,
+        descansoSeg: it.descansoSeg ?? null,
       };
+
+      // ✅ exercício do catálogo
+      if (exercicioId) {
+        return { ...base, exercicioId };
+      }
+
+      // ✅ exercício personalizado (vai para outra tabela no backend)
+      if (nomeCustom) {
+        return {
+          ...base,
+          exercicioPersonalizado: {
+            nome: nomeCustom,
+            descricao: descCustom || null,
+            // você não tem nível/categorias por exercício na UI,
+            // então usamos o nível/categorias do treino:
+            nivel,
+            categorias: Array.isArray(categoria) ? categoria : [],
+            videoDemonstrativoUrl: it.videoUrl ?? null,
+          },
+        };
+      }
+
+      return null;
     })
-    .filter((x) => !!x.exercicioId);
+    .filter(Boolean);
 
     const payload: any = {
       nome: (titulo ?? "").trim(),
@@ -640,15 +663,6 @@ function saveState(partial: any) {
   } catch {}
 }
 
-function getQueryParam(search: string, key: string) {
-    try {
-      const s = search.startsWith("?") ? search : `?${search}`;
-      return new URLSearchParams(s).get(key);
-    } catch {
-      return null;
-    }
- }
-
 function Stepper({
   steps,
   current,
@@ -918,219 +932,218 @@ export default function NovoTreino() {
     ).trim();
   }, []);
 
-useEffect(() => {
-  let cancel = false;
+  useEffect(() => {
+    let cancel = false;
 
-  (async () => {
-    try {
-      const tipo = String(
-        (Storage as any).tipoSalvo ??
-          localStorage.getItem("tipoUsuario") ??
-          sessionStorage.getItem("tipoUsuario") ??
-          ""
-      )
-        .trim()
-        .toLowerCase();
-
-      // só faz sentido para professor
-      if (tipo !== "professor") {
-        if (!cancel) setIsParceiro(false);
-        return;
-      }
-
-      const token = getToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
-      // rota que você mostrou no print (GET /api/professores)
-      const r = await fetch(`${API.BASE_URL}/api/professores`, { headers });
-      if (!r.ok) throw new Error(await r.text());
-
-      const j = await r.json().catch(() => null);
-      const arr = Array.isArray(j) ? j : (j?.items ?? j?.data ?? []);
-
-      // acha o professor logado no retorno
-      const me = (arr || []).find((p: any) => String(p?.id) === String(professorLogadoId));
-
-      // tenta ler o flag em chaves comuns
-      const parceiro =
-        Boolean(
-          me?.parceiro ??
-            me?.isParceiro ??
-            me?.usuario?.parceiro ??
-            me?.usuario?.isParceiro ??
-            me?.perfil?.parceiro ??
-            false
-        );
-
-      if (cancel) return;
-
-      // seta state local
-      setIsParceiro(parceiro);
-
-      // persiste para o seu useMemo "podePublicarFootera" funcionar
+    (async () => {
       try {
-        (Storage as any).parceiro = parceiro;
-      } catch {}
-      localStorage.setItem("parceiro", String(parceiro));
-      sessionStorage.setItem("parceiro", String(parceiro));
+        const tipo = String(
+          (Storage as any).tipoSalvo ??
+            localStorage.getItem("tipoUsuario") ??
+            sessionStorage.getItem("tipoUsuario") ??
+            ""
+        )
+          .trim()
+          .toLowerCase();
 
-      // se o cara deixou de ser parceiro, garante que o toggle não fica ligado
-      if (!parceiro) setTreinoFootera(false);
-    } catch (e) {
-      console.warn("[NovoTreino] falha ao verificar parceiro:", e);
-      if (!cancel) {
-        setIsParceiro(false);
+        // só faz sentido para professor
+        if (tipo !== "professor") {
+          if (!cancel) setIsParceiro(false);
+          return;
+        }
+
+        const token = getToken();
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+        // rota que você mostrou no print (GET /api/professores)
+        const r = await fetch(`${API.BASE_URL}/api/professores`, { headers });
+        if (!r.ok) throw new Error(await r.text());
+
+        const j = await r.json().catch(() => null);
+        const arr = Array.isArray(j) ? j : (j?.items ?? j?.data ?? []);
+
+        // acha o professor logado no retorno
+        const me = (arr || []).find((p: any) => String(p?.id) === String(professorLogadoId));
+
+        // tenta ler o flag em chaves comuns
+        const parceiro =
+          Boolean(
+            me?.parceiro ??
+              me?.isParceiro ??
+              me?.usuario?.parceiro ??
+              me?.usuario?.isParceiro ??
+              me?.perfil?.parceiro ??
+              false
+          );
+
+        if (cancel) return;
+
+        // seta state local
+        setIsParceiro(parceiro);
+
+        // persiste para o seu useMemo "podePublicarFootera" funcionar
         try {
-          (Storage as any).parceiro = false;
+          (Storage as any).parceiro = parceiro;
         } catch {}
-        localStorage.setItem("parceiro", "false");
-        sessionStorage.setItem("parceiro", "false");
-        setTreinoFootera(false);
-      }
-    }
-  })();
+        localStorage.setItem("parceiro", String(parceiro));
+        sessionStorage.setItem("parceiro", String(parceiro));
 
-  return () => {
-    cancel = true;
-  };
-}, [professorLogadoId]);
-
-
-  useEffect(() => {
-  let cancel = false;
-
-  (async () => {
-    try {
-      const token = getToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
-      const r = await fetch(`${API.BASE_URL}/api/professores`, { headers });
-      if (!r.ok) throw new Error(await r.text());
-
-      const j = await r.json();
-      const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? []);
-
-      const norm: ProfessorItem[] = (arr || []).map((p: any) => ({
-        id: String(p.id),
-        nome: String(p.nome ?? p.usuario?.nome ?? "Professor"),
-        codigo: p.codigo ? String(p.codigo) : undefined,
-        cref: p.cref ? String(p.cref) : undefined,
-      }));
-
-      const filtrados = professorLogadoId
-        ? norm.filter((p) => String(p.id) !== String(professorLogadoId))
-        : norm;
-
-      if (!cancel) setProfessores(filtrados);
-    } catch (e) {
-      console.error("Erro ao carregar professores:", e);
-      if (!cancel) setProfessores([]);
-    }
-  })();
-
-  return () => { cancel = true; };
-}, [professorLogadoId]);
-
-  useEffect(() => {
-  let cancel = false;
-
-  (async () => {
-    try {
-      const token =
-        (Storage as any).token ||
-        localStorage.getItem("token") ||
-        sessionStorage.getItem("token") ||
-        "";
-
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
-      const urls = [
-        `${API.BASE_URL}/api/exercicios`,
-        `${API.BASE_URL}/api/exercicios?ativos=1`,
-        `${API.BASE_URL}/api/exercicios/listar`,
-      ];
-
-      let arr: any[] = [];
-      for (const url of urls) {
-        const r = await fetch(url, { headers });
-        const txt = await r.text();
-
-        if (!r.ok) {
-          console.warn("[NovoTreino] falha:", r.status, txt);
-          continue;
-        }
-
-        let j: any = null;
-        try {
-          j = txt ? JSON.parse(txt) : null;
-        } catch {
-          j = null;
-        }
-
-        const list = Array.isArray(j)
-          ? j
-          : j?.items ?? j?.data ?? j?.rows ?? j?.result ?? [];
-
-        if (Array.isArray(list) && list.length) {
-          arr = list;
-          break;
+        // se o cara deixou de ser parceiro, garante que o toggle não fica ligado
+        if (!parceiro) setTreinoFootera(false);
+      } catch (e) {
+        console.warn("[NovoTreino] falha ao verificar parceiro:", e);
+        if (!cancel) {
+          setIsParceiro(false);
+          try {
+            (Storage as any).parceiro = false;
+          } catch {}
+          localStorage.setItem("parceiro", "false");
+          sessionStorage.setItem("parceiro", "false");
+          setTreinoFootera(false);
         }
       }
+    })();
 
-      const normalizados: Exercicio[] = (arr || [])
-        .map((e: any) => {
-          const video =
-            e.videoDemonstrativoUrl ??
-            e.videoDemonstrativoURL ??
-            e.videoUrl ??
-            e.video ??
-            e.midiaUrl ??
-            e?.midia?.url ??
-            null;
+    return () => {
+      cancel = true;
+    };
+  }, [professorLogadoId]);
 
-          const cats =
-            e.categorias ??
-            e.categoria ??
-            e.categoriaBase ??
-            e.faixaEtaria ??
-            [];
+  useEffect(() => {
+    let cancel = false;
 
-          const categoriasArray = Array.isArray(cats)
-            ? cats.map(String)
-            : cats
-            ? [String(cats)]
-            : [];
+    (async () => {
+      try {
+        const token = getToken();
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-          return {
-            id: String(e.id),
-            nome: String(e.nome ?? e.titulo ?? ""),
-            descricao: e.descricao ?? e.desc ?? "",
-            nivel: e.nivel ?? e.dificuldade ?? null,
-            repeticoes: e.repeticoes ?? e.reps ?? "",
-            videoDemonstrativoUrl: video ? String(video) : undefined,
-            categorias: categoriasArray,
-            duracaoMinutos:
-              typeof e.duracaoMinutos === "number"
-                ? e.duracaoMinutos
-                : typeof e.duracao === "number"
-                ? e.duracao
-                : null,
-            tipoTreino: e.tipoTreino ?? null,
-          } as Exercicio;
-        })
-        .filter((x) => x.id && x.nome);
+        const r = await fetch(`${API.BASE_URL}/api/professores`, { headers });
+        if (!r.ok) throw new Error(await r.text());
 
-      if (!cancel) setExerciciosDisponiveis(normalizados);
-    } catch (err) {
-      console.error("[NovoTreino] erro ao carregar exercicios:", err);
-      if (!cancel) setExerciciosDisponiveis([]);
-    }
-  })();
+        const j = await r.json();
+        const arr = Array.isArray(j) ? j : (j.items ?? j.data ?? []);
 
-  return () => {
-    cancel = true;
-  };
-}, []);
+        const norm: ProfessorItem[] = (arr || []).map((p: any) => ({
+          id: String(p.id),
+          nome: String(p.nome ?? p.usuario?.nome ?? "Professor"),
+          codigo: p.codigo ? String(p.codigo) : undefined,
+          cref: p.cref ? String(p.cref) : undefined,
+        }));
+
+        const filtrados = professorLogadoId
+          ? norm.filter((p) => String(p.id) !== String(professorLogadoId))
+          : norm;
+
+        if (!cancel) setProfessores(filtrados);
+      } catch (e) {
+        console.error("Erro ao carregar professores:", e);
+        if (!cancel) setProfessores([]);
+      }
+    })();
+
+    return () => { cancel = true; };
+  }, [professorLogadoId]);
+
+  useEffect(() => {
+    let cancel = false;
+
+    (async () => {
+      try {
+        const token =
+          (Storage as any).token ||
+          localStorage.getItem("token") ||
+          sessionStorage.getItem("token") ||
+          "";
+
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+        const urls = [
+          `${API.BASE_URL}/api/exercicios`,
+          `${API.BASE_URL}/api/exercicios?ativos=1`,
+          `${API.BASE_URL}/api/exercicios/listar`,
+        ];
+
+        let arr: any[] = [];
+        for (const url of urls) {
+          const r = await fetch(url, { headers });
+          const txt = await r.text();
+
+          if (!r.ok) {
+            console.warn("[NovoTreino] falha:", r.status, txt);
+            continue;
+          }
+
+          let j: any = null;
+          try {
+            j = txt ? JSON.parse(txt) : null;
+          } catch {
+            j = null;
+          }
+
+          const list = Array.isArray(j)
+            ? j
+            : j?.items ?? j?.data ?? j?.rows ?? j?.result ?? [];
+
+          if (Array.isArray(list) && list.length) {
+            arr = list;
+            break;
+          }
+        }
+
+        const normalizados: Exercicio[] = (arr || [])
+          .map((e: any) => {
+            const video =
+              e.videoDemonstrativoUrl ??
+              e.videoDemonstrativoURL ??
+              e.videoUrl ??
+              e.video ??
+              e.midiaUrl ??
+              e?.midia?.url ??
+              null;
+
+            const cats =
+              e.categorias ??
+              e.categoria ??
+              e.categoriaBase ??
+              e.faixaEtaria ??
+              [];
+
+            const categoriasArray = Array.isArray(cats)
+              ? cats.map(String)
+              : cats
+              ? [String(cats)]
+              : [];
+
+            return {
+              id: String(e.id),
+              nome: String(e.nome ?? e.titulo ?? ""),
+              descricao: e.descricao ?? e.desc ?? "",
+              nivel: e.nivel ?? e.dificuldade ?? null,
+              repeticoes: e.repeticoes ?? e.reps ?? "",
+              videoDemonstrativoUrl: (e as any).videoDemonstrativoUrl ?? null,
+              categorias: categoriasArray,
+              duracaoMinutos:
+                typeof e.duracaoMinutos === "number"
+                  ? e.duracaoMinutos
+                  : typeof e.duracao === "number"
+                  ? e.duracao
+                  : null,
+              tipoTreino: e.tipoTreino ?? null,
+            } as Exercicio;
+          })
+          .filter((x) => x.id && x.nome);
+
+        if (!cancel) setExerciciosDisponiveis(normalizados);
+      } catch (err) {
+        console.error("[NovoTreino] erro ao carregar exercicios:", err);
+        if (!cancel) setExerciciosDisponiveis([]);
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, []);
 
   useEffect(() => {
     const ehFree = detectarSeFree();
@@ -1167,9 +1180,23 @@ useEffect(() => {
     }
   }, [datasAgendamento]);
 
-  const routeStr = typeof location === "string" ? location : String((location as any)?.href ?? "");
-  const MOSTRAR_TODOS = "__todos__";
+  const DRAFT_KEY = `novoTreino:draft:exercicios:${usuarioId || "anon"}`;
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(exerciciosSelecionados || []));
+    } catch {}
+  }, [DRAFT_KEY, exerciciosSelecionados]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) setExerciciosSelecionados(JSON.parse(raw));
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [DRAFT_KEY]);
+
+  const MOSTRAR_TODOS = "__todos__";
   const score = useMemo(
     () => calcularPontuacaoTreino(nivel, tipoTreino, duracao, exerciciosSelecionados),
     [nivel, tipoTreino, duracao, exerciciosSelecionados],
@@ -2533,7 +2560,7 @@ useEffect(() => {
   const limparProgressoETela = () => {
     sessionStorage.removeItem(SAVE_KEY);
     sessionStorage.removeItem(RESTORE_FLAG_KEY);
-
+    localStorage.removeItem(DRAFT_KEY);
     setEtapa(1);
     setCompletedUntil(1);
     setNome("");
@@ -2603,12 +2630,13 @@ useEffect(() => {
         })) as any,
       );
 
-      const exerciciosValidos = exerciciosSelecionados.filter((x: any) => {
-        const id = x?.exercicioId ?? x?.idCatalogo ?? x?.id;
-        return !!id;
+      const exerciciosValidos = (exerciciosSelecionados || []).filter((x: any) => {
+        const id = x?.exercicioId ?? x?.idCatalogo ?? x?.exercicio?.id ?? x?.id ?? null;
+        const nome = typeof x?.nome === "string" ? x.nome.trim() : "";
+        return !!id || !!nome;
       });
 
-      if (exerciciosValidos.length !== exerciciosSelecionados.length) {
+      if (exerciciosValidos.length !== (exerciciosSelecionados || []).length) {
         const renumerado = exerciciosValidos.map((x: any, i: number) => ({ ...x, ordem: i + 1 }));
         setExerciciosSelecionados(renumerado);
       }
@@ -2620,11 +2648,14 @@ useEffect(() => {
             Date.now().toString(36)
           : "TP-" + Date.now().toString(36);
 
-      const exValidos = exerciciosSelecionados.filter(
-        (ex: any) => ex?.exercicioId || ex?.idCatalogo || ex?.id
-      );
+      const exValidos = exerciciosSelecionados.filter((ex: any) => {
+        const temId = !!(ex?.exercicioId || ex?.idCatalogo || ex?.id);
+        const temNome = !!String(ex?.nome || "").trim();
+        return temId || temNome;
+      });
+
       if (!exValidos.length) {
-        showToast("Selecione pelo menos 1 exercício válido.", "error");
+        showToast("Adicione pelo menos 1 exercício (catálogo ou personalizado).", "error");
         return;
       }
 
@@ -2672,6 +2703,7 @@ useEffect(() => {
             exercicioId: exercicioId ? String(exercicioId) : null,
             nome: nomeTemp || e.nome,
             ordem: e.ordem ?? idx + 1,
+            videoDemonstrativoUrl: (e as any).videoDemonstrativoUrl ?? null,
             repeticoes:
               e.repeticoes ??
               e.repeticoesStr ??
@@ -2740,22 +2772,55 @@ useEffect(() => {
             ? String(e.repeticoes)
             : "");
 
-        if (e.exercicioId) {
+        // ✅ pega vídeo/poster (e ignora blob:)
+        const videoRaw = e.videoDemonstrativoUrl ?? e.videoUrl ?? null;
+        const videoFinal =
+          videoRaw && typeof videoRaw === "string" && videoRaw.startsWith("blob:")
+            ? null
+            : videoRaw
+            ? String(videoRaw)
+            : null;
+
+        const posterRaw = e.videoPosterUrl ?? null;
+        const posterFinal =
+          posterRaw && typeof posterRaw === "string" && posterRaw.startsWith("blob:")
+            ? null
+            : posterRaw
+            ? String(posterRaw)
+            : null;
+
+        const forcePersonalizado =
+          !!videoFinal || !!posterFinal || !!String(e.exercicioPersonalizadoId ?? "").trim();
+
+        // nome fallback (importante quando forçar personalizado mesmo tendo exercicioId)
+        const nomeFinal =
+          String(e.nome || "").trim() ||
+          String(e.exercicio?.nome || "").trim() ||
+          String(e.nomeCatalogo || "").trim() ||
+          "";
+
+        // ✅ Se for exercício de catálogo e NÃO tem mídia -> manda como oficial
+        if (e.exercicioId && !forcePersonalizado) {
           return {
             exercicioId: String(e.exercicioId),
             ordem: Number(e.ordem ?? idx + 1),
-            // ✅ aqui vai "3x12"
             repeticoes: repeticoesFinal,
             observacao: e.observacao ?? null,
           };
         }
 
+        // ✅ Se tem mídia/poster (ou já é personalizado), manda como personalizado
+        // IMPORTANTÍSSIMO: não mandar exercicioId aqui, senão o backend cai no createMany "oficial" e ignora mídia.
         return {
           nome: String(e.nome || "").trim(),
           ordem: Number(e.ordem ?? idx + 1),
-          // ✅ aqui vai "3x12"
           repeticoes: repeticoesFinal,
           observacao: e.observacao ?? null,
+
+          // ✅ AQUI está o que estava faltando:
+          exercicioPersonalizadoId: e.exercicioPersonalizadoId ? String(e.exercicioPersonalizadoId) : null,
+          videoDemonstrativoUrl: e.videoDemonstrativoUrl ?? e.videoUrl ?? null,
+          videoPosterUrl: e.videoPosterUrl ?? null,
         };
       });
 
@@ -4081,7 +4146,7 @@ useEffect(() => {
               </div>
             )}
 
-            <div className="my-4 p-3 border rounded-md">
+            {/* <div className="my-4 p-3 border rounded-md">
               <div className="mb-3 flex items-end gap-2">
                 <div className="flex-1">
                   <label className="block text-sm text-gray-700 mb-1">
@@ -4122,7 +4187,7 @@ useEffect(() => {
                   + Criar turma com selecionados
                 </button>
               </div>
-            </div>
+            </div> */}
 
             <div className="my-4 p-3 border rounded-md bg-gray-50">
               <div className="flex items-start gap-2 mb-3">
