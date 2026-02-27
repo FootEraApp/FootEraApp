@@ -100,7 +100,8 @@ model Usuario {
   metodologiasCriadas   Metodologia[]          @relation("MetodologiaCriador")
   metodologiasAssinadas MetodologiaAssinante[]
 
-  LoginEvent LoginEvent[]
+  LoginEvent             LoginEvent[]
+  ExercicioPersonalizado ExercicioPersonalizado[]
 
   @@index([deletedAt])
   @@index([deleteScheduledAt])
@@ -406,19 +407,22 @@ model TreinoProgramadoProfessor {
 }
 
 model TreinoProgramadoExercicio {
-  id                    String               @id @default(uuid())
-  treinoProgramadoId    String
-  exercicioId           String?
-  ordem                 Int
-  repeticoes            String
-  exercicioTemporarioId String?
-  exercicio             Exercicio?           @relation(fields: [exercicioId], references: [id])
-  exercicioTemporario   ExercicioTemporario? @relation(fields: [exercicioTemporarioId], references: [id])
-  treinoProgramado      TreinoProgramado     @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+  id                       String                  @id @default(uuid())
+  treinoProgramadoId       String
+  exercicioId              String?
+  ordem                    Int
+  repeticoes               String
+  exercicioTemporarioId    String?
+  exercicio                Exercicio?              @relation(fields: [exercicioId], references: [id])
+  exercicioTemporario      ExercicioTemporario?    @relation(fields: [exercicioTemporarioId], references: [id])
+  treinoProgramado         TreinoProgramado        @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
+  exercicioPersonalizadoId String?
+  exercicioPersonalizado   ExercicioPersonalizado? @relation(fields: [exercicioPersonalizadoId], references: [id])
 
   @@index([treinoProgramadoId])
   @@index([exercicioId])
   @@index([exercicioTemporarioId])
+  @@index([exercicioPersonalizadoId])
 }
 
 model Exercicio {
@@ -442,12 +446,40 @@ model ExercicioTemporario {
   descricao                  String?
   nivel                      Nivel
   videoDemonstrativoUrl      String?
+  videoPosterUrl             String?
   categorias                 Categoria[]
   treinoProgramado           TreinoProgramado             @relation(fields: [treinoProgramadoId], references: [id], onDelete: Cascade)
   treinos                    TreinoProgramadoExercicio[]
   SessaoTreinoTurmaExercicio SessaoTreinoTurmaExercicio[]
 
   @@index([treinoProgramadoId])
+}
+
+model ExercicioPersonalizado {
+  id                    String      @id @default(uuid())
+  nome                  String
+  descricao             String?
+  nivel                 Nivel?
+  categorias            Categoria[] @default([])
+
+  // 🎥 vídeo
+  videoDemonstrativoUrl String?
+
+  // 🖼️ NOVO: THUMB GERADA DO VÍDEO
+  videoPosterUrl        String?   // <-- ADICIONAR ESTA LINHA
+
+  // dono
+  criadorUsuarioId String
+  criadorUsuario   Usuario @relation(fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  treinos                    TreinoProgramadoExercicio[]
+  SessaoTreinoTurmaExercicio SessaoTreinoTurmaExercicio[]
+
+  @@unique([criadorUsuarioId, nome])
+  @@index([criadorUsuarioId])
 }
 
 model Metodologia {
@@ -2070,8 +2102,10 @@ model SessaoTreinoTurmaExercicio {
   exercicioId String?
   exercicio   Exercicio? @relation(fields: [exercicioId], references: [id])
 
-  exercicioTemporarioId String?
-  exercicioTemporario   ExercicioTemporario? @relation(fields: [exercicioTemporarioId], references: [id])
+  exercicioTemporarioId    String?
+  exercicioTemporario      ExercicioTemporario?    @relation(fields: [exercicioTemporarioId], references: [id])
+  exercicioPersonalizadoId String?
+  exercicioPersonalizado   ExercicioPersonalizado? @relation(fields: [exercicioPersonalizadoId], references: [id])
 
   sessao SessaoTreinoTurma @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
 
@@ -2385,8 +2419,8 @@ enum NotificacaoTipo {
   FOLLOW
   FOLLOW_BACK
   FOLLOW_REMOVED
-  MENSAGEM        // DM
-  MENSAGEM_GRUPO  // opcional (se usar)
+  MENSAGEM // DM
+  MENSAGEM_GRUPO // opcional (se usar)
   TREINO
   DESAFIO
 }
@@ -2459,7 +2493,7 @@ enum ConquistaOwnerTipo {
 }
 
 enum ConquistaTipo {
-  GERAL   
+  GERAL
   TREINO
   DESAFIO
   SOCIAL

@@ -9,6 +9,24 @@ import http from "http";
 import qrcode from "qrcode-terminal";
 import * as fs from "fs";
 import helmet from "helmet";
+import { createRequire } from "module";
+import ffmpeg from "fluent-ffmpeg";
+const require = createRequire(import.meta.url);
+
+// força tipagem correta (resolve o erro ts2345)
+const ffmpegStatic = require("ffmpeg-static") as string | null;
+const ffprobeStatic = require("ffprobe-static") as { path: string } | null;
+
+if (ffmpegStatic) {
+  ffmpeg.setFfmpegPath(ffmpegStatic);
+}
+
+if (ffprobeStatic?.path) {
+  ffmpeg.setFfprobePath(ffprobeStatic.path);
+}
+
+console.log("[ffmpeg] path:", ffmpegStatic);
+console.log("[ffprobe] path:", ffprobeStatic?.path);
 
 import { requireAdmin } from "./middlewares/guards.js";
 import { processarRenovacoesDiarias } from "./services/billingscheduler.js";

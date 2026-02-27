@@ -1,4 +1,4 @@
-// server/controllers/uploadController
+// server/controllers/uploadController.ts
 import { Request, Response } from "express";
 import multer from "multer";
 import path from "path";
@@ -7,24 +7,17 @@ import { TipoMidia, StorageClass } from "@prisma/client";
 import { probeImage, probeVideo } from "../services/mediaMetadata.js";
 import { audit } from "../services/audit.js";
 import { uploadError } from "../services/uploadErrors.js";
-import { transcodeTo720p } from "../services/transcodeService.js";
+import { transcodeTo720p, generateVideoThumb } from "../services/transcodeService.js";
 import { prisma } from "../prisma.js";
 
 const MAX_VIDEO_SEC = 60;
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
 
-const queueTranscode = {
-  add: async (_name: string, data: { midiaId: string; localPath: string }) => {
-    setImmediate(() => {
-      transcodeTo720p(data.midiaId, data.localPath).catch((err) => {
-        console.error("Erro na transcodificação 720p:", err);
-      });
-    });
-  },
-};
-
 const uploadsDir = path.join(process.cwd(), "public", "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
+
+const thumbsDir = path.join(uploadsDir, "thumbs");
+fs.mkdirSync(thumbsDir, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: uploadsDir,
@@ -39,25 +32,39 @@ export const upload = multer({
   limits: { fileSize: MAX_FILE_BYTES },
 });
 
+function baseUrlFromReq(req: Request) {
+  const base =
+    process.env.BACKEND_URL ||
+    process.env.API_BASE_URL ||
+    process.env.APP_URL ||
+    `${req.protocol}://${req.get("host")}`;
+  return String(base).replace(/\/+$/, "");
+}
+
 export const uploadMidia = [
-  upload.single("foto"),
+  upload.fields([
+    { name: "foto", maxCount: 1 },
+    { name: "file", maxCount: 1 },
+  ]),
   async (req: Request, res: Response) => {
+    let localPathToCleanup: string | null = null;
+    let out720pToCleanup: string | null = null;
+    let thumbToCleanup: string | null = null;
+
     try {
-      const file = req.file;
+      const filesAny = req.files as any;
+      const file: Express.Multer.File | null =
+        filesAny?.foto?.[0] || filesAny?.file?.[0] || null;
 
       if (!file) {
         return res
           .status(400)
-          .json(
-            uploadError(
-              "FILE_REQUIRED",
-              "Envie um arquivo de imagem ou vídeo."
-            )
-          );
+          .json(uploadError("FILE_REQUIRED", "Envie um arquivo de imagem ou vídeo."));
       }
 
       const sizeBytes = file.size;
       const localPath = file.path;
+      localPathToCleanup = localPath;
 
       if (sizeBytes > MAX_FILE_BYTES) {
         fs.unlink(localPath, () => {});
@@ -77,17 +84,10 @@ export const uploadMidia = [
         clubeId,
         submissaoDesafioId,
         submissaoTreinoId,
-      } = (req.body || {}) as {
-        tipo?: string;
-        titulo?: string;
-        descricao?: string;
-        atletaId?: string;
-        escolinhaId?: string;
-        clubeId?: string;
-        submissaoDesafioId?: string;
-        submissaoTreinoId?: string;
-      };
+        exercicioPersonalizadoId, // opcional
+      } = (req.body || {}) as any;
 
+      // detecta tipo
       let tipoMidia: TipoMidia;
       if (tipo === "Imagem" || tipo === "Video" || tipo === "Documento") {
         tipoMidia = tipo as TipoMidia;
@@ -99,17 +99,13 @@ export const uploadMidia = [
         tipoMidia = TipoMidia.Documento;
       }
 
+      // metadata
       let meta: {
         durationSec: number | null;
         width: number | null;
         height: number | null;
         fps: number | null;
-      } = {
-        durationSec: null,
-        width: null,
-        height: null,
-        fps: null,
-      };
+      } = { durationSec: null, width: null, height: null, fps: null };
 
       try {
         if (tipoMidia === TipoMidia.Imagem) {
@@ -122,7 +118,6 @@ export const uploadMidia = [
           };
         } else if (tipoMidia === TipoMidia.Video) {
           const v: any = await probeVideo(localPath);
-
           meta = {
             durationSec: v?.durationSec ?? v?.duration ?? null,
             width: v?.width ?? null,
@@ -133,34 +128,26 @@ export const uploadMidia = [
           if (meta.durationSec && meta.durationSec > MAX_VIDEO_SEC) {
             fs.unlink(localPath, () => {});
             return res.status(400).json(
-              uploadError(
-                "VIDEO_TOO_LONG",
-                "O vídeo pode ter no máximo 60 segundos.",
-                {
-                  maxSeconds: MAX_VIDEO_SEC,
-                  durationSec: meta.durationSec,
-                }
-              )
+              uploadError("VIDEO_TOO_LONG", "O vídeo pode ter no máximo 60 segundos.", {
+                maxSeconds: MAX_VIDEO_SEC,
+                durationSec: meta.durationSec,
+              })
             );
           }
         }
       } catch (e) {
-        console.warn("ffprobe/sharp error", e);
+        console.warn("[uploadMidia] ffprobe/sharp error:", e);
       }
 
       const filename = path.basename(localPath);
       const publicUrl = `/uploads/${filename}`;
+      const base = baseUrlFromReq(req);
+      const urlAbsLocal = `${base}${publicUrl}`;
 
-      const base =
-        process.env.BACKEND_URL ||
-        process.env.API_BASE_URL ||
-        process.env.APP_URL ||
-        `${req.protocol}://${req.get("host")}`;
-      const urlAbs = `${String(base).replace(/\/+$/, "")}${publicUrl}`;
-
+      // cria midia
       const midia = await prisma.midia.create({
         data: {
-          url: urlAbs,
+          url: urlAbsLocal,
           tipo: tipoMidia,
           dataEnvio: new Date(),
           descricao,
@@ -181,10 +168,48 @@ export const uploadMidia = [
         },
       });
 
-      await queueTranscode.add("transcode", {
-        midiaId: midia.id,
-        localPath,
-      });
+      // thumb local (fallback rápido)
+      let thumbAbsLocal: string | null = null;
+      if (tipoMidia === TipoMidia.Video) {
+        try {
+          const nameOnly = path.parse(filename).name;
+          const thumbFilename = `${nameOnly}-thumb.jpg`;
+          const thumbLocalPath = path.join(thumbsDir, thumbFilename);
+          await generateVideoThumb(localPath, thumbLocalPath);
+          const publicThumbUrl = `/uploads/thumbs/${thumbFilename}`;
+          thumbAbsLocal = `${base}${publicThumbUrl}`;
+        } catch (e) {
+          console.warn("[uploadMidia] Falha ao gerar thumb local:", e);
+        }
+      }
+
+      // transcode + S3
+      let processedUrl: string | null = null;
+      let posterUrl: string | null = null;
+
+      if (tipoMidia === TipoMidia.Video) {
+        try {
+          const out = await transcodeTo720p(midia.id, localPath);
+          processedUrl = out.processedUrl ?? null;
+          posterUrl = out.thumbUrl ?? null;
+        } catch (e: any) {
+          console.warn("[uploadMidia] transcode/S3 falhou, seguindo com URLs locais:", e?.message || e);
+          processedUrl = null; // mantém midia.url (local) como final
+          posterUrl = null;    // mantém thumbAbsLocal como fallback
+        }
+      }
+
+      // ✅ Se quiser salvar direto no exercício (OPCIONAL):
+      const exId = String(exercicioPersonalizadoId || "").trim();
+      if (exId && tipoMidia === TipoMidia.Video) {
+        await prisma.exercicioPersonalizado.update({
+          where: { id: exId },
+          data: {
+            videoDemonstrativoUrl: processedUrl,
+            videoPosterUrl: posterUrl,
+          },
+        });
+      }
 
       await audit(req, {
         acao: "UPLOAD_MIDIA",
@@ -196,20 +221,31 @@ export const uploadMidia = [
           durationSec: meta.durationSec,
           width: meta.width,
           height: meta.height,
+          exercicioPersonalizadoId: exId || null,
         },
       });
 
+      // ✅ IMPORTANTÍSSIMO:
+      // retorna `url` já como a URL FINAL (processedUrl) pro seu front salvar certo no banco
+      const finalVideoUrl = processedUrl ?? midia.url;
+      const finalPosterUrl = posterUrl ?? thumbAbsLocal;
+
+      // ✅ url deve ser a FINAL quando for vídeo
+      const finalUrl = (processedUrl ?? midia.url);
+
       return res.status(201).json({
         ok: true,
-        midia,
-        url: midia.url,         
-        relativeUrl: publicUrl,  
+        midiaId: midia.id,
+        url: finalUrl,              // ⭐ agora o front pega certo
+        relativeUrl: publicUrl,
+
+        videoUrl: processedUrl,     // mantém compat
+        posterUrl: posterUrl,       // thumb do S3
+        thumbUrl: posterUrl ?? thumbAbsLocal, // fallback
       });
     } catch (err: any) {
-      console.error("uploadMidia error", err);
-      return res
-        .status(500)
-        .json({ message: "Erro no upload", error: err?.message });
+      console.error("[uploadMidia] error:", err);
+      return res.status(500).json({ message: "Erro no upload", error: err?.message });
     }
   },
 ];

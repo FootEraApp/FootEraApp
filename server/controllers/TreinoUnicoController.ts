@@ -6,17 +6,29 @@ type RowEx = {
   id?: string;
   repeticoes?: string | null;
   ordem?: number | null;
+
   exercicio?: {
     id: string;
     nome: string;
     descricao: string | null;
     videoDemonstrativoUrl: string | null;
+    nivel: string | null;
   } | null;
+
   exercicioTemporario?: {
     id: string;
     nome: string;
     descricao: string | null;
     videoDemonstrativoUrl: string | null;
+    nivel: string | null;
+  } | null;
+
+  exercicioPersonalizado?: {
+    id: string;
+    nome: string;
+    descricao: string | null;
+    videoDemonstrativoUrl: string | null;
+    nivel: string | null;
   } | null;
 };
 
@@ -24,13 +36,14 @@ function montarExercicios(rows: RowEx[]) {
   return (rows ?? [])
     .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
     .map((x) => {
-      const base = x.exercicio ?? x.exercicioTemporario;
+      const base = x.exercicio ?? x.exercicioTemporario ?? x.exercicioPersonalizado;
       return {
         id: base?.id ?? x.id ?? "",
         nome: base?.nome ?? "",
         repeticoes: x.repeticoes ?? null,
         descricao: base?.descricao ?? null,
         videoUrl: base?.videoDemonstrativoUrl ?? null,
+        nivel: base?.nivel ?? null,
       };
     })
     .filter((e) => e.nome);
@@ -107,10 +120,13 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
               exercicios: {
                 include: {
                   exercicio: {
-                    select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+                    select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true, nivel: true },
                   },
                   exercicioTemporario: {
-                    select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+                    select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true, nivel: true },
+                  },
+                  exercicioPersonalizado: {
+                    select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true, nivel: true },
                   },
                 },
               },
@@ -157,10 +173,13 @@ export async function getTreinoUnico(req: AuthenticatedRequest, res: Response) {
         exercicios: {
           include: {
             exercicio: {
-              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true, nivel: true },
             },
             exercicioTemporario: {
-              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true, nivel: true },
+            },
+            exercicioPersonalizado: {
+              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true, nivel: true},
             },
           },
         },
