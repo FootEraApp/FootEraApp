@@ -1115,6 +1115,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       usuario: {
         id: usuario.id,
         nome: usuario.nome,
+        nomeDeUsuario: usuario.nomeDeUsuario ?? null,
         email: (isOwnProfile || isAdmin || priv.mostrarEmail) ? usuario.email : null,
         foto: withDefaultImg(usuario.foto),
       },
@@ -1142,13 +1143,37 @@ export const atualizarPerfil = async (req: AuthenticatedRequest, res: Response) 
   const file = (req as any).file as Express.Multer.File | undefined;
   const fotoFinal: string | null = file ? `/uploads/${file.filename}` : (usuario.foto ?? null);
 
+  const raw = typeof usuario?.nomeDeUsuario === "string" ? usuario.nomeDeUsuario.trim() : "";
+  const novoUsername = raw ? raw.toLowerCase() : null;
+
+  // valida formato (mesma regra do front)
+  if (novoUsername && !/^[a-z0-9._]{3,30}$/.test(novoUsername)) {
+    return res.status(400).json({
+      error: "Nome de usuário inválido. Use letras, números, ponto e underline (3–30).",
+    });
+  }
+
+  // checa duplicado (evita conflito)
+  if (novoUsername) {
+    const existe = await prisma.usuario.findFirst({
+      where: {
+        nomeDeUsuario: novoUsername,
+        NOT: { id },
+      },
+      select: { id: true },
+    });
+
+    if (existe) {
+      return res.status(400).json({ error: "Esse nome de usuário já está em uso." });
+    }
+  }
   try {
     await prisma.usuario.update({
       where: { id },
       data: {
         nome: usuario.nome,
         email: usuario.email,
-        nomeDeUsuario: usuario.nomeDeUsuario ?? undefined,
+        nomeDeUsuario: novoUsername ?? undefined, // ✅ garante lowercase
         foto: fotoFinal,
         cidade: usuario.cidade,
         estado: usuario.estado,
