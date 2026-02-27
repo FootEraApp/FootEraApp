@@ -33,6 +33,6 @@
     "to-ico": "^1.1.5",
     "typescript": "^5.0.0",
     "vite": "^4.5.14",
-    "vite-plugin-pwa": "^1.1.0"
+    "vite-plugin-pwa": "^1.2.0"
   }
 }
