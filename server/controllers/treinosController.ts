@@ -845,7 +845,7 @@ export async function treinosDisponiveis(req: AuthenticatedRequest, res: Respons
     const treinos = await prisma.treinoProgramado.findMany({
       where,
       include: {
-        exercicios: { include: { exercicio: true, exercicioTemporario: true } },
+        exercicios: { include: { exercicio: true, exercicioPersonalizado: true, exercicioTemporario: true } },
         professores: { include: { professor: { select: { id: true, nome: true } } } },
         Professor: { select: { id: true, nome: true } },
         clube: { select: { id: true, nome: true } },
@@ -1135,7 +1135,7 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
     const rows = await prisma.treinoProgramado.findMany({
       where,
       include: {
-        exercicios: { include: { exercicio: true, exercicioTemporario: true } },
+        exercicios: { include: { exercicio: true, exercicioPersonalizado: true, exercicioTemporario: true } },
         professores: { include: { professor: { select: { id: true, nome: true } } } },
         Professor: { select: { id: true, nome: true } },
         clube: { select: { id: true, nome: true } },
@@ -1268,38 +1268,85 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
 export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res: Response) {
   try {
     const { id } = req.params;
+
     const treino = await prisma.treinoProgramado.findUnique({
       where: { id },
       include: {
         exercicios: {
           select: {
+            id: true,
+            ordem: true,
             repeticoes: true,
-            exercicio: { select: { id: true, nome: true } },
-            exercicioTemporario: { select: { id: true, nome: true } },
+
+            exercicio: {
+              select: {
+                id: true,
+                nome: true,
+                descricao: true,
+                videoDemonstrativoUrl: true,
+                nivel: true,
+              },
+            },
+
+            exercicioTemporario: {
+              select: {
+                id: true,
+                nome: true,
+                descricao: true,
+                videoDemonstrativoUrl: true,
+                nivel: true,
+              },
+            },
+
+            // ✅ FALTAVA ISSO AQUI
+            exercicioPersonalizado: {
+              select: {
+                id: true,
+                nome: true,
+                descricao: true,
+                videoDemonstrativoUrl: true,
+                nivel: true,
+              },
+            },
           },
         },
+
         professores: { include: { professor: { select: { id: true, nome: true } } } },
         Professor: { select: { id: true, nome: true } },
         clube: { select: { id: true, nome: true } },
         escolinha: { select: { id: true, nome: true } },
       },
     });
+
     if (!treino) return res.status(404).json({ message: "Treino não encontrado" });
 
+    // ✅ devolve cada row com o "base" completo (catálogo OU temporário OU personalizado)
     const out = {
       ...treino,
-      exercicios: treino.exercicios.map((e) => ({
-        repeticoes: e.repeticoes,
-        exercicio: {
-          id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
-          nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
-        },
-      })),
+      exercicios: (treino.exercicios ?? []).map((row) => {
+        const ex = row.exercicio || row.exercicioPersonalizado || row.exercicioTemporario;
+
+        return {
+          id: row.id,
+          ordem: row.ordem,
+          repeticoes: row.repeticoes ?? null,
+          exercicio: ex
+            ? {
+                id: ex.id,
+                nome: ex.nome,
+                descricao: ex.descricao ?? null,
+                nivel: ex.nivel ?? null,
+                videoDemonstrativoUrl: ex.videoDemonstrativoUrl ?? null,
+              }
+            : null,
+        };
+      }),
     };
-    res.json(out);
+
+    return res.json(out);
   } catch (e) {
     console.error(e);
-    res.status(500).json({ message: "Erro ao buscar treino programado" });
+    return res.status(500).json({ message: "Erro ao buscar treino programado" });
   }
 }
 
@@ -2003,7 +2050,7 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
           atleta: { select: { id: true } },
           treinoProgramado: {
             include: {
-              exercicios: { include: { exercicio: true, exercicioTemporario: true } },
+              exercicios: { include: { exercicio: true, exercicioPersonalizado: true, exercicioTemporario: true } },
               professores: { include: { professor: { select: { id: true, nome: true } } } },
               Professor: { select: { id: true, nome: true } },
               clube: { select: { id: true, nome: true } },
@@ -2138,7 +2185,7 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
       include: {
         treinoProgramado: {
           include: {
-            exercicios: { include: { exercicio: true, exercicioTemporario: true } },
+            exercicios: { include: { exercicio: true, exercicioPersonalizado: true, exercicioTemporario: true } },
             professores: { include: { professor: { select: { id: true, nome: true } } } },
             Professor: { select: { id: true, nome: true } },
             clube: { select: { id: true, nome: true } },
@@ -3104,6 +3151,17 @@ export async function criarTreinoProgramado(
 ) {
   let userCtx: any = getUserFromReq(req);
 
+  // ✅ Suporta multipart com formData.append("payload", JSON.stringify(...))
+  const rawPayload = (req.body as any)?.payload;
+  if (rawPayload && typeof rawPayload === "string") {
+    try {
+      const parsed = JSON.parse(rawPayload);
+      req.body = { ...(req.body as any), ...parsed };
+    } catch (e) {
+      return res.status(400).json({ message: "Payload inválido (JSON)." });
+    }
+  }
+
   if (!userCtx) {
     const authHeader =
       (req.headers.authorization as string | undefined) ||
@@ -3643,17 +3701,23 @@ export async function criarTreinoProgramado(
     const exItems: any[] = Array.isArray(exercicios) ? exercicios : [];
 
     const exsOficiais = exItems.filter((e) => {
-      const id = String(e?.exercicioId ?? e?.id ?? "").trim();
+      const id = String(e?.exercicioId ?? "").trim();
       return !!id;
     });
 
     const exsTemporarios = exItems.filter((e) => {
-      const id = String(e?.exercicioId ?? e?.id ?? "").trim();
+      const id = String(e?.exercicioId ?? "").trim();
       const nomeTemp = String(e?.nome ?? "").trim();
       return !id && !!nomeTemp;
     });
 
+    if (!exsOficiais.length && !exsTemporarios.length) {
+      return res.status(400).json({
+        message: "Adicione pelo menos 1 exercício (catálogo ou personalizado).",
+      });
+    }
     // match simples no BD
+    
     const promoverParaBancoSeBater = async (tx: any, nomeTemp: string) => {
       const nomeNorm = nomeTemp.trim();
       const achado = await tx.exercicio.findFirst({
@@ -3674,7 +3738,7 @@ export async function criarTreinoProgramado(
         await tx.treinoProgramadoExercicio.createMany({
           data: exsOficiais.map((e: any, idx: number) => ({
             treinoProgramadoId: treino.id,
-            exercicioId: String(e.exercicioId ?? e.id).trim(),
+            exercicioId: String(e.exercicioId).trim(),
             ordem: Number.isFinite(Number(e.ordem)) ? Number(e.ordem) : idx + 1,
             repeticoes: String(e.repeticoes ?? e.repeticoesStr ?? e.reps ?? "1"),
           })),
@@ -3682,14 +3746,25 @@ export async function criarTreinoProgramado(
         });
       }
 
-      // 2) temporários (com promoção + herança)
+      // 2) personalizados (reutilizáveis)
       for (let i = 0; i < exsTemporarios.length; i++) {
         const e = exsTemporarios[i];
         const nomeTemp = String(e?.nome ?? "").trim();
         if (!nomeTemp) continue;
 
-        // ✅ se bater no BD, salva como oficial (e não cria temporário)
-        const exercicioBancoId = await promoverParaBancoSeBater(tx, nomeTemp);
+        const hasVideo = !!String(e.videoDemonstrativoUrl ?? e.videoUrl ?? "").trim();
+        const hasPoster = !!String(e.videoPosterUrl ?? "").trim();
+
+        // ✅ Se o front mandou vídeo/poster, force criar/usar ExercicioPersonalizado
+        const forcePersonalizado = hasVideo || hasPoster || !!String(e.exercicioPersonalizadoId ?? "").trim();
+
+        // ✅ se bater no BD, salva como oficial (não cria personalizado)
+        let exercicioBancoId: string | null = null;
+
+        if (!forcePersonalizado) {
+          exercicioBancoId = await promoverParaBancoSeBater(tx, nomeTemp);
+        }
+
         if (exercicioBancoId) {
           await tx.treinoProgramadoExercicio.create({
             data: {
@@ -3704,47 +3779,61 @@ export async function criarTreinoProgramado(
           continue;
         }
 
+        const criadorUsuarioId = String(usuarioIdToken);
         const videoHerdado = await herdarVideoParaTemporario(nomeTemp);
 
-        let temp = await tx.exercicioTemporario.findFirst({
-          where: {
-            treinoProgramadoId: treino.id,
-            nome: { equals: nomeTemp, mode: "insensitive" },
-          },
-          select: { id: true, videoDemonstrativoUrl: true },
-        });
+        // ✅ 1) declara pers ANTES e permite null
+        let pers: { id: string; videoDemonstrativoUrl: string | null; videoPosterUrl: string | null } | null =
+          await tx.exercicioPersonalizado.findFirst({
+            where: {
+              criadorUsuarioId,
+              nome: { equals: nomeTemp, mode: "insensitive" },
+            },
+            select: { id: true, videoDemonstrativoUrl: true, videoPosterUrl: true },
+          });
 
-        if (!temp) {
-          temp = await tx.exercicioTemporario.create({
+        // ✅ 2) garante pers (se não existir, cria)
+        if (!pers) {
+          pers = await tx.exercicioPersonalizado.create({
             data: {
-              treinoProgramadoId: treino.id,
-              codigo: null,
+              criadorUsuarioId,
               nome: nomeTemp,
               descricao: e.descricao ?? null,
               nivel: nivelEnum,
               categorias: categorias ?? [],
+              videoPosterUrl: e.videoPosterUrl ?? null,
               videoDemonstrativoUrl:
                 e.videoDemonstrativoUrl ?? e.videoUrl ?? videoHerdado ?? null,
             },
-            select: { id: true, videoDemonstrativoUrl: true },
-          });
-        } else if (
-          (!temp.videoDemonstrativoUrl || temp.videoDemonstrativoUrl === "") &&
-          (e.videoDemonstrativoUrl ?? e.videoUrl ?? videoHerdado)
-        ) {
-          await tx.exercicioTemporario.update({
-            where: { id: temp.id },
-            data: {
-              videoDemonstrativoUrl:
-                e.videoDemonstrativoUrl ?? e.videoUrl ?? videoHerdado,
-            },
+            select: { id: true, videoDemonstrativoUrl: true, videoPosterUrl: true },
           });
         }
 
+        // ✅ 3) “narrow” pro TS parar de reclamar de null
+        if (!pers) throw new Error("Falha ao criar ExercicioPersonalizado.");
+
+        // ✅ 4) atualiza vídeo se estava vazio e agora veio
+        const novoVideo = e.videoDemonstrativoUrl ?? e.videoUrl ?? videoHerdado ?? null;
+        if ((!pers.videoDemonstrativoUrl || pers.videoDemonstrativoUrl === "") && novoVideo) {
+          await tx.exercicioPersonalizado.update({
+            where: { id: pers.id },
+            data: { videoDemonstrativoUrl: novoVideo },
+          });
+        }
+
+        const novoPoster = e.videoPosterUrl ?? null;
+        if ((!pers.videoPosterUrl || pers.videoPosterUrl === "") && novoPoster) {
+          await tx.exercicioPersonalizado.update({
+            where: { id: pers.id },
+            data: { videoPosterUrl: novoPoster },
+          });
+        }
+
+        // ✅ 5) linka no treino usando exercicioPersonalizadoId
         await tx.treinoProgramadoExercicio.create({
           data: {
             treinoProgramadoId: treino.id,
-            exercicioTemporarioId: temp.id,
+            exercicioPersonalizadoId: pers.id,
             ordem: Number.isFinite(Number(e.ordem))
               ? Number(e.ordem)
               : exsOficiais.length + i + 1,
@@ -3882,6 +3971,19 @@ export async function criarTreinoProgramado(
 }
 
 export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: Response) {
+  let body: any = req.body;
+
+  // ✅ Suporta multipart com formData.append("payload", JSON.stringify(...))
+  const rawPayload = body?.payload;
+  if (rawPayload && typeof rawPayload === "string") {
+    try {
+      const parsed = JSON.parse(rawPayload);
+      body = { ...body, ...parsed }; // ✅ usa body atualizado, não só req.body
+    } catch {
+      return res.status(400).json({ message: "Payload inválido (JSON)." });
+    }
+  }
+
   try {
     const { id } = req.params;
     let {
@@ -3903,7 +4005,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
       exercicios = [],
       tipoUsuario,
       tipoUsuarioId,
-    } = req.body as any;
+    } = body as any;
 
     if (nome || codigo) {
       const OR: any[] = [];
@@ -3941,6 +4043,15 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
     }
 
     const donoUpdate: any = {};
+
+    const criadorProfessorId = (body as any)?.criadorProfessorId ?? (body as any)?.professorId ?? null;
+
+    if ((!tipoUsuario || !tipoUsuarioId) && criadorProfessorId) {
+      donoUpdate.professorId = String(criadorProfessorId);
+      donoUpdate.clubeId = null;
+      donoUpdate.escolinhaId = null;
+    }
+
     if (tipoUsuario || tipoUsuarioId) {
       const s = String(tipoUsuario || "").toLowerCase();
       donoUpdate.professorId = null;
@@ -3987,10 +4098,15 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
 
       const criadorId: string | null = atualTp?.criadoPorProfessorId ?? atualTp?.professorId ?? null;
 
-      const colaboradoresEntrada: string[] = Array.isArray((req.body as any)?.colaboradoresProfessorIds)
-        ? ((req.body as any).colaboradoresProfessorIds as unknown[])
-            .map((v: unknown) => String(v).trim())
-            .filter(Boolean)
+      const colabRaw =
+        (body as any)?.colaboradoresProfessorIds ??
+        (body as any)?.professoresColabIds ??
+        (body as any)?.professoresIds ??
+        (body as any)?.colaboradoresIds ??
+        [];
+
+      const colaboradoresEntrada: string[] = Array.isArray(colabRaw)
+        ? (colabRaw as unknown[]).map((v) => String(v).trim()).filter(Boolean)
         : [];
 
       const uniq = [...new Set(colaboradoresEntrada)].filter((x) => x && x !== criadorId);
@@ -4009,9 +4125,9 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
       });
 
       const colaboradoresRaw =
-        (req.body as any)?.colaboradoresProfessorIds ??
-        (req.body as any)?.professoresIds ??
-        (req.body as any)?.colaboradoresIds ??
+        (body as any)?.colaboradoresProfessorIds ??
+        (body as any)?.professoresIds ??
+        (body as any)?.colaboradoresIds ??
         [];
 
       const colaboradoresProfessorIds = Array.isArray(colaboradoresRaw)
@@ -4073,7 +4189,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
         },
       });
 
-      const metodologiaIdsRaw = (req.body as any)?.metodologiaIds;
+      const metodologiaIdsRaw = (body as any)?.metodologiaIds;
       const metodologiaIds: string[] = Array.isArray(metodologiaIdsRaw)
         ? metodologiaIdsRaw.map((x: any) => String(x).trim()).filter(Boolean)
         : [];
@@ -4144,8 +4260,8 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
       const novosOficiais: string[] = [];
 
       // ✅ fonte única dos exercícios do payload (id / exercicioId / temporário)
-      const exerciciosBody: any[] = Array.isArray((req.body as any)?.exercicios)
-        ? (req.body as any).exercicios
+      const exerciciosBody: any[] = Array.isArray((body as any)?.exercicios)
+        ? (body as any).exercicios
         : Array.isArray(exercicios)
           ? exercicios
           : [];
@@ -4178,6 +4294,47 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
           continue;
         }
 
+        // ✅ 1.5) personalizado (ExercicioPersonalizado)
+        const exercicioPersonalizadoId = ex?.exercicioPersonalizadoId ?? null;
+        if (exercicioPersonalizadoId) {
+          const persId = String(exercicioPersonalizadoId);
+
+          // (opcional, mas recomendado) garantir que existe
+          const pers = await tx.exercicioPersonalizado.findUnique({
+            where: { id: persId },
+            select: { id: true, videoDemonstrativoUrl: true, videoPosterUrl: true },
+          });
+          if (!pers) throw new Error(`ExercicioPersonalizadoId inválido no índice ${i}`);
+
+          // ✅ se veio vídeo/poster novo do front, salva no personalizado (principalmente quando era null)
+          const novoVideo = (ex?.videoDemonstrativoUrl ?? ex?.videoUrl ?? null) ? String(ex?.videoDemonstrativoUrl ?? ex?.videoUrl) : null;
+          const novoPoster = ex?.videoPosterUrl ? String(ex.videoPosterUrl) : null;
+
+          if ((!pers.videoDemonstrativoUrl || pers.videoDemonstrativoUrl === "") && novoVideo) {
+            await tx.exercicioPersonalizado.update({
+              where: { id: persId },
+              data: { videoDemonstrativoUrl: novoVideo },
+            });
+          }
+
+          if ((!pers.videoPosterUrl || pers.videoPosterUrl === "") && novoPoster) {
+            await tx.exercicioPersonalizado.update({
+              where: { id: persId },
+              data: { videoPosterUrl: novoPoster },
+            });
+          }
+
+          await tx.treinoProgramadoExercicio.create({
+            data: {
+              treinoProgramadoId: id,
+              exercicioPersonalizadoId: persId,
+              repeticoes,
+              ordem,
+            },
+          });
+
+          continue;
+        }
         // 2) temporário pode vir como id direto
         const exercicioTemporarioId = ex?.exercicioTemporarioId ?? ex?.tempId ?? null;
         if (exercicioTemporarioId) {
@@ -4226,7 +4383,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
               treinoProgramadoId: id,
               nome: { equals: nomeTemp, mode: "insensitive" },
             },
-            select: { id: true, videoDemonstrativoUrl: true },
+            select: { id: true, videoDemonstrativoUrl: true, videoPosterUrl: true },
           });
 
           if (!temp) {
@@ -4243,8 +4400,12 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
                   tempObj?.videoUrl ??
                   videoHerdado ??
                   null,
+                videoPosterUrl:
+                  tempObj?.videoPosterUrl ??
+                  ex?.videoPosterUrl ??
+                  null,
               },
-              select: { id: true, videoDemonstrativoUrl: true },
+              select: { id: true, videoDemonstrativoUrl: true, videoPosterUrl: true },
             });
           } else {
             // se não tem vídeo e achamos um pra herdar, atualiza
@@ -4254,6 +4415,18 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
                 data: { videoDemonstrativoUrl: videoHerdado },
               });
             }
+          }
+
+          const posterNovo =
+            tempObj?.videoPosterUrl ??
+            ex?.videoPosterUrl ??
+            null;
+
+          if ((!temp.videoPosterUrl || temp.videoPosterUrl === "") && posterNovo) {
+            await tx.exercicioTemporario.update({
+              where: { id: temp.id },
+              data: { videoPosterUrl: String(posterNovo) },
+            });
           }
 
           await tx.treinoProgramadoExercicio.create({
@@ -4300,7 +4473,7 @@ export async function atualizarTreinoProgramado(req: AuthenticatedRequest, res: 
     const updated = await prisma.treinoProgramado.findUnique({
       where: { id },
       include: {
-        exercicios: { include: { exercicio: true, exercicioTemporario: true } },
+        exercicios: { include: { exercicio: true, exercicioPersonalizado: true, exercicioTemporario: true } },
         professores: { include: { professor: { select: { id: true, nome: true } } } },
         Professor: { select: { id: true, nome: true } },
         clube: { select: { id: true, nome: true } },
@@ -5413,4 +5586,17 @@ export async function listarAlunosTreinoAgendadoTurma(req: Request, res: Respons
       message: e?.message ?? "Erro ao buscar alunos do treino agendado.",
     });
   }
+}
+
+export async function listarExerciciosPersonalizados(req: any, res: Response) {
+  const userId = String(req.user?.id || "").trim();
+  if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+  const itens = await prisma.exercicioPersonalizado.findMany({
+    where: { criadorUsuarioId: userId },
+    orderBy: { atualizadoEm: "desc" },
+    take: 200,
+  });
+
+  return res.json(itens);
 }

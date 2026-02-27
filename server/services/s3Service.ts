@@ -1,3 +1,4 @@
+// server/services/s3Service.ts
 import AWS from "aws-sdk";
 import dotenv from "dotenv";
 import fs from "fs";
@@ -13,15 +14,24 @@ AWS.config.update({
 
 const s3 = new AWS.S3();
 
+function getBucketName() {
+  const bucket =
+    process.env.AWS_S3_BUCKET ||
+    process.env.AWS_BUCKET_NAME; // fallback
+  if (!bucket) {
+    throw new Error(
+      "Bucket S3 não configurado. Defina AWS_S3_BUCKET (ou AWS_BUCKET_NAME) no .env."
+    );
+  }
+  return bucket;
+}
+
 export const s3Service = {
-  async uploadFileAsync(
-    file: Express.Multer.File,
-    folder: string
-  ): Promise<string> {
+  async uploadFileAsync(file: Express.Multer.File, folder: string): Promise<string> {
     const key = `${folder}/${Date.now()}_${file.originalname}`;
 
     const params = {
-      Bucket: process.env.AWS_BUCKET_NAME!,
+      Bucket: getBucketName(),
       Key: key,
       Body: file.buffer,
       ContentType: file.mimetype,
@@ -42,7 +52,7 @@ export async function uploadToS3(
   const key = `${folder}/${Date.now()}_${path.basename(filePath)}`;
 
   const params = {
-    Bucket: process.env.AWS_BUCKET_NAME!,
+    Bucket: getBucketName(),
     Key: key,
     Body: buffer,
     ContentType: contentType,
