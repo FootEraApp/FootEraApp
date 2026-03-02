@@ -135,16 +135,41 @@ const GerenciarProfessores: React.FC = () => {
 
   const carregarProfessores = async () => {
     if (!tipo || tipo === "Professor" || !tipoUsuarioIdEntidade) return;
+
     try {
       setProfError(null);
       setProfLoading(true);
 
-      const { data } = await axios.get(`${API.BASE_URL}/api/professores`, {
+      // 🔥 Preferencial: usar gerenciar/professores (vínculo real)
+      // (igual você já usa no TurmasManager)
+      const vinculo = tipo === "Clube" ? "clube" : "escolinha";
+
+      const resGerenciar = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, {
         headers,
-        params: { organizacaoId: tipoUsuarioIdEntidade, search: q.trim() || undefined },
+        params: {
+          vinculo,
+          id: usuarioIdEntidade, // ✅ aqui é USER ID da entidade (igual seu TurmasManager faz com orgUserId)
+          limit: 200,
+          search: q.trim() || undefined,
+        },
       });
 
-      const lista = (Array.isArray(data) ? data : data?.items ?? data?.data ?? []) as any[];
+      let lista = (resGerenciar.data?.professores || resGerenciar.data || []) as any[];
+
+      // 🧯 Fallback: /api/professores com parâmetros mais amplos (igual TurmasManager)
+      if (!lista.length) {
+        const params: any = {
+          organizacaoId: tipoUsuarioIdEntidade,
+          tipoUsuarioId: tipoUsuarioIdEntidade,
+          search: q.trim() || undefined,
+        };
+
+        if (tipo === "Clube") params.clubeId = tipoUsuarioIdEntidade;
+        if (tipo === "Escola") params.escolinhaId = tipoUsuarioIdEntidade; // seu tipo "Escola" = Escolinha
+
+        const { data } = await axios.get(`${API.BASE_URL}/api/professores`, { headers, params });
+        lista = (Array.isArray(data) ? data : data?.items ?? data?.data ?? []) as any[];
+      }
 
       setProfessores(
         lista.map((p) => ({

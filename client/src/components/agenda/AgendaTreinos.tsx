@@ -456,22 +456,49 @@ export function useAgendaTreinos({
   }, [open, initialMonth]);
 
   useEffect(() => {
-    if (!open) return;
+  if (!open) return;
 
-    (async () => {
-      try {
-        setLoadingProgramados(true);
-        const payload = await fetchProgramados();
-        const { meus } = normalizeProgramadosPayload(payload);
+  (async () => {
+    try {
+      setLoadingProgramados(true);
 
-        setTreinosMeus(meus);
-      } catch {
-        setTreinosMeus([]);
-      } finally {
-        setLoadingProgramados(false);
-      }
-    })();
-  }, [open, fetchProgramados]);
+      const payload = await fetchProgramados();
+      const { meus } = normalizeProgramadosPayload(payload);
+
+      // ✅ dono logado (vem do Storage)
+      const tipoRaw = String((Storage as any)?.tipoSalvo ?? "").toLowerCase(); // "clube" | "escolinha" | "professor"
+      const ownerId = String((Storage as any)?.tipoUsuarioId ?? "");
+
+      // normaliza o "tipo" para comparar com o autor.tipo ("Clube"/"Escolinha"/"Professor")
+      const tipoAutorEsperado =
+        tipoRaw === "clube"
+          ? "clube"
+          : tipoRaw === "escolinha"
+            ? "escolinha"
+            : tipoRaw === "professor"
+              ? "professor"
+              : "";
+
+      // ✅ filtra para ficar somente os treinos do dono logado
+      // - se vier autor completo, usa ele
+      // - se NÃO vier autor (alguns endpoints não mandam), mantém (pra não sumir “seus treinos”)
+      const filtrados = meus.filter((t) => {
+        if (!ownerId || !tipoAutorEsperado) return true; // sem info do dono -> não filtra
+        if (!t.autor?.id || !t.autor?.tipo) return true; // sem autor -> não filtra (evita sumir treinos)
+        return (
+          String(t.autor.id) === ownerId &&
+          String(t.autor.tipo).toLowerCase() === tipoAutorEsperado
+        );
+      });
+
+      setTreinosMeus(filtrados);
+    } catch {
+      setTreinosMeus([]);
+    } finally {
+      setLoadingProgramados(false);
+    }
+  })();
+}, [open, fetchProgramados]);
 
   useEffect(() => {
     if (!open) return;
@@ -934,7 +961,7 @@ export default function AgendaTreinos({
   const forceScrollDetails = selectedDays.length >= 2;
 
   return (
-    <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+    <div className="w-full flex flex-col max-h-[85vh] overflow-y-auto">
       <div className="p-3 sm:p-4 border-b border-zinc-200 bg-white flex items-center justify-between gap-2">
         <div className="font-extrabold text-zinc-900">{title}</div>
         <div className="inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
@@ -962,9 +989,9 @@ export default function AgendaTreinos({
       </div>
 
       {aba === "agenda" ? (
-        <div className="flex-1 min-h-0 overflow-hidden grid grid-rows-[minmax(0,1fr)_minmax(260px,0.9fr)] lg:grid-rows-1 lg:grid-cols-[minmax(0,1fr)_420px]">
-          <div className="p-3 sm:p-4 border-b border-zinc-200 lg:border-b-0 lg:border-r lg:border-zinc-200 min-h-0 overflow-hidden">
-            <div className="h-full overflow-y-auto">
+        <div className="grid grid-rows-[auto_auto] lg:grid-rows-1 lg:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="p-3 sm:p-4 border-b border-zinc-200 lg:border-b-0 lg:border-r lg:border-zinc-200">
+            <div>
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <button
@@ -1109,7 +1136,7 @@ export default function AgendaTreinos({
             </div>
           </div>
 
-          <div className="p-3 sm:p-4 min-h-0 overflow-y-auto">
+          <div className="p-3 sm:p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <ClipboardList className="h-5 w-5 text-zinc-500" />
@@ -1296,7 +1323,7 @@ export default function AgendaTreinos({
           </div>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4">
+        <div className="p-3 sm:p-4">
           {selectedDays.length === 0 ? (
             <div className="rounded-xl border border-zinc-200 bg-white p-4">
               <div className="font-extrabold text-zinc-900 mb-1">Selecione dias primeiro</div>
@@ -1392,7 +1419,7 @@ export default function AgendaTreinos({
                   {/* Conteúdo normal (travado quando não for PRO) */}
                   <div
                     className={[
-                      "p-3 space-y-2 max-h-[52vh] overflow-y-auto",
+                      "p-3 space-y-2 max-h-[55vh] overflow-y-auto pr-2",
                       abaTreinos === "footera" && proGateChecked && !isPro
                         ? "pointer-events-none select-none blur-[1px]"
                         : "",

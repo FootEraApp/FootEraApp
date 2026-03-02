@@ -18,6 +18,7 @@ import { Link } from "wouter";
 import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
+import DashboardOrganizacao from "../dashboard/DashboardOrganizacao.js"; 
 
 type Props = { idDaUrl?: string };
 type UsuarioMin = {
@@ -224,7 +225,8 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   } | null>(null);
 
   const escolinhaId = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? null;
-
+  const entidadeUsuarioId = (isOwn ? Storage.usuarioId : data?.escolinha?.usuarioId) ?? null;
+  
   async function buscarPontuacaoRealDoUsuario(usuarioId: string): Promise<number | null> {
     if (!token || !usuarioId) return null;
 
@@ -497,22 +499,49 @@ export default function PerfilEscola({ idDaUrl }: Props) {
   ]);
 
   async function loadProfessores() {
-    if (!token || !escolinhaId) return;
+    if (!token) return;
+
+    // ✅ /api/gerenciar/professores usa o USER ID da entidade (igual no GerenciarProfessores)
+    if (!entidadeUsuarioId) {
+      setProfessores([]);
+      return;
+    }
+
     setProfessoresLoading(true);
     try {
-      const { data } = await axios.get(`${API.BASE_URL}/api/professores`, {
+      const res = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, {
         headers,
-        params: { organizacaoId: escolinhaId },
+        params: {
+          vinculo: "escolinha",
+          id: entidadeUsuarioId, // ✅ USER ID da escolinha
+          limit: 200,
+        },
       });
-      const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+
+      let lista = (res.data?.professores || res.data || []) as any[];
+
+      // 🧯 fallback opcional (se quiser manter compatível)
+      // Se vier vazio, tenta um endpoint mais genérico
+      if (!lista.length && escolinhaId) {
+        const { data } = await axios.get(`${API.BASE_URL}/api/professores`, {
+          headers,
+          params: {
+            organizacaoId: escolinhaId,
+            tipoUsuarioId: escolinhaId,
+            escolinhaId: escolinhaId,
+          },
+        });
+        lista = (Array.isArray(data) ? data : data?.items ?? data?.data ?? []) as any[];
+      }
+
       setProfessores(
-        (arr ?? []).map((p: any) => ({
+        lista.map((p: any) => ({
           id: String(p.id),
           usuarioId: p.usuarioId ?? p.usuario?.id ?? null,
           nome: p.nome ?? p.usuario?.nome ?? "Professor",
           codigo: p.codigo ?? null,
           cref: p.cref ?? null,
-          fotoUrl: p.fotoUrl ?? p.usuario?.foto ?? null,
+          fotoUrl: p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null,
         }))
       );
     } catch {
@@ -677,7 +706,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
       loadTurmas();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aba, canEdit, escolinhaId, token]);
+  }, [aba, canEdit, escolinhaId, token, entidadeUsuarioId]);
 
   useEffect(() => {
     if (!token) return;
@@ -746,6 +775,7 @@ export default function PerfilEscola({ idDaUrl }: Props) {
     : undefined;
 
   const escolinhaIdStr = data.escolinha.id;
+  const ownerIdDashboard = (isOwn ? Storage.tipoUsuarioId : data?.escolinha?.id) ?? data.escolinha.id;
 
   return (
     <div className="w-full max-w-2xl mx-auto">
@@ -856,6 +886,14 @@ export default function PerfilEscola({ idDaUrl }: Props) {
                 </li>
               )}
             </ul>
+          </SectionCard>
+
+          <SectionCard title="Dashboard da Escolinha">
+            {ownerIdDashboard ? (
+              <DashboardOrganizacao ownerTipo="Escolinha" ownerId={ownerIdDashboard} />
+            ) : (
+              <div className="text-sm text-green-900/70">Sem ID da escolinha para carregar o dashboard.</div>
+            )}
           </SectionCard>
 
           {canEdit && (

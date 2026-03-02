@@ -1,7 +1,6 @@
 // server/controllers/turmasController
 import type { Request, Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
-import type { TurmaUsuario, Usuario as UsuarioModel, Atleta as AtletaModel } from "@prisma/client";
 import { prisma } from "../prisma.js";
 
 function uniqById<T extends { id: string }>(arr: T[]) {
@@ -768,4 +767,134 @@ export async function substituirAlunosTurma(req: Request, res: Response) {
     removed: paraRemover.length,
     total,
   });
+}
+
+export async function frequencia(req: Request, res: Response) {
+  try {
+    const turmaId = String(req.params.id || "").trim();
+    if (!turmaId) return res.status(400).json({ message: "turmaId inválido" });
+
+    const year = Number(req.query.year || new Date().getFullYear());
+    if (!Number.isFinite(year) || year < 2000 || year > 2100) {
+      return res.status(400).json({ message: "year inválido" });
+    }
+
+    const start = new Date(Date.UTC(year, 0, 1, 0, 0, 0));
+    const end = new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0));
+
+    // 1) membros da turma
+    const membros = await prisma.turmaUsuario.findMany({
+      where: { turmaId },
+      select: { usuarioId: true },
+    });
+
+    const usuarioIds = membros.map((m) => String(m.usuarioId)).filter(Boolean);
+
+    // 2) pegar atletas (nome/sobrenome vem do Atleta no seu schema)
+    const atletas = usuarioIds.length
+      ? await prisma.atleta.findMany({
+          where: { usuarioId: { in: usuarioIds } },
+          select: {
+            id: true,
+            usuarioId: true,
+            nome: true,
+            sobrenome: true,
+            usuario: { select: { nome: true, foto: true } }, // usuario NÃO tem sobrenome
+          },
+        })
+      : [];
+
+    const atletaNomeByAtletaId = new Map<string, { nome: string; foto: string | null }>();
+
+    for (const a of atletas) {
+      const aid = String(a.id);
+
+      const nomeBase = String(a.nome || a.usuario?.nome || "").trim();
+      const sobrenomeBase = String(a.sobrenome || "").trim();
+      const nome = [nomeBase, sobrenomeBase].filter(Boolean).join(" ").trim() || "Atleta";
+
+      atletaNomeByAtletaId.set(aid, { nome, foto: (a.usuario?.foto ?? null) as any });
+    }
+
+    // 3) treinos agendados da turma no ano (no seu schema é dataTreino)
+    const agendados = await prisma.treinoAgendado.findMany({
+      where: {
+        turmaId,
+        dataTreino: { gte: start, lt: end },
+      },
+      select: {
+        id: true,
+        atletaId: true,
+        dataTreino: true,
+      },
+    });
+
+    const agendadosIds = agendados.map((t) => String(t.id)).filter(Boolean);
+
+    // 4) realizados: no seu schema SubmissaoTreino tem criadoEm (não createdAt)
+    const realizadosTreinoAgendadoIds = new Set<string>();
+    const contagemPorAtleta = new Map<string, number>();
+    const realizadosPorMes = Array.from({ length: 12 }).map(() => 0);
+
+    if (agendadosIds.length) {
+      const submissoes = await prisma.submissaoTreino.findMany({
+        where: {
+          treinoAgendadoId: { in: agendadosIds },
+          criadoEm: { gte: start, lt: end },
+        },
+        select: { treinoAgendadoId: true, atletaId: true, criadoEm: true },
+      });
+
+      for (const s of submissoes) {
+        const tid = String(s.treinoAgendadoId || "");
+        if (tid) realizadosTreinoAgendadoIds.add(tid);
+
+        const aid = s.atletaId ? String(s.atletaId) : "";
+        if (aid) contagemPorAtleta.set(aid, (contagemPorAtleta.get(aid) || 0) + 1);
+
+        const m = new Date(s.criadoEm).getUTCMonth();
+        if (m >= 0 && m < 12) realizadosPorMes[m] += 1;
+      }
+    }
+
+    // 5) histórico mensal (agendados x realizados)
+    const agendadosPorMes = Array.from({ length: 12 }).map(() => 0);
+
+    for (const a of agendados) {
+      const d = a?.dataTreino ? new Date(a.dataTreino) : null;
+      if (!d) continue;
+      const m = d.getUTCMonth();
+      if (m >= 0 && m < 12) agendadosPorMes[m] += 1;
+    }
+
+    const historicoMensal = Array.from({ length: 12 }).map((_, i) => ({
+      mes: i + 1,
+      agendados: agendadosPorMes[i],
+      realizados: realizadosPorMes[i],
+    }));
+
+    // 6) top atletas
+    const topAtletas = Array.from(contagemPorAtleta.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([atletaId, qtd]) => ({
+        atletaId,
+        qtd,
+        nome: atletaNomeByAtletaId.get(atletaId)?.nome ?? "Atleta",
+        foto: atletaNomeByAtletaId.get(atletaId)?.foto ?? null,
+      }));
+
+    return res.json({
+      turmaId,
+      year,
+      totalAlunos: usuarioIds.length,
+      totalAgendados: agendados.length,
+      totalRealizados: realizadosTreinoAgendadoIds.size,
+      topAtletas,
+      historicoMensal,
+    });
+  } catch (e: any) {
+    console.error("[turmas/frequencia] erro:", e);
+    return res.status(500).json({ message: e?.message || "Falha ao carregar frequência." });
+  }
 }
