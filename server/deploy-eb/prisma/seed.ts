@@ -12,11 +12,7 @@ import {
   PosicaoCampo,
 } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-<<<<<<< HEAD
 import { sanitizeMediaPath } from '@/utils/mediaSanitizer.js';
-=======
-import { sanitizeMediaPath } from 'server/utils/mediaSanitizer.js';
->>>>>>> 2bdd9e82feb9d72112afb6b3dd59cd9026ee92c6
 
 const prisma = new PrismaClient();
 const m = (p?: string | null) => sanitizeMediaPath(p);
