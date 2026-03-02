@@ -17,6 +17,7 @@ import {
 import Avatar from "../shared/Avatar.js";
 import TurmasManager from "../turmas/TurmasManager.js";
 import ProfilePostsSection from "../perfil/ProfilePostsSection.js";
+import DashboardOrganizacao from "../dashboard/DashboardOrganizacao.js";
 
 const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
@@ -52,7 +53,7 @@ type PayloadClube = {
   metrics: { atletas: number; eventos?: number; conquistas?: number };
 };
 
-type AbaTopo = "perfil" | "eventos" | "atletas" | "professores" | "postagens";
+type AbaTopo = "perfil" | "dashboard" | "eventos" | "atletas" | "professores" | "postagens";
 type SubAbaAtletas = "vinculados" | "observados" | "solicitacoes";
 type AtletaItem = {
   id: string;
@@ -211,7 +212,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
 
   const [data, setData] = useState<PayloadClube | null>(null);
   const [loading, setLoading] = useState(true);
-  const [aba, setAba] = useState<AbaTopo>(canEdit ? "perfil" : "perfil");
+  const [aba, setAba] = useState<AbaTopo>(canEdit ? "dashboard" : "perfil");
   const [subAba, setSubAba] = useState<SubAbaAtletas>("vinculados");
   const [vinculados, setVinculados] = useState<AtletaItem[] | null>(null);
   const [observados, setObservados] = useState<AtletaItem[] | null>(null);
@@ -588,22 +589,49 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
   }, [aba, subAba, token, clubeId, vinculados, observados, solicitacoes]);
 
   async function loadProfessores() {
-    if (!token || !clubeId) return;
+    if (!token) return;
+
+    // ⚠️ IMPORTANTE:
+    // /api/gerenciar/professores usa o USER ID da entidade (igual no GerenciarProfessores),
+    // NÃO o clubeId (tipoUsuarioId).
+    if (!entidadeUsuarioId) {
+      setProfessores([]);
+      return;
+    }
+
     setProfessoresLoading(true);
+
     try {
-      const { data } = await axios.get(`${API.BASE_URL}/api/professores`, {
+      // ✅ IGUAL AO GERENCIAR PROFESSORES
+      const res = await axios.get(`${API.BASE_URL}/api/gerenciar/professores`, {
         headers,
-        params: { ownerTipo: "Clube", ownerId: clubeId },
+        params: {
+          vinculo: "clube",
+          id: entidadeUsuarioId, // ✅ user id do clube
+          limit: 200,
+        },
       });
-      const arr = Array.isArray(data) ? data : data?.items ?? data?.data ?? [];
+
+      let lista = (res.data?.professores || res.data || []) as any[];
+
+      // 🧯 fallback opcional: se vier vazio, tenta o endpoint antigo
+      // (pode remover se quiser 100% igual ao GerenciarProfessores)
+      if (!lista.length && clubeId) {
+        const { data } = await axios.get(`${API.BASE_URL}/api/professores`, {
+          headers,
+          params: { ownerTipo: "Clube", ownerId: clubeId },
+        });
+        lista = (Array.isArray(data) ? data : data?.items ?? data?.data ?? []) as any[];
+      }
+
       setProfessores(
-        (arr ?? []).map((p: any) => ({
+        lista.map((p: any) => ({
           id: String(p.id),
           usuarioId: p.usuarioId ?? p.usuario?.id ?? null,
           nome: p.nome ?? p.usuario?.nome ?? "Professor",
           codigo: p.codigo ?? null,
           cref: p.cref ?? null,
-          fotoUrl: p.fotoUrl ?? p.usuario?.foto ?? null,
+          fotoUrl: p.fotoUrl ?? p.foto ?? p.usuario?.foto ?? null,
         }))
       );
     } catch {
@@ -707,7 +735,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
       loadTurmas();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aba, canEdit, clubeId, token]);
+  }, [aba, canEdit, token, clubeId, entidadeUsuarioId]);
 
   useEffect(() => {
     if (aba === "eventos") {
@@ -815,10 +843,11 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
         perfilTipoIdProp={data.clube.id}
       />
 
-      <div className="mt-4 grid grid-cols-4 gap-2">
+      <div className="mt-4 grid grid-cols-6 gap-2">
         {(canEdit
           ? [
               { key: "perfil", label: "Perfil" },
+              { key: "dashboard", label: "Dashboard" },
               { key: "eventos", label: "Eventos" },
               { key: "atletas", label: "Atletas" },
               { key: "professores", label: "Professores" },
@@ -850,7 +879,7 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
           </button>
         ))}
       </div>
-
+      
       {aba === "perfil" && (
         <section className="mt-4 grid gap-4">
           <div className="bg-white/70 rounded-xl p-4 shadow-sm">
@@ -1087,6 +1116,12 @@ export default function PerfilClube({ idDaUrl, usuarioId }: Props) {
             )}
           </div>
 
+        </section>
+      )}
+
+      {aba === "dashboard" && canEdit && clubeId && (
+        <section className="mt-4">
+          <DashboardOrganizacao ownerTipo="Clube" ownerId={clubeId} />
         </section>
       )}
 
