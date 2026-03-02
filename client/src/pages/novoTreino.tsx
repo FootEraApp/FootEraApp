@@ -2499,7 +2499,10 @@ useEffect(() => {
         datasBase = filtradas;
       }
 
-      if (!datasBase.length || !atletasSelecionados.length) {
+      const alvoTemAtletas = atletasSelecionados.length > 0;
+      const alvoTemTurma = Boolean(elencoSelecionado);
+
+      if (!datasBase.length || (!alvoTemAtletas && !alvoTemTurma)) {
         return 0;
       }
 
@@ -2528,8 +2531,13 @@ useEffect(() => {
       const body = {
         treinoProgramadoId,
         datas: datasLocal,
-        atletaIds: atletasSelecionados.map(String).filter(Boolean),
-        elencosIds: elencoSelecionado ? [elencoSelecionado] : [],
+
+        // se tiver atleta selecionado, manda
+        atletaIds: alvoTemAtletas ? atletasSelecionados.map(String).filter(Boolean) : [],
+
+        // se tiver turma selecionada, manda
+        elencosIds: alvoTemTurma ? [String(elencoSelecionado)] : [],
+
         incluirObservados: false,
         tituloPadrao: nome || "Treino",
       };
@@ -4148,12 +4156,25 @@ useEffect(() => {
               </div>
             )}
 
-            {/* <div className="my-4 p-3 border rounded-md">
-              <div className="mb-3 flex items-end gap-2">
-                <div className="flex-1">
-                  <label className="block text-sm text-gray-700 mb-1">
-                    Turmas da organização
-                  </label>
+            <div className="my-4 p-4 border rounded-xl bg-white">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="font-semibold text-gray-800">Alvo do agendamento</h4>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Você pode agendar para <b>uma turma</b>, <b>atletas individuais</b>, ou <b>ambos</b>.
+                  </p>
+                </div>
+
+                <div className="text-xs text-gray-700 bg-gray-50 border rounded-full px-3 py-1">
+                  {elencoSelecionado ? "✅ Turma selecionada" : "Turma: —"}
+                  {" • "}
+                  {atletasSelecionados.length ? `✅ ${atletasSelecionados.length} atleta(s)` : "Atletas: —"}
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Turma</label>
                   <select
                     className="border w-full p-2 rounded"
                     value={elencoSelecionado}
@@ -4166,30 +4187,36 @@ useEffect(() => {
                       </option>
                     ))}
                   </select>
-                </div>
-                <button
-                  onClick={incluirElencoNoTreino}
-                  className="bg-green-700 text-white px-3 py-2 rounded"
-                >
-                  Usar turma no treino
-                </button>
-              </div>
 
-              <div className="grid sm:grid-cols-3 gap-2">
-                <input
-                  className="border p-2 rounded sm:col-span-2"
-                  placeholder='Nova turma (ex.: "Sub-13 - Noite")'
-                  value={novaTurmaNome}
-                  onChange={(e) => setNovaTurmaNome(e.target.value)}
-                />
-                <button
-                  onClick={criarTurmaComSelecionados}
-                  className="bg-emerald-600 text-white px-3 py-2 rounded"
-                >
-                  + Criar turma com selecionados
-                </button>
+                  {elencoSelecionado && (
+                    <p className="text-[11px] text-gray-600 mt-1">
+                      Ao salvar, o treino será agendado para esta turma nos dias selecionados.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">Criar nova turma (com atletas selecionados)</label>
+                  <div className="flex gap-2">
+                    <input
+                      className="border p-2 rounded flex-1"
+                      placeholder='Ex.: "Sub-13 - Noite"'
+                      value={novaTurmaNome}
+                      onChange={(e) => setNovaTurmaNome(e.target.value)}
+                    />
+                    <button
+                      onClick={criarTurmaComSelecionados}
+                      className="bg-emerald-600 text-white px-3 py-2 rounded whitespace-nowrap"
+                    >
+                      Criar
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-600 mt-1">
+                    Dica: selecione os atletas abaixo e crie a turma.
+                  </p>
+                </div>
               </div>
-            </div> */}
+            </div>
 
             <div className="my-4 p-3 border rounded-md bg-gray-50">
               <div className="flex items-start gap-2 mb-3">
@@ -4290,6 +4317,9 @@ useEffect(() => {
                   limite.setDate(limite.getDate() + 30);
                 }
 
+                const temAlvoAgendamento =
+                  atletasSelecionados.length > 0 || Boolean(elencoSelecionado);
+
                 const diaForaDaJanela = (dia: number) => {
                   if (!isFreePlan || !hoje || !limite) return false;
                   const dateStr = formatYMD(ano, mes, dia);
@@ -4300,6 +4330,14 @@ useEffect(() => {
                 };
 
                 const toggleDia = (dia: number) => {
+                  if (!temAlvoAgendamento) {
+                    showToast(
+                      "Selecione uma turma ou pelo menos 1 atleta para liberar o agendamento automático.",
+                      "info",
+                    );
+                    return;
+                  }
+
                   if (diaForaDaJanela(dia)) {
                     showToast(
                       "No plano Free, você só pode agendar treinos da data de hoje até 30 dias à frente.",
@@ -4310,21 +4348,34 @@ useEffect(() => {
 
                   const dateStr = formatYMD(ano, mes, dia);
                   setDatasAgendamento((prev) => {
-                    if (prev.includes(dateStr)) {
-                      return prev.filter((d) => d !== dateStr);
-                    }
+                    if (prev.includes(dateStr)) return prev.filter((d) => d !== dateStr);
                     const next = [...prev, dateStr];
                     return next.sort();
                   });
                 };
 
+                {!temAlvoAgendamento && (
+                  <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                    Selecione uma <b>turma</b> ou pelo menos <b>1 atleta</b> para liberar o agendamento automático.
+                  </div>
+                )}
+
                 return (
+              <div
+                className={[
+                  "mb-2",
+                  !temAlvoAgendamento ? "opacity-60" : "opacity-100",
+                ].join(" ")}
+              >
+                {!temAlvoAgendamento && (
+                  <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                    Selecione uma <b>turma</b> ou pelo menos <b>1 atleta</b> para liberar o agendamento automático.
+                  </div>
+                )}
+
                   <div className="grid grid-rows-6 gap-1 mb-2">
                     {semanas.map((semana, idxSemana) => (
-                      <div
-                        key={idxSemana}
-                        className="grid grid-cols-7 gap-1"
-                      >
+                      <div key={idxSemana} className="grid grid-cols-7 gap-1">
                         {semana.map((dia, idxDia) => {
                           if (!dia) {
                             return (
@@ -4336,16 +4387,18 @@ useEffect(() => {
                             datasAgendamento.includes(dateStr);
 
                           const bloqueado = diaForaDaJanela(dia);
+                          const bloqueadoPorAlvo = !temAlvoAgendamento;
+                          const disabled = bloqueado || bloqueadoPorAlvo;
 
                           return (
                             <button
                               key={idxDia}
                               type="button"
                               onClick={() => toggleDia(dia)}
-                              disabled={bloqueado}
+                              disabled={disabled}
                               className={[
                                 "h-8 sm:h-9 text-xs sm:text-sm flex items-center justify-center rounded-full border transition-all",
-                                bloqueado
+                                disabled
                                   ? "bg-gray-100 text-gray-400 border-dashed border-gray-300 cursor-not-allowed"
                                   : selecionado
                                   ? "bg-green-700 text-white border-green-700 shadow-sm"
@@ -4359,7 +4412,9 @@ useEffect(() => {
                       </div>
                     ))}
                   </div>
+                </div>
                 );
+
               })()}
 
               {datasAgendamento.length > 0 && (
