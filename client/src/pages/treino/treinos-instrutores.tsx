@@ -3225,7 +3225,7 @@ async function salvarProgressoSessao(sessaoId: string) {
                               : "bg-gray-300 text-gray-600 cursor-not-allowed"
                           }`}
                         >
-                          Realizar Treino
+                          Visualizar Treino
                         </button>
 
                         {s.status === "finalizada" && (
