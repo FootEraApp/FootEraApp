@@ -324,12 +324,12 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
     const treinoExercicios = await prisma.treinoProgramadoExercicio.findMany({
       where: { treinoProgramadoId },
       select: {
-        exercicioId: true,
-        exercicioTemporarioId: true,
         ordem: true,
         repeticoes: true,
+        exercicioId: true,
+        exercicioTemporarioId: true,
+        exercicioPersonalizadoId: true, // ✅ ADICIONAR
       },
-      orderBy: { ordem: "asc" },
     });
 
     const sessaoId = await prisma.$transaction(async (tx) => {
@@ -341,6 +341,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
       sessaoId: sessao.id,
       exercicioId: e.exercicioId ?? null,
       exercicioTemporarioId: e.exercicioTemporarioId ?? null,
+      exercicioPersonalizadoId: e.exercicioPersonalizadoId ?? null, // ✅ ADD
       ordem: e.ordem ?? idx + 1,
       concluido: false,
     }));
@@ -405,8 +406,23 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
                 id: true,
                 exercicioId: true,
                 exercicioTemporarioId: true,
+                exercicioPersonalizadoId: true, // ✅ ADD
                 ordem: true,
-                repeticoes: true,
+                exercicio: {
+                  select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+                },
+                exercicioTemporario: {
+                  select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+                },
+                exercicioPersonalizado: { // ✅ ADD
+                  select: {
+                    id: true,
+                    nome: true,
+                    descricao: true,
+                    videoDemonstrativoUrl: true,
+                    videoPosterUrl: true,
+                  },
+                },
               },
               orderBy: { ordem: "asc" },
             },
@@ -417,19 +433,24 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
             id: true,
             exercicioId: true,
             exercicioTemporarioId: true,
+            exercicioPersonalizadoId: true, // ✅ ADD
             ordem: true,
             concluido: true,
             concluidoEm: true,
             exercicio: {
+              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+            },
+            exercicioTemporario: {
+              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+            },
+            exercicioPersonalizado: { // ✅ ADD
               select: {
                 id: true,
                 nome: true,
                 descricao: true,
                 videoDemonstrativoUrl: true,
+                videoPosterUrl: true,
               },
-            },
-            exercicioTemporario: {
-              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
             },
           },
           orderBy: { ordem: "asc" },
@@ -455,7 +476,6 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
     if (!usuarioId) return res.status(401).json({ error: "Usuário não autenticado." });
 
     const onlyToday = String(req.query.onlyToday || "") === "1";
-    const onlyTurma = String(req.query.onlyTurma || "") === "1";
     const { start: inicio, end: fim } = getTodayRangeBRT();
 
     const tipoRaw = String(u.tipo || "").toLowerCase();
@@ -535,8 +555,24 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
                 id: true,
                 exercicioId: true,
                 exercicioTemporarioId: true,
+                exercicioPersonalizadoId: true, // ✅ ADD
                 ordem: true,
                 repeticoes: true,
+                exercicio: {
+                  select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+                },
+                exercicioTemporario: {
+                  select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+                },
+                exercicioPersonalizado: { // ✅ ADD
+                  select: {
+                    id: true,
+                    nome: true,
+                    descricao: true,
+                    videoDemonstrativoUrl: true,
+                    videoPosterUrl: true,
+                  },
+                },
               },
               orderBy: { ordem: "asc" },
             },
@@ -545,26 +581,25 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
         exercicios: {
           select: {
             id: true,
-            sessaoId: true,
             exercicioId: true,
             exercicioTemporarioId: true,
+            exercicioPersonalizadoId: true, // ✅ ADD
             ordem: true,
             concluido: true,
             concluidoEm: true,
             exercicio: {
-              select: {
-                id: true,
-                nome: true,
-                descricao: true,
-                videoDemonstrativoUrl: true,
-              },
+              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
             },
             exercicioTemporario: {
+              select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
+            },
+            exercicioPersonalizado: { // ✅ ADD
               select: {
                 id: true,
                 nome: true,
                 descricao: true,
                 videoDemonstrativoUrl: true,
+                videoPosterUrl: true,
               },
             },
           },
@@ -593,11 +628,10 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
       if (sessao.treino && Array.isArray(sessao.treino.exercicios)) {
         sessao.treino.exercicios.forEach((tpe: any) => {
           const key =
-            tpe.exercicioId
-              ? `E:${String(tpe.exercicioId)}`
-              : tpe.exercicioTemporarioId
-                ? `T:${String(tpe.exercicioTemporarioId)}`
-                : "";
+            tpe.exercicioId ? `E:${String(tpe.exercicioId)}`
+            : tpe.exercicioTemporarioId ? `T:${String(tpe.exercicioTemporarioId)}`
+            : tpe.exercicioPersonalizadoId ? `P:${String(tpe.exercicioPersonalizadoId)}`
+            : "";
 
           if (!key) return;
           mapaReps.set(key, tpe.repeticoes != null ? String(tpe.repeticoes) : null);
@@ -608,17 +642,37 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
         const key =
           se.exercicioId ? `E:${String(se.exercicioId)}`
           : se.exercicioTemporarioId ? `T:${String(se.exercicioTemporarioId)}`
+          : se.exercicioPersonalizadoId ? `P:${String(se.exercicioPersonalizadoId)}`
           : "";
 
         const video =
           se.exercicio?.videoDemonstrativoUrl ??
           se.exercicioTemporario?.videoDemonstrativoUrl ??
+          se.exercicioPersonalizado?.videoDemonstrativoUrl ??
           null;
+
+        const nome =
+          se.exercicio?.nome ??
+          se.exercicioTemporario?.nome ??
+          se.exercicioPersonalizado?.nome ??
+          null;
+
+        const detalhes =
+          se.exercicio?.descricao ??
+          se.exercicioTemporario?.descricao ??
+          se.exercicioPersonalizado?.descricao ??
+          null;
+
+        const poster =
+          se.exercicioPersonalizado?.videoPosterUrl ?? null;
 
         return {
           ...se,
+          nome,
+          detalhes,
           repeticoes: (key && mapaReps.get(key)) ?? null,
-          videoDemonstrativoUrl: video, 
+          videoDemonstrativoUrl: video,
+          videoPosterUrl: poster,
         };
       });
 

@@ -1,0 +1,261 @@
+import type { Response } from "express";
+import { prisma } from "../prisma.js";
+
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+}
+function endOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0, 0);
+}
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+// ✅ no seu schema, TreinoProgramado tem createdAt
+const TREINO_PROGRAMADO_DATE_FIELD = "createdAt" as const;
+
+// ✅ no seu schema, SubmissaoTreino tem criadoEm (não tem createdAt)
+const SUBMISSAO_TREINO_DATE_FIELD = "criadoEm" as const;
+
+export async function getDashboardOrganizacao(req: any, res: Response) {
+  try {
+    const ownerTipoRaw = String(req.query.ownerTipo || "");
+    const ownerId = String(req.query.ownerId || "");
+    const ano = Number(req.query.ano || new Date().getFullYear());
+
+    const ownerTipo = ownerTipoRaw === "Escolinha" ? "Escolinha" : "Clube";
+
+    if (!ownerId) {
+      return res.status(400).json({ message: "ownerId é obrigatório" });
+    }
+
+    // =========================
+    // ✅ AUTORIZAÇÃO: DONO OU ADMIN
+    // =========================
+    const ownerTipoLower = ownerTipo.toLowerCase(); // "clube" | "escolinha"
+
+    const tokenTipo = String(
+      req.user?.tipo ??
+        req.user?.tipoUsuario ??
+        req.user?.usuarioTipoRaw ??
+        ""
+    ).toLowerCase();
+
+    const tokenTipoId = String(
+      req.user?.tipoUsuarioId ??
+        req.user?.tipoUsuarioID ??
+        req.user?.clubeId ??
+        req.user?.escolinhaId ??
+        req.user?.tipoId ??
+        ""
+    );
+
+    // ✅ fallback por headers (você mandou no front)
+    const headerTipo = String(req.headers["x-tipo-usuario"] ?? "").toLowerCase();
+    const headerTipoId = String(req.headers["x-tipo-usuario-id"] ?? "");
+
+    const finalTipo = (tokenTipo || headerTipo).toLowerCase();
+    const finalTipoId = String(tokenTipoId || headerTipoId || "");
+
+    // admin por tipo no token/header
+    let isAdmin =
+      finalTipo === "admin" ||
+      finalTipo === "administrador" ||
+      finalTipo === "adm";
+
+    // ✅ admin por tabela Administrador (se existir no seu schema)
+    if (!isAdmin && req.user?.id) {
+      try {
+        const adminRow = await prisma.administrador.findFirst({
+          where: { usuarioId: String(req.user.id) },
+          select: { id: true },
+        });
+        isAdmin = !!adminRow;
+      } catch {
+        // se não existir model/tabela, ignora
+      }
+    }
+
+    const isSameOwner =
+      (finalTipo === "clube" &&
+        ownerTipoLower === "clube" &&
+        finalTipoId === ownerId) ||
+      (finalTipo === "escolinha" &&
+        ownerTipoLower === "escolinha" &&
+        finalTipoId === ownerId);
+
+    if (!isAdmin && !isSameOwner) {
+      return res.status(403).json({
+        message: "Sem permissão para ver este dashboard.",
+      });
+    }
+
+    // =========================
+    // ✅ DADOS DO DASHBOARD
+    // =========================
+    const now = new Date();
+    const mesAtualStart = startOfMonth(now);
+    const mesAtualEnd = endOfMonth(now);
+
+    // filtro por owner no TreinoProgramado
+    const whereTreinoProgramado: any =
+      ownerTipo === "Clube" ? { clubeId: ownerId } : { escolinhaId: ownerId };
+
+    // filtro por owner no TreinoAgendado via relação treinoProgramado
+    const whereAgendado: any =
+      ownerTipo === "Clube"
+        ? { treinoProgramado: { clubeId: ownerId } }
+        : { treinoProgramado: { escolinhaId: ownerId } };
+
+    // ✅ 1) KPIs
+    const treinosLancadosTotal = await prisma.treinoProgramado.count({
+      where: whereTreinoProgramado,
+    });
+
+    const treinosLancadosMes = await prisma.treinoProgramado.count({
+      where: {
+        ...whereTreinoProgramado,
+        [TREINO_PROGRAMADO_DATE_FIELD]: { gte: mesAtualStart, lt: mesAtualEnd },
+      } as any,
+    });
+
+    const agendamentosMes = await prisma.treinoAgendado.count({
+      where: {
+        ...whereAgendado,
+        dataTreino: { gte: mesAtualStart, lt: mesAtualEnd },
+      } as any,
+    });
+
+    const concluidosMes = await prisma.submissaoTreino.count({
+        where: {
+            aprovado: true,
+            [SUBMISSAO_TREINO_DATE_FIELD]: { gte: mesAtualStart, lt: mesAtualEnd },
+            treinoAgendado: whereAgendado,
+        } as any,
+    });
+
+    // alunos ativos 30d (por submissões)
+    const d30 = new Date();
+    d30.setDate(d30.getDate() - 30);
+
+    const ativos30d = await prisma.submissaoTreino.findMany({
+        where: {
+            aprovado: true,
+            [SUBMISSAO_TREINO_DATE_FIELD]: { gte: d30 },
+            treinoAgendado: whereAgendado,
+        } as any,
+        select: { atletaId: true },
+        distinct: ["atletaId"],
+    });
+
+    const alunosAtivos30d = ativos30d.length;
+
+    const taxaConclusaoMes =
+      agendamentosMes > 0 ? (concluidosMes / agendamentosMes) * 100 : 0;
+
+    // ✅ 2) Histórico por mês (ano inteiro)
+    const historicoPorMes: Array<{
+      mes: string;
+      lancados: number;
+      agendados: number;
+      concluidos: number;
+    }> = [];
+
+    for (let m = 0; m < 12; m++) {
+      const ini = new Date(ano, m, 1);
+      const fim = new Date(ano, m + 1, 1);
+
+      const [lancados, agendados, concluidos] = await Promise.all([
+        prisma.treinoProgramado.count({
+          where: {
+            ...whereTreinoProgramado,
+            [TREINO_PROGRAMADO_DATE_FIELD]: { gte: ini, lt: fim },
+          } as any,
+        }),
+        prisma.treinoAgendado.count({
+          where: { ...whereAgendado, dataTreino: { gte: ini, lt: fim } } as any,
+        }),
+        prisma.submissaoTreino.count({
+          where: {
+            aprovado: true,
+            [SUBMISSAO_TREINO_DATE_FIELD]: { gte: ini, lt: fim },
+            treinoAgendado: whereAgendado,
+          } as any,
+        }),
+      ]);
+
+      historicoPorMes.push({
+        mes: `${pad2(m + 1)}/${ano}`,
+        lancados,
+        agendados,
+        concluidos,
+      });
+    }
+
+    const submissoesMes = await prisma.submissaoTreino.findMany({
+    where: {
+        aprovado: true,
+        [SUBMISSAO_TREINO_DATE_FIELD]: { gte: mesAtualStart, lt: mesAtualEnd },
+        treinoAgendado: whereAgendado,
+    } as any,
+    select: { atletaId: true },
+    });
+
+    const countByAtleta = new Map<string, number>();
+    for (const s of submissoesMes) {
+      if (!s.atletaId) continue;
+      countByAtleta.set(s.atletaId, (countByAtleta.get(s.atletaId) || 0) + 1);
+    }
+
+    const top = Array.from(countByAtleta.entries())
+      .map(([atletaId, presencasMes]) => ({ atletaId, presencasMes }))
+      .sort((a, b) => b.presencasMes - a.presencasMes)
+      .slice(0, 10);
+
+    const atletaIds = top.map((t) => t.atletaId);
+
+    const atletas = atletaIds.length
+      ? await prisma.atleta.findMany({
+          where: { id: { in: atletaIds } },
+          select: {
+            id: true,
+            usuario: { select: { nome: true, foto: true } },
+          },
+        })
+      : [];
+
+    const atletaById = new Map(atletas.map((a) => [a.id, a]));
+
+    const topFrequencia = top.map((t) => {
+      const a = atletaById.get(t.atletaId);
+      return {
+        atletaId: t.atletaId,
+        nome: a?.usuario?.nome || "Atleta",
+        foto: a?.usuario?.foto || null,
+        presencasMes: t.presencasMes,
+      };
+    });
+
+    const porTurma: any[] = [];
+
+    return res.json({
+      kpis: {
+        treinosLancadosTotal,
+        treinosLancadosMes,
+        agendamentosMes,
+        concluidosMes,
+        alunosAtivos30d,
+        taxaConclusaoMes,
+      },
+      historicoPorMes,
+      topFrequencia,
+      porTurma,
+    });
+  } catch (e: any) {
+    console.error("[dashboard organizacao] erro:", e);
+    return res.status(500).json({
+      message: "Erro ao gerar dashboard.",
+      detail: e?.message,
+    });
+  }
+}
