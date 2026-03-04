@@ -1005,44 +1005,71 @@ function removerFiltroMetodologia(label: string) {
                   (tp.exercicios ?? []).map((ex: any, idx: number) => {
                     const exNormal = ex.exercicio ?? null;
                     const exTemp = ex.exercicioTemporario ?? ex.exercicio_temporario ?? null;
+                    // ✅ NOVO: personalizado (camelCase e snake_case)
+                    const exPers =
+                      ex.exercicioPersonalizado ??
+                      ex.exercicio_personalizado ??
+                      ex.exercicioPersonalizadoRef ?? // se você tiver algum nome diferente
+                      null;
 
-                    // ✅ id único SEMPRE (normal > temporário > fallback com idx)
+                    // ✅ id único SEMPRE (normal > temporário > personalizado > fallback)
                     const resolvedId =
                       exNormal?.id
                         ? String(exNormal.id)
                         : exTemp?.id
-                        ? `temp:${String(exTemp.id)}`
-                        : `tempidx:${String(tp.id)}:${idx}`;
+                          ? `temp:${String(exTemp.id)}`
+                          : exPers?.id
+                            ? `pers:${String(exPers.id)}`
+                            : `tempidx:${String(tp.id)}:${idx}`;
 
-                    // ✅ nome SEMPRE (normal > temporário > "Exercício")
+                    // ✅ nome SEMPRE (normal > temporário > personalizado > "Exercício")
                     const resolvedNome =
-                      exNormal?.nome ?? exTemp?.nome ?? exTemp?.titulo ?? "Exercício";
+                      exNormal?.nome ??
+                      exTemp?.nome ??
+                      exTemp?.titulo ??
+                      exPers?.nome ??
+                      exPers?.titulo ??
+                      "Exercício";
+
+                    // ✅ mídia (normal > temporário > personalizado)
+                    const resolvedVideo =
+                      exNormal?.videoDemonstrativoUrl ??
+                      exNormal?.videoUrl ??
+                      exTemp?.videoDemonstrativoUrl ??
+                      exTemp?.videoUrl ??
+                      exPers?.videoDemonstrativoUrl ??
+                      exPers?.videoUrl ??
+                      null;
+
+                    // ✅ imagem/poster (se quiser usar poster como “img”)
+                    const resolvedImg =
+                      exNormal?.imgDemonstrativaUrl ??
+                      exNormal?.imagemUrl ??
+                      exTemp?.imgDemonstrativaUrl ??
+                      exTemp?.imagemUrl ??
+                      exPers?.videoPosterUrl ??
+                      exPers?.imgDemonstrativaUrl ??
+                      exPers?.imagemUrl ??
+                      null;
 
                     return {
-                      // ✅ chave única por linha (vamos usar isso no render e checklist)
                       _key: `${resolvedId}:${idx}`,
 
                       exercicio: {
                         id: resolvedId,
                         nome: resolvedNome,
+                        videoDemonstrativoUrl: resolvedVideo,
+                        imgDemonstrativaUrl: resolvedImg,
 
-                        // ✅ mídia direta: normal > temporário
-                        videoDemonstrativoUrl:
-                          exNormal?.videoDemonstrativoUrl ??
-                          exNormal?.videoUrl ??
-                          exTemp?.videoDemonstrativoUrl ??
-                          exTemp?.videoUrl ??
-                          null,
-
-                        imgDemonstrativaUrl:
-                          exNormal?.imgDemonstrativaUrl ??
-                          exNormal?.imagemUrl ??
-                          exTemp?.imgDemonstrativaUrl ??
-                          exTemp?.imagemUrl ??
+                        // ✅ opcional: se você quiser usar em algum lugar depois
+                        descricao:
+                          exNormal?.descricao ??
+                          exTemp?.descricao ??
+                          exPers?.descricao ??
                           null,
                       },
 
-                      repeticoes: ex.repeticoes ?? exTemp?.repeticoes ?? "",
+                      repeticoes: ex.repeticoes ?? exTemp?.repeticoes ?? exPers?.repeticoes ?? "",
                     };
                   }) ?? [],
                 criador: tp.criador ?? null,
