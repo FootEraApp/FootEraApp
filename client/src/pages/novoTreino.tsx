@@ -851,6 +851,24 @@ export default function NovoTreino() {
     message: string;
   } | null>(null);
 
+  const [horaAgendamento, setHoraAgendamento] = useState<string>("18:00");
+  const [horaAgendamentoInput, setHoraAgendamentoInput] = useState<string>("18:00");
+
+  function hhmmNow() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, "0");
+    const m = String(now.getMinutes()).padStart(2, "0");
+    return `${h}:${m}`;
+  }
+  function isValidHHMM(v: string) {
+    return /^\d{2}:\d{2}$/.test(v);
+  }
+  function isTodayYMD(ymd: string) {
+    const t = new Date();
+    const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    return ymd === today;
+  }
+
   const jaSincronizouCalendarioComDatas = useRef(false);
   type ProfessorItem = { id: string; nome: string; codigo?: string; cref?: string };
 
@@ -2515,10 +2533,15 @@ useEffect(() => {
       const headers: any = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
 
-      const baseTime =
-        dataTreino && dataTreino.includes("T")
-          ? dataTreino.split("T")[1].slice(0, 5)
-          : "18:00";
+      const baseTime = isValidHHMM(horaAgendamento) ? horaAgendamento : "18:00";
+      const temHoje = datasBase.some((d) => isTodayYMD(toDateOnlyBR(d) || ""));
+      if (temHoje) {
+        const minNow = hhmmNow();
+        if (baseTime < minNow) {
+          showToast(`Para hoje, escolha um horário a partir de ${minNow}.`, "info");
+          return 0;
+        }
+      }
 
       const datasLocal = datasBase.map((d) => {
       const dateOnly = toDateOnlyBR(d);
@@ -2531,13 +2554,12 @@ useEffect(() => {
       const body = {
         treinoProgramadoId,
         datas: datasLocal,
-
         // se tiver atleta selecionado, manda
         atletaIds: alvoTemAtletas ? atletasSelecionados.map(String).filter(Boolean) : [],
-
-        // se tiver turma selecionada, manda
-        elencosIds: alvoTemTurma ? [String(elencoSelecionado)] : [],
-
+        // ✅ TURMA: manda no campo correto
+        turmaIds: alvoTemTurma ? [String(elencoSelecionado)] : [],
+        // ✅ opcional: deixa vazio pra não confundir com Elenco
+        elencosIds: [],
         incluirObservados: false,
         tituloPadrao: nome || "Treino",
       };
@@ -4414,9 +4436,60 @@ useEffect(() => {
                   </div>
                 </div>
                 );
-
               })()}
 
+              {datasAgendamento.length > 0 && (
+                <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+                  <div className="font-bold text-gray-900">Horário do treino</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    Se algum dia selecionado for <b>hoje</b>, o horário precisa ser <b>maior que o atual</b>.
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-3">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="HH:mm"
+                      value={horaAgendamentoInput}
+                      onChange={(e) => {
+                        let v = e.target.value.replace(/[^\d:]/g, "");
+                        const onlyDigits = v.replace(":", "");
+                        if (!v.includes(":") && onlyDigits.length >= 3) {
+                          v = `${onlyDigits.slice(0, 2)}:${onlyDigits.slice(2, 4)}`;
+                        }
+                        if (v.length > 5) v = v.slice(0, 5);
+                        setHoraAgendamentoInput(v);
+                      }}
+                      onBlur={() => {
+                        const v = horaAgendamentoInput;
+
+                        if (!isValidHHMM(v)) {
+                          setHoraAgendamentoInput(horaAgendamento);
+                          return;
+                        }
+
+                        // se tem "hoje" nas datas, trava para >= agora
+                        const temHoje = datasAgendamento.some(isTodayYMD);
+                        if (temHoje) {
+                          const minNow = hhmmNow();
+                          if (v < minNow) {
+                            showToast(`Para hoje, escolha um horário a partir de ${minNow}.`, "info");
+                            setHoraAgendamento(minNow);
+                            setHoraAgendamentoInput(minNow);
+                            return;
+                          }
+                        }
+
+                        setHoraAgendamento(v);
+                        setHoraAgendamentoInput(v);
+                      }}
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-green-500"
+                    />
+
+                    <div className="text-xs text-gray-500">Ex.: 07:30, 14:00, 19:15</div>
+                  </div>
+                </div>
+              )}
               {datasAgendamento.length > 0 && (
                 <div className="mt-2 text-xs text-gray-700">
                   <span className="font-semibold">Dias selecionados:</span>{" "}
@@ -4437,19 +4510,14 @@ useEffect(() => {
               )}
 
               {datasAgendamento.length > 0 &&
-                atletasSelecionados.length === 0 && (
+                atletasSelecionados.length === 0 &&
+                !elencoSelecionado && (
                   <p className="mt-2 text-xs text-amber-700">
-                    Você já escolheu datas, mas ainda não selecionou atletas. O
-                    treino só será agendado para quem estiver selecionado
-                    acima.
+                    Você já escolheu datas, mas ainda não selecionou nem turma nem atletas. O treino só será
+                    agendado para quem estiver selecionado acima.
                   </p>
-                )}
+              )}
             </div>
-
-
-
-
-
           </StepCard>
         )}
       </div>
