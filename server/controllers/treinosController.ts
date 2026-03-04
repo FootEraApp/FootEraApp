@@ -5101,12 +5101,14 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
       datas = [],
       atletaIds = [],
       elencosIds = [],
+      turmaIds = [],        // ✅ ADD
       incluirObservados = false,
     } = req.body as {
       treinoProgramadoId: string;
       datas: string[];
       atletaIds?: string[];
       elencosIds?: string[];
+      turmaIds?: string[];  // ✅ ADD
       incluirObservados?: boolean;
     };
 
@@ -5126,6 +5128,57 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
     }
 
     const resolved = await resolveEntidade(req.userId!);
+
+    // ✅ atletas vindos de TURMAS (turmaUsuario -> atleta.usuarioId)
+    const turmaIdsClean = Array.isArray(turmaIds)
+      ? turmaIds.map(String).map((s) => s.trim()).filter(Boolean)
+      : [];
+
+    const atletasFromTurmas = turmaIdsClean.length
+      ? await (async () => {
+          // 1) checar permissão (turma pertence ao dono logado)
+          const resolvedMe = resolved; // já calculado acima
+          const tipoUser = resolvedMe?.tipo;
+
+          // pega turmas permitidas
+          const turmaOwnerOr: Prisma.TurmaWhereInput[] = [];
+          if (tipoUser === "professor" && resolvedMe?.id) {
+            turmaOwnerOr.push({ professores: { some: { professorId: resolvedMe.id } } });
+          }
+          if (tipoUser === "clube" && resolvedMe?.id) turmaOwnerOr.push({ clubeId: resolvedMe.id });
+          if (tipoUser === "escolinha" && resolvedMe?.id) turmaOwnerOr.push({ escolinhaId: resolvedMe.id });
+
+          const turmasOk = await prisma.turma.findMany({
+            where: {
+              id: { in: turmaIdsClean },
+              ...(turmaOwnerOr.length ? { OR: turmaOwnerOr } : {}),
+            },
+            select: { id: true },
+          });
+
+          const turmasOkIds = new Set(turmasOk.map((t) => t.id));
+          const turmasValidas = turmaIdsClean.filter((id) => turmasOkIds.has(id));
+
+          if (!turmasValidas.length) return [] as { id: string }[];
+
+          // 2) membros da turma (usuarioId)
+          const membros = await prisma.turmaUsuario.findMany({
+            where: { turmaId: { in: turmasValidas } },
+            select: { usuarioId: true },
+          });
+
+          const usuarioIds = Array.from(new Set(membros.map((m) => m.usuarioId).filter(Boolean)));
+          if (!usuarioIds.length) return [] as { id: string }[];
+
+          // 3) usuários -> atletas
+          const atletas = await prisma.atleta.findMany({
+            where: { usuarioId: { in: usuarioIds } },
+            select: { id: true },
+          });
+
+          return atletas;
+        })()
+      : [];
 
     const atletasDiretos = atletaIds.length
       ? await prisma.atleta.findMany({
@@ -5160,6 +5213,7 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
       new Set([
         ...atletasDiretos.map((a) => a.id),
         ...atletasFromElencos.map((a) => a.atletaId),
+        ...atletasFromTurmas.map((a) => a.id), // ✅ ADD
         ...observados.map((a) => a.id),
       ])
     );
@@ -5209,9 +5263,9 @@ export async function agendarRotinaMensal(req: AuthenticatedRequest, res: Respon
     }
 
     const datasParsed = datas
-      .map((s) => parseDateOnlySafe(s))
-      .filter((d) => !Number.isNaN(d.getTime()));
-
+      .map((s) => parseDateInput(s))
+      .filter((d): d is Date => !!d && !Number.isNaN(d.getTime()));
+      
     if (!datasParsed.length) {
       return res.status(400).json({ message: "Nenhuma data válida em 'datas'." });
     }

@@ -117,6 +117,32 @@ function startOfToday() {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 }
 
+function hhmmNow() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, "0");
+  const m = String(now.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`; // "HH:mm"
+}
+
+function todayISO() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function isValidHHMM(v: string) {
+  return /^\d{2}:\d{2}$/.test(v);
+}
+
+function clampToMinIfToday(v: string, hasTodaySelected: boolean) {
+  if (!hasTodaySelected) return v;
+
+  const minNow = hhmmNow();
+  return v < minNow ? minNow : v;
+}
+
 function isPastDayISO(dayISO: string) {
   const [y, m, d] = dayISO.split("-").map((n) => Number(n));
   const dt = new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
@@ -316,24 +342,29 @@ function isExpiredStatus(s?: string | null) {
   return v === "EXPIRED" || v === "EXPIRADO" || v === "PERDIDO";
 }
 
+const LOST_GRACE_MINUTES = 60;
+
+function addMinutes(date: Date, minutes: number) {
+  return new Date(date.getTime() + minutes * 60_000);
+}
+
 function isLost(t: TreinoAgendadoItem) {
+  // 1) se backend já marcou como expirado/perdido, respeita
   if (
     isExpiredStatus(t.meuStatus) ||
     isExpiredStatus(t.execucaoStatus) ||
     isExpiredStatus(t.status)
-  )
-    return true;
+  ) return true;
 
   const dt = parseAsDate(t.dataTreino);
   if (!dt) return false;
 
-  const today = new Date();
-  const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const treinoOnly = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
-  const passouDoDia = treinoOnly.getTime() < todayOnly.getTime();
   const concluido = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
+  if (concluido) return false;
 
-  return passouDoDia && !concluido;
+  // 2) regra nova: passou 1h do horário agendado => perdido
+  const limite = addMinutes(dt, LOST_GRACE_MINUTES);
+  return new Date().getTime() > limite.getTime();
 }
 
 function formatDayPtBR(dayISO: string) {
@@ -727,12 +758,11 @@ export default function AgendaTreinos({
   const [buscaTreino, setBuscaTreino] = useState("");
   const [footeraLoaded, setFooteraLoaded] = useState(false);
   const [selectedTime, setSelectedTime] = useState<string>("12:00");
-  // 🔒 PRO gate (bloqueia aba FootEra para não assinantes)
+  const [selectedTimeInput, setSelectedTimeInput] = useState<string>("12:00");
   const [proLoading, setProLoading] = useState(false);
   const [isPro, setIsPro] = useState(true); // default true pra não piscar bloqueio antes de checar
   const [proGateChecked, setProGateChecked] = useState(false);
   const parceirosCacheRef = useRef<TreinoProgramadoItem[]>([]);
-
   
   async function checkIsPro() {
     const token =
@@ -843,6 +873,10 @@ export default function AgendaTreinos({
     setIsPro(true);
   }, [open]);
 
+  useEffect(() => {
+    setSelectedTimeInput(selectedTime);
+  }, [selectedTime]);
+
   // ✅ checar assinatura quando entrar na aba FootEra
   useEffect(() => {
     if (!open) return;
@@ -854,6 +888,14 @@ export default function AgendaTreinos({
     checkIsPro();
   }, [open, abaTreinos, proGateChecked]);
 
+  const hasTodaySelected = useMemo(() => {
+    const t = todayISO();
+    return selectedDays.includes(t);
+  }, [selectedDays]);
+
+  const minTimeToday = useMemo(() => {
+    return hhmmNow();
+  }, [hasTodaySelected]); // recalcula quando renderiza
 
   // ✅ buscar treinos dos professores parceiros SOMENTE quando clicar na aba FootEra
   useEffect(() => {
@@ -996,6 +1038,22 @@ export default function AgendaTreinos({
 
     setSalvandoAgenda(true);
     try {
+      // garante que o valor digitado foi “confirmado”
+      if (isValidHHMM(selectedTimeInput) && selectedTimeInput !== selectedTime) {
+        const fixed = clampToMinIfToday(selectedTimeInput, selectedDays.includes(todayISO()));
+        setSelectedTime(fixed);
+        setSelectedTimeInput(fixed);
+      }
+
+      if (selectedDays.includes(todayISO())) {
+        const minNow = hhmmNow();
+        if (selectedTime < minNow) {
+          alert(`Para hoje, escolha um horário a partir de ${minNow}.`);
+          setSelectedTime(minNow);
+          return;
+        }
+      }
+
       await onAgendar({ selectedDays, treinoProgramadoId, selectedTime });
 
       const list = await fetchAgendados3Meses(fetchAgendados, cursorMonth);
@@ -1276,13 +1334,13 @@ export default function AgendaTreinos({
                                 })
                                 : null;
 
-                              const statusText = statusLabel(t.meuStatus ?? t.execucaoStatus ?? t.status);
+                              const statusText = done ? "Concluído" : lost ? "Perdido" : "Pendente";
+
                               const statusClass = done
                                 ? "text-emerald-600"
                                 : lost
                                 ? "text-red-600"
                                 : "text-zinc-600";
-
                               const treinoKey = `${day}__${String(
                                 t.treinoProgramadoId ?? t.treinoProgramado?.id ?? t.id
                               )}`;
@@ -1435,9 +1493,37 @@ export default function AgendaTreinos({
 
                 <div className="mt-3 flex items-center gap-3">
                   <input
-                    type="time"
-                    value={selectedTime}
-                    onChange={(e) => setSelectedTime(e.target.value)}
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="HH:mm"
+                    value={selectedTimeInput}
+                    onChange={(e) => {
+                      // deixa digitar livre, só “limpa” caracteres estranhos
+                      let v = e.target.value.replace(/[^\d:]/g, "");
+                      // opcional: auto-coloca ":" quando digitar 4 dígitos (ex: 1420 -> 14:20)
+                      const onlyDigits = v.replace(":", "");
+                      if (!v.includes(":") && onlyDigits.length >= 3) {
+                        v = `${onlyDigits.slice(0, 2)}:${onlyDigits.slice(2, 4)}`;
+                      }
+                      // limita tamanho
+                      if (v.length > 5) v = v.slice(0, 5);
+                      setSelectedTimeInput(v);
+                    }}
+                    onBlur={() => {
+                      const v = selectedTimeInput;
+                      // se não completou HH:mm, volta pro último válido
+                      if (!isValidHHMM(v)) {
+                        setSelectedTimeInput(selectedTime);
+                        return;
+                      }
+                      // se hoje está selecionado, “trava” pro mínimo ao sair do campo
+                      const fixed = clampToMinIfToday(v, hasTodaySelected);
+                      if (fixed !== v) {
+                        alert(`Para hoje, escolha um horário a partir de ${hhmmNow()}.`);
+                      }
+                      setSelectedTime(fixed);
+                      setSelectedTimeInput(fixed);
+                    }}
                     className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-emerald-400"
                   />
 
