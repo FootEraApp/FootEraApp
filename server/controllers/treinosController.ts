@@ -3376,6 +3376,7 @@ export async function criarTreinoProgramado(
     });
 
     const usuarioEhParceiro = Boolean(usuarioDb?.parceiro);
+    const bypassLimitesTreinoParceiro = tipoStr === "professor" && usuarioEhParceiro;    // ✅ parceiro pode criar ilimitado (apenas professor)
     const parceiroSolicitado = Boolean(parceiro);
 
     if (parceiroSolicitado && !usuarioEhParceiro) {
@@ -3442,7 +3443,11 @@ export async function criarTreinoProgramado(
       : null;
 
     // limites (professor)
-    if (tipoStr === "professor" && !can(userCtx, FEAT.TREINOS_ILIMITADOS)) {
+    if (
+      tipoStr === "professor" &&
+      !bypassLimitesTreinoParceiro &&
+      !can(userCtx, FEAT.TREINOS_ILIMITADOS)
+    ) {
       const profId = String(tipoUsuarioIdFinal);
       const ativos = await prisma.treinoProgramado.count({
         where: {
@@ -3468,7 +3473,11 @@ export async function criarTreinoProgramado(
       }
     }
 
-    if (tipoStr === "professor" && !can(userCtx, FEAT.ROTINAS_ILIMITADAS)) {
+    if (
+      tipoStr === "professor" &&
+      !bypassLimitesTreinoParceiro &&
+      !can(userCtx, FEAT.ROTINAS_ILIMITADAS)
+    ) {
       const profId = String(tipoUsuarioIdFinal);
       const templates = await prisma.treinoProgramado.count({
         where: { naoExpira: true, Professor: { is: { id: profId } } },
@@ -3519,69 +3528,29 @@ export async function criarTreinoProgramado(
       (req.body as any)?.apagarTreinoProgramadoId || ""
     ).trim();
 
-    const plan = String((req.user as any)?.plano || (req.user as any)?.plan || "FREE");
+    const plan = String(
+      (req.user as any)?.plano || (req.user as any)?.plan || "FREE"
+    ).trim().toUpperCase();
+
     const limit = planLimitFor(plan, "treinos_programados_mes"); // 5 no FREE
 
-    if (Number.isFinite(limit)) {
+    // ✅ parceiro professor não entra em limite
+    if (!bypassLimitesTreinoParceiro && Number.isFinite(limit)) {
+      // monta o "owner" correto (e evita professorIdToConnect null)
       const ownerWhere =
         tipoNorm === "clube"
           ? { clubeId: String(tipoUsuarioIdFinal) }
           : tipoNorm === "escolinha" || tipoNorm === "escola"
           ? { escolinhaId: String(tipoUsuarioIdFinal) }
           : tipoNorm === "professor"
-          ? {
-              OR: [
-                { professorId: String(professorIdToConnect) },
-                { criadorProfessorId: String(professorIdToConnect) },
-              ],
-            }
-          : null;
-
-      if (ownerWhere) {
-        const result = await prisma.$transaction(async (tx) => {
-          // 1) se veio id pra apagar, apaga (garantindo ownership)
-          if (apagarTreinoProgramadoId) {
-            await tx.treinoProgramado.deleteMany({
-              where: { id: apagarTreinoProgramadoId, ...ownerWhere },
-            });
-          }
-
-          // 2) conta de novo
-          const used = await tx.treinoProgramado.count({ where: ownerWhere });
-
-          if (used >= Number(limit)) {
-            const meus = await tx.treinoProgramado.findMany({
-              where: ownerWhere,
-              select: { id: true, nome: true, createdAt: true },
-              orderBy: { createdAt: "desc" },
-              take: 50,
-            });
-
-            return { allowed: false as const, meus };
-          }
-
-          return { allowed: true as const };
-        });
-
-        if (!result.allowed) {
-          return res.status(400).json({
-            code: "LIMIT_TREINOS_PROGRAMADOS",
-            message: `Você já possui ${Number(limit)} treinos. Escolha um para apagar e liberar espaço.`,
-            meus: result.meus,
-          });
-        }
-      }
-    }
-    
-    if (Number.isFinite(limit)) {
-      // monta o "owner" correto
-      const ownerWhere =
-        tipoNorm === "clube"
-          ? { clubeId: tipoUsuarioIdFinal }
-          : tipoNorm === "escolinha" || tipoNorm === "escola"
-          ? { escolinhaId: tipoUsuarioIdFinal }
-          : tipoNorm === "professor"
-          ? { OR: [{ criadorProfessorId: professorIdToConnect }, { professorId: professorIdToConnect }] }
+          ? (professorIdToConnect
+              ? {
+                  OR: [
+                    { criadorProfessorId: professorIdToConnect },
+                    { professorId: professorIdToConnect },
+                  ],
+                }
+              : null)
           : null;
 
       if (ownerWhere) {
@@ -3606,10 +3575,10 @@ export async function criarTreinoProgramado(
               take: 20,
             });
 
-            return { allowed: false, used, meus };
+            return { allowed: false as const, used, meus };
           }
 
-          return { allowed: true };
+          return { allowed: true as const };
         });
 
         if (!result.allowed) {
