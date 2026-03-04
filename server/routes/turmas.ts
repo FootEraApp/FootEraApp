@@ -8,7 +8,7 @@ import {
   getAlunosTurma,
   deleteTurma,
   listarTurmasComoProfessor,
-  
+  frequencia
 } from "../controllers/turmasController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 
@@ -18,6 +18,7 @@ router.get("/como-professor", authenticateToken, listarTurmasComoProfessor);
 router.get("/:id/alunos", authenticateToken, getAlunosTurma);
 router.get("/minhas", authenticateToken, listarMinhasTurmas);
 router.post("/:id/alunos", authenticateToken, substituirAlunosTurma);
+router.get("/:id/frequencia", authenticateToken, frequencia);
 router.put("/:id/atribuir-professores", authenticateToken, setProfessoresTurma);
 router.put("/:id/atribuir-professor", authenticateToken, setProfessoresTurma);
 router.put("/:id/vincular-professor", authenticateToken, setProfessoresTurma);

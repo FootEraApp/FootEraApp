@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { API } from "../../config.js";
 import Storage from "../../../../server/utils/storage.js";
-import AgendaTreinos from "@/components/agenda/AgendaTreinos";
+import AgendaTreinos from "../../components/agenda/AgendaTreinos";
 
 type TurmaMin = {
   id: string;
@@ -91,7 +91,7 @@ export default function TurmasManager({
   const [dirtyAlunos, setDirtyAlunos] = useState(false);
   const [filtroAluno, setFiltroAluno] = useState("");
   const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [abaDireita, setAbaDireita] = useState<"membros" | "agenda">("membros");
+  const [abaDireita, setAbaDireita] = useState<"membros" | "agenda" | "frequencia">("membros");
   const [turmaAlunos, setTurmaAlunos] = useState<TurmaAluno[]>([]);
   const [naoVinculadosUsuarioIds, setNaoVinculadosUsuarioIds] = useState<string[]>([]);
   const [novoNome, setNovoNome] = useState("");
@@ -101,6 +101,9 @@ export default function TurmasManager({
   const [novoProfessores, setNovoProfessores] = useState<string[]>(
     professorId ? [professorId] : []
   );
+  const [freqLoading, setFreqLoading] = useState(false);
+  const [freqData, setFreqData] = useState<any>(null);
+  const [freqYear, setFreqYear] = useState(new Date().getFullYear());
 
   function formatYMD(ano: number, mesZeroBased: number, dia: number): string {
     const m = String(mesZeroBased + 1).padStart(2, "0");
@@ -244,6 +247,51 @@ export default function TurmasManager({
   useEffect(() => {
     if (abaDireita === "agenda") setLeftCollapsed(true);
   }, [abaDireita]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    // trava scroll do body e mantém a posição (melhor que só overflow hidden)
+    const scrollY = window.scrollY;
+    const prevOverflow = document.body.style.overflow;
+    const prevPosition = document.body.style.position;
+    const prevTop = document.body.style.top;
+    const prevWidth = document.body.style.width;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.position = prevPosition;
+      document.body.style.top = prevTop;
+      document.body.style.width = prevWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !selecionada) return;
+    if (abaDireita !== "frequencia") return;
+
+    (async () => {
+      try {
+        setFreqLoading(true);
+        const r = await axios.get(`${API.BASE_URL}/api/turmas/${selecionada}/frequencia`, {
+          headers,
+          params: { year: freqYear },
+        });
+        setFreqData(r.data);
+      } catch (e: any) {
+        alert(e?.response?.data?.message || e?.message || "Falha ao carregar frequência.");
+        setFreqData(null);
+      } finally {
+        setFreqLoading(false);
+      }
+    })();
+  }, [open, selecionada, abaDireita, freqYear]);
 
   const carregarTurmas = async (o?: Owner, professorFiltro?: string) => {
     const resT = o
@@ -567,7 +615,7 @@ export default function TurmasManager({
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 overscroll-contain">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4">
           <div className={`grid grid-cols-1 gap-4 ${leftCollapsed ? "md:grid-cols-1" : "md:grid-cols-3"}`}>
             <div className={`${leftCollapsed ? "hidden" : "md:col-span-1"} flex flex-col gap-3`}>
               <div className="rounded-xl border border-zinc-200 bg-white p-3">
@@ -588,7 +636,7 @@ export default function TurmasManager({
                 </select>
               </div>
 
-              <div className="rounded-xl border border-zinc-200 bg-white">
+              <div className="rounded-xl border border-zinc-200 bg-white flex flex-col min-h-0">
                 <div className="border-b border-zinc-100 p-3 text-sm font-medium text-zinc-900 flex items-center gap-2">
                   <List className="h-4 w-4" /> Turmas
                 </div>
@@ -599,7 +647,7 @@ export default function TurmasManager({
                 ) : turmas.length === 0 ? (
                   <div className="p-4 text-center text-zinc-500">Nenhuma turma.</div>
                 ) : (
-                  <ul className="max-h-[40dvh] md:max-h-[60dvh] overflow-auto overscroll-contain">
+                  <ul className="overflow-visible">
                     {turmas.map((t) => (
                       <li
                         key={t.id}
@@ -699,8 +747,8 @@ export default function TurmasManager({
                 </div>
               ) : (
                 <div className="flex flex-col gap-4">
-                  <div className="rounded-xl border border-zinc-200 bg-white">
-                    <div className="flex items-center justify-between border-b border-zinc-100 p-2">
+                  <div className="rounded-xl border border-zinc-200 bg-white flex flex-col min-h-0">
+                    <div className="flex items-center justify-between border-b border-zinc-100 p-2 flex-none">
                       <div className="inline-flex rounded-xl border border-zinc-200 bg-white p-1 text-sm">
                         <button
                           type="button"
@@ -729,6 +777,19 @@ export default function TurmasManager({
                         >
                           <CalendarClock className="h-4 w-4" />
                           Agenda
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAbaDireita("frequencia");
+                            setLeftCollapsed(true);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg flex items-center gap-2 ${
+                            abaDireita === "frequencia" ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
+                          }`}
+                        >
+                          📊 Frequência
                         </button>
                       </div>
 
@@ -759,13 +820,13 @@ export default function TurmasManager({
 
                     <div className="p-3">
                       {abaDireita === "membros" ? (
-                        <div className="flex flex-col gap-4">
+                        <div className="pr-1">
                           <div className="rounded-xl border border-zinc-200 bg-white">
                             <div className="border-b border-zinc-100 p-3 text-sm font-semibold text-zinc-900 flex items-center gap-2">
                               <User className="h-4 w-4" /> Professores da turma
                             </div>
 
-                            <div className="p-3 max-h-[26dvh] overflow-auto overscroll-contain">
+                            <div className="p-3">
                               {profs.length === 0 ? (
                                 <div className="text-sm text-zinc-500">Nenhum professor encontrado.</div>
                               ) : (
@@ -798,7 +859,7 @@ export default function TurmasManager({
                             </div>
                           </div>
 
-                          <div className="rounded-xl border border-zinc-200 bg-white flex flex-col max-h-[70dvh]">
+                          <div className="rounded-xl border border-zinc-200 bg-white flex flex-col">
                             <div className="border-b border-zinc-100 p-3 flex-none">
                               <div className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
                                 <Users className="h-4 w-4" /> Alunos da turma
@@ -817,7 +878,7 @@ export default function TurmasManager({
                               </div>
                             </div>
 
-                            <div className="flex-1 min-h-0 overflow-auto p-3 overscroll-contain space-y-4">
+                            <div className="p-3 space-y-4">
                               {bloqueiaAgendarTurma ? (
                                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                                   <div className="font-extrabold">Atenção</div>
@@ -923,109 +984,193 @@ export default function TurmasManager({
                             </div>
                           </div>
                         </div>
-                      ) : (
-                        <div className="min-h-0 flex-1 overflow-hidden">
-                          <AgendaTreinos
-                            open={open && abaDireita === "agenda" && !!selecionada}
-                            title={turmas.find((t) => t.id === selecionada)?.nome ?? "Turma"}
-                            groupByTreinoPerDay
-                            turmaId={selecionada}
-                            fetchAgendados={async ({ monthISO }) => {
-                              const r = await axios.get(`${API.BASE_URL}/api/treinos/agendados`, {
-                                headers,
-                                params: { turmaId: selecionada, month: monthISO },
-                              });
+                      ) : abaDireita === "agenda" ? (
+                          <div className="pr-1">
+                            <AgendaTreinos
+                              open={open && abaDireita === "agenda" && !!selecionada}
+                              title={turmas.find((t) => t.id === selecionada)?.nome ?? "Turma"}
+                              groupByTreinoPerDay
+                              turmaId={selecionada}
+                              fetchAgendados={async ({ monthISO }) => {
+                                const r = await axios.get(`${API.BASE_URL}/api/treinos/agendados`, {
+                                  headers,
+                                  params: { turmaId: selecionada, month: monthISO },
+                                });
 
-                              const data = r.data;
+                                const data = r.data;
 
-                              const arr =
-                                (Array.isArray(data?.items) && data.items) ||
-                                (Array.isArray(data?.agendados) && data.agendados) ||
-                                (Array.isArray(data) && data) ||
-                                [];
+                                const arr =
+                                  (Array.isArray(data?.items) && data.items) ||
+                                  (Array.isArray(data?.agendados) && data.agendados) ||
+                                  (Array.isArray(data) && data) ||
+                                  [];
 
-                              const turmaNome = turmas.find((t) => t.id === selecionada)?.nome ?? "Turma";
+                                const turmaNome = turmas.find((t) => t.id === selecionada)?.nome ?? "Turma";
 
-                              // ✅ IMPORTANTE: NÃO deduplicar aqui
-                              // só injeta turmaNome pra aparecer no card (se você quiser)
-                              const withTurma = arr.map((it: any) => ({
-                                ...it,
-                                turmaNome,
-                                titulo: it?.titulo ?? it?.treinoProgramado?.nome ?? "Treino",
-                              }));
+                                const withTurma = arr.map((it: any) => ({
+                                  ...it,
+                                  turmaNome,
+                                  titulo: it?.titulo ?? it?.treinoProgramado?.nome ?? "Treino",
+                                }));
 
-                              return { ...data, items: withTurma };
-                            }}                
+                                return { ...data, items: withTurma };
+                              }}
+                              fetchProgramados={async () => {
+                                if (!owner) {
+                                  const userId =
+                                    (Storage as any).user?.id ??
+                                    (Storage as any).usuario?.id ??
+                                    (Storage as any).userId ??
+                                    localStorage.getItem("userId") ??
+                                    "";
 
-                            fetchProgramados={async () => {
-                            if (!owner) {
-                              const userId =
-                                (Storage as any).user?.id ??
-                                (Storage as any).usuario?.id ??
-                                (Storage as any).userId ??
-                                localStorage.getItem("userId") ??
-                                "";
-
-                              const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`, {
-                                headers,
-                                params: {
-                                  vinculo: "professor",
-                                  id: userId,          // ✅ AQUI é o conserto
-                                  debug: "1",
-                                },
-                              });
-                              return res.data;
-                            }
-
-                            const orgUserId = owner.usuarioId ?? owner.id;
-                            const res = await axios.get(`${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`, {
-                              headers,
-                              params: {
-                                vinculo: owner.tipo === "Clube" ? "clube" : "escolinha",
-                                id: orgUserId,
-                                debug: "1",
-                              },
-                            });
-                            return res.data;
-                            }}
-
-                            onAgendar={async ({ selectedDays, treinoProgramadoId, selectedTime }) => {
-                              if (bloqueiaAgendarTurma) {
-                                throw new Error("Não é possível agendar para a turma inteira...");
-                              }
-
-                              const buildDataHoraISO = (dayISO: string, hhmm: string) => {
-                                // opção 1 (mais simples): datetime-local sem timezone
-                                // return `${dayISO}T${hhmm}`;
-
-                                // opção 2 (mais segura p/ Brasil): fixa BRT no payload
-                                return `${dayISO}T${hhmm}:00-03:00`;
-                              };
-
-                              await Promise.all(
-                                selectedDays.map((day) =>
-                                  axios.post(
-                                    `${API.BASE_URL}/api/sessoes-turma`,
+                                  const res = await axios.get(
+                                    `${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`,
                                     {
-                                      turmaId: selecionada,
-                                      treinoProgramadoId,
-                                      dataHoraISO: buildDataHoraISO(day, selectedTime),
-                                    },
-                                    { headers }
-                                  )
-                                )
-                              );
+                                      headers,
+                                      params: {
+                                        vinculo: "professor",
+                                        id: userId,
+                                        debug: "1",
+                                      },
+                                    }
+                                  );
 
-                              setAbaDireita("agenda");
-                              alert("Sessão agendada e treinos criados para os atletas da turma!");
-                            }}
-                          />
-                        </div>
-                      )}
+                                  return res.data;
+                                }
+
+                                const orgUserId = owner.usuarioId ?? owner.id;
+                                const res = await axios.get(
+                                  `${API.BASE_URL}/api/gerenciar/treinosprogramados/visiveis`,
+                                  {
+                                    headers,
+                                    params: {
+                                      vinculo: owner.tipo === "Clube" ? "clube" : "escolinha",
+                                      id: orgUserId,
+                                      debug: "1",
+                                    },
+                                  }
+                                );
+
+                                return res.data;
+                              }}
+                              onAgendar={async ({ selectedDays, treinoProgramadoId, selectedTime }) => {
+                                if (bloqueiaAgendarTurma) {
+                                  throw new Error("Não é possível agendar para a turma inteira...");
+                                }
+
+                                const buildDataHoraISO = (dayISO: string, hhmm: string) => {
+                                  return `${dayISO}T${hhmm}:00-03:00`;
+                                };
+
+                                await Promise.all(
+                                  selectedDays.map((day) =>
+                                    axios.post(
+                                      `${API.BASE_URL}/api/sessoes-turma`,
+                                      {
+                                        turmaId: selecionada,
+                                        treinoProgramadoId,
+                                        dataHoraISO: buildDataHoraISO(day, selectedTime),
+                                      },
+                                      { headers }
+                                    )
+                                  )
+                                );
+
+                                setAbaDireita("agenda");
+                                alert("Sessão agendada e treinos criados para os atletas da turma!");
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="pr-1">
+                            <div className="rounded-xl border border-zinc-200 bg-white p-4">
+                              <div className="flex items-center justify-between gap-2 mb-3">
+                                <div>
+                                  <div className="text-sm font-extrabold text-zinc-900">Frequência da turma</div>
+                                  <div className="text-xs text-zinc-500">Resumo anual • sem vídeos</div>
+                                </div>
+
+                                <select
+                                  value={freqYear}
+                                  onChange={(e) => setFreqYear(Number(e.target.value))}
+                                  className="rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                                >
+                                  {Array.from({ length: 6 }).map((_, i) => {
+                                    const y = new Date().getFullYear() - i;
+                                    return (
+                                      <option key={y} value={y}>
+                                        {y}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                              </div>
+
+                              {freqLoading ? (
+                                <div className="p-6 text-center text-zinc-600">
+                                  <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                                </div>
+                              ) : !freqData ? (
+                                <div className="text-sm text-zinc-500">Sem dados de frequência para este ano.</div>
+                              ) : (
+                                <div className="space-y-4">
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="rounded-xl border border-zinc-200 p-3">
+                                      <div className="text-xs text-zinc-500">Alunos</div>
+                                      <div className="text-2xl font-extrabold text-zinc-900">{freqData.totalAlunos}</div>
+                                    </div>
+                                    <div className="rounded-xl border border-zinc-200 p-3">
+                                      <div className="text-xs text-zinc-500">Treinos agendados</div>
+                                      <div className="text-2xl font-extrabold text-zinc-900">{freqData.totalAgendados}</div>
+                                    </div>
+                                    <div className="rounded-xl border border-zinc-200 p-3">
+                                      <div className="text-xs text-zinc-500">Treinos realizados</div>
+                                      <div className="text-2xl font-extrabold text-zinc-900">{freqData.totalRealizados}</div>
+                                    </div>
+                                  </div>
+
+                                  <div className="rounded-xl border border-zinc-200 p-3">
+                                    <div className="text-sm font-bold text-zinc-900 mb-2">🏅 Quem mais participa</div>
+                                    {freqData.topAtletas?.length ? (
+                                      <ul className="divide-y divide-zinc-100">
+                                        {freqData.topAtletas.map((a: any) => (
+                                          <li key={a.atletaId} className="py-2 flex items-center justify-between">
+                                            <div className="text-sm text-zinc-900">{a.nome}</div>
+                                            <div className="text-xs font-extrabold text-emerald-700">{a.qtd} treino(s)</div>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    ) : (
+                                      <div className="text-sm text-zinc-500">Ninguém realizou treinos ainda neste ano.</div>
+                                    )}
+                                  </div>
+
+                                  <div className="rounded-xl border border-zinc-200 p-3">
+                                    <div className="text-sm font-bold text-zinc-900 mb-2">📅 Histórico mensal</div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                      {(freqData.historicoMensal || []).map((m: any) => (
+                                        <div key={m.mes} className="rounded-lg border border-zinc-200 p-2">
+                                          <div className="text-[11px] text-zinc-500">Mês {m.mes}</div>
+                                          <div className="text-xs text-zinc-800">
+                                            Agendados: <b>{m.agendados}</b>
+                                          </div>
+                                          <div className="text-xs text-zinc-800">
+                                            Realizados: <b>{m.realizados}</b>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                     </div>
+                   </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
           </div>
         </div>

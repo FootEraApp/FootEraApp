@@ -61,6 +61,20 @@ function getYouTubeId(url: string): string | null {
   }
 }
 
+const AVATAR_FALLBACK = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+
+function resolveImg(src?: string | null) {
+  const s = String(src || "").trim();
+  if (!s) return AVATAR_FALLBACK;
+  if (s.startsWith("http://") || s.startsWith("https://")) return s;
+  if (s.startsWith("/uploads/")) return `${API.BASE_URL}${s}`;
+  if (s.startsWith("uploads/")) return `${API.BASE_URL}/${s}`;
+  if (s.startsWith("/assets/")) return `${APP.FRONTEND_BASE_URL}${s}`;
+  if (s.startsWith("/")) return `${APP.FRONTEND_BASE_URL}${s}`;
+
+  return `${API.BASE_URL}/${s.replace(/^\/+/, "")}`;
+}
+
 export default function ActivityGrid({
   activities,
   perfilUsuarioId,
@@ -142,10 +156,7 @@ export default function ActivityGrid({
               thumbCandidate = guessTreinoImage(card.nome);
             }
 
-            const thumb =
-              publicImgUrl(thumbCandidate) ??
-              `${APP.FRONTEND_BASE_URL}/assets/treinos/placeholder.png`;
-
+            const thumb = publicImgUrl(thumbCandidate) || AVATAR_FALLBACK;
             return (
               <button
                 key={card.id}
@@ -155,11 +166,14 @@ export default function ActivityGrid({
                 }}
                 type="button"
               >
-                <img
-                  src={thumb}
-                  alt={card.nome}
-                  className="w-full h-24 object-cover opacity-80 group-hover:opacity-60 transition"
-                />
+              <img
+                src={thumb}
+                alt={card.nome}
+                className="w-full h-24 object-cover opacity-80 group-hover:opacity-60 transition"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = AVATAR_FALLBACK;
+                }}
+              />
 
                 <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[11px] text-white px-2 py-1 flex justify-between items-center">
                   <span className="truncate max-w-[70%]">{card.nome}</span>

@@ -714,12 +714,28 @@ export const gerenciarAtletasController = {
         expiraEm: true,
         naoExpira: true,
         exercicios: {
-          orderBy: { ordem: "asc" as const },
+          orderBy: { ordem: "asc" },
           select: {
             id: true,
             ordem: true,
             repeticoes: true,
             exercicioId: true,
+            exercicioTemporarioId: true,
+
+            // ✅ ADICIONAR
+            exercicioPersonalizadoId: true,
+            exercicioPersonalizado: {
+              select: {
+                id: true,
+                nome: true,
+                descricao: true,
+                nivel: true,
+                categorias: true,
+                videoDemonstrativoUrl: true,
+                videoPosterUrl: true,
+              },
+            },
+
             exercicio: {
               select: {
                 id: true,
@@ -731,16 +747,13 @@ export const gerenciarAtletasController = {
                 videoDemonstrativoUrl: true,
               },
             },
-            exercicioTemporarioId: true,
             exercicioTemporario: {
               select: {
                 id: true,
-                codigo: true,
                 nome: true,
                 descricao: true,
-                nivel: true,
-                categorias: true,
                 videoDemonstrativoUrl: true,
+                videoPosterUrl: true,
               },
             },
           },
@@ -810,42 +823,87 @@ export const gerenciarAtletasController = {
 
           if (!conteudo) return base;
 
-          // @ts-ignore (se o TS reclamar do select condicional)
-          const exercicios = (t.exercicios || []).map((te: any) => {
-            const ex = te.exercicio
-              ? {
-                  tipo: "catalogo" as const,
-                  id: te.exercicio.id,
-                  codigo: te.exercicio.codigo,
-                  nome: te.exercicio.nome,
-                  descricao: te.exercicio.descricao ?? null,
-                  nivel: te.exercicio.nivel ?? null,
-                  categorias: te.exercicio.categorias ?? [],
-                  videoUrl: te.exercicio.videoDemonstrativoUrl ?? null,
-                }
-              : te.exercicioTemporario
-              ? {
-                  tipo: "temporario" as const,
-                  id: te.exercicioTemporario.id,
+          // @ts-ignore
+          const exercicios = (t as any).exercicios.map((e: any) => {
+            // 1) Catálogo
+            if (e.exercicio) {
+              return {
+                id: e.id,
+                ordem: e.ordem,
+                repeticoes: e.repeticoes,
+                exercicioId: e.exercicioId,
+                exercicioTemporarioId: null,
+                exercicioPersonalizadoId: null,
+                exercicio: {
+                  tipo: "catalogo",
+                  id: e.exercicio.id,
+                  codigo: e.exercicio.codigo,
+                  nome: e.exercicio.nome,
+                  descricao: e.exercicio.descricao,
+                  nivel: e.exercicio.nivel,
+                  categorias: e.exercicio.categorias,
+                  videoDemonstrativoUrl: e.exercicio.videoDemonstrativoUrl ?? null,
+                },
+              };
+            }
+
+            // 2) Temporário
+            if (e.exercicioTemporario) {
+              return {
+                id: e.id,
+                ordem: e.ordem,
+                repeticoes: e.repeticoes,
+                exercicioId: null,
+                exercicioTemporarioId: e.exercicioTemporarioId,
+                exercicioPersonalizadoId: null,
+                exercicio: {
+                  tipo: "temporario",
+                  id: e.exercicioTemporario.id,
                   codigo: null,
-                  nome: te.exercicioTemporario.nome ?? "Exercício",
-                  descricao: te.exercicioTemporario.descricao ?? null,
+                  nome: e.exercicioTemporario.nome,
+                  descricao: e.exercicioTemporario.descricao,
                   nivel: null,
                   categorias: [],
-                  videoUrl: te.exercicioTemporario.videoDemonstrativoUrl ?? null,
-                }
-              : null;
+                  videoDemonstrativoUrl: e.exercicioTemporario.videoDemonstrativoUrl ?? null,
+                  videoPosterUrl: e.exercicioTemporario.videoPosterUrl ?? null,
+                },
+              };
+            }
 
+            // ✅ 3) Personalizado (NOVO)
+            if (e.exercicioPersonalizado) {
+              return {
+                id: e.id,
+                ordem: e.ordem,
+                repeticoes: e.repeticoes,
+                exercicioId: null,
+                exercicioTemporarioId: null,
+                exercicioPersonalizadoId: e.exercicioPersonalizadoId,
+                exercicio: {
+                  tipo: "personalizado",
+                  id: e.exercicioPersonalizado.id,
+                  codigo: null,
+                  nome: e.exercicioPersonalizado.nome,
+                  descricao: e.exercicioPersonalizado.descricao,
+                  nivel: e.exercicioPersonalizado.nivel ?? null,
+                  categorias: e.exercicioPersonalizado.categorias ?? [],
+                  videoDemonstrativoUrl: e.exercicioPersonalizado.videoDemonstrativoUrl ?? null,
+                  videoPosterUrl: e.exercicioPersonalizado.videoPosterUrl ?? null,
+                },
+              };
+            }
+
+            // fallback
             return {
-              id: te.id,
-              ordem: te.ordem,
-              repeticoes: te.repeticoes,
-              exercicioId: te.exercicioId ?? null,
-              exercicioTemporarioId: te.exercicioTemporarioId ?? null,
-              exercicio: ex,
+              id: e.id,
+              ordem: e.ordem,
+              repeticoes: e.repeticoes,
+              exercicioId: null,
+              exercicioTemporarioId: null,
+              exercicioPersonalizadoId: null,
+              exercicio: null,
             };
-          }).filter(Boolean);
-
+          });
           return {
             ...base,
             // @ts-ignore
@@ -969,54 +1027,88 @@ export const gerenciarAtletasController = {
       if (!atleta) return res.status(404).json({ message: "Atleta não encontrado" });
 
       const now = new Date();
+
+      // ===== mês atual (mantive sua lógica) =====
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
       const [treinosMes, desafiosMes] = await Promise.all([
         prisma.submissaoTreino.count({
-          where: { atletaId: atleta.id, criadoEm: { gte: startOfMonth, lt: startOfNextMonth } },
+          where: { atletaId: atleta.id, aprovado: true, criadoEm: { gte: startOfMonth, lt: startOfNextMonth } },
         }),
         prisma.submissaoDesafio.count({
-          where: { atletaId: atleta.id, createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
+          where: { atletaId: atleta.id, aprovado: true, createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
         }),
       ]);
 
       const totalTreinosMes = treinosMes + desafiosMes;
       const concluidosMes = treinosMes;
       const desafiosFeitosMes = desafiosMes;
-      const fourWeeksAgo = new Date();
+
+      // ===== rolling 28 dias =====
+      const fourWeeksAgo = new Date(now);
       fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
 
+      // pega submissões aprovadas + pontuação do treinoProgramado
       const ultimas = await prisma.submissaoTreino.findMany({
-        where: { atletaId: atleta.id, criadoEm: { gte: fourWeeksAgo } },
-        select: { criadoEm: true, pontuacaoSnapshot: true },
+        where: {
+          atletaId: atleta.id,
+          aprovado: true,
+          criadoEm: { gte: fourWeeksAgo, lte: now },
+        },
+        select: {
+          criadoEm: true,
+          pontuacaoSnapshot: true,
+          treinoAgendado: {
+            select: {
+              treinoProgramado: { select: { pontuacao: true } },
+            },
+          },
+        },
+        orderBy: { criadoEm: "asc" },
       });
+      
+      // buckets rolling: semana 0..3 (cada uma = janela de 7 dias a partir de fourWeeksAgo)
+      const buckets = [0, 0, 0, 0];
 
-      const buckets: Record<string, number> = {};
+      let totalPontos28d = 0;
       for (const s of ultimas) {
-        const d = new Date(s.criadoEm);
-        const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).getDay();
-        const weekKey = `${d.getFullYear()}-W${Math.ceil((d.getDate() + firstDay) / 7)}`;
-        buckets[weekKey] = (buckets[weekKey] || 0) + (s.pontuacaoSnapshot || 0);
+        const pts =
+          (s.pontuacaoSnapshot ?? s.treinoAgendado?.treinoProgramado?.pontuacao ?? 0) || 0;
+
+        totalPontos28d += pts;
+
+        const diffMs = new Date(s.criadoEm).getTime() - fourWeeksAgo.getTime();
+        const weekIndex = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)); // 0..3
+        if (weekIndex >= 0 && weekIndex <= 3) buckets[weekIndex] += pts;
       }
 
-      const series: { semana: string; pontos: number }[] = [];
-      for (let i = 3; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i * 7);
-        const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).getDay();
-        const key = `${d.getFullYear()}-W${Math.ceil((d.getDate() + firstDay) / 7)}`;
-        series.push({ semana: i === 0 ? "S" : `S-${i}`, pontos: buckets[key] || 0 });
-      }
-      const mediaUltimas4Semanas =
-        series.reduce((acc, x) => acc + x.pontos, 0) / (series.length || 1);
+      const series = [
+        { semana: "S-3", pontos: buckets[0] },
+        { semana: "S-2", pontos: buckets[1] },
+        { semana: "S-1", pontos: buckets[2] },
+        { semana: "S", pontos: buckets[3] },
+      ];
+
+      // ✅ média “das 4 semanas” = média por semana (28 dias / 4)
+      const mediaUltimas4Semanas = totalPontos28d / 4;
+
+      // (extra útil) média por treino concluído nos 28d
+      const mediaPorTreino28d = ultimas.length ? totalPontos28d / ultimas.length : 0;
 
       return res.json({
         totalTreinosMes,
         concluidosMes,
         desafiosFeitosMes,
+
+        // principal (o que você pediu)
         mediaUltimas4Semanas: Math.round(mediaUltimas4Semanas),
         evolucaoSemanas: series,
+
+        // debug/apoio (recomendo manter)
+        totalPontos28d,
+        qtdTreinosConcluidos28d: ultimas.length,
+        mediaPorTreino28d: Math.round(mediaPorTreino28d),
       });
     } catch (e: any) {
       console.error("[gerenciarAtletas.statsAtleta]", e);
@@ -1120,10 +1212,10 @@ export const gerenciarAtletasController = {
 
       const [treinosMes, desafiosMes, ultTreinos, ultDesafios] = await Promise.all([
         prisma.submissaoTreino.count({
-          where: { atletaId: atleta.id, criadoEm: { gte: startOfMonth, lt: startOfNextMonth } },
+          where: { atletaId: atleta.id, aprovado: true, criadoEm: { gte: startOfMonth, lt: startOfNextMonth } },
         }),
         prisma.submissaoDesafio.count({
-          where: { atletaId: atleta.id, createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
+          where: { atletaId: atleta.id, aprovado: true, createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
         }),
         prisma.submissaoTreino.findMany({
           where: { atletaId: atleta.id },
@@ -1579,33 +1671,47 @@ export const gerenciarAtletasController = {
       }
 
       const agendados = await prisma.treinoAgendado.findMany({
-        where: {
-          atletaId,
-          ...(dateFilter ? { dataTreino: dateFilter } : {}),
-        },
+        where: { atletaId: atletaId },
         include: {
-          treinoProgramado: { select: { id: true, nome: true } },
+          treinoProgramado: { select: { id: true, nome: true, pontuacao: true } },
+          submissaoTreinos: { // <- ajuste o nome conforme seu schema (pode ser "submissoes" etc.)
+            orderBy: { criadoEm: "desc" },
+            take: 1,
+            select: { id: true, aprovado: true },
+          },
         },
         orderBy: { dataTreino: "asc" },
       });
 
-      const items = agendados.map((t: any) => ({
-        id: t.id,
-        titulo: t.titulo ?? null,
-        dataTreino: t.dataTreino ?? null,
-        dataExpiracao: t.dataExpiracao ?? null,
-        treinoProgramadoId: t.treinoProgramadoId ?? null,
-        treinoProgramado: t.treinoProgramado
-          ? { id: t.treinoProgramado.id, nome: t.treinoProgramado.nome }
-          : null,
+      const items = agendados.map((t) => {
+          const lastSub = t.submissaoTreinos?.[0];
+          const aprovado = lastSub?.aprovado === true;
 
-        meuStatus: t.meuStatus ?? t.statusExecucao ?? t.execucaoStatus ?? t.status ?? null,
-        status: t.status ?? null,
-        execucaoStatus: t.execucaoStatus ?? t.statusExecucao ?? null,
-        submissaoTreinoId: t.submissaoTreinoId ?? null,
-        submissaoFeita: !!t.submissaoTreinoId,
-      }));
+          const concluido =
+            aprovado ||
+            String(t.execucaoStatus || "").toUpperCase() === "COMPLETED" ||
+            String(t.status || "").toUpperCase() === "CONCLUIDO";
 
+          return {
+            id: t.id,
+            titulo: t.titulo ?? t.treinoProgramado?.nome ?? "Treino",
+            dataTreino: t.dataTreino,
+            treinoProgramadoId: t.treinoProgramadoId,
+            treinoProgramado: t.treinoProgramado ? { id: t.treinoProgramado.id, nome: t.treinoProgramado.nome } : null,
+
+            // ✅ isso aqui é o que vai deixar verde no front:
+            meuStatus: concluido ? "COMPLETED" : "PENDENTE",
+
+            // (opcional) manda também os campos reais:
+            status: t.status,
+            execucaoStatus: t.execucaoStatus,
+
+            // ✅ sem precisar ter "submissaoTreinoId" no schema, você envia no payload:
+            submissaoFeita: !!lastSub,
+            submissaoTreinoId: lastSub?.id ?? null,
+            aprovado: lastSub?.aprovado ?? null,
+          };
+        });
       return res.json({ items });
     } catch (e: any) {
       console.error("[gerenciarAtletas.agendadosAtleta]", e);

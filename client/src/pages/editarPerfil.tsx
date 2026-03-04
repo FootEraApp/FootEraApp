@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { formatarUrlFoto } from "../utils/formatarFoto.js";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
-import { ArrowLeft, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
 import BottomNav from "@/components/layout/BottomNav.js";
 
@@ -11,6 +11,7 @@ type ResultadoBuscaClube = {
   id: string;
   nome: string;
   username?: string;
+
   fotoUrl?: string | null;
 };
 type OptionMin = { id: string; nome: string };
@@ -98,7 +99,20 @@ const EditarPerfil = () => {
           return;
         }
 
-        setDadosUsuario(res.data.usuario);
+        const u = res.data.usuario || {};
+
+        // ✅ garante preencher o input mesmo se o backend vier com outro nome
+        const nomeDeUsuario =
+          u.nomeDeUsuario ??
+          u.username ??
+          u.nome_usuario ??
+          u.nomeDeUsuarioAtual ??
+          "";
+
+        setDadosUsuario({
+          ...u,
+          nomeDeUsuario: String(nomeDeUsuario || ""),
+        });
 
         const dadosEsp: any = { ...(res.data.dadosEspecificos || {}) };
         if (dadosEsp.site && !dadosEsp.siteOficial) {
@@ -726,14 +740,11 @@ return (
         className="bg-green-700 text-white px-4 py-2 rounded hover:bg-green-600"
         onClick={async () => {
           const rawUsername = (dadosUsuario.nomeDeUsuario ?? "").trim();
-          if (rawUsername) {
-            const username = rawUsername.toLowerCase();
-            dadosUsuario.nomeDeUsuario = username;
+          const usernameFinal = rawUsername ? rawUsername.toLowerCase() : "";
 
-            if (!/^[a-z0-9._]{3,30}$/.test(username)) {
-              alert(
-                "Nome de usuário inválido. Use letras, números, ponto e underline (3–30)."
-              );
+          if (usernameFinal) {
+            if (!/^[a-z0-9._]{3,30}$/.test(usernameFinal)) {
+              alert("Nome de usuário inválido. Use letras, números, ponto e underline (3–30).");
               return;
             }
           }
@@ -813,7 +824,7 @@ return (
               await axios.put(
                 `${API.BASE_URL}/api/perfil/${usuarioId}`,
                 {
-                  usuario: { ...dadosUsuario, foto: fotoUrl },
+                  usuario: { ...dadosUsuario, foto: fotoUrl, nomeDeUsuario: usernameFinal || null },
                   tipo,
                   tipoUsuario: String(tipoUsuarioOriginal)
                     .toLowerCase()
@@ -862,6 +873,7 @@ return (
               }
             }
             alert("Dados atualizados com sucesso!");
+            Storage.nomeDeUsuario = usernameFinal || Storage.nomeDeUsuario;
             window.location.href = "/perfil";
           } catch (err: any) {
             console.error(

@@ -1,4 +1,3 @@
-// client/vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
@@ -11,30 +10,24 @@ export default defineConfig({
     VitePWA({
       strategies: "generateSW",
       registerType: "autoUpdate",
-      injectRegister: "auto",
 
-      devOptions: {
-        enabled: true,
-        type: "module",
-      },
+      // você registra no main.tsx (somente PROD)
+      injectRegister: false,
+
+      // NÃO habilita SW no dev
+      devOptions: { enabled: false },
 
       workbox: {
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-
-        // ✅ não deixa o service worker interferir em chamadas da API
         navigateFallbackDenylist: [/^\/api\//],
 
-        // ✅ garante que /api sempre é rede (nunca cache)
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
+            urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith("/api/"),
             handler: "NetworkOnly",
-            options: {
-              cacheName: "api-no-cache",
-            },
+            options: { cacheName: "api-no-cache" },
           },
         ],
       },
@@ -49,12 +42,7 @@ export default defineConfig({
         icons: [
           { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
-          {
-            src: "/icon-512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "any maskable",
-          },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
         ],
       },
     }),

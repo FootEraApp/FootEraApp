@@ -13,7 +13,7 @@ const setToStorage = (key: string, value: string | null) => {
   sessionStorage.setItem(key, value);
 };
 
-const AppStorage = {
+const Storage = {
   get tipoSalvo() {
     return getFromStorage("tipoUsuario");
   },
@@ -44,4 +44,4 @@ const AppStorage = {
   },
 };
 
-export default AppStorage;
+export default Storage;
