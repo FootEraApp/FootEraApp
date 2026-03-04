@@ -39,12 +39,33 @@ const Storage = {
   },
 };
 
-interface ExercicioSessaoDetalhe {
+type ExercicioInfoMin = {
   id: string;
   nome: string;
-  repeticoes?: string;
-  detalhes?: string;
-  videoUrl?: string | null;
+  descricao?: string | null;
+  videoDemonstrativoUrl?: string | null;
+  videoPosterUrl?: string | null;
+};
+
+interface ExercicioSessaoDetalhe {
+  id: string;
+
+  // ✅ campos "flat" (se o backend já mandar pronto)
+  nome?: string | null;
+  detalhes?: string | null;
+  repeticoes?: string | null;
+  videoDemonstrativoUrl?: string | null;
+
+  // ✅ IDs (compat/debug)
+  exercicioId?: string | null;
+  exercicioTemporarioId?: string | null;
+  exercicioPersonalizadoId?: string | null;
+
+  // ✅ relações (quando vier include)
+  exercicio?: ExercicioInfoMin | null;
+  exercicioTemporario?: ExercicioInfoMin | null;
+  exercicioPersonalizado?: ExercicioInfoMin | null;
+
   concluido?: boolean;
 }
 
@@ -135,13 +156,6 @@ type MetodologiaCard = {
   publicoAlvo?: MetodologiaPublico | null;
   totalReviews?: number | null;
 };
-
-type StatusVisualSessao =
-  | "nao_iniciada"
-  | "em_andamento"
-  | "finalizada"
-  | "cancelada"
-  | "faltou";
 
 type SessaoDeHoje = {
   id: string;
@@ -1024,32 +1038,41 @@ useEffect(() => {
 }
 
   async function abrirModalIniciar(sessaoId: string, turmaId?: string) {
-  const token = getToken();
-  if (!token) return;
+    const token = getToken();
+    if (!token) return;
 
-  try {
+    const turmaIdOk = String(turmaId || "").trim();
+    if (!turmaIdOk) {
+      console.warn("[treinos] turmaId ausente para buscar alunos", { sessaoId, turmaId });
+      alert("Não consegui identificar a turma dessa sessão. Recarregue a página.");
+      return;
+    }
+
+    // sempre trabalhar com let (nunca const) porque vamos setar depois
     let alunos: AtletaVinculado[] = [];
 
-    if (turmaId) {
-      alunos = await buscarAlunosDaTurma(turmaId);
-    } else {
-      const res = await fetch(
-        `${API.BASE_URL}/api/sessoes-turma/${sessaoId}/alunos`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+    try {
+      // ✅ usa SEMPRE /turma/:id/alunos
+      const res = await fetch(`${API.BASE_URL}/api/turmas/${turmaIdOk}/alunos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (!res.ok) {
-        console.warn(
-          "[treinos] falha ao buscar alunos da sessão",
-          sessaoId,
-          res.status,
-        );
-      } else {
-        const data = await res.json();
-        const arr = Array.isArray(data.alunos) ? data.alunos : data;
-        alunos = (Array.isArray(arr) ? arr : [])
+        console.warn("[treinos] falha ao buscar alunos da turma", turmaIdOk, res.status);
+        // abre modal vazio mesmo, pra não travar o fluxo
+        setAlunosDaSessao([]);
+        setPresentesSelecionados([]);
+        setModalSessaoId(sessaoId);
+        return;
+      }
+
+      const data = await res.json();
+
+      // seu backend pode retornar { alunos: [...] } ou direto [...]
+      const arr = Array.isArray(data?.alunos) ? data.alunos : data;
+      const lista = Array.isArray(arr) ? arr : [];
+
+      alunos = lista
         .map((a: any) => {
           const atletaId = a.atletaId ?? a.id ?? "";
           if (!atletaId) return null;
@@ -1059,211 +1082,70 @@ useEffect(() => {
           const foto = a.usuario?.foto ?? a.foto ?? null;
 
           return {
-            id: String(atletaId),              
-            usuario: { id: String(usuarioId || atletaId), nome, foto },
-          };
+            id: String(atletaId),
+            usuario: {
+              id: String(usuarioId || atletaId),
+              nome: String(nome),
+              foto,
+            },
+          } as AtletaVinculado;
         })
         .filter(Boolean) as AtletaVinculado[];
 
-      }
+      setAlunosDaSessao(alunos);
+
+      // ✅ padrão: todos marcados como presentes (igual seu código atual fazia)
+      setPresentesSelecionados(alunos.map((a) => a.id));
+
+      setModalSessaoId(sessaoId);
+    } catch (e) {
+      console.error("[treinos] erro ao abrir modal de presença:", e);
+      setAlunosDaSessao([]);
+      setPresentesSelecionados([]);
+      setModalSessaoId(sessaoId);
     }
-
-    setAlunosDaSessao(alunos);
-    setPresentesSelecionados(alunos.map((a) => a.id));
-    setModalSessaoId(sessaoId);
-
-  } catch (e) {
-    console.error("[treinos] erro ao abrir modal de presença:", e);
-    setAlunosDaSessao([]);
-    setPresentesSelecionados([]);
-    setModalSessaoId(sessaoId);
   }
-}
 
   async function confirmarPresencas() {
-  const token = getToken();
-  if (!token || !modalSessaoId) return;
+    const token = getToken();
+    if (!token || !modalSessaoId) return;
 
-  const sessaoId = modalSessaoId;
+    const sessaoId = modalSessaoId;
 
-  try {
-    const res = await fetch(
-      `${API.BASE_URL}/api/sessoes-turma/${sessaoId}/iniciar`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+    try {
+      const res = await fetch(
+        `${API.BASE_URL}/api/sessoes-turma/${sessaoId}/iniciar`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            presentes: presentesSelecionados,
+          }),
         },
-        body: JSON.stringify({
-          presentes: presentesSelecionados,
-        }),
-      },
-    );
+      );
 
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      console.error("[treinos] erro ao iniciar sessão:", res.status, txt);
-      alert("Não foi possível iniciar esse treino.");
-      return;
-    }
-
-    const js = await res.json().catch(() => ({}));
-
-    startedAtRef.current = js?.startedAt ?? new Date().toISOString();
-    
-    setModalSessaoId(null);
-    setSessaoAbertaExerciciosId(sessaoId);
-    await carregarSessoesDeHoje();
-  } catch (e) {
-    console.error("[treinos] erro ao confirmar presenças:", e);
-    alert("Erro inesperado ao iniciar o treino.");
-  }
-}
-
-function extrairExerciciosSessao(s: any): ExercicioSessaoDetalhe[] {
-  let list: any[] = Array.isArray(s.exercicios) ? s.exercicios : [];
-
-  if (!list.length && Array.isArray(s.treino?.exercicios)) {
-    list = s.treino.exercicios;
-  }
-
-  return list
-   .map((item: any, idx: number) => {
-    const ex =
-      item.exercicio ||
-      item.exercicioTemporario ||
-      item.exercicioRef ||
-      item.Exercicio ||
-      item.treinoExercicio?.exercicio ||
-      item.treinoProgramadoExercicio?.exercicio ||
-      item;
-
-    const nome =
-      ex?.nome ||
-      item?.nome ||
-      item?.exercicioNome ||
-      item?.titulo ||
-      "Exercício";
-
-    const detalhes =
-      ex?.descricao ||
-      ex?.detalhes ||
-      item?.descricao ||
-      item?.detalhes ||
-      "";
-
-    const safeId =
-      item.id ||
-      item.exercicioId ||
-      item.exercicioTemporarioId ||
-      item.treinoExercicio?.exercicioId ||
-      item.treinoProgramadoExercicio?.exercicioId ||
-      ex?.id ||
-      `${s.id || "sessao"}-ex-${idx}`;
-
-    const midias = Array.isArray(s.midias) ? s.midias : [];
-
-    const videoMidia = midias.find((m: any) => {
-      const tipoStr = String(m.tipo || m.tipoMidia || "").toUpperCase();
-      return tipoStr.includes("VIDEO") || tipoStr.includes("VÍDEO");
-    });
-
-    const exId = String(ex?.id ?? item?.exercicioId ?? item?.id ?? "");
-const videoUrlRaw =
-  ex?.videoDemonstrativoUrl ||
-  item?.exercicio?.videoDemonstrativoUrl ||
-  item?.exercicioTemporario?.videoDemonstrativoUrl ||
-  item?.videoDemonstrativoUrl ||
-  (exId ? videoByExId[exId] : null) ||
-  null;
-
-  const videoUrl = videoUrlRaw ? String(videoUrlRaw) : null;
-      const repRaw =
-        item.repeticoes ||
-        item.repeticao ||
-        item.repsTexto ||
-        item.treinoExercicio?.repeticoes ||
-        item.treinoProgramadoExercicio?.repeticoes ||
-        ex.repeticoes ||
-        ex.repeticoesTexto ||
-        ex.seriesRepeticoes ||
-        "";
-
-      const series =
-        item.series ??
-        item.qtdSeries ??
-        ex.series ??
-        ex.qtdSeries ??
-        null;
-
-      const reps =
-        item.reps ??
-        item.qtdRepeticoes ??
-        ex.reps ??
-        ex.qtdRepeticoes ??
-        null;
-
-      const tempoSeg =
-        item.tempoSegundos ??
-        item.tempo ??
-        item.duracaoSegundos ??
-        ex.tempoSegundos ??
-        ex.tempo ??
-        ex.duracaoSegundos ??
-        null;
-
-      const descansoSeg =
-        item.descansoSegundos ??
-        ex.descansoSegundos ??
-        null;
-
-      let repeticoes = "";
-      const repText = String(repRaw || "").trim();
-
-      const temFormatoRich = /x|seg|s\b|min|rep|descanso|,/i.test(repText);
-
-      if (
-        repText &&
-        (
-          temFormatoRich || 
-          (!series && !reps && !tempoSeg && !descansoSeg) 
-        )
-      ) {
-        repeticoes = repText;
-      } else {
-        const partes: string[] = [];
-
-        if (series != null && tempoSeg != null) {
-          partes.push(`${series}x ${tempoSeg}s`);
-        } else if (series != null && reps != null) {
-          partes.push(`${series}x ${reps} reps`);
-        } else if (series != null) {
-          partes.push(`${series} séries`);
-        } else if (reps != null) {
-          partes.push(`${reps} reps`);
-        } else if (tempoSeg != null) {
-          partes.push(`${tempoSeg}s`);
-        }
-
-        if (descansoSeg != null) {
-          partes.push(`+ ${descansoSeg}s descanso`);
-        }
-
-        repeticoes = partes.join(" ");
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        console.error("[treinos] erro ao iniciar sessão:", res.status, txt);
+        alert("Não foi possível iniciar esse treino.");
+        return;
       }
+
+      const js = await res.json().catch(() => ({}));
+
+      startedAtRef.current = js?.startedAt ?? new Date().toISOString();
       
-      return {
-        id: String(safeId),
-        nome,
-        repeticoes: repeticoes || undefined,
-        detalhes,
-        videoUrl,
-        concluido: Boolean(item.concluido),
-      };
-    })
-    .filter((e) => e.id);
-}
+      setModalSessaoId(null);
+      setSessaoAbertaExerciciosId(sessaoId);
+      await carregarSessoesDeHoje();
+    } catch (e) {
+      console.error("[treinos] erro ao confirmar presenças:", e);
+      alert("Erro inesperado ao iniciar o treino.");
+    }
+  }
 
  async function carregarSessoesDeHoje() {
   const token = getToken();
@@ -3317,7 +3199,7 @@ async function salvarProgressoSessao(sessaoId: string) {
 
                         {s.status === "nao_iniciada" && (
                           <button
-                            onClick={() => abrirModalIniciar(s)}
+                            onClick={() => abrirModalIniciar(String(s.id), String((s as any).turma?.id ?? (s as any).turmaId ?? ""))}
                             disabled={!s.podeIniciar}
                             title={
                               s.faltou
@@ -3335,7 +3217,7 @@ async function salvarProgressoSessao(sessaoId: string) {
                         )}
 
                         <button
-                          onClick={() => setSessaoAbertaExerciciosId(s)}
+                          onClick={() => setSessaoAbertaExerciciosId(String(s.id))}
                           disabled={!(s.status === "em_andamento" || (s.status === "nao_iniciada" && s.podeIniciar))}
                           className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
                             (s.status === "em_andamento" || (s.status === "nao_iniciada" && s.podeIniciar))
@@ -3440,9 +3322,61 @@ async function salvarProgressoSessao(sessaoId: string) {
         );
         if (!sessao) return null;
 
-        const exercicios: ExercicioSessaoDetalhe[] = sessao.exercicios ?? [];
-        const marcados = new Set(exerciciosMarcadosBySessao[sessao.id] ?? []);
+        const exerciciosSessao: ExercicioSessaoDetalhe[] = Array.isArray(sessao.exercicios)
+          ? sessao.exercicios
+          : [];
 
+        const exerciciosDoTreino: any[] = Array.isArray(sessao.treino?.exercicios)
+          ? (sessao.treino!.exercicios as any[])
+          : [];
+
+        // chave estável pra “bater” treino.exercicios com sessao.exercicios
+        const keyOf = (x: any) =>
+          x?.exercicioId
+            ? `E:${String(x.exercicioId)}`
+            : x?.exercicioTemporarioId
+              ? `T:${String(x.exercicioTemporarioId)}`
+              : x?.exercicioPersonalizadoId
+                ? `P:${String(x.exercicioPersonalizadoId)}`
+                : `ID:${String(x?.id ?? "")}`;
+
+        // mapa do que foi concluído/marcado na sessão
+        const sessaoByKey = new Map<string, ExercicioSessaoDetalhe>();
+        for (const se of exerciciosSessao) sessaoByKey.set(keyOf(se), se);
+
+        // ✅ lista final pra render (prioriza dados “completos” do treino)
+        const exercicios: ExercicioSessaoDetalhe[] =
+          exerciciosDoTreino.length > 0
+            ? exerciciosDoTreino.map((te: any) => {
+                const se = sessaoByKey.get(keyOf(te));
+                return {
+                  // id: usa o id da linha da sessão se existir (pra marcar concluído pelo id correto)
+                  id: se?.id ?? String(te.id),
+                  exercicioId: te.exercicioId ?? null,
+                  exercicioTemporarioId: te.exercicioTemporarioId ?? null,
+                  exercicioPersonalizadoId: te.exercicioPersonalizadoId ?? null,
+                  // relações completas (nome/descrição/vídeo)
+                  exercicio: te.exercicio ?? null,
+                  exercicioTemporario: te.exercicioTemporario ?? null,
+                  exercicioPersonalizado: te.exercicioPersonalizado ?? null,
+                  repeticoes: te.repeticoes != null ? String(te.repeticoes) : (se?.repeticoes ?? null),
+                  // estado da sessão
+                  concluido: Boolean(se?.concluido),
+                  // se backend já “achatou” videoDemonstrativoUrl, mantém também
+                  videoDemonstrativoUrl:
+                    se?.videoDemonstrativoUrl ??
+                    te?.exercicio?.videoDemonstrativoUrl ??
+                    te?.exercicioTemporario?.videoDemonstrativoUrl ??
+                    te?.exercicioPersonalizado?.videoDemonstrativoUrl ??
+                    null,
+                  // extras
+                  nome: null,
+                  detalhes: null,
+                } as ExercicioSessaoDetalhe;
+              })
+            : exerciciosSessao;
+
+        const marcados = new Set(exerciciosMarcadosBySessao[sessao.id] ?? []);
         const pontosTreino =
           typeof sessao.treino?.pontuacao === "number"
             ? sessao.treino.pontuacao
@@ -3514,77 +3448,94 @@ async function salvarProgressoSessao(sessaoId: string) {
                 ) : (
                   exercicios.map((ex) => {
                     const checked = marcados.has(ex.id);
-                    const videoUrl = ex.videoUrl
-                      ? resolveUploadUrl(ex.videoUrl)
-                      : null;
 
+                    const nome =
+                      ex.exercicio?.nome ??
+                      ex.exercicioTemporario?.nome ??
+                      ex.exercicioPersonalizado?.nome ??
+                      ex.nome ??
+                      "Exercício";
+
+                    const descricao =
+                      ex.exercicio?.descricao ??
+                      ex.exercicioTemporario?.descricao ??
+                      ex.exercicioPersonalizado?.descricao ??
+                      null;
+
+                    const video =
+                      ex.videoDemonstrativoUrl ??
+                      ex.exercicio?.videoDemonstrativoUrl ??
+                      ex.exercicioTemporario?.videoDemonstrativoUrl ??
+                      ex.exercicioPersonalizado?.videoDemonstrativoUrl ??
+                      null;
+
+                    const repeticoes = ex.repeticoes ?? null;
+
+                    const videoUrl = video ? resolveUploadUrl(video) : null;
                     return (
                       <div
                         key={ex.id}
                         className="border rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
                       >
-                      <div className="flex items-start gap-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setExerciciosMarcadosBySessao((prev) => {
-                              const current = new Set(prev[sessao.id] ?? []);
-                              if (current.has(ex.id)) current.delete(ex.id);
-                              else current.add(ex.id);
-                              return {
-                                ...prev,
-                                [sessao.id]: Array.from(current),
-                              };
-                            });
-                          }}
-                          className={`mt-0.5 flex items-center justify-center w-6 h-6 rounded-full border text-xs ${
-                            checked
-                              ? "border-green-700 bg-green-700 text-white"
-                              : "border-gray-300 bg-white text-gray-500"
-                          }`}
-                          aria-pressed={checked}
-                        >
-                          {checked ? <Check className="w-3 h-3" /> : "✕"}
-                        </button>
+                        <div className="flex items-start gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExerciciosMarcadosBySessao((prev) => {
+                                const current = new Set(prev[sessao.id] ?? []);
+                                if (current.has(ex.id)) current.delete(ex.id);
+                                else current.add(ex.id);
+                                return { ...prev, [sessao.id]: Array.from(current) };
+                              });
+                            }}
+                            className={`mt-0.5 flex items-center justify-center w-6 h-6 rounded-full border text-xs ${
+                              checked
+                                ? "border-green-700 bg-green-700 text-white"
+                                : "border-gray-300 bg-white text-gray-500"
+                            }`}
+                            aria-pressed={checked}
+                          >
+                            {checked ? <Check className="w-3 h-3" /> : "✕"}
+                          </button>
 
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div className="font-semibold text-sm sm:text-base text-gray-900">
-                                {ex.nome}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="font-semibold text-sm sm:text-base text-gray-900">
+                                  {nome}
+                                </div>
+
+                                {descricao && (
+                                  <div className="text-xs sm:text-sm text-gray-700 mt-1">
+                                    {descricao}
+                                  </div>
+                                )}
+
+                                {repeticoes && (
+                                  <div className="text-xs sm:text-sm text-gray-600 mt-0.5">
+                                    Repetições: {repeticoes}
+                                  </div>
+                                )}
                               </div>
 
-                              {ex.detalhes && (
-                                <div className="text-xs sm:text-sm text-gray-700 mt-1">
-                                  {ex.detalhes}
-                                </div>
-                              )}
-
-                              {ex.repeticoes && (
-                                <div className="text-xs sm:text-sm text-gray-600 mt-0.5">
-                                  {ex.repeticoes}
-                                </div>
+                              {videoUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setVideoModal({
+                                      url: videoUrl,
+                                      nome,
+                                      repeticoes: repeticoes ?? undefined,
+                                    })
+                                  }
+                                  className="text-xs sm:text-sm font-medium text-green-700 hover:underline underline-offset-2 flex-shrink-0"
+                                >
+                                  Ver vídeo
+                                </button>
                               )}
                             </div>
-
-                            {videoUrl && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setVideoModal({
-                                    url: videoUrl,
-                                    nome: ex.nome,
-                                    repeticoes: ex.repeticoes,
-                                  })
-                                }
-                                className="text-xs sm:text-sm font-medium text-green-700 hover:underline underline-offset-2 flex-shrink-0"
-                              >
-                                Ver vídeo
-                              </button>
-                            )}
                           </div>
                         </div>
-                      </div>
                       </div>
                     );
                   })

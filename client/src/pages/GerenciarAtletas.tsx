@@ -154,45 +154,10 @@ function dayKeyFromAny(x: any) {
   return toISODateOnly(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
 }
 
-
-
-function statusLabel(s?: string | null) {
-  const v = String(s || "").toUpperCase();
-  if (v === "COMPLETED" || v === "CONCLUIDO" || v === "CONCLUÍDO") return "Concluído";
-  if (v === "IN_PROGRESS" || v === "EM_ANDAMENTO") return "Em andamento";
-  if (v === "EXPIRED" || v === "EXPIRADO") return "Perdido";
-  return "Pendente";
-}
-
 function autorTipoFromTela(t: "Escola" | "Clube" | "Professor"): AutorTipoApi {
   if (t === "Professor") return "Professor";
   if (t === "Clube") return "Clube";
   return "Escolinha";
-}
-
-function isCompleted(s?: string | null) {
-  const v = String(s || "").toUpperCase();
-  return v === "COMPLETED" || v === "CONCLUIDO" || v === "CONCLUÍDO";
-}
-
-function isExpiredStatus(s?: string | null) {
-  const v = String(s || "").toUpperCase();
-  return v === "EXPIRED" || v === "EXPIRADO" || v === "PERDIDO";
-}
-
-function isLost(t: TreinoAgendadoItem) {
-  if (isExpiredStatus(t.meuStatus) || isExpiredStatus(t.execucaoStatus) || isExpiredStatus(t.status)) return true;
-
-  const dt = parseAsDate(t.dataTreino);
-  if (!dt) return false;
-
-  const today = new Date();
-  const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const treinoOnly = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
-  const passouDoDia = treinoOnly.getTime() < todayOnly.getTime();
-  const concluido = isCompleted(t.meuStatus || t.execucaoStatus || t.status);
-
-  return passouDoDia && !concluido;
 }
 
 function submissaoToAgendadoLike(s: SubmissaoItem): TreinoAgendadoItem {
@@ -247,8 +212,13 @@ const formatRelativo = (iso: string) => {
 };
 
 // ✅ cache para não bater na API toda hora
-const pontuacaoCacheRef = { current: new Map<string, number>() };
+const pontuacaoCacheRef = { current: new Map<string, { total: number; ts: number }>() };
 
+function invalidatePontuacaoCache(usuarioId?: string | null) {
+  const uid = String(usuarioId || "").trim();
+  if (!uid) return;
+  pontuacaoCacheRef.current.delete(uid);
+}
 // ✅ mesma lógica do ProfileHeader: soma performance + disciplina + responsabilidade
 async function fetchPontuacaoTotalPorUsuarioId(
   usuarioId: string,
@@ -272,10 +242,12 @@ async function fetchPontuacaoTotalPorUsuarioId(
     const performance = Number(data?.performance) || 0;
     const disciplina = Number(data?.disciplina) || 0;
     const responsabilidade = Number(data?.responsabilidade) || 0;
-
+    const TTL_MS = 10_000;
+    if (cached && (Date.now() - cached.ts) < TTL_MS) return cached.total;
+    
     const total = performance + disciplina + responsabilidade;
 
-    pontuacaoCacheRef.current.set(uid, total);
+    pontuacaoCacheRef.current.set(uid, { total, ts: Date.now() });
     return total;
   } catch {
     return null;
@@ -297,6 +269,19 @@ const AprovacaoPill: React.FC<{ value: boolean | null }> = ({ value }) => {
       : "bg-zinc-100 text-zinc-600";
   const label = value === true ? "aprovado" : value === false ? "reprovado" : "pendente";
   return <span className={`rounded-full px-2 py-0.5 text-[11px] ${cls}`}>{label}</span>;
+};
+
+const PontosPill: React.FC<{ pontos?: number | null; aprovado?: boolean | null }> = ({ pontos, aprovado }) => {
+  if (typeof pontos !== "number") return null;
+
+  // se quiser mostrar só quando aprovado:
+  if (aprovado !== true) return null;
+
+  return (
+    <span className="rounded-full px-2 py-0.5 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200">
+      +{pontos} pts
+    </span>
+  );
 };
 
 const StatusBadge: React.FC<{ ativo?: boolean }> = ({ ativo }) => (
@@ -635,7 +620,7 @@ const GerenciarAtletas: React.FC = () => {
     try {
       const { data } = await axios.get(
         `${API.BASE_URL}/api/gerenciar/atletas/${atletaUsuarioId}/submissoes`,
-        { headers, params: { type: "all", period: "month", limit: 8 } }
+        { headers, params: { type: "all", period: "all", limit: 80 } }
       );
       const items = (data?.items || []) as any[];
       setSubmissoes(items.map((row) => ({
@@ -832,167 +817,85 @@ const GerenciarAtletas: React.FC = () => {
       { semana: "Semana 3", treinos: 0, desafios: 0 },
       { semana: "Semana 4", treinos: 0, desafios: 0 },
     ];
+
     const now = Date.now();
+    const cutoff = now - 28 * 86_400_000;
+
     for (const s of submissoes) {
       if (s.aprovado !== true) continue;
+
       const t = new Date(s.data).getTime();
+      if (!Number.isFinite(t)) continue;
+      if (t < cutoff) continue;
+
       const diffDays = Math.floor((now - t) / 86_400_000);
+
       let idx = -1;
       if (diffDays <= 6) idx = 3;
       else if (diffDays <= 13) idx = 2;
       else if (diffDays <= 20) idx = 1;
-      else if (diffDays <= 27) idx = 0;
-      if (idx >= 0) {
-        if (s.tipo === "treino") bins[idx].treinos += 1;
-        else bins[idx].desafios += 1;
-      }
+      else idx = 0; // 21..27
+
+      if (s.tipo === "treino") bins[idx].treinos += 1;
+      else bins[idx].desafios += 1;
     }
+
     return bins;
   }, [submissoes]);
 
-const monthLabel = useMemo(() => {
-  const d = cursorMonth;
-  const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-  return `${meses[d.getMonth()]} ${d.getFullYear()}`;
-}, [cursorMonth]);
+  const submissoesMes = useMemo(() => {
+    const now = Date.now();
+    const cutoff = now - 30 * 86_400_000; // 30 dias
 
-function formatDayPtBR(dayISO: string) {
-  const [y, m, d] = dayISO.split("-").map((n) => Number(n));
-  const dt = new Date(y, (m || 1) - 1, d || 1);
-  return dt.toLocaleDateString("pt-BR", {
-    weekday: "short",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
+    return submissoes
+      .filter((s) => {
+        const t = new Date(s.data).getTime();
+        if (!Number.isFinite(t)) return false;
+        return t >= cutoff;
+      })
+      .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
+      .slice(0, 20); // opcional: limita pra não ficar gigante (ajuste como quiser)
+  }, [submissoes]);
 
-const daysGrid = useMemo(() => {
-  const first = startOfMonth(cursorMonth);
-  const firstWeekday = (first.getDay() + 6) % 7;
-  const start = new Date(first);
-  start.setDate(first.getDate() - firstWeekday);
+  const agendadosPorDia = useMemo(() => {
+    const map = new Map<string, TreinoAgendadoItem[]>();
 
-  return Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    const inMonth = d.getMonth() === cursorMonth.getMonth();
-    return { date: d, key: toISODateOnly(d), inMonth };
-  });
-}, [cursorMonth]);
-
-const agendadosPorDia = useMemo(() => {
-  const map = new Map<string, TreinoAgendadoItem[]>();
-
-  for (const t of agendados) {
-    const k = dayKeyFromAny(t.dataTreino);
-    if (!k) continue;
-    const arr = map.get(k) ?? [];
-    arr.push(t);
-    map.set(k, arr);
-  }
-
-  for (const s of submissoes) {
-    const k = dayKeyFromAny(s.data);
-    if (!k) continue;
-
-    const arr = map.get(k) ?? [];
-    const like = submissaoToAgendadoLike(s);
-    const nomeLike = (like.treinoProgramado?.nome || like.titulo || "").trim();
-    const idx = arr.findIndex((x) => {
-      const nomeX = (x.treinoProgramado?.nome || x.titulo || "").trim();
-      return nomeX && nomeX === nomeLike;
-    });
-
-    if (idx >= 0) {
-      const atual = arr[idx];
-      arr[idx] = {
-        ...atual,
-        submissaoTreinoId: atual.submissaoTreinoId ?? like.submissaoTreinoId ?? null,
-        submissaoFeita: atual.submissaoFeita ?? true,
-        meuStatus: atual.meuStatus ?? like.meuStatus,
-      };
-    } else {
-      arr.push(like);
+    for (const t of agendados) {
+      const k = dayKeyFromAny(t.dataTreino);
+      if (!k) continue;
+      const arr = map.get(k) ?? [];
+      arr.push(t);
+      map.set(k, arr);
     }
-    map.set(k, arr);
-  }
-  return map;
-}, [agendados, submissoes]);
 
-const selectedDayItems = useMemo(() => {
-  const out: { day: string; items: TreinoAgendadoItem[] }[] = [];
-  for (const day of selectedDays) out.push({ day, items: agendadosPorDia.get(day) ?? [] });
-  out.sort((a, b) => a.day.localeCompare(b.day));
-  return out;
-}, [selectedDays, agendadosPorDia]);
+    for (const s of submissoes) {
+      const k = dayKeyFromAny(s.data);
+      if (!k) continue;
 
-const hasPastSelectedDay = useMemo(() => {
-  return selectedDays.some(isPastDayISO);
-}, [selectedDays]);
+      const arr = map.get(k) ?? [];
+      const like = submissaoToAgendadoLike(s);
+      const nomeLike = (like.treinoProgramado?.nome || like.titulo || "").trim();
+      const idx = arr.findIndex((x) => {
+        const nomeX = (x.treinoProgramado?.nome || x.titulo || "").trim();
+        return nomeX && nomeX === nomeLike;
+      });
 
-const forceScrollDetails = useMemo(() => selectedDays.length >= 2, [selectedDays.length]);
-
-function toggleDay(dayISO: string) {
-  setDrawerOpen(true);
-  setSelectedDays((prev) =>
-    prev.includes(dayISO) ? prev.filter((d) => d !== dayISO) : [...prev, dayISO]
-  );
-}
-
-async function agendarParaDiasSelecionados() {
-  if (selectedDays.some(isPastDayISO)) {
-    return alert("Não é permitido agendar treinos em datas passadas.");
-  }
-  if (!focado?.id) return;
-  if (!treinoProgramadoId) return alert("Selecione um treino programado para agendar.");
-  if (!selectedDays.length) return alert("Selecione ao menos 1 dia no calendário.");
-  if (salvandoAgenda) return;
-
-  const autorId = getAutorId();           
-  const autorTipo = tipo ? autorTipoFromTela(tipo) : undefined; 
-
-  if (!autorId || !autorTipo) {
-    return alert("Não foi possível identificar o autor (entidade) para agendar.");
-  }
-
-  setSalvandoAgenda(true);
-  try {
-    await Promise.all(
-      selectedDays.map((day) =>
-        axios.post(
-          `${API.BASE_URL}/api/treinos/agendados`,
-          {
-            atletaId: focado.id,
-            treinoProgramadoId,
-            dataTreino: day,
-            autorId,
-            autorTipo,
-          },
-          { headers }
-        )
-      )
-    );
-
-    const r = await axios.get(`${API.BASE_URL}/api/treinos/agendados`, {
-      headers,
-      params: { atletaId: focado.id },
-    });
-    setAgendados(normalizeAgendadosPayload(r.data));
-    setSelectedDays([]);
-    alert("Treino(s) agendado(s) com sucesso!");
-  } catch (e: any) {
-    console.error(e);
-
-    const msg =
-      e?.response?.data?.message ||
-      (e?.response?.status === 409 ? "Já existe treino agendado em um dos dias selecionados." : null) ||
-      "Erro ao agendar treinos.";
-    alert(msg);
-  } finally {
-    setSalvandoAgenda(false);
-  }
-}
+      
+      if (idx >= 0) {
+        const atual = arr[idx];
+        arr[idx] = {
+          ...atual,
+          submissaoTreinoId: atual.submissaoTreinoId ?? like.submissaoTreinoId ?? null,
+          submissaoFeita: atual.submissaoFeita ?? true,
+          meuStatus: atual.meuStatus ?? like.meuStatus,
+        };
+      } else {
+        arr.push(like);
+      }
+      map.set(k, arr);
+    }
+    return map;
+  }, [agendados, submissoes]);
 
 async function abrirModalAvaliacao(submissaoTreinoId: string) {
   const id = String(submissaoTreinoId || "").trim();
@@ -1080,6 +983,13 @@ async function salvarAvaliacao() {
         { headers }
       );
 
+      if (focado?.usuarioId) invalidatePontuacaoCache(focado.usuarioId);
+
+      await carregarAtletas();
+
+      if (carreiraOpen && focado?.id) {
+        await carregarAgendadosDoAtleta(focado.id, cursorMonth);
+      }
       alert("Avaliação salva!");
       fecharModalAvaliacao();
     } catch (e: any) {
@@ -1538,7 +1448,7 @@ async function salvarAvaliacao() {
                     <div className="text-lg font-semibold">{stats?.desafiosFeitosMes ?? 0}</div>
                   </div>
                   <div className="rounded-xl bg-zinc-50 p-3">
-                    <div className="text-xs text-zinc-500">Média 4s</div>
+                    <div className="text-xs text-zinc-500">Média pontos últimas 4s</div>
                     <div className="text-lg font-semibold">{stats?.mediaUltimas4Semanas ?? 0}</div>
                   </div>
                 </div>
@@ -1563,15 +1473,18 @@ async function salvarAvaliacao() {
                   <div className="text-sm font-medium text-zinc-700 mb-2">Últimas submissões (mês)</div>
                   {subsLoading ? (
                     <div className="text-zinc-600 text-sm">Carregando…</div>
-                  ) : submissoes.length === 0 ? (
-                    <div className="text-zinc-500 text-sm">Sem submissões no período.</div>
+                  ) : submissoesMes.length === 0 ? (
+                    <div className="text-zinc-500 text-sm">Sem submissões nos últimos 30 dias.</div>
                   ) : (
                     <ul className="space-y-2">
-                      {submissoes.map((s) => (
+                      {submissoesMes.map((s) => (
                         <li key={s.id} className="rounded-lg border border-zinc-200 p-2 text-sm">
-                          <div className="flex items-center justify-between">
+                         <div className="flex items-center justify-between gap-2">
                             <div className="font-medium">{s.titulo}</div>
-                            <AprovacaoPill value={s.aprovado} />
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <PontosPill pontos={s.pontos} aprovado={s.aprovado} />
+                            </div>
                           </div>
                           <div className="text-xs text-zinc-500">
                             {s.tipo === "treino" ? "Treino" : "Desafio"} · {formatRelativo(s.data)}

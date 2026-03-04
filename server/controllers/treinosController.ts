@@ -549,17 +549,22 @@ export async function getCalendarioTreinos(req: Request, res: Response) {
     const treinos = await prisma.treinoAgendado.findMany({
       where: {
         atletaId: atleta.id,
-        dataTreino: {
-          gte: startDate,
-          lt: endDate,
-        },
+        dataTreino: { gte: startDate, lt: endDate },
       },
       include: {
-        treinoProgramado: true,
+        treinoProgramado: {
+          include: {
+            exercicios: {
+              include: {
+                exercicio: true,
+                exercicioPersonalizado: true,
+                exercicioTemporario: true,
+              },
+            },
+          },
+        },
       },
-      orderBy: {
-        dataTreino: "asc",
-      },
+      orderBy: { dataTreino: "asc" },
     });
 
     const eventos = treinos.map((t) => ({
@@ -896,12 +901,36 @@ export async function treinosDisponiveis(req: AuthenticatedRequest, res: Respons
         professorId: (t as any).professorId ?? null,
         criadorProfessorId: (t as any).criadorProfessorId ?? null,
         criadores,
-        exercicios: t.exercicios.map((e) => ({
-          id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
-          nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
-          repeticoes: e.repeticoes ?? "",
-        })),
-        
+        exercicios: t.exercicios.map((e) => {
+          const resolved = e.exercicio ?? e.exercicioTemporario ?? e.exercicioPersonalizado ?? null;
+
+          return {
+            id: e.id,
+            ordem: e.ordem ?? null,
+            repeticoes: e.repeticoes ?? "",
+            exercicioId: e.exercicioId ?? null,
+            exercicioTemporarioId: e.exercicioTemporarioId ?? null,
+            exercicioPersonalizadoId: e.exercicioPersonalizadoId ?? null,
+            exercicio: resolved
+              ? {
+                  tipo: e.exercicio
+                    ? "catalogo"
+                    : e.exercicioTemporario
+                      ? "temporario"
+                      : "personalizado",
+                  id: resolved.id,
+                  codigo: (resolved as any).codigo ?? null,
+                  nome: resolved.nome ?? "Exercício",
+                  descricao: (resolved as any).descricao ?? null,
+                  videoUrl:
+                    (resolved as any).videoUrl ??
+                    (resolved as any).videoDemonstrativoUrl ??
+                    null,
+                  videoPosterUrl: (resolved as any).videoPosterUrl ?? null,
+                }
+              : null,
+          };
+        }),        
       };
     });
 
@@ -930,7 +959,7 @@ export async function treinosPublicosProfessoresParceiros(
     // ✅ include tipado corretamente
     const include = {
       exercicios: {
-        include: { exercicio: true, exercicioTemporario: true },
+        include: { exercicio: true, exercicioTemporario: true, exercicioPersonalizado: true },
         orderBy: { ordem: "asc" as const },
       },
       professores: {
@@ -1015,12 +1044,23 @@ export async function treinosPublicosProfessoresParceiros(
         categoria: t.categoria ?? [],
         tipoTreino: t.tipoTreino ?? null,
         criadores,
-        exercicios: t.exercicios.map((e) => ({
-          id: e.exercicio?.id ?? e.exercicioTemporario?.id ?? "",
-          nome: e.exercicio?.nome ?? e.exercicioTemporario?.nome ?? "",
-          repeticoes: e.repeticoes,
-          ordem: e.ordem,
-        })),
+        exercicios: t.exercicios.map((row: any) => {
+          const base = row.exercicio || row.exercicioPersonalizado || row.exercicioTemporario || null;
+
+          return {
+            id: String(row.id),
+            ordem: row.ordem ?? null,
+            repeticoes: row.repeticoes ?? null,
+            exercicio: row.exercicio ?? null,
+            exercicioPersonalizado: row.exercicioPersonalizado ?? null,
+            exercicioTemporario: row.exercicioTemporario ?? null,
+            nome: base?.nome ?? null,
+            descricao: base?.descricao ?? null,
+            videoDemonstrativoUrl: base?.videoDemonstrativoUrl ?? null,
+            videoPosterUrl: base?.videoPosterUrl ?? null,
+            nivel: base?.nivel ?? null,
+          };
+        }),
       };
     });
 
@@ -1135,7 +1175,44 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
     const rows = await prisma.treinoProgramado.findMany({
       where,
       include: {
-        exercicios: { include: { exercicio: true, exercicioPersonalizado: true, exercicioTemporario: true } },
+        exercicios: {
+          select: {
+            id: true,
+            ordem: true,
+            repeticoes: true,
+
+            exercicio: {
+              select: {
+                id: true,
+                nome: true,
+                descricao: true,
+                videoDemonstrativoUrl: true,
+                nivel: true,
+              },
+            },
+
+            exercicioTemporario: {
+              select: {
+                id: true,
+                nome: true,
+                descricao: true,
+                videoDemonstrativoUrl: true,
+                nivel: true,
+              },
+            },
+
+            exercicioPersonalizado: {
+              select: {
+                id: true,
+                nome: true,
+                descricao: true,
+                videoDemonstrativoUrl: true,
+                videoPosterUrl: true, // se existir no model
+                nivel: true,
+              },
+            },
+          },
+        },
         professores: { include: { professor: { select: { id: true, nome: true } } } },
         Professor: { select: { id: true, nome: true } },
         clube: { select: { id: true, nome: true } },
@@ -1168,7 +1245,6 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
 
     const agIdsAll = subsAll.map((x) => x.treinoAgendadoId);
     const agIdsAp = subsApproved.map((x) => x.treinoAgendadoId);
-
     const agMap = await prisma.treinoAgendado.findMany({
       where: { id: { in: Array.from(new Set([...agIdsAll, ...agIdsAp])) } },
       select: { id: true, treinoProgramadoId: true },
@@ -1209,9 +1285,7 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
       // ✅ IDs que o FRONT precisa pra liberar lápis/lixeira
       const clubeId = String((t as any).clubeId ?? t.clube?.id ?? "").trim() || null;
       const escolinhaId = String((t as any).escolinhaId ?? t.escolinha?.id ?? "").trim() || null;
-      const professorId = String((t as any).professorId ?? t.Professor?.id ?? "").trim() || null;
-
-      // ✅ colaboradores (professores) que o FRONT usa pra "sou colaborador"
+      const professorId = String((t as any).professorId ?? t.Professor?.id ?? "").trim() || null;      // ✅ colaboradores (professores) que o FRONT usa pra "sou colaborador"
       const professoresIds: string[] = Array.from(
         new Set(
           (Array.isArray((t as any).professores) ? (t as any).professores : [])
@@ -1246,15 +1320,33 @@ export async function listarTodosTreinosProgramados(req: AuthenticatedRequest, r
         escolinhaId,
         professorId,
         professoresIds,
-
         criadores,
         criadoresNomes,
+        exercicios: (Array.isArray((t as any).exercicios) ? (t as any).exercicios : []).map((row: any) => {
+          const base =
+            row.exercicio ||
+            row.exercicioPersonalizado ||
+            row.exercicioTemporario ||
+            null;
 
-        exercicios: (Array.isArray((t as any).exercicios) ? (t as any).exercicios : []).map((ex: any) => ({
-          id: String(ex?.exercicio?.id ?? ex?.id ?? ""),
-          nome: String(ex?.exercicio?.nome ?? ex?.nome ?? ""),
-          repeticoes: ex?.repeticoes ?? undefined,
-        })),
+          return {
+            id: String(row.id),
+            ordem: row.ordem ?? null,
+            repeticoes: row.repeticoes ?? null,
+
+            // mantém as 3 possibilidades pro front (igual treinos-instrutores/treinos-unicos)
+            exercicio: row.exercicio ?? null,
+            exercicioPersonalizado: row.exercicioPersonalizado ?? null,
+            exercicioTemporario: row.exercicioTemporario ?? null,
+
+            // e ainda manda um "atalho" (opcional) pra facilitar em qualquer tela
+            nome: base?.nome ?? null,
+            descricao: base?.descricao ?? null,
+            videoDemonstrativoUrl: base?.videoDemonstrativoUrl ?? null,
+            videoPosterUrl: base?.videoPosterUrl ?? null,
+            nivel: base?.nivel ?? null,
+          };
+        }),
       };
     });
 
@@ -1324,19 +1416,23 @@ export async function obterTreinoProgramadoPorId(req: AuthenticatedRequest, res:
     const out = {
       ...treino,
       exercicios: (treino.exercicios ?? []).map((row) => {
-        const ex = row.exercicio || row.exercicioPersonalizado || row.exercicioTemporario;
+        const exBase =
+          row.exercicio ||
+          row.exercicioPersonalizado ||
+          row.exercicioTemporario;
 
         return {
           id: row.id,
           ordem: row.ordem,
           repeticoes: row.repeticoes ?? null,
-          exercicio: ex
+          exercicio: exBase
             ? {
-                id: ex.id,
-                nome: ex.nome,
-                descricao: ex.descricao ?? null,
-                nivel: ex.nivel ?? null,
-                videoDemonstrativoUrl: ex.videoDemonstrativoUrl ?? null,
+                id: exBase.id,
+                nome: exBase.nome,
+                descricao: (exBase as any).descricao ?? null,
+                nivel: (exBase as any).nivel ?? null,
+                videoDemonstrativoUrl: (exBase as any).videoDemonstrativoUrl ?? null,
+                videoPosterUrl: (exBase as any).videoPosterUrl ?? null,
               }
             : null,
         };
@@ -1981,9 +2077,6 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
     const apenasFuturos = String(req.query.apenasFuturos || "") === "1";
     const apenasComSubmissao = String(req.query.apenasComSubmissao || "") === "1";
     const agora = new Date();
-    const monthStr =
-      typeof req.query.month === "string" ? req.query.month.trim() : "";
-
     // =========================================================
     // ✅ MODO TURMA: /treinos/agendados?turmaId=...&month=YYYY-MM
     // =========================================================
@@ -2049,12 +2142,31 @@ export async function getTreinosAgendados(req: AuthenticatedRequest, res: Respon
         include: {
           atleta: { select: { id: true } },
           treinoProgramado: {
-            include: {
-              exercicios: { include: { exercicio: true, exercicioPersonalizado: true, exercicioTemporario: true } },
-              professores: { include: { professor: { select: { id: true, nome: true } } } },
-              Professor: { select: { id: true, nome: true } },
-              clube: { select: { id: true, nome: true } },
-              escolinha: { select: { id: true, nome: true } },
+            select: {
+              id: true,
+              nome: true,
+              nivel: true,
+              imagemUrl: true,
+              categoria: true,
+              tipoTreino: true,
+              dataAgendada: true,
+              criadorProfessor: { include: { usuario: true } },
+              Professor: { include: { usuario: true } },
+              clube: true,
+              escolinha: true,
+              professores: {
+                include: { professor: { include: { usuario: true } } },
+              },
+              // ✅ AQUI é o que estava faltando:
+              exercicios: {
+                include: {
+                  exercicio: true,
+                  exercicioPersonalizado: true,
+                  // se existir no seu schema:
+                  exercicioTemporario: true,
+                },
+                orderBy: { ordem: "asc" as const },
+              },
             },
           },
         },
